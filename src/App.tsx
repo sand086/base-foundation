@@ -20,6 +20,7 @@ import GestionTarifas from "./pages/GestionTarifas";
 import Despacho from "./pages/Despacho";
 import UsuariosSeguridad from "./pages/UsuariosSeguridad";
 import Tesoreria from "./pages/Tesoreria";
+import NotificacionesConfig from "./pages/NotificacionesConfig";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -48,6 +49,7 @@ const App = () => (
             <Route path="despacho" element={<Despacho />} />
             <Route path="usuarios" element={<UsuariosSeguridad />} />
             <Route path="tesoreria" element={<Tesoreria />} />
+            <Route path="notificaciones" element={<NotificacionesConfig />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

@@ -18,6 +18,7 @@ import {
   Calculator,
   Shield,
   Landmark,
+  Bell,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -65,6 +66,7 @@ const menuItems: MenuItem[] = [
   { title: "Cobranza", icon: DollarSign, path: "/cuentas-por-cobrar" },
   { title: "Tesorería", icon: Landmark, path: "/tesoreria" },
   { title: "Usuarios", icon: Shield, path: "/usuarios" },
+  { title: "Notificaciones", icon: Bell, path: "/notificaciones" },
   { title: "Configuración", icon: Settings, path: "/configuracion" },
 ];
 
