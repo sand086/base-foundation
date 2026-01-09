@@ -1,36 +1,28 @@
 import { TrendingUp, TrendingDown, Clock, Truck, AlertTriangle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge, StatusType } from "@/components/ui/status-badge";
+import { PageHeader } from "@/components/ui/page-header";
 import { mockTrips } from "@/data/mockData";
 
 const getStatusBadge = (status: string) => {
-  const styles: Record<string, string> = {
-    en_ruta: "bg-status-info-bg text-status-info",
-    detenido: "bg-status-warning-bg text-status-warning",
-    retraso: "bg-status-danger-bg text-status-danger animate-pulse-danger",
-    entregado: "bg-status-success-bg text-status-success",
+  const statusMap: Record<string, { type: StatusType; label: string }> = {
+    en_ruta: { type: "success", label: "En Ruta" },
+    detenido: { type: "warning", label: "Detenido" },
+    retraso: { type: "danger", label: "Retraso" },
+    entregado: { type: "success", label: "Entregado" },
   };
-  const labels: Record<string, string> = {
-    en_ruta: "En Ruta",
-    detenido: "Detenido",
-    retraso: "Retraso",
-    entregado: "Entregado",
-  };
-  return (
-    <Badge className={styles[status] || "bg-muted text-muted-foreground"}>
-      {labels[status] || status}
-    </Badge>
-  );
+  const config = statusMap[status] || { type: "info" as StatusType, label: status };
+  return <StatusBadge status={config.type}>{config.label}</StatusBadge>;
 };
 
 export default function Dashboard() {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div>
-        <h1 className="text-xl font-bold text-foreground">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">Resumen operativo en tiempo real</p>
-      </div>
+      <PageHeader 
+        title="Dashboard" 
+        description="Resumen operativo en tiempo real" 
+      />
 
       {/* KPI Cards - 3 Top Cards as specified */}
       <div className="grid gap-4 md:grid-cols-3">
@@ -104,13 +96,13 @@ export default function Dashboard() {
           <div className="overflow-x-auto">
             <table className="w-full table-dense">
               <thead>
-                <tr className="border-b border-t bg-muted/30">
-                  <th className="text-left py-2.5 px-4">ID</th>
-                  <th className="text-left py-2.5 px-4">Cliente</th>
-                  <th className="text-left py-2.5 px-4">Unidad</th>
-                  <th className="text-left py-2.5 px-4">Operador</th>
-                  <th className="text-left py-2.5 px-4">Origen - Destino</th>
-                  <th className="text-left py-2.5 px-4">Estatus</th>
+                <tr className="border-b border-t bg-gray-50">
+                  <th className="text-left py-2 px-4 text-xs font-semibold uppercase text-slate-600 tracking-wider">ID</th>
+                  <th className="text-left py-2 px-4 text-xs font-semibold uppercase text-slate-600 tracking-wider">Cliente</th>
+                  <th className="text-left py-2 px-4 text-xs font-semibold uppercase text-slate-600 tracking-wider">Unidad</th>
+                  <th className="text-left py-2 px-4 text-xs font-semibold uppercase text-slate-600 tracking-wider">Operador</th>
+                  <th className="text-left py-2 px-4 text-xs font-semibold uppercase text-slate-600 tracking-wider">Origen - Destino</th>
+                  <th className="text-left py-2 px-4 text-xs font-semibold uppercase text-slate-600 tracking-wider">Estatus</th>
                 </tr>
               </thead>
               <tbody>

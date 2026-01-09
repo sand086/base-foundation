@@ -61,12 +61,26 @@ export default {
         status: {
           success: "hsl(var(--status-success))",
           "success-bg": "hsl(var(--status-success-bg))",
+          "success-border": "hsl(var(--status-success-border))",
           warning: "hsl(var(--status-warning))",
           "warning-bg": "hsl(var(--status-warning-bg))",
+          "warning-border": "hsl(var(--status-warning-border))",
           danger: "hsl(var(--status-danger))",
           "danger-bg": "hsl(var(--status-danger-bg))",
+          "danger-border": "hsl(var(--status-danger-border))",
           info: "hsl(var(--status-info))",
           "info-bg": "hsl(var(--status-info-bg))",
+          "info-border": "hsl(var(--status-info-border))",
+        },
+        // Action Button Colors (Emerald Green)
+        action: {
+          DEFAULT: "hsl(var(--action))",
+          hover: "hsl(var(--action-hover))",
+          foreground: "hsl(var(--action-foreground))",
+        },
+        // Table Colors
+        table: {
+          header: "hsl(var(--table-header))",
         },
       },
       borderRadius: {

@@ -4,17 +4,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatusBadge, StatusType } from "@/components/ui/status-badge";
 import { mockTrips, Trip } from "@/data/mockData";
 
 const getStatusBadge = (status: string) => {
-  const styles = {
-    en_ruta: "bg-status-info-bg text-status-info",
-    detenido: "bg-status-warning-bg text-status-warning",
-    retraso: "bg-status-danger-bg text-status-danger animate-pulse-danger",
-    entregado: "bg-status-success-bg text-status-success",
+  const statusMap: Record<string, { type: StatusType; label: string }> = {
+    en_ruta: { type: "success", label: "En Ruta" },
+    detenido: { type: "warning", label: "Detenido" },
+    retraso: { type: "danger", label: "Retraso" },
+    entregado: { type: "success", label: "Entregado" },
   };
-  const labels = { en_ruta: "En Ruta", detenido: "Detenido", retraso: "Retraso", entregado: "Entregado" };
-  return <Badge className={styles[status as keyof typeof styles]}>{labels[status as keyof typeof labels]}</Badge>;
+  const config = statusMap[status] || { type: "info" as StatusType, label: status };
+  return <StatusBadge status={config.type}>{config.label}</StatusBadge>;
 };
 
 export default function CentroMonitoreo() {
@@ -22,13 +24,11 @@ export default function CentroMonitoreo() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2"><Map className="h-6 w-6" /> Centro de Monitoreo</h1>
-          <p className="text-muted-foreground">Control de viajes activos en tiempo real</p>
-        </div>
-        <Badge variant="outline" className="text-lg px-4 py-2">{mockTrips.length} Viajes Activos</Badge>
-      </div>
+      <PageHeader title="Centro de Monitoreo" description="Control de viajes activos en tiempo real">
+        <Badge variant="outline" className="text-sm px-3 py-1.5 font-medium">
+          {mockTrips.length} Viajes Activos
+        </Badge>
+      </PageHeader>
 
       <Card>
         <CardHeader><CardTitle>Torre de Control</CardTitle></CardHeader>
@@ -36,28 +36,28 @@ export default function CentroMonitoreo() {
           <div className="overflow-x-auto">
             <table className="w-full table-dense">
               <thead>
-                <tr className="border-b text-left text-sm font-medium text-muted-foreground">
-                  <th className="py-3 px-3">Servicio ID</th>
-                  <th className="py-3 px-3">Cliente</th>
-                  <th className="py-3 px-3">Unidad</th>
-                  <th className="py-3 px-3">Operador</th>
-                  <th className="py-3 px-3">Origen - Destino</th>
-                  <th className="py-3 px-3">Estatus</th>
-                  <th className="py-3 px-3">Última Actualización</th>
-                  <th className="py-3 px-3">Acciones</th>
+                <tr className="bg-gray-50 text-left">
+                  <th className="py-2 px-3 text-xs font-semibold uppercase text-slate-600 tracking-wider">Servicio ID</th>
+                  <th className="py-2 px-3 text-xs font-semibold uppercase text-slate-600 tracking-wider">Cliente</th>
+                  <th className="py-2 px-3 text-xs font-semibold uppercase text-slate-600 tracking-wider">Unidad</th>
+                  <th className="py-2 px-3 text-xs font-semibold uppercase text-slate-600 tracking-wider">Operador</th>
+                  <th className="py-2 px-3 text-xs font-semibold uppercase text-slate-600 tracking-wider">Origen - Destino</th>
+                  <th className="py-2 px-3 text-xs font-semibold uppercase text-slate-600 tracking-wider">Estatus</th>
+                  <th className="py-2 px-3 text-xs font-semibold uppercase text-slate-600 tracking-wider">Última Actualización</th>
+                  <th className="py-2 px-3 text-xs font-semibold uppercase text-slate-600 tracking-wider">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {mockTrips.map((trip) => (
                   <tr key={trip.id} className="border-b hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => setSelectedTrip(trip)}>
-                    <td className="py-3 px-3 font-medium">{trip.id}</td>
-                    <td className="py-3 px-3">{trip.clientName}</td>
-                    <td className="py-3 px-3 font-mono">{trip.unitNumber}</td>
-                    <td className="py-3 px-3">{trip.operator}</td>
-                    <td className="py-3 px-3">{trip.origin} → {trip.destination}</td>
-                    <td className="py-3 px-3">{getStatusBadge(trip.status)}</td>
-                    <td className="py-3 px-3 text-muted-foreground">{trip.lastUpdate}</td>
-                    <td className="py-3 px-3">
+                    <td className="py-2 px-3 font-medium text-sm text-slate-700">{trip.id}</td>
+                    <td className="py-2 px-3 text-sm text-slate-700">{trip.clientName}</td>
+                    <td className="py-2 px-3 font-mono text-sm text-slate-700">{trip.unitNumber}</td>
+                    <td className="py-2 px-3 text-sm text-slate-700">{trip.operator}</td>
+                    <td className="py-2 px-3 text-sm text-slate-700">{trip.origin} → {trip.destination}</td>
+                    <td className="py-2 px-3">{getStatusBadge(trip.status)}</td>
+                    <td className="py-2 px-3 text-sm text-muted-foreground">{trip.lastUpdate}</td>
+                    <td className="py-2 px-3">
                       <Button variant="ghost" size="sm" onClick={() => setSelectedTrip(trip)}><Eye className="h-4 w-4" /></Button>
                     </td>
                   </tr>
