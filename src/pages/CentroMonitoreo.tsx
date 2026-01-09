@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Eye, Edit2 } from "lucide-react";
+import { Eye, Edit2, Truck, User, MapPin, Navigation } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,8 +7,10 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusBadge, StatusType } from "@/components/ui/status-badge";
 import { UpdateStatusModal, StatusUpdateData } from "@/features/monitoreo/UpdateStatusModal";
+import { TripMapPlaceholder } from "@/features/monitoreo/TripMapPlaceholder";
 import { mockTrips, Trip, TimelineEvent } from "@/data/mockData";
 import { toast } from "sonner";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const getStatusBadge = (status: string) => {
   const statusMap: Record<string, { type: StatusType; label: string }> = {
@@ -177,81 +179,161 @@ export default function CentroMonitoreo() {
         </CardContent>
       </Card>
 
-      {/* Timeline Drawer */}
+      {/* Service Detail Drawer with Map */}
       <Sheet open={!!selectedTrip} onOpenChange={() => setSelectedTrip(null)}>
-        <SheetContent className="w-[400px] sm:w-[540px]">
-          <SheetHeader>
-            <SheetTitle className="text-brand-dark">
-              Timeline - {selectedTrip?.id}
-            </SheetTitle>
-          </SheetHeader>
-          {selectedTrip && (
-            <div className="mt-6 space-y-4">
-              {/* Trip Details */}
-              <div className="grid grid-cols-2 gap-3 text-sm p-3 bg-muted/50 rounded-lg border">
-                <div>
-                  <span className="text-xs text-muted-foreground uppercase tracking-wide">Cliente</span>
-                  <p className="font-medium text-brand-dark">{selectedTrip.clientName}</p>
+        <SheetContent className="w-[500px] sm:w-[680px] p-0 overflow-hidden">
+          <div className="h-full flex flex-col">
+            <SheetHeader className="p-4 border-b bg-muted/30">
+              <SheetTitle className="text-brand-dark flex items-center gap-2">
+                <div className="w-8 h-8 rounded bg-brand-red flex items-center justify-center">
+                  <Truck className="h-4 w-4 text-white" />
                 </div>
-                <div>
-                  <span className="text-xs text-muted-foreground uppercase tracking-wide">Unidad</span>
-                  <p className="font-medium text-brand-dark font-mono">{selectedTrip.unitNumber}</p>
-                </div>
-                <div>
-                  <span className="text-xs text-muted-foreground uppercase tracking-wide">Operador</span>
-                  <p className="font-medium text-brand-dark">{selectedTrip.operator}</p>
-                </div>
-                <div>
-                  <span className="text-xs text-muted-foreground uppercase tracking-wide">Estatus</span>
-                  <div className="mt-1">{getStatusBadge(selectedTrip.status)}</div>
-                </div>
-              </div>
-
-              {/* Update Status Button */}
-              <Button
-                className="w-full h-9 gap-2 bg-brand-red hover:bg-brand-red/90 text-white"
-                onClick={(e) => handleOpenUpdateModal(e, selectedTrip)}
-              >
-                <Edit2 className="h-4 w-4" />
-                Actualizar Estatus
-              </Button>
-
-              {/* Timeline */}
-              <div className="border-t pt-4">
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">
-                  Historial de Eventos
-                </h4>
-                <div className="space-y-1">
-                  {selectedTrip.timeline.map((event, idx) => (
-                    <div key={idx} className="flex gap-3">
-                      <div className="flex flex-col items-center">
-                        <div
-                          className={`w-2.5 h-2.5 rounded-full mt-1.5 ${
-                            event.type === 'alert'
-                              ? 'bg-status-danger'
-                              : event.type === 'checkpoint'
-                              ? 'bg-status-success'
-                              : 'bg-status-info'
-                          }`}
-                        />
-                        {idx < selectedTrip.timeline.length - 1 && (
-                          <div className="w-0.5 flex-1 bg-border mt-1" />
-                        )}
+                Detalle del Servicio - {selectedTrip?.id}
+              </SheetTitle>
+            </SheetHeader>
+            
+            {selectedTrip && (
+              <ScrollArea className="flex-1">
+                <div className="p-4 space-y-4">
+                  {/* Top Section: Split Layout */}
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* Left: Service Data Cards */}
+                    <div className="space-y-3">
+                      {/* Origin Card */}
+                      <div className="p-3 bg-status-success-bg rounded-lg border border-status-success-border">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Navigation className="h-3.5 w-3.5 text-status-success" />
+                          <span className="text-[10px] font-semibold text-status-success uppercase tracking-wide">
+                            Origen
+                          </span>
+                        </div>
+                        <p className="text-sm font-medium text-brand-dark">
+                          {selectedTrip.origin}
+                        </p>
                       </div>
-                      <div className="flex-1 pb-4">
-                        <p className="text-sm font-medium text-brand-dark leading-tight">
-                          {event.event}
+
+                      {/* Destination Card */}
+                      <div className="p-3 bg-muted rounded-lg border">
+                        <div className="flex items-center gap-2 mb-1">
+                          <MapPin className="h-3.5 w-3.5 text-brand-dark" />
+                          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                            Destino
+                          </span>
+                        </div>
+                        <p className="text-sm font-medium text-brand-dark">
+                          {selectedTrip.destination}
                         </p>
-                        <p className="text-[10px] text-muted-foreground mt-1">
-                          {event.time}
+                      </div>
+
+                      {/* Driver Card */}
+                      <div className="p-3 bg-muted rounded-lg border">
+                        <div className="flex items-center gap-2 mb-1">
+                          <User className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                            Operador
+                          </span>
+                        </div>
+                        <p className="text-sm font-medium text-brand-dark">
+                          {selectedTrip.operator}
                         </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Unidad: <span className="font-mono">{selectedTrip.unitNumber}</span>
+                        </p>
+                      </div>
+
+                      {/* Status Card */}
+                      <div className="p-3 bg-card rounded-lg border">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">
+                              Estatus Actual
+                            </span>
+                            {getStatusBadge(selectedTrip.status)}
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[10px] text-muted-foreground block">
+                              Última Act.
+                            </span>
+                            <span className="text-xs font-medium text-brand-dark">
+                              {selectedTrip.lastUpdate}
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  ))}
+
+                    {/* Right: Map Container */}
+                    <TripMapPlaceholder
+                      origin={selectedTrip.origin}
+                      destination={selectedTrip.destination}
+                      checkpoints={selectedTrip.timeline}
+                      lastUpdate={selectedTrip.lastUpdate}
+                      lastLocation={
+                        selectedTrip.timeline[0]?.event.includes('Estatus actualizado')
+                          ? selectedTrip.timeline[0].event.split(' - ')[1]?.split('.')[0]
+                          : selectedTrip.timeline[0]?.event
+                      }
+                      className="h-[280px]"
+                    />
+                  </div>
+
+                  {/* Client Info */}
+                  <div className="p-3 bg-muted/50 rounded-lg border">
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                      Cliente
+                    </span>
+                    <p className="text-sm font-medium text-brand-dark mt-0.5">
+                      {selectedTrip.clientName}
+                    </p>
+                  </div>
+
+                  {/* Update Status Button */}
+                  <Button
+                    className="w-full h-9 gap-2 bg-brand-red hover:bg-brand-red/90 text-white"
+                    onClick={(e) => handleOpenUpdateModal(e, selectedTrip)}
+                  >
+                    <Edit2 className="h-4 w-4" />
+                    Actualizar Estatus
+                  </Button>
+
+                  {/* Timeline */}
+                  <div className="border-t pt-4">
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">
+                      Historial de Eventos (Bitácora)
+                    </h4>
+                    <div className="space-y-1">
+                      {selectedTrip.timeline.map((event, idx) => (
+                        <div key={idx} className="flex gap-3">
+                          <div className="flex flex-col items-center">
+                            <div
+                              className={`w-2.5 h-2.5 rounded-full mt-1.5 ${
+                                event.type === 'alert'
+                                  ? 'bg-status-danger'
+                                  : event.type === 'checkpoint'
+                                  ? 'bg-status-success'
+                                  : 'bg-status-info'
+                              }`}
+                            />
+                            {idx < selectedTrip.timeline.length - 1 && (
+                              <div className="w-0.5 flex-1 bg-border mt-1" />
+                            )}
+                          </div>
+                          <div className="flex-1 pb-4">
+                            <p className="text-sm font-medium text-brand-dark leading-tight">
+                              {event.event}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground mt-1">
+                              {event.time}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-          )}
+              </ScrollArea>
+            )}
+          </div>
         </SheetContent>
       </Sheet>
 
