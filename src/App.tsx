@@ -15,6 +15,7 @@ import ClientesNuevo from "./pages/ClientesNuevo";
 import CierreViaje from "./pages/CierreViaje";
 import CuentasPorCobrar from "./pages/CuentasPorCobrar";
 import ProveedoresCxP from "./pages/ProveedoresCxP";
+import GestionTarifas from "./pages/GestionTarifas";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -38,6 +39,7 @@ const App = () => (
             <Route path="cierre" element={<CierreViaje />} />
             <Route path="cuentas-por-cobrar" element={<CuentasPorCobrar />} />
             <Route path="proveedores" element={<ProveedoresCxP />} />
+            <Route path="tarifas" element={<GestionTarifas />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
