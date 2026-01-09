@@ -8,6 +8,7 @@ import Dashboard from "./pages/Dashboard";
 import CentroMonitoreo from "./pages/CentroMonitoreo";
 import FlotaLlantas from "./pages/FlotaLlantas";
 import CombustibleConciliacion from "./pages/CombustibleConciliacion";
+import ClientesCatalogo from "./pages/ClientesCatalogo";
 import ClientesNuevo from "./pages/ClientesNuevo";
 import CuentasPorCobrar from "./pages/CuentasPorCobrar";
 import NotFound from "./pages/NotFound";
@@ -26,6 +27,7 @@ const App = () => (
             <Route path="monitoreo" element={<CentroMonitoreo />} />
             <Route path="flota/llantas" element={<FlotaLlantas />} />
             <Route path="combustible/conciliacion" element={<CombustibleConciliacion />} />
+            <Route path="clientes" element={<ClientesCatalogo />} />
             <Route path="clientes/nuevo" element={<ClientesNuevo />} />
             <Route path="cuentas-por-cobrar" element={<CuentasPorCobrar />} />
           </Route>
