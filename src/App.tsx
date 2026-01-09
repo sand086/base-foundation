@@ -6,6 +6,8 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AppLayout } from "./components/layout/AppLayout";
 import Dashboard from "./pages/Dashboard";
 import CentroMonitoreo from "./pages/CentroMonitoreo";
+import FlotaUnidades from "./pages/FlotaUnidades";
+import FlotaUnidadDetalle from "./pages/FlotaUnidadDetalle";
 import FlotaLlantas from "./pages/FlotaLlantas";
 import CombustibleConciliacion from "./pages/CombustibleConciliacion";
 import ClientesCatalogo from "./pages/ClientesCatalogo";
@@ -25,6 +27,8 @@ const App = () => (
           <Route path="/" element={<AppLayout />}>
             <Route index element={<Dashboard />} />
             <Route path="monitoreo" element={<CentroMonitoreo />} />
+            <Route path="flota" element={<FlotaUnidades />} />
+            <Route path="flota/unidad/:id" element={<FlotaUnidadDetalle />} />
             <Route path="flota/llantas" element={<FlotaLlantas />} />
             <Route path="combustible/conciliacion" element={<CombustibleConciliacion />} />
             <Route path="clientes" element={<ClientesCatalogo />} />
