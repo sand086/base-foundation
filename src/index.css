@@ -6,65 +6,71 @@
   :root {
     /* Clean White Backgrounds */
     --background: 0 0% 98%;
-    --foreground: 215 25% 27%; /* slate-700 for main text */
+    --foreground: 0 0% 20%; /* #333333 - Neutral Dark */
     
     --card: 0 0% 100%;
-    --card-foreground: 215 25% 27%;
+    --card-foreground: 0 0% 20%;
     
     --popover: 0 0% 100%;
-    --popover-foreground: 215 25% 27%;
+    --popover-foreground: 0 0% 20%;
     
-    /* Navy Blue Primary - #0f172a (slate-900) */
-    --primary: 222 47% 11%;
+    /* Brand Red Primary - #be0811 */
+    --primary: 357 93% 39%;
     --primary-foreground: 0 0% 100%;
     
-    /* Emerald Green for Actions - #059669 (emerald-600) */
-    --action: 160 84% 39%;
-    --action-hover: 162 93% 24%; /* emerald-700 */
+    /* Brand Green for Actions - #009740 */
+    --action: 152 100% 30%;
+    --action-hover: 152 100% 24%;
     --action-foreground: 0 0% 100%;
     
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 215 25% 27%;
+    /* Brand Colors as tokens */
+    --brand-red: 357 93% 39%; /* #be0811 */
+    --brand-green: 152 100% 30%; /* #009740 */
+    --brand-dark: 0 0% 20%; /* #333333 */
+    --brand-black: 0 0% 0%; /* #000000 */
     
-    --muted: 220 14% 96%; /* gray-100 */
-    --muted-foreground: 215 16% 47%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 0 0% 20%;
+    
+    --muted: 220 14% 96%;
+    --muted-foreground: 0 0% 40%;
     
     --accent: 210 40% 96%;
-    --accent-foreground: 215 25% 27%;
+    --accent-foreground: 0 0% 20%;
     
-    --destructive: 0 84% 60%;
+    --destructive: 357 93% 39%; /* Brand Red */
     --destructive-foreground: 0 0% 100%;
     
     --border: 214 32% 91%;
     --input: 214 32% 91%;
-    --ring: 222 47% 11%;
+    --ring: 357 93% 39%;
     --radius: 0.375rem;
     
-    /* Sidebar - Deep Navy Blue #0f172a */
-    --sidebar-background: 222 47% 11%;
-    --sidebar-foreground: 215 20% 65%; /* muted text for inactive */
-    --sidebar-primary: 0 0% 100%; /* white text for active */
-    --sidebar-primary-foreground: 222 47% 11%;
-    --sidebar-accent: 217 33% 17%; /* slate-800 for active bg */
+    /* Sidebar - Pure Black #000000 for high contrast */
+    --sidebar-background: 0 0% 0%;
+    --sidebar-foreground: 0 0% 65%;
+    --sidebar-primary: 0 0% 100%;
+    --sidebar-primary-foreground: 0 0% 0%;
+    --sidebar-accent: 0 0% 12%;
     --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 217 33% 17%;
-    --sidebar-ring: 217 91% 60%;
+    --sidebar-border: 0 0% 15%;
+    --sidebar-ring: 357 93% 39%;
     
-    /* Status Colors - Exact Badge Specs */
-    /* Success/Activo: bg-emerald-100 text-emerald-700 border-emerald-200 */
-    --status-success: 162 63% 41%; /* emerald-700 */
-    --status-success-bg: 152 81% 96%; /* emerald-100 */
-    --status-success-border: 149 80% 90%; /* emerald-200 */
+    /* Status Colors - Brand Specs */
+    /* Success/Active: Brand Green #009740 */
+    --status-success: 152 100% 30%;
+    --status-success-bg: 152 100% 95%;
+    --status-success-border: 152 100% 85%;
     
-    /* Warning/Pendiente: bg-amber-100 text-amber-700 border-amber-200 */
-    --status-warning: 26 90% 37%; /* amber-700 */
-    --status-warning-bg: 48 100% 96%; /* amber-100 */
-    --status-warning-border: 48 97% 77%; /* amber-200 */
+    /* Warning/Pendiente: Amber tones */
+    --status-warning: 26 90% 37%;
+    --status-warning-bg: 48 100% 96%;
+    --status-warning-border: 48 97% 77%;
     
-    /* Danger/Vencido: bg-red-100 text-red-700 border-red-200 */
-    --status-danger: 0 72% 51%; /* red-700 */
-    --status-danger-bg: 0 86% 97%; /* red-100 */
-    --status-danger-border: 0 96% 89%; /* red-200 */
+    /* Danger/Critical: Brand Red #be0811 */
+    --status-danger: 357 93% 39%;
+    --status-danger-bg: 357 93% 96%;
+    --status-danger-border: 357 93% 85%;
     
     /* Info */
     --status-info: 217 91% 60%;
@@ -72,7 +78,7 @@
     --status-info-border: 214 95% 85%;
     
     /* Table Header */
-    --table-header: 220 14% 96%; /* gray-50 */
+    --table-header: 220 14% 96%;
   }
 
   .dark {

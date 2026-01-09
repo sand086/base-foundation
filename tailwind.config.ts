@@ -57,6 +57,13 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        // Brand Colors - Rápidos 3T Identity
+        brand: {
+          red: "hsl(var(--brand-red))",
+          green: "hsl(var(--brand-green))",
+          dark: "hsl(var(--brand-dark))",
+          black: "hsl(var(--brand-black))",
+        },
         // TMS Status Colors
         status: {
           success: "hsl(var(--status-success))",
@@ -72,7 +79,7 @@ export default {
           "info-bg": "hsl(var(--status-info-bg))",
           "info-border": "hsl(var(--status-info-border))",
         },
-        // Action Button Colors (Emerald Green)
+        // Action Button Colors (Brand Green)
         action: {
           DEFAULT: "hsl(var(--action))",
           hover: "hsl(var(--action-hover))",
