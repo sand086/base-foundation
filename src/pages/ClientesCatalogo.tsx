@@ -4,6 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { ActionButton } from "@/components/ui/action-button";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatusBadge, StatusType } from "@/components/ui/status-badge";
 import {
   Table,
   TableBody,
@@ -21,10 +24,10 @@ import {
 import { useNavigate } from "react-router-dom";
 import { mockClients, type Client } from "@/data/mockData";
 
-const statusConfig = {
-  activo: { label: "Activo", className: "bg-emerald-100 text-emerald-700 hover:bg-emerald-100" },
-  pendiente: { label: "Pendiente", className: "bg-amber-100 text-amber-700 hover:bg-amber-100" },
-  incompleto: { label: "Incompleto", className: "bg-rose-100 text-rose-700 hover:bg-rose-100" },
+const statusConfig: Record<string, { label: string; type: StatusType }> = {
+  activo: { label: "Activo", type: "success" },
+  pendiente: { label: "Pendiente", type: "warning" },
+  incompleto: { label: "Incompleto", type: "danger" },
 };
 
 export default function ClientesCatalogo() {
@@ -44,17 +47,14 @@ export default function ClientesCatalogo() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Users className="h-6 w-6" /> Gestión de Clientes
-          </h1>
-          <p className="text-muted-foreground">Administra clientes y sus sucursales de entrega</p>
-        </div>
-        <Button onClick={() => navigate("/clientes/nuevo")}>
-          <Plus className="h-4 w-4 mr-2" /> Nuevo Cliente
-        </Button>
-      </div>
+      <PageHeader 
+        title="Gestión de Clientes" 
+        description="Administra clientes y sus sucursales de entrega"
+      >
+        <ActionButton onClick={() => navigate("/clientes/nuevo")}>
+          <Plus className="h-4 w-4" /> Nuevo Cliente
+        </ActionButton>
+      </PageHeader>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-3 gap-4">
@@ -118,31 +118,31 @@ export default function ClientesCatalogo() {
         <CardContent className="p-0">
           <Table>
             <TableHeader>
-              <TableRow className="bg-muted/50">
-                <TableHead className="font-semibold">Razón Social</TableHead>
-                <TableHead className="font-semibold">RFC</TableHead>
-                <TableHead className="font-semibold text-center">Subclientes</TableHead>
-                <TableHead className="font-semibold">Tarifas Activas</TableHead>
-                <TableHead className="font-semibold">Estatus</TableHead>
-                <TableHead className="font-semibold text-right">Acciones</TableHead>
+              <TableRow className="bg-gray-50">
+                <TableHead className="text-xs font-semibold uppercase text-slate-600 tracking-wider">Razón Social</TableHead>
+                <TableHead className="text-xs font-semibold uppercase text-slate-600 tracking-wider">RFC</TableHead>
+                <TableHead className="text-xs font-semibold uppercase text-slate-600 tracking-wider text-center">Subclientes</TableHead>
+                <TableHead className="text-xs font-semibold uppercase text-slate-600 tracking-wider">Tarifas Activas</TableHead>
+                <TableHead className="text-xs font-semibold uppercase text-slate-600 tracking-wider">Estatus</TableHead>
+                <TableHead className="text-xs font-semibold uppercase text-slate-600 tracking-wider text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredClients.map((client) => (
                 <TableRow key={client.id} className="hover:bg-muted/30">
-                  <TableCell>
+                  <TableCell className="py-2">
                     <div>
-                      <p className="font-medium">{client.razónSocial}</p>
-                      <p className="text-sm text-muted-foreground">{client.contactoPrincipal}</p>
+                      <p className="font-medium text-sm text-slate-700">{client.razónSocial}</p>
+                      <p className="text-xs text-muted-foreground">{client.contactoPrincipal}</p>
                     </div>
                   </TableCell>
-                  <TableCell className="font-mono text-sm">{client.rfc}</TableCell>
-                  <TableCell className="text-center">
+                  <TableCell className="font-mono text-sm text-slate-700 py-2">{client.rfc}</TableCell>
+                  <TableCell className="text-center py-2">
                     <Badge variant="secondary" className="font-medium">
                       {client.subClientes}
                     </Badge>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="py-2">
                     <div className="flex flex-wrap gap-1">
                       {client.tarifasActivas.length > 0 ? (
                         client.tarifasActivas.slice(0, 2).map((tarifa, idx) => (
@@ -151,7 +151,7 @@ export default function ClientesCatalogo() {
                           </Badge>
                         ))
                       ) : (
-                        <span className="text-sm text-muted-foreground italic">Sin tarifas</span>
+                        <span className="text-xs text-muted-foreground italic">Sin tarifas</span>
                       )}
                       {client.tarifasActivas.length > 2 && (
                         <Badge variant="outline" className="text-xs">
@@ -160,10 +160,10 @@ export default function ClientesCatalogo() {
                       )}
                     </div>
                   </TableCell>
-                  <TableCell>
-                    <Badge className={statusConfig[client.estatus].className}>
-                      {statusConfig[client.estatus].label}
-                    </Badge>
+                  <TableCell className="py-2">
+                    <StatusBadge status={statusConfig[client.estatus as keyof typeof statusConfig].type}>
+                      {statusConfig[client.estatus as keyof typeof statusConfig].label}
+                    </StatusBadge>
                   </TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>
