@@ -7,7 +7,7 @@ export interface Trip {
   operator: string;
   origin: string;
   destination: string;
-  status: 'en_ruta' | 'detenido' | 'retraso' | 'entregado';
+  status: 'en_ruta' | 'detenido' | 'retraso' | 'entregado' | 'accidente';
   lastUpdate: string;
   timeline: TimelineEvent[];
 }
