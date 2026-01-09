@@ -17,6 +17,7 @@ import CierreViaje from "./pages/CierreViaje";
 import CuentasPorCobrar from "./pages/CuentasPorCobrar";
 import ProveedoresCxP from "./pages/ProveedoresCxP";
 import GestionTarifas from "./pages/GestionTarifas";
+import Despacho from "./pages/Despacho";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -42,6 +43,7 @@ const App = () => (
             <Route path="cuentas-por-cobrar" element={<CuentasPorCobrar />} />
             <Route path="proveedores" element={<ProveedoresCxP />} />
             <Route path="tarifas" element={<GestionTarifas />} />
+            <Route path="despacho" element={<Despacho />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
