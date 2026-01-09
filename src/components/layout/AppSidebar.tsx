@@ -15,6 +15,7 @@ import {
   ChevronRight,
   PanelLeftClose,
   PanelLeft,
+  Calculator,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -34,10 +35,10 @@ const menuItems: MenuItem[] = [
     icon: Users,
     children: [
       { title: "Catálogo", path: "/clientes" },
-      { title: "Tarifas", path: "/clientes/tarifas" },
       { title: "Nuevo Cliente", path: "/clientes/nuevo" },
     ],
   },
+  { title: "Tarifas", icon: Calculator, path: "/tarifas" },
   {
     title: "Flota",
     icon: Truck,
