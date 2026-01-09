@@ -12,6 +12,7 @@ import FlotaLlantas from "./pages/FlotaLlantas";
 import CombustibleConciliacion from "./pages/CombustibleConciliacion";
 import ClientesCatalogo from "./pages/ClientesCatalogo";
 import ClientesNuevo from "./pages/ClientesNuevo";
+import CierreViaje from "./pages/CierreViaje";
 import CuentasPorCobrar from "./pages/CuentasPorCobrar";
 import NotFound from "./pages/NotFound";
 
@@ -33,6 +34,7 @@ const App = () => (
             <Route path="combustible/conciliacion" element={<CombustibleConciliacion />} />
             <Route path="clientes" element={<ClientesCatalogo />} />
             <Route path="clientes/nuevo" element={<ClientesNuevo />} />
+            <Route path="cierre" element={<CierreViaje />} />
             <Route path="cuentas-por-cobrar" element={<CuentasPorCobrar />} />
           </Route>
           <Route path="*" element={<NotFound />} />
