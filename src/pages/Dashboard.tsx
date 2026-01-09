@@ -1,134 +1,134 @@
-import { TrendingUp, Truck, Fuel, Clock, AlertTriangle, DollarSign } from "lucide-react";
+import { TrendingUp, TrendingDown, Clock, Truck, AlertTriangle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { dashboardKPIs, mockTrips } from "@/data/mockData";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-
-const trendData = [
-  { name: "Lun", onTime: 92, fuel: 3.6 },
-  { name: "Mar", onTime: 95, fuel: 3.9 },
-  { name: "Mié", onTime: 88, fuel: 3.7 },
-  { name: "Jue", onTime: 96, fuel: 4.0 },
-  { name: "Vie", onTime: 94, fuel: 3.8 },
-  { name: "Sáb", onTime: 97, fuel: 4.1 },
-  { name: "Dom", onTime: 94, fuel: 3.8 },
-];
+import { mockTrips } from "@/data/mockData";
 
 const getStatusBadge = (status: string) => {
-  const styles = {
+  const styles: Record<string, string> = {
     en_ruta: "bg-status-info-bg text-status-info",
     detenido: "bg-status-warning-bg text-status-warning",
     retraso: "bg-status-danger-bg text-status-danger animate-pulse-danger",
     entregado: "bg-status-success-bg text-status-success",
   };
-  const labels = { en_ruta: "En Ruta", detenido: "Detenido", retraso: "Retraso", entregado: "Entregado" };
-  return <Badge className={styles[status as keyof typeof styles]}>{labels[status as keyof typeof labels]}</Badge>;
+  const labels: Record<string, string> = {
+    en_ruta: "En Ruta",
+    detenido: "Detenido",
+    retraso: "Retraso",
+    entregado: "Entregado",
+  };
+  return (
+    <Badge className={styles[status] || "bg-muted text-muted-foreground"}>
+      {labels[status] || status}
+    </Badge>
+  );
 };
 
 export default function Dashboard() {
   return (
     <div className="space-y-6">
+      {/* Page Header */}
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-        <p className="text-muted-foreground">Resumen operativo de Rápidos 3T</p>
+        <h1 className="text-xl font-bold text-foreground">Dashboard</h1>
+        <p className="text-sm text-muted-foreground">Resumen operativo en tiempo real</p>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">On-Time Delivery</CardTitle>
+      {/* KPI Cards - 3 Top Cards as specified */}
+      <div className="grid gap-4 md:grid-cols-3">
+        {/* On Time % */}
+        <Card className="rounded-md">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 pt-4 px-4">
+            <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              On Time %
+            </CardTitle>
             <Clock className="h-4 w-4 text-status-success" />
           </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-status-success">{dashboardKPIs.onTimeDelivery}%</div>
-            <p className="text-xs text-muted-foreground mt-1">+2.1% vs mes anterior</p>
+          <CardContent className="px-4 pb-4">
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-bold text-status-success">92%</span>
+              <div className="flex items-center text-xs text-status-success">
+                <TrendingUp className="h-3 w-3 mr-0.5" />
+                +2.1%
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">vs. mes anterior</p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Eficiencia Combustible</CardTitle>
-            <Fuel className="h-4 w-4 text-status-info" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{dashboardKPIs.fuelEfficiency} km/L</div>
-            <p className="text-xs text-muted-foreground mt-1">Promedio de flota</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Viajes Activos</CardTitle>
+        {/* Total Servicios */}
+        <Card className="rounded-md">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 pt-4 px-4">
+            <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Total Servicios
+            </CardTitle>
             <Truck className="h-4 w-4 text-primary" />
           </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{dashboardKPIs.activeTrips}</div>
-            <p className="text-xs text-muted-foreground mt-1">{dashboardKPIs.unitsInMaintenance} unidades en mantenimiento</p>
+          <CardContent className="px-4 pb-4">
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-bold">1,240</span>
+              <div className="flex items-center text-xs text-status-success">
+                <TrendingUp className="h-3 w-3 mr-0.5" />
+                +8%
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">este mes</p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Cartera Vencida</CardTitle>
-            <DollarSign className="h-4 w-4 text-status-danger" />
+        {/* Servicios con Retraso */}
+        <Card className="rounded-md">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 pt-4 px-4">
+            <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Servicios con Retraso
+            </CardTitle>
+            <AlertTriangle className="h-4 w-4 text-status-danger" />
           </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-status-danger">${(dashboardKPIs.totalVencido / 1000).toFixed(0)}K</div>
-            <p className="text-xs text-muted-foreground mt-1">{dashboardKPIs.pendingInvoices} facturas pendientes</p>
+          <CardContent className="px-4 pb-4">
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-bold text-status-danger">98</span>
+              <div className="flex items-center text-xs text-status-danger">
+                <TrendingDown className="h-3 w-3 mr-0.5" />
+                -12%
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">requieren atención</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Chart */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <TrendingUp className="h-5 w-5" /> Tendencia Semanal
-          </CardTitle>
+      {/* Active Services Table */}
+      <Card className="rounded-md">
+        <CardHeader className="pb-3 pt-4 px-4">
+          <CardTitle className="text-base font-semibold">Servicios Activos</CardTitle>
         </CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height={250}>
-            <AreaChart data={trendData}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-              <XAxis dataKey="name" className="text-xs" />
-              <YAxis className="text-xs" />
-              <Tooltip />
-              <Area type="monotone" dataKey="onTime" stroke="hsl(var(--status-success))" fill="hsl(var(--status-success-bg))" name="On-Time %" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
-
-      {/* Active Trips Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Viajes Activos</CardTitle>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="px-0 pb-0">
           <div className="overflow-x-auto">
             <table className="w-full table-dense">
               <thead>
-                <tr className="border-b text-left text-sm font-medium text-muted-foreground">
-                  <th className="py-3 px-3">Servicio ID</th>
-                  <th className="py-3 px-3">Cliente</th>
-                  <th className="py-3 px-3">Unidad</th>
-                  <th className="py-3 px-3">Operador</th>
-                  <th className="py-3 px-3">Ruta</th>
-                  <th className="py-3 px-3">Estatus</th>
-                  <th className="py-3 px-3">Última Actualización</th>
+                <tr className="border-b border-t bg-muted/30">
+                  <th className="text-left py-2.5 px-4">ID</th>
+                  <th className="text-left py-2.5 px-4">Cliente</th>
+                  <th className="text-left py-2.5 px-4">Unidad</th>
+                  <th className="text-left py-2.5 px-4">Operador</th>
+                  <th className="text-left py-2.5 px-4">Origen - Destino</th>
+                  <th className="text-left py-2.5 px-4">Estatus</th>
                 </tr>
               </thead>
               <tbody>
                 {mockTrips.map((trip) => (
-                  <tr key={trip.id} className="border-b hover:bg-muted/50 transition-colors">
-                    <td className="py-3 px-3 font-medium">{trip.id}</td>
-                    <td className="py-3 px-3">{trip.clientName}</td>
-                    <td className="py-3 px-3">{trip.unitNumber}</td>
-                    <td className="py-3 px-3">{trip.operator}</td>
-                    <td className="py-3 px-3">{trip.origin} → {trip.destination}</td>
-                    <td className="py-3 px-3">{getStatusBadge(trip.status)}</td>
-                    <td className="py-3 px-3 text-muted-foreground">{trip.lastUpdate}</td>
+                  <tr
+                    key={trip.id}
+                    className="border-b hover:bg-muted/30 transition-colors cursor-pointer"
+                  >
+                    <td className="py-2.5 px-4 font-medium text-primary">{trip.id}</td>
+                    <td className="py-2.5 px-4">{trip.clientName}</td>
+                    <td className="py-2.5 px-4 font-mono text-sm">{trip.unitNumber}</td>
+                    <td className="py-2.5 px-4">{trip.operator}</td>
+                    <td className="py-2.5 px-4">
+                      <span className="text-muted-foreground">{trip.origin}</span>
+                      <span className="mx-1.5 text-muted-foreground/50">→</span>
+                      <span>{trip.destination}</span>
+                    </td>
+                    <td className="py-2.5 px-4">{getStatusBadge(trip.status)}</td>
                   </tr>
                 ))}
               </tbody>
