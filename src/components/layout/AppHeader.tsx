@@ -14,23 +14,23 @@ import {
 
 export function AppHeader() {
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b bg-card px-6">
+    <header className="sticky top-0 z-30 flex h-12 items-center justify-between border-b border-border bg-card px-4">
       {/* Global Search */}
-      <div className="relative w-80">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <div className="relative w-72">
+        <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
         <Input
           type="search"
           placeholder="Buscar guías, clientes, unidades..."
-          className="pl-10 h-9 bg-muted/50 border-0 focus-visible:ring-1"
+          className="pl-8 h-8 text-xs bg-muted/50 border-0 focus-visible:ring-1 rounded"
         />
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         {/* Notifications */}
-        <Button variant="ghost" size="icon" className="relative h-9 w-9">
-          <Bell className="h-5 w-5 text-muted-foreground" />
-          <Badge className="absolute -right-0.5 -top-0.5 h-4 w-4 rounded-full p-0 flex items-center justify-center text-[10px] bg-status-danger text-white border-2 border-card">
+        <Button variant="ghost" size="icon" className="relative h-8 w-8">
+          <Bell className="h-4 w-4 text-muted-foreground" />
+          <Badge className="absolute -right-0.5 -top-0.5 h-4 w-4 rounded-full p-0 flex items-center justify-center text-[9px] bg-brand-red text-white border-2 border-card">
             3
           </Badge>
         </Button>
@@ -38,26 +38,26 @@ export function AppHeader() {
         {/* User Profile Dropdown */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="flex items-center gap-2 h-9 px-2">
-              <Avatar className="h-7 w-7">
+            <Button variant="ghost" className="flex items-center gap-2 h-8 px-2">
+              <Avatar className="h-6 w-6">
                 <AvatarImage src="/placeholder.svg" />
-                <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                <AvatarFallback className="bg-brand-red text-white text-[10px] font-bold">
                   AD
                 </AvatarFallback>
               </Avatar>
               <div className="flex flex-col items-start text-left">
-                <span className="text-sm font-medium leading-none">Administrador</span>
+                <span className="text-xs font-medium leading-none">Administrador</span>
               </div>
-              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuLabel className="text-xs">Mi Cuenta</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>Perfil</DropdownMenuItem>
-            <DropdownMenuItem>Configuración</DropdownMenuItem>
+            <DropdownMenuItem className="text-xs">Perfil</DropdownMenuItem>
+            <DropdownMenuItem className="text-xs">Configuración</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive">
+            <DropdownMenuItem className="text-xs text-brand-red">
               Cerrar Sesión
             </DropdownMenuItem>
           </DropdownMenuContent>
