@@ -17,6 +17,7 @@ import {
   PanelLeft,
   Calculator,
   Shield,
+  Landmark,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -62,6 +63,7 @@ const menuItems: MenuItem[] = [
   { title: "Cierre", icon: FileCheck, path: "/cierre" },
   { title: "Proveedores", icon: Briefcase, path: "/proveedores" },
   { title: "Cobranza", icon: DollarSign, path: "/cuentas-por-cobrar" },
+  { title: "Tesorería", icon: Landmark, path: "/tesoreria" },
   { title: "Usuarios", icon: Shield, path: "/usuarios" },
   { title: "Configuración", icon: Settings, path: "/configuracion" },
 ];

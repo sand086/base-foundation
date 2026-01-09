@@ -4,7 +4,6 @@ import {
   Plus, 
   Upload, 
   Download, 
-  Check, 
   FileText,
   Building2,
   AlertCircle
@@ -41,6 +40,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { PaymentModal, PaymentFormData } from "@/features/pagos/PaymentModal";
+import { toast } from "sonner";
 
 // Mock Data for Suppliers
 interface Supplier {
@@ -101,6 +102,8 @@ export default function ProveedoresCxP() {
   const [searchCatalog, setSearchCatalog] = useState("");
   const [searchCxP, setSearchCxP] = useState("");
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [payments, setPayments] = useState(mockPayments);
 
   // Calculate KPIs
   const totalVencido = mockPayableInvoices
@@ -135,6 +138,23 @@ export default function ProveedoresCxP() {
     const vencimiento = new Date(invoice.fechaVencimiento);
     if (vencimiento < today) return 'VENCIDO';
     return 'PENDIENTE';
+  };
+
+  const handlePaymentSubmit = (data: PaymentFormData) => {
+    const supplierName = mockSuppliers.find(s => s.id === data.proveedor)?.razonSocial || 'Proveedor';
+    const newPayment: Payment = {
+      id: `PAG-${String(payments.length + 1).padStart(3, '0')}`,
+      proveedor: supplierName,
+      folioFactura: data.folioFactura,
+      fechaPago: new Date().toISOString().split('T')[0],
+      monto: data.monto,
+      metodoPago: data.metodoPago === 'transferencia' ? 'Transferencia' : data.metodoPago === 'cheque' ? 'Cheque' : 'Efectivo',
+      complementoUUID: `comp-${Date.now()}`,
+    };
+    setPayments([newPayment, ...payments]);
+    toast.success('Pago registrado correctamente', {
+      description: `${supplierName} - $${data.monto.toLocaleString('es-MX')}`,
+    });
   };
 
   return (
@@ -390,7 +410,7 @@ export default function ProveedoresCxP() {
                 className="pl-10"
               />
             </div>
-            <ActionButton>
+            <ActionButton onClick={() => setIsPaymentModalOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Registrar Pago
             </ActionButton>
@@ -409,7 +429,7 @@ export default function ProveedoresCxP() {
               </DataTableRow>
             </DataTableHeader>
             <DataTableBody>
-              {mockPayments.map((payment) => (
+              {payments.map((payment) => (
                 <DataTableRow key={payment.id}>
                   <DataTableCell className="font-mono text-xs">{payment.id}</DataTableCell>
                   <DataTableCell className="font-medium">{payment.proveedor}</DataTableCell>
@@ -435,6 +455,14 @@ export default function ProveedoresCxP() {
           </DataTable>
         </TabsContent>
       </Tabs>
+
+      {/* Payment Modal with Bank Account Selection */}
+      <PaymentModal
+        open={isPaymentModalOpen}
+        onOpenChange={setIsPaymentModalOpen}
+        onSubmit={handlePaymentSubmit}
+        suppliers={mockSuppliers.filter(s => s.estatus === 'activo').map(s => ({ id: s.id, razonSocial: s.razonSocial }))}
+      />
     </div>
   );
 }
