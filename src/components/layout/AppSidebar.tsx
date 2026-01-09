@@ -4,7 +4,7 @@ import {
   LayoutDashboard,
   Users,
   Truck,
-  Map,
+  Radar,
   CalendarPlus,
   Fuel,
   FileCheck,
@@ -13,12 +13,11 @@ import {
   Settings,
   ChevronDown,
   ChevronRight,
-  Menu,
-  X,
+  PanelLeftClose,
+  PanelLeft,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface MenuItem {
@@ -31,7 +30,7 @@ interface MenuItem {
 const menuItems: MenuItem[] = [
   { title: "Dashboard", icon: LayoutDashboard, path: "/" },
   {
-    title: "Gestión de Clientes",
+    title: "Clientes",
     icon: Users,
     children: [
       { title: "Catálogo", path: "/clientes" },
@@ -40,7 +39,7 @@ const menuItems: MenuItem[] = [
     ],
   },
   {
-    title: "Gestión de Flota",
+    title: "Flota",
     icon: Truck,
     children: [
       { title: "Unidades", path: "/flota" },
@@ -48,8 +47,8 @@ const menuItems: MenuItem[] = [
       { title: "Mantenimiento", path: "/flota/mantenimiento" },
     ],
   },
-  { title: "Centro de Monitoreo", icon: Map, path: "/monitoreo" },
-  { title: "Despacho/Servicios", icon: CalendarPlus, path: "/despacho" },
+  { title: "Monitoreo", icon: Radar, path: "/monitoreo" },
+  { title: "Despacho", icon: CalendarPlus, path: "/despacho" },
   {
     title: "Combustible",
     icon: Fuel,
@@ -58,9 +57,9 @@ const menuItems: MenuItem[] = [
       { title: "Conciliación", path: "/combustible/conciliacion" },
     ],
   },
-  { title: "Cierre y Liquidación", icon: FileCheck, path: "/cierre" },
+  { title: "Cierre", icon: FileCheck, path: "/cierre" },
   { title: "Proveedores", icon: Briefcase, path: "/proveedores" },
-  { title: "Cuentas por Cobrar", icon: DollarSign, path: "/cuentas" },
+  { title: "Cobranza", icon: DollarSign, path: "/cuentas-por-cobrar" },
   { title: "Configuración", icon: Settings, path: "/configuracion" },
 ];
 
@@ -71,7 +70,7 @@ interface AppSidebarProps {
 
 export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
   const location = useLocation();
-  const [expandedItems, setExpandedItems] = useState<string[]>(["Gestión de Clientes", "Gestión de Flota", "Combustible"]);
+  const [expandedItems, setExpandedItems] = useState<string[]>(["Clientes", "Flota", "Combustible"]);
 
   const toggleExpand = (title: string) => {
     setExpandedItems((prev) =>
@@ -81,95 +80,89 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
 
   const isActive = (path?: string, children?: { path: string }[]) => {
     if (path && location.pathname === path) return true;
-    if (children) return children.some((child) => location.pathname === child.path);
+    if (children) return children.some((child) => location.pathname.startsWith(child.path));
     return false;
   };
 
   return (
     <aside
       className={cn(
-        "fixed left-0 top-0 z-40 h-screen bg-sidebar text-sidebar-foreground transition-all duration-300",
+        "fixed left-0 top-0 z-40 h-screen bg-sidebar text-sidebar-foreground transition-all duration-300 border-r border-sidebar-border",
         collapsed ? "w-16" : "w-64"
       )}
     >
       {/* Header */}
-      <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-4">
+      <div className="flex h-16 items-center justify-between px-4">
         {!collapsed && (
           <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground font-bold text-sm">
+            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-sidebar-ring text-white font-bold text-sm">
               3T
             </div>
-            <span className="font-semibold text-lg">Rápidos 3T</span>
+            <span className="font-bold text-lg tracking-tight">Rápidos 3T</span>
           </div>
         )}
+        {collapsed && (
+          <div className="flex h-9 w-9 items-center justify-center rounded-md bg-sidebar-ring text-white font-bold text-sm mx-auto">
+            3T
+          </div>
+        )}
+      </div>
+
+      {/* Toggle Button */}
+      <div className="px-3 pb-2">
         <Button
           variant="ghost"
-          size="icon"
+          size="sm"
           onClick={onToggle}
-          className="text-sidebar-foreground hover:bg-sidebar-accent"
+          className={cn(
+            "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
+            collapsed ? "w-full justify-center" : "w-full justify-start"
+          )}
         >
-          {collapsed ? <Menu className="h-5 w-5" /> : <X className="h-5 w-5" />}
+          {collapsed ? <PanelLeft className="h-4 w-4" /> : <><PanelLeftClose className="h-4 w-4 mr-2" /> Colapsar</>}
         </Button>
       </div>
 
-      {/* User Profile */}
-      {!collapsed && (
-        <div className="border-b border-sidebar-border p-4">
-          <div className="flex items-center gap-3">
-            <Avatar className="h-10 w-10">
-              <AvatarImage src="/placeholder.svg" />
-              <AvatarFallback className="bg-sidebar-accent text-sidebar-accent-foreground">
-                MG
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex-1 overflow-hidden">
-              <p className="text-sm font-medium truncate">María García</p>
-              <p className="text-xs text-sidebar-foreground/70 truncate">
-                Administrador
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Navigation */}
-      <ScrollArea className="flex-1 h-[calc(100vh-8rem)]">
-        <nav className="p-2">
+      <ScrollArea className="flex-1 h-[calc(100vh-7rem)]">
+        <nav className="px-2 py-2">
           {menuItems.map((item) => (
-            <div key={item.title} className="mb-1">
+            <div key={item.title} className="mb-0.5">
               {item.children ? (
                 <>
                   <button
-                    onClick={() => toggleExpand(item.title)}
+                    onClick={() => !collapsed && toggleExpand(item.title)}
                     className={cn(
-                      "flex w-full items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-sidebar-accent",
-                      isActive(undefined, item.children) && "bg-sidebar-accent"
+                      "flex w-full items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                      "hover:bg-sidebar-accent",
+                      isActive(undefined, item.children) && "bg-sidebar-accent text-sidebar-primary"
                     )}
                   >
                     <div className="flex items-center gap-3">
-                      <item.icon className="h-5 w-5" />
+                      <item.icon className="h-5 w-5 shrink-0" />
                       {!collapsed && <span>{item.title}</span>}
                     </div>
                     {!collapsed && (
                       expandedItems.includes(item.title) ? (
-                        <ChevronDown className="h-4 w-4" />
+                        <ChevronDown className="h-4 w-4 text-sidebar-foreground/50" />
                       ) : (
-                        <ChevronRight className="h-4 w-4" />
+                        <ChevronRight className="h-4 w-4 text-sidebar-foreground/50" />
                       )
                     )}
                   </button>
                   {!collapsed && expandedItems.includes(item.title) && (
-                    <div className="ml-8 mt-1 space-y-1">
+                    <div className="ml-5 mt-0.5 space-y-0.5 border-l border-sidebar-border pl-4">
                       {item.children.map((child) => (
                         <NavLink
                           key={child.path}
                           to={child.path}
                           className={({ isActive }) =>
                             cn(
-                              "block rounded-md px-3 py-2 text-sm transition-colors hover:bg-sidebar-accent",
+                              "block rounded-md px-3 py-1.5 text-sm transition-colors",
+                              "hover:bg-sidebar-accent hover:text-sidebar-primary",
                               isActive
                                 ? "bg-sidebar-accent text-sidebar-primary font-medium"
-                                : "text-sidebar-foreground/80"
+                                : "text-sidebar-foreground/70"
                             )
                           }
                         >
@@ -184,14 +177,15 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
                   to={item.path!}
                   className={({ isActive }) =>
                     cn(
-                      "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-sidebar-accent",
+                      "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                      "hover:bg-sidebar-accent hover:text-sidebar-primary",
                       isActive
                         ? "bg-sidebar-accent text-sidebar-primary"
-                        : "text-sidebar-foreground"
+                        : "text-sidebar-foreground/80"
                     )
                   }
                 >
-                  <item.icon className="h-5 w-5" />
+                  <item.icon className="h-5 w-5 shrink-0" />
                   {!collapsed && <span>{item.title}</span>}
                 </NavLink>
               )}
