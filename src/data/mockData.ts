@@ -18,14 +18,34 @@ export interface TimelineEvent {
   type: 'checkpoint' | 'alert' | 'info';
 }
 
+export interface SubClienteDetalle {
+  id: string;
+  nombre: string;
+  alias: string;
+  direccion: string;
+  ciudad: string;
+  estado: string;
+  codigoPostal: string;
+  tipoOperacion: 'importación' | 'exportación' | 'nacional';
+  contacto?: string;
+  telefono?: string;
+  horarioRecepcion?: string;
+  estatus: 'activo' | 'inactivo';
+}
+
 export interface Client {
   id: string;
   razónSocial: string;
   rfc: string;
+  regimenFiscal?: string;
+  usoCFDI?: string;
   contactoPrincipal: string;
   telefono: string;
+  email?: string;
+  direccionFiscal?: string;
   estatus: 'activo' | 'pendiente' | 'incompleto';
   subClientes: number;
+  subClientesDetalle: SubClienteDetalle[];
   tarifasActivas: string[];
 }
 
@@ -178,56 +198,296 @@ export const mockTrips: Trip[] = [
   },
 ];
 
-// Mock Clients Data
+// Mock Clients Data with SubClientes Details
 export const mockClients: Client[] = [
   {
     id: 'CLI-001',
     razónSocial: 'Corporativo Logístico Alfa S.A. de C.V.',
     rfc: 'CLA021001AA1',
+    regimenFiscal: '601',
+    usoCFDI: 'G03',
     contactoPrincipal: 'Lic. María García',
     telefono: '55 1234 5678',
+    email: 'mgarcia@corplogalf.com',
+    direccionFiscal: 'Av. Insurgentes Sur 1234, Col. Del Valle, CDMX, CP 03100',
     estatus: 'activo',
     subClientes: 5,
+    subClientesDetalle: [
+      {
+        id: 'SUB-001-A',
+        nombre: 'Planta Norte Monterrey',
+        alias: 'Planta Norte',
+        direccion: 'Blvd. Díaz Ordaz 500',
+        ciudad: 'Monterrey',
+        estado: 'Nuevo León',
+        codigoPostal: '64000',
+        tipoOperacion: 'nacional',
+        contacto: 'Ing. Roberto Salinas',
+        telefono: '81 5555 4444',
+        horarioRecepcion: 'Lun-Vie 7:00-17:00',
+        estatus: 'activo',
+      },
+      {
+        id: 'SUB-001-B',
+        nombre: 'Centro de Distribución Sur',
+        alias: 'CEDIS Sur',
+        direccion: 'Carr. Tlalpan 3456',
+        ciudad: 'CDMX',
+        estado: 'Ciudad de México',
+        codigoPostal: '14000',
+        tipoOperacion: 'nacional',
+        contacto: 'Lic. Ana Torres',
+        telefono: '55 3333 2222',
+        horarioRecepcion: 'Lun-Sab 6:00-22:00',
+        estatus: 'activo',
+      },
+      {
+        id: 'SUB-001-C',
+        nombre: 'Almacén Querétaro',
+        alias: 'Almacén QRO',
+        direccion: 'Parque Industrial Benito Juárez, Nave 12',
+        ciudad: 'Querétaro',
+        estado: 'Querétaro',
+        codigoPostal: '76100',
+        tipoOperacion: 'nacional',
+        contacto: 'Carlos Mendoza',
+        telefono: '442 123 4567',
+        horarioRecepcion: 'Lun-Vie 8:00-18:00',
+        estatus: 'activo',
+      },
+      {
+        id: 'SUB-001-D',
+        nombre: 'Recinto Fiscal Nuevo Laredo',
+        alias: 'Aduana NLD',
+        direccion: 'Recinto Fiscalizado Estratégico',
+        ciudad: 'Nuevo Laredo',
+        estado: 'Tamaulipas',
+        codigoPostal: '88000',
+        tipoOperacion: 'importación',
+        contacto: 'Agente Aduanal Pérez',
+        telefono: '867 890 1234',
+        horarioRecepcion: '24/7',
+        estatus: 'activo',
+      },
+      {
+        id: 'SUB-001-E',
+        nombre: 'Terminal Manzanillo',
+        alias: 'Puerto MZL',
+        direccion: 'Terminal de Contenedores SSA',
+        ciudad: 'Manzanillo',
+        estado: 'Colima',
+        codigoPostal: '28200',
+        tipoOperacion: 'importación',
+        contacto: 'Op. Portuarias',
+        telefono: '314 567 8901',
+        horarioRecepcion: '24/7',
+        estatus: 'activo',
+      },
+    ],
     tarifasActivas: ['Ruta Troncal Norte', 'Última Milla CDMX'],
   },
   {
     id: 'CLI-002',
     razónSocial: 'Macro Centro Distribución S.A.',
     rfc: 'MCD990215BB2',
+    regimenFiscal: '601',
+    usoCFDI: 'G03',
     contactoPrincipal: 'Ing. Roberto López',
     telefono: '33 9876 5432',
+    email: 'rlopez@macrocentro.mx',
+    direccionFiscal: 'Av. Vallarta 2500, Zapopan, Jalisco, CP 45010',
     estatus: 'pendiente',
-    subClientes: 12,
+    subClientes: 3,
+    subClientesDetalle: [
+      {
+        id: 'SUB-002-A',
+        nombre: 'CEDIS Guadalajara',
+        alias: 'CEDIS GDL',
+        direccion: 'Periférico Sur 8000',
+        ciudad: 'Tlaquepaque',
+        estado: 'Jalisco',
+        codigoPostal: '45600',
+        tipoOperacion: 'nacional',
+        contacto: 'Javier Ramírez',
+        telefono: '33 1234 5678',
+        horarioRecepcion: 'Lun-Dom 6:00-22:00',
+        estatus: 'activo',
+      },
+      {
+        id: 'SUB-002-B',
+        nombre: 'Almacén León',
+        alias: 'Bodega León',
+        direccion: 'Blvd. Torres Landa 1200',
+        ciudad: 'León',
+        estado: 'Guanajuato',
+        codigoPostal: '37150',
+        tipoOperacion: 'nacional',
+        contacto: 'Martha Sánchez',
+        telefono: '477 234 5678',
+        horarioRecepcion: 'Lun-Vie 7:00-19:00',
+        estatus: 'activo',
+      },
+      {
+        id: 'SUB-002-C',
+        nombre: 'Cross-Dock Aguascalientes',
+        alias: 'X-Dock AGS',
+        direccion: 'Parque Industrial del Valle',
+        ciudad: 'Aguascalientes',
+        estado: 'Aguascalientes',
+        codigoPostal: '20340',
+        tipoOperacion: 'nacional',
+        contacto: 'Pedro Hernández',
+        telefono: '449 345 6789',
+        horarioRecepcion: 'Lun-Sab 8:00-20:00',
+        estatus: 'activo',
+      },
+    ],
     tarifasActivas: ['Norte', 'CDMX', 'Bajío'],
   },
   {
     id: 'CLI-003',
     razónSocial: 'AutoPartes Premium MX',
     rfc: 'APM110701CC3',
+    regimenFiscal: '601',
+    usoCFDI: 'G03',
     contactoPrincipal: 'Lic. Ana Martínez',
     telefono: '81 5555 4444',
+    email: 'ana.martinez@autopartespremium.mx',
+    direccionFiscal: 'Av. Ruiz Cortines 456, San Pedro, NL, CP 66220',
     estatus: 'activo',
     subClientes: 3,
+    subClientesDetalle: [
+      {
+        id: 'SUB-003-A',
+        nombre: 'Planta Ensamble Silao',
+        alias: 'Planta Silao',
+        direccion: 'Parque Industrial Puerto Interior',
+        ciudad: 'Silao',
+        estado: 'Guanajuato',
+        codigoPostal: '36100',
+        tipoOperacion: 'nacional',
+        contacto: 'Ing. Luis Vega',
+        telefono: '472 123 4567',
+        horarioRecepcion: 'Lun-Sab 6:00-18:00',
+        estatus: 'activo',
+      },
+      {
+        id: 'SUB-003-B',
+        nombre: 'Línea de Producción Puebla',
+        alias: 'Línea PUE',
+        direccion: 'Complejo Automotriz VW',
+        ciudad: 'Puebla',
+        estado: 'Puebla',
+        codigoPostal: '72000',
+        tipoOperacion: 'nacional',
+        contacto: 'Mónica Fuentes',
+        telefono: '222 345 6789',
+        horarioRecepcion: 'Lun-Vie 7:00-17:00',
+        estatus: 'activo',
+      },
+      {
+        id: 'SUB-003-C',
+        nombre: 'Centro JIT Monterrey',
+        alias: 'JIT MTY',
+        direccion: 'Parque FINSA Apodaca',
+        ciudad: 'Apodaca',
+        estado: 'Nuevo León',
+        codigoPostal: '66600',
+        tipoOperacion: 'nacional',
+        contacto: 'Ricardo Treviño',
+        telefono: '81 2345 6789',
+        horarioRecepcion: '24/7',
+        estatus: 'activo',
+      },
+    ],
     tarifasActivas: ['Recolecciones Urgentes'],
   },
   {
     id: 'CLI-004',
     razónSocial: 'Farmacias Unidas del Norte',
     rfc: 'FUN040303DD4',
+    regimenFiscal: '601',
+    usoCFDI: 'G03',
     contactoPrincipal: 'Dr. Carlos Sánchez',
     telefono: '81 3333 2222',
+    email: 'csanchez@farmaunidas.com',
+    direccionFiscal: 'Av. Constitución 1000, Centro, Monterrey, NL, CP 64000',
     estatus: 'activo',
-    subClientes: 8,
+    subClientes: 2,
+    subClientesDetalle: [
+      {
+        id: 'SUB-004-A',
+        nombre: 'CEDIS Farmacéutico MTY',
+        alias: 'CEDIS Farma',
+        direccion: 'Av. Lincoln 5000',
+        ciudad: 'Monterrey',
+        estado: 'Nuevo León',
+        codigoPostal: '64310',
+        tipoOperacion: 'nacional',
+        contacto: 'Farm. Lucía Garza',
+        telefono: '81 4444 5555',
+        horarioRecepcion: 'Lun-Sab 7:00-21:00',
+        estatus: 'activo',
+      },
+      {
+        id: 'SUB-004-B',
+        nombre: 'Almacén Cadena Fría',
+        alias: 'Cold Storage',
+        direccion: 'Parque Logístico Norte',
+        ciudad: 'Escobedo',
+        estado: 'Nuevo León',
+        codigoPostal: '66050',
+        tipoOperacion: 'nacional',
+        contacto: 'Ing. Frío Controlado',
+        telefono: '81 6666 7777',
+        horarioRecepcion: '24/7',
+        estatus: 'activo',
+      },
+    ],
     tarifasActivas: ['Distribución Nocturna', 'Cadena Fría'],
   },
   {
     id: 'CLI-005',
     razónSocial: 'Sabino del Bene Logistics',
     rfc: 'SBL150812EE5',
+    regimenFiscal: '601',
+    usoCFDI: 'P01',
     contactoPrincipal: 'Ing. Patricia Vega',
     telefono: '55 7777 8888',
+    email: 'pvega@sabinodelbene.com',
+    direccionFiscal: 'WTC CDMX, Montecito 38, Nápoles, CDMX, CP 03810',
     estatus: 'incompleto',
     subClientes: 2,
+    subClientesDetalle: [
+      {
+        id: 'SUB-005-A',
+        nombre: 'Oficina Corporativa CDMX',
+        alias: 'Corp CDMX',
+        direccion: 'Paseo de la Reforma 250',
+        ciudad: 'CDMX',
+        estado: 'Ciudad de México',
+        codigoPostal: '06600',
+        tipoOperacion: 'nacional',
+        contacto: 'Recepción General',
+        telefono: '55 8888 9999',
+        horarioRecepcion: 'Lun-Vie 9:00-18:00',
+        estatus: 'activo',
+      },
+      {
+        id: 'SUB-005-B',
+        nombre: 'Almacén Consolidación',
+        alias: 'Almacén Cons',
+        direccion: 'Zona Industrial Vallejo',
+        ciudad: 'CDMX',
+        estado: 'Ciudad de México',
+        codigoPostal: '07700',
+        tipoOperacion: 'exportación',
+        contacto: 'Coordinador Exportaciones',
+        telefono: '55 2222 3333',
+        horarioRecepcion: 'Lun-Vie 7:00-17:00',
+        estatus: 'inactivo',
+      },
+    ],
     tarifasActivas: [],
   },
 ];
