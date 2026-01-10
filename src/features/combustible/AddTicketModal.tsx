@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -15,9 +15,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { unidadesCombustible, operadoresCombustible } from '@/data/combustibleData';
+import { unidadesCombustible, operadoresCombustible, PRECIOS_PROMEDIO, type TipoCombustible } from '@/data/combustibleData';
 import { toast } from 'sonner';
-import { Fuel, Camera, CheckCircle2, Upload } from 'lucide-react';
+import { Fuel, Camera, CheckCircle2, Upload, Droplets } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface AddTicketModalProps {
   open: boolean;
@@ -30,6 +31,7 @@ export interface TicketFormData {
   operadorId: string;
   fechaHora: string;
   estacion: string;
+  tipoCombustible: TipoCombustible;
   litros: number;
   precioPorLitro: number;
   odometro: number;
@@ -42,11 +44,20 @@ export function AddTicketModal({ open, onOpenChange, onSubmit }: AddTicketModalP
     operadorId: '',
     fechaHora: new Date().toISOString().slice(0, 16),
     estacion: '',
+    tipoCombustible: 'diesel',
     litros: 0,
-    precioPorLitro: 0,
+    precioPorLitro: PRECIOS_PROMEDIO.diesel,
     odometro: 0,
     evidencia: null,
   });
+
+  // Update default price when fuel type changes
+  useEffect(() => {
+    setFormData(prev => ({
+      ...prev,
+      precioPorLitro: PRECIOS_PROMEDIO[prev.tipoCombustible],
+    }));
+  }, [formData.tipoCombustible]);
 
   const total = formData.litros * formData.precioPorLitro;
 
@@ -66,8 +77,9 @@ export function AddTicketModal({ open, onOpenChange, onSubmit }: AddTicketModalP
       operadorId: '',
       fechaHora: new Date().toISOString().slice(0, 16),
       estacion: '',
+      tipoCombustible: 'diesel',
       litros: 0,
-      precioPorLitro: 0,
+      precioPorLitro: PRECIOS_PROMEDIO.diesel,
       odometro: 0,
       evidencia: null,
     });
@@ -75,21 +87,80 @@ export function AddTicketModal({ open, onOpenChange, onSubmit }: AddTicketModalP
   };
 
   const selectedUnit = unidadesCombustible.find(u => u.id === formData.unidadId);
-  const isOverCapacity = selectedUnit && formData.litros > selectedUnit.capacidadTanque;
+  const tankCapacity = selectedUnit 
+    ? (formData.tipoCombustible === 'diesel' 
+        ? selectedUnit.capacidadTanqueDiesel 
+        : selectedUnit.capacidadTanqueUrea)
+    : 0;
+  const isOverCapacity = selectedUnit && formData.litros > tankCapacity;
+
+  const getFuelTypeStyles = (type: TipoCombustible, isSelected: boolean) => {
+    if (type === 'diesel') {
+      return isSelected 
+        ? 'bg-amber-500 text-white border-amber-500 shadow-md' 
+        : 'border-amber-300 text-amber-700 hover:bg-amber-50';
+    }
+    return isSelected 
+      ? 'bg-sky-500 text-white border-sky-500 shadow-md' 
+      : 'border-sky-300 text-sky-700 hover:bg-sky-50';
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
         <DialogHeader className="pb-4 border-b">
           <DialogTitle className="flex items-center gap-2 text-foreground">
-            <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center">
-              <Fuel className="h-4 w-4 text-primary" />
+            <div className={cn(
+              "w-8 h-8 rounded flex items-center justify-center transition-colors",
+              formData.tipoCombustible === 'diesel' ? 'bg-amber-100' : 'bg-sky-100'
+            )}>
+              {formData.tipoCombustible === 'diesel' 
+                ? <Fuel className="h-4 w-4 text-amber-600" />
+                : <Droplets className="h-4 w-4 text-sky-600" />
+              }
             </div>
             Agregar Ticket de Combustible
           </DialogTitle>
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4 pt-4">
+          {/* Fuel Type Selection - Visual Toggle */}
+          <div className="space-y-2">
+            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Tipo de Combustible *
+            </Label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, tipoCombustible: 'diesel', litros: 0 })}
+                className={cn(
+                  "flex items-center justify-center gap-2 py-3 px-4 rounded-lg border-2 transition-all duration-200",
+                  getFuelTypeStyles('diesel', formData.tipoCombustible === 'diesel')
+                )}
+              >
+                <Fuel className="h-5 w-5" />
+                <div className="text-left">
+                  <div className="font-semibold">Diesel</div>
+                  <div className="text-xs opacity-80">Tanque hasta {selectedUnit?.capacidadTanqueDiesel || '---'}L</div>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, tipoCombustible: 'urea', litros: 0 })}
+                className={cn(
+                  "flex items-center justify-center gap-2 py-3 px-4 rounded-lg border-2 transition-all duration-200",
+                  getFuelTypeStyles('urea', formData.tipoCombustible === 'urea')
+                )}
+              >
+                <Droplets className="h-5 w-5" />
+                <div className="text-left">
+                  <div className="font-semibold">Urea/DEF</div>
+                  <div className="text-xs opacity-80">Tanque hasta {selectedUnit?.capacidadTanqueUrea || '---'}L</div>
+                </div>
+              </button>
+            </div>
+          </div>
+
           {/* Unit Selection */}
           <div className="space-y-2">
             <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -102,10 +173,10 @@ export function AddTicketModal({ open, onOpenChange, onSubmit }: AddTicketModalP
               <SelectTrigger className="h-11 text-sm">
                 <SelectValue placeholder="Seleccionar unidad" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="bg-popover border shadow-lg z-50">
                 {unidadesCombustible.map((unit) => (
                   <SelectItem key={unit.id} value={unit.id} className="text-sm">
-                    {unit.numero} (Tanque: {unit.capacidadTanque}L)
+                    {unit.numero} (D: {unit.capacidadTanqueDiesel}L / U: {unit.capacidadTanqueUrea}L)
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -124,7 +195,7 @@ export function AddTicketModal({ open, onOpenChange, onSubmit }: AddTicketModalP
               <SelectTrigger className="h-11 text-sm">
                 <SelectValue placeholder="Seleccionar operador" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="bg-popover border shadow-lg z-50">
                 {operadoresCombustible.map((op) => (
                   <SelectItem key={op.id} value={op.id} className="text-sm">
                     {op.nombre}
@@ -153,7 +224,9 @@ export function AddTicketModal({ open, onOpenChange, onSubmit }: AddTicketModalP
               Estación *
             </Label>
             <Input
-              placeholder="Ej: OXXO Gas - Querétaro Norte"
+              placeholder={formData.tipoCombustible === 'diesel' 
+                ? "Ej: OXXO Gas - Querétaro Norte" 
+                : "Ej: AdBlue Center - Querétaro"}
               value={formData.estacion}
               onChange={(e) => setFormData({ ...formData, estacion: e.target.value })}
               className="h-11 text-sm"
@@ -172,11 +245,14 @@ export function AddTicketModal({ open, onOpenChange, onSubmit }: AddTicketModalP
                 placeholder="0.0"
                 value={formData.litros || ''}
                 onChange={(e) => setFormData({ ...formData, litros: parseFloat(e.target.value) || 0 })}
-                className={`h-11 text-sm ${isOverCapacity ? 'border-status-danger focus-visible:ring-status-danger' : ''}`}
+                className={cn(
+                  "h-11 text-sm",
+                  isOverCapacity && 'border-status-danger focus-visible:ring-status-danger'
+                )}
               />
               {isOverCapacity && (
                 <p className="text-xs text-status-danger">
-                  ⚠️ Excede capacidad del tanque ({selectedUnit?.capacidadTanque}L)
+                  ⚠️ Excede capacidad del tanque de {formData.tipoCombustible === 'diesel' ? 'Diesel' : 'Urea'} ({tankCapacity}L)
                 </p>
               )}
             </div>
@@ -196,10 +272,22 @@ export function AddTicketModal({ open, onOpenChange, onSubmit }: AddTicketModalP
           </div>
 
           {/* Total (Auto-calculated) */}
-          <div className="bg-muted/50 rounded-lg p-4 border">
+          <div className={cn(
+            "rounded-lg p-4 border transition-colors",
+            formData.tipoCombustible === 'diesel' ? 'bg-amber-50 border-amber-200' : 'bg-sky-50 border-sky-200'
+          )}>
             <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Total Calculado:</span>
-              <span className="text-xl font-bold text-primary">
+              <div className="flex items-center gap-2">
+                {formData.tipoCombustible === 'diesel' 
+                  ? <Fuel className="h-4 w-4 text-amber-600" />
+                  : <Droplets className="h-4 w-4 text-sky-600" />
+                }
+                <span className="text-sm text-muted-foreground">Total {formData.tipoCombustible === 'diesel' ? 'Diesel' : 'Urea'}:</span>
+              </div>
+              <span className={cn(
+                "text-xl font-bold",
+                formData.tipoCombustible === 'diesel' ? 'text-amber-700' : 'text-sky-700'
+              )}>
                 ${total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
               </span>
             </div>
@@ -264,10 +352,15 @@ export function AddTicketModal({ open, onOpenChange, onSubmit }: AddTicketModalP
             </Button>
             <Button
               type="submit"
-              className="h-11 text-sm flex-1 bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
+              className={cn(
+                "h-11 text-sm flex-1 gap-2",
+                formData.tipoCombustible === 'diesel' 
+                  ? 'bg-amber-600 hover:bg-amber-700 text-white' 
+                  : 'bg-sky-600 hover:bg-sky-700 text-white'
+              )}
             >
               <Upload className="h-4 w-4" />
-              Registrar Carga
+              Registrar {formData.tipoCombustible === 'diesel' ? 'Diesel' : 'Urea'}
             </Button>
           </div>
         </form>
