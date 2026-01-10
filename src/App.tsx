@@ -22,6 +22,7 @@ import Despacho from "./pages/Despacho";
 import UsuariosSeguridad from "./pages/UsuariosSeguridad";
 import Tesoreria from "./pages/Tesoreria";
 import NotificacionesConfig from "./pages/NotificacionesConfig";
+import CargasMasivas from "./pages/CargasMasivas";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -53,6 +54,7 @@ const App = () => (
             <Route path="usuarios" element={<UsuariosSeguridad />} />
             <Route path="tesoreria" element={<Tesoreria />} />
             <Route path="notificaciones" element={<NotificacionesConfig />} />
+            <Route path="cargas-masivas" element={<CargasMasivas />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

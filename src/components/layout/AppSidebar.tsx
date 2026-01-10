@@ -19,6 +19,7 @@ import {
   Shield,
   Landmark,
   Bell,
+  Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -67,6 +68,7 @@ const menuItems: MenuItem[] = [
   { title: "Tesorería", icon: Landmark, path: "/tesoreria" },
   { title: "Usuarios", icon: Shield, path: "/usuarios" },
   { title: "Notificaciones", icon: Bell, path: "/notificaciones" },
+  { title: "Cargas Masivas", icon: Upload, path: "/cargas-masivas" },
   { title: "Configuración", icon: Settings, path: "/configuracion" },
 ];
 
