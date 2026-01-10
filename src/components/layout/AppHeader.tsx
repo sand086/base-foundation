@@ -1,4 +1,5 @@
-import { Bell, Search, ChevronDown } from "lucide-react";
+import { Bell, Search, ChevronDown, LogOut } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,8 +12,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useAuth } from "@/context/AuthContext";
 
 export function AppHeader() {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login', { replace: true });
+  };
+
   return (
     <header className="sticky top-0 z-30 flex h-12 items-center justify-between border-b border-border bg-card px-4">
       {/* Global Search */}
@@ -42,11 +52,13 @@ export function AppHeader() {
               <Avatar className="h-6 w-6">
                 <AvatarImage src="/placeholder.svg" />
                 <AvatarFallback className="bg-brand-red text-white text-[10px] font-bold">
-                  AD
+                  {user?.username?.slice(0, 2).toUpperCase() || 'AD'}
                 </AvatarFallback>
               </Avatar>
               <div className="flex flex-col items-start text-left">
-                <span className="text-xs font-medium leading-none">Administrador</span>
+                <span className="text-xs font-medium leading-none capitalize">
+                  {user?.username || 'Administrador'}
+                </span>
               </div>
               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
             </Button>
@@ -57,7 +69,11 @@ export function AppHeader() {
             <DropdownMenuItem className="text-xs">Perfil</DropdownMenuItem>
             <DropdownMenuItem className="text-xs">Configuración</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-xs text-brand-red">
+            <DropdownMenuItem 
+              className="text-xs text-brand-red cursor-pointer"
+              onClick={handleLogout}
+            >
+              <LogOut className="h-3.5 w-3.5 mr-2" />
               Cerrar Sesión
             </DropdownMenuItem>
           </DropdownMenuContent>
