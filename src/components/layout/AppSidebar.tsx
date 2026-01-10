@@ -48,6 +48,7 @@ const menuItems: MenuItem[] = [
     icon: Truck,
     children: [
       { title: "Unidades", path: "/flota" },
+      { title: "Operadores", path: "/flota/operadores" },
       { title: "Llantas", path: "/flota/llantas" },
       { title: "Mantenimiento", path: "/flota/mantenimiento" },
     ],
