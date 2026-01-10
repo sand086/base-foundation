@@ -1,5 +1,7 @@
 // Mock data for Fuel Loads (Cargas de Combustible)
 
+export type TipoCombustible = 'diesel' | 'urea';
+
 export interface CargaCombustible {
   id: string;
   fechaHora: string;
@@ -8,6 +10,7 @@ export interface CargaCombustible {
   operadorId: string;
   operadorNombre: string;
   estacion: string;
+  tipoCombustible: TipoCombustible;
   litros: number;
   precioPorLitro: number;
   total: number;
@@ -21,7 +24,8 @@ export interface CargaCombustible {
 export interface UnidadCombustible {
   id: string;
   numero: string;
-  capacidadTanque: number; // Litros
+  capacidadTanqueDiesel: number; // Litros
+  capacidadTanqueUrea: number; // Litros (typical DEF tank ~40-80L)
 }
 
 export interface OperadorCombustible {
@@ -30,13 +34,25 @@ export interface OperadorCombustible {
   unidadAsignada: string;
 }
 
+// Tank capacity limits
+export const CAPACIDADES_TANQUE = {
+  diesel: { min: 100, max: 1200, default: 800 },
+  urea: { min: 20, max: 100, default: 80 },
+};
+
+// Average prices (for reference)
+export const PRECIOS_PROMEDIO = {
+  diesel: 23.85,
+  urea: 18.50,
+};
+
 export const unidadesCombustible: UnidadCombustible[] = [
-  { id: 'U-001', numero: 'TR-204', capacidadTanque: 800 },
-  { id: 'U-002', numero: 'TR-118', capacidadTanque: 600 },
-  { id: 'U-003', numero: 'TR-156', capacidadTanque: 1000 },
-  { id: 'U-004', numero: 'TR-089', capacidadTanque: 800 },
-  { id: 'U-005', numero: 'TR-201', capacidadTanque: 1000 },
-  { id: 'U-006', numero: 'TR-305', capacidadTanque: 600 },
+  { id: 'U-001', numero: 'TR-204', capacidadTanqueDiesel: 800, capacidadTanqueUrea: 60 },
+  { id: 'U-002', numero: 'TR-118', capacidadTanqueDiesel: 600, capacidadTanqueUrea: 50 },
+  { id: 'U-003', numero: 'TR-156', capacidadTanqueDiesel: 1000, capacidadTanqueUrea: 80 },
+  { id: 'U-004', numero: 'TR-089', capacidadTanqueDiesel: 800, capacidadTanqueUrea: 60 },
+  { id: 'U-005', numero: 'TR-201', capacidadTanqueDiesel: 1000, capacidadTanqueUrea: 80 },
+  { id: 'U-006', numero: 'TR-305', capacidadTanqueDiesel: 600, capacidadTanqueUrea: 50 },
 ];
 
 export const operadoresCombustible: OperadorCombustible[] = [
@@ -57,6 +73,7 @@ export const mockCargasCombustible: CargaCombustible[] = [
     operadorId: 'OP-001',
     operadorNombre: 'Juan Pérez González',
     estacion: 'OXXO Gas - Querétaro Norte',
+    tipoCombustible: 'diesel',
     litros: 450,
     precioPorLitro: 23.85,
     total: 10732.50,
@@ -74,6 +91,7 @@ export const mockCargasCombustible: CargaCombustible[] = [
     operadorId: 'OP-002',
     operadorNombre: 'Roberto Martínez Luna',
     estacion: 'Pemex - Puebla Centro',
+    tipoCombustible: 'diesel',
     litros: 380,
     precioPorLitro: 23.50,
     total: 8930.00,
@@ -91,6 +109,7 @@ export const mockCargasCombustible: CargaCombustible[] = [
     operadorId: 'OP-003',
     operadorNombre: 'Carlos Hernández Ruiz',
     estacion: 'BP - Monterrey Sur',
+    tipoCombustible: 'diesel',
     litros: 1150, // Exceeds tank capacity
     precioPorLitro: 24.10,
     total: 27715.00,
@@ -101,12 +120,31 @@ export const mockCargasCombustible: CargaCombustible[] = [
   },
   {
     id: 'CRG-004',
+    fechaHora: '2026-01-09 09:30',
+    unidadId: 'U-001',
+    unidadNumero: 'TR-204',
+    operadorId: 'OP-001',
+    operadorNombre: 'Juan Pérez González',
+    estacion: 'AdBlue Center - Querétaro',
+    tipoCombustible: 'urea',
+    litros: 45,
+    precioPorLitro: 18.50,
+    total: 832.50,
+    odometro: 245890,
+    evidenciaUrl: '/ticket-urea-001.jpg',
+    tieneEvidencia: true,
+    capacidadTanque: 60,
+    excedeTanque: false,
+  },
+  {
+    id: 'CRG-005',
     fechaHora: '2026-01-08 18:20',
     unidadId: 'U-004',
     unidadNumero: 'TR-089',
     operadorId: 'OP-004',
     operadorNombre: 'Miguel Ángel Soto',
     estacion: 'Mobil - Guadalajara Periférico',
+    tipoCombustible: 'diesel',
     litros: 520,
     precioPorLitro: 23.75,
     total: 12350.00,
@@ -117,13 +155,14 @@ export const mockCargasCombustible: CargaCombustible[] = [
     excedeTanque: false,
   },
   {
-    id: 'CRG-005',
+    id: 'CRG-006',
     fechaHora: '2026-01-08 15:00',
     unidadId: 'U-005',
     unidadNumero: 'TR-201',
     operadorId: 'OP-005',
     operadorNombre: 'Fernando García Vega',
     estacion: 'OXXO Gas - CDMX Tepeyac',
+    tipoCombustible: 'diesel',
     litros: 680,
     precioPorLitro: 23.90,
     total: 16252.00,
@@ -134,13 +173,31 @@ export const mockCargasCombustible: CargaCombustible[] = [
     excedeTanque: false,
   },
   {
-    id: 'CRG-006',
+    id: 'CRG-007',
+    fechaHora: '2026-01-08 14:45',
+    unidadId: 'U-003',
+    unidadNumero: 'TR-156',
+    operadorId: 'OP-003',
+    operadorNombre: 'Carlos Hernández Ruiz',
+    estacion: 'DEF Station - Monterrey',
+    tipoCombustible: 'urea',
+    litros: 95, // Exceeds tank capacity
+    precioPorLitro: 19.00,
+    total: 1805.00,
+    odometro: 312750,
+    tieneEvidencia: false,
+    capacidadTanque: 80,
+    excedeTanque: true,
+  },
+  {
+    id: 'CRG-008',
     fechaHora: '2026-01-08 11:30',
     unidadId: 'U-006',
     unidadNumero: 'TR-305',
     operadorId: 'OP-006',
     operadorNombre: 'Antonio López Díaz',
     estacion: 'Pemex - León Industrial',
+    tipoCombustible: 'diesel',
     litros: 720, // Exceeds tank capacity
     precioPorLitro: 23.60,
     total: 16992.00,
@@ -150,13 +207,14 @@ export const mockCargasCombustible: CargaCombustible[] = [
     excedeTanque: true,
   },
   {
-    id: 'CRG-007',
+    id: 'CRG-009',
     fechaHora: '2026-01-07 16:45',
     unidadId: 'U-001',
     unidadNumero: 'TR-204',
     operadorId: 'OP-001',
     operadorNombre: 'Juan Pérez González',
     estacion: 'Shell - San Luis Potosí',
+    tipoCombustible: 'diesel',
     litros: 550,
     precioPorLitro: 24.00,
     total: 13200.00,
@@ -167,13 +225,32 @@ export const mockCargasCombustible: CargaCombustible[] = [
     excedeTanque: false,
   },
   {
-    id: 'CRG-008',
+    id: 'CRG-010',
+    fechaHora: '2026-01-07 16:30',
+    unidadId: 'U-005',
+    unidadNumero: 'TR-201',
+    operadorId: 'OP-005',
+    operadorNombre: 'Fernando García Vega',
+    estacion: 'AdBlue Express - CDMX',
+    tipoCombustible: 'urea',
+    litros: 55,
+    precioPorLitro: 18.00,
+    total: 990.00,
+    odometro: 156100,
+    evidenciaUrl: '/ticket-urea-002.jpg',
+    tieneEvidencia: true,
+    capacidadTanque: 80,
+    excedeTanque: false,
+  },
+  {
+    id: 'CRG-011',
     fechaHora: '2026-01-07 08:00',
     unidadId: 'U-002',
     unidadNumero: 'TR-118',
     operadorId: 'OP-002',
     operadorNombre: 'Roberto Martínez Luna',
     estacion: 'Chevron - Veracruz Puerto',
+    tipoCombustible: 'diesel',
     litros: 400,
     precioPorLitro: 23.45,
     total: 9380.00,
