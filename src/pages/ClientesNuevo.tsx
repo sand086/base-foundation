@@ -1,20 +1,56 @@
 import { useState } from "react";
-import { Users, Plus, Trash2, Upload, ArrowLeft, Check } from "lucide-react";
+import { Users, Plus, Trash2, Upload, ArrowLeft, Check, MapPin, Building2, Phone, Clock, Edit2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
-interface SubClient {
+interface SubClienteForm {
   id: string;
+  nombre: string;
   alias: string;
   direccion: string;
+  ciudad: string;
+  estado: string;
+  codigoPostal: string;
   tipoOperacion: string;
+  contacto: string;
+  telefono: string;
+  horarioRecepcion: string;
 }
+
+const emptySubCliente: SubClienteForm = {
+  id: "",
+  nombre: "",
+  alias: "",
+  direccion: "",
+  ciudad: "",
+  estado: "",
+  codigoPostal: "",
+  tipoOperacion: "",
+  contacto: "",
+  telefono: "",
+  horarioRecepcion: "",
+};
+
+const estadosMexico = [
+  "Aguascalientes", "Baja California", "Baja California Sur", "Campeche", "Chiapas",
+  "Chihuahua", "Ciudad de México", "Coahuila", "Colima", "Durango", "Estado de México",
+  "Guanajuato", "Guerrero", "Hidalgo", "Jalisco", "Michoacán", "Morelos", "Nayarit",
+  "Nuevo León", "Oaxaca", "Puebla", "Querétaro", "Quintana Roo", "San Luis Potosí",
+  "Sinaloa", "Sonora", "Tabasco", "Tamaulipas", "Tlaxcala", "Veracruz", "Yucatán", "Zacatecas"
+];
 
 export default function ClientesNuevo() {
   const navigate = useNavigate();
@@ -24,40 +60,83 @@ export default function ClientesNuevo() {
     rfc: "",
     regimenFiscal: "",
     usoCFDI: "",
+    direccionFiscal: "",
+    contactoPrincipal: "",
+    telefono: "",
+    email: "",
   });
-  const [subClients, setSubClients] = useState<SubClient[]>([]);
-  const [newSubClient, setNewSubClient] = useState<SubClient>({
-    id: "",
-    alias: "",
-    direccion: "",
-    tipoOperacion: "",
-  });
-  const [showSubClientForm, setShowSubClientForm] = useState(false);
+  const [subClientes, setSubClientes] = useState<SubClienteForm[]>([]);
+  const [editingSubCliente, setEditingSubCliente] = useState<SubClienteForm | null>(null);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
 
-  const addSubClient = () => {
-    if (!newSubClient.alias || !newSubClient.direccion || !newSubClient.tipoOperacion) {
-      toast.error("Completa todos los campos del subcliente");
-      return;
-    }
-    setSubClients([...subClients, { ...newSubClient, id: Date.now().toString() }]);
-    setNewSubClient({ id: "", alias: "", direccion: "", tipoOperacion: "" });
-    setShowSubClientForm(false);
-    toast.success("Subcliente agregado");
+  const addSubCliente = () => {
+    const newSub: SubClienteForm = {
+      ...emptySubCliente,
+      id: `SUB-${Date.now()}`,
+    };
+    setSubClientes([...subClientes, newSub]);
+    setEditingSubCliente(newSub);
+    setEditingIndex(subClientes.length);
   };
 
-  const removeSubClient = (id: string) => {
-    setSubClients(subClients.filter((s) => s.id !== id));
+  const updateSubCliente = (index: number, field: keyof SubClienteForm, value: string) => {
+    const updated = [...subClientes];
+    updated[index] = { ...updated[index], [field]: value };
+    setSubClientes(updated);
+    if (editingIndex === index) {
+      setEditingSubCliente(updated[index]);
+    }
+  };
+
+  const removeSubCliente = (index: number) => {
+    setSubClientes(subClientes.filter((_, i) => i !== index));
+    if (editingIndex === index) {
+      setEditingSubCliente(null);
+      setEditingIndex(null);
+    }
+    toast.success("Subcliente eliminado");
+  };
+
+  const saveSubCliente = () => {
+    if (editingIndex !== null && editingSubCliente) {
+      if (!editingSubCliente.nombre || !editingSubCliente.direccion || !editingSubCliente.ciudad) {
+        toast.error("Complete los campos obligatorios del subcliente");
+        return;
+      }
+      toast.success("Subcliente guardado");
+      setEditingSubCliente(null);
+      setEditingIndex(null);
+    }
   };
 
   const handleSave = () => {
-    toast.success("Cliente guardado exitosamente");
+    if (!fiscalData.razonSocial || !fiscalData.rfc) {
+      toast.error("Complete los datos fiscales obligatorios");
+      return;
+    }
+    toast.success("Cliente guardado exitosamente", {
+      description: `${fiscalData.razonSocial} con ${subClientes.length} subcliente(s)`,
+    });
     navigate("/clientes");
   };
 
   const canProceed = fiscalData.razonSocial && fiscalData.rfc;
 
+  const getOperationBadge = (tipo: string) => {
+    switch (tipo) {
+      case 'nacional':
+        return <Badge className="bg-status-success text-white">Nacional</Badge>;
+      case 'importacion':
+        return <Badge className="bg-status-info text-white">Importación</Badge>;
+      case 'exportacion':
+        return <Badge className="bg-amber-500 text-white">Exportación</Badge>;
+      default:
+        return <Badge variant="outline">Sin definir</Badge>;
+    }
+  };
+
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
+    <div className="space-y-6 max-w-5xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => navigate("/clientes")}>
@@ -84,7 +163,7 @@ export default function ClientesNuevo() {
           <div className={`w-8 h-8 rounded-full flex items-center justify-center font-medium ${step >= 2 ? "bg-primary text-primary-foreground" : "bg-muted"}`}>
             2
           </div>
-          <span className="font-medium">Subclientes</span>
+          <span className="font-medium">Subclientes / Destinos</span>
         </div>
       </div>
 
@@ -92,7 +171,10 @@ export default function ClientesNuevo() {
       {step === 1 && (
         <Card>
           <CardHeader>
-            <CardTitle>Datos Fiscales (Receptor CFDI)</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5" />
+              Datos Fiscales (Receptor CFDI)
+            </CardTitle>
             <CardDescription>Información fiscal del cliente para facturación</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -112,6 +194,7 @@ export default function ClientesNuevo() {
                   value={fiscalData.rfc}
                   onChange={(e) => setFiscalData({ ...fiscalData, rfc: e.target.value.toUpperCase() })}
                   maxLength={13}
+                  className="font-mono"
                 />
               </div>
             </div>
@@ -124,7 +207,7 @@ export default function ClientesNuevo() {
                   onValueChange={(value) => setFiscalData({ ...fiscalData, regimenFiscal: value })}
                 >
                   <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-popover border shadow-lg z-50">
                     <SelectItem value="601">601 - General de Ley</SelectItem>
                     <SelectItem value="603">603 - Personas Morales sin Fines de Lucro</SelectItem>
                     <SelectItem value="612">612 - Personas Físicas con Actividades Empresariales</SelectItem>
@@ -139,12 +222,49 @@ export default function ClientesNuevo() {
                   onValueChange={(value) => setFiscalData({ ...fiscalData, usoCFDI: value })}
                 >
                   <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-popover border shadow-lg z-50">
                     <SelectItem value="G03">G03 - Gastos en general</SelectItem>
                     <SelectItem value="P01">P01 - Por definir</SelectItem>
                     <SelectItem value="S01">S01 - Sin efectos fiscales</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Dirección Fiscal</Label>
+              <Input
+                placeholder="Av. Ejemplo 123, Col. Centro, Ciudad, Estado, CP"
+                value={fiscalData.direccionFiscal}
+                onChange={(e) => setFiscalData({ ...fiscalData, direccionFiscal: e.target.value })}
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>Contacto Principal</Label>
+                <Input
+                  placeholder="Lic. Juan Pérez"
+                  value={fiscalData.contactoPrincipal}
+                  onChange={(e) => setFiscalData({ ...fiscalData, contactoPrincipal: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Teléfono</Label>
+                <Input
+                  placeholder="55 1234 5678"
+                  value={fiscalData.telefono}
+                  onChange={(e) => setFiscalData({ ...fiscalData, telefono: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <Input
+                  type="email"
+                  placeholder="contacto@empresa.com"
+                  value={fiscalData.email}
+                  onChange={(e) => setFiscalData({ ...fiscalData, email: e.target.value })}
+                />
               </div>
             </div>
 
@@ -169,116 +289,230 @@ export default function ClientesNuevo() {
         </Card>
       )}
 
-      {/* Step 2: Sub-Clients */}
+      {/* Step 2: Sub-Clients with Dynamic Array */}
       {step === 2 && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Subclientes y Direcciones de Entrega</CardTitle>
-                <CardDescription>Agrega las sucursales o ubicaciones de entrega del cliente</CardDescription>
-              </div>
-              <Button onClick={() => setShowSubClientForm(true)} size="sm" disabled={showSubClientForm}>
-                <Plus className="h-4 w-4 mr-2" /> Agregar Subcliente
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* New Sub-Client Form */}
-            {showSubClientForm && (
-              <div className="border rounded-md p-4 bg-muted/30 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-medium text-sm">Nuevo Subcliente</h4>
-                  <Button variant="ghost" size="sm" onClick={() => setShowSubClientForm(false)}>
-                    Cancelar
-                  </Button>
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <MapPin className="h-5 w-5" />
+                    Subclientes y Direcciones de Entrega
+                  </CardTitle>
+                  <CardDescription>
+                    Agrega las sucursales, plantas o ubicaciones de entrega del cliente "{fiscalData.razonSocial}"
+                  </CardDescription>
                 </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label>Alias *</Label>
-                    <Input
-                      placeholder="Ej: Planta Norte"
-                      value={newSubClient.alias}
-                      onChange={(e) => setNewSubClient({ ...newSubClient, alias: e.target.value })}
-                    />
-                  </div>
-                  <div className="col-span-2 space-y-2">
-                    <Label>Dirección Completa *</Label>
-                    <Input
-                      placeholder="Av. Industrial 123, Col. Centro, Monterrey, NL"
-                      value={newSubClient.direccion}
-                      onChange={(e) => setNewSubClient({ ...newSubClient, direccion: e.target.value })}
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label>Tipo de Operación *</Label>
-                    <Select
-                      value={newSubClient.tipoOperacion}
-                      onValueChange={(value) => setNewSubClient({ ...newSubClient, tipoOperacion: value })}
-                    >
-                      <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="nacional">Nacional</SelectItem>
-                        <SelectItem value="importacion">Importación</SelectItem>
-                        <SelectItem value="exportacion">Exportación</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="col-span-2 flex items-end">
-                    <Button onClick={addSubClient} className="w-full">
-                      <Plus className="h-4 w-4 mr-2" /> Agregar Subcliente
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Sub-Clients List */}
-            {subClients.length === 0 && !showSubClientForm ? (
-              <div className="text-center py-8 border rounded-md bg-muted/20">
-                <Users className="h-10 w-10 mx-auto text-muted-foreground mb-2" />
-                <p className="text-muted-foreground">No hay subclientes agregados</p>
-                <Button variant="link" onClick={() => setShowSubClientForm(true)}>
-                  + Agregar el primer subcliente
+                <Button onClick={addSubCliente} className="gap-2 bg-action hover:bg-action-hover text-action-foreground">
+                  <Plus className="h-4 w-4" /> Agregar Destino
                 </Button>
               </div>
-            ) : (
-              <div className="space-y-2">
-                {subClients.map((sub, idx) => (
-                  <div key={sub.id} className="flex items-center justify-between border rounded-md p-3 hover:bg-muted/30">
-                    <div className="flex items-center gap-4">
-                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium text-sm">
-                        {idx + 1}
-                      </div>
-                      <div>
-                        <p className="font-medium">{sub.alias}</p>
-                        <p className="text-sm text-muted-foreground">{sub.direccion}</p>
-                      </div>
+            </CardHeader>
+            <CardContent>
+              {subClientes.length === 0 ? (
+                <div className="text-center py-12 border-2 border-dashed rounded-lg bg-muted/20">
+                  <MapPin className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+                  <h3 className="font-semibold text-lg mb-1">Sin subclientes registrados</h3>
+                  <p className="text-muted-foreground text-sm mb-4">
+                    Agrega ubicaciones de entrega como plantas, almacenes o sucursales
+                  </p>
+                  <Button variant="outline" onClick={addSubCliente}>
+                    <Plus className="h-4 w-4 mr-2" /> Agregar primer destino
+                  </Button>
+                </div>
+              ) : (
+                <Accordion type="single" collapsible className="space-y-2" value={editingIndex !== null ? `sub-${editingIndex}` : undefined}>
+                  {subClientes.map((sub, idx) => (
+                    <AccordionItem 
+                      key={sub.id} 
+                      value={`sub-${idx}`}
+                      className={cn(
+                        "border rounded-lg overflow-hidden transition-all",
+                        editingIndex === idx ? "ring-2 ring-primary" : ""
+                      )}
+                    >
+                      <AccordionTrigger className="px-4 py-3 hover:bg-muted/50 [&[data-state=open]]:bg-muted/50">
+                        <div className="flex items-center gap-4 flex-1 text-left">
+                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium text-sm">
+                            {idx + 1}
+                          </div>
+                          <div className="flex-1">
+                            <p className="font-semibold">
+                              {sub.nombre || <span className="text-muted-foreground italic">Nombre del destino...</span>}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              {sub.ciudad && sub.estado ? `${sub.ciudad}, ${sub.estado}` : 'Sin ubicación'}
+                            </p>
+                          </div>
+                          {sub.tipoOperacion && getOperationBadge(sub.tipoOperacion)}
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent className="px-4 pb-4">
+                        <div className="space-y-4 pt-4 border-t">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label>Nombre del Destino *</Label>
+                              <Input
+                                placeholder="Ej: Planta Norte Monterrey"
+                                value={sub.nombre}
+                                onChange={(e) => updateSubCliente(idx, 'nombre', e.target.value)}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Alias (corto)</Label>
+                              <Input
+                                placeholder="Ej: Planta Norte"
+                                value={sub.alias}
+                                onChange={(e) => updateSubCliente(idx, 'alias', e.target.value)}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label>Dirección Completa *</Label>
+                            <Input
+                              placeholder="Av. Industrial 123, Parque Industrial..."
+                              value={sub.direccion}
+                              onChange={(e) => updateSubCliente(idx, 'direccion', e.target.value)}
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-4 gap-4">
+                            <div className="space-y-2">
+                              <Label>Ciudad *</Label>
+                              <Input
+                                placeholder="Monterrey"
+                                value={sub.ciudad}
+                                onChange={(e) => updateSubCliente(idx, 'ciudad', e.target.value)}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Estado</Label>
+                              <Select
+                                value={sub.estado}
+                                onValueChange={(value) => updateSubCliente(idx, 'estado', value)}
+                              >
+                                <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                                <SelectContent className="bg-popover border shadow-lg z-50 max-h-60">
+                                  {estadosMexico.map((edo) => (
+                                    <SelectItem key={edo} value={edo}>{edo}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Código Postal</Label>
+                              <Input
+                                placeholder="64000"
+                                value={sub.codigoPostal}
+                                onChange={(e) => updateSubCliente(idx, 'codigoPostal', e.target.value)}
+                                maxLength={5}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Tipo Operación</Label>
+                              <Select
+                                value={sub.tipoOperacion}
+                                onValueChange={(value) => updateSubCliente(idx, 'tipoOperacion', value)}
+                              >
+                                <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                                <SelectContent className="bg-popover border shadow-lg z-50">
+                                  <SelectItem value="nacional">Nacional</SelectItem>
+                                  <SelectItem value="importacion">Importación</SelectItem>
+                                  <SelectItem value="exportacion">Exportación</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-4">
+                            <div className="space-y-2">
+                              <Label className="flex items-center gap-1">
+                                <Users className="h-3 w-3" /> Contacto
+                              </Label>
+                              <Input
+                                placeholder="Ing. Roberto Salinas"
+                                value={sub.contacto}
+                                onChange={(e) => updateSubCliente(idx, 'contacto', e.target.value)}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="flex items-center gap-1">
+                                <Phone className="h-3 w-3" /> Teléfono
+                              </Label>
+                              <Input
+                                placeholder="81 5555 4444"
+                                value={sub.telefono}
+                                onChange={(e) => updateSubCliente(idx, 'telefono', e.target.value)}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="flex items-center gap-1">
+                                <Clock className="h-3 w-3" /> Horario Recepción
+                              </Label>
+                              <Input
+                                placeholder="Lun-Vie 7:00-17:00"
+                                value={sub.horarioRecepcion}
+                                onChange={(e) => updateSubCliente(idx, 'horarioRecepcion', e.target.value)}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex justify-end pt-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                              onClick={() => removeSubCliente(idx)}
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Eliminar destino
+                            </Button>
+                          </div>
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Summary Card */}
+          {subClientes.length > 0 && (
+            <Card className="bg-muted/30">
+              <CardContent className="py-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-6">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Cliente</p>
+                      <p className="font-semibold">{fiscalData.razonSocial}</p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="capitalize">{sub.tipoOperacion}</Badge>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => removeSubClient(sub.id)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                    <div>
+                      <p className="text-sm text-muted-foreground">RFC</p>
+                      <p className="font-mono">{fiscalData.rfc}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Destinos</p>
+                      <p className="font-semibold text-primary">{subClientes.length}</p>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
-            {/* Navigation */}
-            <div className="flex justify-between pt-4 border-t">
-              <Button variant="outline" onClick={() => setStep(1)}>
-                <ArrowLeft className="h-4 w-4 mr-2" /> Anterior
-              </Button>
-              <Button onClick={handleSave}>
-                Guardar Cliente
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+          {/* Navigation */}
+          <div className="flex justify-between pt-4">
+            <Button variant="outline" onClick={() => setStep(1)}>
+              <ArrowLeft className="h-4 w-4 mr-2" /> Anterior
+            </Button>
+            <Button onClick={handleSave} className="bg-action hover:bg-action-hover text-action-foreground">
+              Guardar Cliente
+            </Button>
+          </div>
+        </div>
       )}
     </div>
   );
