@@ -4,7 +4,7 @@ export interface Usuario {
   id: string;
   nombre: string;
   email: string;
-  rol: 'admin' | 'operativo' | 'finanzas' | 'supervisor';
+  rol: 'admin' | 'operativo' | 'finanzas' | 'supervisor' | 'taller';
   empresa: string;
   estado: 'activo' | 'inactivo';
   ultimoAcceso: string;
@@ -29,6 +29,7 @@ export interface Permiso {
   ver: boolean;
   editar: boolean;
   eliminar: boolean;
+  exportar: boolean;
 }
 
 export interface RolPermisos {
@@ -118,6 +119,12 @@ export const roles: Rol[] = [
     descripcion: 'Monitoreo y reportes',
     color: 'warning',
   },
+  {
+    id: 'taller',
+    nombre: 'Taller',
+    descripcion: 'Mantenimiento y reparaciones',
+    color: 'info',
+  },
 ];
 
 export const modulos: Modulo[] = [
@@ -137,54 +144,70 @@ export const modulos: Modulo[] = [
 export const permisosDefault: RolPermisos[] = [
   {
     rolId: 'admin',
-    permisos: modulos.map(m => ({ moduloId: m.id, ver: true, editar: true, eliminar: true })),
+    permisos: modulos.map(m => ({ moduloId: m.id, ver: true, editar: true, eliminar: true, exportar: true })),
   },
   {
     rolId: 'operativo',
     permisos: [
-      { moduloId: 'dashboard', ver: true, editar: false, eliminar: false },
-      { moduloId: 'monitoreo', ver: true, editar: true, eliminar: false },
-      { moduloId: 'clientes', ver: true, editar: false, eliminar: false },
-      { moduloId: 'flota', ver: true, editar: true, eliminar: false },
-      { moduloId: 'combustible', ver: true, editar: true, eliminar: false },
-      { moduloId: 'tarifas', ver: true, editar: false, eliminar: false },
-      { moduloId: 'despacho', ver: true, editar: true, eliminar: false },
-      { moduloId: 'cxc', ver: false, editar: false, eliminar: false },
-      { moduloId: 'cxp', ver: false, editar: false, eliminar: false },
-      { moduloId: 'reportes', ver: true, editar: false, eliminar: false },
-      { moduloId: 'usuarios', ver: false, editar: false, eliminar: false },
+      { moduloId: 'dashboard', ver: true, editar: false, eliminar: false, exportar: true },
+      { moduloId: 'monitoreo', ver: true, editar: true, eliminar: false, exportar: true },
+      { moduloId: 'clientes', ver: true, editar: false, eliminar: false, exportar: false },
+      { moduloId: 'flota', ver: true, editar: true, eliminar: false, exportar: true },
+      { moduloId: 'combustible', ver: true, editar: true, eliminar: false, exportar: true },
+      { moduloId: 'tarifas', ver: true, editar: false, eliminar: false, exportar: false },
+      { moduloId: 'despacho', ver: true, editar: true, eliminar: false, exportar: true },
+      { moduloId: 'cxc', ver: false, editar: false, eliminar: false, exportar: false },
+      { moduloId: 'cxp', ver: false, editar: false, eliminar: false, exportar: false },
+      { moduloId: 'reportes', ver: true, editar: false, eliminar: false, exportar: true },
+      { moduloId: 'usuarios', ver: false, editar: false, eliminar: false, exportar: false },
     ],
   },
   {
     rolId: 'finanzas',
     permisos: [
-      { moduloId: 'dashboard', ver: true, editar: false, eliminar: false },
-      { moduloId: 'monitoreo', ver: true, editar: false, eliminar: false },
-      { moduloId: 'clientes', ver: true, editar: true, eliminar: false },
-      { moduloId: 'flota', ver: true, editar: false, eliminar: false },
-      { moduloId: 'combustible', ver: true, editar: true, eliminar: true },
-      { moduloId: 'tarifas', ver: true, editar: true, eliminar: true },
-      { moduloId: 'despacho', ver: true, editar: false, eliminar: false },
-      { moduloId: 'cxc', ver: true, editar: true, eliminar: true },
-      { moduloId: 'cxp', ver: true, editar: true, eliminar: true },
-      { moduloId: 'reportes', ver: true, editar: true, eliminar: false },
-      { moduloId: 'usuarios', ver: false, editar: false, eliminar: false },
+      { moduloId: 'dashboard', ver: true, editar: false, eliminar: false, exportar: true },
+      { moduloId: 'monitoreo', ver: true, editar: false, eliminar: false, exportar: false },
+      { moduloId: 'clientes', ver: true, editar: true, eliminar: false, exportar: true },
+      { moduloId: 'flota', ver: true, editar: false, eliminar: false, exportar: false },
+      { moduloId: 'combustible', ver: true, editar: true, eliminar: true, exportar: true },
+      { moduloId: 'tarifas', ver: true, editar: true, eliminar: true, exportar: true },
+      { moduloId: 'despacho', ver: true, editar: false, eliminar: false, exportar: false },
+      { moduloId: 'cxc', ver: true, editar: true, eliminar: true, exportar: true },
+      { moduloId: 'cxp', ver: true, editar: true, eliminar: true, exportar: true },
+      { moduloId: 'reportes', ver: true, editar: true, eliminar: false, exportar: true },
+      { moduloId: 'usuarios', ver: false, editar: false, eliminar: false, exportar: false },
     ],
   },
   {
     rolId: 'supervisor',
     permisos: [
-      { moduloId: 'dashboard', ver: true, editar: false, eliminar: false },
-      { moduloId: 'monitoreo', ver: true, editar: true, eliminar: false },
-      { moduloId: 'clientes', ver: true, editar: false, eliminar: false },
-      { moduloId: 'flota', ver: true, editar: true, eliminar: false },
-      { moduloId: 'combustible', ver: true, editar: false, eliminar: false },
-      { moduloId: 'tarifas', ver: true, editar: false, eliminar: false },
-      { moduloId: 'despacho', ver: true, editar: true, eliminar: false },
-      { moduloId: 'cxc', ver: true, editar: false, eliminar: false },
-      { moduloId: 'cxp', ver: true, editar: false, eliminar: false },
-      { moduloId: 'reportes', ver: true, editar: true, eliminar: false },
-      { moduloId: 'usuarios', ver: false, editar: false, eliminar: false },
+      { moduloId: 'dashboard', ver: true, editar: false, eliminar: false, exportar: true },
+      { moduloId: 'monitoreo', ver: true, editar: true, eliminar: false, exportar: true },
+      { moduloId: 'clientes', ver: true, editar: false, eliminar: false, exportar: false },
+      { moduloId: 'flota', ver: true, editar: true, eliminar: false, exportar: true },
+      { moduloId: 'combustible', ver: true, editar: false, eliminar: false, exportar: true },
+      { moduloId: 'tarifas', ver: true, editar: false, eliminar: false, exportar: false },
+      { moduloId: 'despacho', ver: true, editar: true, eliminar: false, exportar: true },
+      { moduloId: 'cxc', ver: true, editar: false, eliminar: false, exportar: true },
+      { moduloId: 'cxp', ver: true, editar: false, eliminar: false, exportar: true },
+      { moduloId: 'reportes', ver: true, editar: true, eliminar: false, exportar: true },
+      { moduloId: 'usuarios', ver: false, editar: false, eliminar: false, exportar: false },
+    ],
+  },
+  {
+    rolId: 'taller',
+    permisos: [
+      { moduloId: 'dashboard', ver: true, editar: false, eliminar: false, exportar: false },
+      { moduloId: 'monitoreo', ver: true, editar: false, eliminar: false, exportar: false },
+      { moduloId: 'clientes', ver: false, editar: false, eliminar: false, exportar: false },
+      { moduloId: 'flota', ver: true, editar: true, eliminar: false, exportar: true },
+      { moduloId: 'combustible', ver: true, editar: true, eliminar: false, exportar: true },
+      { moduloId: 'tarifas', ver: false, editar: false, eliminar: false, exportar: false },
+      { moduloId: 'despacho', ver: false, editar: false, eliminar: false, exportar: false },
+      { moduloId: 'cxc', ver: false, editar: false, eliminar: false, exportar: false },
+      { moduloId: 'cxp', ver: false, editar: false, eliminar: false, exportar: false },
+      { moduloId: 'reportes', ver: true, editar: false, eliminar: false, exportar: true },
+      { moduloId: 'usuarios', ver: false, editar: false, eliminar: false, exportar: false },
     ],
   },
 ];

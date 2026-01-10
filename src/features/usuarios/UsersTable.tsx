@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { StatusBadge } from '@/components/ui/status-badge';
+import { Switch } from '@/components/ui/switch';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { usuarios, roles, Usuario } from '@/data/usuariosData';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 import {
   Search,
   UserPlus,
@@ -36,13 +37,26 @@ interface UsersTableProps {
 
 export function UsersTable({ onAddUser }: UsersTableProps) {
   const [search, setSearch] = useState('');
-  const [users] = useState<Usuario[]>(usuarios);
+  const [users, setUsers] = useState<Usuario[]>(usuarios);
 
   const filteredUsers = users.filter(
     (user) =>
       user.nombre.toLowerCase().includes(search.toLowerCase()) ||
       user.email.toLowerCase().includes(search.toLowerCase())
   );
+
+  const handleToggleStatus = (userId: string) => {
+    setUsers(prev => 
+      prev.map(user => {
+        if (user.id !== userId) return user;
+        const newStatus = user.estado === 'activo' ? 'inactivo' : 'activo';
+        toast.success(`Usuario ${newStatus === 'activo' ? 'activado' : 'desactivado'}`, {
+          description: `${user.nombre} ha sido ${newStatus === 'activo' ? 'activado' : 'desactivado'}.`,
+        });
+        return { ...user, estado: newStatus };
+      })
+    );
+  };
 
   const getRolBadge = (rolId: string) => {
     const rol = roles.find(r => r.id === rolId);
@@ -96,7 +110,7 @@ export function UsersTable({ onAddUser }: UsersTableProps) {
         
         <Button
           onClick={onAddUser}
-          className="h-9 gap-2 bg-brand-green hover:bg-brand-green/90 text-white"
+          className="h-9 gap-2 bg-action hover:bg-action-hover text-action-foreground"
         >
           <UserPlus className="h-4 w-4" />
           Agregar Usuario
@@ -107,13 +121,13 @@ export function UsersTable({ onAddUser }: UsersTableProps) {
       <div className="border rounded-lg overflow-hidden">
         <Table className="table-dense">
           <TableHeader>
-            <TableRow className="bg-table-header hover:bg-table-header">
-              <TableHead className="w-[280px]">Usuario</TableHead>
-              <TableHead>Rol</TableHead>
-              <TableHead>Empresa</TableHead>
-              <TableHead className="text-center">Estado</TableHead>
-              <TableHead>Último Acceso</TableHead>
-              <TableHead className="w-[60px] text-center">Acciones</TableHead>
+            <TableRow className="bg-primary hover:bg-primary">
+              <TableHead className="w-[280px] text-primary-foreground font-semibold">Usuario</TableHead>
+              <TableHead className="text-primary-foreground font-semibold">Rol</TableHead>
+              <TableHead className="text-primary-foreground font-semibold">Empresa</TableHead>
+              <TableHead className="text-primary-foreground font-semibold">Último Acceso</TableHead>
+              <TableHead className="text-center text-primary-foreground font-semibold">Estatus</TableHead>
+              <TableHead className="w-[60px] text-center text-primary-foreground font-semibold">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -122,12 +136,12 @@ export function UsersTable({ onAddUser }: UsersTableProps) {
                 <TableCell>
                   <div className="flex items-center gap-3">
                     <Avatar className="h-8 w-8">
-                      <AvatarFallback className="bg-brand-dark text-white text-xs">
+                      <AvatarFallback className="bg-primary text-primary-foreground text-xs">
                         {getInitials(user.nombre)}
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <div className="text-sm font-medium text-brand-dark">
+                      <div className="text-sm font-medium text-foreground">
                         {user.nombre}
                       </div>
                       <div className="text-xs text-muted-foreground">
@@ -137,16 +151,28 @@ export function UsersTable({ onAddUser }: UsersTableProps) {
                   </div>
                 </TableCell>
                 <TableCell>{getRolBadge(user.rol)}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  {user.empresa}
-                </TableCell>
-                <TableCell className="text-center">
-                  <StatusBadge status={user.estado === 'activo' ? 'success' : 'danger'}>
-                    {user.estado === 'activo' ? 'Activo' : 'Inactivo'}
-                  </StatusBadge>
+                <TableCell>
+                  <Badge variant="secondary" className="text-xs">
+                    {user.empresa}
+                  </Badge>
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
                   {user.ultimoAcceso}
+                </TableCell>
+                <TableCell className="text-center">
+                  <div className="flex items-center justify-center gap-2">
+                    <Switch
+                      checked={user.estado === 'activo'}
+                      onCheckedChange={() => handleToggleStatus(user.id)}
+                      className="data-[state=checked]:bg-status-success"
+                    />
+                    <span className={cn(
+                      "text-xs font-medium",
+                      user.estado === 'activo' ? 'text-status-success' : 'text-muted-foreground'
+                    )}>
+                      {user.estado === 'activo' ? 'Activo' : 'Inactivo'}
+                    </span>
+                  </div>
                 </TableCell>
                 <TableCell className="text-center">
                   <DropdownMenu>

@@ -57,9 +57,11 @@ export function AddUserModal({ open, onOpenChange, onSubmit }: AddUserModalProps
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[480px]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-brand-dark">
-            <UserPlus className="h-5 w-5" />
+        <DialogHeader className="pb-4 border-b">
+          <DialogTitle className="flex items-center gap-2 text-foreground">
+            <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center">
+              <UserPlus className="h-4 w-4 text-primary" />
+            </div>
             Agregar Nuevo Usuario
           </DialogTitle>
         </DialogHeader>
@@ -157,7 +159,7 @@ export function AddUserModal({ open, onOpenChange, onSubmit }: AddUserModalProps
             </Button>
             <Button
               type="submit"
-              className="h-9 text-sm bg-brand-green hover:bg-brand-green/90 text-white"
+              className="h-9 text-sm bg-primary hover:bg-primary/90 text-primary-foreground"
             >
               Guardar Usuario
             </Button>
