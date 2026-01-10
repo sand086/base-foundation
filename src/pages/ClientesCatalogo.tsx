@@ -28,7 +28,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useNavigate } from "react-router-dom";
 import { mockClients, type Client, type SubClienteDetalle } from "@/data/mockData";
 import { cn } from "@/lib/utils";
@@ -79,7 +78,6 @@ function ExpandableClientRow({ client, isExpanded, onToggle }: ExpandableClientR
         }}
         className={cn("hover:bg-muted/30 transition-colors cursor-pointer group", isExpanded && "bg-muted/20")}
       >
-        zZZ
         <TableCell className="py-2 w-10">
           <Button
             variant="ghost"
