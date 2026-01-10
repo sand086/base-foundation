@@ -11,6 +11,7 @@ import Dashboard from "./pages/Dashboard";
 import CentroMonitoreo from "./pages/CentroMonitoreo";
 import FlotaUnidades from "./pages/FlotaUnidades";
 import FlotaUnidadDetalle from "./pages/FlotaUnidadDetalle";
+import FlotaOperadores from "./pages/FlotaOperadores";
 import FlotaLlantas from "./pages/FlotaLlantas";
 import Mantenimiento from "./pages/Mantenimiento";
 import CombustibleConciliacion from "./pages/CombustibleConciliacion";
@@ -48,6 +49,7 @@ const App = () => (
                 <Route path="monitoreo" element={<CentroMonitoreo />} />
                 <Route path="flota" element={<FlotaUnidades />} />
                 <Route path="flota/unidad/:id" element={<FlotaUnidadDetalle />} />
+                <Route path="flota/operadores" element={<FlotaOperadores />} />
                 <Route path="flota/llantas" element={<FlotaLlantas />} />
                 <Route path="flota/mantenimiento" element={<Mantenimiento />} />
                 <Route path="combustible" element={<CombustibleCargas />} />
