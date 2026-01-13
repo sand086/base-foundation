@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -7,6 +7,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { StatusBadge, StatusType } from '@/components/ui/status-badge';
@@ -21,9 +22,9 @@ import {
   AlertTriangle,
   CheckCircle,
   Clock,
+  UserX,
 } from 'lucide-react';
 import {
-  mockOperadores,
   Operador,
   getExpiryStatus,
   getExpiryLabel,
@@ -32,7 +33,9 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 interface OperadoresTableProps {
+  operadores: Operador[];
   onEdit?: (operador: Operador) => void;
+  onDelete?: (id: string) => void;
 }
 
 const getStatusBadge = (status: string) => {
@@ -77,17 +80,18 @@ const ExpiryBadge = ({ date, label }: { date: string; label: string }) => {
   );
 };
 
-export function OperadoresTable({ onEdit }: OperadoresTableProps) {
+export function OperadoresTable({ operadores, onEdit, onDelete }: OperadoresTableProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
   // Simulate initial loading
-  useState(() => {
+  useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 600);
     return () => clearTimeout(timer);
-  });
+  }, []);
 
-  const filteredOperadores = mockOperadores.filter(
+  // Filter by name, license, or phone
+  const filteredOperadores = operadores.filter(
     (op) =>
       op.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       op.license_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -104,7 +108,7 @@ export function OperadoresTable({ onEdit }: OperadoresTableProps) {
           <div className="relative w-full sm:w-72">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Buscar por nombre, licencia..."
+              placeholder="Buscar por nombre, licencia o teléfono..."
               className="pl-10"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -233,7 +237,7 @@ export function OperadoresTable({ onEdit }: OperadoresTableProps) {
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
+                          <DropdownMenuContent align="end" className="bg-popover">
                             <DropdownMenuItem className="gap-2">
                               <Eye className="h-4 w-4" />
                               Ver detalles
@@ -245,9 +249,13 @@ export function OperadoresTable({ onEdit }: OperadoresTableProps) {
                               <Edit className="h-4 w-4" />
                               Editar
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="gap-2 text-destructive focus:text-destructive">
-                              <Trash2 className="h-4 w-4" />
-                              Eliminar
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem 
+                              className="gap-2 text-destructive focus:text-destructive focus:bg-destructive/10"
+                              onClick={() => onDelete?.(operador.id)}
+                            >
+                              <UserX className="h-4 w-4" />
+                              Dar de Baja
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
