@@ -2,34 +2,113 @@ import { useState } from 'react';
 import { Users, Plus, AlertTriangle, CheckCircle, Clock, UserX } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { OperadoresTable } from '@/features/flota/OperadoresTable';
 import { AddOperadorModal } from '@/features/flota/AddOperadorModal';
-import { mockOperadores, getExpiryStatus } from '@/data/flotaData';
+import { mockOperadores, getExpiryStatus, Operador } from '@/data/flotaData';
+import { useToast } from '@/hooks/use-toast';
 
 export default function FlotaOperadores() {
+  const { toast } = useToast();
+  
+  // State management for CRUD
+  const [operadores, setOperadores] = useState<Operador[]>(mockOperadores);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [operadorToEdit, setOperadorToEdit] = useState<Operador | null>(null);
+  const [operadorToDelete, setOperadorToDelete] = useState<string | null>(null);
 
-  // Calculate summary stats
-  const activos = mockOperadores.filter((op) => op.status === 'activo').length;
-  const inactivos = mockOperadores.filter((op) => op.status === 'inactivo').length;
+  // Calculate summary stats dynamically
+  const activos = operadores.filter((op) => op.status === 'activo').length;
+  const inactivos = operadores.filter((op) => op.status === 'inactivo').length;
 
-  const licenciasVencidas = mockOperadores.filter(
+  const licenciasVencidas = operadores.filter(
     (op) => getExpiryStatus(op.license_expiry) === 'danger'
   ).length;
 
-  const licenciasPorVencer = mockOperadores.filter(
+  const licenciasPorVencer = operadores.filter(
     (op) => getExpiryStatus(op.license_expiry) === 'warning'
   ).length;
 
-  const examenesVencidos = mockOperadores.filter(
+  const examenesVencidos = operadores.filter(
     (op) => getExpiryStatus(op.medical_check_expiry) === 'danger'
   ).length;
 
-  const examenesPorVencer = mockOperadores.filter(
+  const examenesPorVencer = operadores.filter(
     (op) => getExpiryStatus(op.medical_check_expiry) === 'warning'
   ).length;
 
   const alertasTotal = licenciasVencidas + licenciasPorVencer + examenesVencidos + examenesPorVencer;
+
+  // CRUD Handlers
+  const handleCreate = (operadorData: Omit<Operador, 'id'> & { id?: string }) => {
+    const newOperador: Operador = {
+      ...operadorData,
+      id: `OP-${String(operadores.length + 1).padStart(3, '0')}`,
+      status: 'activo',
+    } as Operador;
+    
+    setOperadores((prev) => [...prev, newOperador]);
+  };
+
+  const handleUpdate = (operadorData: Omit<Operador, 'id'> & { id?: string }) => {
+    if (!operadorData.id) return;
+    
+    setOperadores((prev) =>
+      prev.map((op) =>
+        op.id === operadorData.id ? { ...op, ...operadorData } as Operador : op
+      )
+    );
+  };
+
+  const handleSave = (operadorData: Omit<Operador, 'id'> & { id?: string }) => {
+    if (operadorToEdit) {
+      handleUpdate({ ...operadorData, id: operadorToEdit.id });
+    } else {
+      handleCreate(operadorData);
+    }
+    setOperadorToEdit(null);
+  };
+
+  const handleDelete = () => {
+    if (!operadorToDelete) return;
+
+    const operador = operadores.find((op) => op.id === operadorToDelete);
+    
+    setOperadores((prev) => prev.filter((op) => op.id !== operadorToDelete));
+    
+    toast({
+      title: 'Operador dado de baja',
+      description: `${operador?.name} ha sido eliminado del sistema.`,
+    });
+    
+    setOperadorToDelete(null);
+  };
+
+  const handleEdit = (operador: Operador) => {
+    setOperadorToEdit(operador);
+    setIsModalOpen(true);
+  };
+
+  const handleOpenNewModal = () => {
+    setOperadorToEdit(null);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = (open: boolean) => {
+    setIsModalOpen(open);
+    if (!open) {
+      setOperadorToEdit(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -45,7 +124,7 @@ export default function FlotaOperadores() {
         </div>
         <Button
           className="gap-2 bg-action hover:bg-action-hover text-action-foreground"
-          onClick={() => setIsModalOpen(true)}
+          onClick={handleOpenNewModal}
         >
           <Plus className="h-4 w-4" /> Nuevo Operador
         </Button>
@@ -132,10 +211,47 @@ export default function FlotaOperadores() {
       )}
 
       {/* Operators Table */}
-      <OperadoresTable />
+      <OperadoresTable 
+        operadores={operadores}
+        onEdit={handleEdit}
+        onDelete={(id) => setOperadorToDelete(id)}
+      />
 
-      {/* Add Operator Modal */}
-      <AddOperadorModal open={isModalOpen} onOpenChange={setIsModalOpen} />
+      {/* Add/Edit Operator Modal */}
+      <AddOperadorModal 
+        open={isModalOpen} 
+        onOpenChange={handleCloseModal}
+        operatorToEdit={operadorToEdit}
+        onSave={handleSave}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!operadorToDelete} onOpenChange={() => setOperadorToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <UserX className="h-5 w-5 text-destructive" />
+              Confirmar Baja de Operador
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Está seguro que desea dar de baja a{' '}
+              <span className="font-semibold">
+                {operadores.find((op) => op.id === operadorToDelete)?.name}
+              </span>
+              ? Esta acción eliminará al operador del sistema.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90"
+              onClick={handleDelete}
+            >
+              Dar de Baja
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
