@@ -178,7 +178,7 @@ function ExpandableClientRow({ client, isExpanded, onToggle, onEdit, onDelete }:
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="bg-popover border shadow-lg z-50">
-              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); }}>
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); window.location.href = `/clientes/nuevo?edit=${client.id}`; }}>
                 <Eye className="h-4 w-4 mr-2" /> Ver Detalle
               </DropdownMenuItem>
               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(); }}>

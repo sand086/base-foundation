@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
-import { Users, Plus, Trash2, Upload, ArrowLeft, Check, MapPin, Building2, Phone, Clock, Edit2, DollarSign, FileText } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Users, Plus, Trash2, Upload, ArrowLeft, Check, MapPin, Building2, Phone, Clock, Edit2, DollarSign, FileText, Paperclip, FileCheck } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import {
   Accordion,
@@ -31,8 +32,10 @@ interface SubClienteForm {
   horarioRecepcion: string;
   // Step 3: Tarifa fields
   tarifaPactada: number;
-  moneda: string;
+  moneda: 'MXN' | 'USD';
   diasCredito: number;
+  requiereContrato: boolean;
+  contratoAdjunto?: string;
 }
 
 const emptySubCliente: SubClienteForm = {
@@ -50,6 +53,8 @@ const emptySubCliente: SubClienteForm = {
   tarifaPactada: 0,
   moneda: "MXN",
   diasCredito: 30,
+  requiereContrato: false,
+  contratoAdjunto: "",
 };
 
 const estadosMexico = [
@@ -118,6 +123,8 @@ export default function ClientesNuevo() {
           tarifaPactada: (sub as any).tarifaPactada || 0,
           moneda: (sub as any).moneda || "MXN",
           diasCredito: (sub as any).diasCredito || 30,
+          requiereContrato: (sub as any).requiereContrato || false,
+          contratoAdjunto: (sub as any).contratoAdjunto || "",
         }));
         setSubClientes(converted);
         
@@ -648,17 +655,17 @@ export default function ClientesNuevo() {
         </div>
       )}
 
-      {/* Step 3: Tarifas y Convenios */}
+      {/* Step 3: Tarifas y Convenios - Modern Card Grid */}
       {step === 3 && (
-        <div className="space-y-4">
+        <div className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <DollarSign className="h-5 w-5" />
+                <DollarSign className="h-5 w-5 text-primary" />
                 Tarifas y Convenios Comerciales
               </CardTitle>
               <CardDescription>
-                Asigna tarifas base y condiciones comerciales a cada destino de "{fiscalData.razonSocial}"
+                Configura las condiciones comerciales para cada destino de "{fiscalData.razonSocial}"
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -671,76 +678,153 @@ export default function ClientesNuevo() {
                   </p>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {/* Header Row */}
-                  <div className="grid grid-cols-12 gap-4 px-4 py-2 bg-muted/50 rounded-lg text-sm font-medium text-muted-foreground">
-                    <div className="col-span-4">Destino</div>
-                    <div className="col-span-3">Tarifa Base Pactada</div>
-                    <div className="col-span-2">Moneda</div>
-                    <div className="col-span-3">Días de Crédito</div>
-                  </div>
-
-                  {/* Subcliente Rows */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {subClientes.map((sub, idx) => (
-                    <div 
+                    <Card 
                       key={sub.id} 
                       className={cn(
-                        "grid grid-cols-12 gap-4 p-4 rounded-lg border transition-all",
-                        sub.tarifaPactada > 0 ? "bg-emerald-50/50 border-emerald-200" : "bg-white"
+                        "overflow-hidden transition-all duration-200 hover:shadow-md",
+                        sub.tarifaPactada > 0 
+                          ? "border-emerald-300 bg-gradient-to-br from-emerald-50/80 to-white shadow-sm" 
+                          : "border-border bg-card hover:border-primary/40"
                       )}
                     >
-                      <div className="col-span-4 flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium text-sm">
-                          {idx + 1}
+                      {/* Card Header with Destination Info */}
+                      <CardHeader className="pb-3 bg-muted/30 border-b">
+                        <div className="flex items-start gap-3">
+                          <div className={cn(
+                            "w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm shadow-sm",
+                            sub.tarifaPactada > 0 
+                              ? "bg-emerald-500 text-white" 
+                              : "bg-primary/10 text-primary"
+                          )}>
+                            {idx + 1}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <CardTitle className="text-base truncate">{sub.nombre}</CardTitle>
+                            <CardDescription className="flex items-center gap-1 mt-0.5">
+                              <MapPin className="h-3 w-3" />
+                              {sub.ciudad}, {sub.estado}
+                            </CardDescription>
+                          </div>
+                          {sub.tarifaPactada > 0 && (
+                            <div className="shrink-0">
+                              <FileCheck className="h-5 w-5 text-emerald-500" />
+                            </div>
+                          )}
                         </div>
-                        <div>
-                          <p className="font-medium">{sub.nombre}</p>
-                          <p className="text-xs text-muted-foreground">{sub.ciudad}, {sub.estado}</p>
+                      </CardHeader>
+
+                      {/* Card Content with Pricing */}
+                      <CardContent className="pt-4 space-y-4">
+                        {/* Price Input - Large and Prominent */}
+                        <div className="space-y-2">
+                          <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                            Tarifa Base Pactada
+                          </Label>
+                          <div className="flex gap-2">
+                            <div className="relative flex-1">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg font-medium text-muted-foreground">$</span>
+                              <Input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                placeholder="0.00"
+                                value={sub.tarifaPactada || ""}
+                                onChange={(e) => updateSubCliente(idx, 'tarifaPactada', parseFloat(e.target.value) || 0)}
+                                className="pl-8 text-lg font-mono font-semibold h-12 bg-background"
+                              />
+                            </div>
+                            <Select
+                              value={sub.moneda}
+                              onValueChange={(value) => updateSubCliente(idx, 'moneda', value)}
+                            >
+                              <SelectTrigger className="w-24 h-12 font-medium">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="bg-popover border shadow-lg z-50">
+                                <SelectItem value="MXN">🇲🇽 MXN</SelectItem>
+                                <SelectItem value="USD">🇺🇸 USD</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
                         </div>
-                      </div>
-                      <div className="col-span-3">
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                          <Input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            placeholder="0.00"
-                            value={sub.tarifaPactada || ""}
-                            onChange={(e) => updateSubCliente(idx, 'tarifaPactada', parseFloat(e.target.value) || 0)}
-                            className="pl-7 font-mono"
-                          />
+
+                        {/* Credit Days */}
+                        <div className="space-y-2">
+                          <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                            Días de Crédito
+                          </Label>
+                          <div className="flex items-center gap-3">
+                            <Input
+                              type="number"
+                              min="0"
+                              max="120"
+                              value={sub.diasCredito}
+                              onChange={(e) => updateSubCliente(idx, 'diasCredito', parseInt(e.target.value) || 0)}
+                              className="w-20 font-mono text-center bg-background"
+                            />
+                            <span className="text-sm text-muted-foreground">días</span>
+                            <Badge 
+                              variant="outline" 
+                              className={cn(
+                                "ml-auto text-xs font-medium",
+                                sub.diasCredito <= 15 
+                                  ? "bg-blue-50 text-blue-700 border-blue-200" 
+                                  : sub.diasCredito <= 30 
+                                    ? "bg-amber-50 text-amber-700 border-amber-200"
+                                    : "bg-rose-50 text-rose-700 border-rose-200"
+                              )}
+                            >
+                              {sub.diasCredito <= 15 ? "Contado" : sub.diasCredito <= 30 ? "Crédito 30" : `Crédito ${sub.diasCredito}`}
+                            </Badge>
+                          </div>
                         </div>
-                      </div>
-                      <div className="col-span-2">
-                        <Select
-                          value={sub.moneda}
-                          onValueChange={(value) => updateSubCliente(idx, 'moneda', value)}
+
+                        {/* Contract Toggle */}
+                        <div className="flex items-center justify-between pt-2 border-t">
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              id={`contrato-${sub.id}`}
+                              checked={sub.requiereContrato}
+                              onCheckedChange={(checked) => updateSubCliente(idx, 'requiereContrato', checked ? 1 : 0)}
+                            />
+                            <Label 
+                              htmlFor={`contrato-${sub.id}`}
+                              className="text-sm cursor-pointer"
+                            >
+                              Convenio Especial
+                            </Label>
+                          </div>
+                          {sub.requiereContrato && (
+                            <Badge variant="secondary" className="text-[10px]">
+                              Activo
+                            </Badge>
+                          )}
+                        </div>
+                      </CardContent>
+
+                      {/* Card Footer with Attach Button */}
+                      <CardFooter className="bg-muted/20 border-t py-3">
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="w-full text-muted-foreground hover:text-primary gap-2"
+                          onClick={() => {
+                            // Simulate file attachment
+                            updateSubCliente(idx, 'contratoAdjunto', 'contrato-adjunto.pdf');
+                            toast.success("Archivo adjunto", { description: `Contrato adjuntado a ${sub.nombre}` });
+                          }}
                         >
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent className="bg-popover border shadow-lg z-50">
-                            <SelectItem value="MXN">MXN</SelectItem>
-                            <SelectItem value="USD">USD</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="col-span-3 flex items-center gap-2">
-                        <Input
-                          type="number"
-                          min="0"
-                          max="120"
-                          value={sub.diasCredito}
-                          onChange={(e) => updateSubCliente(idx, 'diasCredito', parseInt(e.target.value) || 0)}
-                          className="w-20 font-mono"
-                        />
-                        <span className="text-sm text-muted-foreground">días</span>
-                        {sub.diasCredito > 0 && (
-                          <Badge variant="outline" className="ml-auto text-xs">
-                            {sub.diasCredito <= 15 ? "Contado" : sub.diasCredito <= 30 ? "Crédito 30" : `Crédito ${sub.diasCredito}`}
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
+                          <Paperclip className="h-4 w-4" />
+                          {sub.contratoAdjunto ? (
+                            <span className="text-emerald-600 font-medium">✓ PDF Adjunto</span>
+                          ) : (
+                            "Adjuntar Contrato PDF"
+                          )}
+                        </Button>
+                      </CardFooter>
+                    </Card>
                   ))}
                 </div>
               )}
