@@ -1,314 +1,647 @@
-import { useState } from "react";
-import { Fuel, AlertTriangle, CheckCircle, Smartphone, Upload, Camera, Send, Filter, Search } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useMemo, useEffect } from "react";
+import { 
+  Fuel, 
+  AlertTriangle, 
+  CheckCircle, 
+  Calculator, 
+  Gauge, 
+  TrendingUp, 
+  FileText,
+  Truck,
+  User,
+  MapPin,
+  ShieldAlert,
+  Shield,
+  RotateCcw,
+  Printer
+} from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { mockFuelRecords } from "@/data/mockData";
+import { Separator } from "@/components/ui/separator";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 
+// Trip data for the audit (simulated - would come from selected trip)
+const mockTripData = {
+  cartaPorteId: "CP-2024-001587",
+  unidadId: "TR-204",
+  ruta: "Veracruz → CDMX (Cedis Norte)",
+  operador: "Juan Carlos Mendoza",
+  fechaViaje: "2024-01-10",
+  kmsRecorridos: 425,
+};
+
+// Tolerance constant - 0.3%
+const TOLERANCE_PERCENTAGE = 0.003;
+
+interface AuditFormData {
+  // Physical Data (Pump/Vouchers)
+  litrosBomba: string;
+  litrosVales: string;
+  // Digital Data (ECM)
+  lecturaInicialECM: string;
+  lecturaFinalECM: string;
+  litrosConsumidosECM: string;
+}
+
+interface AuditResult {
+  totalFisicoLitros: number;
+  totalDigitalLitros: number;
+  diferenciaLitros: number;
+  rendimientoKmL: number;
+  toleranciaPermitida: number;
+  estatus: "CONCILIADO" | "COBRO_OPERADOR" | "PENDIENTE";
+  esRoboSospechado: boolean;
+}
+
 export default function CombustibleConciliacion() {
-  const [showMobileView, setShowMobileView] = useState(false);
-  const [driverForm, setDriverForm] = useState({
-    litros: "",
-    costo: "",
-    odometro: "",
-    foto: null as File | null,
+  const [formData, setFormData] = useState<AuditFormData>({
+    litrosBomba: "",
+    litrosVales: "",
+    lecturaInicialECM: "",
+    lecturaFinalECM: "",
+    litrosConsumidosECM: "",
   });
 
-  const totalVales = mockFuelRecords.filter((r) => r.estatus === "vale_cobro").length;
-  const conciliados = mockFuelRecords.filter((r) => r.estatus === "conciliado").length;
-  const pendientes = mockFuelRecords.filter((r) => r.estatus === "pendiente").length;
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [auditCompleted, setAuditCompleted] = useState(false);
 
-  const handleDriverSubmit = () => {
-    if (!driverForm.litros || !driverForm.costo || !driverForm.odometro) {
+  // Real-time calculation of audit results
+  const auditResult = useMemo<AuditResult | null>(() => {
+    const litrosBomba = parseFloat(formData.litrosBomba) || 0;
+    const litrosVales = parseFloat(formData.litrosVales) || 0;
+    const litrosConsumidosECM = parseFloat(formData.litrosConsumidosECM) || 0;
+    const lecturaInicial = parseFloat(formData.lecturaInicialECM) || 0;
+    const lecturaFinal = parseFloat(formData.lecturaFinalECM) || 0;
+
+    // Need at least the physical and digital liters to calculate
+    if (litrosConsumidosECM <= 0) {
+      return null;
+    }
+
+    // A. The Math
+    const totalFisicoLitros = litrosBomba + litrosVales;
+    const totalDigitalLitros = litrosConsumidosECM;
+    const diferenciaLitros = totalFisicoLitros - totalDigitalLitros;
+    
+    // Calculate efficiency (km/L) - only if we have valid readings
+    const kmsRecorridos = lecturaFinal > lecturaInicial ? lecturaFinal - lecturaInicial : mockTripData.kmsRecorridos;
+    const rendimientoKmL = totalFisicoLitros > 0 ? kmsRecorridos / totalFisicoLitros : 0;
+
+    // B. Tolerance Rule (0.3%)
+    const toleranciaPermitida = totalDigitalLitros * TOLERANCE_PERCENTAGE;
+    
+    // Determine status
+    let estatus: "CONCILIADO" | "COBRO_OPERADOR" | "PENDIENTE" = "PENDIENTE";
+    let esRoboSospechado = false;
+
+    if (totalFisicoLitros > 0) {
+      if (diferenciaLitros > toleranciaPermitida) {
+        // Positive deviation beyond tolerance = THEFT SUSPECTED
+        estatus = "COBRO_OPERADOR";
+        esRoboSospechado = true;
+      } else if (Math.abs(diferenciaLitros) <= toleranciaPermitida) {
+        // Within tolerance = OK
+        estatus = "CONCILIADO";
+        esRoboSospechado = false;
+      } else {
+        // Negative deviation (operator used less than reported) - still OK but flag it
+        estatus = "CONCILIADO";
+        esRoboSospechado = false;
+      }
+    }
+
+    return {
+      totalFisicoLitros,
+      totalDigitalLitros,
+      diferenciaLitros,
+      rendimientoKmL,
+      toleranciaPermitida,
+      estatus,
+      esRoboSospechado,
+    };
+  }, [formData]);
+
+  const handleInputChange = (field: keyof AuditFormData, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    setAuditCompleted(false);
+  };
+
+  const handleReset = () => {
+    setFormData({
+      litrosBomba: "",
+      litrosVales: "",
+      lecturaInicialECM: "",
+      lecturaFinalECM: "",
+      litrosConsumidosECM: "",
+    });
+    setAuditCompleted(false);
+  };
+
+  const handleAuthorizeAndClose = () => {
+    if (!auditResult) {
       toast({
-        title: "Campos requeridos",
-        description: "Por favor complete todos los campos",
+        title: "Datos incompletos",
+        description: "Por favor complete todos los campos requeridos para la conciliación",
         variant: "destructive",
       });
       return;
     }
-    toast({
-      title: "Carga registrada",
-      description: `${driverForm.litros} litros @ $${driverForm.costo} - Odómetro: ${driverForm.odometro} km`,
-    });
-    setDriverForm({ litros: "", costo: "", odometro: "", foto: null });
-    setShowMobileView(false);
-  };
 
-  const handleGenerateVale = (recordId: string, operador: string, diferencia: number) => {
-    toast({
-      title: "Vale de Cobro Generado",
-      description: `Se generó vale por diferencia de ${diferencia.toFixed(1)}% para ${operador}`,
-      variant: "destructive",
-    });
+    setIsProcessing(true);
+    
+    // Simulate processing
+    setTimeout(() => {
+      setIsProcessing(false);
+      setAuditCompleted(true);
+      setShowReceiptModal(true);
+      
+      toast({
+        title: auditResult.estatus === "COBRO_OPERADOR" 
+          ? "⚠️ Vale de Cobro Generado" 
+          : "✅ Viaje Conciliado",
+        description: auditResult.estatus === "COBRO_OPERADOR"
+          ? `Diferencia de ${auditResult.diferenciaLitros.toFixed(2)} L detectada. Cargo aplicado al operador.`
+          : "El viaje ha sido conciliado exitosamente sin diferencias significativas.",
+        variant: auditResult.estatus === "COBRO_OPERADOR" ? "destructive" : "default",
+      });
+    }, 1500);
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in-50 duration-500">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Fuel className="h-6 w-6" /> Conciliación de Combustible
+          <h1 className="text-2xl font-bold flex items-center gap-2 text-brand-dark">
+            <Calculator className="h-6 w-6" /> Conciliación de Combustible
           </h1>
-          <p className="text-muted-foreground">Comparación ECM vs Ticket Real (Tolerancia: 5%)</p>
+          <p className="text-muted-foreground">
+            Herramienta de Auditoría — Tolerancia: <span className="font-semibold text-foreground">±0.3%</span>
+          </p>
         </div>
-        <Dialog open={showMobileView} onOpenChange={setShowMobileView}>
-          <DialogTrigger asChild>
-            <Button variant="outline" className="gap-2">
-              <Smartphone className="h-4 w-4" /> Vista Operador
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-sm">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Fuel className="h-5 w-5" /> Registro de Carga
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 pt-4">
-              {/* Mobile Driver Form */}
-              <div className="bg-primary/5 rounded-md p-4 border">
-                <p className="text-sm text-muted-foreground mb-2">Unidad Asignada</p>
-                <p className="font-bold text-lg">TR-204 - Juan Pérez</p>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="litros">Litros Cargados</Label>
-                <Input
-                  id="litros"
-                  type="number"
-                  placeholder="Ej: 180.5"
-                  value={driverForm.litros}
-                  onChange={(e) => setDriverForm({ ...driverForm, litros: e.target.value })}
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="costo">Costo Total (MXN)</Label>
-                <Input
-                  id="costo"
-                  type="number"
-                  placeholder="Ej: 4,250.00"
-                  value={driverForm.costo}
-                  onChange={(e) => setDriverForm({ ...driverForm, costo: e.target.value })}
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="odometro">Odómetro Actual (km)</Label>
-                <Input
-                  id="odometro"
-                  type="number"
-                  placeholder="Ej: 245,890"
-                  value={driverForm.odometro}
-                  onChange={(e) => setDriverForm({ ...driverForm, odometro: e.target.value })}
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label>Foto del Ticket</Label>
-                <div className="border-2 border-dashed rounded-md p-6 text-center hover:bg-muted/50 transition-colors cursor-pointer">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    className="hidden"
-                    id="ticket-photo"
-                    onChange={(e) => setDriverForm({ ...driverForm, foto: e.target.files?.[0] || null })}
-                  />
-                  <label htmlFor="ticket-photo" className="cursor-pointer">
-                    {driverForm.foto ? (
-                      <div className="flex items-center justify-center gap-2 text-status-success">
-                        <CheckCircle className="h-6 w-6" />
-                        <span className="font-medium">{driverForm.foto.name}</span>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                        <Camera className="h-8 w-8" />
-                        <span className="text-sm">Toca para tomar foto</span>
-                      </div>
-                    )}
-                  </label>
-                </div>
-              </div>
-              
-              <Button onClick={handleDriverSubmit} className="w-full gap-2">
-                <Send className="h-4 w-4" /> Enviar Registro
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <Button variant="outline" onClick={handleReset} className="gap-2">
+          <RotateCcw className="h-4 w-4" /> Nueva Auditoría
+        </Button>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card className="border-l-4 border-l-status-success">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Conciliados</p>
-                <p className="text-3xl font-bold text-status-success">{conciliados}</p>
-              </div>
-              <CheckCircle className="h-8 w-8 text-status-success" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-l-4 border-l-status-danger">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Vales de Cobro</p>
-                <p className="text-3xl font-bold text-status-danger">{totalVales}</p>
-              </div>
-              <AlertTriangle className="h-8 w-8 text-status-danger" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-l-4 border-l-status-warning">
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">Pendientes</p>
-            <p className="text-3xl font-bold text-status-warning">{pendientes}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">Total Registros</p>
-            <p className="text-3xl font-bold">{mockFuelRecords.length}</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Search and Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex gap-4 flex-wrap">
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input placeholder="Buscar por viaje, unidad u operador..." className="pl-10" />
-            </div>
-            <Button variant="outline" className="gap-2">
-              <Filter className="h-4 w-4" /> Filtros
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Conciliation Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span>Tabla de Conciliación</span>
-            <Badge variant="outline" className="font-normal">
-              Tolerancia: ±5%
-            </Badge>
+      {/* Section 1: Trip Information (Read-Only Header) */}
+      <Card className="border-l-4 border-l-primary">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <FileText className="h-5 w-5" /> Información del Viaje
           </CardTitle>
+          <CardDescription>Datos del viaje a auditar (solo lectura)</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full table-dense">
-              <thead>
-                <tr className="border-b text-left text-sm font-medium text-muted-foreground">
-                  <th className="py-3 px-3">Viaje ID</th>
-                  <th className="py-3 px-3">Fecha</th>
-                  <th className="py-3 px-3">Unidad</th>
-                  <th className="py-3 px-3">Operador</th>
-                  <th className="py-3 px-3 text-right">Kms Recorridos</th>
-                  <th className="py-3 px-3 text-right">Litros ECM (Teórico)</th>
-                  <th className="py-3 px-3 text-right">Litros Ticket (Real)</th>
-                  <th className="py-3 px-3 text-right">Diferencia %</th>
-                  <th className="py-3 px-3">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {mockFuelRecords.map((record) => {
-                  const isOverTolerance = record.diferenciaPorcentaje > 5;
-                  return (
-                    <tr 
-                      key={record.id} 
-                      className={`border-b transition-colors ${
-                        isOverTolerance 
-                          ? "bg-red-50 dark:bg-red-950/20" 
-                          : "hover:bg-muted/50"
-                      }`}
-                    >
-                      <td className={`py-3 px-3 font-medium ${isOverTolerance ? "text-status-danger" : ""}`}>
-                        {record.viajeId}
-                      </td>
-                      <td className={`py-3 px-3 ${isOverTolerance ? "text-status-danger" : ""}`}>
-                        {record.fecha}
-                      </td>
-                      <td className={`py-3 px-3 font-mono ${isOverTolerance ? "text-status-danger" : ""}`}>
-                        {record.unidad}
-                      </td>
-                      <td className={`py-3 px-3 ${isOverTolerance ? "text-status-danger font-medium" : ""}`}>
-                        {record.operador}
-                      </td>
-                      <td className={`py-3 px-3 text-right ${isOverTolerance ? "text-status-danger" : ""}`}>
-                        {record.kmsRecorridos.toLocaleString()}
-                      </td>
-                      <td className="py-3 px-3 text-right font-mono">
-                        {record.litrosECM.toFixed(1)} L
-                      </td>
-                      <td className={`py-3 px-3 text-right font-mono ${isOverTolerance ? "text-status-danger font-bold" : ""}`}>
-                        {record.litrosTicket.toFixed(1)} L
-                      </td>
-                      <td className="py-3 px-3 text-right">
-                        <Badge 
-                          className={`font-mono ${
-                            isOverTolerance 
-                              ? "bg-status-danger text-white" 
-                              : "bg-status-success text-white"
-                          }`}
-                        >
-                          {isOverTolerance ? "+" : ""}{record.diferenciaPorcentaje.toFixed(1)}%
-                        </Badge>
-                      </td>
-                      <td className="py-3 px-3">
-                        {isOverTolerance ? (
-                          <Button 
-                            size="sm" 
-                            variant="destructive"
-                            onClick={() => handleGenerateVale(record.id, record.operador, record.diferenciaPorcentaje)}
-                            className="whitespace-nowrap"
-                          >
-                            Generar Vale de Cobro
-                          </Button>
-                        ) : (
-                          <div className="flex items-center gap-2 text-status-success">
-                            <CheckCircle className="h-5 w-5" />
-                            <span className="text-sm font-medium">Conciliado</span>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Carta Porte ID</Label>
+              <div className="flex items-center gap-2 font-mono font-semibold text-brand-dark bg-muted/50 px-3 py-2 rounded-md">
+                <FileText className="h-4 w-4 text-muted-foreground" />
+                {mockTripData.cartaPorteId}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Unidad</Label>
+              <div className="flex items-center gap-2 font-mono font-semibold text-brand-dark bg-muted/50 px-3 py-2 rounded-md">
+                <Truck className="h-4 w-4 text-muted-foreground" />
+                {mockTripData.unidadId}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Ruta</Label>
+              <div className="flex items-center gap-2 font-semibold text-brand-dark bg-muted/50 px-3 py-2 rounded-md">
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+                {mockTripData.ruta}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Operador</Label>
+              <div className="flex items-center gap-2 font-semibold text-brand-dark bg-muted/50 px-3 py-2 rounded-md">
+                <User className="h-4 w-4 text-muted-foreground" />
+                {mockTripData.operador}
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Legend */}
-      <Card>
-        <CardContent className="pt-6">
-          <h4 className="font-medium mb-3">Leyenda de Estados</h4>
-          <div className="flex flex-wrap gap-6">
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded bg-red-50 border border-status-danger"></div>
-              <span className="text-sm">Diferencia &gt; 5% - Requiere Vale de Cobro</span>
+      {/* Section 2: The "Auditor" Form */}
+      <div className="grid md:grid-cols-2 gap-6">
+        {/* Physical Data (Inputs) */}
+        <Card className="border-t-4 border-t-status-info">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Fuel className="h-5 w-5 text-status-info" /> Datos Físicos
+            </CardTitle>
+            <CardDescription>Combustible entregado (Bomba + Vales en ruta)</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="litrosBomba" className="flex items-center gap-2">
+                Litros Bomba (Patio)
+                <span className="text-xs text-muted-foreground">— Carga inicial en base</span>
+              </Label>
+              <div className="relative">
+                <Input
+                  id="litrosBomba"
+                  type="number"
+                  step="0.01"
+                  placeholder="Ej: 350.00"
+                  value={formData.litrosBomba}
+                  onChange={(e) => handleInputChange("litrosBomba", e.target.value)}
+                  className="pr-10 font-mono"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">L</span>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-status-success" />
-              <span className="text-sm">Conciliado - Dentro de tolerancia</span>
+            <div className="space-y-2">
+              <Label htmlFor="litrosVales" className="flex items-center gap-2">
+                Litros Vales (En Ruta)
+                <span className="text-xs text-muted-foreground">— Recargas durante el viaje</span>
+              </Label>
+              <div className="relative">
+                <Input
+                  id="litrosVales"
+                  type="number"
+                  step="0.01"
+                  placeholder="Ej: 80.00"
+                  value={formData.litrosVales}
+                  onChange={(e) => handleInputChange("litrosVales", e.target.value)}
+                  className="pr-10 font-mono"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">L</span>
+              </div>
             </div>
-          </div>
+            
+            <Separator />
+            
+            <div className="bg-status-info-bg border border-status-info-border rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-status-info">Total Físico Entregado</span>
+                <span className="text-2xl font-bold font-mono text-status-info">
+                  {auditResult ? auditResult.totalFisicoLitros.toFixed(2) : "0.00"} L
+                </span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Digital Data (Inputs) */}
+        <Card className="border-t-4 border-t-primary">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Gauge className="h-5 w-5 text-primary" /> Datos Digitales (ECM)
+            </CardTitle>
+            <CardDescription>Lecturas del computador del motor (Scanner)</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="lecturaInicialECM">Lectura Inicial (km)</Label>
+                <div className="relative">
+                  <Input
+                    id="lecturaInicialECM"
+                    type="number"
+                    step="1"
+                    placeholder="Ej: 245000"
+                    value={formData.lecturaInicialECM}
+                    onChange={(e) => handleInputChange("lecturaInicialECM", e.target.value)}
+                    className="pr-12 font-mono"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">km</span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="lecturaFinalECM">Lectura Final (km)</Label>
+                <div className="relative">
+                  <Input
+                    id="lecturaFinalECM"
+                    type="number"
+                    step="1"
+                    placeholder="Ej: 245425"
+                    value={formData.lecturaFinalECM}
+                    onChange={(e) => handleInputChange("lecturaFinalECM", e.target.value)}
+                    className="pr-12 font-mono"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">km</span>
+                </div>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="litrosConsumidosECM" className="flex items-center gap-2">
+                Litros Consumidos (ECM)
+                <span className="text-xs text-muted-foreground">— Según computadora del motor</span>
+              </Label>
+              <div className="relative">
+                <Input
+                  id="litrosConsumidosECM"
+                  type="number"
+                  step="0.01"
+                  placeholder="Ej: 420.50"
+                  value={formData.litrosConsumidosECM}
+                  onChange={(e) => handleInputChange("litrosConsumidosECM", e.target.value)}
+                  className="pr-10 font-mono"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">L</span>
+              </div>
+            </div>
+            
+            <Separator />
+            
+            <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-primary">Total Digital Reportado</span>
+                <span className="text-2xl font-bold font-mono text-primary">
+                  {auditResult ? auditResult.totalDigitalLitros.toFixed(2) : "0.00"} L
+                </span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Section 3: Analysis Results (Auto-Calculated) */}
+      <Card className={`transition-all duration-500 ${
+        auditResult?.esRoboSospechado 
+          ? "border-2 border-status-danger bg-status-danger-bg/30 shadow-lg shadow-status-danger/10" 
+          : auditResult?.estatus === "CONCILIADO"
+            ? "border-2 border-status-success bg-status-success-bg/30 shadow-lg shadow-status-success/10"
+            : "border border-border"
+      }`}>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <TrendingUp className="h-5 w-5" /> Resultados del Análisis
+          </CardTitle>
+          <CardDescription>
+            Cálculo automático con tolerancia de ±{(TOLERANCE_PERCENTAGE * 100).toFixed(1)}%
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {auditResult ? (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Difference Card */}
+                <Card className={`${
+                  auditResult.esRoboSospechado 
+                    ? "border-status-danger bg-status-danger-bg" 
+                    : "border-status-success bg-status-success-bg"
+                }`}>
+                  <CardContent className="pt-6">
+                    <div className="text-center space-y-2">
+                      <p className="text-sm font-medium text-muted-foreground">Diferencia</p>
+                      <p className={`text-4xl font-bold font-mono ${
+                        auditResult.esRoboSospechado ? "text-status-danger" : "text-status-success"
+                      }`}>
+                        {auditResult.diferenciaLitros > 0 ? "+" : ""}{auditResult.diferenciaLitros.toFixed(2)} L
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Tolerancia permitida: ±{auditResult.toleranciaPermitida.toFixed(2)} L
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Efficiency Card */}
+                <Card className="border-muted">
+                  <CardContent className="pt-6">
+                    <div className="text-center space-y-2">
+                      <p className="text-sm font-medium text-muted-foreground">Rendimiento</p>
+                      <p className="text-4xl font-bold font-mono text-brand-dark">
+                        {auditResult.rendimientoKmL.toFixed(2)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Km/L</p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Status Card */}
+                <Card className={`${
+                  auditResult.esRoboSospechado 
+                    ? "border-status-danger" 
+                    : "border-status-success"
+                }`}>
+                  <CardContent className="pt-6">
+                    <div className="text-center space-y-3">
+                      <p className="text-sm font-medium text-muted-foreground">Estatus</p>
+                      {auditResult.esRoboSospechado ? (
+                        <div className="space-y-2">
+                          <div className="flex justify-center">
+                            <ShieldAlert className="h-10 w-10 text-status-danger animate-pulse" />
+                          </div>
+                          <Badge variant="destructive" className="text-lg px-4 py-1 animate-pulse">
+                            COBRO AL OPERADOR
+                          </Badge>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="flex justify-center">
+                            <Shield className="h-10 w-10 text-status-success" />
+                          </div>
+                          <Badge className="text-lg px-4 py-1 bg-status-success text-white hover:bg-status-success/90">
+                            CONCILIADO
+                          </Badge>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Alert Message for Theft Detection */}
+              {auditResult.esRoboSospechado && (
+                <div className="bg-status-danger/10 border-2 border-status-danger rounded-lg p-4 animate-in slide-in-from-top-2 duration-300">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="h-6 w-6 text-status-danger flex-shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="font-bold text-status-danger">⚠️ ALERTA: Desviación Detectada</h4>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        La diferencia de <strong className="text-status-danger">{auditResult.diferenciaLitros.toFixed(2)} L</strong> excede 
+                        la tolerancia permitida de <strong>±{auditResult.toleranciaPermitida.toFixed(2)} L</strong> (0.3% del consumo ECM).
+                      </p>
+                      <p className="text-sm text-status-danger font-medium mt-2">
+                        Se generará un Vale de Cobro al operador <strong>{mockTripData.operador}</strong>.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Conciliated Success Message */}
+              {auditResult.estatus === "CONCILIADO" && (
+                <div className="bg-status-success/10 border-2 border-status-success rounded-lg p-4 animate-in slide-in-from-top-2 duration-300">
+                  <div className="flex items-start gap-3">
+                    <CheckCircle className="h-6 w-6 text-status-success flex-shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="font-bold text-status-success">✅ Auditoría Exitosa</h4>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        La diferencia de <strong className="text-status-success">{Math.abs(auditResult.diferenciaLitros).toFixed(2)} L</strong> está 
+                        dentro de la tolerancia permitida de <strong>±{auditResult.toleranciaPermitida.toFixed(2)} L</strong>.
+                      </p>
+                      <p className="text-sm text-status-success font-medium mt-2">
+                        El viaje puede ser cerrado sin cargos adicionales.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Action Button */}
+              <div className="flex justify-end pt-4">
+                <Button 
+                  size="lg"
+                  onClick={handleAuthorizeAndClose}
+                  disabled={isProcessing}
+                  className={`gap-2 ${
+                    auditResult.esRoboSospechado 
+                      ? "bg-status-danger hover:bg-status-danger/90" 
+                      : "bg-action hover:bg-action-hover"
+                  }`}
+                >
+                  {isProcessing ? (
+                    <>
+                      <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Procesando...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="h-5 w-5" />
+                      {auditResult.esRoboSospechado 
+                        ? "Autorizar y Generar Vale de Cobro" 
+                        : "Autorizar y Cerrar Viaje"
+                      }
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-12 text-muted-foreground">
+              <Calculator className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p className="text-lg">Complete los campos de auditoría</p>
+              <p className="text-sm">Los resultados se calcularán automáticamente</p>
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      {/* Receipt Modal */}
+      <Dialog open={showReceiptModal} onOpenChange={setShowReceiptModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {auditResult?.esRoboSospechado ? (
+                <>
+                  <ShieldAlert className="h-5 w-5 text-status-danger" />
+                  Vale de Cobro Generado
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="h-5 w-5 text-status-success" />
+                  Comprobante de Conciliación
+                </>
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              Viaje {mockTripData.cartaPorteId}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {auditResult && (
+            <div className="space-y-4 py-4">
+              {/* Receipt Header */}
+              <div className="text-center border-b pb-4">
+                <h3 className="text-lg font-bold text-brand-dark">Rápidos 3T</h3>
+                <p className="text-xs text-muted-foreground">Sistema de Conciliación de Combustible</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {new Date().toLocaleString('es-MX')}
+                </p>
+              </div>
+
+              {/* Trip Details */}
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Carta Porte:</span>
+                  <span className="font-mono font-medium">{mockTripData.cartaPorteId}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Unidad:</span>
+                  <span className="font-mono font-medium">{mockTripData.unidadId}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Operador:</span>
+                  <span className="font-medium">{mockTripData.operador}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Ruta:</span>
+                  <span className="font-medium text-right">{mockTripData.ruta}</span>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Fuel Details */}
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Combustible Físico:</span>
+                  <span className="font-mono">{auditResult.totalFisicoLitros.toFixed(2)} L</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Combustible ECM:</span>
+                  <span className="font-mono">{auditResult.totalDigitalLitros.toFixed(2)} L</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Rendimiento:</span>
+                  <span className="font-mono">{auditResult.rendimientoKmL.toFixed(2)} Km/L</span>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Result */}
+              <div className={`p-4 rounded-lg ${
+                auditResult.esRoboSospechado 
+                  ? "bg-status-danger-bg border border-status-danger" 
+                  : "bg-status-success-bg border border-status-success"
+              }`}>
+                <div className="flex justify-between items-center">
+                  <span className="font-medium">Diferencia:</span>
+                  <span className={`text-xl font-bold font-mono ${
+                    auditResult.esRoboSospechado ? "text-status-danger" : "text-status-success"
+                  }`}>
+                    {auditResult.diferenciaLitros > 0 ? "+" : ""}{auditResult.diferenciaLitros.toFixed(2)} L
+                  </span>
+                </div>
+                <div className="flex justify-center mt-3">
+                  <Badge className={`${
+                    auditResult.esRoboSospechado 
+                      ? "bg-status-danger text-white" 
+                      : "bg-status-success text-white"
+                  }`}>
+                    {auditResult.esRoboSospechado ? "COBRO AL OPERADOR" : "CONCILIADO"}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowReceiptModal(false)}>
+              Cerrar
+            </Button>
+            <Button className="gap-2" onClick={() => {
+              toast({ title: "Imprimiendo...", description: "El comprobante se enviará a la impresora" });
+            }}>
+              <Printer className="h-4 w-4" /> Imprimir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
