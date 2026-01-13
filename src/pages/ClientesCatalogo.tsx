@@ -13,6 +13,8 @@ import {
   ChevronRight,
   Phone,
   Clock,
+  AlertTriangle,
+  CreditCard,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,11 +28,23 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useNavigate } from "react-router-dom";
-import { mockClients, type Client, type SubClienteDetalle } from "@/data/mockData";
+import { mockClients, mockTrips, type Client, type SubClienteDetalle } from "@/data/mockData";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 const statusConfig: Record<string, { label: string; type: StatusType }> = {
   activo: { label: "Activo", type: "success" },
@@ -67,9 +81,13 @@ interface ExpandableClientRowProps {
   client: Client;
   isExpanded: boolean;
   onToggle: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
 }
 
-function ExpandableClientRow({ client, isExpanded, onToggle }: ExpandableClientRowProps) {
+function ExpandableClientRow({ client, isExpanded, onToggle, onEdit, onDelete }: ExpandableClientRowProps) {
+  const diasCredito = (client as any).diasCredito || 30;
+  
   return (
     <>
       <TableRow
@@ -102,6 +120,11 @@ function ExpandableClientRow({ client, isExpanded, onToggle }: ExpandableClientR
           </div>
         </TableCell>
         <TableCell className="font-mono text-sm text-slate-700 py-2">{client.rfc}</TableCell>
+        <TableCell className="py-2">
+          <Badge variant="outline" className="text-xs font-mono">
+            {client.regimenFiscal || "---"}
+          </Badge>
+        </TableCell>
         <TableCell className="text-center py-2">
           <Badge
             variant="secondary"
@@ -116,6 +139,13 @@ function ExpandableClientRow({ client, isExpanded, onToggle }: ExpandableClientR
           >
             {client.subClientesDetalle.length}
           </Badge>
+        </TableCell>
+        <TableCell className="py-2">
+          <div className="flex items-center gap-1">
+            <CreditCard className="h-3 w-3 text-muted-foreground" />
+            <span className="text-sm font-medium">{diasCredito}</span>
+            <span className="text-xs text-muted-foreground">días</span>
+          </div>
         </TableCell>
         <TableCell className="py-2">
           <div className="flex flex-wrap gap-1">
@@ -148,13 +178,17 @@ function ExpandableClientRow({ client, isExpanded, onToggle }: ExpandableClientR
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="bg-popover border shadow-lg z-50">
-              <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); }}>
                 <Eye className="h-4 w-4 mr-2" /> Ver Detalle
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(); }}>
                 <Edit className="h-4 w-4 mr-2" /> Editar
               </DropdownMenuItem>
-              <DropdownMenuItem className="text-destructive" onClick={(e) => e.stopPropagation()}>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem 
+                className="text-destructive focus:text-destructive focus:bg-destructive/10" 
+                onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              >
                 <Trash2 className="h-4 w-4 mr-2" /> Eliminar
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -164,7 +198,7 @@ function ExpandableClientRow({ client, isExpanded, onToggle }: ExpandableClientR
 
       {isExpanded && (
         <TableRow className="bg-slate-50/80 hover:bg-slate-50/80">
-          <TableCell colSpan={7} className="p-0">
+          <TableCell colSpan={9} className="p-0">
             <div className="px-12 py-4 border-l-4 border-l-primary/30">
               <div className="flex items-center gap-2 mb-3">
                 <MapPin className="h-4 w-4 text-primary" />
@@ -214,6 +248,15 @@ function ExpandableClientRow({ client, isExpanded, onToggle }: ExpandableClientR
                     </div>
 
                     <div className="flex items-center gap-4">
+                      {/* Show tarifa if exists */}
+                      {(sub as any).tarifaPactada && (
+                        <div className="text-right text-xs">
+                          <p className="font-mono font-medium text-emerald-700">
+                            ${(sub as any).tarifaPactada.toLocaleString()} {(sub as any).moneda || 'MXN'}
+                          </p>
+                        </div>
+                      )}
+                      
                       {sub.contacto && (
                         <div className="text-right text-xs">
                           <p className="text-muted-foreground">{sub.contacto}</p>
@@ -247,18 +290,22 @@ function ExpandableClientRow({ client, isExpanded, onToggle }: ExpandableClientR
 
 export default function ClientesCatalogo() {
   const navigate = useNavigate();
+  const [clients, setClients] = useState<Client[]>(mockClients);
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
 
-  const filteredClients = mockClients.filter(
+  const filteredClients = clients.filter(
     (client) =>
       client.razónSocial.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.rfc.toLowerCase().includes(searchTerm.toLowerCase()),
+      client.rfc.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      client.contactoPrincipal?.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
-  const totalClients = mockClients.length;
-  const activeClients = mockClients.filter((c) => c.estatus === "activo").length;
-  const totalSubClients = mockClients.reduce((acc, c) => acc + c.subClientesDetalle.length, 0);
+  const totalClients = clients.length;
+  const activeClients = clients.filter((c) => c.estatus === "activo").length;
+  const totalSubClients = clients.reduce((acc, c) => acc + c.subClientesDetalle.length, 0);
 
   const toggleClientExpanded = (clientId: string) => {
     setExpandedClients((prev) => {
@@ -272,10 +319,43 @@ export default function ClientesCatalogo() {
     });
   };
 
+  const handleEdit = (client: Client) => {
+    navigate(`/clientes/nuevo?edit=${client.id}`);
+  };
+
+  const handleDeleteRequest = (client: Client) => {
+    // Check if client has active trips
+    const activeTrips = mockTrips.filter(trip => 
+      trip.clientName.toLowerCase().includes(client.razónSocial.toLowerCase()) &&
+      ['en_ruta', 'detenido', 'retraso'].includes(trip.status)
+    );
+    
+    if (activeTrips.length > 0) {
+      toast.error("No se puede eliminar", {
+        description: `${client.razónSocial} tiene ${activeTrips.length} viaje(s) activo(s)`,
+      });
+      return;
+    }
+    
+    setClientToDelete(client);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (clientToDelete) {
+      setClients(prev => prev.filter(c => c.id !== clientToDelete.id));
+      toast.success("Cliente eliminado", {
+        description: `${clientToDelete.razónSocial} ha sido eliminado del catálogo`,
+      });
+      setClientToDelete(null);
+    }
+    setDeleteDialogOpen(false);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <PageHeader title="Gestión de Clientes" description="Administra clientes y sus destinos de entrega">
+      <PageHeader title="Gestión de Clientes" description="Administra clientes, destinos de entrega y tarifas comerciales">
         <ActionButton onClick={() => navigate("/clientes/nuevo")}>
           <Plus className="h-4 w-4" /> Nuevo Cliente
         </ActionButton>
@@ -332,7 +412,7 @@ export default function ClientesCatalogo() {
             <div className="relative w-72">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar por razón social o RFC..."
+                placeholder="Buscar por razón social, RFC o contacto..."
                 className="pl-9"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -349,8 +429,12 @@ export default function ClientesCatalogo() {
                   Razón Social
                 </TableHead>
                 <TableHead className="text-xs font-semibold uppercase text-slate-600 tracking-wider">RFC</TableHead>
+                <TableHead className="text-xs font-semibold uppercase text-slate-600 tracking-wider">Régimen</TableHead>
                 <TableHead className="text-xs font-semibold uppercase text-slate-600 tracking-wider text-center">
                   Destinos
+                </TableHead>
+                <TableHead className="text-xs font-semibold uppercase text-slate-600 tracking-wider">
+                  Crédito
                 </TableHead>
                 <TableHead className="text-xs font-semibold uppercase text-slate-600 tracking-wider">
                   Tarifas Activas
@@ -362,14 +446,25 @@ export default function ClientesCatalogo() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredClients.map((client) => (
-                <ExpandableClientRow
-                  key={client.id}
-                  client={client}
-                  isExpanded={expandedClients.has(client.id)}
-                  onToggle={() => toggleClientExpanded(client.id)}
-                />
-              ))}
+              {filteredClients.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={9} className="text-center py-12">
+                    <Building2 className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+                    <p className="text-muted-foreground">No se encontraron clientes</p>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredClients.map((client) => (
+                  <ExpandableClientRow
+                    key={client.id}
+                    client={client}
+                    isExpanded={expandedClients.has(client.id)}
+                    onToggle={() => toggleClientExpanded(client.id)}
+                    onEdit={() => handleEdit(client)}
+                    onDelete={() => handleDeleteRequest(client)}
+                  />
+                ))
+              )}
             </TableBody>
           </Table>
 
@@ -379,6 +474,37 @@ export default function ClientesCatalogo() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              ¿Eliminar cliente?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción no se puede deshacer. Se eliminará permanentemente:
+              <div className="mt-3 p-3 bg-muted rounded-lg">
+                <p className="font-semibold">{clientToDelete?.razónSocial}</p>
+                <p className="text-sm font-mono">{clientToDelete?.rfc}</p>
+                <p className="text-sm mt-1">
+                  {clientToDelete?.subClientesDetalle.length || 0} destino(s) asociado(s)
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Eliminar Cliente
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Animation styles */}
       <style>{`

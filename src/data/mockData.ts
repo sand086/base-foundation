@@ -31,6 +31,10 @@ export interface SubClienteDetalle {
   telefono?: string;
   horarioRecepcion?: string;
   estatus: 'activo' | 'inactivo';
+  // Tariff fields
+  tarifaPactada?: number;
+  moneda?: 'MXN' | 'USD';
+  diasCredito?: number;
 }
 
 export interface Client {
@@ -43,10 +47,14 @@ export interface Client {
   telefono: string;
   email?: string;
   direccionFiscal?: string;
+  codigoPostalFiscal?: string;
   estatus: 'activo' | 'pendiente' | 'incompleto';
   subClientes: number;
   subClientesDetalle: SubClienteDetalle[];
   tarifasActivas: string[];
+  // Commercial fields
+  contratoUrl?: string;
+  diasCredito?: number;
 }
 
 export interface SubClient {
