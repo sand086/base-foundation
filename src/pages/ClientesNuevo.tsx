@@ -19,15 +19,15 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { mockClients, type Client } from "@/data/mockData";
 
-// Interface for individual route tariff
-interface TarifaRuta {
+// Interface for authorized route tariff
+interface TarifaAutorizada {
   id: string;
-  nombreRuta: string;
-  tipoUnidad: 'sencillo' | 'full' | 'rabon';
-  tipoTarifa: 'pactada' | 'sugerida' | 'manual';
-  montoBase: number;
+  nombreRuta: string;        // Ej: "Veracruz - CDMX (Vía Xalapa)"
+  tipoUnidad: 'sencillo' | 'full' | 'rabon'; // El costo cambia drásticamente por esto
+  tarifaBase: number;        // El precio del flete pactado
+  costoCasetas?: number;     // (Opcional) Referencia del costo de casetas para esa ruta
   moneda: 'MXN' | 'USD';
-  vigencia: string;
+  vigencia: string;          // Fecha hasta la cual se respeta este precio
 }
 
 interface SubClienteForm {
@@ -48,15 +48,15 @@ interface SubClienteForm {
   convenioEspecial: boolean;
   contratoAdjunto?: string;
   // Multiple tariffs per route/unit
-  tarifas: TarifaRuta[];
+  tarifas: TarifaAutorizada[];
 }
 
-const emptyTarifa: TarifaRuta = {
+const emptyTarifa: TarifaAutorizada = {
   id: "",
   nombreRuta: "",
   tipoUnidad: "sencillo",
-  tipoTarifa: "pactada",
-  montoBase: 0,
+  tarifaBase: 0,
+  costoCasetas: 0,
   moneda: "MXN",
   vigencia: "",
 };
@@ -189,10 +189,10 @@ export default function ClientesNuevo() {
   // Tarifa management functions
   const addTarifa = (subClienteIndex: number) => {
     const updated = [...subClientes];
-    const newTarifa: TarifaRuta = {
+    const newTarifa: TarifaAutorizada = {
       ...emptyTarifa,
       id: `TAR-${Date.now()}`,
-      nombreRuta: "Ruta Base",
+      nombreRuta: "",
     };
     updated[subClienteIndex] = {
       ...updated[subClienteIndex],
@@ -201,7 +201,7 @@ export default function ClientesNuevo() {
     setSubClientes(updated);
   };
 
-  const updateTarifa = (subClienteIndex: number, tarifaIndex: number, field: keyof TarifaRuta, value: any) => {
+  const updateTarifa = (subClienteIndex: number, tarifaIndex: number, field: keyof TarifaAutorizada, value: any) => {
     const updated = [...subClientes];
     const tarifas = [...updated[subClienteIndex].tarifas];
     tarifas[tarifaIndex] = { ...tarifas[tarifaIndex], [field]: value };
@@ -217,6 +217,35 @@ export default function ClientesNuevo() {
     };
     setSubClientes(updated);
     toast.success("Tarifa eliminada");
+  };
+
+  // Validate tariff before saving
+  const validateTarifas = (): boolean => {
+    for (const sub of subClientes) {
+      for (const tarifa of sub.tarifas) {
+        if (!tarifa.nombreRuta || tarifa.tarifaBase <= 0) {
+          toast.error("Tarifa incompleta", { 
+            description: `En "${sub.nombre}": Ruta y Monto son obligatorios` 
+          });
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+
+  // Get unit type badge with appropriate styling
+  const getUnidadBadge = (tipo: string) => {
+    switch (tipo) {
+      case 'sencillo':
+        return <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-[10px]">🚛 Sencillo</Badge>;
+      case 'full':
+        return <Badge className="bg-purple-100 text-purple-700 border-purple-200 text-[10px]">🚚 Full</Badge>;
+      case 'rabon':
+        return <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-[10px]">📦 Rabón</Badge>;
+      default:
+        return <Badge variant="outline" className="text-[10px]">{tipo}</Badge>;
+    }
   };
 
   const saveSubCliente = () => {
@@ -258,6 +287,11 @@ export default function ClientesNuevo() {
       return;
     }
 
+    // Validate all tariffs have required fields
+    if (!validateTarifas()) {
+      return;
+    }
+
     // Count total tariffs assigned
     const totalTarifas = subClientes.reduce((acc, sub) => acc + sub.tarifas.length, 0);
 
@@ -289,19 +323,6 @@ export default function ClientesNuevo() {
       case 'full': return 'Full';
       case 'rabon': return 'Rabón';
       default: return tipo;
-    }
-  };
-
-  const getTipoTarifaBadge = (tipo: string) => {
-    switch (tipo) {
-      case 'pactada':
-        return <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200" variant="outline">Pactada</Badge>;
-      case 'sugerida':
-        return <Badge className="bg-blue-100 text-blue-700 border-blue-200" variant="outline">Sugerida</Badge>;
-      case 'manual':
-        return <Badge className="bg-amber-100 text-amber-700 border-amber-200" variant="outline">Manual</Badge>;
-      default:
-        return <Badge variant="outline">{tipo}</Badge>;
     }
   };
 
@@ -913,122 +934,156 @@ export default function ClientesNuevo() {
                               </Button>
                             </div>
                           ) : (
-                            <div className="space-y-3">
+                            <div className="space-y-2">
+                              {/* Table Header */}
+                              <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-muted/50 rounded-t-lg text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                                <div className="col-span-3">Ruta</div>
+                                <div className="col-span-2">Unidad</div>
+                                <div className="col-span-2">Tarifa Base</div>
+                                <div className="col-span-2">Casetas (Est.)</div>
+                                <div className="col-span-2">Vigencia</div>
+                                <div className="col-span-1"></div>
+                              </div>
+                              
+                              {/* Tariff Rows */}
                               {sub.tarifas.map((tarifa, tIdx) => (
                                 <div 
                                   key={tarifa.id} 
-                                  className="p-3 border rounded-lg bg-background/50 space-y-3 relative group"
+                                  className="grid grid-cols-12 gap-2 px-3 py-2 border rounded-lg bg-background/50 items-center group hover:border-primary/30 transition-colors"
                                 >
-                                  {/* Delete button */}
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="absolute -right-2 -top-2 h-6 w-6 rounded-full bg-destructive/10 text-destructive opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive hover:text-white"
-                                    onClick={() => removeTarifa(idx, tIdx)}
-                                  >
-                                    <Trash2 className="h-3 w-3" />
-                                  </Button>
-
-                                  {/* Row 1: Route Name + Unit Type */}
-                                  <div className="grid grid-cols-2 gap-2">
-                                    <div className="space-y-1">
-                                      <Label className="text-[10px] text-muted-foreground">Nombre Ruta</Label>
+                                  {/* Route Name */}
+                                  <div className="col-span-3">
+                                    <Input
+                                      placeholder="Ruta Bajío - Vía Corta"
+                                      value={tarifa.nombreRuta}
+                                      onChange={(e) => updateTarifa(idx, tIdx, 'nombreRuta', e.target.value)}
+                                      className={cn(
+                                        "h-8 text-xs",
+                                        !tarifa.nombreRuta && "border-amber-300 bg-amber-50/50"
+                                      )}
+                                    />
+                                  </div>
+                                  
+                                  {/* Unit Type */}
+                                  <div className="col-span-2">
+                                    <Select
+                                      value={tarifa.tipoUnidad}
+                                      onValueChange={(value) => updateTarifa(idx, tIdx, 'tipoUnidad', value)}
+                                    >
+                                      <SelectTrigger className="h-8 text-xs">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent className="bg-popover border shadow-lg z-50">
+                                        <SelectItem value="sencillo">
+                                          <span className="flex items-center gap-1">🚛 Sencillo</span>
+                                        </SelectItem>
+                                        <SelectItem value="full">
+                                          <span className="flex items-center gap-1">🚚 Full</span>
+                                        </SelectItem>
+                                        <SelectItem value="rabon">
+                                          <span className="flex items-center gap-1">📦 Rabón</span>
+                                        </SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  
+                                  {/* Base Tariff - Prominent */}
+                                  <div className="col-span-2">
+                                    <div className="relative">
+                                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">$</span>
                                       <Input
-                                        placeholder="Ej: Ruta Base, Vía Corta..."
-                                        value={tarifa.nombreRuta}
-                                        onChange={(e) => updateTarifa(idx, tIdx, 'nombreRuta', e.target.value)}
-                                        className="h-8 text-sm"
+                                        type="number"
+                                        min="0"
+                                        step="100"
+                                        placeholder="0"
+                                        value={tarifa.tarifaBase || ""}
+                                        onChange={(e) => updateTarifa(idx, tIdx, 'tarifaBase', parseFloat(e.target.value) || 0)}
+                                        className={cn(
+                                          "h-8 text-xs pl-5 font-mono font-semibold",
+                                          !tarifa.tarifaBase && "border-amber-300 bg-amber-50/50"
+                                        )}
                                       />
                                     </div>
-                                    <div className="space-y-1">
-                                      <Label className="text-[10px] text-muted-foreground flex items-center gap-1">
-                                        <Truck className="h-3 w-3" /> Tipo Unidad
-                                      </Label>
-                                      <Select
-                                        value={tarifa.tipoUnidad}
-                                        onValueChange={(value) => updateTarifa(idx, tIdx, 'tipoUnidad', value)}
-                                      >
-                                        <SelectTrigger className="h-8 text-sm">
-                                          <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-popover border shadow-lg z-50">
-                                          <SelectItem value="sencillo">🚛 Sencillo</SelectItem>
-                                          <SelectItem value="full">🚚 Full</SelectItem>
-                                          <SelectItem value="rabon">📦 Rabón</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
                                   </div>
-
-                                  {/* Row 2: Tariff Type + Amount + Currency */}
-                                  <div className="grid grid-cols-3 gap-2">
-                                    <div className="space-y-1">
-                                      <Label className="text-[10px] text-muted-foreground">Tipo Tarifa</Label>
-                                      <Select
-                                        value={tarifa.tipoTarifa}
-                                        onValueChange={(value) => updateTarifa(idx, tIdx, 'tipoTarifa', value)}
-                                      >
-                                        <SelectTrigger className="h-8 text-sm">
-                                          <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-popover border shadow-lg z-50">
-                                          <SelectItem value="pactada">Pactada</SelectItem>
-                                          <SelectItem value="sugerida">Sugerida</SelectItem>
-                                          <SelectItem value="manual">Manual</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                    <div className="space-y-1">
-                                      <Label className="text-[10px] text-muted-foreground">Monto Base</Label>
-                                      <div className="relative">
-                                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">$</span>
-                                        <Input
-                                          type="number"
-                                          min="0"
-                                          step="0.01"
-                                          placeholder="0.00"
-                                          value={tarifa.montoBase || ""}
-                                          onChange={(e) => updateTarifa(idx, tIdx, 'montoBase', parseFloat(e.target.value) || 0)}
-                                          className="h-8 text-sm pl-6 font-mono"
-                                        />
-                                      </div>
-                                    </div>
-                                    <div className="space-y-1">
-                                      <Label className="text-[10px] text-muted-foreground">Moneda</Label>
-                                      <Select
-                                        value={tarifa.moneda}
-                                        onValueChange={(value) => updateTarifa(idx, tIdx, 'moneda', value)}
-                                      >
-                                        <SelectTrigger className="h-8 text-sm">
-                                          <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-popover border shadow-lg z-50">
-                                          <SelectItem value="MXN">🇲🇽 MXN</SelectItem>
-                                          <SelectItem value="USD">🇺🇸 USD</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                  </div>
-
-                                  {/* Row 3: Expiration Date */}
-                                  <div className="grid grid-cols-2 gap-2">
-                                    <div className="space-y-1">
-                                      <Label className="text-[10px] text-muted-foreground flex items-center gap-1">
-                                        <Calendar className="h-3 w-3" /> Vigencia
-                                      </Label>
+                                  
+                                  {/* Toll Costs - Informative/Gray */}
+                                  <div className="col-span-2">
+                                    <div className="relative">
+                                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">$</span>
                                       <Input
-                                        type="date"
-                                        value={tarifa.vigencia}
-                                        onChange={(e) => updateTarifa(idx, tIdx, 'vigencia', e.target.value)}
-                                        className="h-8 text-sm"
+                                        type="number"
+                                        min="0"
+                                        step="50"
+                                        placeholder="0"
+                                        value={tarifa.costoCasetas || ""}
+                                        onChange={(e) => updateTarifa(idx, tIdx, 'costoCasetas', parseFloat(e.target.value) || 0)}
+                                        className="h-8 text-xs pl-5 font-mono bg-muted/30 text-muted-foreground"
                                       />
                                     </div>
-                                    <div className="flex items-end pb-1">
-                                      {getTipoTarifaBadge(tarifa.tipoTarifa)}
-                                    </div>
+                                  </div>
+                                  
+                                  {/* Validity Date */}
+                                  <div className="col-span-2">
+                                    <Input
+                                      type="date"
+                                      value={tarifa.vigencia}
+                                      onChange={(e) => updateTarifa(idx, tIdx, 'vigencia', e.target.value)}
+                                      className="h-8 text-xs"
+                                    />
+                                  </div>
+                                  
+                                  {/* Delete Action */}
+                                  <div className="col-span-1 flex justify-center">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10 hover:text-destructive"
+                                      onClick={() => removeTarifa(idx, tIdx)}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
                                   </div>
                                 </div>
                               ))}
+                              
+                              {/* Add New Tariff Row */}
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="w-full h-8 text-xs gap-1 border-dashed hover:border-primary hover:bg-primary/5"
+                                onClick={() => addTarifa(idx)}
+                              >
+                                <Plus className="h-3.5 w-3.5" />
+                                Agregar Tarifa
+                              </Button>
+                              
+                              {/* Saved Tariffs Summary */}
+                              {sub.tarifas.length > 0 && (
+                                <div className="pt-3 border-t mt-3">
+                                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                                    Resumen de Tarifas Configuradas
+                                  </p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {sub.tarifas.filter(t => t.nombreRuta && t.tarifaBase > 0).map((tarifa) => (
+                                      <div 
+                                        key={tarifa.id}
+                                        className="flex items-center gap-2 px-2 py-1 rounded-lg bg-muted/50 border"
+                                      >
+                                        <span className="text-xs truncate max-w-[120px]">{tarifa.nombreRuta}</span>
+                                        {getUnidadBadge(tarifa.tipoUnidad)}
+                                        <span className="font-mono font-bold text-xs text-primary">
+                                          ${tarifa.tarifaBase.toLocaleString()} {tarifa.moneda}
+                                        </span>
+                                        {tarifa.costoCasetas ? (
+                                          <span className="text-[10px] text-muted-foreground">
+                                            (+${tarifa.costoCasetas.toLocaleString()} casetas)
+                                          </span>
+                                        ) : null}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
