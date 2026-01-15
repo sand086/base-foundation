@@ -1,5 +1,25 @@
 // Mock Data for Rápidos 3T - TMS
 
+// ============= INTERFACES DE TARIFAS (Matriz de Precios) =============
+
+/**
+ * TarifaAutorizada: Define el precio pactado para una combinación específica de
+ * Ruta + Tipo de Unidad. Esto permite que un mismo destino tenga diferentes
+ * precios dependiendo de si se usa un Sencillo, Full o Rabón.
+ */
+export interface TarifaAutorizada {
+  id: string;
+  nombreRuta: string;           // Ej: "Veracruz - CDMX (Vía Xalapa)"
+  tipoUnidad: 'sencillo' | 'full' | 'rabon';
+  tarifaBase: number;           // Precio del flete pactado
+  costoCasetas?: number;        // Referencia del costo de casetas para esa ruta
+  moneda: 'MXN' | 'USD';
+  vigencia: string;             // Fecha hasta la cual se respeta este precio (ISO string)
+  estatus: 'activa' | 'vencida' | 'por_vencer';
+}
+
+// ============= INTERFACES DE VIAJES =============
+
 export interface Trip {
   id: string;
   clientName: string;
@@ -18,6 +38,12 @@ export interface TimelineEvent {
   type: 'checkpoint' | 'alert' | 'info';
 }
 
+// ============= INTERFACES DE CLIENTES Y SUBCLIENTES =============
+
+/**
+ * SubClienteDetalle: Representa un destino/ubicación de entrega del cliente.
+ * Ahora soporta la "Matriz de Tarifas" completa con múltiples precios por ruta/unidad.
+ */
 export interface SubClienteDetalle {
   id: string;
   nombre: string;
@@ -31,10 +57,20 @@ export interface SubClienteDetalle {
   telefono?: string;
   horarioRecepcion?: string;
   estatus: 'activo' | 'inactivo';
-  // Tariff fields
+  
+  // ===== CONDICIONES COMERCIALES =====
+  diasCredito?: number;
+  requiereContrato?: boolean;
+  convenioEspecial?: boolean;
+  contratoUrl?: string;
+  
+  // ===== MATRIZ DE TARIFAS AUTORIZADAS =====
+  // Una lista de tarifas que permiten definir precios por Ruta + Tipo de Unidad
+  tarifas?: TarifaAutorizada[];
+  
+  // Legacy fields (para compatibilidad con datos existentes)
   tarifaPactada?: number;
   moneda?: 'MXN' | 'USD';
-  diasCredito?: number;
 }
 
 export interface Client {
@@ -234,6 +270,41 @@ export const mockClients: Client[] = [
         telefono: '81 5555 4444',
         horarioRecepcion: 'Lun-Vie 7:00-17:00',
         estatus: 'activo',
+        diasCredito: 30,
+        requiereContrato: true,
+        convenioEspecial: false,
+        tarifas: [
+          {
+            id: 'TAR-001-A-1',
+            nombreRuta: 'CDMX - Monterrey (Vía Saltillo)',
+            tipoUnidad: 'sencillo',
+            tarifaBase: 28500,
+            costoCasetas: 3200,
+            moneda: 'MXN',
+            vigencia: '2025-12-31',
+            estatus: 'activa',
+          },
+          {
+            id: 'TAR-001-A-2',
+            nombreRuta: 'CDMX - Monterrey (Vía Saltillo)',
+            tipoUnidad: 'full',
+            tarifaBase: 42000,
+            costoCasetas: 4800,
+            moneda: 'MXN',
+            vigencia: '2025-12-31',
+            estatus: 'activa',
+          },
+          {
+            id: 'TAR-001-A-3',
+            nombreRuta: 'Querétaro - Monterrey (Directa)',
+            tipoUnidad: 'sencillo',
+            tarifaBase: 18500,
+            costoCasetas: 2100,
+            moneda: 'MXN',
+            vigencia: '2025-06-30',
+            estatus: 'por_vencer',
+          },
+        ],
       },
       {
         id: 'SUB-001-B',
@@ -248,6 +319,31 @@ export const mockClients: Client[] = [
         telefono: '55 3333 2222',
         horarioRecepcion: 'Lun-Sab 6:00-22:00',
         estatus: 'activo',
+        diasCredito: 15,
+        requiereContrato: false,
+        convenioEspecial: true,
+        tarifas: [
+          {
+            id: 'TAR-001-B-1',
+            nombreRuta: 'Veracruz - CDMX (Vía Xalapa)',
+            tipoUnidad: 'sencillo',
+            tarifaBase: 18000,
+            costoCasetas: 1800,
+            moneda: 'MXN',
+            vigencia: '2025-12-31',
+            estatus: 'activa',
+          },
+          {
+            id: 'TAR-001-B-2',
+            nombreRuta: 'Veracruz - CDMX (Vía Xalapa)',
+            tipoUnidad: 'full',
+            tarifaBase: 26500,
+            costoCasetas: 2400,
+            moneda: 'MXN',
+            vigencia: '2025-12-31',
+            estatus: 'activa',
+          },
+        ],
       },
       {
         id: 'SUB-001-C',
@@ -262,6 +358,41 @@ export const mockClients: Client[] = [
         telefono: '442 123 4567',
         horarioRecepcion: 'Lun-Vie 8:00-18:00',
         estatus: 'activo',
+        diasCredito: 45,
+        requiereContrato: true,
+        convenioEspecial: false,
+        tarifas: [
+          {
+            id: 'TAR-001-C-1',
+            nombreRuta: 'CDMX - Querétaro (Autopista)',
+            tipoUnidad: 'sencillo',
+            tarifaBase: 8500,
+            costoCasetas: 850,
+            moneda: 'MXN',
+            vigencia: '2025-12-31',
+            estatus: 'activa',
+          },
+          {
+            id: 'TAR-001-C-2',
+            nombreRuta: 'CDMX - Querétaro (Autopista)',
+            tipoUnidad: 'full',
+            tarifaBase: 12800,
+            costoCasetas: 1200,
+            moneda: 'MXN',
+            vigencia: '2025-12-31',
+            estatus: 'activa',
+          },
+          {
+            id: 'TAR-001-C-3',
+            nombreRuta: 'Monterrey - Querétaro',
+            tipoUnidad: 'full',
+            tarifaBase: 32000,
+            costoCasetas: 3600,
+            moneda: 'MXN',
+            vigencia: '2025-09-30',
+            estatus: 'activa',
+          },
+        ],
       },
       {
         id: 'SUB-001-D',
