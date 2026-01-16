@@ -23,6 +23,7 @@ import CuentasPorCobrar from "./pages/CuentasPorCobrar";
 import ProveedoresCxP from "./pages/ProveedoresCxP";
 import GestionTarifas from "./pages/GestionTarifas";
 import Despacho from "./pages/Despacho";
+import DespachoNuevo from "./pages/DespachoNuevo";
 import UsuariosSeguridad from "./pages/UsuariosSeguridad";
 import Tesoreria from "./pages/Tesoreria";
 import NotificacionesConfig from "./pages/NotificacionesConfig";
@@ -62,6 +63,7 @@ const App = () => (
                 <Route path="proveedores" element={<ProveedoresCxP />} />
                 <Route path="tarifas" element={<GestionTarifas />} />
                 <Route path="despacho" element={<Despacho />} />
+                <Route path="despacho/nuevo" element={<DespachoNuevo />} />
                 <Route path="usuarios" element={<UsuariosSeguridad />} />
                 <Route path="tesoreria" element={<Tesoreria />} />
                 <Route path="notificaciones" element={<NotificacionesConfig />} />
