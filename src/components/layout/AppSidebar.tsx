@@ -80,7 +80,11 @@ interface AppSidebarProps {
 
 export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
   const location = useLocation();
-  const [expandedItems, setExpandedItems] = useState<string[]>(["Clientes", "Flota", "Combustible"]);
+  const [expandedItems, setExpandedItems] = useState<string[]>([
+    "Clientes",
+    "Flota",
+    "Combustible",
+  ]);
 
   const toggleExpand = (title: string) => {
     setExpandedItems((prev) =>
@@ -90,7 +94,8 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
 
   const isActive = (path?: string, children?: { path: string }[]) => {
     if (path && location.pathname === path) return true;
-    if (children) return children.some((child) => location.pathname.startsWith(child.path));
+    if (children)
+      return children.some((child) => location.pathname.startsWith(child.path));
     return false;
   };
 
@@ -105,15 +110,17 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
       <div className="flex h-14 items-center justify-between px-4 border-b border-sidebar-border">
         {!collapsed && (
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded bg-brand-red text-white font-bold text-xs">
-              3T
-            </div>
-            <span className="font-bold text-base tracking-tight text-white">Rápidos 3T</span>
+            {/* <div className="flex h-8 w-8 items-center justify-center rounded bg-brand-red text-white font-bold text-xs">
+              4T
+            </div> */}
+            <span className="font-bold text-base tracking-tight text-white">
+              <img src="/logo-white.svg" alt="3T Logistics" className="h-6" />
+            </span>
           </div>
         )}
         {collapsed && (
-          <div className="flex h-8 w-8 items-center justify-center rounded bg-brand-red text-white font-bold text-xs mx-auto">
-            3T
+          <div className="flex h-8 w-8 items-center justify-center text-white font-bold text-xs mx-auto">
+            <img src="/favicon.svg" alt="3T" className="h-5" />
           </div>
         )}
       </div>
@@ -129,7 +136,13 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
             collapsed ? "w-full justify-center" : "w-full justify-start"
           )}
         >
-          {collapsed ? <PanelLeft className="h-4 w-4" /> : <><PanelLeftClose className="h-4 w-4 mr-2" /> Colapsar</>}
+          {collapsed ? (
+            <PanelLeft className="h-4 w-4" />
+          ) : (
+            <>
+              <PanelLeftClose className="h-4 w-4 mr-2" /> Colapsar
+            </>
+          )}
         </Button>
       </div>
 
@@ -145,20 +158,20 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
                     className={cn(
                       "flex w-full items-center justify-between rounded px-2.5 py-2 text-xs font-medium transition-colors",
                       "hover:bg-sidebar-accent hover:text-white",
-                      isActive(undefined, item.children) && "bg-sidebar-accent text-white border-l-2 border-brand-red"
+                      isActive(undefined, item.children) &&
+                        "bg-sidebar-accent text-white border-l-2 border-brand-red"
                     )}
                   >
                     <div className="flex items-center gap-2.5">
                       <item.icon className="h-4 w-4 shrink-0" />
                       {!collapsed && <span>{item.title}</span>}
                     </div>
-                    {!collapsed && (
-                      expandedItems.includes(item.title) ? (
+                    {!collapsed &&
+                      (expandedItems.includes(item.title) ? (
                         <ChevronDown className="h-3.5 w-3.5 text-sidebar-foreground" />
                       ) : (
                         <ChevronRight className="h-3.5 w-3.5 text-sidebar-foreground" />
-                      )
-                    )}
+                      ))}
                   </button>
                   {!collapsed && expandedItems.includes(item.title) && (
                     <div className="ml-4 mt-0.5 space-y-0.5 border-l border-sidebar-border pl-3">

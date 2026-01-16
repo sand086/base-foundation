@@ -63,7 +63,7 @@ export function SettlementReceiptModal({
         <div className="bg-white border-2 border-dashed border-muted rounded-lg p-6 space-y-6">
           {/* Header */}
           <div className="text-center border-b pb-4">
-            <h2 className="text-xl font-bold text-primary">RÁPIDOS 3T</h2>
+            <h2 className="text-xl font-bold text-primary"><img src="/logo-white.svg" alt="3T Logistics" className="h-6" /></h2>
             <p className="text-sm text-muted-foreground">Sistema de Transporte</p>
             <Badge className="mt-2 bg-status-success text-white">
               <CheckCircle className="h-3 w-3 mr-1" />
@@ -194,7 +194,7 @@ export function SettlementReceiptModal({
           {/* Footer */}
           <div className="text-center text-xs text-muted-foreground pt-4 border-t border-dashed">
             <p>Este documento es un comprobante de liquidación generado automáticamente.</p>
-            <p className="mt-1">Rápidos 3T © 2025 - Sistema de Gestión de Transporte</p>
+            <p className="mt-1"><img src="/logo-white.svg" alt="3T Logistics" className="h-6" /> © 2025 - Sistema de Gestión de Transporte</p>
           </div>
         </div>
 
