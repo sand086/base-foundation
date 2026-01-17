@@ -68,6 +68,7 @@ const menuItems: MenuItem[] = [
     title: "Finanzas",
     icon: DollarSign,
     children: [
+      { title: "Dirección", path: "/finanzas-direccion" },
       { title: "Compras", path: "/compras" },
       { title: "Proveedores CxP", path: "/proveedores" },
       { title: "Cobranza CxC", path: "/cuentas-por-cobrar" },
