@@ -2,11 +2,14 @@ import { useState } from "react";
 import { 
   Search, 
   Plus, 
-  Upload, 
   Download, 
   FileText,
   Building2,
-  AlertCircle
+  AlertCircle,
+  Eye,
+  Edit,
+  CreditCard,
+  MoreHorizontal
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { ActionButton } from "@/components/ui/action-button";
@@ -24,46 +27,24 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { PaymentModal, PaymentFormData } from "@/features/pagos/PaymentModal";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 
-// Mock Data for Suppliers
-interface Supplier {
-  id: string;
-  razonSocial: string;
-  rfc: string;
-  contacto: string;
-  telefono: string;
-  giro: string;
-  estatus: 'activo' | 'inactivo';
-}
-
-interface PayableInvoice {
-  id: string;
-  proveedor: string;
-  uuid: string;
-  fechaEmision: string;
-  fechaVencimiento: string;
-  montoTotal: number;
-  saldoPendiente: number;
-  estatus: 'pendiente' | 'vencido' | 'pagado';
-}
+// Feature components
+import { RegisterExpenseModal } from "@/features/cxp/RegisterExpenseModal";
+import { InvoiceDetailSheet } from "@/features/cxp/InvoiceDetailSheet";
+import { RegisterPaymentModal } from "@/features/cxp/RegisterPaymentModal";
+import { 
+  PayableInvoice, 
+  InvoicePayment,
+  getInvoiceStatusInfo 
+} from "@/features/cxp/types";
+import { mockSuppliers, initialPayableInvoices, bankAccounts } from "@/features/cxp/data";
 
 interface Payment {
   id: string;
@@ -75,43 +56,40 @@ interface Payment {
   complementoUUID: string;
 }
 
-const mockSuppliers: Supplier[] = [
-  { id: 'PROV-001', razonSocial: 'Llantas Premium del Norte S.A.', rfc: 'LPN150320AA1', contacto: 'Ing. Carlos Mendoza', telefono: '81 4433 2211', giro: 'Llantas y Refacciones', estatus: 'activo' },
-  { id: 'PROV-002', razonSocial: 'Combustibles Nacionales MX', rfc: 'CNM100815BB2', contacto: 'Lic. Ana Torres', telefono: '55 8877 6655', giro: 'Combustible', estatus: 'activo' },
-  { id: 'PROV-003', razonSocial: 'Taller Mecánico Automotriz García', rfc: 'TMA090422CC3', contacto: 'Roberto García', telefono: '33 1122 3344', giro: 'Mantenimiento', estatus: 'activo' },
-  { id: 'PROV-004', razonSocial: 'Seguros y Fianzas del Bajío', rfc: 'SFB080101DD4', contacto: 'Lic. Patricia Vega', telefono: '442 555 6677', giro: 'Seguros', estatus: 'inactivo' },
-  { id: 'PROV-005', razonSocial: 'Casetas TAG Services', rfc: 'CTS120630EE5', contacto: 'Ing. Miguel Ángel Soto', telefono: '55 9988 7766', giro: 'Servicios Carreteros', estatus: 'activo' },
-];
-
-const mockPayableInvoices: PayableInvoice[] = [
-  { id: 'CXP-001', proveedor: 'Llantas Premium del Norte', uuid: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', fechaEmision: '2024-12-20', fechaVencimiento: '2025-01-20', montoTotal: 85000, saldoPendiente: 85000, estatus: 'pendiente' },
-  { id: 'CXP-002', proveedor: 'Combustibles Nacionales MX', uuid: 'b2c3d4e5-f6a7-8901-bcde-f23456789012', fechaEmision: '2024-12-01', fechaVencimiento: '2024-12-31', montoTotal: 125000, saldoPendiente: 125000, estatus: 'vencido' },
-  { id: 'CXP-003', proveedor: 'Taller Mecánico García', uuid: 'c3d4e5f6-a7b8-9012-cdef-345678901234', fechaEmision: '2024-12-15', fechaVencimiento: '2025-01-15', montoTotal: 45000, saldoPendiente: 0, estatus: 'pagado' },
-  { id: 'CXP-004', proveedor: 'Casetas TAG Services', uuid: 'd4e5f6a7-b8c9-0123-defa-456789012345', fechaEmision: '2024-11-15', fechaVencimiento: '2024-12-15', montoTotal: 67500, saldoPendiente: 67500, estatus: 'vencido' },
-  { id: 'CXP-005', proveedor: 'Combustibles Nacionales MX', uuid: 'e5f6a7b8-c9d0-1234-efab-567890123456', fechaEmision: '2025-01-02', fechaVencimiento: '2025-02-01', montoTotal: 98000, saldoPendiente: 98000, estatus: 'pendiente' },
-];
-
-const mockPayments: Payment[] = [
+const initialPayments: Payment[] = [
   { id: 'PAG-001', proveedor: 'Taller Mecánico García', folioFactura: 'A-4521', fechaPago: '2025-01-05', monto: 45000, metodoPago: 'Transferencia', complementoUUID: 'comp-001-abcd' },
   { id: 'PAG-002', proveedor: 'Llantas Premium del Norte', folioFactura: 'B-1298', fechaPago: '2024-12-28', monto: 62000, metodoPago: 'Transferencia', complementoUUID: 'comp-002-efgh' },
   { id: 'PAG-003', proveedor: 'Combustibles Nacionales MX', folioFactura: 'FC-8821', fechaPago: '2024-12-20', monto: 110000, metodoPago: 'Transferencia', complementoUUID: 'comp-003-ijkl' },
-  { id: 'PAG-004', proveedor: 'Seguros y Fianzas del Bajío', folioFactura: 'POL-2024-001', fechaPago: '2024-12-15', monto: 185000, metodoPago: 'Cheque', complementoUUID: 'comp-004-mnop' },
 ];
 
 export default function ProveedoresCxP() {
   const [searchCatalog, setSearchCatalog] = useState("");
   const [searchCxP, setSearchCxP] = useState("");
-  const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
+  
+  // State for invoices
+  const [invoices, setInvoices] = useState<PayableInvoice[]>(initialPayableInvoices);
+  const [payments, setPayments] = useState<Payment[]>(initialPayments);
+  
+  // Modal states
+  const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
+  const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [payments, setPayments] = useState(mockPayments);
+  
+  // Selected invoice for actions
+  const [selectedInvoice, setSelectedInvoice] = useState<PayableInvoice | null>(null);
+  const [editingInvoice, setEditingInvoice] = useState<PayableInvoice | null>(null);
 
   // Calculate KPIs
-  const totalVencido = mockPayableInvoices
-    .filter(inv => inv.estatus === 'vencido')
+  const totalVencido = invoices
+    .filter(inv => getInvoiceStatusInfo(inv).status === 'danger')
     .reduce((sum, inv) => sum + inv.saldoPendiente, 0);
   
-  const totalPorPagar = mockPayableInvoices
-    .filter(inv => inv.estatus === 'pendiente')
+  const totalPorPagar = invoices
+    .filter(inv => getInvoiceStatusInfo(inv).status === 'warning')
+    .reduce((sum, inv) => sum + inv.saldoPendiente, 0);
+
+  const totalParcial = invoices
+    .filter(inv => getInvoiceStatusInfo(inv).status === 'info')
     .reduce((sum, inv) => sum + inv.saldoPendiente, 0);
 
   const filteredSuppliers = mockSuppliers.filter(s => 
@@ -119,42 +97,108 @@ export default function ProveedoresCxP() {
     s.rfc.toLowerCase().includes(searchCatalog.toLowerCase())
   );
 
-  const filteredInvoices = mockPayableInvoices.filter(inv =>
+  const filteredInvoices = invoices.filter(inv =>
     inv.proveedor.toLowerCase().includes(searchCxP.toLowerCase()) ||
-    inv.uuid.toLowerCase().includes(searchCxP.toLowerCase())
+    inv.uuid.toLowerCase().includes(searchCxP.toLowerCase()) ||
+    inv.concepto.toLowerCase().includes(searchCxP.toLowerCase())
   );
 
-  const getInvoiceStatus = (invoice: PayableInvoice): 'success' | 'warning' | 'danger' => {
-    if (invoice.saldoPendiente === 0) return 'success';
-    const today = new Date();
-    const vencimiento = new Date(invoice.fechaVencimiento);
-    if (vencimiento < today) return 'danger';
-    return 'warning';
-  };
-
-  const getStatusLabel = (invoice: PayableInvoice): string => {
-    if (invoice.saldoPendiente === 0) return 'PAGADO';
-    const today = new Date();
-    const vencimiento = new Date(invoice.fechaVencimiento);
-    if (vencimiento < today) return 'VENCIDO';
-    return 'PENDIENTE';
-  };
-
-  const handlePaymentSubmit = (data: PaymentFormData) => {
-    const supplierName = mockSuppliers.find(s => s.id === data.proveedor)?.razonSocial || 'Proveedor';
-    const newPayment: Payment = {
-      id: `PAG-${String(payments.length + 1).padStart(3, '0')}`,
-      proveedor: supplierName,
-      folioFactura: data.folioFactura,
-      fechaPago: new Date().toISOString().split('T')[0],
-      monto: data.monto,
-      metodoPago: data.metodoPago === 'transferencia' ? 'Transferencia' : data.metodoPago === 'cheque' ? 'Cheque' : 'Efectivo',
-      complementoUUID: `comp-${Date.now()}`,
+  // Handle new invoice creation
+  const handleCreateInvoice = (invoiceData: Omit<PayableInvoice, 'id' | 'pagos' | 'estatus'>) => {
+    const newInvoice: PayableInvoice = {
+      ...invoiceData,
+      id: `CXP-${String(invoices.length + 1).padStart(3, '0')}`,
+      pagos: [],
+      estatus: 'pendiente',
     };
-    setPayments([newPayment, ...payments]);
-    toast.success('Pago registrado correctamente', {
-      description: `${supplierName} - $${data.monto.toLocaleString('es-MX')}`,
+    
+    setInvoices([newInvoice, ...invoices]);
+    toast.success('Factura registrada correctamente', {
+      description: `${invoiceData.proveedor} - $${invoiceData.montoTotal.toLocaleString('es-MX')}`,
     });
+  };
+
+  // Handle invoice update
+  const handleUpdateInvoice = (invoiceData: Omit<PayableInvoice, 'id' | 'pagos' | 'estatus'>) => {
+    if (!editingInvoice) return;
+    
+    setInvoices(invoices.map(inv => {
+      if (inv.id === editingInvoice.id) {
+        return {
+          ...inv,
+          ...invoiceData,
+          // Keep existing payments
+          pagos: inv.pagos,
+        };
+      }
+      return inv;
+    }));
+    
+    setEditingInvoice(null);
+    toast.success('Factura actualizada correctamente');
+  };
+
+  // Handle payment registration
+  const handleRegisterPayment = (invoiceId: string, payment: Omit<InvoicePayment, 'id'>) => {
+    const account = bankAccounts.find(a => a.id === payment.cuentaRetiro);
+    
+    setInvoices(invoices.map(inv => {
+      if (inv.id === invoiceId) {
+        const newPayment: InvoicePayment = {
+          ...payment,
+          id: `PAY-${Date.now()}`,
+          cuentaRetiro: account?.name || payment.cuentaRetiro,
+        };
+        
+        const newSaldo = inv.saldoPendiente - payment.monto;
+        const newEstatus = newSaldo === 0 ? 'pagado' : 'pago_parcial';
+        
+        return {
+          ...inv,
+          saldoPendiente: newSaldo,
+          estatus: newEstatus,
+          pagos: [...inv.pagos, newPayment],
+        };
+      }
+      return inv;
+    }));
+
+    // Add to payments history
+    const invoice = invoices.find(inv => inv.id === invoiceId);
+    if (invoice) {
+      const newPaymentRecord: Payment = {
+        id: `PAG-${String(payments.length + 1).padStart(3, '0')}`,
+        proveedor: invoice.proveedor,
+        folioFactura: invoice.id,
+        fechaPago: payment.fecha,
+        monto: payment.monto,
+        metodoPago: 'Transferencia',
+        complementoUUID: `comp-${Date.now()}`,
+      };
+      setPayments([newPaymentRecord, ...payments]);
+    }
+
+    toast.success('Pago registrado correctamente', {
+      description: `$${payment.monto.toLocaleString('es-MX')} aplicado a ${invoiceId}`,
+    });
+  };
+
+  // Open detail sheet
+  const handleViewInvoice = (invoice: PayableInvoice) => {
+    setSelectedInvoice(invoice);
+    setIsDetailSheetOpen(true);
+  };
+
+  // Open edit modal
+  const handleEditInvoice = (invoice: PayableInvoice) => {
+    setEditingInvoice(invoice);
+    setIsExpenseModalOpen(true);
+  };
+
+  // Open payment modal
+  const handlePayInvoice = (invoice: PayableInvoice) => {
+    setSelectedInvoice(invoice);
+    setIsPaymentModalOpen(true);
   };
 
   return (
@@ -230,7 +274,7 @@ export default function ProveedoresCxP() {
         {/* TAB 2: Cuentas por Pagar */}
         <TabsContent value="cuentas" className="space-y-4">
           {/* KPI Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <Card className="border-red-200 bg-red-50">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-red-700 flex items-center gap-2">
@@ -257,6 +301,19 @@ export default function ProveedoresCxP() {
                 </p>
               </CardContent>
             </Card>
+            <Card className="border-blue-200 bg-blue-50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-blue-700 flex items-center gap-2">
+                  <CreditCard className="h-4 w-4" />
+                  Pagos Parciales
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold text-blue-700">
+                  ${totalParcial.toLocaleString('es-MX')}
+                </p>
+              </CardContent>
+            </Card>
             <Card className="border-slate-200">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
@@ -277,121 +334,108 @@ export default function ProveedoresCxP() {
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <Input
-                placeholder="Buscar por proveedor o UUID..."
+                placeholder="Buscar por proveedor, UUID o concepto..."
                 value={searchCxP}
                 onChange={(e) => setSearchCxP(e.target.value)}
                 className="pl-10"
               />
             </div>
-            <Dialog open={isInvoiceModalOpen} onOpenChange={setIsInvoiceModalOpen}>
-              <DialogTrigger asChild>
-                <ActionButton>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Registrar Factura
-                </ActionButton>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[500px]">
-                <DialogHeader>
-                  <DialogTitle className="text-slate-700">Registrar Nueva Factura</DialogTitle>
-                  <DialogDescription>
-                    Ingrese los datos de la factura del proveedor
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="proveedor">Proveedor</Label>
-                    <Select>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar proveedor" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {mockSuppliers.filter(s => s.estatus === 'activo').map(s => (
-                          <SelectItem key={s.id} value={s.id}>{s.razonSocial}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="xml">Archivo XML (CFDI)</Label>
-                    <div className="flex items-center gap-2">
-                      <Input id="xml" type="file" accept=".xml" className="flex-1" />
-                      <Button variant="outline" size="icon">
-                        <Upload className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="monto">Monto Total</Label>
-                      <Input id="monto" type="number" placeholder="$0.00" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="dias">Días de Crédito</Label>
-                      <Select>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="15">15 días</SelectItem>
-                          <SelectItem value="30">30 días</SelectItem>
-                          <SelectItem value="45">45 días</SelectItem>
-                          <SelectItem value="60">60 días</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsInvoiceModalOpen(false)}>
-                    Cancelar
-                  </Button>
-                  <ActionButton onClick={() => setIsInvoiceModalOpen(false)}>
-                    Guardar Factura
-                  </ActionButton>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+            <ActionButton onClick={() => {
+              setEditingInvoice(null);
+              setIsExpenseModalOpen(true);
+            }}>
+              <Plus className="h-4 w-4 mr-2" />
+              Registrar Gasto
+            </ActionButton>
           </div>
 
           {/* Invoices Table */}
           <DataTable>
             <DataTableHeader>
               <DataTableRow>
+                <DataTableHead>ID</DataTableHead>
                 <DataTableHead>Proveedor</DataTableHead>
+                <DataTableHead>Concepto</DataTableHead>
                 <DataTableHead>UUID</DataTableHead>
-                <DataTableHead>Fecha Emisión</DataTableHead>
-                <DataTableHead>Fecha Vencimiento</DataTableHead>
-                <DataTableHead className="text-right">Monto Total</DataTableHead>
-                <DataTableHead className="text-right">Saldo Pendiente</DataTableHead>
+                <DataTableHead>Vencimiento</DataTableHead>
+                <DataTableHead className="text-right">Monto</DataTableHead>
+                <DataTableHead className="text-right">Saldo</DataTableHead>
                 <DataTableHead>Estatus</DataTableHead>
+                <DataTableHead className="text-center">Acciones</DataTableHead>
               </DataTableRow>
             </DataTableHeader>
             <DataTableBody>
               {filteredInvoices.map((invoice) => {
-                const isVencido = getInvoiceStatus(invoice) === 'danger' && invoice.saldoPendiente > 0;
+                const statusInfo = getInvoiceStatusInfo(invoice);
+                const isOverdue = statusInfo.status === 'danger' && invoice.saldoPendiente > 0;
+                
                 return (
                   <DataTableRow 
                     key={invoice.id}
-                    className={isVencido ? 'bg-red-50' : ''}
+                    className={isOverdue ? 'bg-red-50/50' : ''}
                   >
-                    <DataTableCell className="font-medium">{invoice.proveedor}</DataTableCell>
+                    <DataTableCell className="font-mono text-xs font-medium">
+                      {invoice.id}
+                    </DataTableCell>
+                    <DataTableCell className="font-medium max-w-[150px] truncate">
+                      {invoice.proveedor}
+                    </DataTableCell>
+                    <DataTableCell className="max-w-[180px] truncate text-muted-foreground text-xs">
+                      {invoice.concepto}
+                    </DataTableCell>
                     <DataTableCell className="font-mono text-xs">
                       {invoice.uuid.substring(0, 8)}...
                     </DataTableCell>
-                    <DataTableCell>{invoice.fechaEmision}</DataTableCell>
-                    <DataTableCell className={isVencido ? 'text-red-700 font-medium' : ''}>
+                    <DataTableCell className={isOverdue ? 'text-red-700 font-medium' : ''}>
                       {invoice.fechaVencimiento}
                     </DataTableCell>
                     <DataTableCell className="text-right font-medium">
                       ${invoice.montoTotal.toLocaleString('es-MX')}
+                      <span className="text-xs text-muted-foreground ml-1">{invoice.moneda}</span>
                     </DataTableCell>
-                    <DataTableCell className={`text-right font-medium ${isVencido ? 'text-red-700' : ''}`}>
+                    <DataTableCell className={`text-right font-bold ${
+                      invoice.saldoPendiente === 0 
+                        ? 'text-emerald-700' 
+                        : isOverdue 
+                          ? 'text-red-700' 
+                          : 'text-amber-700'
+                    }`}>
                       ${invoice.saldoPendiente.toLocaleString('es-MX')}
                     </DataTableCell>
                     <DataTableCell>
-                      <StatusBadge status={getInvoiceStatus(invoice)}>
-                        {getStatusLabel(invoice)}
+                      <StatusBadge status={statusInfo.status}>
+                        {statusInfo.label}
                       </StatusBadge>
+                    </DataTableCell>
+                    <DataTableCell>
+                      <div className="flex items-center justify-center gap-1">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="bg-card">
+                            <DropdownMenuItem onClick={() => handleViewInvoice(invoice)}>
+                              <Eye className="h-4 w-4 mr-2" />
+                              Ver Detalle
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleEditInvoice(invoice)}>
+                              <Edit className="h-4 w-4 mr-2" />
+                              Editar
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem 
+                              onClick={() => handlePayInvoice(invoice)}
+                              disabled={invoice.saldoPendiente === 0}
+                              className={invoice.saldoPendiente > 0 ? 'text-brand-green font-medium' : ''}
+                            >
+                              <CreditCard className="h-4 w-4 mr-2" />
+                              Registrar Pago
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </DataTableCell>
                   </DataTableRow>
                 );
@@ -410,10 +454,6 @@ export default function ProveedoresCxP() {
                 className="pl-10"
               />
             </div>
-            <ActionButton onClick={() => setIsPaymentModalOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Registrar Pago
-            </ActionButton>
           </div>
 
           <DataTable>
@@ -435,7 +475,7 @@ export default function ProveedoresCxP() {
                   <DataTableCell className="font-medium">{payment.proveedor}</DataTableCell>
                   <DataTableCell>{payment.folioFactura}</DataTableCell>
                   <DataTableCell>{payment.fechaPago}</DataTableCell>
-                  <DataTableCell className="text-right font-medium">
+                  <DataTableCell className="text-right font-medium text-emerald-700">
                     ${payment.monto.toLocaleString('es-MX')}
                   </DataTableCell>
                   <DataTableCell>
@@ -456,12 +496,29 @@ export default function ProveedoresCxP() {
         </TabsContent>
       </Tabs>
 
-      {/* Payment Modal with Bank Account Selection */}
-      <PaymentModal
+      {/* Modals */}
+      <RegisterExpenseModal
+        open={isExpenseModalOpen}
+        onOpenChange={(open) => {
+          setIsExpenseModalOpen(open);
+          if (!open) setEditingInvoice(null);
+        }}
+        onSubmit={editingInvoice ? handleUpdateInvoice : handleCreateInvoice}
+        suppliers={mockSuppliers}
+        editInvoice={editingInvoice}
+      />
+
+      <InvoiceDetailSheet
+        open={isDetailSheetOpen}
+        onOpenChange={setIsDetailSheetOpen}
+        invoice={selectedInvoice}
+      />
+
+      <RegisterPaymentModal
         open={isPaymentModalOpen}
         onOpenChange={setIsPaymentModalOpen}
-        onSubmit={handlePaymentSubmit}
-        suppliers={mockSuppliers.filter(s => s.estatus === 'activo').map(s => ({ id: s.id, razonSocial: s.razonSocial }))}
+        invoice={selectedInvoice}
+        onSubmit={handleRegisterPayment}
       />
     </div>
   );
