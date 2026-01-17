@@ -14,7 +14,8 @@ export interface RouteTemplate {
   id: string;
   clienteId: string;
   clienteNombre: string;
-  nombreRuta: string;
+  origen: string;
+  destino: string;
   tipoUnidad: '5ejes' | '9ejes';
   casetas: string[]; // toll booth IDs
   costoTotal: number;
@@ -128,7 +129,8 @@ export const mockRouteTemplates: RouteTemplate[] = [
     id: 'ruta-1',
     clienteId: 'cliente-1',
     clienteNombre: 'Sabino del Bene',
-    nombreRuta: 'CDMX - Veracruz Puerto',
+    origen: 'CDMX',
+    destino: 'Veracruz Puerto',
     tipoUnidad: '5ejes',
     casetas: ['caseta-6', 'caseta-7'],
     costoTotal: 375,
@@ -137,7 +139,8 @@ export const mockRouteTemplates: RouteTemplate[] = [
     id: 'ruta-2',
     clienteId: 'cliente-2',
     clienteNombre: 'DHL Supply Chain',
-    nombreRuta: 'Querétaro - CDMX',
+    origen: 'Querétaro',
+    destino: 'CDMX',
     tipoUnidad: '9ejes',
     casetas: ['caseta-3'],
     costoTotal: 225,
