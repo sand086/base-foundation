@@ -1,80 +1,305 @@
-import { useMemo } from "react";
-import { Truck, AlertTriangle } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useMemo } from "react";
+import { 
+  Truck, 
+  AlertTriangle, 
+  Package, 
+  CircleDot, 
+  History,
+  ArrowRightLeft,
+  Wrench,
+  Plus
+} from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { mockUnit, Tire } from "@/data/mockData";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { EnhancedDataTable, ColumnDef } from "@/components/ui/enhanced-data-table";
-
-const getTireColor = (depth: number) => {
-  if (depth < 5) return { bg: "bg-status-danger", text: "text-white", label: "Crítico" };
-  if (depth <= 10) return { bg: "bg-status-warning", text: "text-black", label: "Atención" };
-  return { bg: "bg-status-success", text: "text-white", label: "OK" };
-};
+import { 
+  GlobalTire, 
+  getTireLifePercentage, 
+  getTireSemaphoreStatus,
+  getEstadoBadge,
+  getEstadoFisicoBadge 
+} from "@/features/llantas/types";
+import { mockGlobalTires, fleetUnits, tireBrands } from "@/features/llantas/data";
+import { TireHistorySheet } from "@/features/llantas/TireHistorySheet";
+import { AssignTireModal } from "@/features/llantas/AssignTireModal";
+import { MaintenanceTireModal } from "@/features/llantas/MaintenanceTireModal";
+import { MoreHorizontal } from "lucide-react";
 
 export default function FlotaLlantas() {
-  const criticalTires = mockUnit.tires.filter((t) => t.profundidad < 5);
-  const warningTires = mockUnit.tires.filter((t) => t.profundidad >= 5 && t.profundidad <= 10);
-  const goodTires = mockUnit.tires.filter((t) => t.profundidad > 10);
+  const [tires, setTires] = useState<GlobalTire[]>(mockGlobalTires);
+  const [selectedTire, setSelectedTire] = useState<GlobalTire | null>(null);
+  const [historySheetOpen, setHistorySheetOpen] = useState(false);
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [maintenanceModalOpen, setMaintenanceModalOpen] = useState(false);
 
-  // Define columns for EnhancedDataTable
-  const columns: ColumnDef<Tire>[] = useMemo(() => [
+  // Calculate KPIs
+  const kpis = useMemo(() => {
+    const activeTires = tires.filter(t => t.estado !== 'desecho');
+    const critical = activeTires.filter(t => t.profundidadActual < 5);
+    const warning = activeTires.filter(t => t.profundidadActual >= 5 && t.profundidadActual <= 10);
+    const good = activeTires.filter(t => t.profundidadActual > 10);
+    const inStock = activeTires.filter(t => t.unidadActual === null);
+    
+    return { critical, warning, good, inStock, total: activeTires.length };
+  }, [tires]);
+
+  // Unique values for filters
+  const uniqueUnits = useMemo(() => {
+    const units = new Set<string>();
+    tires.forEach(t => {
+      if (t.unidadActual) units.add(t.unidadActual);
+    });
+    return ['En Almacén', ...Array.from(units)];
+  }, [tires]);
+
+  // Handlers
+  const handleViewHistory = (tire: GlobalTire) => {
+    setSelectedTire(tire);
+    setHistorySheetOpen(true);
+  };
+
+  const handleOpenAssign = (tire: GlobalTire) => {
+    setSelectedTire(tire);
+    setAssignModalOpen(true);
+  };
+
+  const handleOpenMaintenance = (tire: GlobalTire) => {
+    setSelectedTire(tire);
+    setMaintenanceModalOpen(true);
+  };
+
+  const handleAssign = (tireId: string, unidad: string | null, posicion: string | null, notas: string) => {
+    setTires(prev => prev.map(t => {
+      if (t.id === tireId) {
+        const newEvent = {
+          id: `h${Date.now()}`,
+          fecha: new Date(),
+          tipo: unidad ? 'montaje' as const : 'desmontaje' as const,
+          descripcion: unidad 
+            ? `Asignado a ${unidad} - ${posicion}${notas ? `. ${notas}` : ''}`
+            : `Enviado a almacén${notas ? `. ${notas}` : ''}`,
+          unidad: unidad || undefined,
+          posicion: posicion || undefined,
+          km: t.kmRecorridos,
+          responsable: 'Usuario Actual'
+        };
+        
+        return {
+          ...t,
+          unidadActual: unidad,
+          posicion: posicion,
+          historial: [...t.historial, newEvent]
+        };
+      }
+      return t;
+    }));
+  };
+
+  const handleMaintenance = (tireId: string, tipo: 'reparacion' | 'renovado' | 'desecho', costo: number, descripcion: string) => {
+    setTires(prev => prev.map(t => {
+      if (t.id === tireId) {
+        const newEvent = {
+          id: `h${Date.now()}`,
+          fecha: new Date(),
+          tipo: tipo,
+          descripcion: descripcion || `Enviado a ${tipo}`,
+          costo: costo || undefined,
+          km: t.kmRecorridos,
+          responsable: 'Usuario Actual'
+        };
+
+        const updates: Partial<GlobalTire> = {
+          historial: [...t.historial, newEvent],
+          costoAcumulado: t.costoAcumulado + costo
+        };
+
+        // If desecho, mark as such
+        if (tipo === 'desecho') {
+          updates.estado = 'desecho';
+          updates.estadoFisico = 'mala';
+          updates.unidadActual = null;
+          updates.posicion = null;
+        }
+
+        // If renovado and currently mounted, unmount
+        if (tipo === 'renovado' && t.unidadActual) {
+          updates.unidadActual = null;
+          updates.posicion = null;
+        }
+
+        return { ...t, ...updates };
+      }
+      return t;
+    }));
+  };
+
+  // Column definitions for EnhancedDataTable
+  const columns: ColumnDef<GlobalTire>[] = useMemo(() => [
     {
-      key: 'position',
-      header: 'Posición',
-    },
-    {
-      key: 'id',
+      key: 'codigoInterno',
       header: 'ID Llanta',
-      render: (value) => <span className="font-mono">{value}</span>,
+      render: (value) => <span className="font-mono font-medium">{value}</span>,
     },
     {
       key: 'marca',
       header: 'Marca',
+      type: 'status',
+      statusOptions: tireBrands,
     },
     {
-      key: 'profundidad',
-      header: 'Profundidad',
-      type: 'number',
-      render: (value) => <span className="font-bold">{value} mm</span>,
+      key: 'modelo',
+      header: 'Modelo',
     },
     {
-      key: 'profundidad',
-      header: 'Semáforo',
-      sortable: false,
-      render: (value) => {
-        const color = getTireColor(value);
-        return <Badge className={`${color.bg} ${color.text}`}>{color.label}</Badge>;
-      },
+      key: 'medida',
+      header: 'Medida',
+      render: (value) => <span className="text-xs font-mono">{value}</span>,
+    },
+    {
+      key: 'unidadActual',
+      header: 'Unidad Actual',
+      type: 'status',
+      statusOptions: uniqueUnits,
+      render: (value, row) => (
+        <div className="flex items-center gap-1.5">
+          {value ? (
+            <>
+              <Truck className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="font-medium">{value}</span>
+            </>
+          ) : (
+            <>
+              <Package className="h-3.5 w-3.5 text-amber-600" />
+              <span className="text-amber-700">En Almacén</span>
+            </>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'posicion',
+      header: 'Posición',
+      render: (value) => value || <span className="text-muted-foreground">—</span>,
     },
     {
       key: 'estado',
       header: 'Estado',
       type: 'status',
-      statusOptions: ['normal', 'ponchada', 'desgastada'],
-      render: (value) => <span className="capitalize">{value}</span>,
+      statusOptions: ['nuevo', 'usado', 'renovado', 'desecho'],
+      render: (value) => {
+        const badge = getEstadoBadge(value);
+        return <Badge className={badge.className}>{badge.label}</Badge>;
+      },
     },
     {
-      key: 'marcajeInterno',
-      header: 'Marcaje',
-      render: (value) => <span className="font-mono text-xs">{value}</span>,
+      key: 'estadoFisico',
+      header: 'Condición',
+      type: 'status',
+      statusOptions: ['buena', 'regular', 'mala'],
+      render: (value) => {
+        const badge = getEstadoFisicoBadge(value);
+        return <Badge variant={badge.variant}>{badge.label}</Badge>;
+      },
     },
-  ], []);
+    {
+      key: 'profundidadActual',
+      header: 'Semáforo de Vida',
+      type: 'number',
+      render: (value, row) => {
+        const percentage = getTireLifePercentage(row);
+        const semaphore = getTireSemaphoreStatus(row);
+        return (
+          <div className="w-28 space-y-1">
+            <div className="flex items-center justify-between text-xs">
+              <span>{value}mm</span>
+              <Badge className={`${semaphore.bgColor} ${semaphore.color} text-[10px] px-1.5`}>
+                {semaphore.label}
+              </Badge>
+            </div>
+            <Progress value={percentage} className="h-2" />
+          </div>
+        );
+      },
+    },
+    {
+      key: 'kmRecorridos',
+      header: 'Km Recorridos',
+      type: 'number',
+      render: (value) => <span className="font-mono">{value.toLocaleString()}</span>,
+    },
+    {
+      key: 'id',
+      header: 'Acciones',
+      sortable: false,
+      render: (_, row) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => handleViewHistory(row)}>
+              <History className="h-4 w-4 mr-2" />
+              Ver Historial
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem 
+              onClick={() => handleOpenAssign(row)}
+              disabled={row.estado === 'desecho'}
+            >
+              <ArrowRightLeft className="h-4 w-4 mr-2" />
+              Asignar / Rotar
+            </DropdownMenuItem>
+            <DropdownMenuItem 
+              onClick={() => handleOpenMaintenance(row)}
+              disabled={row.estado === 'desecho'}
+            >
+              <Wrench className="h-4 w-4 mr-2" />
+              Mantenimiento
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ),
+    },
+  ], [uniqueUnits]);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2"><Truck className="h-6 w-6" /> Semáforo de Llantas</h1>
-        <p className="text-muted-foreground">Unidad {mockUnit.numeroEconomico} - {mockUnit.modelo}</p>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <CircleDot className="h-6 w-6" /> 
+            Inventario Global de Neumáticos
+          </h1>
+          <p className="text-muted-foreground">
+            Gestión centralizada de {kpis.total} llantas activas en la flota
+          </p>
+        </div>
+        <Button className="gap-2">
+          <Plus className="h-4 w-4" />
+          Nueva Llanta
+        </Button>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
+      {/* KPI Cards */}
+      <div className="grid gap-4 md:grid-cols-4">
         <Card className="border-l-4 border-l-status-danger">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Críticas (Reemplazar)</p>
-                <p className="text-3xl font-bold text-status-danger">{criticalTires.length}</p>
+                <p className="text-sm text-muted-foreground">Críticas (&lt;5mm)</p>
+                <p className="text-3xl font-bold text-status-danger">{kpis.critical.length}</p>
               </div>
               <AlertTriangle className="h-8 w-8 text-status-danger" />
             </div>
@@ -83,91 +308,59 @@ export default function FlotaLlantas() {
         <Card className="border-l-4 border-l-status-warning">
           <CardContent className="pt-6">
             <p className="text-sm text-muted-foreground">Atención (6-10mm)</p>
-            <p className="text-3xl font-bold text-status-warning">{warningTires.length}</p>
+            <p className="text-3xl font-bold text-status-warning">{kpis.warning.length}</p>
           </CardContent>
         </Card>
         <Card className="border-l-4 border-l-status-success">
           <CardContent className="pt-6">
             <p className="text-sm text-muted-foreground">Buen Estado (+11mm)</p>
-            <p className="text-3xl font-bold text-status-success">{goodTires.length}</p>
+            <p className="text-3xl font-bold text-status-success">{kpis.good.length}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-l-4 border-l-primary">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">En Stock/Almacén</p>
+                <p className="text-3xl font-bold">{kpis.inStock.length}</p>
+              </div>
+              <Package className="h-8 w-8 text-primary" />
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Visual Truck Chassis with Numeric Positions */}
+      {/* Main Data Table */}
       <Card>
-        <CardHeader><CardTitle>Diagrama de Llantas (Posiciones Numéricas)</CardTitle></CardHeader>
-        <CardContent>
-          <div className="flex flex-col items-center gap-8 py-8">
-            {/* Front Axle - Positions 1-2 */}
-            <div className="flex items-center gap-32">
-              {mockUnit.tires.slice(0, 2).map((tire, idx) => {
-                const color = getTireColor(tire.profundidad);
-                return (
-                  <div key={tire.id} className={`w-16 h-24 rounded-lg ${color.bg} ${color.text} flex flex-col items-center justify-center text-xs font-bold shadow-lg`}>
-                    <span className="text-lg font-bold">{idx + 1}</span>
-                    <span>{tire.profundidad}mm</span>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="w-24 h-16 bg-primary rounded-lg flex items-center justify-center text-primary-foreground font-bold">EJE 1</div>
-
-            {/* Second Axle - Positions 3-4 */}
-            <div className="flex items-center gap-32">
-              {mockUnit.tires.slice(2, 4).map((tire, idx) => {
-                const color = getTireColor(tire.profundidad);
-                return (
-                  <div key={tire.id} className={`w-16 h-24 rounded-lg ${color.bg} ${color.text} flex flex-col items-center justify-center text-xs font-bold shadow-lg`}>
-                    <span className="text-lg font-bold">{idx + 3}</span>
-                    <span>{tire.profundidad}mm</span>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="w-24 h-16 bg-primary rounded-lg flex items-center justify-center text-primary-foreground font-bold">EJE 2</div>
-
-            {/* Third Axle (dual tires) - Positions 5-8 */}
-            <div className="flex items-center gap-24">
-              <div className="flex gap-2">
-                {mockUnit.tires.slice(4, 6).map((tire, idx) => {
-                  const color = getTireColor(tire.profundidad);
-                  return (
-                    <div key={tire.id} className={`w-14 h-20 rounded-lg ${color.bg} ${color.text} flex flex-col items-center justify-center text-xs font-bold shadow-lg`}>
-                      <span className="text-base font-bold">{idx + 5}</span>
-                      <span>{tire.profundidad}mm</span>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="flex gap-2">
-                {mockUnit.tires.slice(6, 8).map((tire, idx) => {
-                  const color = getTireColor(tire.profundidad);
-                  return (
-                    <div key={tire.id} className={`w-14 h-20 rounded-lg ${color.bg} ${color.text} flex flex-col items-center justify-center text-xs font-bold shadow-lg`}>
-                      <span className="text-base font-bold">{idx + 7}</span>
-                      <span>{tire.profundidad}mm</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-            <div className="w-24 h-16 bg-primary rounded-lg flex items-center justify-center text-primary-foreground font-bold">EJE 3</div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Enhanced Tire Details Table */}
-      <Card>
-        <CardHeader><CardTitle>Detalle de Llantas</CardTitle></CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           <EnhancedDataTable
-            data={mockUnit.tires}
+            data={tires.filter(t => t.estado !== 'desecho')}
             columns={columns}
-            exportFileName="llantas_detalle"
+            exportFileName="inventario_llantas"
           />
         </CardContent>
       </Card>
+
+      {/* Modals */}
+      <TireHistorySheet
+        tire={selectedTire}
+        open={historySheetOpen}
+        onOpenChange={setHistorySheetOpen}
+      />
+      
+      <AssignTireModal
+        tire={selectedTire}
+        open={assignModalOpen}
+        onOpenChange={setAssignModalOpen}
+        onAssign={handleAssign}
+      />
+
+      <MaintenanceTireModal
+        tire={selectedTire}
+        open={maintenanceModalOpen}
+        onOpenChange={setMaintenanceModalOpen}
+        onSubmit={handleMaintenance}
+      />
     </div>
   );
 }
