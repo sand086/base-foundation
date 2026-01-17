@@ -54,6 +54,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { CreatePermissionModal } from '@/features/permisos/CreatePermissionModal';
+import { AuditLogPanel } from '@/features/auditoria/AuditLogPanel';
+import { History } from 'lucide-react';
 const iconMap: Record<string, React.ElementType> = {
   LayoutDashboard,
   Radio,
@@ -82,6 +84,7 @@ const RolesPermisosPage = () => {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [roleToDelete, setRoleToDelete] = useState<string | null>(null);
   const [showCreatePermissionModal, setShowCreatePermissionModal] = useState(false);
+  const [showAuditLogPanel, setShowAuditLogPanel] = useState(false);
 
   // Role badge colors
   const getRoleBadgeColor = (rol: string) => {
@@ -217,21 +220,31 @@ const RolesPermisosPage = () => {
               </CardTitle>
               <CardDescription>Configura los permisos de cada rol para controlar el acceso a los módulos</CardDescription>
             </div>
-            <Button 
-              variant="outline"
-              onClick={() => setShowCreatePermissionModal(true)}
-              className="gap-2"
-            >
-              <Key className="h-4 w-4" />
-              Crear Permiso
-            </Button>
-            <Button 
-              onClick={openNewRoleEditor}
-              className="bg-action hover:bg-action-hover text-action-foreground gap-2"
-            >
-              <Plus className="h-4 w-4" />
-              Nuevo Rol
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="outline"
+                onClick={() => setShowAuditLogPanel(true)}
+                className="gap-2"
+              >
+                <History className="h-4 w-4" />
+                Ver Actividad
+              </Button>
+              <Button 
+                variant="outline"
+                onClick={() => setShowCreatePermissionModal(true)}
+                className="gap-2"
+              >
+                <Key className="h-4 w-4" />
+                Crear Permiso
+              </Button>
+              <Button 
+                onClick={openNewRoleEditor}
+                className="bg-action hover:bg-action-hover text-action-foreground gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                Nuevo Rol
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -547,6 +560,12 @@ const RolesPermisosPage = () => {
       </AlertDialog>
 
       {/* Create Permission Modal */}
+      {/* Audit Log Panel */}
+      <AuditLogPanel
+        open={showAuditLogPanel}
+        onOpenChange={setShowAuditLogPanel}
+      />
+
       <CreatePermissionModal
         open={showCreatePermissionModal}
         onOpenChange={setShowCreatePermissionModal}

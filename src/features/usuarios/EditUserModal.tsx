@@ -5,6 +5,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,7 +31,7 @@ import {
 import { roles } from '@/data/usuariosData';
 import { PasswordInput } from '@/components/usuarios/PasswordInput';
 import { ImageUpload } from '@/components/usuarios/ImageUpload';
-import { Edit, User, Lock, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { Edit, User, Lock, Image as ImageIcon, Loader2, ShieldOff } from 'lucide-react';
 import { toast } from 'sonner';
 
 export interface UserData {
@@ -46,6 +57,7 @@ interface EditUserModalProps {
 export function EditUserModal({ open, onOpenChange, user, onSave }: EditUserModalProps) {
   const [activeTab, setActiveTab] = useState('general');
   const [isSaving, setIsSaving] = useState(false);
+  const [showReset2FADialog, setShowReset2FADialog] = useState(false);
   const [formData, setFormData] = useState<UserData & { password: string }>({
     id: '',
     nombre: '',
@@ -68,8 +80,17 @@ export function EditUserModal({ open, onOpenChange, user, onSave }: EditUserModa
         password: '',
       });
       setActiveTab('general');
+      setShowReset2FADialog(false);
     }
   }, [user, open]);
+
+  const handleReset2FA = () => {
+    setFormData({ ...formData, twoFactorEnabled: false });
+    setShowReset2FADialog(false);
+    toast.success('2FA reseteado', {
+      description: `La autenticación de dos factores de ${formData.nombre} ha sido desactivada.`,
+    });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -261,6 +282,55 @@ export function EditUserModal({ open, onOpenChange, user, onSave }: EditUserModa
                   }
                 />
               </div>
+
+              {/* Reset 2FA Section */}
+              {formData.twoFactorEnabled && (
+                <div className="p-4 rounded-lg border border-destructive/30 bg-destructive/5">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-full bg-destructive/10 flex items-center justify-center flex-shrink-0">
+                      <ShieldOff className="h-5 w-5 text-destructive" />
+                    </div>
+                    <div className="flex-1">
+                      <Label className="text-sm font-medium text-destructive">Resetear 2FA</Label>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Desconectará la autenticación de dos factores. El usuario deberá configurarla nuevamente.
+                      </p>
+                      <AlertDialog open={showReset2FADialog} onOpenChange={setShowReset2FADialog}>
+                        <AlertDialogTrigger asChild>
+                          <Button 
+                            type="button"
+                            variant="destructive" 
+                            size="sm" 
+                            className="mt-3 gap-2"
+                          >
+                            <ShieldOff className="h-4 w-4" />
+                            Resetear Autenticación
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>¿Resetear 2FA?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Esta acción desconectará la autenticación de dos factores de{' '}
+                              <strong>{formData.nombre} {formData.apellidos}</strong>.
+                              El usuario deberá configurar 2FA nuevamente en su próximo inicio de sesión.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction 
+                              onClick={handleReset2FA}
+                              className="bg-destructive hover:bg-destructive/90"
+                            >
+                              Sí, resetear 2FA
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </div>
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="imagen" className="py-4">
