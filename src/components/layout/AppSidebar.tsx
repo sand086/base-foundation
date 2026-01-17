@@ -64,9 +64,16 @@ const menuItems: MenuItem[] = [
     ],
   },
   { title: "Cierre", icon: FileCheck, path: "/cierre" },
-  { title: "Proveedores", icon: Briefcase, path: "/proveedores" },
-  { title: "Cobranza", icon: DollarSign, path: "/cuentas-por-cobrar" },
-  { title: "Tesorería", icon: Landmark, path: "/tesoreria" },
+  {
+    title: "Finanzas",
+    icon: DollarSign,
+    children: [
+      { title: "Compras", path: "/compras" },
+      { title: "Proveedores CxP", path: "/proveedores" },
+      { title: "Cobranza CxC", path: "/cuentas-por-cobrar" },
+      { title: "Tesorería", path: "/tesoreria" },
+    ],
+  },
   {
     title: "Administración",
     icon: Settings,
