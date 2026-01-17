@@ -94,56 +94,58 @@ export default function FlotaLlantas() {
         </Card>
       </div>
 
-      {/* Visual Truck Chassis */}
+      {/* Visual Truck Chassis with Numeric Positions */}
       <Card>
-        <CardHeader><CardTitle>Diagrama de Llantas</CardTitle></CardHeader>
+        <CardHeader><CardTitle>Diagrama de Llantas (Posiciones Numéricas)</CardTitle></CardHeader>
         <CardContent>
           <div className="flex flex-col items-center gap-8 py-8">
-            {/* Front Axle */}
+            {/* Front Axle - Positions 1-2 */}
             <div className="flex items-center gap-32">
-              {mockUnit.tires.slice(0, 2).map((tire) => {
+              {mockUnit.tires.slice(0, 2).map((tire, idx) => {
                 const color = getTireColor(tire.profundidad);
                 return (
                   <div key={tire.id} className={`w-16 h-24 rounded-lg ${color.bg} ${color.text} flex flex-col items-center justify-center text-xs font-bold shadow-lg`}>
+                    <span className="text-lg font-bold">{idx + 1}</span>
                     <span>{tire.profundidad}mm</span>
-                    <span className="text-[10px] mt-1">{tire.position.split(' - ')[1]}</span>
                   </div>
                 );
               })}
             </div>
             <div className="w-24 h-16 bg-primary rounded-lg flex items-center justify-center text-primary-foreground font-bold">EJE 1</div>
 
-            {/* Second Axle */}
+            {/* Second Axle - Positions 3-4 */}
             <div className="flex items-center gap-32">
-              {mockUnit.tires.slice(2, 4).map((tire) => {
+              {mockUnit.tires.slice(2, 4).map((tire, idx) => {
                 const color = getTireColor(tire.profundidad);
                 return (
                   <div key={tire.id} className={`w-16 h-24 rounded-lg ${color.bg} ${color.text} flex flex-col items-center justify-center text-xs font-bold shadow-lg`}>
+                    <span className="text-lg font-bold">{idx + 3}</span>
                     <span>{tire.profundidad}mm</span>
-                    <span className="text-[10px] mt-1">{tire.position.split(' - ')[1]}</span>
                   </div>
                 );
               })}
             </div>
             <div className="w-24 h-16 bg-primary rounded-lg flex items-center justify-center text-primary-foreground font-bold">EJE 2</div>
 
-            {/* Third Axle (dual tires) */}
+            {/* Third Axle (dual tires) - Positions 5-8 */}
             <div className="flex items-center gap-24">
               <div className="flex gap-2">
-                {mockUnit.tires.slice(4, 6).map((tire) => {
+                {mockUnit.tires.slice(4, 6).map((tire, idx) => {
                   const color = getTireColor(tire.profundidad);
                   return (
                     <div key={tire.id} className={`w-14 h-20 rounded-lg ${color.bg} ${color.text} flex flex-col items-center justify-center text-xs font-bold shadow-lg`}>
+                      <span className="text-base font-bold">{idx + 5}</span>
                       <span>{tire.profundidad}mm</span>
                     </div>
                   );
                 })}
               </div>
               <div className="flex gap-2">
-                {mockUnit.tires.slice(6, 8).map((tire) => {
+                {mockUnit.tires.slice(6, 8).map((tire, idx) => {
                   const color = getTireColor(tire.profundidad);
                   return (
                     <div key={tire.id} className={`w-14 h-20 rounded-lg ${color.bg} ${color.text} flex flex-col items-center justify-center text-xs font-bold shadow-lg`}>
+                      <span className="text-base font-bold">{idx + 7}</span>
                       <span>{tire.profundidad}mm</span>
                     </div>
                   );

@@ -1,8 +1,9 @@
 import { useState, useMemo } from 'react';
-import { Truck, Plus, AlertTriangle, Eye, Edit, Trash2 } from "lucide-react";
+import { Truck, Plus, AlertTriangle, Eye, Edit, Trash2, Package } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,6 +24,7 @@ import {
 import { MoreHorizontal } from 'lucide-react';
 import { useNavigate } from "react-router-dom";
 import { AddUnidadModal, Unidad } from '@/features/flota/AddUnidadModal';
+import { PatrimonialView } from '@/features/flota/PatrimonialView';
 import { EnhancedDataTable, ColumnDef } from '@/components/ui/enhanced-data-table';
 import { useToast } from '@/hooks/use-toast';
 
@@ -302,61 +304,84 @@ export default function FlotaUnidades() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Truck className="h-6 w-6" /> Catálogo de Unidades
+            <Truck className="h-6 w-6" /> Gestión de Flota
           </h1>
-          <p className="text-muted-foreground">Gestión de flota vehicular y documentación</p>
+          <p className="text-muted-foreground">Catálogo de unidades e inventario patrimonial</p>
         </div>
-        <Button 
-          className="gap-2 bg-action hover:bg-action-hover text-action-foreground"
-          onClick={handleOpenNewModal}
-        >
-          <Plus className="h-4 w-4" /> Nueva Unidad
-        </Button>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card className="border-l-4 border-l-status-success">
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">Disponibles</p>
-            <p className="text-3xl font-bold text-status-success">{disponibles}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-l-4 border-l-blue-600">
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">En Ruta</p>
-            <p className="text-3xl font-bold text-blue-600">{enRuta}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-l-4 border-l-status-warning">
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">Mantenimiento</p>
-            <p className="text-3xl font-bold text-status-warning">{mantenimiento}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-l-4 border-l-status-danger">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Bloqueadas</p>
-                <p className="text-3xl font-bold text-status-danger">{bloqueadas}</p>
-              </div>
-              {bloqueadas > 0 && <AlertTriangle className="h-6 w-6 text-status-danger" />}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <Tabs defaultValue="unidades" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="unidades" className="gap-2">
+            <Truck className="h-4 w-4" />
+            Unidades Operativas
+          </TabsTrigger>
+          <TabsTrigger value="patrimonial" className="gap-2">
+            <Package className="h-4 w-4" />
+            Patrimonial
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Enhanced Data Table */}
-      <Card>
-        <CardContent className="pt-6">
-          <EnhancedDataTable
-            data={unidades}
-            columns={columns}
-            exportFileName="flota_unidades"
-          />
-        </CardContent>
-      </Card>
+        <TabsContent value="unidades" className="space-y-6">
+          {/* Add Button */}
+          <div className="flex justify-end">
+            <Button 
+              className="gap-2 bg-action hover:bg-action-hover text-action-foreground"
+              onClick={handleOpenNewModal}
+            >
+              <Plus className="h-4 w-4" /> Nueva Unidad
+            </Button>
+          </div>
+
+          {/* Summary Cards */}
+          <div className="grid gap-4 md:grid-cols-4">
+            <Card className="border-l-4 border-l-status-success">
+              <CardContent className="pt-6">
+                <p className="text-sm text-muted-foreground">Disponibles</p>
+                <p className="text-3xl font-bold text-status-success">{disponibles}</p>
+              </CardContent>
+            </Card>
+            <Card className="border-l-4 border-l-blue-600">
+              <CardContent className="pt-6">
+                <p className="text-sm text-muted-foreground">En Ruta</p>
+                <p className="text-3xl font-bold text-blue-600">{enRuta}</p>
+              </CardContent>
+            </Card>
+            <Card className="border-l-4 border-l-status-warning">
+              <CardContent className="pt-6">
+                <p className="text-sm text-muted-foreground">Mantenimiento</p>
+                <p className="text-3xl font-bold text-status-warning">{mantenimiento}</p>
+              </CardContent>
+            </Card>
+            <Card className="border-l-4 border-l-status-danger">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Bloqueadas</p>
+                    <p className="text-3xl font-bold text-status-danger">{bloqueadas}</p>
+                  </div>
+                  {bloqueadas > 0 && <AlertTriangle className="h-6 w-6 text-status-danger" />}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Enhanced Data Table */}
+          <Card>
+            <CardContent className="pt-6">
+              <EnhancedDataTable
+                data={unidades}
+                columns={columns}
+                exportFileName="flota_unidades"
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="patrimonial">
+          <PatrimonialView />
+        </TabsContent>
+      </Tabs>
 
       {/* Add/Edit Unit Modal */}
       <AddUnidadModal 
