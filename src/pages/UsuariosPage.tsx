@@ -50,13 +50,15 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { AddUserModal, UserFormData } from '@/features/usuarios/AddUserModal';
-
+import { EditUserModal, UserData } from '@/features/usuarios/EditUserModal';
 const UsuariosPage = () => {
   const { users, isLoading, resetUserPassword, toggleUserStatus } = useAdminActions();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRol, setFilterRol] = useState<string>('all');
   const [filterEstado, setFilterEstado] = useState<string>('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedUserForEdit, setSelectedUserForEdit] = useState<UserData | null>(null);
   
   // User action dialogs
   const [showResetPasswordDialog, setShowResetPasswordDialog] = useState(false);
@@ -265,7 +267,23 @@ const UsuariosPage = () => {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setSelectedUserForEdit({
+                                id: user.id,
+                                nombre: user.nombre,
+                                apellidos: user.apellidos,
+                                email: user.email,
+                                telefono: user.telefono,
+                                puesto: user.puesto,
+                                rol: user.rol,
+                                estado: user.estado,
+                                avatar: user.avatar,
+                                twoFactorEnabled: user.twoFactorEnabled,
+                              });
+                              setIsEditModalOpen(true);
+                            }}
+                          >
                             <Edit className="mr-2 h-4 w-4" />
                             Editar Usuario
                           </DropdownMenuItem>
@@ -363,6 +381,16 @@ const UsuariosPage = () => {
         open={isAddModalOpen}
         onOpenChange={setIsAddModalOpen}
         onSubmit={handleAddUser}
+      />
+
+      {/* Edit User Modal */}
+      <EditUserModal
+        open={isEditModalOpen}
+        onOpenChange={setIsEditModalOpen}
+        user={selectedUserForEdit}
+        onSave={(data) => {
+          toast.success('Usuario actualizado correctamente');
+        }}
       />
     </div>
   );

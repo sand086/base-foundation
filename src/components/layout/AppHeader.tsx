@@ -1,4 +1,4 @@
-import { Bell, Search, ChevronDown, LogOut } from "lucide-react";
+import { Bell, Search, ChevronDown, LogOut, User, Settings } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -66,8 +66,20 @@ export function AppHeader() {
           <DropdownMenuContent align="end" className="w-48">
             <DropdownMenuLabel className="text-xs">Mi Cuenta</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-xs">Perfil</DropdownMenuItem>
-            <DropdownMenuItem className="text-xs">Configuración</DropdownMenuItem>
+            <DropdownMenuItem 
+              className="text-xs cursor-pointer"
+              onClick={() => navigate('/perfil')}
+            >
+              <User className="h-3.5 w-3.5 mr-2" />
+              Mi Perfil
+            </DropdownMenuItem>
+            <DropdownMenuItem 
+              className="text-xs cursor-pointer"
+              onClick={() => navigate('/configuracion')}
+            >
+              <Settings className="h-3.5 w-3.5 mr-2" />
+              Configuración
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem 
               className="text-xs text-brand-red cursor-pointer"

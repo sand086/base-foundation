@@ -28,6 +28,7 @@ import {
 import { roles, modulos, permisosDefault, Rol, Permiso, RolPermisos } from '@/data/usuariosData';
 import { cn } from '@/lib/utils';
 import {
+import {
   Shield,
   Plus,
   Edit,
@@ -50,9 +51,10 @@ import {
   Lock,
   Copy,
   CheckCircle2,
+  Key,
 } from 'lucide-react';
 import { toast } from 'sonner';
-
+import { CreatePermissionModal } from '@/features/permisos/CreatePermissionModal';
 const iconMap: Record<string, React.ElementType> = {
   LayoutDashboard,
   Radio,
@@ -80,6 +82,7 @@ const RolesPermisosPage = () => {
   // Delete dialog
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [roleToDelete, setRoleToDelete] = useState<string | null>(null);
+  const [showCreatePermissionModal, setShowCreatePermissionModal] = useState(false);
 
   // Role badge colors
   const getRoleBadgeColor = (rol: string) => {
@@ -215,6 +218,14 @@ const RolesPermisosPage = () => {
               </CardTitle>
               <CardDescription>Configura los permisos de cada rol para controlar el acceso a los módulos</CardDescription>
             </div>
+            <Button 
+              variant="outline"
+              onClick={() => setShowCreatePermissionModal(true)}
+              className="gap-2"
+            >
+              <Key className="h-4 w-4" />
+              Crear Permiso
+            </Button>
             <Button 
               onClick={openNewRoleEditor}
               className="bg-action hover:bg-action-hover text-action-foreground gap-2"
@@ -535,6 +546,15 @@ const RolesPermisosPage = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Create Permission Modal */}
+      <CreatePermissionModal
+        open={showCreatePermissionModal}
+        onOpenChange={setShowCreatePermissionModal}
+        onSubmit={(data) => {
+          console.log('New permission:', data);
+        }}
+      />
     </div>
   );
 };
