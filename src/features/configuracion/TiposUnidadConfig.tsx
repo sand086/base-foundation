@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,11 +24,20 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Plus, Pencil, Trash2, Truck } from 'lucide-react';
-import { defaultTiposUnidad, TipoUnidad } from '@/data/tiposUnidadData';
+import { TipoUnidad } from '@/data/tiposUnidadData';
+import { useTiposUnidad } from '@/hooks/useTiposUnidad';
 import { toast } from 'sonner';
 
 export function TiposUnidadConfig() {
-  const [tipos, setTipos] = useState<TipoUnidad[]>(defaultTiposUnidad);
+  const { tiposUnidad, saveTiposUnidad, loading } = useTiposUnidad();
+  const [tipos, setTipos] = useState<TipoUnidad[]>([]);
+  
+  // Sync local state with hook
+  useEffect(() => {
+    if (!loading) {
+      setTipos(tiposUnidad);
+    }
+  }, [tiposUnidad, loading]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTipo, setEditingTipo] = useState<TipoUnidad | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -63,42 +72,62 @@ export function TiposUnidadConfig() {
     }
 
     if (editingTipo) {
-      setTipos(prev => prev.map(t => 
+      const updated = tipos.map(t => 
         t.id === editingTipo.id 
           ? { ...t, ...formData }
           : t
-      ));
+      );
+      setTipos(updated);
+      saveTiposUnidad(updated);
       toast.success('Tipo de unidad actualizado');
     } else {
       const newTipo: TipoUnidad = {
-        id: `tipo-${Date.now()}`,
+        id: `tipo-${formData.nombre.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`,
         nombre: formData.nombre,
         descripcion: formData.descripcion,
         icono: formData.icono,
         activo: true,
         createdAt: new Date().toISOString().split('T')[0],
       };
-      setTipos(prev => [...prev, newTipo]);
+      const updated = [...tipos, newTipo];
+      setTipos(updated);
+      saveTiposUnidad(updated);
       toast.success('Tipo de unidad agregado');
     }
     setIsModalOpen(false);
   };
 
   const handleToggleActive = (id: string) => {
-    setTipos(prev => prev.map(t => 
-      t.id === id ? { ...t, activo: !t.activo } : t
-    ));
     const tipo = tipos.find(t => t.id === id);
+    const updated = tipos.map(t => 
+      t.id === id ? { ...t, activo: !t.activo } : t
+    );
+    setTipos(updated);
+    saveTiposUnidad(updated);
     toast.success(`${tipo?.nombre} ${tipo?.activo ? 'desactivado' : 'activado'}`);
   };
 
   const handleDelete = () => {
     if (!deleteId) return;
     const tipo = tipos.find(t => t.id === deleteId);
-    setTipos(prev => prev.filter(t => t.id !== deleteId));
+    const updated = tipos.filter(t => t.id !== deleteId);
+    setTipos(updated);
+    saveTiposUnidad(updated);
     toast.success(`${tipo?.nombre} eliminado`);
     setDeleteId(null);
   };
+
+  if (loading) {
+    return (
+      <Card>
+        <CardContent className="py-8">
+          <div className="flex items-center justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   const emojis = ['🚛', '🚚', '📦', '❄️', '🛻', '🏗️', '🏭', '🚗', '🚐', '🚌', '🏎️', '🚜'];
 
@@ -260,24 +289,4 @@ export function TiposUnidadConfig() {
       </AlertDialog>
     </Card>
   );
-}
-
-// Hook para obtener tipos de unidad activos (para usar en otros componentes)
-export function useTiposUnidad() {
-  const [tipos] = useState<TipoUnidad[]>(defaultTiposUnidad);
-  
-  const tiposActivos = tipos.filter(t => t.activo);
-  
-  const getTipoLabel = (id: string) => {
-    const tipo = tipos.find(t => t.id === id || t.nombre.toLowerCase() === id.toLowerCase());
-    return tipo ? `${tipo.icono} ${tipo.nombre}` : id;
-  };
-  
-  const getTipoBadge = (nombreTipo: string) => {
-    const tipo = tipos.find(t => t.nombre.toLowerCase() === nombreTipo.toLowerCase());
-    if (!tipo) return { icono: '📦', nombre: nombreTipo };
-    return { icono: tipo.icono, nombre: tipo.nombre };
-  };
-  
-  return { tipos, tiposActivos, getTipoLabel, getTipoBadge };
 }
