@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Dialog,
   DialogContent,
@@ -154,7 +155,7 @@ export function ReceiveOrderModal({ order, open, onOpenChange, onReceive }: Rece
   );
 }
 
-// Convert to CxP Modal
+// Convert to CxP Modal - Now creates the actual CxP record
 interface ConvertToCxPModalProps {
   order: PurchaseOrder | null;
   open: boolean;
@@ -163,6 +164,8 @@ interface ConvertToCxPModalProps {
 }
 
 export function ConvertToCxPModal({ order, open, onOpenChange, onConvert }: ConvertToCxPModalProps) {
+  const navigate = useNavigate();
+
   if (!order) return null;
 
   const formatCurrency = (amount: number) => {
@@ -170,6 +173,25 @@ export function ConvertToCxPModal({ order, open, onOpenChange, onConvert }: Conv
       style: "currency",
       currency: order.moneda,
     }).format(amount);
+  };
+
+  const handleConvert = () => {
+    // Mark order as converted
+    onConvert(order.id);
+    onOpenChange(false);
+
+    // Navigate to CxP with prefilled data
+    const params = new URLSearchParams({
+      fromCompras: 'true',
+      proveedor: order.proveedorNombre,
+      proveedorId: order.proveedorId,
+      concepto: order.descripcionServicio || order.items.map(i => i.descripcion).join(', ') || `Orden ${order.folio}`,
+      monto: String(order.total),
+      ordenId: order.id,
+      ordenFolio: order.folio,
+    });
+
+    navigate(`/proveedores?${params.toString()}`);
   };
 
   return (
@@ -184,8 +206,8 @@ export function ConvertToCxPModal({ order, open, onOpenChange, onConvert }: Conv
 
         <div className="space-y-4 py-4">
           <p className="text-sm text-muted-foreground">
-            Al convertir esta orden a CxP, se creará un registro en el módulo de 
-            <strong> Proveedores → Cuentas por Pagar</strong> con los datos pre-llenados.
+            Al convertir esta orden a CxP, se abrirá el formulario de registro de factura con los datos pre-llenados. 
+            Solo faltará ingresar el <strong>UUID/Folio Fiscal</strong> y subir los archivos PDF/XML.
           </p>
 
           <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-3">
@@ -209,8 +231,9 @@ export function ConvertToCxPModal({ order, open, onOpenChange, onConvert }: Conv
           <div className="p-3 bg-muted rounded-lg text-sm">
             <p className="font-medium mb-1">Próximos pasos:</p>
             <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
-              <li>Solicitar factura al proveedor</li>
-              <li>Subir PDF y XML de la factura en CxP</li>
+              <li>Seleccionar la <strong>Clasificación Financiera</strong></li>
+              <li>Ingresar el UUID de la factura del proveedor</li>
+              <li>Subir PDF y XML de la factura</li>
               <li>Programar el pago según días de crédito</li>
             </ol>
           </div>
@@ -220,8 +243,8 @@ export function ConvertToCxPModal({ order, open, onOpenChange, onConvert }: Conv
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <ActionButton onClick={() => { onConvert(order.id); onOpenChange(false); }}>
-            Ir a Cuentas por Pagar
+          <ActionButton onClick={handleConvert}>
+            Ir a Registrar Factura
             <ArrowRight className="h-4 w-4 ml-2" />
           </ActionButton>
         </DialogFooter>

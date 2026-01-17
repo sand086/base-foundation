@@ -17,9 +17,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { FileText, Upload, Calendar, DollarSign } from 'lucide-react';
-import { PayableInvoice, Supplier, calculateDueDate } from './types';
+import { Badge } from '@/components/ui/badge';
+import { FileText, Upload, Calendar, DollarSign, AlertCircle, Plus } from 'lucide-react';
+import { 
+  PayableInvoice, 
+  Supplier, 
+  calculateDueDate, 
+  ClasificacionFinanciera,
+  IndirectCategory,
+  getClasificacionLabel,
+  mockTrips,
+  mockUnits,
+  defaultIndirectCategories,
+} from './types';
 import { creditDaysOptions } from './data';
+import { toast } from 'sonner';
 
 interface RegisterExpenseModalProps {
   open: boolean;
@@ -27,6 +39,15 @@ interface RegisterExpenseModalProps {
   onSubmit: (invoice: Omit<PayableInvoice, 'id' | 'pagos' | 'estatus'>) => void;
   suppliers: Supplier[];
   editInvoice?: PayableInvoice | null;
+  // Pre-filled data from Compras conversion
+  prefillData?: {
+    proveedor: string;
+    proveedorId: string;
+    concepto: string;
+    montoTotal: number;
+    ordenCompraId: string;
+    ordenCompraFolio: string;
+  } | null;
 }
 
 export function RegisterExpenseModal({ 
@@ -34,7 +55,8 @@ export function RegisterExpenseModal({
   onOpenChange, 
   onSubmit, 
   suppliers,
-  editInvoice 
+  editInvoice,
+  prefillData,
 }: RegisterExpenseModalProps) {
   const [formData, setFormData] = useState({
     proveedorId: '',
@@ -46,9 +68,21 @@ export function RegisterExpenseModal({
     uuid: '',
     pdfUrl: '',
     xmlUrl: '',
+    // Financial classification fields
+    clasificacion: '' as ClasificacionFinanciera | '',
+    viajeId: '',
+    unidadId: '',
+    categoriaIndirectoId: '',
+    // Origin from Compras
+    ordenCompraId: '',
+    ordenCompraFolio: '',
   });
 
   const [fechaVencimiento, setFechaVencimiento] = useState('');
+  const [indirectCategories, setIndirectCategories] = useState<IndirectCategory[]>(defaultIndirectCategories);
+  const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   // Calculate due date whenever emission date or credit days change
   useEffect(() => {
@@ -57,6 +91,20 @@ export function RegisterExpenseModal({
       setFechaVencimiento(dueDate);
     }
   }, [formData.fechaEmision, formData.diasCredito]);
+
+  // Handle prefill data from Compras conversion
+  useEffect(() => {
+    if (prefillData && open) {
+      setFormData(prev => ({
+        ...prev,
+        proveedorId: prefillData.proveedorId,
+        concepto: prefillData.concepto,
+        montoTotal: prefillData.montoTotal,
+        ordenCompraId: prefillData.ordenCompraId,
+        ordenCompraFolio: prefillData.ordenCompraFolio,
+      }));
+    }
+  }, [prefillData, open]);
 
   // Populate form when editing
   useEffect(() => {
@@ -71,9 +119,15 @@ export function RegisterExpenseModal({
         uuid: editInvoice.uuid,
         pdfUrl: editInvoice.pdfUrl || '',
         xmlUrl: editInvoice.xmlUrl || '',
+        clasificacion: editInvoice.clasificacion || '',
+        viajeId: editInvoice.viajeId || '',
+        unidadId: editInvoice.unidadId || '',
+        categoriaIndirectoId: editInvoice.categoriaIndirectoId || '',
+        ordenCompraId: editInvoice.ordenCompraId || '',
+        ordenCompraFolio: editInvoice.ordenCompraFolio || '',
       });
-    } else {
-      // Reset form
+    } else if (!prefillData) {
+      // Reset form only if no prefill data
       setFormData({
         proveedorId: '',
         concepto: '',
@@ -84,9 +138,16 @@ export function RegisterExpenseModal({
         uuid: '',
         pdfUrl: '',
         xmlUrl: '',
+        clasificacion: '',
+        viajeId: '',
+        unidadId: '',
+        categoriaIndirectoId: '',
+        ordenCompraId: '',
+        ordenCompraFolio: '',
       });
     }
-  }, [editInvoice, open]);
+    setValidationErrors([]);
+  }, [editInvoice, open, prefillData]);
 
   const selectedSupplier = suppliers.find(s => s.id === formData.proveedorId);
   
@@ -94,8 +155,48 @@ export function RegisterExpenseModal({
   const isAmountLocked = editInvoice && (editInvoice.estatus === 'pagado' || editInvoice.estatus === 'pago_parcial');
   const isProviderLocked = isAmountLocked;
 
+  // Validate form
+  const validateForm = (): boolean => {
+    const errors: string[] = [];
+
+    if (!formData.proveedorId) errors.push('Selecciona un proveedor');
+    if (!formData.montoTotal || formData.montoTotal <= 0) errors.push('El monto debe ser mayor a 0');
+    if (!formData.uuid) errors.push('El UUID/Folio fiscal es obligatorio');
+    if (!formData.clasificacion) errors.push('La clasificación financiera es obligatoria');
+
+    // Validate based on classification type
+    if (formData.clasificacion === 'costo_directo_viaje' && !formData.viajeId) {
+      errors.push('Debes vincular un viaje para Costo Directo de Viaje');
+    }
+    if (formData.clasificacion === 'costo_mantenimiento' && !formData.unidadId) {
+      errors.push('Debes vincular una unidad para Costo de Mantenimiento');
+    }
+
+    setValidationErrors(errors);
+    return errors.length === 0;
+  };
+
+  // Add new indirect category
+  const handleAddCategory = () => {
+    if (!newCategoryName.trim()) return;
+
+    const tipoCategoria = formData.clasificacion === 'gasto_indirecto_fijo' ? 'fijo' : 'variable';
+    const newCategory: IndirectCategory = {
+      id: `cat-${Date.now()}`,
+      nombre: newCategoryName.trim(),
+      tipo: tipoCategoria,
+    };
+
+    setIndirectCategories([...indirectCategories, newCategory]);
+    setFormData({ ...formData, categoriaIndirectoId: newCategory.id });
+    setNewCategoryName('');
+    setShowNewCategoryInput(false);
+    toast.success(`Categoría "${newCategory.nombre}" creada`);
+  };
+
   const handleSubmit = () => {
-    if (!formData.proveedorId || !formData.montoTotal || !formData.uuid) {
+    if (!validateForm()) {
+      toast.error('Corrige los errores antes de continuar');
       return;
     }
 
@@ -114,20 +215,55 @@ export function RegisterExpenseModal({
       uuid: formData.uuid,
       pdfUrl: formData.pdfUrl,
       xmlUrl: formData.xmlUrl,
+      clasificacion: formData.clasificacion as ClasificacionFinanciera,
+      viajeId: formData.viajeId || undefined,
+      unidadId: formData.unidadId || undefined,
+      categoriaIndirectoId: formData.categoriaIndirectoId || undefined,
+      ordenCompraId: formData.ordenCompraId || undefined,
+      ordenCompraFolio: formData.ordenCompraFolio || undefined,
     });
 
     onOpenChange(false);
   };
 
+  // Filter categories based on classification type
+  const filteredCategories = indirectCategories.filter(cat => {
+    if (formData.clasificacion === 'gasto_indirecto_fijo') return cat.tipo === 'fijo';
+    if (formData.clasificacion === 'gasto_indirecto_variable') return cat.tipo === 'variable';
+    return true;
+  });
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-brand-dark">
             <FileText className="h-5 w-5" />
             {editInvoice ? 'Editar Factura' : 'Registrar Gasto'}
+            {formData.ordenCompraFolio && (
+              <Badge variant="outline" className="ml-2 text-xs">
+                Origen: {formData.ordenCompraFolio}
+              </Badge>
+            )}
           </DialogTitle>
         </DialogHeader>
+
+        {/* Validation Errors */}
+        {validationErrors.length > 0 && (
+          <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 text-red-600 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-red-800">Errores de validación:</p>
+                <ul className="list-disc list-inside text-xs text-red-700 mt-1">
+                  {validationErrors.map((error, i) => (
+                    <li key={i}>{error}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="space-y-4 pt-4">
           {/* Provider Selection */}
@@ -155,6 +291,174 @@ export function RegisterExpenseModal({
               <p className="text-xs text-muted-foreground">
                 ⚠️ No se puede cambiar el proveedor porque ya tiene pagos registrados.
               </p>
+            )}
+          </div>
+
+          {/* Financial Classification - REQUIRED */}
+          <div className="p-4 bg-muted/30 rounded-lg border space-y-4">
+            <div className="space-y-2">
+              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Clasificación Financiera <span className="text-status-danger">*</span>
+              </Label>
+              <Select
+                value={formData.clasificacion}
+                onValueChange={(value: ClasificacionFinanciera) => {
+                  setFormData({ 
+                    ...formData, 
+                    clasificacion: value,
+                    viajeId: '',
+                    unidadId: '',
+                    categoriaIndirectoId: '',
+                  });
+                  setValidationErrors([]);
+                }}
+              >
+                <SelectTrigger className="h-10">
+                  <SelectValue placeholder="Selecciona la clasificación" />
+                </SelectTrigger>
+                <SelectContent className="bg-card">
+                  <SelectItem value="costo_directo_viaje">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-blue-500" />
+                      Costo Directo de Viaje
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="costo_mantenimiento">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-amber-500" />
+                      Costo de Mantenimiento
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="gasto_indirecto_fijo">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-slate-500" />
+                      Gasto Indirecto Fijo
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="gasto_indirecto_variable">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-purple-500" />
+                      Gasto Indirecto Variable
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Conditional fields based on classification */}
+            {formData.clasificacion === 'costo_directo_viaje' && (
+              <div className="space-y-2">
+                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Viaje Asociado <span className="text-status-danger">*</span>
+                </Label>
+                <Select
+                  value={formData.viajeId}
+                  onValueChange={(value) => setFormData({ ...formData, viajeId: value })}
+                >
+                  <SelectTrigger className="h-10">
+                    <SelectValue placeholder="Selecciona el viaje" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-card">
+                    {mockTrips.map((trip) => (
+                      <SelectItem key={trip.id} value={trip.id}>
+                        <span className="font-mono text-xs mr-2">{trip.folio}</span>
+                        {trip.origen} → {trip.destino}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-blue-600">
+                  ℹ️ Este gasto se imputará al costo del viaje seleccionado
+                </p>
+              </div>
+            )}
+
+            {formData.clasificacion === 'costo_mantenimiento' && (
+              <div className="space-y-2">
+                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Unidad Económica <span className="text-status-danger">*</span>
+                </Label>
+                <Select
+                  value={formData.unidadId}
+                  onValueChange={(value) => setFormData({ ...formData, unidadId: value })}
+                >
+                  <SelectTrigger className="h-10">
+                    <SelectValue placeholder="Selecciona la unidad" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-card">
+                    {mockUnits.map((unit) => (
+                      <SelectItem key={unit.id} value={unit.id}>
+                        <span className="font-mono font-medium mr-2">{unit.economico}</span>
+                        {unit.tipo} - {unit.placas}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-amber-600">
+                  ℹ️ Este gasto se asociará al historial de mantenimiento de la unidad
+                </p>
+              </div>
+            )}
+
+            {(formData.clasificacion === 'gasto_indirecto_fijo' || formData.clasificacion === 'gasto_indirecto_variable') && (
+              <div className="space-y-2">
+                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Categoría de Gasto
+                </Label>
+                {!showNewCategoryInput ? (
+                  <Select
+                    value={formData.categoriaIndirectoId}
+                    onValueChange={(value) => {
+                      if (value === '__new__') {
+                        setShowNewCategoryInput(true);
+                      } else {
+                        setFormData({ ...formData, categoriaIndirectoId: value });
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="h-10">
+                      <SelectValue placeholder="Selecciona la categoría" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-card">
+                      {filteredCategories.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.id}>
+                          {cat.nombre}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="__new__" className="text-primary font-medium">
+                        <div className="flex items-center gap-2">
+                          <Plus className="h-3 w-3" />
+                          Crear nueva categoría...
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Nombre de la nueva categoría"
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      className="h-10"
+                      autoFocus
+                    />
+                    <Button size="sm" onClick={handleAddCategory} className="h-10">
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={() => {
+                        setShowNewCategoryInput(false);
+                        setNewCategoryName('');
+                      }}
+                      className="h-10"
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
 
@@ -327,7 +631,6 @@ export function RegisterExpenseModal({
           <Button
             onClick={handleSubmit}
             className="bg-brand-green hover:bg-brand-green/90 text-white"
-            disabled={!formData.proveedorId || !formData.montoTotal || !formData.uuid}
           >
             {editInvoice ? 'Guardar Cambios' : 'Registrar Factura'}
           </Button>

@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { 
   Search, 
   Plus, 
@@ -9,11 +10,13 @@ import {
   Eye,
   Edit,
   CreditCard,
-  MoreHorizontal
+  MoreHorizontal,
+  Package
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { ActionButton } from "@/components/ui/action-button";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { Badge } from "@/components/ui/badge";
 import {
   DataTable,
   DataTableHeader,
@@ -42,7 +45,9 @@ import { RegisterPaymentModal } from "@/features/cxp/RegisterPaymentModal";
 import { 
   PayableInvoice, 
   InvoicePayment,
-  getInvoiceStatusInfo 
+  getInvoiceStatusInfo,
+  getClasificacionLabel,
+  getClasificacionColor,
 } from "@/features/cxp/types";
 import { mockSuppliers, initialPayableInvoices, bankAccounts } from "@/features/cxp/data";
 
@@ -62,7 +67,18 @@ const initialPayments: Payment[] = [
   { id: 'PAG-003', proveedor: 'Combustibles Nacionales MX', folioFactura: 'FC-8821', fechaPago: '2024-12-20', monto: 110000, metodoPago: 'Transferencia', complementoUUID: 'comp-003-ijkl' },
 ];
 
+// Interface for prefilled data from Compras module
+interface PrefillData {
+  proveedor: string;
+  proveedorId: string;
+  concepto: string;
+  montoTotal: number;
+  ordenCompraId: string;
+  ordenCompraFolio: string;
+}
+
 export default function ProveedoresCxP() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [searchCatalog, setSearchCatalog] = useState("");
   const [searchCxP, setSearchCxP] = useState("");
   
@@ -78,6 +94,34 @@ export default function ProveedoresCxP() {
   // Selected invoice for actions
   const [selectedInvoice, setSelectedInvoice] = useState<PayableInvoice | null>(null);
   const [editingInvoice, setEditingInvoice] = useState<PayableInvoice | null>(null);
+  
+  // Prefill data from Compras module
+  const [prefillData, setPrefillData] = useState<PrefillData | null>(null);
+
+  // Handle URL params from Compras module conversion
+  useEffect(() => {
+    const fromCompras = searchParams.get('fromCompras');
+    if (fromCompras === 'true') {
+      const prefill: PrefillData = {
+        proveedor: searchParams.get('proveedor') || '',
+        proveedorId: searchParams.get('proveedorId') || '',
+        concepto: searchParams.get('concepto') || '',
+        montoTotal: parseFloat(searchParams.get('monto') || '0'),
+        ordenCompraId: searchParams.get('ordenId') || '',
+        ordenCompraFolio: searchParams.get('ordenFolio') || '',
+      };
+      
+      setPrefillData(prefill);
+      setIsExpenseModalOpen(true);
+      
+      // Clear URL params
+      setSearchParams({});
+      
+      toast.info('Datos pre-llenados desde Orden de Compra', {
+        description: `${prefill.ordenCompraFolio} - ${prefill.proveedor}`,
+      });
+    }
+  }, [searchParams, setSearchParams]);
 
   // Calculate KPIs
   const totalVencido = invoices
@@ -91,6 +135,8 @@ export default function ProveedoresCxP() {
   const totalParcial = invoices
     .filter(inv => getInvoiceStatusInfo(inv).status === 'info')
     .reduce((sum, inv) => sum + inv.saldoPendiente, 0);
+
+  const fromComprasCount = invoices.filter(inv => inv.ordenCompraId).length;
 
   const filteredSuppliers = mockSuppliers.filter(s => 
     s.razonSocial.toLowerCase().includes(searchCatalog.toLowerCase()) ||
@@ -113,6 +159,7 @@ export default function ProveedoresCxP() {
     };
     
     setInvoices([newInvoice, ...invoices]);
+    setPrefillData(null); // Clear prefill data after creating
     toast.success('Factura registrada correctamente', {
       description: `${invoiceData.proveedor} - $${invoiceData.montoTotal.toLocaleString('es-MX')}`,
     });
@@ -317,13 +364,13 @@ export default function ProveedoresCxP() {
             <Card className="border-slate-200">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                  <Building2 className="h-4 w-4" />
-                  Proveedores Activos
+                  <Package className="h-4 w-4" />
+                  Desde Compras
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-2xl font-bold text-slate-700">
-                  {mockSuppliers.filter(s => s.estatus === 'activo').length}
+                  {fromComprasCount}
                 </p>
               </CardContent>
             </Card>
@@ -342,6 +389,7 @@ export default function ProveedoresCxP() {
             </div>
             <ActionButton onClick={() => {
               setEditingInvoice(null);
+              setPrefillData(null);
               setIsExpenseModalOpen(true);
             }}>
               <Plus className="h-4 w-4 mr-2" />
@@ -355,6 +403,7 @@ export default function ProveedoresCxP() {
               <DataTableRow>
                 <DataTableHead>ID</DataTableHead>
                 <DataTableHead>Proveedor</DataTableHead>
+                <DataTableHead>Clasificación</DataTableHead>
                 <DataTableHead>Concepto</DataTableHead>
                 <DataTableHead>UUID</DataTableHead>
                 <DataTableHead>Vencimiento</DataTableHead>
@@ -375,10 +424,26 @@ export default function ProveedoresCxP() {
                     className={isOverdue ? 'bg-red-50/50' : ''}
                   >
                     <DataTableCell className="font-mono text-xs font-medium">
-                      {invoice.id}
+                      <div className="flex flex-col">
+                        {invoice.id}
+                        {invoice.ordenCompraFolio && (
+                          <span className="text-[10px] text-muted-foreground">
+                            ← {invoice.ordenCompraFolio}
+                          </span>
+                        )}
+                      </div>
                     </DataTableCell>
                     <DataTableCell className="font-medium max-w-[150px] truncate">
                       {invoice.proveedor}
+                    </DataTableCell>
+                    <DataTableCell>
+                      {invoice.clasificacion ? (
+                        <Badge className={`text-[10px] ${getClasificacionColor(invoice.clasificacion)}`}>
+                          {getClasificacionLabel(invoice.clasificacion)}
+                        </Badge>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
                     </DataTableCell>
                     <DataTableCell className="max-w-[180px] truncate text-muted-foreground text-xs">
                       {invoice.concepto}
@@ -501,11 +566,15 @@ export default function ProveedoresCxP() {
         open={isExpenseModalOpen}
         onOpenChange={(open) => {
           setIsExpenseModalOpen(open);
-          if (!open) setEditingInvoice(null);
+          if (!open) {
+            setEditingInvoice(null);
+            setPrefillData(null);
+          }
         }}
         onSubmit={editingInvoice ? handleUpdateInvoice : handleCreateInvoice}
         suppliers={mockSuppliers}
         editInvoice={editingInvoice}
+        prefillData={prefillData}
       />
 
       <InvoiceDetailSheet
