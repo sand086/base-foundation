@@ -71,6 +71,9 @@ const App = () => (
                 <Route path="tesoreria" element={<Tesoreria />} />
                 <Route path="notificaciones" element={<NotificacionesConfig />} />
                 <Route path="cargas-masivas" element={<CargasMasivas />} />
+                <Route path="perfil" element={<ProfilePage />} />
+                <Route path="configuracion" element={<SettingsPage />} />
+                <Route path="seguridad" element={<SecurityPage />} />
               </Route>
             </Route>
             
