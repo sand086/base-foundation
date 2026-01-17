@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Search, Plus, AlertTriangle, Package } from "lucide-react";
+import { Search, Plus, AlertTriangle, Package, Eye, Edit, Trash2, MoreHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { ActionButton } from "@/components/ui/action-button";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -12,6 +13,23 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   DataTable,
   DataTableHeader,
   DataTableBody,
@@ -20,14 +38,24 @@ import {
   DataTableCell,
 } from "@/components/ui/data-table";
 import { mockInventory, InventoryItem } from "@/data/mantenimientoData";
+import { AddInventarioModal } from "./AddInventarioModal";
+import { ViewInventarioModal } from "./ViewInventarioModal";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 const categories = ['Todos', 'Motor', 'Frenos', 'Eléctrico', 'Suspensión', 'Transmisión', 'General'];
 
 export const InventarioTable = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("Todos");
-  const [inventory] = useState<InventoryItem[]>(mockInventory);
+  const [inventory, setInventory] = useState<InventoryItem[]>(mockInventory);
+  
+  // Modal states
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [itemToEdit, setItemToEdit] = useState<InventoryItem | null>(null);
+  const [itemToView, setItemToView] = useState<InventoryItem | null>(null);
+  const [itemToDelete, setItemToDelete] = useState<string | null>(null);
 
   const filteredInventory = inventory.filter((item) => {
     const matchesSearch =
@@ -63,6 +91,47 @@ export const InventarioTable = () => {
         {categoria}
       </Badge>
     );
+  };
+
+  // CRUD handlers
+  const handleSave = (itemData: Omit<InventoryItem, 'id'> & { id?: string }) => {
+    if (itemToEdit) {
+      setInventory(prev => prev.map(item => 
+        item.id === itemToEdit.id ? { ...item, ...itemData } as InventoryItem : item
+      ));
+    } else {
+      const newItem: InventoryItem = {
+        ...itemData,
+        id: `inv-${Date.now()}`,
+      } as InventoryItem;
+      setInventory(prev => [...prev, newItem]);
+    }
+    setItemToEdit(null);
+  };
+
+  const handleDelete = () => {
+    if (!itemToDelete) return;
+    const item = inventory.find(i => i.id === itemToDelete);
+    setInventory(prev => prev.filter(i => i.id !== itemToDelete));
+    toast.success('Refacción eliminada', {
+      description: `${item?.sku} ha sido eliminada del inventario.`,
+    });
+    setItemToDelete(null);
+  };
+
+  const handleEdit = (item: InventoryItem) => {
+    setItemToEdit(item);
+    setIsAddModalOpen(true);
+  };
+
+  const handleView = (item: InventoryItem) => {
+    setItemToView(item);
+    setIsViewModalOpen(true);
+  };
+
+  const handleOpenNewModal = () => {
+    setItemToEdit(null);
+    setIsAddModalOpen(true);
   };
 
   return (
@@ -138,7 +207,7 @@ export const InventarioTable = () => {
             </SelectContent>
           </Select>
         </div>
-        <ActionButton>
+        <ActionButton onClick={handleOpenNewModal}>
           <Plus className="h-4 w-4 mr-2" />
           Nueva Refacción
         </ActionButton>
@@ -156,6 +225,7 @@ export const InventarioTable = () => {
             <DataTableHead className="text-center">Stock Mínimo</DataTableHead>
             <DataTableHead>Ubicación</DataTableHead>
             <DataTableHead className="text-right">Precio Unit.</DataTableHead>
+            <DataTableHead className="text-center">Acciones</DataTableHead>
           </DataTableRow>
         </DataTableHeader>
         <DataTableBody>
@@ -164,7 +234,7 @@ export const InventarioTable = () => {
             return (
               <DataTableRow 
                 key={item.id}
-                className={cn(isLowStock && "bg-red-50/50")}
+                className={cn(isLowStock && "bg-red-50/50", "group")}
               >
                 <DataTableCell>
                   <div className="flex items-center gap-2">
@@ -203,6 +273,39 @@ export const InventarioTable = () => {
                 <DataTableCell className="text-right font-mono text-sm text-slate-700">
                   {formatCurrency(item.precioUnitario)}
                 </DataTableCell>
+                <DataTableCell>
+                  <div className="flex justify-center">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="bg-popover">
+                        <DropdownMenuItem className="gap-2" onClick={() => handleView(item)}>
+                          <Eye className="h-4 w-4" />
+                          Ver detalles
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="gap-2" onClick={() => handleEdit(item)}>
+                          <Edit className="h-4 w-4" />
+                          Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem 
+                          className="gap-2 text-destructive focus:text-destructive focus:bg-destructive/10"
+                          onClick={() => setItemToDelete(item.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Eliminar
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </DataTableCell>
               </DataTableRow>
             );
           })}
@@ -216,6 +319,51 @@ export const InventarioTable = () => {
           <span>Stock por debajo del mínimo - Requiere reorden</span>
         </div>
       </div>
+
+      {/* Modals */}
+      <AddInventarioModal
+        open={isAddModalOpen}
+        onOpenChange={(open) => {
+          setIsAddModalOpen(open);
+          if (!open) setItemToEdit(null);
+        }}
+        itemToEdit={itemToEdit}
+        onSave={handleSave}
+      />
+
+      <ViewInventarioModal
+        open={isViewModalOpen}
+        onOpenChange={setIsViewModalOpen}
+        item={itemToView}
+      />
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!itemToDelete} onOpenChange={() => setItemToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5 text-destructive" />
+              Confirmar Eliminación
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Está seguro que desea eliminar la refacción{' '}
+              <span className="font-semibold">
+                {inventory.find(i => i.id === itemToDelete)?.sku}
+              </span>
+              ? Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90"
+              onClick={handleDelete}
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
