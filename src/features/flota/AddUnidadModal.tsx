@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { useTiposUnidad } from '@/hooks/useTiposUnidad';
 import { Truck, CreditCard, Calendar, Hash } from 'lucide-react';
 
 export interface Unidad {
@@ -57,6 +58,7 @@ export function AddUnidadModal({
   onSave 
 }: AddUnidadModalProps) {
   const { toast } = useToast();
+  const { tiposActivos, loading: loadingTipos } = useTiposUnidad();
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState(emptyFormData);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -283,14 +285,19 @@ export function AddUnidadModal({
                 <Select
                   value={formData.tipo}
                   onValueChange={(value) => setFormData({ ...formData, tipo: value })}
+                  disabled={loadingTipos}
                 >
                   <SelectTrigger className={errors.tipo ? 'border-destructive' : ''}>
-                    <SelectValue placeholder="Seleccionar tipo" />
+                    <SelectValue placeholder={loadingTipos ? 'Cargando...' : 'Seleccionar tipo'} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="sencillo">Sencillo (3 ejes)</SelectItem>
-                    <SelectItem value="full">Full (5+ ejes)</SelectItem>
-                    <SelectItem value="rabon">Rabón (2 ejes)</SelectItem>
+                    {tiposActivos.map((tipo) => (
+                      <SelectItem key={tipo.id} value={tipo.nombre.toLowerCase()}>
+                        <span className="flex items-center gap-2">
+                          {tipo.icono} {tipo.nombre}
+                        </span>
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 {errors.tipo && <p className="text-xs text-destructive">{errors.tipo}</p>}

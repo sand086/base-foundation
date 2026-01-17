@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Users, Plus, Trash2, Upload, ArrowLeft, Check, MapPin, Building2, Phone, Clock, DollarSign, FileText, Paperclip, FileCheck, Route, Truck, Calendar } from "lucide-react";
+import { Users, Plus, Trash2, Upload, ArrowLeft, Check, MapPin, Building2, Phone, Clock, DollarSign, FileText, Paperclip, FileCheck, Route, Truck, Calendar, CheckCircle2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Accordion,
   AccordionContent,
@@ -18,6 +19,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { mockClients, type Client } from "@/data/mockData";
+import { useTiposUnidad } from "@/hooks/useTiposUnidad";
 
 // Interface for authorized route tariff
 interface TarifaAutorizada {
@@ -42,6 +44,7 @@ interface SubClienteForm {
   contacto: string;
   telefono: string;
   horarioRecepcion: string;
+  horarioCita: string; // NEW: Horario de cita específico
   // Step 3: Commercial conditions
   diasCredito: number;
   requiereContrato: boolean;
@@ -49,6 +52,16 @@ interface SubClienteForm {
   contratoAdjunto?: string;
   // Multiple tariffs per route/unit
   tarifas: TarifaAutorizada[];
+}
+
+// Documentos obligatorios del cliente
+interface DocumentosObligatorios {
+  constanciaFiscal: boolean;
+  constanciaFiscalFile?: string;
+  actaConstitutiva: boolean;
+  actaConstitutivaFile?: string;
+  comprobanteDomicilio: boolean;
+  comprobanteDomicilioFile?: string;
 }
 
 const emptyTarifa: TarifaAutorizada = {
@@ -73,12 +86,20 @@ const emptySubCliente: SubClienteForm = {
   contacto: "",
   telefono: "",
   horarioRecepcion: "",
+  horarioCita: "", // NEW
   diasCredito: 30,
   requiereContrato: false,
   convenioEspecial: false,
   contratoAdjunto: "",
   tarifas: [],
 };
+
+// Opciones estandarizadas de días de crédito
+const opcionesDiasCredito = [
+  { value: 0, label: 'Contado', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+  { value: 15, label: '15 días', color: 'bg-blue-100 text-blue-700 border-blue-200' },
+  { value: 30, label: '30 días', color: 'bg-amber-100 text-amber-700 border-amber-200' },
+];
 
 const estadosMexico = [
   "Aguascalientes", "Baja California", "Baja California Sur", "Campeche", "Chiapas",
@@ -93,6 +114,7 @@ export default function ClientesNuevo() {
   const { clientId } = useParams();
   const [searchParams] = useSearchParams();
   const isEditMode = !!clientId || searchParams.get('edit') !== null;
+  const { tiposActivos, getTipoLabel, getTipoIcono, loading: loadingTipos } = useTiposUnidad();
   
   const [step, setStep] = useState(1);
   const [fiscalData, setFiscalData] = useState({
@@ -107,6 +129,14 @@ export default function ClientesNuevo() {
     email: "",
     contratoUrl: "",
   });
+  
+  // NEW: Estado para documentos obligatorios
+  const [documentos, setDocumentos] = useState<DocumentosObligatorios>({
+    constanciaFiscal: false,
+    actaConstitutiva: false,
+    comprobanteDomicilio: false,
+  });
+  
   const [subClientes, setSubClientes] = useState<SubClienteForm[]>([]);
   const [editingSubCliente, setEditingSubCliente] = useState<SubClienteForm | null>(null);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -143,6 +173,7 @@ export default function ClientesNuevo() {
           contacto: sub.contacto || "",
           telefono: sub.telefono || "",
           horarioRecepcion: sub.horarioRecepcion || "",
+          horarioCita: (sub as any).horarioCita || "",
           diasCredito: (sub as any).diasCredito || 30,
           requiereContrato: (sub as any).requiereContrato || false,
           convenioEspecial: (sub as any).convenioEspecial || false,
@@ -234,18 +265,25 @@ export default function ClientesNuevo() {
     return true;
   };
 
-  // Get unit type badge with appropriate styling
+  // Get unit type badge with appropriate styling - using dynamic types
   const getUnidadBadge = (tipo: string) => {
-    switch (tipo) {
-      case 'sencillo':
-        return <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-[10px]">🚛 Sencillo</Badge>;
-      case 'full':
-        return <Badge className="bg-purple-100 text-purple-700 border-purple-200 text-[10px]">🚚 Full</Badge>;
-      case 'rabon':
-        return <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-[10px]">📦 Rabón</Badge>;
-      default:
-        return <Badge variant="outline" className="text-[10px]">{tipo}</Badge>;
-    }
+    const icono = getTipoIcono(tipo);
+    const label = getTipoLabel(tipo).replace(icono, '').trim();
+    
+    const colorMap: Record<string, string> = {
+      'sencillo': 'bg-blue-100 text-blue-700 border-blue-200',
+      'full': 'bg-purple-100 text-purple-700 border-purple-200',
+      'rabon': 'bg-orange-100 text-orange-700 border-orange-200',
+      'rabón': 'bg-orange-100 text-orange-700 border-orange-200',
+    };
+    
+    const colorClass = colorMap[tipo.toLowerCase()] || 'bg-muted text-muted-foreground border-muted';
+    
+    return (
+      <Badge className={`${colorClass} text-[10px]`}>
+        {icono} {label}
+      </Badge>
+    );
   };
 
   const saveSubCliente = () => {
@@ -488,34 +526,144 @@ export default function ClientesNuevo() {
               </div>
             </div>
 
-            {/* File Uploads */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Constancia de Situación Fiscal (PDF)</Label>
-                <div className="border-2 border-dashed rounded-md p-4 text-center hover:border-primary/50 transition-colors cursor-pointer">
-                  <Upload className="h-6 w-6 mx-auto text-muted-foreground mb-2" />
-                  <p className="text-xs text-muted-foreground">
-                    Arrastra o <span className="text-primary font-medium">selecciona</span>
-                  </p>
-                  <Input type="file" accept=".pdf" className="hidden" id="fiscal-file" />
+            {/* Documentos Obligatorios - NEW */}
+            <div className="space-y-4">
+              <h4 className="text-sm font-semibold text-foreground flex items-center gap-2 border-b pb-2">
+                <FileCheck className="h-4 w-4 text-primary" />
+                Documentos Obligatorios
+              </h4>
+              <div className="grid grid-cols-3 gap-4">
+                {/* Constancia Fiscal */}
+                <div className={cn(
+                  "border-2 border-dashed rounded-lg p-4 transition-all",
+                  documentos.constanciaFiscal ? "border-emerald-400 bg-emerald-50/50" : "border-muted-foreground/30 hover:border-primary/50"
+                )}>
+                  <div className="flex items-start gap-3">
+                    <Checkbox 
+                      id="constanciaFiscal"
+                      checked={documentos.constanciaFiscal}
+                      onCheckedChange={(checked) => setDocumentos(prev => ({ ...prev, constanciaFiscal: !!checked }))}
+                      className="mt-1"
+                    />
+                    <div className="flex-1">
+                      <Label htmlFor="constanciaFiscal" className="cursor-pointer font-medium">
+                        Constancia Fiscal
+                      </Label>
+                      <p className="text-xs text-muted-foreground mt-1">Constancia de Situación Fiscal (SAT)</p>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="mt-2 h-7 text-xs gap-1 text-primary"
+                        onClick={() => setDocumentos(prev => ({ ...prev, constanciaFiscal: true, constanciaFiscalFile: 'constancia.pdf' }))}
+                      >
+                        <Upload className="h-3 w-3" /> Subir PDF
+                      </Button>
+                    </div>
+                    {documentos.constanciaFiscal && (
+                      <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                    )}
+                  </div>
+                </div>
+
+                {/* Acta Constitutiva */}
+                <div className={cn(
+                  "border-2 border-dashed rounded-lg p-4 transition-all",
+                  documentos.actaConstitutiva ? "border-emerald-400 bg-emerald-50/50" : "border-muted-foreground/30 hover:border-primary/50"
+                )}>
+                  <div className="flex items-start gap-3">
+                    <Checkbox 
+                      id="actaConstitutiva"
+                      checked={documentos.actaConstitutiva}
+                      onCheckedChange={(checked) => setDocumentos(prev => ({ ...prev, actaConstitutiva: !!checked }))}
+                      className="mt-1"
+                    />
+                    <div className="flex-1">
+                      <Label htmlFor="actaConstitutiva" className="cursor-pointer font-medium">
+                        Acta Constitutiva
+                      </Label>
+                      <p className="text-xs text-muted-foreground mt-1">Escritura de la empresa</p>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="mt-2 h-7 text-xs gap-1 text-primary"
+                        onClick={() => setDocumentos(prev => ({ ...prev, actaConstitutiva: true, actaConstitutivaFile: 'acta.pdf' }))}
+                      >
+                        <Upload className="h-3 w-3" /> Subir PDF
+                      </Button>
+                    </div>
+                    {documentos.actaConstitutiva && (
+                      <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                    )}
+                  </div>
+                </div>
+
+                {/* Comprobante Domicilio */}
+                <div className={cn(
+                  "border-2 border-dashed rounded-lg p-4 transition-all",
+                  documentos.comprobanteDomicilio ? "border-emerald-400 bg-emerald-50/50" : "border-muted-foreground/30 hover:border-primary/50"
+                )}>
+                  <div className="flex items-start gap-3">
+                    <Checkbox 
+                      id="comprobanteDomicilio"
+                      checked={documentos.comprobanteDomicilio}
+                      onCheckedChange={(checked) => setDocumentos(prev => ({ ...prev, comprobanteDomicilio: !!checked }))}
+                      className="mt-1"
+                    />
+                    <div className="flex-1">
+                      <Label htmlFor="comprobanteDomicilio" className="cursor-pointer font-medium">
+                        Comprobante Domicilio
+                      </Label>
+                      <p className="text-xs text-muted-foreground mt-1">Luz, agua o predial</p>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="mt-2 h-7 text-xs gap-1 text-primary"
+                        onClick={() => setDocumentos(prev => ({ ...prev, comprobanteDomicilio: true, comprobanteDomicilioFile: 'domicilio.pdf' }))}
+                      >
+                        <Upload className="h-3 w-3" /> Subir PDF
+                      </Button>
+                    </div>
+                    {documentos.comprobanteDomicilio && (
+                      <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                    )}
+                  </div>
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
-                  Contrato General (PDF)
-                </Label>
-                <div className="border-2 border-dashed rounded-md p-4 text-center hover:border-primary/50 transition-colors cursor-pointer">
-                  <Upload className="h-6 w-6 mx-auto text-muted-foreground mb-2" />
-                  <p className="text-xs text-muted-foreground">
-                    {fiscalData.contratoUrl ? (
-                      <span className="text-emerald-600 font-medium">✓ Contrato cargado</span>
-                    ) : (
-                      <>Arrastra o <span className="text-primary font-medium">selecciona</span></>
-                    )}
-                  </p>
-                  <Input type="file" accept=".pdf" className="hidden" id="contract-file" />
+              
+              {/* Progress indicator */}
+              <div className="flex items-center gap-2 text-sm">
+                <div className={cn(
+                  "h-2 flex-1 rounded-full bg-muted overflow-hidden"
+                )}>
+                  <div 
+                    className="h-full bg-emerald-500 transition-all"
+                    style={{ 
+                      width: `${((documentos.constanciaFiscal ? 1 : 0) + (documentos.actaConstitutiva ? 1 : 0) + (documentos.comprobanteDomicilio ? 1 : 0)) / 3 * 100}%` 
+                    }}
+                  />
                 </div>
+                <span className="text-xs text-muted-foreground">
+                  {(documentos.constanciaFiscal ? 1 : 0) + (documentos.actaConstitutiva ? 1 : 0) + (documentos.comprobanteDomicilio ? 1 : 0)}/3 documentos
+                </span>
+              </div>
+            </div>
+
+            {/* Contrato General */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                Contrato General (Opcional)
+              </Label>
+              <div className="border-2 border-dashed rounded-md p-4 text-center hover:border-primary/50 transition-colors cursor-pointer">
+                <Upload className="h-6 w-6 mx-auto text-muted-foreground mb-2" />
+                <p className="text-xs text-muted-foreground">
+                  {fiscalData.contratoUrl ? (
+                    <span className="text-emerald-600 font-medium">✓ Contrato cargado</span>
+                  ) : (
+                    <>Arrastra o <span className="text-primary font-medium">selecciona</span></>
+                  )}
+                </p>
+                <Input type="file" accept=".pdf" className="hidden" id="contract-file" />
               </div>
             </div>
 
@@ -665,7 +813,7 @@ export default function ClientesNuevo() {
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-3 gap-4">
+                          <div className="grid grid-cols-4 gap-4">
                             <div className="space-y-2">
                               <Label className="flex items-center gap-1">
                                 <Users className="h-3 w-3" /> Contacto
@@ -694,6 +842,16 @@ export default function ClientesNuevo() {
                                 placeholder="Lun-Vie 7:00-17:00"
                                 value={sub.horarioRecepcion}
                                 onChange={(e) => updateSubCliente(idx, 'horarioRecepcion', e.target.value)}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="flex items-center gap-1">
+                                <Calendar className="h-3 w-3" /> Horario de Cita
+                              </Label>
+                              <Input
+                                placeholder="Ej: 08:00-10:00"
+                                value={sub.horarioCita}
+                                onChange={(e) => updateSubCliente(idx, 'horarioCita', e.target.value)}
                               />
                             </div>
                           </div>
@@ -824,32 +982,26 @@ export default function ClientesNuevo() {
                           </h4>
                           
                           <div className="grid grid-cols-2 gap-3">
-                            {/* Credit Days */}
+                            {/* Credit Days - Select with standard options */}
                             <div className="space-y-1.5">
                               <Label className="text-xs">Días de Crédito</Label>
-                              <div className="flex items-center gap-2">
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  max="120"
-                                  value={sub.diasCredito}
-                                  onChange={(e) => updateSubCliente(idx, 'diasCredito', parseInt(e.target.value) || 0)}
-                                  className="w-20 font-mono text-center h-9"
-                                />
-                                <Badge 
-                                  variant="outline" 
-                                  className={cn(
-                                    "text-[10px] shrink-0",
-                                    sub.diasCredito <= 15 
-                                      ? "bg-blue-50 text-blue-700 border-blue-200" 
-                                      : sub.diasCredito <= 30 
-                                        ? "bg-amber-50 text-amber-700 border-amber-200"
-                                        : "bg-rose-50 text-rose-700 border-rose-200"
-                                  )}
-                                >
-                                  {sub.diasCredito <= 15 ? "Contado" : `Crédito ${sub.diasCredito}d`}
-                                </Badge>
-                              </div>
+                              <Select
+                                value={sub.diasCredito.toString()}
+                                onValueChange={(value) => updateSubCliente(idx, 'diasCredito', parseInt(value))}
+                              >
+                                <SelectTrigger className="h-9">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="bg-popover border shadow-lg z-50">
+                                  {opcionesDiasCredito.map((opcion) => (
+                                    <SelectItem key={opcion.value} value={opcion.value.toString()}>
+                                      <span className="flex items-center gap-2">
+                                        {opcion.label}
+                                      </span>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </div>
 
                             {/* Attach Contract Button */}
@@ -964,25 +1116,22 @@ export default function ClientesNuevo() {
                                     />
                                   </div>
                                   
-                                  {/* Unit Type */}
+                                  {/* Unit Type - Dynamic */}
                                   <div className="col-span-2">
                                     <Select
                                       value={tarifa.tipoUnidad}
                                       onValueChange={(value) => updateTarifa(idx, tIdx, 'tipoUnidad', value)}
+                                      disabled={loadingTipos}
                                     >
                                       <SelectTrigger className="h-8 text-xs">
-                                        <SelectValue />
+                                        <SelectValue placeholder={loadingTipos ? '...' : 'Tipo'} />
                                       </SelectTrigger>
                                       <SelectContent className="bg-popover border shadow-lg z-50">
-                                        <SelectItem value="sencillo">
-                                          <span className="flex items-center gap-1">🚛 Sencillo</span>
-                                        </SelectItem>
-                                        <SelectItem value="full">
-                                          <span className="flex items-center gap-1">🚚 Full</span>
-                                        </SelectItem>
-                                        <SelectItem value="rabon">
-                                          <span className="flex items-center gap-1">📦 Rabón</span>
-                                        </SelectItem>
+                                        {tiposActivos.map((tipo) => (
+                                          <SelectItem key={tipo.id} value={tipo.nombre.toLowerCase()}>
+                                            <span className="flex items-center gap-1">{tipo.icono} {tipo.nombre}</span>
+                                          </SelectItem>
+                                        ))}
                                       </SelectContent>
                                     </Select>
                                   </div>
