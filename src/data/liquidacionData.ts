@@ -130,8 +130,8 @@ export const mockTripSettlement: TripSettlement = {
     {
       id: 'CP-006',
       tipo: 'deduccion',
-      categoria: 'otro',
-      descripcion: 'Descuento Préstamo Personal',
+      categoria: 'anticipo',
+      descripcion: 'Anticipo de Liquidación',
       monto: 200.00,
       esAutomatico: false,
       referencia: 'Abono 3/6',
