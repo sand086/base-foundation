@@ -14,18 +14,28 @@ import {
   DollarSign,
   Receipt,
   TrendingUp,
-  TrendingDown,
   Banknote,
   ArrowDownCircle,
   ArrowUpCircle,
   BadgeAlert,
   Droplets,
+  Plus,
+  Award,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { 
   mockTripSettlement, 
   TripSettlement, 
@@ -46,6 +56,9 @@ export default function CierreViaje() {
   const [settlement, setSettlement] = useState<TripSettlement>(mockTripSettlement);
   const [showReceipt, setShowReceipt] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [showAddBonoDialog, setShowAddBonoDialog] = useState(false);
+  const [bonoAmount, setBonoAmount] = useState('');
+  const [bonoDescription, setBonoDescription] = useState('');
 
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([
     {
@@ -121,6 +134,47 @@ export default function CierreViaje() {
     }).format(amount);
   };
 
+  const handleAddBono = () => {
+    const amount = parseFloat(bonoAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast({
+        title: "Error",
+        description: "Ingresa un monto válido mayor a 0",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const newBono: ConceptoPago = {
+      id: `CP-BONO-${Date.now()}`,
+      tipo: 'ingreso',
+      categoria: 'bono',
+      descripcion: bonoDescription.trim() || 'Bono adicional',
+      monto: amount,
+      esAutomatico: false,
+    };
+
+    const newConceptos = [...settlement.conceptos, newBono];
+    const newTotalIngresos = settlement.totalIngresos + amount;
+    const newNetoAPagar = newTotalIngresos - settlement.totalDeducciones;
+
+    setSettlement({
+      ...settlement,
+      conceptos: newConceptos,
+      totalIngresos: newTotalIngresos,
+      netoAPagar: newNetoAPagar,
+    });
+
+    setShowAddBonoDialog(false);
+    setBonoAmount('');
+    setBonoDescription('');
+
+    toast({
+      title: "✅ Bono agregado",
+      description: `Se agregó un bono de ${formatCurrency(amount)} al operador.`,
+    });
+  };
+
   const handleAuthorizeAndClose = () => {
     setIsAnimating(true);
     
@@ -146,6 +200,8 @@ export default function CierreViaje() {
   const ingresos = settlement.conceptos.filter(c => c.tipo === 'ingreso');
   const deducciones = settlement.conceptos.filter(c => c.tipo === 'deduccion');
   const fuelDeduction = deducciones.find(d => d.categoria === 'combustible');
+  const bonos = ingresos.filter(c => c.categoria === 'bono');
+  const anticipos = deducciones.filter(c => c.categoria === 'anticipo');
 
   // Calculate excess percentage
   const excessPercentage = settlement.consumoEsperadoLitros > 0 
@@ -333,26 +389,45 @@ export default function CierreViaje() {
             <Banknote className="h-5 w-5" /> Liquidación del Operador
           </CardTitle>
           <CardDescription>
-            Cálculo: Pago Base + Bonos - Anticipos - Deducción Combustible = Neto a Pagar
+            Cálculo: Pago Base + Bonos - Anticipos de Liquidación - Deducción Combustible = Neto a Pagar
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid gap-6 md:grid-cols-2">
             {/* Income Section */}
             <div className="space-y-4">
-              <div className="flex items-center gap-2 text-status-success font-bold">
-                <ArrowUpCircle className="h-5 w-5" />
-                INGRESOS
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-status-success font-bold">
+                  <ArrowUpCircle className="h-5 w-5" />
+                  INGRESOS
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="gap-1"
+                  onClick={() => setShowAddBonoDialog(true)}
+                  disabled={settlement.estatus === 'liquidado'}
+                >
+                  <Award className="h-4 w-4" />
+                  Agregar Bono
+                </Button>
               </div>
               <div className="space-y-2">
                 {ingresos.map((concepto, index) => (
                   <div 
                     key={concepto.id} 
-                    className="flex justify-between items-center p-3 bg-status-success/5 rounded-lg border border-status-success/20 animate-in fade-in slide-in-from-left duration-300"
+                    className={`flex justify-between items-center p-3 rounded-lg border animate-in fade-in slide-in-from-left duration-300 ${
+                      concepto.categoria === 'bono' 
+                        ? 'bg-amber-50 border-amber-200' 
+                        : 'bg-status-success/5 border-status-success/20'
+                    }`}
                     style={{ animationDelay: `${index * 100}ms` }}
                   >
                     <div>
-                      <p className="font-medium">{concepto.descripcion}</p>
+                      <p className="font-medium flex items-center gap-2">
+                        {concepto.categoria === 'bono' && <Award className="h-4 w-4 text-amber-600" />}
+                        {concepto.descripcion}
+                      </p>
                       {concepto.referencia && (
                         <p className="text-xs text-muted-foreground">{concepto.referencia}</p>
                       )}
@@ -362,7 +437,9 @@ export default function CierreViaje() {
                         </Badge>
                       )}
                     </div>
-                    <span className="font-bold font-mono text-status-success">
+                    <span className={`font-bold font-mono ${
+                      concepto.categoria === 'bono' ? 'text-amber-600' : 'text-status-success'
+                    }`}>
                       +{formatCurrency(concepto.monto)}
                     </span>
                   </div>
@@ -389,6 +466,8 @@ export default function CierreViaje() {
                     className={`flex justify-between items-center p-3 rounded-lg border animate-in fade-in slide-in-from-right duration-300 ${
                       concepto.categoria === 'combustible' 
                         ? 'bg-status-danger/10 border-status-danger' 
+                        : concepto.categoria === 'anticipo'
+                        ? 'bg-blue-50 border-blue-200'
                         : 'bg-status-danger/5 border-status-danger/20'
                     }`}
                     style={{ animationDelay: `${index * 100}ms` }}
@@ -406,6 +485,11 @@ export default function CierreViaje() {
                           className={`mt-1 text-xs ${concepto.categoria === 'combustible' ? 'border-status-danger text-status-danger' : ''}`}
                         >
                           {concepto.categoria === 'combustible' ? '⚠️ Desde Módulo Combustible' : 'Automático'}
+                        </Badge>
+                      )}
+                      {concepto.categoria === 'anticipo' && (
+                        <Badge variant="outline" className="mt-1 text-xs border-blue-300 text-blue-600">
+                          Anticipo de Liquidación
                         </Badge>
                       )}
                     </div>
@@ -427,11 +511,19 @@ export default function CierreViaje() {
           {/* Grand Total */}
           <Separator className="my-6" />
           
-          <div className="grid gap-4 md:grid-cols-4 mb-6">
+          <div className="grid gap-4 md:grid-cols-5 mb-6">
             <div className="p-4 bg-muted/30 rounded-lg text-center">
               <p className="text-sm text-muted-foreground mb-1">Total Ingresos</p>
               <p className="text-xl font-bold text-status-success font-mono">
                 {formatCurrency(settlement.totalIngresos)}
+              </p>
+            </div>
+            <div className="p-4 bg-amber-50 rounded-lg text-center border border-amber-200">
+              <p className="text-sm text-amber-700 mb-1 flex items-center justify-center gap-1">
+                <Award className="h-3 w-3" /> Bonos
+              </p>
+              <p className="text-xl font-bold text-amber-600 font-mono">
+                +{formatCurrency(bonos.reduce((sum, b) => sum + b.monto, 0))}
               </p>
             </div>
             <div className="p-4 bg-muted/30 rounded-lg text-center">
@@ -443,7 +535,7 @@ export default function CierreViaje() {
             {fuelDeduction && (
               <div className="p-4 bg-status-danger/10 rounded-lg text-center border border-status-danger">
                 <p className="text-sm text-status-danger mb-1 flex items-center justify-center gap-1">
-                  <Fuel className="h-3 w-3" /> Deducción Combustible
+                  <Fuel className="h-3 w-3" /> Combustible
                 </p>
                 <p className="text-xl font-bold text-status-danger font-mono">
                   -{formatCurrency(fuelDeduction.monto)}
@@ -518,6 +610,50 @@ export default function CierreViaje() {
           </Card>
         </CardContent>
       </Card>
+
+      {/* Add Bono Dialog */}
+      <Dialog open={showAddBonoDialog} onOpenChange={setShowAddBonoDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Award className="h-5 w-5 text-amber-600" />
+              Agregar Bono al Operador
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="bono-description">Concepto del Bono</Label>
+              <Input
+                id="bono-description"
+                placeholder="Ej: Bono por entrega anticipada, Buen rendimiento..."
+                value={bonoDescription}
+                onChange={(e) => setBonoDescription(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="bono-amount">Monto (MXN) *</Label>
+              <Input
+                id="bono-amount"
+                type="number"
+                placeholder="0.00"
+                value={bonoAmount}
+                onChange={(e) => setBonoAmount(e.target.value)}
+                min="0"
+                step="0.01"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddBonoDialog(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleAddBono} disabled={!bonoAmount}>
+              <Plus className="h-4 w-4 mr-2" />
+              Agregar Bono
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Settlement Receipt Modal */}
       <SettlementReceiptModal

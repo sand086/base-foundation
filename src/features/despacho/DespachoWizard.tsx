@@ -1,11 +1,12 @@
 import { useState, useMemo } from "react";
-import { Check, ChevronRight, AlertTriangle, MapPin, Truck, User, FileText } from "lucide-react";
+import { Check, ChevronRight, AlertTriangle, MapPin, Truck, User, FileText, ShieldAlert, Lock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ActionButton } from "@/components/ui/action-button";
 import { Label } from "@/components/ui/label";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -14,13 +15,23 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
   mockDispatchClientes,
   mockSubClientes,
   mockDispatchRoutes,
   mockDispatchUnits,
   mockDrivers,
 } from "@/data/despachoData";
+import { useSecurityNotifications } from "@/hooks/useSecurityNotifications";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 type WizardStep = 1 | 2 | 3;
 
@@ -60,11 +71,21 @@ const initialData: WizardData = {
   precio: 0,
 };
 
+// Simulated current user role - In production this would come from auth context
+const CURRENT_USER_ROLE = 'SuperAdmin'; // Change to 'Operador' to test non-admin behavior
+const CURRENT_USER_NAME = 'Carlos Administrador';
+
 export const DespachoWizard = () => {
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
   const [data, setData] = useState<WizardData>(initialData);
   const [unitBlocked, setUnitBlocked] = useState(false);
-  const [blockReason, setBlockReason] = useState('');
+  const [driverBlocked, setDriverBlocked] = useState(false);
+  const [blockReasons, setBlockReasons] = useState<string[]>([]);
+  const [forceOverrideDialogOpen, setForceOverrideDialogOpen] = useState(false);
+  const [overrideReason, setOverrideReason] = useState('');
+  const [overrideApplied, setOverrideApplied] = useState(false);
+
+  const { sendSecurityNotification } = useSecurityNotifications();
 
   const steps = [
     { number: 1, title: 'El Servicio', description: 'Cliente, Destino y Ruta' },
@@ -96,6 +117,7 @@ export const DespachoWizard = () => {
       clienteId,
       clienteNombre: cliente?.nombre || '',
     });
+    setOverrideApplied(false);
   };
 
   const handleSubClienteChange = (subClienteId: string) => {
@@ -138,33 +160,84 @@ export const DespachoWizard = () => {
         precio: newPrecio,
       });
 
-      // Check for blocked status
+      // Reset override when changing selection
+      setOverrideApplied(false);
+
+      // Check for blocked status based on document expiration
+      const reasons: string[] = [];
       if (unit.documentStatus === 'vencido') {
-        setUnitBlocked(true);
-        setBlockReason(unit.documentoVencido || 'Documentación');
-      } else {
-        setUnitBlocked(false);
-        setBlockReason('');
+        reasons.push(`Unidad: ${unit.documentoVencido || 'Documentación'} vencida`);
       }
+      
+      setUnitBlocked(unit.documentStatus === 'vencido');
+      
+      // Update combined block reasons
+      const driverReasons = blockReasons.filter(r => r.startsWith('Operador:'));
+      setBlockReasons([...reasons, ...driverReasons]);
     }
   };
 
   const handleDriverChange = (driverId: string) => {
     const driver = mockDrivers.find((d) => d.id === driverId);
-    setData({
-      ...data,
-      driverId,
-      driverNombre: driver?.nombre || '',
+    if (driver) {
+      setData({
+        ...data,
+        driverId,
+        driverNombre: driver.nombre,
+      });
+
+      // Reset override when changing selection
+      setOverrideApplied(false);
+
+      // Check for blocked status based on license expiration
+      const reasons: string[] = [];
+      if (driver.licenciaStatus === 'vencido') {
+        reasons.push(`Operador: Licencia vencida`);
+      }
+      
+      setDriverBlocked(driver.licenciaStatus === 'vencido');
+      
+      // Update combined block reasons
+      const unitReasons = blockReasons.filter(r => r.startsWith('Unidad:'));
+      setBlockReasons([...unitReasons, ...reasons]);
+    }
+  };
+
+  const handleForceOverride = () => {
+    if (!overrideReason.trim()) {
+      toast.error('Debes proporcionar un motivo para el desbloqueo');
+      return;
+    }
+
+    // Log the override action
+    sendSecurityNotification({
+      event: 'forced_assignment',
+      details: {
+        adminName: CURRENT_USER_NAME,
+        reason: overrideReason,
+        tripId: `${data.clienteNombre} - ${data.routeNombre}`,
+      },
+    });
+
+    setOverrideApplied(true);
+    setForceOverrideDialogOpen(false);
+    setOverrideReason('');
+    
+    toast.success('Bloqueo anulado', {
+      description: 'Se registró la acción en el log de auditoría.',
     });
   };
 
+  // Check if there are any blocking issues
+  const hasBlockingIssues = unitBlocked || driverBlocked;
+  const canProceedStep2 = data.unitId && data.driverId && (!hasBlockingIssues || overrideApplied);
+
   // Step validation
   const isStep1Valid = data.clienteId && data.subClienteId && data.routeId;
-  const isStep2Valid = data.unitId && data.driverId && !unitBlocked;
 
   const canProceed = () => {
     if (currentStep === 1) return isStep1Valid;
-    if (currentStep === 2) return isStep2Valid;
+    if (currentStep === 2) return canProceedStep2;
     return true;
   };
 
@@ -180,6 +253,8 @@ export const DespachoWizard = () => {
         return null;
     }
   };
+
+  const isSuperAdmin = CURRENT_USER_ROLE === 'SuperAdmin';
 
   return (
     <div className="space-y-6">
@@ -393,7 +468,13 @@ export const DespachoWizard = () => {
                     </SelectTrigger>
                     <SelectContent>
                       {mockDrivers.map((driver) => (
-                        <SelectItem key={driver.id} value={driver.id}>
+                        <SelectItem 
+                          key={driver.id} 
+                          value={driver.id}
+                          className={cn(
+                            driver.licenciaStatus === 'vencido' && "opacity-60"
+                          )}
+                        >
                           <div className="flex items-center gap-3">
                             <span className="font-medium">{driver.nombre}</span>
                             {getDocStatusBadge(driver.licenciaStatus)}
@@ -415,15 +496,54 @@ export const DespachoWizard = () => {
                 </div>
               </div>
 
-              {/* Blocked Unit Warning */}
-              {unitBlocked && (
-                <Alert className="bg-red-50 border-red-200">
-                  <AlertTriangle className="h-4 w-4 text-red-600" />
-                  <AlertDescription className="text-red-800">
-                    <strong>⛔ Unidad Bloqueada por Documentación</strong>
-                    <br />
-                    El documento "{blockReason}" de la unidad {data.unitNumero} está vencido.
-                    No es posible asignar esta unidad hasta regularizar su documentación.
+              {/* Blocking Warning - Documents Expired */}
+              {hasBlockingIssues && !overrideApplied && (
+                <Alert className="bg-red-50 border-red-300 border-2">
+                  <Lock className="h-5 w-5 text-red-600" />
+                  <AlertTitle className="text-red-800 font-bold">
+                    ⛔ Asignación Bloqueada por Documentación Vencida
+                  </AlertTitle>
+                  <AlertDescription className="text-red-700 mt-2">
+                    <ul className="list-disc list-inside space-y-1">
+                      {blockReasons.map((reason, idx) => (
+                        <li key={idx}>{reason}</li>
+                      ))}
+                    </ul>
+                    <p className="mt-3 text-sm">
+                      No es posible continuar hasta regularizar la documentación.
+                    </p>
+                    
+                    {/* SuperAdmin Override Button */}
+                    {isSuperAdmin && (
+                      <div className="mt-4 pt-3 border-t border-red-200">
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="gap-2"
+                          onClick={() => setForceOverrideDialogOpen(true)}
+                        >
+                          <ShieldAlert className="h-4 w-4" />
+                          Forzar Asignación (Admin Override)
+                        </Button>
+                        <p className="text-xs mt-2 text-red-600">
+                          Solo visible para SuperAdmin. Esta acción quedará registrada.
+                        </p>
+                      </div>
+                    )}
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Override Applied Indicator */}
+              {overrideApplied && hasBlockingIssues && (
+                <Alert className="bg-amber-50 border-amber-300">
+                  <ShieldAlert className="h-5 w-5 text-amber-600" />
+                  <AlertTitle className="text-amber-800">
+                    ⚡ Bloqueo Anulado por Administrador
+                  </AlertTitle>
+                  <AlertDescription className="text-amber-700">
+                    {CURRENT_USER_NAME} autorizó continuar a pesar de la documentación vencida.
+                    Esta acción fue registrada en el log de auditoría.
                   </AlertDescription>
                 </Alert>
               )}
@@ -497,6 +617,16 @@ export const DespachoWizard = () => {
                     </div>
                   </div>
 
+                  {/* Override Warning in Summary */}
+                  {overrideApplied && (
+                    <Alert className="bg-amber-50 border-amber-200">
+                      <ShieldAlert className="h-4 w-4 text-amber-600" />
+                      <AlertDescription className="text-amber-700 text-sm">
+                        Este viaje fue autorizado con override administrativo por {CURRENT_USER_NAME}.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
                   <div className="pt-4 border-t">
                     <div className="flex justify-between items-center p-4 bg-emerald-100 rounded-lg">
                       <div>
@@ -537,7 +667,7 @@ export const DespachoWizard = () => {
               <ActionButton
                 onClick={() => {
                   console.log('Generating Carta Porte with data:', data);
-                  alert('¡Carta Porte generada exitosamente!');
+                  toast.success('¡Carta Porte generada exitosamente!');
                 }}
               >
                 <FileText className="h-4 w-4 mr-2" />
@@ -547,6 +677,57 @@ export const DespachoWizard = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Force Override Dialog */}
+      <Dialog open={forceOverrideDialogOpen} onOpenChange={setForceOverrideDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <ShieldAlert className="h-5 w-5" />
+              Forzar Asignación - Admin Override
+            </DialogTitle>
+            <DialogDescription>
+              Esta acción permitirá continuar a pesar de la documentación vencida.
+              Se registrará en el log de auditoría.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+              <p className="text-sm font-medium text-red-800">Documentos bloqueantes:</p>
+              <ul className="list-disc list-inside text-sm text-red-700 mt-1">
+                {blockReasons.map((reason, idx) => (
+                  <li key={idx}>{reason}</li>
+                ))}
+              </ul>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="override-reason">Motivo del Desbloqueo *</Label>
+              <Textarea
+                id="override-reason"
+                placeholder="Ej: Cliente confirmó urgencia, documentos en trámite de renovación..."
+                value={overrideReason}
+                onChange={(e) => setOverrideReason(e.target.value)}
+                rows={3}
+              />
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setForceOverrideDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleForceOverride}
+              disabled={!overrideReason.trim()}
+            >
+              Confirmar Override
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

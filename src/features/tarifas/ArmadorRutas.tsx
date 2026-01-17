@@ -184,7 +184,6 @@ export const ArmadorRutas = () => {
     {
       key: 'tipoUnidad',
       header: 'Tipo Unidad',
-      type: 'badge',
       sortable: true,
       render: (value) => (
         <span className={cn(
@@ -207,8 +206,9 @@ export const ArmadorRutas = () => {
     {
       key: 'costoTotal',
       header: 'Costo Total',
-      type: 'currency',
+      type: 'number',
       sortable: true,
+      render: (value) => formatCurrency(value as number),
     },
   ];
 
@@ -466,9 +466,8 @@ export const ArmadorRutas = () => {
           <EnhancedDataTable
             data={savedRoutes}
             columns={columns}
-            searchPlaceholder="Buscar tarifas..."
-            onEdit={handleEditRoute}
-            onDelete={(route) => handleDeleteRoute(route.id)}
+            exportFileName="tarifas"
+            onRowClick={handleEditRoute}
           />
         </CardContent>
       </Card>
