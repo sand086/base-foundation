@@ -1,10 +1,9 @@
 import { useState, useMemo } from "react";
-import { Plus, Trash2, GripVertical, Route, Calculator } from "lucide-react";
+import { Plus, Trash2, GripVertical, Route, Calculator, ArrowRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { ActionButton } from "@/components/ui/action-button";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -20,34 +19,57 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { mockTollBooths, mockClientes, TollBooth } from "@/data/tarifasData";
+import { mockTollBooths, mockClientes, TollBooth, RouteTemplate, mockRouteTemplates } from "@/data/tarifasData";
+import { useTiposUnidad } from "@/hooks/useTiposUnidad";
+import { useRutasAutorizadas } from "@/hooks/useRutasAutorizadas";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import { EnhancedDataTable, ColumnDef } from "@/components/ui/enhanced-data-table";
 
 export const ArmadorRutas = () => {
+  const { tiposActivos } = useTiposUnidad();
+  const { rutasActivas } = useRutasAutorizadas();
+  
   const [selectedCliente, setSelectedCliente] = useState("");
-  const [nombreRuta, setNombreRuta] = useState("");
-  const [tipoUnidad, setTipoUnidad] = useState<"5ejes" | "9ejes">("5ejes");
+  const [rutaSeleccionada, setRutaSeleccionada] = useState("");
+  const [origen, setOrigen] = useState("");
+  const [destino, setDestino] = useState("");
+  const [tipoUnidad, setTipoUnidad] = useState("");
   const [selectedTolls, setSelectedTolls] = useState<TollBooth[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [savedRoutes, setSavedRoutes] = useState<RouteTemplate[]>(mockRouteTemplates);
+  const [editingRoute, setEditingRoute] = useState<RouteTemplate | null>(null);
+
+  // Handle route selection from catalog
+  const handleRutaChange = (rutaId: string) => {
+    setRutaSeleccionada(rutaId);
+    const ruta = rutasActivas.find(r => r.id === rutaId);
+    if (ruta) {
+      setOrigen(ruta.origen);
+      setDestino(ruta.destino);
+    }
+  };
 
   // Calculate total cost based on selected tolls and unit type
   const costoTotal = useMemo(() => {
+    const tipo = tiposActivos.find(t => t.id === tipoUnidad);
+    const esFull = tipo?.nombre.toLowerCase().includes('full') || tipo?.nombre.toLowerCase().includes('9 ejes');
+    
     return selectedTolls.reduce((total, toll) => {
-      const costo =
-        tipoUnidad === "5ejes"
-          ? toll.costo5EjesSencillo
-          : toll.costo9EjesSencillo;
+      const costo = esFull ? toll.costo9EjesSencillo : toll.costo5EjesSencillo;
       return total + costo;
     }, 0);
-  }, [selectedTolls, tipoUnidad]);
+  }, [selectedTolls, tipoUnidad, tiposActivos]);
 
   const costoTotalFull = useMemo(() => {
+    const tipo = tiposActivos.find(t => t.id === tipoUnidad);
+    const esFull = tipo?.nombre.toLowerCase().includes('full') || tipo?.nombre.toLowerCase().includes('9 ejes');
+    
     return selectedTolls.reduce((total, toll) => {
-      const costo =
-        tipoUnidad === "5ejes" ? toll.costo5EjesFull : toll.costo9EjesFull;
+      const costo = esFull ? toll.costo9EjesFull : toll.costo5EjesFull;
       return total + costo;
     }, 0);
-  }, [selectedTolls, tipoUnidad]);
+  }, [selectedTolls, tipoUnidad, tiposActivos]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("es-MX", {
@@ -67,222 +89,387 @@ export const ArmadorRutas = () => {
     setSelectedTolls(selectedTolls.filter((t) => t.id !== tollId));
   };
 
+  const handleSaveRoute = () => {
+    if (!selectedCliente || !origen || !destino || !tipoUnidad) {
+      toast.error('Completa todos los campos obligatorios');
+      return;
+    }
+
+    const cliente = mockClientes.find(c => c.id === selectedCliente);
+    const tipo = tiposActivos.find(t => t.id === tipoUnidad);
+    
+    const newRoute: RouteTemplate = {
+      id: editingRoute?.id || `ruta-${Date.now()}`,
+      clienteId: selectedCliente,
+      clienteNombre: cliente?.nombre || '',
+      nombreRuta: `${origen} - ${destino}`,
+      tipoUnidad: tipo?.nombre.toLowerCase().includes('9') ? '9ejes' : '5ejes',
+      casetas: selectedTolls.map(t => t.id),
+      costoTotal: costoTotalFull,
+    };
+
+    if (editingRoute) {
+      setSavedRoutes(savedRoutes.map(r => r.id === editingRoute.id ? newRoute : r));
+      toast.success('Tarifa actualizada correctamente');
+    } else {
+      setSavedRoutes([...savedRoutes, newRoute]);
+      toast.success('Nueva tarifa guardada');
+    }
+
+    handleClearForm();
+  };
+
+  const handleClearForm = () => {
+    setSelectedCliente('');
+    setRutaSeleccionada('');
+    setOrigen('');
+    setDestino('');
+    setTipoUnidad('');
+    setSelectedTolls([]);
+    setEditingRoute(null);
+  };
+
+  const handleEditRoute = (route: RouteTemplate) => {
+    setEditingRoute(route);
+    setSelectedCliente(route.clienteId);
+    
+    // Parse route name to get origin/destination
+    const parts = route.nombreRuta.split(' - ');
+    setOrigen(parts[0] || '');
+    setDestino(parts[1] || '');
+    
+    // Find matching unit type
+    const tipo = tiposActivos.find(t => 
+      (route.tipoUnidad === '9ejes' && (t.nombre.toLowerCase().includes('full') || t.nombre.toLowerCase().includes('9'))) ||
+      (route.tipoUnidad === '5ejes' && !t.nombre.toLowerCase().includes('full') && !t.nombre.toLowerCase().includes('9'))
+    );
+    setTipoUnidad(tipo?.id || '');
+    
+    // Load casetas
+    const tolls = mockTollBooths.filter(t => route.casetas.includes(t.id));
+    setSelectedTolls(tolls);
+  };
+
+  const handleDeleteRoute = (routeId: string) => {
+    setSavedRoutes(savedRoutes.filter(r => r.id !== routeId));
+    toast.success('Tarifa eliminada');
+  };
+
   const availableTolls = mockTollBooths.filter(
     (toll) => !selectedTolls.find((t) => t.id === toll.id)
   );
 
+  // Table columns for saved routes
+  const columns: ColumnDef<RouteTemplate>[] = [
+    {
+      key: 'clienteNombre',
+      header: 'Cliente',
+      sortable: true,
+    },
+    {
+      key: 'nombreRuta',
+      header: 'Ruta',
+      sortable: true,
+      render: (value, row) => {
+        const parts = (value as string).split(' - ');
+        return (
+          <div className="flex items-center gap-2">
+            <span className="font-medium">{parts[0]}</span>
+            <ArrowRight className="h-4 w-4 text-muted-foreground" />
+            <span className="font-medium">{parts[1]}</span>
+          </div>
+        );
+      },
+    },
+    {
+      key: 'tipoUnidad',
+      header: 'Tipo Unidad',
+      type: 'badge',
+      sortable: true,
+      render: (value) => (
+        <span className={cn(
+          "px-2 py-1 rounded text-xs font-medium",
+          value === '9ejes' 
+            ? 'bg-amber-100 text-amber-800' 
+            : 'bg-blue-100 text-blue-800'
+        )}>
+          {value === '9ejes' ? '9 Ejes (Full)' : '5 Ejes'}
+        </span>
+      ),
+    },
+    {
+      key: 'casetas',
+      header: 'Casetas',
+      render: (value) => (
+        <span className="text-sm">{(value as string[]).length} casetas</span>
+      ),
+    },
+    {
+      key: 'costoTotal',
+      header: 'Costo Total',
+      type: 'currency',
+      sortable: true,
+    },
+  ];
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {/* Left Side: Form */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-slate-800">
-            <Route className="h-5 w-5" />
-            Configuración de Ruta
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Cliente Selection */}
-          <div className="space-y-2">
-            <Label htmlFor="cliente">Cliente</Label>
-            <Select value={selectedCliente} onValueChange={setSelectedCliente}>
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccionar cliente..." />
-              </SelectTrigger>
-              <SelectContent>
-                {mockClientes.map((cliente) => (
-                  <SelectItem key={cliente.id} value={cliente.id}>
-                    {cliente.nombre}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Route Name */}
-          <div className="space-y-2">
-            <Label htmlFor="nombreRuta">Nombre de la Ruta</Label>
-            <Input
-              id="nombreRuta"
-              placeholder="Ej: CDMX - Veracruz Puerto"
-              value={nombreRuta}
-              onChange={(e) => setNombreRuta(e.target.value)}
-            />
-          </div>
-
-          {/* Truck Type Toggle */}
-          <div className="space-y-3">
-            <Label>Tipo de Unidad</Label>
-            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border">
-              <div className="flex items-center gap-3">
-                <span
-                  className={cn(
-                    "text-sm font-medium transition-colors",
-                    tipoUnidad === "5ejes"
-                      ? "text-emerald-700"
-                      : "text-slate-400"
-                  )}
-                >
-                  5 Ejes
-                </span>
-                <Switch
-                  checked={tipoUnidad === "9ejes"}
-                  onCheckedChange={(checked) =>
-                    setTipoUnidad(checked ? "9ejes" : "5ejes")
-                  }
-                />
-                <span
-                  className={cn(
-                    "text-sm font-medium transition-colors",
-                    tipoUnidad === "9ejes"
-                      ? "text-emerald-700"
-                      : "text-slate-400"
-                  )}
-                >
-                  9 Ejes
-                </span>
-              </div>
-              <span className="text-xs text-slate-500 bg-white px-2 py-1 rounded">
-                {tipoUnidad === "5ejes" ? "Tractocamión" : "Full (Doble Remolque)"}
-              </span>
+    <div className="space-y-6">
+      {/* Form Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Left Side: Form */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-slate-800">
+              <Route className="h-5 w-5" />
+              {editingRoute ? 'Editar Tarifa' : 'Nueva Tarifa de Ruta'}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Cliente Selection */}
+            <div className="space-y-2">
+              <Label htmlFor="cliente">Cliente *</Label>
+              <Select value={selectedCliente} onValueChange={setSelectedCliente}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar cliente..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {mockClientes.map((cliente) => (
+                    <SelectItem key={cliente.id} value={cliente.id}>
+                      {cliente.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          </div>
 
-          {/* Add Toll Button */}
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" className="w-full border-dashed">
-                <Plus className="h-4 w-4 mr-2" />
-                Agregar Caseta
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Seleccionar Caseta del Catálogo</DialogTitle>
-              </DialogHeader>
-              <div className="max-h-96 overflow-y-auto">
-                <div className="space-y-2">
-                  {availableTolls.length === 0 ? (
-                    <p className="text-center text-slate-500 py-8">
-                      Todas las casetas ya han sido agregadas
-                    </p>
-                  ) : (
-                    availableTolls.map((toll) => (
-                      <div
-                        key={toll.id}
-                        className="flex items-center justify-between p-3 border rounded-lg hover:bg-slate-50 cursor-pointer transition-colors"
-                        onClick={() => handleAddToll(toll)}
-                      >
-                        <div>
-                          <p className="font-medium text-slate-900">
-                            {toll.nombre}
-                          </p>
-                          <p className="text-sm text-slate-500">{toll.tramo}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-mono text-slate-700">
-                            {tipoUnidad === "5ejes"
-                              ? formatCurrency(toll.costo5EjesSencillo)
-                              : formatCurrency(toll.costo9EjesSencillo)}
-                          </p>
-                          <p className="text-xs text-slate-400">Sencillo</p>
-                        </div>
+            {/* Route from Catalog or Manual */}
+            <div className="space-y-2">
+              <Label>Ruta del Catálogo (opcional)</Label>
+              <Select value={rutaSeleccionada} onValueChange={handleRutaChange}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar ruta autorizada..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {rutasActivas.map((ruta) => (
+                    <SelectItem key={ruta.id} value={ruta.id}>
+                      <div className="flex items-center gap-2">
+                        <span>{ruta.origen}</span>
+                        <ArrowRight className="h-3 w-3" />
+                        <span>{ruta.destino}</span>
                       </div>
-                    ))
-                  )}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Origin / Destination Inputs */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="origen">Origen *</Label>
+                <Input
+                  id="origen"
+                  placeholder="Ej: CDMX"
+                  value={origen}
+                  onChange={(e) => setOrigen(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="destino">Destino *</Label>
+                <Input
+                  id="destino"
+                  placeholder="Ej: Veracruz Puerto"
+                  value={destino}
+                  onChange={(e) => setDestino(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Preview of Route Display */}
+            {origen && destino && (
+              <div className="p-3 bg-muted rounded-lg border">
+                <p className="text-xs text-muted-foreground mb-1">Vista previa de ruta:</p>
+                <div className="flex items-center gap-2 font-semibold">
+                  <span>{origen}</span>
+                  <span className="text-primary">➝</span>
+                  <span>{destino}</span>
                 </div>
               </div>
-            </DialogContent>
-          </Dialog>
+            )}
 
-          {/* Save Button */}
-          <ActionButton className="w-full" disabled={selectedTolls.length === 0}>
-            Guardar Ruta
-          </ActionButton>
-        </CardContent>
-      </Card>
+            {/* Truck Type Selection */}
+            <div className="space-y-2">
+              <Label>Tipo de Unidad *</Label>
+              <Select value={tipoUnidad} onValueChange={setTipoUnidad}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar tipo..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {tiposActivos.map((tipo) => (
+                    <SelectItem key={tipo.id} value={tipo.id}>
+                      {tipo.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-      {/* Right Side: Route List */}
+            {/* Add Toll Button */}
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="w-full border-dashed">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Agregar Caseta
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Seleccionar Caseta del Catálogo</DialogTitle>
+                </DialogHeader>
+                <div className="max-h-96 overflow-y-auto">
+                  <div className="space-y-2">
+                    {availableTolls.length === 0 ? (
+                      <p className="text-center text-slate-500 py-8">
+                        Todas las casetas ya han sido agregadas
+                      </p>
+                    ) : (
+                      availableTolls.map((toll) => (
+                        <div
+                          key={toll.id}
+                          className="flex items-center justify-between p-3 border rounded-lg hover:bg-slate-50 cursor-pointer transition-colors"
+                          onClick={() => handleAddToll(toll)}
+                        >
+                          <div>
+                            <p className="font-medium text-slate-900">
+                              {toll.nombre}
+                            </p>
+                            <p className="text-sm text-slate-500">{toll.tramo}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-mono text-slate-700">
+                              {formatCurrency(toll.costo5EjesSencillo)}
+                            </p>
+                            <p className="text-xs text-slate-400">5 Ejes Sencillo</p>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            {/* Action Buttons */}
+            <div className="flex gap-2">
+              {editingRoute && (
+                <Button variant="outline" onClick={handleClearForm} className="flex-1">
+                  Cancelar
+                </Button>
+              )}
+              <ActionButton 
+                className="flex-1" 
+                disabled={!selectedCliente || !origen || !destino || !tipoUnidad}
+                onClick={handleSaveRoute}
+              >
+                {editingRoute ? 'Actualizar Tarifa' : 'Guardar Tarifa'}
+              </ActionButton>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Right Side: Toll List */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between text-slate-800">
+              <span className="flex items-center gap-2">
+                <Calculator className="h-5 w-5" />
+                Lista de Casetas
+              </span>
+              <span className="text-sm font-normal text-slate-500">
+                {selectedTolls.length} caseta{selectedTolls.length !== 1 ? "s" : ""}
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {selectedTolls.length === 0 ? (
+              <div className="text-center py-12 text-slate-400">
+                <Route className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                <p>No hay casetas agregadas</p>
+                <p className="text-sm">
+                  Usa el botón "Agregar Caseta" para comenzar
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {selectedTolls.map((toll, index) => (
+                  <div
+                    key={toll.id}
+                    className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border group"
+                  >
+                    <div className="flex items-center gap-2 text-slate-400">
+                      <GripVertical className="h-4 w-4" />
+                      <span className="text-xs font-medium w-5">{index + 1}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-slate-900 truncate">
+                        {toll.nombre}
+                      </p>
+                      <p className="text-xs text-slate-500">{toll.tramo}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-mono font-semibold text-slate-800">
+                        {formatCurrency(toll.costo5EjesSencillo)}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleRemoveToll(toll.id)}
+                      className="p-1.5 hover:bg-red-100 rounded-md transition-colors opacity-0 group-hover:opacity-100"
+                    >
+                      <Trash2 className="h-4 w-4 text-red-500" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Cost Summary */}
+            {selectedTolls.length > 0 && (
+              <div className="mt-6 pt-4 border-t space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-slate-600">
+                    Costo Sencillo (Ida)
+                  </span>
+                  <span className="text-lg font-mono font-semibold text-slate-800">
+                    {formatCurrency(costoTotal)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-lg border border-emerald-200">
+                  <span className="text-sm font-medium text-emerald-800">
+                    Costo Total Estimado (Full)
+                  </span>
+                  <span className="text-xl font-mono font-bold text-emerald-700">
+                    {formatCurrency(costoTotalFull)}
+                  </span>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Saved Routes Table */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center justify-between text-slate-800">
-            <span className="flex items-center gap-2">
-              <Calculator className="h-5 w-5" />
-              Lista de Casetas
-            </span>
-            <span className="text-sm font-normal text-slate-500">
-              {selectedTolls.length} caseta{selectedTolls.length !== 1 ? "s" : ""}
-            </span>
-          </CardTitle>
+          <CardTitle>Tarifas Guardadas</CardTitle>
         </CardHeader>
         <CardContent>
-          {selectedTolls.length === 0 ? (
-            <div className="text-center py-12 text-slate-400">
-              <Route className="h-12 w-12 mx-auto mb-3 opacity-50" />
-              <p>No hay casetas agregadas</p>
-              <p className="text-sm">
-                Usa el botón "Agregar Caseta" para comenzar
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {selectedTolls.map((toll, index) => (
-                <div
-                  key={toll.id}
-                  className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border group"
-                >
-                  <div className="flex items-center gap-2 text-slate-400">
-                    <GripVertical className="h-4 w-4" />
-                    <span className="text-xs font-medium w-5">{index + 1}</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-slate-900 truncate">
-                      {toll.nombre}
-                    </p>
-                    <p className="text-xs text-slate-500">{toll.tramo}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-mono font-semibold text-slate-800">
-                      {tipoUnidad === "5ejes"
-                        ? formatCurrency(toll.costo5EjesSencillo)
-                        : formatCurrency(toll.costo9EjesSencillo)}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => handleRemoveToll(toll.id)}
-                    className="p-1.5 hover:bg-red-100 rounded-md transition-colors opacity-0 group-hover:opacity-100"
-                  >
-                    <Trash2 className="h-4 w-4 text-red-500" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Cost Summary */}
-          {selectedTolls.length > 0 && (
-            <div className="mt-6 pt-4 border-t space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-slate-600">
-                  Costo Sencillo (Ida)
-                </span>
-                <span className="text-lg font-mono font-semibold text-slate-800">
-                  {formatCurrency(costoTotal)}
-                </span>
-              </div>
-              <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-lg border border-emerald-200">
-                <span className="text-sm font-medium text-emerald-800">
-                  Costo Total Estimado (Full)
-                </span>
-                <span className="text-xl font-mono font-bold text-emerald-700">
-                  {formatCurrency(costoTotalFull)}
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 text-center">
-                El costo se actualiza automáticamente al cambiar el tipo de unidad
-              </p>
-            </div>
-          )}
+          <EnhancedDataTable
+            data={savedRoutes}
+            columns={columns}
+            searchPlaceholder="Buscar tarifas..."
+            onEdit={handleEditRoute}
+            onDelete={(route) => handleDeleteRoute(route.id)}
+          />
         </CardContent>
       </Card>
     </div>

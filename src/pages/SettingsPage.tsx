@@ -12,6 +12,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAdminActions } from '@/hooks/useAdminActions';
 import { cn } from '@/lib/utils';
 import { TiposUnidadConfig } from '@/features/configuracion/TiposUnidadConfig';
+import { RutasAutorizadasConfig } from '@/features/configuracion/RutasAutorizadasConfig';
 import {
   Building2,
   Settings2,
@@ -344,6 +345,7 @@ const SettingsPage = () => {
               {activeCategory === 'catalogos' && (
                 <div className="space-y-6">
                   <TiposUnidadConfig />
+                  <RutasAutorizadasConfig />
                 </div>
               )}
 
