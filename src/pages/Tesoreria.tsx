@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,14 +20,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -45,6 +37,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import { mockBankAccounts, BankAccount, bancos, bankLogos } from '@/data/tesoreriaData';
+import { EnhancedDataTable, ColumnDef } from '@/components/ui/enhanced-data-table';
 import { toast } from 'sonner';
 
 export default function Tesoreria() {
@@ -91,6 +84,111 @@ export default function Tesoreria() {
   const maskAccountNumber = (num: string) => {
     return `****${num.slice(-4)}`;
   };
+
+  // Define columns for EnhancedDataTable
+  const columns: ColumnDef<BankAccount>[] = useMemo(() => [
+    {
+      key: 'banco',
+      header: 'Banco',
+      render: (value, row) => (
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center text-xl">
+            {row.bancoLogo}
+          </div>
+          <span className="font-medium text-brand-dark">{value}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'numeroCuenta',
+      header: 'No. Cuenta',
+      render: (value) => (
+        <span className="font-mono text-sm text-muted-foreground">
+          {maskAccountNumber(value)}
+        </span>
+      ),
+    },
+    {
+      key: 'clabe',
+      header: 'CLABE',
+      render: (value) => (
+        <span className="font-mono text-xs text-muted-foreground">
+          {value.slice(0, 6)}...{value.slice(-4)}
+        </span>
+      ),
+    },
+    {
+      key: 'moneda',
+      header: 'Moneda',
+      type: 'status',
+      statusOptions: ['MXN', 'USD'],
+      render: (value) => (
+        <span
+          className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${
+            value === 'MXN'
+              ? 'bg-brand-green/10 text-brand-green'
+              : 'bg-status-info/10 text-status-info'
+          }`}
+        >
+          {value}
+        </span>
+      ),
+    },
+    {
+      key: 'alias',
+      header: 'Alias',
+      render: (value) => <span className="font-medium text-brand-dark">{value}</span>,
+    },
+    {
+      key: 'saldo',
+      header: 'Saldo',
+      type: 'number',
+      render: (value, row) => (
+        showBalances ? (
+          <span className={row.moneda === 'USD' ? 'text-status-info' : 'text-brand-dark'}>
+            ${(value || 0).toLocaleString(row.moneda === 'MXN' ? 'es-MX' : 'en-US')}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">••••••</span>
+        )
+      ),
+    },
+    {
+      key: 'estatus',
+      header: 'Estatus',
+      type: 'status',
+      statusOptions: ['activo', 'inactivo'],
+      render: (value) => (
+        <StatusBadge status={value === 'activo' ? 'success' : 'warning'}>
+          {value === 'activo' ? 'Activo' : 'Inactivo'}
+        </StatusBadge>
+      ),
+    },
+    {
+      key: 'id',
+      header: 'Acciones',
+      sortable: false,
+      render: () => (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-7 w-7">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="bg-card">
+            <DropdownMenuItem className="text-sm gap-2">
+              <Pencil className="h-3 w-3" />
+              Editar
+            </DropdownMenuItem>
+            <DropdownMenuItem className="text-sm gap-2 text-status-danger">
+              <Trash2 className="h-3 w-3" />
+              Eliminar
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ),
+    },
+  ], [showBalances]);
 
   return (
     <div className="p-6 space-y-6">
@@ -148,113 +246,34 @@ export default function Tesoreria() {
         </Card>
       </div>
 
-      {/* Bank Accounts Table */}
+      {/* Toolbar */}
+      <div className="flex items-center justify-end gap-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowBalances(!showBalances)}
+          className="h-8 gap-2 text-xs"
+        >
+          {showBalances ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+          {showBalances ? 'Ocultar' : 'Mostrar'} Saldos
+        </Button>
+        <Button
+          onClick={() => setIsAddModalOpen(true)}
+          className="h-8 gap-2 text-xs bg-brand-green hover:bg-brand-green/90 text-white"
+        >
+          <Plus className="h-3 w-3" />
+          Agregar Cuenta
+        </Button>
+      </div>
+
+      {/* Enhanced Data Table */}
       <Card>
-        <CardHeader className="py-3 flex flex-row items-center justify-between">
-          <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            Catálogo de Cuentas Bancarias
-          </CardTitle>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowBalances(!showBalances)}
-              className="h-8 gap-2 text-xs"
-            >
-              {showBalances ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-              {showBalances ? 'Ocultar' : 'Mostrar'} Saldos
-            </Button>
-            <Button
-              onClick={() => setIsAddModalOpen(true)}
-              className="h-8 gap-2 text-xs bg-brand-green hover:bg-brand-green/90 text-white"
-            >
-              <Plus className="h-3 w-3" />
-              Agregar Cuenta
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table className="table-dense">
-            <TableHeader>
-              <TableRow className="bg-table-header">
-                <TableHead className="w-[200px]">Banco</TableHead>
-                <TableHead>No. Cuenta</TableHead>
-                <TableHead>CLABE</TableHead>
-                <TableHead className="text-center">Moneda</TableHead>
-                <TableHead>Alias</TableHead>
-                <TableHead className="text-right">Saldo</TableHead>
-                <TableHead className="text-center">Estatus</TableHead>
-                <TableHead className="w-[60px] text-center">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {accounts.map((account) => (
-                <TableRow key={account.id} className="hover:bg-muted/50">
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center text-xl">
-                        {account.bancoLogo}
-                      </div>
-                      <span className="font-medium text-brand-dark">{account.banco}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-mono text-sm text-muted-foreground">
-                    {maskAccountNumber(account.numeroCuenta)}
-                  </TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground">
-                    {account.clabe.slice(0, 6)}...{account.clabe.slice(-4)}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <span
-                      className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${
-                        account.moneda === 'MXN'
-                          ? 'bg-brand-green/10 text-brand-green'
-                          : 'bg-status-info/10 text-status-info'
-                      }`}
-                    >
-                      {account.moneda}
-                    </span>
-                  </TableCell>
-                  <TableCell className="font-medium text-brand-dark">
-                    {account.alias}
-                  </TableCell>
-                  <TableCell className="text-right font-medium">
-                    {showBalances ? (
-                      <span className={account.moneda === 'USD' ? 'text-status-info' : 'text-brand-dark'}>
-                        ${(account.saldo || 0).toLocaleString(account.moneda === 'MXN' ? 'es-MX' : 'en-US')}
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground">••••••</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <StatusBadge status={account.estatus === 'activo' ? 'success' : 'warning'}>
-                      {account.estatus === 'activo' ? 'Activo' : 'Inactivo'}
-                    </StatusBadge>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="bg-card">
-                        <DropdownMenuItem className="text-sm gap-2">
-                          <Pencil className="h-3 w-3" />
-                          Editar
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="text-sm gap-2 text-status-danger">
-                          <Trash2 className="h-3 w-3" />
-                          Eliminar
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+        <CardContent className="pt-6">
+          <EnhancedDataTable
+            data={accounts}
+            columns={columns}
+            exportFileName="cuentas_bancarias"
+          />
         </CardContent>
       </Card>
 

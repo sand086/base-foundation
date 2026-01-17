@@ -1,7 +1,9 @@
+import { useMemo } from "react";
 import { Truck, AlertTriangle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { mockUnit } from "@/data/mockData";
+import { mockUnit, Tire } from "@/data/mockData";
+import { EnhancedDataTable, ColumnDef } from "@/components/ui/enhanced-data-table";
 
 const getTireColor = (depth: number) => {
   if (depth < 5) return { bg: "bg-status-danger", text: "text-white", label: "Crítico" };
@@ -13,6 +15,50 @@ export default function FlotaLlantas() {
   const criticalTires = mockUnit.tires.filter((t) => t.profundidad < 5);
   const warningTires = mockUnit.tires.filter((t) => t.profundidad >= 5 && t.profundidad <= 10);
   const goodTires = mockUnit.tires.filter((t) => t.profundidad > 10);
+
+  // Define columns for EnhancedDataTable
+  const columns: ColumnDef<Tire>[] = useMemo(() => [
+    {
+      key: 'position',
+      header: 'Posición',
+    },
+    {
+      key: 'id',
+      header: 'ID Llanta',
+      render: (value) => <span className="font-mono">{value}</span>,
+    },
+    {
+      key: 'marca',
+      header: 'Marca',
+    },
+    {
+      key: 'profundidad',
+      header: 'Profundidad',
+      type: 'number',
+      render: (value) => <span className="font-bold">{value} mm</span>,
+    },
+    {
+      key: 'profundidad',
+      header: 'Semáforo',
+      sortable: false,
+      render: (value) => {
+        const color = getTireColor(value);
+        return <Badge className={`${color.bg} ${color.text}`}>{color.label}</Badge>;
+      },
+    },
+    {
+      key: 'estado',
+      header: 'Estado',
+      type: 'status',
+      statusOptions: ['normal', 'ponchada', 'desgastada'],
+      render: (value) => <span className="capitalize">{value}</span>,
+    },
+    {
+      key: 'marcajeInterno',
+      header: 'Marcaje',
+      render: (value) => <span className="font-mono text-xs">{value}</span>,
+    },
+  ], []);
 
   return (
     <div className="space-y-6">
@@ -109,39 +155,15 @@ export default function FlotaLlantas() {
         </CardContent>
       </Card>
 
-      {/* Tire Details Table */}
+      {/* Enhanced Tire Details Table */}
       <Card>
         <CardHeader><CardTitle>Detalle de Llantas</CardTitle></CardHeader>
         <CardContent>
-          <table className="w-full table-dense">
-            <thead>
-              <tr className="border-b text-left text-sm font-medium text-muted-foreground">
-                <th className="py-3 px-3">Posición</th>
-                <th className="py-3 px-3">ID Llanta</th>
-                <th className="py-3 px-3">Marca</th>
-                <th className="py-3 px-3">Profundidad</th>
-                <th className="py-3 px-3">Semáforo</th>
-                <th className="py-3 px-3">Estado</th>
-                <th className="py-3 px-3">Marcaje</th>
-              </tr>
-            </thead>
-            <tbody>
-              {mockUnit.tires.map((tire) => {
-                const color = getTireColor(tire.profundidad);
-                return (
-                  <tr key={tire.id} className="border-b hover:bg-muted/50">
-                    <td className="py-3 px-3">{tire.position}</td>
-                    <td className="py-3 px-3 font-mono">{tire.id}</td>
-                    <td className="py-3 px-3">{tire.marca}</td>
-                    <td className="py-3 px-3 font-bold">{tire.profundidad} mm</td>
-                    <td className="py-3 px-3"><Badge className={`${color.bg} ${color.text}`}>{color.label}</Badge></td>
-                    <td className="py-3 px-3 capitalize">{tire.estado}</td>
-                    <td className="py-3 px-3 font-mono text-xs">{tire.marcajeInterno}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <EnhancedDataTable
+            data={mockUnit.tires}
+            columns={columns}
+            exportFileName="llantas_detalle"
+          />
         </CardContent>
       </Card>
     </div>
