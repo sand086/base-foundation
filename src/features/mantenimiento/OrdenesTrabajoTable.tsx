@@ -1,6 +1,5 @@
-import { useState } from "react";
-import { Search, Plus, Wrench, Clock, CheckCircle, Eye, Edit, Trash2, MoreHorizontal } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { useState, useMemo } from "react";
+import { Plus, Wrench, Clock, CheckCircle, Eye, Edit, Trash2, MoreHorizontal } from "lucide-react";
 import { ActionButton } from "@/components/ui/action-button";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -30,20 +29,12 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import {
-  DataTable,
-  DataTableHeader,
-  DataTableBody,
-  DataTableRow,
-  DataTableHead,
-  DataTableCell,
-} from "@/components/ui/data-table";
+import { EnhancedDataTable, ColumnDef } from "@/components/ui/enhanced-data-table";
 import { mockWorkOrders, WorkOrder } from "@/data/mantenimientoData";
 import { WorkOrderModal } from "./WorkOrderModal";
 import { toast } from "sonner";
 
 export const OrdenesTrabajoTable = () => {
-  const [searchTerm, setSearchTerm] = useState("");
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>(mockWorkOrders);
   const [isModalOpen, setIsModalOpen] = useState(false);
   
@@ -51,13 +42,6 @@ export const OrdenesTrabajoTable = () => {
   const [orderToView, setOrderToView] = useState<WorkOrder | null>(null);
   const [orderToEdit, setOrderToEdit] = useState<WorkOrder | null>(null);
   const [orderToDelete, setOrderToDelete] = useState<string | null>(null);
-
-  const filteredOrders = workOrders.filter(
-    (order) =>
-      order.folio.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.unidadNumero.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.mecanicoNombre.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   const getStatusBadge = (status: WorkOrder["status"]) => {
     switch (status) {
@@ -100,19 +84,133 @@ export const OrdenesTrabajoTable = () => {
     setIsModalOpen(true);
   };
 
+  // Define columns for EnhancedDataTable
+  const columns: ColumnDef<WorkOrder>[] = useMemo(() => [
+    {
+      key: 'status_icon',
+      header: '',
+      sortable: false,
+      width: 'w-12',
+      render: (_, order) => getStatusIcon(order.status),
+    },
+    {
+      key: 'folio',
+      header: 'Folio',
+      sortable: true,
+      render: (value) => (
+        <span className="font-mono text-sm font-medium text-foreground">{value}</span>
+      ),
+    },
+    {
+      key: 'unidadNumero',
+      header: 'Unidad',
+      sortable: true,
+      render: (value) => (
+        <span className="font-semibold text-foreground">{value}</span>
+      ),
+    },
+    {
+      key: 'mecanicoNombre',
+      header: 'Mecánico Asignado',
+      sortable: true,
+      render: (value) => (
+        <span className="text-foreground">{value}</span>
+      ),
+    },
+    {
+      key: 'descripcionProblema',
+      header: 'Descripción',
+      width: 'min-w-[200px]',
+      sortable: true,
+      render: (value) => (
+        <span className="text-muted-foreground text-sm">{value}</span>
+      ),
+    },
+    {
+      key: 'fechaApertura',
+      header: 'Fecha Apertura',
+      type: 'date',
+      sortable: true,
+      render: (value) => (
+        <span className="text-muted-foreground">{value}</span>
+      ),
+    },
+    {
+      key: 'fechaCierre',
+      header: 'Fecha Cierre',
+      type: 'date',
+      sortable: true,
+      render: (value) => (
+        <span className="text-muted-foreground">{value || "—"}</span>
+      ),
+    },
+    {
+      key: 'partes',
+      header: 'Partes',
+      sortable: false,
+      render: (value: WorkOrder['partes']) => (
+        value.length > 0 ? (
+          <span className="text-sm text-foreground">
+            {value.length} refacción{value.length !== 1 ? "es" : ""}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Estatus',
+      type: 'status',
+      statusOptions: ['abierta', 'en_progreso', 'cerrada'],
+      sortable: true,
+      render: (value) => getStatusBadge(value as WorkOrder["status"]),
+    },
+    {
+      key: 'actions',
+      header: 'Acciones',
+      sortable: false,
+      width: 'w-[80px]',
+      render: (_, order) => (
+        <div className="flex justify-center" onClick={(e) => e.stopPropagation()}>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="bg-popover">
+              <DropdownMenuItem className="gap-2" onClick={() => setOrderToView(order)}>
+                <Eye className="h-4 w-4" />
+                Ver detalles
+              </DropdownMenuItem>
+              <DropdownMenuItem className="gap-2" onClick={() => handleEdit(order)}>
+                <Edit className="h-4 w-4" />
+                Editar
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem 
+                className="gap-2 text-destructive focus:text-destructive focus:bg-destructive/10"
+                onClick={() => setOrderToDelete(order.id)}
+              >
+                <Trash2 className="h-4 w-4" />
+                Eliminar
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ),
+    },
+  ], []);
+
   return (
     <div className="space-y-4">
-      {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-4 justify-between">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <Input
-            placeholder="Buscar folio, unidad o mecánico..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
-        </div>
+      {/* Toolbar Button */}
+      <div className="flex justify-end">
         <ActionButton onClick={() => {
           setOrderToEdit(null);
           setIsModalOpen(true);
@@ -122,91 +220,12 @@ export const OrdenesTrabajoTable = () => {
         </ActionButton>
       </div>
 
-      {/* Table */}
-      <DataTable>
-        <DataTableHeader>
-          <DataTableRow>
-            <DataTableHead className="w-12"></DataTableHead>
-            <DataTableHead>Folio</DataTableHead>
-            <DataTableHead>Unidad</DataTableHead>
-            <DataTableHead>Mecánico Asignado</DataTableHead>
-            <DataTableHead className="min-w-[200px]">Descripción</DataTableHead>
-            <DataTableHead>Fecha Apertura</DataTableHead>
-            <DataTableHead>Fecha Cierre</DataTableHead>
-            <DataTableHead>Partes</DataTableHead>
-            <DataTableHead>Estatus</DataTableHead>
-            <DataTableHead className="text-center">Acciones</DataTableHead>
-          </DataTableRow>
-        </DataTableHeader>
-        <DataTableBody>
-          {filteredOrders.map((order) => (
-            <DataTableRow key={order.id} className="group">
-              <DataTableCell>{getStatusIcon(order.status)}</DataTableCell>
-              <DataTableCell className="font-mono text-sm font-medium text-slate-800">
-                {order.folio}
-              </DataTableCell>
-              <DataTableCell className="font-semibold text-slate-800">
-                {order.unidadNumero}
-              </DataTableCell>
-              <DataTableCell className="text-slate-700">
-                {order.mecanicoNombre}
-              </DataTableCell>
-              <DataTableCell className="text-slate-600 text-sm">
-                {order.descripcionProblema}
-              </DataTableCell>
-              <DataTableCell className="text-slate-600">
-                {order.fechaApertura}
-              </DataTableCell>
-              <DataTableCell className="text-slate-600">
-                {order.fechaCierre || "—"}
-              </DataTableCell>
-              <DataTableCell className="text-slate-600">
-                {order.partes.length > 0 ? (
-                  <span className="text-sm">
-                    {order.partes.length} refacción{order.partes.length !== 1 ? "es" : ""}
-                  </span>
-                ) : (
-                  <span className="text-slate-400">—</span>
-                )}
-              </DataTableCell>
-              <DataTableCell>{getStatusBadge(order.status)}</DataTableCell>
-              <DataTableCell>
-                <div className="flex justify-center">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="bg-popover">
-                      <DropdownMenuItem className="gap-2" onClick={() => setOrderToView(order)}>
-                        <Eye className="h-4 w-4" />
-                        Ver detalles
-                      </DropdownMenuItem>
-                      <DropdownMenuItem className="gap-2" onClick={() => handleEdit(order)}>
-                        <Edit className="h-4 w-4" />
-                        Editar
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem 
-                        className="gap-2 text-destructive focus:text-destructive focus:bg-destructive/10"
-                        onClick={() => setOrderToDelete(order.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        Eliminar
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </DataTableCell>
-            </DataTableRow>
-          ))}
-        </DataTableBody>
-      </DataTable>
+      {/* EnhancedDataTable */}
+      <EnhancedDataTable
+        data={workOrders}
+        columns={columns}
+        exportFileName="ordenes-trabajo"
+      />
 
       {/* Work Order Modal */}
       <WorkOrderModal 
