@@ -11,6 +11,7 @@ import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAdminActions } from '@/hooks/useAdminActions';
 import { cn } from '@/lib/utils';
+import { TiposUnidadConfig } from '@/features/configuracion/TiposUnidadConfig';
 import {
   Building2,
   Settings2,
@@ -32,14 +33,16 @@ import {
   AlertTriangle,
   Server,
   Key,
+  Truck,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-type ConfigCategory = 'empresa' | 'operacion' | 'notificaciones' | 'integraciones';
+type ConfigCategory = 'empresa' | 'operacion' | 'notificaciones' | 'integraciones' | 'catalogos';
 
 const categories: { id: ConfigCategory; label: string; icon: React.ElementType; description: string }[] = [
   { id: 'empresa', label: 'Empresa', icon: Building2, description: 'Datos fiscales y corporativos' },
   { id: 'operacion', label: 'Operación', icon: Settings2, description: 'Parámetros operativos del sistema' },
+  { id: 'catalogos', label: 'Catálogos', icon: Truck, description: 'Tipos de unidad y configuraciones' },
   { id: 'notificaciones', label: 'Notificaciones', icon: Bell, description: 'Canales y eventos de alerta' },
   { id: 'integraciones', label: 'Integraciones', icon: Puzzle, description: 'APIs y servicios externos' },
 ];
@@ -334,6 +337,13 @@ const SettingsPage = () => {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* Catálogos Section */}
+              {activeCategory === 'catalogos' && (
+                <div className="space-y-6">
+                  <TiposUnidadConfig />
                 </div>
               )}
 
