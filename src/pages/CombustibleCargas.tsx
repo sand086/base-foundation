@@ -20,6 +20,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   Fuel,
   Plus,
   Search,
@@ -31,10 +37,14 @@ import {
   TrendingUp,
   Gauge,
   Droplets,
+  MoreHorizontal,
+  Eye,
+  Edit,
 } from 'lucide-react';
 import { mockCargasCombustible, unidadesCombustible, operadoresCombustible, type CargaCombustible, type TipoCombustible } from '@/data/combustibleData';
 import { AddTicketModal, type TicketFormData } from '@/features/combustible/AddTicketModal';
 import { ViewCargaModal } from '@/features/combustible/ViewCargaModal';
+import { EditCargaModal } from '@/features/combustible/EditCargaModal';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -42,6 +52,7 @@ const CombustibleCargas = () => {
   const [cargas, setCargas] = useState<CargaCombustible[]>(mockCargasCombustible);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [cargaToView, setCargaToView] = useState<CargaCombustible | null>(null);
+  const [cargaToEdit, setCargaToEdit] = useState<CargaCombustible | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [fuelTypeFilter, setFuelTypeFilter] = useState<'all' | TipoCombustible>('all');
   const [isLoading, setIsLoading] = useState(true);
@@ -106,6 +117,10 @@ const CombustibleCargas = () => {
     toast.success('Ticket registrado', {
       description: `Carga de ${data.litros}L de ${data.tipoCombustible === 'diesel' ? 'Diesel' : 'Urea'} para ${unit.numero} registrada correctamente.`,
     });
+  };
+
+  const handleEditCarga = (updatedCarga: CargaCombustible) => {
+    setCargas(prev => prev.map(c => c.id === updatedCarga.id ? updatedCarga : c));
   };
 
   const FuelTypeBadge = ({ type }: { type: TipoCombustible }) => (
@@ -285,6 +300,7 @@ const CombustibleCargas = () => {
                   <TableHead className="text-primary-foreground font-semibold text-right">Total</TableHead>
                   <TableHead className="text-primary-foreground font-semibold text-right">Odómetro</TableHead>
                   <TableHead className="text-primary-foreground font-semibold text-center">Evidencia</TableHead>
+                  <TableHead className="text-primary-foreground font-semibold text-center w-[60px]">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -377,6 +393,25 @@ const CombustibleCargas = () => {
                           </div>
                         )}
                       </TableCell>
+                      <TableCell className="text-center">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-7 w-7">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => setCargaToView(carga)}>
+                              <Eye className="h-4 w-4 mr-2" />
+                              Ver Detalle
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setCargaToEdit(carga)}>
+                              <Edit className="h-4 w-4 mr-2" />
+                              Editar
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
                     </TableRow>
                   ))
                 )}
@@ -417,6 +452,13 @@ const CombustibleCargas = () => {
         open={!!cargaToView}
         onOpenChange={() => setCargaToView(null)}
         carga={cargaToView}
+      />
+
+      <EditCargaModal
+        open={!!cargaToEdit}
+        onOpenChange={() => setCargaToEdit(null)}
+        carga={cargaToEdit}
+        onSave={handleEditCarga}
       />
 
       {/* Animation styles */}
