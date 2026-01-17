@@ -2,16 +2,8 @@ import { useState } from 'react';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,12 +21,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { EnhancedDataTable, ColumnDef } from '@/components/ui/enhanced-data-table';
 import { useAdminActions } from '@/hooks/useAdminActions';
 import { roles } from '@/data/usuariosData';
 import { cn } from '@/lib/utils';
 import {
   Users,
-  Search,
   MoreHorizontal,
   Plus,
   Edit,
@@ -44,18 +36,29 @@ import {
   ShieldCheck,
   ShieldOff,
   Clock,
-  Filter,
   Mail,
   Phone,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { AddUserModal, UserFormData } from '@/features/usuarios/AddUserModal';
 import { EditUserModal, UserData } from '@/features/usuarios/EditUserModal';
+// Define a type for user display
+interface UserDisplay {
+  id: string;
+  nombre: string;
+  apellidos: string;
+  email: string;
+  telefono: string;
+  puesto: string;
+  rol: string;
+  estado: string;
+  avatar?: string;
+  twoFactorEnabled: boolean;
+  ultimoAcceso: string;
+}
+
 const UsuariosPage = () => {
   const { users, isLoading, resetUserPassword, toggleUserStatus } = useAdminActions();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterRol, setFilterRol] = useState<string>('all');
-  const [filterEstado, setFilterEstado] = useState<string>('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedUserForEdit, setSelectedUserForEdit] = useState<UserData | null>(null);
@@ -64,17 +67,6 @@ const UsuariosPage = () => {
   const [showResetPasswordDialog, setShowResetPasswordDialog] = useState(false);
   const [showToggleStatusDialog, setShowToggleStatusDialog] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-
-  // Filter users
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = 
-      user.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.apellidos.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRol = filterRol === 'all' || user.rol === filterRol;
-    const matchesEstado = filterEstado === 'all' || user.estado === filterEstado;
-    return matchesSearch && matchesRol && matchesEstado;
-  });
 
   const selectedUser = users.find(u => u.id === selectedUserId);
 
@@ -131,6 +123,153 @@ const UsuariosPage = () => {
     });
   };
 
+  // Define columns for EnhancedDataTable
+  const columns: ColumnDef<UserDisplay>[] = [
+    {
+      key: 'nombre',
+      header: 'Usuario',
+      render: (_, user) => (
+        <div className="flex items-center gap-3">
+          <Avatar className="h-9 w-9">
+            <AvatarImage src={user.avatar} />
+            <AvatarFallback className="text-xs bg-primary text-primary-foreground">
+              {user.nombre.charAt(0)}{user.apellidos.charAt(0)}
+            </AvatarFallback>
+          </Avatar>
+          <div>
+            <p className="font-medium text-sm">{user.nombre} {user.apellidos}</p>
+            <p className="text-xs text-muted-foreground">{user.puesto}</p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'email',
+      header: 'Contacto',
+      render: (_, user) => (
+        <div className="space-y-1">
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Mail className="h-3 w-3" />
+            {user.email}
+          </div>
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Phone className="h-3 w-3" />
+            {user.telefono}
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'rol',
+      header: 'Rol',
+      type: 'status',
+      statusOptions: roles.map(r => r.id),
+      render: (rol) => (
+        <Badge variant="outline" className={cn("text-xs", getRoleBadgeColor(rol))}>
+          {getRoleLabel(rol)}
+        </Badge>
+      ),
+    },
+    {
+      key: 'estado',
+      header: 'Estado',
+      type: 'status',
+      statusOptions: ['activo', 'inactivo', 'bloqueado'],
+      render: (estado) => (
+        <Badge variant="outline" className={cn("text-xs capitalize", getStatusBadgeColor(estado))}>
+          {estado}
+        </Badge>
+      ),
+    },
+    {
+      key: 'twoFactorEnabled',
+      header: '2FA',
+      render: (enabled) => (
+        enabled ? (
+          <ShieldCheck className="h-5 w-5 text-status-success" />
+        ) : (
+          <ShieldOff className="h-5 w-5 text-muted-foreground" />
+        )
+      ),
+    },
+    {
+      key: 'ultimoAcceso',
+      header: 'Último Acceso',
+      type: 'date',
+      render: (value) => (
+        <div className="flex items-center gap-1 text-sm text-muted-foreground">
+          <Clock className="h-4 w-4" />
+          {value}
+        </div>
+      ),
+    },
+    {
+      key: 'acciones',
+      header: 'Acciones',
+      sortable: false,
+      render: (_, user) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onClick={() => {
+                setSelectedUserForEdit({
+                  id: user.id,
+                  nombre: user.nombre,
+                  apellidos: user.apellidos,
+                  email: user.email,
+                  telefono: user.telefono,
+                  puesto: user.puesto,
+                  rol: user.rol,
+                  estado: user.estado,
+                  avatar: user.avatar,
+                  twoFactorEnabled: user.twoFactorEnabled,
+                });
+                setIsEditModalOpen(true);
+              }}
+            >
+              <Edit className="mr-2 h-4 w-4" />
+              Editar Usuario
+            </DropdownMenuItem>
+            <DropdownMenuItem 
+              onClick={() => {
+                setSelectedUserId(user.id);
+                setShowResetPasswordDialog(true);
+              }}
+            >
+              <Key className="mr-2 h-4 w-4" />
+              Resetear Contraseña
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem 
+              onClick={() => {
+                setSelectedUserId(user.id);
+                setShowToggleStatusDialog(true);
+              }}
+              className={user.estado === 'activo' ? 'text-destructive' : 'text-status-success'}
+            >
+              {user.estado === 'activo' ? (
+                <>
+                  <UserX className="mr-2 h-4 w-4" />
+                  Desactivar
+                </>
+              ) : (
+                <>
+                  <UserCheck className="mr-2 h-4 w-4" />
+                  Activar
+                </>
+              )}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ),
+    },
+  ];
+
   return (
     <div className="p-6 space-y-6">
       <PageHeader
@@ -158,176 +297,11 @@ const UsuariosPage = () => {
           </div>
         </CardHeader>
         <CardContent>
-          {/* Filters */}
-          <div className="flex items-center gap-4 mb-4">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar usuario..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-            <Select value={filterRol} onValueChange={setFilterRol}>
-              <SelectTrigger className="w-40">
-                <Filter className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="Rol" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos los roles</SelectItem>
-                {roles.map(rol => (
-                  <SelectItem key={rol.id} value={rol.id}>{rol.nombre}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={filterEstado} onValueChange={setFilterEstado}>
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="Estado" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="activo">Activos</SelectItem>
-                <SelectItem value="inactivo">Inactivos</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Users Table */}
-          <div className="border rounded-lg overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-muted">
-                <tr>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Usuario</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Contacto</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Rol</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Estado</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">2FA</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Último Acceso</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {filteredUsers.map((user) => (
-                  <tr key={user.id} className="hover:bg-muted/50 transition-colors">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-9 w-9">
-                          <AvatarImage src={user.avatar} />
-                          <AvatarFallback className="text-xs bg-primary text-primary-foreground">
-                            {user.nombre.charAt(0)}{user.apellidos.charAt(0)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="font-medium text-sm">{user.nombre} {user.apellidos}</p>
-                          <p className="text-xs text-muted-foreground">{user.puesto}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Mail className="h-3 w-3" />
-                          {user.email}
-                        </div>
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Phone className="h-3 w-3" />
-                          {user.telefono}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge variant="outline" className={cn("text-xs", getRoleBadgeColor(user.rol))}>
-                        {getRoleLabel(user.rol)}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge variant="outline" className={cn("text-xs capitalize", getStatusBadgeColor(user.estado))}>
-                        {user.estado}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3">
-                      {user.twoFactorEnabled ? (
-                        <ShieldCheck className="h-5 w-5 text-status-success" />
-                      ) : (
-                        <ShieldOff className="h-5 w-5 text-muted-foreground" />
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                        <Clock className="h-4 w-4" />
-                        {user.ultimoAcceso}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={() => {
-                              setSelectedUserForEdit({
-                                id: user.id,
-                                nombre: user.nombre,
-                                apellidos: user.apellidos,
-                                email: user.email,
-                                telefono: user.telefono,
-                                puesto: user.puesto,
-                                rol: user.rol,
-                                estado: user.estado,
-                                avatar: user.avatar,
-                                twoFactorEnabled: user.twoFactorEnabled,
-                              });
-                              setIsEditModalOpen(true);
-                            }}
-                          >
-                            <Edit className="mr-2 h-4 w-4" />
-                            Editar Usuario
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => {
-                              setSelectedUserId(user.id);
-                              setShowResetPasswordDialog(true);
-                            }}
-                          >
-                            <Key className="mr-2 h-4 w-4" />
-                            Resetear Contraseña
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem 
-                            onClick={() => {
-                              setSelectedUserId(user.id);
-                              setShowToggleStatusDialog(true);
-                            }}
-                            className={user.estado === 'activo' ? 'text-destructive' : 'text-status-success'}
-                          >
-                            {user.estado === 'activo' ? (
-                              <>
-                                <UserX className="mr-2 h-4 w-4" />
-                                Desactivar
-                              </>
-                            ) : (
-                              <>
-                                <UserCheck className="mr-2 h-4 w-4" />
-                                Activar
-                              </>
-                            )}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="flex items-center justify-between mt-4 text-sm text-muted-foreground">
-            <p>Mostrando {filteredUsers.length} de {users.length} usuarios</p>
-          </div>
+          <EnhancedDataTable
+            data={users as UserDisplay[]}
+            columns={columns}
+            exportFileName="usuarios"
+          />
         </CardContent>
       </Card>
 
