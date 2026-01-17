@@ -1,25 +1,18 @@
-import { useState } from "react";
-import { Download, FileText, Search, Eye, MoreHorizontal, AlertCircle } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useMemo } from "react";
+import { Download, AlertCircle, Eye, MoreHorizontal } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ActionButton } from "@/components/ui/action-button";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusBadge, StatusType } from "@/components/ui/status-badge";
-import { mockInvoices, dashboardKPIs } from "@/data/mockData";
+import { mockInvoices, dashboardKPIs, Invoice } from "@/data/mockData";
+import { EnhancedDataTable, ColumnDef } from "@/components/ui/enhanced-data-table";
 import { toast } from "@/hooks/use-toast";
 
 export default function CuentasPorCobrar() {
-  const [filterStatus, setFilterStatus] = useState<string>("all");
-  
   const vencidas = mockInvoices.filter((i) => i.estatus === "vencida");
   const porVencer = mockInvoices.filter((i) => i.estatus === "por_vencer");
   const pagadas = mockInvoices.filter((i) => i.estatus === "pagada");
-
-  const filteredInvoices = filterStatus === "all" 
-    ? mockInvoices 
-    : mockInvoices.filter(i => i.estatus === filterStatus);
 
   const handleDownloadPDF = () => {
     toast({
@@ -53,6 +46,90 @@ export default function CuentasPorCobrar() {
     }
     return <span className="text-muted-foreground">{diff} días</span>;
   };
+
+  // Define columns for EnhancedDataTable
+  const columns: ColumnDef<Invoice>[] = useMemo(() => [
+    {
+      key: 'folio',
+      header: 'Folio',
+      render: (value, row) => (
+        <span className={`font-mono text-sm font-medium ${row.estatus === 'vencida' ? 'text-red-700' : 'text-slate-700'}`}>
+          {value}
+        </span>
+      ),
+    },
+    {
+      key: 'cliente',
+      header: 'Cliente',
+      render: (value, row) => (
+        <span className={`text-sm ${row.estatus === 'vencida' ? 'text-red-700' : 'text-slate-700'}`}>
+          {value}
+        </span>
+      ),
+    },
+    {
+      key: 'monto',
+      header: 'Monto',
+      type: 'number',
+      render: (value, row) => (
+        <span className={`text-right text-sm font-bold ${row.estatus === 'vencida' ? 'text-red-700' : 'text-slate-700'}`}>
+          ${value.toLocaleString()}
+        </span>
+      ),
+    },
+    {
+      key: 'fechaEmision',
+      header: 'Emisión',
+      type: 'date',
+      render: (value) => (
+        <span className="text-sm text-muted-foreground">
+          {new Date(value).toLocaleDateString('es-MX')}
+        </span>
+      ),
+    },
+    {
+      key: 'fechaVencimiento',
+      header: 'Vencimiento',
+      type: 'date',
+      render: (value, row) => (
+        <span className={`text-sm ${row.estatus === 'vencida' ? 'text-red-700 font-medium' : 'text-slate-700'}`}>
+          {new Date(value).toLocaleDateString('es-MX')}
+        </span>
+      ),
+    },
+    {
+      key: 'fechaVencimiento',
+      header: 'Antigüedad',
+      sortable: false,
+      render: (value, row) => (
+        <div className="text-center text-sm">
+          {calculateAntiguedad(value, row.diasVencida)}
+        </div>
+      ),
+    },
+    {
+      key: 'estatus',
+      header: 'Estatus',
+      type: 'status',
+      statusOptions: ['vencida', 'por_vencer', 'pagada'],
+      render: (value) => getStatusBadge(value),
+    },
+    {
+      key: 'id',
+      header: 'Acciones',
+      sortable: false,
+      render: () => (
+        <div className="flex gap-1">
+          <Button variant="ghost" size="sm">
+            <Eye className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="sm">
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </div>
+      ),
+    },
+  ], []);
 
   return (
     <div className="space-y-6">
@@ -111,97 +188,14 @@ export default function CuentasPorCobrar() {
         </Card>
       </div>
 
-      {/* Search and Filters */}
+      {/* Enhanced Data Table */}
       <Card>
         <CardContent className="pt-6">
-          <div className="flex gap-4 flex-wrap">
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input placeholder="Buscar por folio, cliente..." className="pl-10" />
-            </div>
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filtrar por estatus" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="vencida">Vencidas</SelectItem>
-                <SelectItem value="por_vencer">Por Vencer</SelectItem>
-                <SelectItem value="pagada">Pagadas</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Invoices Table */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base font-semibold text-slate-700">
-            <FileText className="h-5 w-5" /> Listado de Facturas
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-gray-50 border-b text-left">
-                  <th className="py-2 px-3 text-xs font-semibold uppercase text-slate-600 tracking-wider">Folio</th>
-                  <th className="py-2 px-3 text-xs font-semibold uppercase text-slate-600 tracking-wider">Cliente</th>
-                  <th className="py-2 px-3 text-xs font-semibold uppercase text-slate-600 tracking-wider text-right">Monto</th>
-                  <th className="py-2 px-3 text-xs font-semibold uppercase text-slate-600 tracking-wider">Emisión</th>
-                  <th className="py-2 px-3 text-xs font-semibold uppercase text-slate-600 tracking-wider">Vencimiento</th>
-                  <th className="py-2 px-3 text-xs font-semibold uppercase text-slate-600 tracking-wider text-center">Antigüedad</th>
-                  <th className="py-2 px-3 text-xs font-semibold uppercase text-slate-600 tracking-wider">Estatus</th>
-                  <th className="py-2 px-3 text-xs font-semibold uppercase text-slate-600 tracking-wider">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredInvoices.map((inv) => (
-                  <tr 
-                    key={inv.id} 
-                    className={`border-b transition-colors ${
-                      inv.estatus === 'vencida' 
-                        ? 'bg-red-50' 
-                        : 'hover:bg-muted/50'
-                    }`}
-                  >
-                    <td className={`py-2 px-3 font-mono text-sm font-medium ${inv.estatus === 'vencida' ? 'text-red-700' : 'text-slate-700'}`}>
-                      {inv.folio}
-                    </td>
-                    <td className={`py-2 px-3 text-sm ${inv.estatus === 'vencida' ? 'text-red-700' : 'text-slate-700'}`}>
-                      {inv.cliente}
-                    </td>
-                    <td className={`py-2 px-3 text-right text-sm font-bold ${inv.estatus === 'vencida' ? 'text-red-700' : 'text-slate-700'}`}>
-                      ${inv.monto.toLocaleString()}
-                    </td>
-                    <td className="py-2 px-3 text-sm text-muted-foreground">
-                      {new Date(inv.fechaEmision).toLocaleDateString('es-MX')}
-                    </td>
-                    <td className="py-2 px-3 text-sm text-slate-700">
-                      {new Date(inv.fechaVencimiento).toLocaleDateString('es-MX')}
-                    </td>
-                    <td className="py-2 px-3 text-center text-sm">
-                      {calculateAntiguedad(inv.fechaVencimiento, inv.diasVencida)}
-                    </td>
-                    <td className="py-2 px-3">
-                      {getStatusBadge(inv.estatus)}
-                    </td>
-                    <td className="py-2 px-3">
-                      <div className="flex gap-1">
-                        <Button variant="ghost" size="sm">
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <EnhancedDataTable
+            data={mockInvoices}
+            columns={columns}
+            exportFileName="cuentas_por_cobrar"
+          />
         </CardContent>
       </Card>
 
