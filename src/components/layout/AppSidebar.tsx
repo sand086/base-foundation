@@ -67,10 +67,18 @@ const menuItems: MenuItem[] = [
   { title: "Proveedores", icon: Briefcase, path: "/proveedores" },
   { title: "Cobranza", icon: DollarSign, path: "/cuentas-por-cobrar" },
   { title: "Tesorería", icon: Landmark, path: "/tesoreria" },
-  { title: "Usuarios", icon: Shield, path: "/usuarios" },
-  { title: "Notificaciones", icon: Bell, path: "/notificaciones" },
-  { title: "Cargas Masivas", icon: Upload, path: "/cargas-masivas" },
-  { title: "Configuración", icon: Settings, path: "/configuracion" },
+  {
+    title: "Administración",
+    icon: Settings,
+    children: [
+      { title: "Usuarios", path: "/usuarios" },
+      { title: "Roles y Permisos", path: "/roles-permisos" },
+      { title: "Mi Perfil", path: "/perfil" },
+      { title: "Configuración", path: "/configuracion" },
+      { title: "Notificaciones", path: "/notificaciones" },
+      { title: "Cargas Masivas", path: "/cargas-masivas" },
+    ],
+  },
 ];
 
 interface AppSidebarProps {

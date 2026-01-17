@@ -25,12 +25,13 @@ import GestionTarifas from "./pages/GestionTarifas";
 import Despacho from "./pages/Despacho";
 import DespachoNuevo from "./pages/DespachoNuevo";
 import UsuariosSeguridad from "./pages/UsuariosSeguridad";
+import UsuariosPage from "./pages/UsuariosPage";
+import RolesPermisosPage from "./pages/RolesPermisosPage";
 import Tesoreria from "./pages/Tesoreria";
 import NotificacionesConfig from "./pages/NotificacionesConfig";
 import CargasMasivas from "./pages/CargasMasivas";
 import ProfilePage from "./pages/ProfilePage";
 import SettingsPage from "./pages/SettingsPage";
-import SecurityPage from "./pages/SecurityPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -67,13 +68,13 @@ const App = () => (
                 <Route path="tarifas" element={<GestionTarifas />} />
                 <Route path="despacho" element={<Despacho />} />
                 <Route path="despacho/nuevo" element={<DespachoNuevo />} />
-                <Route path="usuarios" element={<UsuariosSeguridad />} />
+                <Route path="usuarios" element={<UsuariosPage />} />
+                <Route path="roles-permisos" element={<RolesPermisosPage />} />
                 <Route path="tesoreria" element={<Tesoreria />} />
                 <Route path="notificaciones" element={<NotificacionesConfig />} />
                 <Route path="cargas-masivas" element={<CargasMasivas />} />
                 <Route path="perfil" element={<ProfilePage />} />
                 <Route path="configuracion" element={<SettingsPage />} />
-                <Route path="seguridad" element={<SecurityPage />} />
               </Route>
             </Route>
             
