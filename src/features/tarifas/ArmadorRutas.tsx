@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Plus, Trash2, GripVertical, Route, Calculator, ArrowRight } from "lucide-react";
+import { Plus, Trash2, GripVertical, Route, Calculator, ArrowRight, MoreHorizontal, Edit, History } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { ActionButton } from "@/components/ui/action-button";
@@ -19,6 +19,23 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { mockTollBooths, mockClientes, TollBooth, RouteTemplate, mockRouteTemplates } from "@/data/tarifasData";
 import { useTiposUnidad } from "@/hooks/useTiposUnidad";
 import { useRutasAutorizadas } from "@/hooks/useRutasAutorizadas";
@@ -39,6 +56,8 @@ export const ArmadorRutas = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [savedRoutes, setSavedRoutes] = useState<RouteTemplate[]>(mockRouteTemplates);
   const [editingRoute, setEditingRoute] = useState<RouteTemplate | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [routeToDelete, setRouteToDelete] = useState<RouteTemplate | null>(null);
 
   // Handle route selection from catalog
   const handleRutaChange = (rutaId: string) => {
@@ -102,7 +121,8 @@ export const ArmadorRutas = () => {
       id: editingRoute?.id || `ruta-${Date.now()}`,
       clienteId: selectedCliente,
       clienteNombre: cliente?.nombre || '',
-      nombreRuta: `${origen} - ${destino}`,
+      origen: origen,
+      destino: destino,
       tipoUnidad: tipo?.nombre.toLowerCase().includes('9') ? '9ejes' : '5ejes',
       casetas: selectedTolls.map(t => t.id),
       costoTotal: costoTotalFull,
@@ -132,11 +152,8 @@ export const ArmadorRutas = () => {
   const handleEditRoute = (route: RouteTemplate) => {
     setEditingRoute(route);
     setSelectedCliente(route.clienteId);
-    
-    // Parse route name to get origin/destination
-    const parts = route.nombreRuta.split(' - ');
-    setOrigen(parts[0] || '');
-    setDestino(parts[1] || '');
+    setOrigen(route.origen);
+    setDestino(route.destino);
     
     // Find matching unit type
     const tipo = tiposActivos.find(t => 
@@ -148,42 +165,53 @@ export const ArmadorRutas = () => {
     // Load casetas
     const tolls = mockTollBooths.filter(t => route.casetas.includes(t.id));
     setSelectedTolls(tolls);
+    
+    // Scroll to form
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleDeleteRoute = (routeId: string) => {
-    setSavedRoutes(savedRoutes.filter(r => r.id !== routeId));
-    toast.success('Tarifa eliminada');
+  const handleDeleteClick = (route: RouteTemplate) => {
+    setRouteToDelete(route);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (routeToDelete) {
+      setSavedRoutes(savedRoutes.filter(r => r.id !== routeToDelete.id));
+      toast.success('Tarifa eliminada');
+      setRouteToDelete(null);
+    }
+    setDeleteDialogOpen(false);
   };
 
   const availableTolls = mockTollBooths.filter(
     (toll) => !selectedTolls.find((t) => t.id === toll.id)
   );
 
-  // Table columns for saved routes
-  const columns: ColumnDef<RouteTemplate>[] = [
+  // Table columns for saved routes with actions
+  const columns: ColumnDef<RouteTemplate>[] = useMemo(() => [
     {
       key: 'clienteNombre',
       header: 'Cliente',
       sortable: true,
     },
     {
-      key: 'nombreRuta',
+      key: 'origen',
       header: 'Ruta',
       sortable: true,
-      render: (value, row) => {
-        const parts = (value as string).split(' - ');
-        return (
-          <div className="flex items-center gap-2">
-            <span className="font-medium">{parts[0]}</span>
-            <ArrowRight className="h-4 w-4 text-muted-foreground" />
-            <span className="font-medium">{parts[1]}</span>
-          </div>
-        );
-      },
+      render: (_, row) => (
+        <div className="flex items-center gap-2">
+          <span className="font-medium">{row.origen}</span>
+          <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+          <span className="font-medium">{row.destino}</span>
+        </div>
+      ),
     },
     {
       key: 'tipoUnidad',
       header: 'Tipo Unidad',
+      type: 'status',
+      statusOptions: ['5ejes', '9ejes'],
       sortable: true,
       render: (value) => (
         <span className={cn(
@@ -208,9 +236,41 @@ export const ArmadorRutas = () => {
       header: 'Costo Total',
       type: 'number',
       sortable: true,
-      render: (value) => formatCurrency(value as number),
+      render: (value) => (
+        <span className="font-mono font-semibold text-emerald-700">
+          {formatCurrency(value as number)}
+        </span>
+      ),
     },
-  ];
+    {
+      key: 'id',
+      header: 'Acciones',
+      sortable: false,
+      render: (_, row) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => handleEditRoute(row)}>
+              <Edit className="h-4 w-4 mr-2" />
+              Editar
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem 
+              onClick={() => handleDeleteClick(row)}
+              className="text-destructive focus:text-destructive"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Eliminar
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ),
+    },
+  ], [savedRoutes]);
 
   return (
     <div className="space-y-6">
@@ -467,10 +527,38 @@ export const ArmadorRutas = () => {
             data={savedRoutes}
             columns={columns}
             exportFileName="tarifas"
-            onRowClick={handleEditRoute}
           />
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar esta tarifa?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {routeToDelete && (
+                <>
+                  Estás a punto de eliminar la tarifa de la ruta{" "}
+                  <strong>{routeToDelete.origen} ➝ {routeToDelete.destino}</strong>{" "}
+                  para el cliente <strong>{routeToDelete.clienteNombre}</strong>.
+                  <br /><br />
+                  Esta acción no se puede deshacer.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
