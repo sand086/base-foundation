@@ -28,7 +28,6 @@ import {
 import { roles, modulos, permisosDefault, Rol, Permiso, RolPermisos } from '@/data/usuariosData';
 import { cn } from '@/lib/utils';
 import {
-import {
   Shield,
   Plus,
   Edit,

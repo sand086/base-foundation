@@ -34,12 +34,14 @@ import {
 } from 'lucide-react';
 import { mockCargasCombustible, unidadesCombustible, operadoresCombustible, type CargaCombustible, type TipoCombustible } from '@/data/combustibleData';
 import { AddTicketModal, type TicketFormData } from '@/features/combustible/AddTicketModal';
+import { ViewCargaModal } from '@/features/combustible/ViewCargaModal';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 const CombustibleCargas = () => {
   const [cargas, setCargas] = useState<CargaCombustible[]>(mockCargasCombustible);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [cargaToView, setCargaToView] = useState<CargaCombustible | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [fuelTypeFilter, setFuelTypeFilter] = useState<'all' | TipoCombustible>('all');
   const [isLoading, setIsLoading] = useState(true);
@@ -409,6 +411,12 @@ const CombustibleCargas = () => {
         open={isModalOpen}
         onOpenChange={setIsModalOpen}
         onSubmit={handleAddTicket}
+      />
+
+      <ViewCargaModal
+        open={!!cargaToView}
+        onOpenChange={() => setCargaToView(null)}
+        carga={cargaToView}
       />
 
       {/* Animation styles */}

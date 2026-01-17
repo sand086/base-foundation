@@ -1,9 +1,11 @@
 // Inventario de Refacciones (Spare Parts Inventory)
+export type InventoryCategory = 'Motor' | 'Frenos' | 'Eléctrico' | 'Suspensión' | 'Transmisión' | 'General';
+
 export interface InventoryItem {
   id: string;
   sku: string;
   descripcion: string;
-  categoria: 'Motor' | 'Frenos' | 'Eléctrico' | 'Suspensión' | 'Transmisión' | 'General';
+  categoria: InventoryCategory;
   stockActual: number;
   stockMinimo: number;
   ubicacion: string;
