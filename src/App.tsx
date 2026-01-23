@@ -29,6 +29,7 @@ import UsuariosSeguridad from "./pages/UsuariosSeguridad";
 import UsuariosPage from "./pages/UsuariosPage";
 import RolesPermisosPage from "./pages/RolesPermisosPage";
 import Tesoreria from "./pages/Tesoreria";
+import FinanzasDireccion from "./pages/FinanzasDireccion";
 import NotificacionesConfig from "./pages/NotificacionesConfig";
 import CargasMasivas from "./pages/CargasMasivas";
 import ProfilePage from "./pages/ProfilePage";
@@ -73,6 +74,7 @@ const App = () => (
                 <Route path="usuarios" element={<UsuariosPage />} />
                 <Route path="roles-permisos" element={<RolesPermisosPage />} />
                 <Route path="tesoreria" element={<Tesoreria />} />
+                <Route path="finanzas-direccion" element={<FinanzasDireccion />} />
                 <Route path="notificaciones" element={<NotificacionesConfig />} />
                 <Route path="cargas-masivas" element={<CargasMasivas />} />
                 <Route path="perfil" element={<ProfilePage />} />
