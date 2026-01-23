@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Capa_2" data-name="Capa 2" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 50 50">
+  <defs>
+    <style>
+      .cls-1, .cls-2 {
+        fill: none;
+      }
+
+      .cls-3 {
+        clip-path: url(#clippath-1);
+      }
+
+      .cls-2 {
+        stroke: #000;
+        stroke-miterlimit: 13.33;
+      }
+
+      .cls-4 {
+        clip-path: url(#clippath);
+      }
+    </style>
+    <clipPath id="clippath">
+      <rect class="cls-1" x=".92" y=".57" width="48.77" height="48.77"/>
+    </clipPath>
+    <clipPath id="clippath-1">
+      <rect class="cls-1" x=".92" y=".57" width="48.77" height="48.77"/>
+    </clipPath>
+  </defs>
+  <g id="g1484">
+    <g class="cls-4">
+      <g id="g1486">
+        <path id="path1492" class="cls-2" d="M5.3,2h28.58v20H5.3V2Z"/>
+      </g>
+    </g>
+  </g>
+  <path id="path1494" class="cls-2" d="M28.17,16.29H11.02V7.72h17.15v8.57Z"/>
+  <g id="g1496">
+    <path id="path1498" class="cls-2" d="M8.16,42.2v-20.2"/>
+  </g>
+  <g id="g1500">
+    <path id="path1502" class="cls-2" d="M31.02,22.01v20.2"/>
+  </g>
+  <g id="g1504">
+    <g class="cls-3">
+      <g id="g1506">
+        <g id="g1512">
+          <path id="path1514" class="cls-2" d="M22.45,33.44c0,1.57-1.29,2.86-2.86,2.86s-2.86-1.29-2.86-2.86c0-.51.14-1,.37-1.43l2.49-4.29,2.49,4.29c.23.43.37.91.37,1.43Z"/>
+        </g>
+        <path id="path1516" class="cls-2" d="M33.88,42.2H5.3v5.72h28.58v-5.72Z"/>
+        <g id="g1518">
+          <path id="path1520" class="cls-2" d="M31.02,27.72h2.86c1.58,0,2.86,1.28,2.86,2.86v4.29c0,2.37,1.92,4.29,4.29,4.29s4.29-1.92,4.29-4.29V10.57l-11.43-2.62"/>
+        </g>
+        <g id="g1522">
+          <path id="path1524" class="cls-2" d="M39.6,9.27v12.74h5.72"/>
+        </g>
+        <g id="g1526">
+          <path id="path1528" class="cls-2" d="M45.31,16.29h-5.72"/>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>

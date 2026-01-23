@@ -22,3 +22,19 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+
+# carpetas publicas y archivos generados
+/public
+/build
+
+# archivos de entorno
+.env
+.env.local
+.env.*.local  
+
+# dependencias
+/node_modules
+/.pnp
+/vendor
+/backend/venv/

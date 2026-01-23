@@ -1,4 +1,11 @@
-import { Bell, Search, ChevronDown, LogOut, User, Settings } from "lucide-react";
+import {
+  Bell,
+  Search,
+  ChevronDown,
+  LogOut,
+  User,
+  Settings,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -20,7 +27,7 @@ export function AppHeader() {
 
   const handleLogout = () => {
     logout();
-    navigate('/login', { replace: true });
+    navigate("/login", { replace: true });
   };
 
   return (
@@ -48,16 +55,19 @@ export function AppHeader() {
         {/* User Profile Dropdown */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="flex items-center gap-2 h-8 px-2">
+            <Button
+              variant="ghost"
+              className="flex items-center gap-2 h-8 px-2"
+            >
               <Avatar className="h-6 w-6">
-                <AvatarImage src="/placeholder.svg" />
+                <AvatarImage alt="Avatar" />
                 <AvatarFallback className="bg-brand-red text-white text-[10px] font-bold">
-                  {user?.username?.slice(0, 2).toUpperCase() || 'AD'}
+                  {user?.username?.slice(0, 2).toUpperCase() || "AD"}
                 </AvatarFallback>
               </Avatar>
               <div className="flex flex-col items-start text-left">
                 <span className="text-xs font-medium leading-none capitalize">
-                  {user?.username || 'Administrador'}
+                  {user?.username || "Administrador"}
                 </span>
               </div>
               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
@@ -66,22 +76,22 @@ export function AppHeader() {
           <DropdownMenuContent align="end" className="w-48">
             <DropdownMenuLabel className="text-xs">Mi Cuenta</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem 
+            <DropdownMenuItem
               className="text-xs cursor-pointer"
-              onClick={() => navigate('/perfil')}
+              onClick={() => navigate("/perfil")}
             >
               <User className="h-3.5 w-3.5 mr-2" />
               Mi Perfil
             </DropdownMenuItem>
-            <DropdownMenuItem 
+            <DropdownMenuItem
               className="text-xs cursor-pointer"
-              onClick={() => navigate('/configuracion')}
+              onClick={() => navigate("/configuracion")}
             >
               <Settings className="h-3.5 w-3.5 mr-2" />
               Configuración
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem 
+            <DropdownMenuItem
               className="text-xs text-brand-red cursor-pointer"
               onClick={handleLogout}
             >

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState } from "react";
 import {
   Table,
   TableBody,
@@ -6,21 +6,21 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
+} from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { usuarios, roles, Usuario } from '@/data/usuariosData';
-import { cn } from '@/lib/utils';
-import { toast } from 'sonner';
+} from "@/components/ui/dropdown-menu";
+import { usuarios, roles, Usuario } from "@/data/usuariosData";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import {
   Search,
   UserPlus,
@@ -29,50 +29,60 @@ import {
   Trash2,
   Key,
   Filter,
-} from 'lucide-react';
+} from "lucide-react";
+import AvatarDefault from "@/assets/img/usuarios/avatar3.png";
 
 interface UsersTableProps {
   onAddUser: () => void;
 }
 
 export function UsersTable({ onAddUser }: UsersTableProps) {
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
   const [users, setUsers] = useState<Usuario[]>(usuarios);
 
   const filteredUsers = users.filter(
     (user) =>
       user.nombre.toLowerCase().includes(search.toLowerCase()) ||
-      user.email.toLowerCase().includes(search.toLowerCase())
+      user.email.toLowerCase().includes(search.toLowerCase()),
   );
 
   const handleToggleStatus = (userId: string) => {
-    setUsers(prev => 
-      prev.map(user => {
+    setUsers((prev) =>
+      prev.map((user) => {
         if (user.id !== userId) return user;
-        const newStatus = user.estado === 'activo' ? 'inactivo' : 'activo';
-        toast.success(`Usuario ${newStatus === 'activo' ? 'activado' : 'desactivado'}`, {
-          description: `${user.nombre} ha sido ${newStatus === 'activo' ? 'activado' : 'desactivado'}.`,
-        });
+        const newStatus = user.estado === "activo" ? "inactivo" : "activo";
+        toast.success(
+          `Usuario ${newStatus === "activo" ? "activado" : "desactivado"}`,
+          {
+            description: `${user.nombre} ha sido ${newStatus === "activo" ? "activado" : "desactivado"}.`,
+          },
+        );
         return { ...user, estado: newStatus };
-      })
+      }),
     );
   };
 
   const getRolBadge = (rolId: string) => {
-    const rol = roles.find(r => r.id === rolId);
+    const rol = roles.find((r) => r.id === rolId);
     if (!rol) return null;
 
     const colorClasses = {
-      danger: 'bg-status-danger-bg text-status-danger border-status-danger-border',
-      success: 'bg-status-success-bg text-status-success border-status-success-border',
-      warning: 'bg-status-warning-bg text-status-warning border-status-warning-border',
-      info: 'bg-status-info-bg text-status-info border-status-info-border',
+      danger:
+        "bg-status-danger-bg text-status-danger border-status-danger-border",
+      success:
+        "bg-status-success-bg text-status-success border-status-success-border",
+      warning:
+        "bg-status-warning-bg text-status-warning border-status-warning-border",
+      info: "bg-status-info-bg text-status-info border-status-info-border",
     };
 
     return (
       <Badge
         variant="outline"
-        className={cn('text-[10px] px-2 py-0.5 font-medium', colorClasses[rol.color])}
+        className={cn(
+          "text-[10px] px-2 py-0.5 font-medium",
+          colorClasses[rol.color],
+        )}
       >
         {rol.nombre}
       </Badge>
@@ -81,10 +91,10 @@ export function UsersTable({ onAddUser }: UsersTableProps) {
 
   const getInitials = (name: string) => {
     return name
-      .split(' ')
-      .map(n => n[0])
+      .split(" ")
+      .map((n) => n[0])
       .slice(0, 2)
-      .join('')
+      .join("")
       .toUpperCase();
   };
 
@@ -107,7 +117,7 @@ export function UsersTable({ onAddUser }: UsersTableProps) {
             Filtrar
           </Button>
         </div>
-        
+
         <Button
           onClick={onAddUser}
           className="h-9 gap-2 bg-action hover:bg-action-hover text-action-foreground"
@@ -122,12 +132,24 @@ export function UsersTable({ onAddUser }: UsersTableProps) {
         <Table className="table-dense">
           <TableHeader>
             <TableRow className="bg-primary hover:bg-primary">
-              <TableHead className="w-[280px] text-primary-foreground font-semibold">Usuario</TableHead>
-              <TableHead className="text-primary-foreground font-semibold">Rol</TableHead>
-              <TableHead className="text-primary-foreground font-semibold">Empresa</TableHead>
-              <TableHead className="text-primary-foreground font-semibold">Último Acceso</TableHead>
-              <TableHead className="text-center text-primary-foreground font-semibold">Estatus</TableHead>
-              <TableHead className="w-[60px] text-center text-primary-foreground font-semibold">Acciones</TableHead>
+              <TableHead className="w-[280px] text-primary-foreground font-semibold">
+                Usuario
+              </TableHead>
+              <TableHead className="text-primary-foreground font-semibold">
+                Rol
+              </TableHead>
+              <TableHead className="text-primary-foreground font-semibold">
+                Empresa
+              </TableHead>
+              <TableHead className="text-primary-foreground font-semibold">
+                Último Acceso
+              </TableHead>
+              <TableHead className="text-center text-primary-foreground font-semibold">
+                Estatus
+              </TableHead>
+              <TableHead className="w-[60px] text-center text-primary-foreground font-semibold">
+                Acciones
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -136,6 +158,10 @@ export function UsersTable({ onAddUser }: UsersTableProps) {
                 <TableCell>
                   <div className="flex items-center gap-3">
                     <Avatar className="h-8 w-8">
+                      <AvatarImage
+                        src={user.avatar?.trim() ? user.avatar : AvatarDefault}
+                        alt={user.nombre}
+                      />
                       <AvatarFallback className="bg-primary text-primary-foreground text-xs">
                         {getInitials(user.nombre)}
                       </AvatarFallback>
@@ -162,15 +188,19 @@ export function UsersTable({ onAddUser }: UsersTableProps) {
                 <TableCell className="text-center">
                   <div className="flex items-center justify-center gap-2">
                     <Switch
-                      checked={user.estado === 'activo'}
+                      checked={user.estado === "activo"}
                       onCheckedChange={() => handleToggleStatus(user.id)}
                       className="data-[state=checked]:bg-status-success"
                     />
-                    <span className={cn(
-                      "text-xs font-medium",
-                      user.estado === 'activo' ? 'text-status-success' : 'text-muted-foreground'
-                    )}>
-                      {user.estado === 'activo' ? 'Activo' : 'Inactivo'}
+                    <span
+                      className={cn(
+                        "text-xs font-medium",
+                        user.estado === "activo"
+                          ? "text-status-success"
+                          : "text-muted-foreground",
+                      )}
+                    >
+                      {user.estado === "activo" ? "Activo" : "Inactivo"}
                     </span>
                   </div>
                 </TableCell>

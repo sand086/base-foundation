@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Capa_2" data-name="Capa 2" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 50 50">
+  <defs>
+    <style>
+      .cls-1, .cls-2, .cls-3 {
+        fill: none;
+      }
+
+      .cls-2 {
+        stroke-linecap: square;
+      }
+
+      .cls-2, .cls-3 {
+        stroke: #000;
+        stroke-miterlimit: 13.33;
+      }
+
+      .cls-4 {
+        clip-path: url(#clippath-1);
+      }
+
+      .cls-5 {
+        clip-path: url(#clippath);
+      }
+    </style>
+    <clipPath id="clippath">
+      <rect class="cls-1" width="50" height="50"/>
+    </clipPath>
+    <clipPath id="clippath-1">
+      <rect class="cls-1" width="50" height="50"/>
+    </clipPath>
+  </defs>
+  <g id="g489">
+    <g id="g491">
+      <g class="cls-5">
+        <g id="g493">
+          <path id="path499" class="cls-3" d="M1.46,48.54h47.07v-5.86H1.46v5.86Z"/>
+          <g id="g501">
+            <path id="path503" class="cls-3" d="M25,1.54L1.46,9.19v5.86h47.07v-5.86L25,1.54Z"/>
+          </g>
+        </g>
+      </g>
+    </g>
+    <g id="g505">
+      <path id="path507" class="cls-2" d="M22.62,9.19h4.75"/>
+    </g>
+    <g id="g509">
+      <g class="cls-4">
+        <g id="g511">
+          <g id="g517">
+            <path id="path519" class="cls-3" d="M4.5,42.68V15.05h5.83s0,27.63,0,27.63h-5.83Z"/>
+          </g>
+          <g id="g521">
+            <path id="path523" class="cls-3" d="M4.5,20.91h5.83"/>
+          </g>
+          <g id="g525">
+            <path id="path527" class="cls-3" d="M39.61,42.68V15.05h5.88v27.63h-5.88Z"/>
+          </g>
+          <g id="g529">
+            <path id="path531" class="cls-3" d="M39.64,20.91h5.83"/>
+          </g>
+          <g id="g533">
+            <path id="path535" class="cls-3" d="M21.29,32.11c0,1.79,1.66,3.24,3.71,3.24s3.71-1.45,3.71-3.24-1.66-3.24-3.71-3.24-3.71-1.45-3.71-3.24,1.66-3.24,3.71-3.24,3.71,1.45,3.71,3.24"/>
+          </g>
+          <g id="g537">
+            <path id="path539" class="cls-3" d="M25,19.48v2.9"/>
+          </g>
+          <g id="g541">
+            <path id="path543" class="cls-3" d="M25,35.35v2.9"/>
+          </g>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>

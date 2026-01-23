@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Capa_2" data-name="Capa 2" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 50 50">
+  <defs>
+    <style>
+      .cls-1, .cls-2 {
+        fill: none;
+      }
+
+      .cls-2 {
+        stroke: #000;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .cls-3 {
+        clip-path: url(#clippath-1);
+      }
+
+      .cls-4 {
+        clip-path: url(#clippath);
+      }
+    </style>
+    <clipPath id="clippath">
+      <rect class="cls-1" width="50" height="50"/>
+    </clipPath>
+    <clipPath id="clippath-1">
+      <rect class="cls-1" width="50" height="50"/>
+    </clipPath>
+  </defs>
+  <g id="g2670">
+    <g id="g2672">
+      <path id="path2674" class="cls-2" d="M45.12,19.14v11.72H4.88V4.88h40.23v14.26Z"/>
+    </g>
+    <g id="g2676">
+      <path id="path2678" class="cls-2" d="M45.12,19.14h-12.08l-3.65,5.86-4.39-11.72-4.39,11.72-2.93-5.86H4.88"/>
+    </g>
+    <g id="g2680">
+      <g class="cls-4">
+        <g id="g2682">
+          <g id="g2688">
+            <path id="path2690" class="cls-2" d="M22.07,40.62l-2.93,8.4"/>
+          </g>
+          <g id="g2692">
+            <path id="path2694" class="cls-2" d="M30.86,49.02l-2.93-8.4"/>
+          </g>
+          <g id="g2696">
+            <path id="path2698" class="cls-2" d="M13.28,49.02h23.44"/>
+          </g>
+        </g>
+      </g>
+    </g>
+    <g id="g2700">
+      <path id="path2702" class="cls-2" d="M9.77,35.74h-2.93"/>
+    </g>
+    <g id="g2704">
+      <path id="path2706" class="cls-2" d="M18.55,35.74h-2.93"/>
+    </g>
+    <g id="g2708">
+      <path id="path2710" class="cls-2" d="M43.16,35.74h-6.45"/>
+    </g>
+    <g id="g2712">
+      <g class="cls-3">
+        <g id="g2714">
+          <g id="g2720">
+            <path id="path2722" d="M25.98.98c0,.54-.44.98-.98.98s-.98-.44-.98-.98S24.46,0,25,0s.98.44.98.98"/>
+          </g>
+          <g id="g2724">
+            <path id="path2726" class="cls-2" d="M29.39.98h17.68c1.08,0,1.95.87,1.95,1.95v35.74c0,1.08-.87,1.95-1.95,1.95H2.93c-1.08,0-1.95-.87-1.95-1.95V2.93c0-1.08.87-1.95,1.95-1.95h17.68"/>
+          </g>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>

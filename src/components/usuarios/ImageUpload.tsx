@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Camera, Trash2, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import AvatarDefault from "@/assets/img/usuarios/avatar3.png";
 
 interface ImageUploadProps {
   value?: string;
@@ -74,19 +75,23 @@ export function ImageUpload({
       <div
         className={cn(
           "relative rounded-full transition-all",
-          isDragging && "ring-2 ring-primary ring-offset-2"
+          isDragging && "ring-2 ring-primary ring-offset-2",
         )}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
       >
         <Avatar className="h-24 w-24 border-2 border-border">
-          <AvatarImage src={value} alt="Profile" className="object-cover" />
+          <AvatarImage
+            src={value?.trim() ? value : AvatarDefault}
+            alt="Profile"
+            className="object-cover"
+          />
           <AvatarFallback className="text-xl bg-primary/10 text-primary">
             {fallback}
           </AvatarFallback>
         </Avatar>
-        
+
         <Button
           type="button"
           variant="secondary"
@@ -117,7 +122,7 @@ export function ImageUpload({
           <Upload className="h-3.5 w-3.5" />
           Subir imagen
         </Button>
-        
+
         {value && (
           <Button
             type="button"

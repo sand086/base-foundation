@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Capa_2" data-name="Capa 2" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 50 50">
+  <defs>
+    <style>
+      .cls-1, .cls-2 {
+        fill: none;
+      }
+
+      .cls-2 {
+        stroke: #000;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .cls-3 {
+        clip-path: url(#clippath);
+      }
+    </style>
+    <clipPath id="clippath">
+      <rect class="cls-1" width="50" height="50"/>
+    </clipPath>
+  </defs>
+  <g class="cls-3">
+    <g id="g145">
+      <g id="g151">
+        <path id="path153" class="cls-2" d="M6.93,40.46v1.56c0,.86.7,1.55,1.55,1.55h17.29"/>
+      </g>
+      <g id="g155">
+        <path id="path157" class="cls-2" d="M35.04,3.85h1.66c.86,0,1.55.7,1.55,1.55v19.93"/>
+      </g>
+      <g id="g159">
+        <path id="path161" class="cls-2" d="M15.35.73h18.13c.86,0,1.55.7,1.55,1.55v26.46"/>
+      </g>
+      <g id="g163">
+        <path id="path165" class="cls-2" d="M25.77,40.46H5.27c-.86,0-1.55-.7-1.55-1.55V8.93"/>
+      </g>
+      <g id="g167">
+        <path id="path169" class="cls-2" d="M42.22,49.27h-12.38c-2.25,0-4.07-1.82-4.07-4.07v-12.38c0-2.25,1.82-4.07,4.07-4.07h12.38c2.25,0,4.07,1.82,4.07,4.07v12.38c0,2.25-1.82,4.07-4.07,4.07Z"/>
+      </g>
+      <g id="g171">
+        <path id="path173" class="cls-2" d="M41.16,37.5l-3.68-4.58c-.75-.93-2.16-.93-2.91,0l-3.68,4.58c-.91,1.08-.07,2.85,1.35,2.81h1.43v4.55c0,.51.42.93.93.93h2.85c.51,0,.93-.42.93-.93v-4.55h1.43c1.42.04,2.26-1.74,1.35-2.81Z"/>
+      </g>
+      <g id="g175">
+        <path id="path177" class="cls-2" d="M3.71,8.93L11.92.73v6.65c0,.86-.7,1.55-1.55,1.55H3.71Z"/>
+      </g>
+      <g id="g179">
+        <path id="path181" class="cls-2" d="M24.02,8.26h-6.88c-.88,0-1.6-.72-1.6-1.6h0c0-.89.72-1.6,1.6-1.6h6.88c.88,0,1.6.72,1.6,1.6h0c0,.89-.72,1.6-1.6,1.6Z"/>
+      </g>
+      <g id="g183">
+        <path id="path185" class="cls-2" d="M9.24,14.46h20.3"/>
+      </g>
+      <g id="g187">
+        <path id="path189" class="cls-2" d="M9.24,18.8h20.3"/>
+      </g>
+      <g id="g191">
+        <path id="path193" class="cls-2" d="M25.75,23.15h3.79"/>
+      </g>
+      <g id="g195">
+        <path id="path197" class="cls-2" d="M9.24,23.15h13.07"/>
+      </g>
+      <g id="g199">
+        <path id="path201" class="cls-2" d="M9.24,27.49h8.85"/>
+      </g>
+      <g id="g203">
+        <path id="path205" class="cls-2" d="M9.24,31.83h8.85"/>
+      </g>
+    </g>
+  </g>
+</svg>

@@ -16,36 +16,51 @@ import {
   PanelLeftClose,
   PanelLeft,
   Calculator,
-  Shield,
   Landmark,
-  Bell,
-  Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
+import type { SidebarIconKey } from "@/assets/img/icons/sidebar";
+import { SidebarSvgIcon } from "@/components/common/SidebarSvgIcon";
+
 interface MenuItem {
   title: string;
-  icon: React.ElementType;
+  icon?: React.ElementType; // fallback lucide
+  iconSrc?: string; // svg en public/img/icons/sidebar/*.svg
+  iconName?: SidebarIconKey;
   path?: string;
   children?: { title: string; path: string }[];
 }
 
 const menuItems: MenuItem[] = [
-  { title: "Dashboard", icon: LayoutDashboard, path: "/" },
+  {
+    title: "Dashboard",
+    icon: LayoutDashboard,
+
+    path: "/",
+  },
   {
     title: "Clientes",
-    icon: Users,
+    icon: Users, // fallback por si algo falla
+    iconName: "Clientes", // ESTE es el que usa tu svg real
     children: [
       { title: "Catálogo", path: "/clientes" },
       { title: "Nuevo Cliente", path: "/clientes/nuevo" },
     ],
   },
-  { title: "Tarifas", icon: Calculator, path: "/tarifas" },
+
+  {
+    title: "Tarifas",
+    icon: Calculator,
+    iconName: "Tarifas",
+    path: "/tarifas",
+  },
   {
     title: "Flota",
     icon: Truck,
+    iconName: "Flota",
     children: [
       { title: "Unidades", path: "/flota" },
       { title: "Operadores", path: "/flota/operadores" },
@@ -53,23 +68,54 @@ const menuItems: MenuItem[] = [
       { title: "Mantenimiento", path: "/flota/mantenimiento" },
     ],
   },
-  { title: "Monitoreo", icon: Radar, path: "/monitoreo" },
-  { title: "Despacho", icon: CalendarPlus, path: "/despacho" },
+  {
+    title: "Monitoreo",
+    icon: Radar,
+    iconName: "Monitoreo",
+    path: "/monitoreo",
+  },
+  {
+    title: "Despacho",
+    icon: CalendarPlus,
+    iconName: "Despacho",
+    path: "/despacho",
+  },
   {
     title: "Combustible",
     icon: Fuel,
+    iconName: "Combustible",
     children: [
       { title: "Cargas", path: "/combustible" },
       { title: "Conciliación", path: "/combustible/conciliacion" },
     ],
   },
-  { title: "Cierre", icon: FileCheck, path: "/cierre" },
-  { title: "Proveedores", icon: Briefcase, path: "/proveedores" },
-  { title: "Cobranza", icon: DollarSign, path: "/cuentas-por-cobrar" },
-  { title: "Tesorería", icon: Landmark, path: "/tesoreria" },
+  {
+    title: "Liquidación",
+    icon: FileCheck,
+    iconName: "Liquidacion",
+    path: "/cierre",
+  },
+  {
+    title: "Proveedores",
+    icon: Briefcase,
+    iconName: "Proveedores",
+  },
+  {
+    title: "Cobranza",
+    icon: DollarSign,
+    iconName: "Cobranza",
+    path: "/cuentas-por-cobrar",
+  },
+  {
+    title: "Tesorería",
+    icon: Landmark,
+    iconName: "Tesoreria",
+    path: "/tesoreria",
+  },
   {
     title: "Administración",
     icon: Settings,
+    iconName: "Administracion",
     children: [
       { title: "Usuarios", path: "/usuarios" },
       { title: "Roles y Permisos", path: "/roles-permisos" },
@@ -96,7 +142,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
 
   const toggleExpand = (title: string) => {
     setExpandedItems((prev) =>
-      prev.includes(title) ? prev.filter((t) => t !== title) : [...prev, title]
+      prev.includes(title) ? prev.filter((t) => t !== title) : [...prev, title],
     );
   };
 
@@ -107,28 +153,63 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
     return false;
   };
 
+  // Render de icono: usa SVG (negro -> blanco) y si no existe, usa lucide
+  const RenderIcon = ({ item }: { item: MenuItem }) => {
+    // 1) PRIORIDAD: si tiene iconName, usa el SVG importado del registry
+    if (item.iconName) {
+      return (
+        <SidebarSvgIcon
+          name={item.iconName}
+          className="h-6 w-6 shrink-0"
+          alt={item.title}
+        />
+      );
+    }
+
+    // 2) Si tiene iconSrc (ruta en public), usa <img>
+    if (item.iconSrc) {
+      return (
+        <img
+          src={item.iconSrc}
+          alt={item.title}
+          className="h-6 w-6 shrink-0 brightness-0 invert"
+          loading="lazy"
+        />
+      );
+    }
+
+    // 3) Fallback lucide
+    if (item.icon) {
+      const Icon = item.icon;
+      return <Icon className="h-6 w-6 shrink-0" />;
+    }
+
+    return null;
+  };
+
   return (
     <aside
       className={cn(
         "fixed left-0 top-0 z-40 h-screen bg-brand-black text-sidebar-foreground transition-all duration-300 border-r border-sidebar-border",
-        collapsed ? "w-16" : "w-64"
+        collapsed ? "w-16" : "w-64",
       )}
     >
       {/* Header */}
       <div className="flex h-14 items-center justify-between px-4 border-b border-sidebar-border">
         {!collapsed && (
           <div className="flex items-center gap-2">
-            {/* <div className="flex h-8 w-8 items-center justify-center rounded bg-brand-red text-white font-bold text-xs">
-              4T
-            </div> */}
             <span className="font-bold text-base tracking-tight text-white">
-              <img src="/logo-white.svg" alt="3T Logistics" className="h-6" />
+              <img
+                src="../../assets/img/logo-white.svg"
+                alt="3T TLM"
+                className="h-6"
+              />
             </span>
           </div>
         )}
         {collapsed && (
           <div className="flex h-8 w-8 items-center justify-center text-white font-bold text-xs mx-auto">
-            <img src="/favicon.svg" alt="3T" className="h-5" />
+            <img src="/img/icons/favicon.svg" alt="3T" className="h-5" />
           </div>
         )}
       </div>
@@ -141,7 +222,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
           onClick={onToggle}
           className={cn(
             "text-sidebar-foreground hover:bg-sidebar-accent hover:text-white h-8 text-xs",
-            collapsed ? "w-full justify-center" : "w-full justify-start"
+            collapsed ? "w-full justify-center" : "w-full justify-start",
           )}
         >
           {collapsed ? (
@@ -167,13 +248,14 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
                       "flex w-full items-center justify-between rounded px-2.5 py-2 text-xs font-medium transition-colors",
                       "hover:bg-sidebar-accent hover:text-white",
                       isActive(undefined, item.children) &&
-                        "bg-sidebar-accent text-white border-l-2 border-brand-red"
+                        "bg-sidebar-accent text-white border-l-2 border-brand-red",
                     )}
                   >
                     <div className="flex items-center gap-2.5">
-                      <item.icon className="h-4 w-4 shrink-0" />
+                      <RenderIcon item={item} />
                       {!collapsed && <span>{item.title}</span>}
                     </div>
+
                     {!collapsed &&
                       (expandedItems.includes(item.title) ? (
                         <ChevronDown className="h-3.5 w-3.5 text-sidebar-foreground" />
@@ -181,6 +263,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
                         <ChevronRight className="h-3.5 w-3.5 text-sidebar-foreground" />
                       ))}
                   </button>
+
                   {!collapsed && expandedItems.includes(item.title) && (
                     <div className="ml-4 mt-0.5 space-y-0.5 border-l border-sidebar-border pl-3">
                       {item.children.map((child) => (
@@ -193,7 +276,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
                               "hover:bg-sidebar-accent hover:text-white",
                               isActive
                                 ? "bg-sidebar-accent text-white font-medium"
-                                : "text-sidebar-foreground"
+                                : "text-sidebar-foreground",
                             )
                           }
                         >
@@ -212,11 +295,11 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
                       "hover:bg-sidebar-accent hover:text-white",
                       isActive
                         ? "bg-sidebar-accent text-white border-l-2 border-brand-red"
-                        : "text-sidebar-foreground"
+                        : "text-sidebar-foreground",
                     )
                   }
                 >
-                  <item.icon className="h-4 w-4 shrink-0" />
+                  <RenderIcon item={item} />
                   {!collapsed && <span>{item.title}</span>}
                 </NavLink>
               )}
