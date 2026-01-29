@@ -10,9 +10,9 @@ export function TopClientsChart({ clients }: TopClientsChartProps) {
   const data = getTopClientsChartData(clients);
 
   return (
-    <Card className="rounded border shadow-none">
+    <Card className="rounded-xl border shadow-none glass-card">
       <CardHeader className="pb-2 pt-3 px-3">
-        <CardTitle className="text-sm font-semibold text-brand-dark">
+        <CardTitle className="text-sm font-semibold text-brand-dark heading-crisp">
           Servicios por Cliente (Top 5)
         </CardTitle>
       </CardHeader>
@@ -24,12 +24,28 @@ export function TopClientsChart({ clients }: TopClientsChartProps) {
               layout="vertical"
               margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
             >
-              <XAxis type="number" tick={{ fontSize: 10 }} />
+              <defs>
+                {/* Holographic gradient for bars */}
+                <linearGradient id="barGradientBlue" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="hsl(221, 83%, 53%)" stopOpacity={0.9} />
+                  <stop offset="50%" stopColor="hsl(221, 90%, 60%)" stopOpacity={1} />
+                  <stop offset="100%" stopColor="hsl(221, 83%, 53%)" stopOpacity={0.85} />
+                </linearGradient>
+                {/* Glow filter */}
+                <filter id="barGlow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+                  <feMerge>
+                    <feMergeNode in="coloredBlur"/>
+                    <feMergeNode in="SourceGraphic"/>
+                  </feMerge>
+                </filter>
+              </defs>
+              <XAxis type="number" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
               <YAxis
                 dataKey="name"
                 type="category"
                 width={100}
-                tick={{ fontSize: 9 }}
+                tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }}
                 tickFormatter={(value) =>
                   value.length > 15 ? `${value.substring(0, 15)}...` : value
                 }
@@ -40,12 +56,20 @@ export function TopClientsChart({ clients }: TopClientsChartProps) {
                   'Servicios',
                 ]}
                 labelFormatter={(label) => label}
+                contentStyle={{
+                  backgroundColor: 'hsl(var(--card) / 0.9)',
+                  backdropFilter: 'blur(12px)',
+                  border: '1px solid hsl(0 0% 100% / 0.1)',
+                  borderRadius: '12px',
+                  boxShadow: '0 8px 32px hsl(0 0% 0% / 0.2)',
+                }}
               />
               <Bar
                 dataKey="servicios"
-                fill="hsl(221, 83%, 53%)"
-                radius={[0, 4, 4, 0]}
-                barSize={16}
+                fill="url(#barGradientBlue)"
+                radius={[0, 6, 6, 0]}
+                barSize={18}
+                filter="url(#barGlow)"
               />
             </BarChart>
           </ResponsiveContainer>

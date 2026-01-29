@@ -711,9 +711,10 @@
 }
 
 /* ========================================
-   SCROLLBAR STYLES
+   SCROLLBAR STYLES - Minimalist macOS Style
    ======================================== */
 
+/* Hide scrollbars by default, show on hover/scroll */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -724,17 +725,32 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--muted-foreground) / 0.3);
-  border-radius: 3px;
+  background: transparent;
+  border-radius: 9999px;
+  transition: background 0.3s ease;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground) / 0.5);
+/* Show scrollbar on hover of scrollable container */
+*:hover::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.25);
 }
 
+*:hover::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.45);
+}
+
+*::-webkit-scrollbar-thumb:active {
+  background: hsl(var(--muted-foreground) / 0.55);
+}
+
+/* Firefox minimal scrollbars */
 * {
   scrollbar-width: thin;
-  scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
+  scrollbar-color: transparent transparent;
+}
+
+*:hover {
+  scrollbar-color: hsl(var(--muted-foreground) / 0.25) transparent;
 }
 
 /* ========================================
