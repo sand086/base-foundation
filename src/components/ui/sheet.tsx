@@ -19,7 +19,7 @@ const SheetOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SheetPrimitive.Overlay
     className={cn(
-      "fixed inset-0 z-50 bg-black/60 backdrop-blur-sm",
+      "fixed inset-0 z-50 modal-glow-overlay backdrop-blur-sm",
       "data-[state=open]:animate-in data-[state=closed]:animate-out",
       "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       className,
@@ -32,10 +32,11 @@ SheetOverlay.displayName = SheetPrimitive.Overlay.displayName;
 
 const sheetVariants = cva(
   [
-    "fixed z-50 gap-4 p-6 shadow-xl transition ease-in-out",
-    // Glassmorphism - macOS Tahoe style
+    "fixed z-50 gap-4 p-6 transition ease-in-out",
+    // Glassmorphism - macOS Tahoe style with glow
     "bg-card/90 backdrop-blur-xl",
     "border-white/15 dark:border-white/8",
+    "modal-glow",
     // Animations
     "data-[state=open]:animate-in data-[state=closed]:animate-out",
     "data-[state=closed]:duration-300 data-[state=open]:duration-500",
