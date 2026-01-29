@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useNavigation } from "react-router-dom";
+import { useEffect, useState, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
 interface GlobalProgressBarProps {
@@ -7,18 +7,21 @@ interface GlobalProgressBarProps {
 }
 
 export function GlobalProgressBar({ className }: GlobalProgressBarProps) {
-  const navigation = useNavigation();
+  const location = useLocation();
   const [isVisible, setIsVisible] = useState(false);
+  const previousPathRef = useRef(location.pathname);
 
   useEffect(() => {
-    if (navigation.state === "loading") {
+    // Show progress bar briefly on route change
+    if (previousPathRef.current !== location.pathname) {
       setIsVisible(true);
-    } else {
-      // Keep visible briefly after loading completes for smooth transition
-      const timeout = setTimeout(() => setIsVisible(false), 200);
+      previousPathRef.current = location.pathname;
+      
+      // Hide after animation completes
+      const timeout = setTimeout(() => setIsVisible(false), 400);
       return () => clearTimeout(timeout);
     }
-  }, [navigation.state]);
+  }, [location.pathname]);
 
   if (!isVisible) return null;
 
@@ -29,7 +32,7 @@ export function GlobalProgressBar({ className }: GlobalProgressBarProps) {
   );
 }
 
-// Alternative hook-based progress for manual control
+// Hook for manual progress control (API calls, etc.)
 export function useGlobalProgress() {
   const [isLoading, setIsLoading] = useState(false);
 
