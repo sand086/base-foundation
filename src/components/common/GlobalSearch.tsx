@@ -63,9 +63,19 @@ const searchItems: SearchItem[] = [
   { title: "Configuración", path: "/configuracion", icon: Settings, category: "Administración" },
 ];
 
+// Export a function to open the search from outside
+let openSearchFn: (() => void) | null = null;
+
+export function openGlobalSearch() {
+  openSearchFn?.();
+}
+
 export function GlobalSearch() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
+  
+  // Register the open function for external access
+  openSearchFn = () => setOpen(true);
 
   // Keyboard shortcut handler
   useEffect(() => {
