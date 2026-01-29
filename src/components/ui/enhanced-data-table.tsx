@@ -415,7 +415,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
               ))}
             </tr>
           </thead>
-          <tbody className="[&_tr:last-child]:border-0">
+          <tbody className="[&_tr:last-child]:border-0 table-staggered">
             {paginatedData.length === 0 ? (
               <tr>
                 <td colSpan={columns.length} className="px-4 py-8 text-center text-muted-foreground">
@@ -427,7 +427,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                 <tr
                   key={idx}
                   className={cn(
-                    "border-b transition-colors hover:bg-muted/50",
+                    "border-b transition-colors duration-150 hover:bg-muted/50",
                     onRowClick && "cursor-pointer"
                   )}
                   onClick={() => onRowClick?.(row)}

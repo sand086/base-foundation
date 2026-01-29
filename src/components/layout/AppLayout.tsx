@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { AppSidebar } from "./AppSidebar";
 import { AppHeader } from "./AppHeader";
+import { GlobalProgressBar } from "@/components/ui/global-progress-bar";
 import { cn } from "@/lib/utils";
 
 export function AppLayout() {
@@ -10,6 +11,9 @@ export function AppLayout() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Global Progress Bar - Safari/iOS style */}
+      <GlobalProgressBar />
+      
       <AppSidebar
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}

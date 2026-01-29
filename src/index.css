@@ -44,7 +44,19 @@
     --border: 214 32% 91%;
     --input: 214 32% 91%;
     --ring: 357 93% 39%;
-    --radius: 0.375rem;
+    
+    /* macOS Tahoe - Organic radii */
+    --radius: 0.75rem;
+    --radius-lg: 1rem;
+    --radius-xl: 1.5rem;
+    
+    /* Glassmorphism Variables */
+    --glass-bg: 0 0% 100%;
+    --glass-opacity: 0.75;
+    --glass-border: 0 0% 100%;
+    --glass-border-opacity: 0.15;
+    --glass-shadow: 0 0% 0%;
+    --glass-shadow-opacity: 0.05;
     
     /* Sidebar - Pure Black #000000 for high contrast */
     --sidebar-background: 0 0% 0%;
@@ -143,7 +155,7 @@
 }
 
 /* ========================================
-   ANIMATION KEYFRAMES - Premium Polish
+   ANIMATION KEYFRAMES - macOS Tahoe Premium
    ======================================== */
 
 /* Page transition - slide up fade */
@@ -170,6 +182,18 @@
   }
 }
 
+/* Table row staggered entrance - macOS Tahoe */
+@keyframes table-row-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* Subtle float for cards */
 @keyframes subtle-float {
   0%, 100% {
@@ -180,7 +204,7 @@
   }
 }
 
-/* Shimmer effect for loading states */
+/* Premium shimmer effect - tricolor gradient */
 @keyframes shimmer {
   0% {
     background-position: -200% 0;
@@ -188,6 +212,12 @@
   100% {
     background-position: 200% 0;
   }
+}
+
+/* Glass shimmer premium */
+@keyframes glass-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
 /* Pulse glow for important elements */
@@ -207,6 +237,32 @@
   }
   50% {
     opacity: 0.6;
+  }
+}
+
+/* Global progress bar indeterminate - Safari style */
+@keyframes progress-indeterminate {
+  0% {
+    left: -40%;
+    width: 40%;
+  }
+  50% {
+    left: 20%;
+    width: 60%;
+  }
+  100% {
+    left: 100%;
+    width: 40%;
+  }
+}
+
+/* Data loaded fade in */
+@keyframes data-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 
@@ -234,11 +290,15 @@
   background: linear-gradient(
     90deg,
     hsl(var(--muted)) 0%,
-    hsl(var(--muted-foreground) / 0.1) 50%,
+    hsl(var(--muted-foreground) / 0.08) 50%,
     hsl(var(--muted)) 100%
   );
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
+}
+
+.animate-data-loaded {
+  animation: data-fade-in 0.5s ease-out;
 }
 
 /* Staggered delays for table rows */
@@ -252,6 +312,84 @@
 .stagger-8 { animation-delay: 0.16s; }
 .stagger-9 { animation-delay: 0.18s; }
 .stagger-10 { animation-delay: 0.20s; }
+
+/* ========================================
+   TABLE STAGGERED ANIMATION - Auto delays
+   ======================================== */
+
+.table-staggered tr {
+  animation: table-row-enter 0.4s ease-out backwards;
+}
+
+.table-staggered tr:nth-child(1) { animation-delay: 0ms; }
+.table-staggered tr:nth-child(2) { animation-delay: 40ms; }
+.table-staggered tr:nth-child(3) { animation-delay: 80ms; }
+.table-staggered tr:nth-child(4) { animation-delay: 120ms; }
+.table-staggered tr:nth-child(5) { animation-delay: 160ms; }
+.table-staggered tr:nth-child(6) { animation-delay: 200ms; }
+.table-staggered tr:nth-child(7) { animation-delay: 240ms; }
+.table-staggered tr:nth-child(8) { animation-delay: 280ms; }
+.table-staggered tr:nth-child(9) { animation-delay: 320ms; }
+.table-staggered tr:nth-child(10) { animation-delay: 360ms; }
+
+/* ========================================
+   GLASSMORPHISM - macOS Tahoe Style
+   ======================================== */
+
+/* Glass panel - main container effect */
+.glass-panel {
+  background: hsl(var(--glass-bg) / var(--glass-opacity));
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid hsl(var(--glass-border) / var(--glass-border-opacity));
+  box-shadow: 
+    0 4px 30px hsl(var(--glass-shadow) / var(--glass-shadow-opacity)),
+    inset 0 1px 0 hsl(0 0% 100% / 0.1);
+}
+
+.dark .glass-panel {
+  --glass-opacity: 0.6;
+  --glass-border-opacity: 0.08;
+}
+
+/* Glass card - lighter variant for cards */
+.glass-card {
+  background: hsl(var(--card) / 0.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid hsl(0 0% 100% / 0.12);
+  box-shadow: 
+    0 2px 20px hsl(0 0% 0% / 0.04),
+    0 8px 32px hsl(0 0% 0% / 0.06),
+    inset 0 1px 0 hsl(0 0% 100% / 0.08);
+}
+
+.dark .glass-card {
+  background: hsl(var(--card) / 0.6);
+  border: 1px solid hsl(0 0% 100% / 0.06);
+}
+
+/* Glass surface - subtle internal depth */
+.glass-surface {
+  background: hsl(var(--muted) / 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid hsl(0 0% 100% / 0.08);
+}
+
+/* Glass shimmer loading effect */
+.glass-shimmer {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted) / 0.4) 0%,
+    hsl(var(--muted) / 0.6) 25%,
+    hsl(var(--muted) / 0.8) 50%,
+    hsl(var(--muted) / 0.6) 75%,
+    hsl(var(--muted) / 0.4) 100%
+  );
+  background-size: 200% 100%;
+  animation: glass-shimmer 2s ease-in-out infinite;
+}
 
 /* ========================================
    INTERACTIVE ELEMENT STYLES
@@ -268,12 +406,6 @@
     0 4px 6px -1px hsl(var(--foreground) / 0.05),
     0 10px 15px -3px hsl(var(--foreground) / 0.08),
     0 0 0 1px hsl(var(--border) / 0.5);
-}
-
-/* Glass effect for cards (subtle) */
-.glass-card {
-  @apply backdrop-blur-sm;
-  background: hsl(var(--card) / 0.8);
 }
 
 /* Button press feedback */
@@ -323,6 +455,33 @@
     hsl(var(--action-hover)) 0%,
     hsl(var(--action) / 0.8) 100%
   );
+}
+
+/* ========================================
+   GLOBAL PROGRESS BAR - Safari Style
+   ======================================== */
+
+.progress-bar-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 9999;
+  overflow: hidden;
+  background: transparent;
+}
+
+.progress-bar-indeterminate {
+  position: absolute;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    hsl(var(--brand-red)) 50%,
+    transparent 100%
+  );
+  animation: progress-indeterminate 1.5s ease-in-out infinite;
 }
 
 /* ========================================
