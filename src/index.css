@@ -1,4 +1,83 @@
 @tailwind base;
+
+/* ========================================
+   ANIMATED LOGO KEYFRAMES
+   ======================================== */
+
+/* Logo stroke draw animation */
+@keyframes logo-draw {
+  0% {
+    stroke-dasharray: 200;
+    stroke-dashoffset: 200;
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dasharray: 200;
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
+@keyframes logo-draw-delayed {
+  0%, 30% {
+    stroke-dasharray: 150;
+    stroke-dashoffset: 150;
+    opacity: 0;
+  }
+  40% {
+    opacity: 0.3;
+  }
+  100% {
+    stroke-dasharray: 150;
+    stroke-dashoffset: 0;
+    opacity: 0.3;
+  }
+}
+
+/* Speed lines animation */
+@keyframes speed-lines {
+  0%, 70% {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Slow pulse for glow effect */
+@keyframes pulse-slow {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.1);
+  }
+}
+
+.animate-logo-draw {
+  animation: logo-draw 1.2s ease-out forwards;
+}
+
+.animate-logo-draw-delayed {
+  animation: logo-draw-delayed 1.5s ease-out forwards;
+}
+
+.animate-speed-lines {
+  animation: speed-lines 0.5s ease-out forwards;
+  animation-delay: 0.8s;
+  opacity: 0;
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 3s ease-in-out infinite;
+}
 @tailwind components;
 @tailwind utilities;
 
