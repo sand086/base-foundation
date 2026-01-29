@@ -53,47 +53,42 @@ export default function Login() {
 
   return (
     <div className="fixed inset-0 z-[9999] overflow-hidden">
-      {/* Background image */}
-      <div className="absolute inset-0 bg-[url('/login-bg.jpg')] bg-cover bg-center" />
-
-      {/* Global dark overlay */}
-      <div className="absolute inset-0 bg-black/20" />
-
-      {/* Frosted overlay: FIXED position on md+ (never moves), hidden on mobile */}
-      {/* Cut exactly at the left edge of the card:
-          card = 520px
-          md right padding = 4rem (md:px-16)
-          => right = calc(520px + 4rem)
-      */}
-      <div className="hidden md:block absolute inset-y-0 right-0 bg-white/35 backdrop-blur-[2px] w-full" />
+      {/* Background image with cinematic overlay */}
+      <div className="absolute inset-0">
+        <div className="absolute inset-0 bg-[url('/login-bg.jpg')] bg-cover bg-center scale-105 animate-[subtle-float_20s_ease-in-out_infinite]" />
+        {/* Cinematic dark overlay with gradient */}
+        <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-black/50" />
+        {/* Subtle brand color accent overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-brand-red/10 via-transparent to-transparent" />
+      </div>
 
       {/* Logo top-right (solo en md+ para que en móvil se enfoque el form) */}
       <div className="hidden md:block absolute right-16 top-10 z-10 select-none">
         <img
           src="/logo-white.svg"
           alt="transport management system"
-          className="h-20 drop-shadow-sm"
+          className="h-20 drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]"
         />
       </div>
 
       {/* Content */}
       <div className="relative z-10 flex h-full items-center justify-center px-6 md:justify-end md:px-16">
-        <Card className="w-full max-w-[520px] rounded-[28px] border border-black/10 bg-white shadow-2xl">
+        <Card className="login-card w-full max-w-[520px] rounded-3xl border border-white/10 bg-black/30 backdrop-blur-2xl shadow-[0_8px_64px_rgba(0,0,0,0.5)]">
           <CardContent className="px-10 py-10">
             {/* Title */}
             <div className="text-center">
-              <div className="text-5xl font-extrabold tracking-wide text-brand-dark">
+              <div className="text-5xl font-extrabold tracking-wide text-white drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]">
                 TMS
               </div>
-              <div className="mx-auto mt-2 h-[6px] w-[150px] rounded-full bg-brand-dark" />
-              <div className="mt-4 text-sm font-medium tracking-[0.18em] text-brand-dark/90">
+              <div className="mx-auto mt-2 h-[6px] w-[150px] rounded-full bg-gradient-to-r from-brand-red via-brand-red/80 to-brand-red shadow-[0_0_20px_rgba(190,8,17,0.5)]" />
+              <div className="mt-4 text-sm font-medium tracking-[0.18em] text-white/80">
                 TRANSPORT MANAGEMENT SYSTEM
               </div>
             </div>
 
             {/* Error */}
             {error && (
-              <div className="mt-6 flex items-center gap-2 rounded-md border border-status-danger-border bg-status-danger-bg p-3 text-sm text-status-danger">
+              <div className="mt-6 flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 backdrop-blur-sm p-3 text-sm text-red-300">
                 <AlertCircle className="h-4 w-4 flex-shrink-0" />
                 <span>{error}</span>
               </div>
@@ -102,7 +97,7 @@ export default function Login() {
             <form onSubmit={handleSubmit} className="mt-8 space-y-4">
               {/* Email/username */}
               <div className="relative group">
-                <User className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-black/35 transition-all duration-200 group-focus-within:text-brand-dark group-focus-within:scale-110" />
+                <User className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40 transition-all duration-300 group-focus-within:text-white group-focus-within:scale-110" />
                 <Input
                   id="username"
                   type="text"
@@ -111,20 +106,13 @@ export default function Login() {
                   onChange={(e) => setUsername(e.target.value)}
                   required
                   autoComplete="username"
-                  className={[
-                    "h-12 rounded-md border-transparent bg-[#ECECEE] pl-11 pr-4 text-[15px]",
-                    "placeholder:text-black/35",
-                    "transition-all duration-200",
-                    "focus:bg-white focus:shadow-[0_0_0_2px_rgba(0,0,0,0.12)]",
-                    "focus-visible:ring-0 focus-visible:ring-offset-0",
-                    "hover:bg-[#E6E6E8]",
-                  ].join(" ")}
+                  className="login-input h-12 rounded-xl border border-white/20 bg-white/10 pl-11 pr-4 text-[15px] text-white placeholder:text-white/40 transition-all duration-300 focus:bg-white/15 focus:border-white/30 focus:shadow-[0_0_20px_rgba(255,255,255,0.1)] focus-visible:ring-0 focus-visible:ring-offset-0 hover:bg-white/12 hover:border-white/25"
                 />
               </div>
 
               {/* Password with eye */}
               <div className="relative group">
-                <Lock className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-black/35 transition-all duration-200 group-focus-within:text-brand-dark group-focus-within:scale-110" />
+                <Lock className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40 transition-all duration-300 group-focus-within:text-white group-focus-within:scale-110" />
                 <Input
                   id="password"
                   type={showPass ? "text" : "password"}
@@ -133,26 +121,13 @@ export default function Login() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   autoComplete="current-password"
-                  className={[
-                    "h-12 rounded-md border-transparent bg-[#ECECEE] pl-11 pr-12 text-[15px]",
-                    "placeholder:text-black/35",
-                    "transition-all duration-200",
-                    "focus:bg-white focus:shadow-[0_0_0_2px_rgba(0,0,0,0.12)]",
-                    "focus-visible:ring-0 focus-visible:ring-offset-0",
-                    "hover:bg-[#E6E6E8]",
-                  ].join(" ")}
+                  className="login-input h-12 rounded-xl border border-white/20 bg-white/10 pl-11 pr-12 text-[15px] text-white placeholder:text-white/40 transition-all duration-300 focus:bg-white/15 focus:border-white/30 focus:shadow-[0_0_20px_rgba(255,255,255,0.1)] focus-visible:ring-0 focus-visible:ring-offset-0 hover:bg-white/12 hover:border-white/25"
                 />
 
                 <button
                   type="button"
                   onClick={() => setShowPass((v) => !v)}
-                  className={[
-                    "absolute right-3 top-1/2 -translate-y-1/2",
-                    "inline-flex h-9 w-9 items-center justify-center rounded-md",
-                    "text-black/45 transition-all duration-200",
-                    "hover:bg-black/5 hover:text-black/70",
-                    "active:scale-95",
-                  ].join(" ")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex h-9 w-9 items-center justify-center rounded-lg text-white/40 transition-all duration-300 hover:bg-white/10 hover:text-white active:scale-95"
                   aria-label={
                     showPass ? "Ocultar contraseña" : "Mostrar contraseña"
                   }
@@ -167,19 +142,19 @@ export default function Login() {
 
               {/* Remember / Forgot */}
               <div className="flex items-center justify-between pt-1 text-sm">
-                <label className="flex cursor-pointer items-center gap-2 text-black/60">
+                <label className="flex cursor-pointer items-center gap-2 text-white/60 hover:text-white/80 transition-colors">
                   <input
                     type="checkbox"
                     checked={remember}
                     onChange={(e) => setRemember(e.target.checked)}
-                    className="h-4 w-4 accent-brand-dark"
+                    className="h-4 w-4 rounded border-white/30 bg-white/10 accent-brand-red"
                   />
                   Recuérdame
                 </label>
 
                 <button
                   type="button"
-                  className="text-black/45 transition-colors hover:text-black/70"
+                  className="text-white/50 transition-colors hover:text-white/80"
                   onClick={() => {
                     toast({
                       title: "Recuperación",
@@ -194,35 +169,22 @@ export default function Login() {
 
               {/* 2FA */}
               <div className="relative group pt-1">
-                <Check className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-black/30 transition-all duration-200 group-focus-within:text-brand-dark group-focus-within:scale-110" />
+                <Check className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/30 transition-all duration-300 group-focus-within:text-white group-focus-within:scale-110" />
                 <Input
                   id="twoFactor"
                   inputMode="numeric"
                   placeholder="doble verificación"
                   value={twoFactor}
                   onChange={(e) => setTwoFactor(e.target.value)}
-                  className={[
-                    "h-12 rounded-md border-transparent bg-[#ECECEE] pl-11 pr-4 text-[15px]",
-                    "placeholder:text-black/35",
-                    "transition-all duration-200",
-                    "focus:bg-white focus:shadow-[0_0_0_2px_rgba(0,0,0,0.12)]",
-                    "focus-visible:ring-0 focus-visible:ring-offset-0",
-                    "hover:bg-[#E6E6E8]",
-                  ].join(" ")}
+                  className="login-input h-12 rounded-xl border border-white/20 bg-white/10 pl-11 pr-4 text-[15px] text-white placeholder:text-white/40 transition-all duration-300 focus:bg-white/15 focus:border-white/30 focus:shadow-[0_0_20px_rgba(255,255,255,0.1)] focus-visible:ring-0 focus-visible:ring-offset-0 hover:bg-white/12 hover:border-white/25"
                 />
               </div>
 
-              {/* Button */}
+              {/* Button with glow */}
               <Button
                 type="submit"
                 disabled={isLoading}
-                className={[
-                  "mt-2 h-12 w-full rounded-md bg-brand-dark text-base font-semibold text-white",
-                  "transition-all duration-200",
-                  "hover:bg-brand-dark/90 hover:-translate-y-[1px] hover:shadow-lg",
-                  "active:translate-y-0 active:shadow-md",
-                  "disabled:opacity-70 disabled:hover:translate-y-0 disabled:hover:shadow-none",
-                ].join(" ")}
+                className="login-button mt-2 h-12 w-full rounded-xl bg-brand-red text-base font-semibold text-white transition-all duration-300 hover:bg-brand-red/90 hover:-translate-y-[2px] hover:shadow-[0_0_30px_rgba(190,8,17,0.5)] active:translate-y-0 active:shadow-[0_0_15px_rgba(190,8,17,0.3)] disabled:opacity-70 disabled:hover:translate-y-0 disabled:hover:shadow-none border-0"
               >
                 {isLoading ? (
                   <span className="flex items-center gap-2">
@@ -236,8 +198,8 @@ export default function Login() {
                 )}
               </Button>
 
-              <div className="pt-3 text-center text-[11px] text-black">
-                ¿No tienes acceso? Cominicate con el soporte técnico o con el
+              <div className="pt-3 text-center text-[11px] text-white/60">
+                ¿No tienes acceso? Comunícate con el soporte técnico o con el
                 administrador.
               </div>
             </form>
