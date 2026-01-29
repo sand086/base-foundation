@@ -24,7 +24,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 
 import type { SidebarIconKey } from "@/assets/img/icons/sidebar";
 import { SidebarSvgIcon } from "@/components/common/SidebarSvgIcon";
-import { logos_3t } from "@/assets/img";
+import { AnimatedLogo } from "@/components/common/AnimatedLogo";
 
 interface MenuItem {
   title: string;
@@ -191,24 +191,16 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
   return (
     <aside
       className={cn(
-        "fixed left-0 top-0 z-40 h-screen bg-brand-black text-sidebar-foreground transition-all duration-300 border-r border-sidebar-border sidebar-elevated",
+        "fixed left-0 top-0 z-50 h-screen bg-brand-black text-sidebar-foreground transition-all duration-300 border-r border-sidebar-border sidebar-elevated",
         collapsed ? "w-16" : "w-64",
       )}
     >
-      {/* Header */}
-      <div className="flex h-14 items-center justify-between px-4 border-b border-sidebar-border">
-        {!collapsed && (
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-base tracking-tight text-white">
-              <img src={logos_3t.logo_white_3t} alt="3T TLM" className="h-9" />
-            </span>
-          </div>
-        )}
-        {collapsed && (
-          <div className="flex h-8 w-8 items-center justify-center text-white font-bold text-xs mx-auto">
-            <img src={logos_3t.favicon_3t} alt="3T" className="h-6" />
-          </div>
-        )}
+      {/* Header with Animated Logo */}
+      <div className="flex h-14 items-center justify-center px-3 border-b border-sidebar-border">
+        <AnimatedLogo 
+          collapsed={collapsed} 
+          className={collapsed ? "h-8 w-8" : "h-10"} 
+        />
       </div>
 
       {/* Toggle Button */}
