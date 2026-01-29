@@ -11,10 +11,43 @@ export function AppLayout() {
   const location = useLocation();
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Aurora Mesh Background - Subtle animated atmosphere */}
-      <div className="aurora-background" aria-hidden="true" />
-      <div className="aurora-orb-center" aria-hidden="true" />
+    <div className="min-h-screen bg-background relative overflow-hidden">
+      {/* ========================================
+          AMBIENT LIGHT - Floating Blob Orbs
+          Subtle animated background atmosphere
+          ======================================== */}
+      <div className="absolute inset-0 -z-10 overflow-hidden" aria-hidden="true">
+        {/* Red Brand Orb - Top Left */}
+        <div 
+          className={cn(
+            "absolute -top-32 -left-32",
+            "w-96 h-96 rounded-full",
+            "bg-brand-red/10",
+            "blur-3xl mix-blend-multiply",
+            "animate-blob"
+          )} 
+        />
+        {/* Blue Orb - Top Right */}
+        <div 
+          className={cn(
+            "absolute -top-16 -right-16",
+            "w-80 h-80 rounded-full",
+            "bg-blue-200/10",
+            "blur-3xl mix-blend-multiply",
+            "animate-blob animation-delay-2000"
+          )} 
+        />
+        {/* Purple Orb - Bottom Center */}
+        <div 
+          className={cn(
+            "absolute -bottom-32 left-1/2 -translate-x-1/2",
+            "w-[500px] h-[500px] rounded-full",
+            "bg-purple-200/10",
+            "blur-3xl mix-blend-multiply",
+            "animate-blob animation-delay-4000"
+          )} 
+        />
+      </div>
       
       {/* Global Progress Bar - Safari/iOS style */}
       <GlobalProgressBar />
@@ -23,15 +56,17 @@ export function AppLayout() {
       <GlobalSearch />
       
       {/* Fixed Sidebar - Always visible on desktop */}
-      <AppSidebar
-        collapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-      />
+      <div className="relative z-10">
+        <AppSidebar
+          collapsed={sidebarCollapsed}
+          onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+        />
+      </div>
       
       {/* Main content with proper margin to avoid sidebar overlap */}
       <div
         className={cn(
-          "min-h-screen transition-all duration-300 ease-out",
+          "min-h-screen transition-all duration-300 ease-out relative z-10",
           sidebarCollapsed ? "ml-16" : "ml-64"
         )}
       >
