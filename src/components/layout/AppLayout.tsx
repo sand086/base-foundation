@@ -12,6 +12,10 @@ export function AppLayout() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Aurora Mesh Background - Subtle animated atmosphere */}
+      <div className="aurora-background" aria-hidden="true" />
+      <div className="aurora-orb-center" aria-hidden="true" />
+      
       {/* Global Progress Bar - Safari/iOS style */}
       <GlobalProgressBar />
       
