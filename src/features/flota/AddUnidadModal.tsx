@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useTiposUnidad } from '@/hooks/useTiposUnidad';
-import { Truck, CreditCard, Calendar, Hash } from 'lucide-react';
+import { Truck, CreditCard, Calendar, Hash, Box, Wrench, Settings } from 'lucide-react';
 
 export interface Unidad {
   id: string;
@@ -42,13 +42,22 @@ interface AddUnidadModalProps {
   onSave?: (unidad: Omit<Unidad, 'id'> & { id?: string }) => void;
 }
 
+type CategoriaActivo = 'tractocamion' | 'remolque_dolly' | 'utilitario';
+
 const emptyFormData = {
+  categoriaActivo: '' as CategoriaActivo | '',
   numeroEconomico: '',
   placas: '',
   marca: '',
   modelo: '',
   year: new Date().getFullYear().toString(),
   tipo: '',
+  // Remolque/Dolly specific fields
+  tipoSuspension: '',
+  dimensiones: '',
+  ejes: '',
+  // Utilitario specific
+  descripcion: '',
 };
 
 export function AddUnidadModal({ 
@@ -69,6 +78,8 @@ export function AddUnidadModal({
   useEffect(() => {
     if (unidadToEdit) {
       setFormData({
+        ...emptyFormData,
+        categoriaActivo: 'tractocamion', // Default to tractocamion for existing units
         numeroEconomico: unidadToEdit.numeroEconomico,
         placas: unidadToEdit.placas,
         marca: unidadToEdit.marca,
@@ -86,23 +97,45 @@ export function AddUnidadModal({
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
 
+    // Common validation
+    if (!formData.categoriaActivo) {
+      newErrors.categoriaActivo = 'Seleccione una categoría de activo';
+    }
     if (!formData.numeroEconomico.trim()) {
       newErrors.numeroEconomico = 'El número económico es obligatorio';
     }
-    if (!formData.placas.trim()) {
-      newErrors.placas = 'Las placas son obligatorias';
-    }
-    if (!formData.marca.trim()) {
-      newErrors.marca = 'La marca es obligatoria';
-    }
-    if (!formData.modelo.trim()) {
-      newErrors.modelo = 'El modelo es obligatorio';
-    }
-    if (!formData.year || isNaN(Number(formData.year))) {
-      newErrors.year = 'El año es obligatorio';
-    }
-    if (!formData.tipo) {
-      newErrors.tipo = 'Seleccione un tipo de unidad';
+
+    // Category-specific validation
+    if (formData.categoriaActivo === 'tractocamion') {
+      if (!formData.placas.trim()) {
+        newErrors.placas = 'Las placas son obligatorias';
+      }
+      if (!formData.marca.trim()) {
+        newErrors.marca = 'La marca es obligatoria';
+      }
+      if (!formData.modelo.trim()) {
+        newErrors.modelo = 'El modelo es obligatorio';
+      }
+      if (!formData.year || isNaN(Number(formData.year))) {
+        newErrors.year = 'El año es obligatorio';
+      }
+      if (!formData.tipo) {
+        newErrors.tipo = 'Seleccione un tipo de unidad';
+      }
+    } else if (formData.categoriaActivo === 'remolque_dolly') {
+      if (!formData.tipoSuspension.trim()) {
+        newErrors.tipoSuspension = 'El tipo de suspensión es obligatorio';
+      }
+      if (!formData.dimensiones.trim()) {
+        newErrors.dimensiones = 'Las dimensiones son obligatorias';
+      }
+      if (!formData.ejes.trim()) {
+        newErrors.ejes = 'El número de ejes es obligatorio';
+      }
+    } else if (formData.categoriaActivo === 'utilitario') {
+      if (!formData.descripcion.trim()) {
+        newErrors.descripcion = 'La descripción es obligatoria';
+      }
     }
 
     setErrors(newErrors);
@@ -179,7 +212,48 @@ export function AddUnidadModal({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6 pt-4">
-          {/* Identification */}
+          {/* Category Selection - First Field */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-foreground border-b pb-2 flex items-center gap-2">
+              <Box className="h-4 w-4 text-muted-foreground" />
+              Categoría de Activo
+            </h3>
+            <div className="space-y-2">
+              <Label htmlFor="categoriaActivo">Tipo de Activo *</Label>
+              <Select
+                value={formData.categoriaActivo}
+                onValueChange={(value: CategoriaActivo) => setFormData({ 
+                  ...emptyFormData, 
+                  categoriaActivo: value,
+                  numeroEconomico: formData.numeroEconomico,
+                })}
+              >
+                <SelectTrigger className={errors.categoriaActivo ? 'border-destructive' : ''}>
+                  <SelectValue placeholder="Seleccionar categoría..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="tractocamion">
+                    <span className="flex items-center gap-2">
+                      <Truck className="h-4 w-4" /> Tractocamión
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="remolque_dolly">
+                    <span className="flex items-center gap-2">
+                      <Box className="h-4 w-4" /> Remolque / Dolly
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="utilitario">
+                    <span className="flex items-center gap-2">
+                      <Wrench className="h-4 w-4" /> Utilitario / Otro
+                    </span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              {errors.categoriaActivo && <p className="text-xs text-destructive">{errors.categoriaActivo}</p>}
+            </div>
+          </div>
+
+          {/* Identification - Common to all */}
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-foreground border-b pb-2 flex items-center gap-2">
               <Hash className="h-4 w-4 text-muted-foreground" />
@@ -191,119 +265,233 @@ export function AddUnidadModal({
                 <Label htmlFor="numeroEconomico">No. Económico *</Label>
                 <Input
                   id="numeroEconomico"
-                  placeholder="TR-001"
+                  placeholder={formData.categoriaActivo === 'remolque_dolly' ? 'REM-001' : 'TR-001'}
                   value={formData.numeroEconomico}
                   onChange={(e) => setFormData({ ...formData, numeroEconomico: e.target.value.toUpperCase() })}
                   className={errors.numeroEconomico ? 'border-destructive' : ''}
                 />
                 {errors.numeroEconomico && <p className="text-xs text-destructive">{errors.numeroEconomico}</p>}
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="placas">Placas Federales *</Label>
-                <div className="relative">
-                  <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="placas"
-                    placeholder="AAA-000-A"
-                    className={`pl-10 uppercase ${errors.placas ? 'border-destructive' : ''}`}
-                    value={formData.placas}
-                    onChange={(e) => setFormData({ ...formData, placas: e.target.value.toUpperCase() })}
-                  />
+
+              {/* Placas - Only for Tractocamion */}
+              {formData.categoriaActivo === 'tractocamion' && (
+                <div className="space-y-2">
+                  <Label htmlFor="placas">Placas Federales *</Label>
+                  <div className="relative">
+                    <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="placas"
+                      placeholder="AAA-000-A"
+                      className={`pl-10 uppercase ${errors.placas ? 'border-destructive' : ''}`}
+                      value={formData.placas}
+                      onChange={(e) => setFormData({ ...formData, placas: e.target.value.toUpperCase() })}
+                    />
+                  </div>
+                  {errors.placas && <p className="text-xs text-destructive">{errors.placas}</p>}
                 </div>
-                {errors.placas && <p className="text-xs text-destructive">{errors.placas}</p>}
-              </div>
+              )}
             </div>
           </div>
 
-          {/* Vehicle Details */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-foreground border-b pb-2 flex items-center gap-2">
-              <Truck className="h-4 w-4 text-muted-foreground" />
-              Datos del Vehículo
-            </h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="marca">Marca *</Label>
-                <Select
-                  value={formData.marca}
-                  onValueChange={(value) => setFormData({ ...formData, marca: value })}
-                >
-                  <SelectTrigger className={errors.marca ? 'border-destructive' : ''}>
-                    <SelectValue placeholder="Seleccionar marca" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Freightliner">Freightliner</SelectItem>
-                    <SelectItem value="Kenworth">Kenworth</SelectItem>
-                    <SelectItem value="Volvo">Volvo</SelectItem>
-                    <SelectItem value="International">International</SelectItem>
-                    <SelectItem value="Peterbilt">Peterbilt</SelectItem>
-                    <SelectItem value="Mack">Mack</SelectItem>
-                    <SelectItem value="Western Star">Western Star</SelectItem>
-                  </SelectContent>
-                </Select>
-                {errors.marca && <p className="text-xs text-destructive">{errors.marca}</p>}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="modelo">Modelo *</Label>
-                <Input
-                  id="modelo"
-                  placeholder="Cascadia, T680, VNL..."
-                  value={formData.modelo}
-                  onChange={(e) => setFormData({ ...formData, modelo: e.target.value })}
-                  className={errors.modelo ? 'border-destructive' : ''}
-                />
-                {errors.modelo && <p className="text-xs text-destructive">{errors.modelo}</p>}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="year">Año *</Label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          {/* TRACTOCAMION FIELDS */}
+          {formData.categoriaActivo === 'tractocamion' && (
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-foreground border-b pb-2 flex items-center gap-2">
+                <Truck className="h-4 w-4 text-muted-foreground" />
+                Datos del Vehículo
+              </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="marca">Marca *</Label>
                   <Select
-                    value={formData.year}
-                    onValueChange={(value) => setFormData({ ...formData, year: value })}
+                    value={formData.marca}
+                    onValueChange={(value) => setFormData({ ...formData, marca: value })}
                   >
-                    <SelectTrigger className={`pl-10 ${errors.year ? 'border-destructive' : ''}`}>
-                      <SelectValue placeholder="Seleccionar año" />
+                    <SelectTrigger className={errors.marca ? 'border-destructive' : ''}>
+                      <SelectValue placeholder="Seleccionar marca" />
                     </SelectTrigger>
                     <SelectContent>
-                      {yearOptions.map((year) => (
-                        <SelectItem key={year} value={year.toString()}>
-                          {year}
+                      <SelectItem value="Freightliner">Freightliner</SelectItem>
+                      <SelectItem value="Kenworth">Kenworth</SelectItem>
+                      <SelectItem value="Volvo">Volvo</SelectItem>
+                      <SelectItem value="International">International</SelectItem>
+                      <SelectItem value="Peterbilt">Peterbilt</SelectItem>
+                      <SelectItem value="Mack">Mack</SelectItem>
+                      <SelectItem value="Western Star">Western Star</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {errors.marca && <p className="text-xs text-destructive">{errors.marca}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="modelo">Modelo *</Label>
+                  <Input
+                    id="modelo"
+                    placeholder="Cascadia, T680, VNL..."
+                    value={formData.modelo}
+                    onChange={(e) => setFormData({ ...formData, modelo: e.target.value })}
+                    className={errors.modelo ? 'border-destructive' : ''}
+                  />
+                  {errors.modelo && <p className="text-xs text-destructive">{errors.modelo}</p>}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="year">Año *</Label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Select
+                      value={formData.year}
+                      onValueChange={(value) => setFormData({ ...formData, year: value })}
+                    >
+                      <SelectTrigger className={`pl-10 ${errors.year ? 'border-destructive' : ''}`}>
+                        <SelectValue placeholder="Seleccionar año" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {yearOptions.map((year) => (
+                          <SelectItem key={year} value={year.toString()}>
+                            {year}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {errors.year && <p className="text-xs text-destructive">{errors.year}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="tipo">Tipo de Unidad *</Label>
+                  <Select
+                    value={formData.tipo}
+                    onValueChange={(value) => setFormData({ ...formData, tipo: value })}
+                    disabled={loadingTipos}
+                  >
+                    <SelectTrigger className={errors.tipo ? 'border-destructive' : ''}>
+                      <SelectValue placeholder={loadingTipos ? 'Cargando...' : 'Seleccionar tipo'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {tiposActivos.map((tipo) => (
+                        <SelectItem key={tipo.id} value={tipo.nombre.toLowerCase()}>
+                          <span className="flex items-center gap-2">
+                            {tipo.icono} {tipo.nombre}
+                          </span>
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  {errors.tipo && <p className="text-xs text-destructive">{errors.tipo}</p>}
                 </div>
-                {errors.year && <p className="text-xs text-destructive">{errors.year}</p>}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="tipo">Tipo de Unidad *</Label>
-                <Select
-                  value={formData.tipo}
-                  onValueChange={(value) => setFormData({ ...formData, tipo: value })}
-                  disabled={loadingTipos}
-                >
-                  <SelectTrigger className={errors.tipo ? 'border-destructive' : ''}>
-                    <SelectValue placeholder={loadingTipos ? 'Cargando...' : 'Seleccionar tipo'} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {tiposActivos.map((tipo) => (
-                      <SelectItem key={tipo.id} value={tipo.nombre.toLowerCase()}>
-                        <span className="flex items-center gap-2">
-                          {tipo.icono} {tipo.nombre}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {errors.tipo && <p className="text-xs text-destructive">{errors.tipo}</p>}
               </div>
             </div>
-          </div>
+          )}
+
+          {/* REMOLQUE/DOLLY FIELDS */}
+          {formData.categoriaActivo === 'remolque_dolly' && (
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-foreground border-b pb-2 flex items-center gap-2">
+                <Box className="h-4 w-4 text-muted-foreground" />
+                Datos del Remolque / Dolly
+              </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="tipoSuspension">Tipo de Suspensión *</Label>
+                  <Select
+                    value={formData.tipoSuspension}
+                    onValueChange={(value) => setFormData({ ...formData, tipoSuspension: value })}
+                  >
+                    <SelectTrigger className={errors.tipoSuspension ? 'border-destructive' : ''}>
+                      <SelectValue placeholder="Seleccionar suspensión" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="aire">Suspensión de Aire</SelectItem>
+                      <SelectItem value="mecanica">Suspensión Mecánica</SelectItem>
+                      <SelectItem value="mixta">Mixta</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {errors.tipoSuspension && <p className="text-xs text-destructive">{errors.tipoSuspension}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="dimensiones">Dimensiones *</Label>
+                  <Select
+                    value={formData.dimensiones}
+                    onValueChange={(value) => setFormData({ ...formData, dimensiones: value })}
+                  >
+                    <SelectTrigger className={errors.dimensiones ? 'border-destructive' : ''}>
+                      <SelectValue placeholder="Seleccionar dimensiones" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="40">40 pies</SelectItem>
+                      <SelectItem value="48">48 pies</SelectItem>
+                      <SelectItem value="53">53 pies</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {errors.dimensiones && <p className="text-xs text-destructive">{errors.dimensiones}</p>}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="ejes">Número de Ejes *</Label>
+                <Select
+                  value={formData.ejes}
+                  onValueChange={(value) => setFormData({ ...formData, ejes: value })}
+                >
+                  <SelectTrigger className={errors.ejes ? 'border-destructive' : ''}>
+                    <SelectValue placeholder="Seleccionar ejes" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="2">2 Ejes</SelectItem>
+                    <SelectItem value="3">3 Ejes</SelectItem>
+                    <SelectItem value="4">4 Ejes</SelectItem>
+                  </SelectContent>
+                </Select>
+                {errors.ejes && <p className="text-xs text-destructive">{errors.ejes}</p>}
+              </div>
+            </div>
+          )}
+
+          {/* UTILITARIO FIELDS */}
+          {formData.categoriaActivo === 'utilitario' && (
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-foreground border-b pb-2 flex items-center gap-2">
+                <Wrench className="h-4 w-4 text-muted-foreground" />
+                Datos del Utilitario
+              </h3>
+              
+              <div className="space-y-2">
+                <Label htmlFor="descripcion">Descripción del Activo *</Label>
+                <Input
+                  id="descripcion"
+                  placeholder="Ej: Montacargas Yale 5 Ton, Generador Caterpillar..."
+                  value={formData.descripcion}
+                  onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
+                  className={errors.descripcion ? 'border-destructive' : ''}
+                />
+                {errors.descripcion && <p className="text-xs text-destructive">{errors.descripcion}</p>}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="marca">Marca (Opcional)</Label>
+                  <Input
+                    id="marca"
+                    placeholder="Yale, Caterpillar, etc."
+                    value={formData.marca}
+                    onChange={(e) => setFormData({ ...formData, marca: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="modelo">Modelo (Opcional)</Label>
+                  <Input
+                    id="modelo"
+                    placeholder="Modelo del equipo"
+                    value={formData.modelo}
+                    onChange={(e) => setFormData({ ...formData, modelo: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           <DialogFooter className="gap-2">
             <Button

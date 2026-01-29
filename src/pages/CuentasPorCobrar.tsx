@@ -43,6 +43,7 @@ import { ImportServicesModal } from "@/features/cxc/ImportServicesModal";
 import { CreateInvoiceModal } from "@/features/cxc/CreateInvoiceModal";
 import { InvoiceDetailSheet } from "@/features/cxc/InvoiceDetailSheet";
 import { RegisterPaymentModal } from "@/features/cxc/RegisterPaymentModal";
+import { AccountStatementModal } from "@/features/cxc/AccountStatementModal";
 import { 
   ReceivableInvoice, 
   InvoicePayment,
@@ -67,6 +68,7 @@ export default function CuentasPorCobrar() {
   const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isAccountStatementOpen, setIsAccountStatementOpen] = useState(false);
   
   // Selected invoice for actions
   const [selectedInvoice, setSelectedInvoice] = useState<ReceivableInvoice | null>(null);
@@ -199,10 +201,8 @@ export default function CuentasPorCobrar() {
     setIsDeleteDialogOpen(true);
   };
 
-  const handleDownloadPDF = () => {
-    toast.success("Generando PDF", {
-      description: "El estado de cuenta se descargará en unos segundos...",
-    });
+  const handleOpenAccountStatement = () => {
+    setIsAccountStatementOpen(true);
   };
 
   // Define columns for EnhancedDataTable
@@ -371,9 +371,9 @@ export default function CuentasPorCobrar() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button variant="outline" onClick={handleDownloadPDF}>
+          <Button variant="outline" onClick={handleOpenAccountStatement}>
             <Download className="h-4 w-4 mr-2" />
-            Estado de Cuenta
+            Generar Estado de Cuenta
           </Button>
         </div>
       </PageHeader>
@@ -507,6 +507,13 @@ export default function CuentasPorCobrar() {
         onOpenChange={setIsPaymentModalOpen}
         invoice={selectedInvoice}
         onSubmit={handleRegisterPayment}
+      />
+
+      {/* Account Statement Modal */}
+      <AccountStatementModal
+        open={isAccountStatementOpen}
+        onClose={() => setIsAccountStatementOpen(false)}
+        invoices={invoices}
       />
 
       {/* Delete Confirmation Dialog */}
