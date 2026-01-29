@@ -17,9 +17,9 @@ export function KPICards({ stats }: KPICardsProps) {
   };
 
   return (
-    <div className="grid gap-3 md:grid-cols-4">
+    <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
       {/* Total Servicios */}
-      <Card className="rounded border shadow-none">
+      <Card className="rounded-xl border-0 shadow-none glass-card">
         <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
           <CardTitle className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
             Total Servicios
@@ -41,7 +41,7 @@ export function KPICards({ stats }: KPICardsProps) {
       </Card>
 
       {/* On Time % */}
-      <Card className="rounded border shadow-none">
+      <Card className="rounded-xl border-0 shadow-none glass-card">
         <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
           <CardTitle className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
             On Time %
@@ -65,7 +65,7 @@ export function KPICards({ stats }: KPICardsProps) {
       </Card>
 
       {/* Servicios con Retraso */}
-      <Card className="rounded border shadow-none">
+      <Card className="rounded-xl border-0 shadow-none glass-card">
         <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
           <CardTitle className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
             Servicios Tardíos
@@ -87,7 +87,7 @@ export function KPICards({ stats }: KPICardsProps) {
       </Card>
 
       {/* Ingresos Estimados */}
-      <Card className="rounded border shadow-none">
+      <Card className="rounded-xl border-0 shadow-none glass-card">
         <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
           <CardTitle className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
             Ingresos Estimados

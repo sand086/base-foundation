@@ -28,7 +28,7 @@ export default function Dashboard() {
   });
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Page Header with Date Filter */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <PageHeader
@@ -42,20 +42,33 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* KPI Cards Row */}
-      <KPICards stats={mockServiceStats} />
+      {/* Bento Grid Layout */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 auto-rows-[minmax(140px,auto)]">
+        {/* KPI Cards - Top Row (4 cards, 1 column each) */}
+        <div className="bento-card">
+          <KPICards stats={mockServiceStats} />
+        </div>
 
-      {/* Charts Row: On-Time Pie + Top Clients Bar */}
-      <div className="grid gap-3 md:grid-cols-2">
-        <OnTimeChart stats={mockServiceStats} />
-        <TopClientsChart clients={mockClientServices} />
+        {/* On-Time Chart - Featured Large Card */}
+        <div className="md:col-span-2 md:row-span-2 bento-card bento-card-featured">
+          <OnTimeChart stats={mockServiceStats} />
+        </div>
+
+        {/* Top Clients Chart */}
+        <div className="md:col-span-2 md:row-span-2 bento-card">
+          <TopClientsChart clients={mockClientServices} />
+        </div>
+
+        {/* Operator Statistics */}
+        <div className="md:col-span-4 bento-card">
+          <OperatorStatsCharts operators={mockOperatorStats} />
+        </div>
+
+        {/* Recent Services Table - Full Width */}
+        <div className="md:col-span-4 bento-card">
+          <RecentServicesTable services={mockRecentServices} />
+        </div>
       </div>
-
-      {/* Recent Services Table with contextual navigation */}
-      <RecentServicesTable services={mockRecentServices} />
-
-      {/* Operator Statistics Charts */}
-      <OperatorStatsCharts operators={mockOperatorStats} />
     </div>
   );
 }
