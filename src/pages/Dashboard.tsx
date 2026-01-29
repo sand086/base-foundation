@@ -42,32 +42,27 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* Bento Grid Layout */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 auto-rows-[minmax(140px,auto)]">
-        {/* KPI Cards - Top Row (4 cards, 1 column each) */}
-        <div className="bento-card">
-          <KPICards stats={mockServiceStats} />
-        </div>
+      {/* KPI Cards - Always 4 columns, responsive sizing */}
+      <KPICards stats={mockServiceStats} />
 
-        {/* On-Time Chart - Featured Large Card */}
-        <div className="md:col-span-2 md:row-span-2 bento-card bento-card-featured">
+      {/* Charts Row: On-Time Pie + Top Clients Bar */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="bento-card bento-card-featured min-h-[280px]">
           <OnTimeChart stats={mockServiceStats} />
         </div>
-
-        {/* Top Clients Chart */}
-        <div className="md:col-span-2 md:row-span-2 bento-card">
+        <div className="bento-card min-h-[280px]">
           <TopClientsChart clients={mockClientServices} />
         </div>
+      </div>
 
-        {/* Operator Statistics */}
-        <div className="md:col-span-4 bento-card">
-          <OperatorStatsCharts operators={mockOperatorStats} />
-        </div>
+      {/* Recent Services Table - Full Width */}
+      <div className="bento-card">
+        <RecentServicesTable services={mockRecentServices} />
+      </div>
 
-        {/* Recent Services Table - Full Width */}
-        <div className="md:col-span-4 bento-card">
-          <RecentServicesTable services={mockRecentServices} />
-        </div>
+      {/* Operator Statistics */}
+      <div className="bento-card">
+        <OperatorStatsCharts operators={mockOperatorStats} />
       </div>
     </div>
   );

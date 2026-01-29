@@ -48,111 +48,113 @@ export function RecentServicesTable({ services }: RecentServicesTableProps) {
   };
 
   return (
-    <Card className="rounded border shadow-none">
-      <CardHeader className="pb-2 pt-3 px-3 flex flex-row items-center justify-between">
-        <CardTitle className="text-sm font-semibold text-brand-dark">
+    <Card className="rounded-2xl border-0 shadow-none bg-transparent">
+      <CardHeader className="pb-3 pt-4 px-4 flex flex-row items-center justify-between">
+        <CardTitle className="text-sm font-semibold text-brand-dark heading-crisp">
           Últimos Servicios
         </CardTitle>
-        <span className="text-[10px] text-muted-foreground">
+        <span className="text-xs text-muted-foreground">
           Click en fila para ver en Monitoreo
         </span>
       </CardHeader>
       <CardContent className="px-0 pb-0">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-y bg-muted/50">
-                <th className="text-left py-1.5 px-3 text-[10px] font-semibold uppercase text-muted-foreground tracking-wider">
-                  ID
-                </th>
-                <th className="text-left py-1.5 px-3 text-[10px] font-semibold uppercase text-muted-foreground tracking-wider">
-                  Cliente
-                </th>
-                <th className="text-left py-1.5 px-3 text-[10px] font-semibold uppercase text-muted-foreground tracking-wider">
-                  Ruta
-                </th>
-                <th className="text-left py-1.5 px-3 text-[10px] font-semibold uppercase text-muted-foreground tracking-wider">
-                  Operador
-                </th>
-                <th className="text-left py-1.5 px-3 text-[10px] font-semibold uppercase text-muted-foreground tracking-wider">
-                  Estatus
-                </th>
-                <th className="text-left py-1.5 px-3 text-[10px] font-semibold uppercase text-muted-foreground tracking-wider">
-                  Fecha
-                </th>
-                <th className="text-left py-1.5 px-3 text-[10px] font-semibold uppercase text-muted-foreground tracking-wider">
-                  Acción
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {services.slice(0, 10).map((service) => {
-                const statusConfig = getStatusConfig(service.status);
-                return (
-                  <tr
-                    key={service.id}
-                    onClick={() => handleRowClick(service)}
-                    className="border-b hover:bg-muted/30 transition-colors cursor-pointer"
-                  >
-                    <td className="py-1.5 px-3 text-xs font-medium text-brand-red">
-                      {service.id}
-                    </td>
-                    <td className="py-1.5 px-3 text-xs max-w-[140px] truncate">
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span className="cursor-default">
-                              {service.clientName.length > 20
-                                ? `${service.clientName.substring(0, 20)}...`
-                                : service.clientName}
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>{service.clientName}</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    </td>
-                    <td className="py-1.5 px-3 text-xs">
-                      <span className="text-muted-foreground">{service.origin}</span>
-                      <span className="mx-1 text-muted-foreground/50">→</span>
-                      <span>{service.destination}</span>
-                    </td>
-                    <td className="py-1.5 px-3 text-xs max-w-[120px] truncate">
-                      {service.operator}
-                    </td>
-                    <td className="py-1.5 px-3">
-                      <StatusBadge status={statusConfig.type}>
-                        {statusConfig.label}
-                      </StatusBadge>
-                    </td>
-                    <td className="py-1.5 px-3 text-xs text-muted-foreground">
-                      {service.date}
-                    </td>
-                    <td className="py-1.5 px-3">
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0"
-                              onClick={(e) => handleViewInDispatch(e, service)}
-                            >
-                              <ExternalLink className="h-3.5 w-3.5 text-muted-foreground hover:text-brand-dark" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Ver en Despacho</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="overflow-hidden rounded-xl mx-4 mb-4 liquid-glass-table">
+          <div className="overflow-x-auto max-h-[400px]">
+            <table className="w-full">
+              <thead className="sticky top-0 z-10 bg-white/80 dark:bg-black/40 backdrop-blur-xl">
+                <tr className="border-b border-muted/20">
+                  <th className="text-left py-3 px-4 text-[11px] font-semibold uppercase text-muted-foreground tracking-wider">
+                    ID
+                  </th>
+                  <th className="text-left py-3 px-4 text-[11px] font-semibold uppercase text-muted-foreground tracking-wider">
+                    Cliente
+                  </th>
+                  <th className="text-left py-3 px-4 text-[11px] font-semibold uppercase text-muted-foreground tracking-wider">
+                    Ruta
+                  </th>
+                  <th className="text-left py-3 px-4 text-[11px] font-semibold uppercase text-muted-foreground tracking-wider">
+                    Operador
+                  </th>
+                  <th className="text-left py-3 px-4 text-[11px] font-semibold uppercase text-muted-foreground tracking-wider">
+                    Estatus
+                  </th>
+                  <th className="text-left py-3 px-4 text-[11px] font-semibold uppercase text-muted-foreground tracking-wider">
+                    Fecha
+                  </th>
+                  <th className="text-left py-3 px-4 text-[11px] font-semibold uppercase text-muted-foreground tracking-wider">
+                    Acción
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {services.slice(0, 10).map((service) => {
+                  const statusConfig = getStatusConfig(service.status);
+                  return (
+                    <tr
+                      key={service.id}
+                      onClick={() => handleRowClick(service)}
+                      className="group border-b border-muted/20 dark:border-white/5 hover:bg-muted/40 dark:hover:bg-white/5 transition-all duration-200 cursor-pointer"
+                    >
+                      <td className="py-4 px-4 text-sm font-medium text-brand-red">
+                        {service.id}
+                      </td>
+                      <td className="py-4 px-4 text-sm max-w-[160px] truncate">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="cursor-default">
+                                {service.clientName.length > 22
+                                  ? `${service.clientName.substring(0, 22)}...`
+                                  : service.clientName}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>{service.clientName}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </td>
+                      <td className="py-4 px-4 text-sm">
+                        <span className="text-muted-foreground">{service.origin}</span>
+                        <span className="mx-2 text-muted-foreground/40">→</span>
+                        <span>{service.destination}</span>
+                      </td>
+                      <td className="py-4 px-4 text-sm max-w-[140px] truncate">
+                        {service.operator}
+                      </td>
+                      <td className="py-4 px-4">
+                        <StatusBadge status={statusConfig.type}>
+                          {statusConfig.label}
+                        </StatusBadge>
+                      </td>
+                      <td className="py-4 px-4 text-sm text-muted-foreground">
+                        {service.date}
+                      </td>
+                      <td className="py-4 px-4">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                                onClick={(e) => handleViewInDispatch(e, service)}
+                              >
+                                <ExternalLink className="h-4 w-4 text-muted-foreground hover:text-brand-dark" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Ver en Despacho</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       </CardContent>
     </Card>

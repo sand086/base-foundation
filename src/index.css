@@ -1060,3 +1060,150 @@
 .login-button:hover::before {
   transform: translateX(100%);
 }
+
+/* ========================================
+   LIQUID GLASS TABLE
+   ======================================== */
+
+.liquid-glass-table {
+  background: hsl(var(--card) / 0.6);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid hsl(0 0% 100% / 0.1);
+  box-shadow: 
+    0 4px 24px hsl(0 0% 0% / 0.06),
+    inset 0 1px 0 hsl(0 0% 100% / 0.1);
+}
+
+.dark .liquid-glass-table {
+  background: hsl(var(--card) / 0.4);
+  border-color: hsl(0 0% 100% / 0.05);
+}
+
+/* KPI Card specific styles */
+.kpi-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 120px;
+  height: 120px;
+  background: radial-gradient(
+    circle at 100% 0%,
+    hsl(var(--brand-red) / 0.05) 0%,
+    transparent 70%
+  );
+  pointer-events: none;
+}
+
+/* ========================================
+   AURORA MESH BACKGROUND
+   ======================================== */
+
+.aurora-background {
+  position: fixed;
+  inset: 0;
+  z-index: -10;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.aurora-background::before,
+.aurora-background::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(100px);
+  opacity: 0.4;
+  will-change: transform;
+}
+
+.aurora-background::before {
+  width: 600px;
+  height: 600px;
+  top: -200px;
+  left: -100px;
+  background: radial-gradient(
+    ellipse,
+    hsl(var(--brand-red) / 0.15) 0%,
+    hsl(280 60% 30% / 0.08) 40%,
+    transparent 70%
+  );
+  animation: aurora-float-1 25s ease-in-out infinite;
+}
+
+.aurora-background::after {
+  width: 500px;
+  height: 500px;
+  bottom: -150px;
+  right: -100px;
+  background: radial-gradient(
+    ellipse,
+    hsl(var(--brand-green) / 0.1) 0%,
+    hsl(200 50% 40% / 0.06) 40%,
+    transparent 70%
+  );
+  animation: aurora-float-2 30s ease-in-out infinite;
+}
+
+/* Third aurora orb - center */
+.aurora-orb-center {
+  position: fixed;
+  width: 800px;
+  height: 800px;
+  top: 30%;
+  left: 40%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(
+    ellipse,
+    hsl(var(--muted-foreground) / 0.03) 0%,
+    transparent 60%
+  );
+  filter: blur(80px);
+  pointer-events: none;
+  z-index: -10;
+  animation: aurora-float-3 35s ease-in-out infinite;
+}
+
+@keyframes aurora-float-1 {
+  0%, 100% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+  }
+  25% {
+    transform: translate(50px, 30px) scale(1.1) rotate(5deg);
+  }
+  50% {
+    transform: translate(20px, 60px) scale(0.95) rotate(-3deg);
+  }
+  75% {
+    transform: translate(-30px, 20px) scale(1.05) rotate(2deg);
+  }
+}
+
+@keyframes aurora-float-2 {
+  0%, 100% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+  }
+  33% {
+    transform: translate(-40px, -30px) scale(1.08) rotate(-4deg);
+  }
+  66% {
+    transform: translate(30px, -50px) scale(0.92) rotate(3deg);
+  }
+}
+
+@keyframes aurora-float-3 {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.3;
+  }
+  50% {
+    transform: translate(-45%, -55%) scale(1.1);
+    opacity: 0.5;
+  }
+}
