@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Check, ChevronRight, AlertTriangle, MapPin, Truck, User, FileText, ShieldAlert, Lock } from "lucide-react";
+import { Check, ChevronRight, AlertTriangle, MapPin, Truck, User, FileText, ShieldAlert, Lock, Container } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ActionButton } from "@/components/ui/action-button";
@@ -29,6 +29,7 @@ import {
   mockDispatchUnits,
   mockDrivers,
 } from "@/data/despachoData";
+import { mockRemolques, mockDollies } from "@/data/remolquesData";
 import { useSecurityNotifications } from "@/hooks/useSecurityNotifications";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -51,6 +52,13 @@ interface WizardData {
   driverId: string;
   driverNombre: string;
   precio: number;
+  // Multirremolque fields
+  remolque1Id: string;
+  remolque1Numero: string;
+  dollyId: string;
+  dollyNumero: string;
+  remolque2Id: string;
+  remolque2Numero: string;
 }
 
 const initialData: WizardData = {
@@ -69,6 +77,13 @@ const initialData: WizardData = {
   driverId: '',
   driverNombre: '',
   precio: 0,
+  // Multirremolque fields
+  remolque1Id: '',
+  remolque1Numero: '',
+  dollyId: '',
+  dollyNumero: '',
+  remolque2Id: '',
+  remolque2Numero: '',
 };
 
 // Simulated current user role - In production this would come from auth context
@@ -158,6 +173,13 @@ export const DespachoWizard = () => {
         unitNumero: unit.numero,
         unitTipo: unit.tipo,
         precio: newPrecio,
+        // Reset trailer selections when unit type changes
+        remolque1Id: '',
+        remolque1Numero: '',
+        dollyId: '',
+        dollyNumero: '',
+        remolque2Id: '',
+        remolque2Numero: '',
       });
 
       // Reset override when changing selection
@@ -176,6 +198,53 @@ export const DespachoWizard = () => {
       setBlockReasons([...reasons, ...driverReasons]);
     }
   };
+
+  // Handlers for trailers
+  const handleRemolque1Change = (remolqueId: string) => {
+    const remolque = mockRemolques.find((r) => r.id === remolqueId);
+    if (remolque) {
+      setData({
+        ...data,
+        remolque1Id: remolqueId,
+        remolque1Numero: remolque.numero,
+      });
+    }
+  };
+
+  const handleDollyChange = (dollyId: string) => {
+    const dolly = mockDollies.find((d) => d.id === dollyId);
+    if (dolly) {
+      setData({
+        ...data,
+        dollyId,
+        dollyNumero: dolly.numero,
+      });
+    }
+  };
+
+  const handleRemolque2Change = (remolqueId: string) => {
+    const remolque = mockRemolques.find((r) => r.id === remolqueId);
+    if (remolque) {
+      setData({
+        ...data,
+        remolque2Id: remolqueId,
+        remolque2Numero: remolque.numero,
+      });
+    }
+  };
+
+  // Available trailers (not already selected)
+  const availableRemolquesForSlot1 = useMemo(() => {
+    return mockRemolques.filter(r => r.status === 'disponible' && r.id !== data.remolque2Id);
+  }, [data.remolque2Id]);
+
+  const availableRemolquesForSlot2 = useMemo(() => {
+    return mockRemolques.filter(r => r.status === 'disponible' && r.id !== data.remolque1Id);
+  }, [data.remolque1Id]);
+
+  const availableDollies = useMemo(() => {
+    return mockDollies.filter(d => d.status === 'disponible');
+  }, []);
 
   const handleDriverChange = (driverId: string) => {
     const driver = mockDrivers.find((d) => d.id === driverId);
@@ -230,7 +299,21 @@ export const DespachoWizard = () => {
 
   // Check if there are any blocking issues
   const hasBlockingIssues = unitBlocked || driverBlocked;
-  const canProceedStep2 = data.unitId && data.driverId && (!hasBlockingIssues || overrideApplied);
+  
+  // Validate trailer requirements based on unit type
+  const isTrailerRequirementMet = useMemo(() => {
+    if (!data.unitId) return false;
+    
+    if (data.unitTipo === '9ejes') {
+      // Full requires: Remolque 1 + Dolly + Remolque 2
+      return !!data.remolque1Id && !!data.dollyId && !!data.remolque2Id;
+    } else {
+      // Sencillo requires: Remolque 1 only
+      return !!data.remolque1Id;
+    }
+  }, [data.unitId, data.unitTipo, data.remolque1Id, data.dollyId, data.remolque2Id]);
+
+  const canProceedStep2 = data.unitId && data.driverId && isTrailerRequirementMet && (!hasBlockingIssues || overrideApplied);
 
   // Step validation
   const isStep1Valid = data.clienteId && data.subClienteId && data.routeId;
@@ -495,6 +578,102 @@ export const DespachoWizard = () => {
                   )}
                 </div>
               </div>
+
+              {/* Trailer/Remolque Selection - Conditional based on unit type */}
+              {data.unitId && (
+                <div className="space-y-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                  <div className="flex items-center gap-2 text-slate-700 font-medium">
+                    <Container className="h-4 w-4" />
+                    <span>
+                      Configuración de Remolques 
+                      {data.unitTipo === '9ejes' ? ' (Full - 9 Ejes)' : ' (Sencillo - 5 Ejes)'}
+                    </span>
+                  </div>
+                  
+                  <div className={cn(
+                    "grid gap-4",
+                    data.unitTipo === '9ejes' ? "grid-cols-1 md:grid-cols-3" : "grid-cols-1 md:grid-cols-2"
+                  )}>
+                    {/* Remolque 1 - Always required */}
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-1">
+                        {data.unitTipo === '9ejes' ? 'Remolque 1 *' : 'Remolque *'}
+                      </Label>
+                      <Select value={data.remolque1Id} onValueChange={handleRemolque1Change}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar remolque..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableRemolquesForSlot1.map((rem) => (
+                            <SelectItem key={rem.id} value={rem.id}>
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold">{rem.numero}</span>
+                                <span className="text-slate-500 text-sm">{rem.descripcion}</span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Dolly - Only for 9 ejes (Full) */}
+                    {data.unitTipo === '9ejes' && (
+                      <div className="space-y-2">
+                        <Label>Dolly *</Label>
+                        <Select value={data.dollyId} onValueChange={handleDollyChange}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar dolly..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableDollies.map((dolly) => (
+                              <SelectItem key={dolly.id} value={dolly.id}>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-semibold">{dolly.numero}</span>
+                                  <span className="text-slate-500 text-sm capitalize">
+                                    {dolly.tipo.replace('_', ' ')}
+                                  </span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    {/* Remolque 2 - Only for 9 ejes (Full) */}
+                    {data.unitTipo === '9ejes' && (
+                      <div className="space-y-2">
+                        <Label>Remolque 2 *</Label>
+                        <Select value={data.remolque2Id} onValueChange={handleRemolque2Change}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar remolque..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableRemolquesForSlot2.map((rem) => (
+                              <SelectItem key={rem.id} value={rem.id}>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-semibold">{rem.numero}</span>
+                                  <span className="text-slate-500 text-sm">{rem.descripcion}</span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Visual indicator of what's required */}
+                  {!isTrailerRequirementMet && (
+                    <p className="text-xs text-amber-600 flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3" />
+                      {data.unitTipo === '9ejes' 
+                        ? 'Debe seleccionar Remolque 1, Dolly y Remolque 2 para unidad Full'
+                        : 'Debe seleccionar un Remolque para continuar'}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Blocking Warning - Documents Expired */}
               {hasBlockingIssues && !overrideApplied && (

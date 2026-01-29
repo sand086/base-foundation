@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { MapPin, Navigation, MessageSquare, Mail, Clock } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface UpdateStatusModalProps {
   open: boolean;
@@ -70,10 +71,21 @@ export function UpdateStatusModal({
       minute: '2-digit',
     });
     
+    const selectedStatusLabel = statusOptions.find(s => s.value === formData.status)?.label || formData.status;
+    
     onSubmit({
       ...formData,
       timestamp,
     });
+    
+    // Simulate email notification if enabled
+    if (formData.notifyClient) {
+      // In real implementation, this would trigger an actual email
+      toast.success('Correo enviado al cliente', {
+        description: `Tu unidad [${serviceId}] está en [${formData.location}] - ${selectedStatusLabel}`,
+        duration: 5000,
+      });
+    }
     
     // Reset form
     setFormData({
