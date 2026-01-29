@@ -136,6 +136,67 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
+    /* Subtle dot pattern for depth */
+    background-image: radial-gradient(circle at 1px 1px, hsl(var(--muted-foreground) / 0.03) 1px, transparent 0);
+    background-size: 24px 24px;
+  }
+}
+
+/* ========================================
+   ANIMATION KEYFRAMES - Premium Polish
+   ======================================== */
+
+/* Page transition - slide up fade */
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Staggered row animation */
+@keyframes row-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Subtle float for cards */
+@keyframes subtle-float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+/* Shimmer effect for loading states */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* Pulse glow for important elements */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 hsl(var(--primary) / 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 4px hsl(var(--primary) / 0);
   }
 }
 
@@ -149,9 +210,124 @@
   }
 }
 
+/* ========================================
+   ANIMATION UTILITIES
+   ======================================== */
+
+.animate-page-enter {
+  animation: page-enter 0.4s ease-out;
+}
+
+.animate-row-enter {
+  animation: row-enter 0.3s ease-out backwards;
+}
+
 .animate-pulse-danger {
   animation: pulse-danger 1.5s ease-in-out infinite;
 }
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted)) 0%,
+    hsl(var(--muted-foreground) / 0.1) 50%,
+    hsl(var(--muted)) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* Staggered delays for table rows */
+.stagger-1 { animation-delay: 0.02s; }
+.stagger-2 { animation-delay: 0.04s; }
+.stagger-3 { animation-delay: 0.06s; }
+.stagger-4 { animation-delay: 0.08s; }
+.stagger-5 { animation-delay: 0.10s; }
+.stagger-6 { animation-delay: 0.12s; }
+.stagger-7 { animation-delay: 0.14s; }
+.stagger-8 { animation-delay: 0.16s; }
+.stagger-9 { animation-delay: 0.18s; }
+.stagger-10 { animation-delay: 0.20s; }
+
+/* ========================================
+   INTERACTIVE ELEMENT STYLES
+   ======================================== */
+
+/* Premium card hover effect */
+.card-hover {
+  @apply transition-all duration-300 ease-out;
+}
+
+.card-hover:hover {
+  @apply -translate-y-1;
+  box-shadow: 
+    0 4px 6px -1px hsl(var(--foreground) / 0.05),
+    0 10px 15px -3px hsl(var(--foreground) / 0.08),
+    0 0 0 1px hsl(var(--border) / 0.5);
+}
+
+/* Glass effect for cards (subtle) */
+.glass-card {
+  @apply backdrop-blur-sm;
+  background: hsl(var(--card) / 0.8);
+}
+
+/* Button press feedback */
+.btn-press {
+  @apply transition-transform duration-100;
+}
+
+.btn-press:active {
+  @apply scale-[0.97];
+}
+
+/* Primary button with subtle gradient */
+.btn-primary-gradient {
+  background: linear-gradient(
+    135deg,
+    hsl(var(--primary)) 0%,
+    hsl(var(--primary) / 0.85) 100%
+  );
+  box-shadow: 
+    0 1px 2px hsl(var(--primary) / 0.2),
+    inset 0 1px 0 hsl(var(--primary-foreground) / 0.1);
+}
+
+.btn-primary-gradient:hover {
+  background: linear-gradient(
+    135deg,
+    hsl(var(--primary) / 0.95) 0%,
+    hsl(var(--primary) / 0.8) 100%
+  );
+}
+
+/* Action button (green) with gradient */
+.btn-action-gradient {
+  background: linear-gradient(
+    135deg,
+    hsl(var(--action)) 0%,
+    hsl(var(--action) / 0.85) 100%
+  );
+  box-shadow: 
+    0 1px 2px hsl(var(--action) / 0.2),
+    inset 0 1px 0 hsl(var(--action-foreground) / 0.1);
+}
+
+.btn-action-gradient:hover {
+  background: linear-gradient(
+    135deg,
+    hsl(var(--action-hover)) 0%,
+    hsl(var(--action) / 0.8) 100%
+  );
+}
+
+/* ========================================
+   TABLE STYLES
+   ======================================== */
 
 /* High-density table styles */
 .table-dense th,
@@ -163,7 +339,38 @@
   @apply font-semibold text-muted-foreground uppercase text-xs tracking-wider;
 }
 
-/* Custom Scrollbar */
+/* Animated table rows */
+.table-row-animated {
+  @apply transition-colors duration-200;
+}
+
+.table-row-animated:hover {
+  @apply bg-muted/50;
+}
+
+/* ========================================
+   SIDEBAR STYLES
+   ======================================== */
+
+/* Smooth sidebar item transitions */
+.sidebar-item {
+  @apply transition-all duration-200 ease-out;
+}
+
+.sidebar-item:hover {
+  @apply bg-sidebar-accent;
+}
+
+/* Sidebar accordion animation */
+.sidebar-accordion-content {
+  @apply overflow-hidden;
+  animation: accordion-down 0.2s ease-out;
+}
+
+/* ========================================
+   SCROLLBAR STYLES
+   ======================================== */
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -185,4 +392,21 @@
 * {
   scrollbar-width: thin;
   scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
+}
+
+/* ========================================
+   FOCUS STYLES
+   ======================================== */
+
+/* Better focus ring */
+.focus-ring {
+  @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+}
+
+/* ========================================
+   LOADING STATES
+   ======================================== */
+
+.skeleton {
+  @apply animate-shimmer rounded;
 }
