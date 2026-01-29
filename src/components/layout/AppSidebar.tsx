@@ -191,7 +191,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
   return (
     <aside
       className={cn(
-        "fixed left-0 top-0 z-40 h-screen bg-brand-black text-sidebar-foreground transition-all duration-300 border-r border-sidebar-border",
+        "fixed left-0 top-0 z-40 h-screen bg-brand-black text-sidebar-foreground transition-all duration-300 border-r border-sidebar-border sidebar-elevated",
         collapsed ? "w-16" : "w-64",
       )}
     >

@@ -19,7 +19,7 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      "fixed inset-0 z-50 bg-black/60 backdrop-blur-sm",
+      "fixed inset-0 z-50 modal-glow-overlay backdrop-blur-sm",
       "data-[state=open]:animate-in data-[state=closed]:animate-out",
       "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       className,
@@ -39,10 +39,10 @@ const DialogContent = React.forwardRef<
       ref={ref}
       className={cn(
         "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 p-6",
-        // Glassmorphism - macOS Tahoe style
+        // Glassmorphism - macOS Tahoe style with glow
         "bg-card/90 backdrop-blur-xl",
         "border border-white/15 dark:border-white/8",
-        "shadow-[0_8px_32px_hsl(0_0%_0%/0.12),0_24px_64px_hsl(0_0%_0%/0.16)]",
+        "modal-glow",
         "rounded-2xl",
         // Animations
         "duration-200",
