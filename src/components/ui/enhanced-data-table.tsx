@@ -392,61 +392,67 @@ export function EnhancedDataTable<T extends Record<string, any>>({
         </div>
       </div>
 
-      {/* Table */}
-      <div className="relative w-full overflow-auto rounded-md border">
-        <table className="w-full caption-bottom text-sm">
-          <thead className="bg-muted">
-            <tr>
-              {columns.map((col) => (
-                <th
-                  key={col.key as string}
-                  className={cn(
-                    "h-10 px-3 py-2 text-left align-middle font-semibold text-muted-foreground uppercase text-xs tracking-wider",
-                    col.sortable !== false && "cursor-pointer select-none hover:text-foreground transition-colors",
-                    col.width
-                  )}
-                  onClick={() => col.sortable !== false && handleSort(col.key as string)}
-                >
-                  <div className="flex items-center gap-1.5">
-                    {col.header}
-                    {col.sortable !== false && getSortIcon(col.key as string)}
-                  </div>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="[&_tr:last-child]:border-0 table-staggered">
-            {paginatedData.length === 0 ? (
+      {/* Table - Liquid Glass Style */}
+      <div className="relative w-full overflow-hidden rounded-2xl border border-white/10 shadow-lg">
+        <div className="overflow-auto max-h-[500px]">
+          <table className="w-full caption-bottom text-sm">
+            <thead className="sticky top-0 z-20 backdrop-blur-md bg-white/85 dark:bg-black/85 shadow-sm border-b border-white/20">
               <tr>
-                <td colSpan={columns.length} className="px-4 py-8 text-center text-muted-foreground">
-                  No se encontraron registros
-                </td>
+                {columns.map((col) => (
+                  <th
+                    key={col.key as string}
+                    className={cn(
+                      "h-12 p-4 text-left align-middle",
+                      "font-semibold text-muted-foreground",
+                      "uppercase text-xs tracking-wider",
+                      col.sortable !== false && "cursor-pointer select-none hover:text-foreground transition-colors",
+                      col.width
+                    )}
+                    onClick={() => col.sortable !== false && handleSort(col.key as string)}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      {col.header}
+                      {col.sortable !== false && getSortIcon(col.key as string)}
+                    </div>
+                  </th>
+                ))}
               </tr>
-            ) : (
-              paginatedData.map((row, idx) => (
-                <tr
-                  key={idx}
-                  className={cn(
-                    "border-b transition-colors duration-150 hover:bg-muted/50",
-                    onRowClick && "cursor-pointer"
-                  )}
-                  onClick={() => onRowClick?.(row)}
-                >
-                  {columns.map((col) => (
-                    <td
-                      key={col.key as string}
-                      className="px-3 py-2 align-middle text-sm"
-                    >
-                      {col.render
-                        ? col.render(getValue(row, col.key as string), row)
-                        : getValue(row, col.key as string)}
-                    </td>
-                  ))}
+            </thead>
+            <tbody className="[&_tr:last-child]:border-0 table-staggered">
+              {paginatedData.length === 0 ? (
+                <tr>
+                  <td colSpan={columns.length} className="p-4 py-8 text-center text-muted-foreground">
+                    No se encontraron registros
+                  </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                paginatedData.map((row, idx) => (
+                  <tr
+                    key={idx}
+                    className={cn(
+                      "border-b border-muted/30 dark:border-white/5",
+                      "transition-colors duration-200",
+                      "hover:bg-muted/40 dark:hover:bg-white/5",
+                      onRowClick && "cursor-pointer"
+                    )}
+                    onClick={() => onRowClick?.(row)}
+                  >
+                    {columns.map((col) => (
+                      <td
+                        key={col.key as string}
+                        className="p-4 align-middle text-sm"
+                      >
+                        {col.render
+                          ? col.render(getValue(row, col.key as string), row)
+                          : getValue(row, col.key as string)}
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Pagination */}
