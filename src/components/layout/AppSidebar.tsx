@@ -242,8 +242,9 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
                   <button
                     onClick={() => !collapsed && toggleExpand(item.title)}
                     className={cn(
-                      "flex w-full items-center justify-between rounded px-2.5 py-2 text-xs font-medium transition-colors",
-                      "hover:bg-sidebar-accent hover:text-white",
+                      "flex w-full items-center justify-between rounded px-2.5 py-2 text-xs font-medium",
+                      "transition-all duration-200 ease-out",
+                      "hover:bg-sidebar-accent hover:text-white hover:translate-x-0.5",
                       isActive(undefined, item.children) &&
                         "bg-sidebar-accent text-white border-l-2 border-brand-red",
                     )}
@@ -255,22 +256,25 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
 
                     {!collapsed &&
                       (expandedItems.includes(item.title) ? (
-                        <ChevronDown className="h-3.5 w-3.5 text-sidebar-foreground" />
+                        <ChevronDown className="h-3.5 w-3.5 text-sidebar-foreground transition-transform duration-200" />
                       ) : (
-                        <ChevronRight className="h-3.5 w-3.5 text-sidebar-foreground" />
+                        <ChevronRight className="h-3.5 w-3.5 text-sidebar-foreground transition-transform duration-200" />
                       ))}
                   </button>
 
                   {!collapsed && expandedItems.includes(item.title) && (
-                    <div className="ml-4 mt-0.5 space-y-0.5 border-l border-sidebar-border pl-3">
-                      {item.children.map((child) => (
+                    <div className="ml-4 mt-0.5 space-y-0.5 border-l border-sidebar-border pl-3 animate-in slide-in-from-top-1 fade-in duration-200">
+                      {item.children.map((child, idx) => (
                         <NavLink
                           key={child.path}
                           to={child.path}
+                          style={{ animationDelay: `${idx * 30}ms` }}
                           className={({ isActive }) =>
                             cn(
-                              "block rounded px-2.5 py-1.5 text-xs transition-colors",
-                              "hover:bg-sidebar-accent hover:text-white",
+                              "block rounded px-2.5 py-1.5 text-xs",
+                              "transition-all duration-200 ease-out",
+                              "hover:bg-sidebar-accent hover:text-white hover:translate-x-0.5",
+                              "animate-in fade-in slide-in-from-left-1",
                               isActive
                                 ? "bg-sidebar-accent text-white font-medium"
                                 : "text-sidebar-foreground",
@@ -284,22 +288,23 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
                   )}
                 </>
               ) : (
-                <NavLink
-                  to={item.path!}
-                  className={({ isActive }) =>
-                    cn(
-                      "flex items-center gap-2.5 rounded px-2.5 py-2 text-xs font-medium transition-colors",
-                      "hover:bg-sidebar-accent hover:text-white",
-                      isActive
-                        ? "bg-sidebar-accent text-white border-l-2 border-brand-red"
-                        : "text-sidebar-foreground",
-                    )
-                  }
-                >
-                  <RenderIcon item={item} />
-                  {!collapsed && <span>{item.title}</span>}
-                </NavLink>
-              )}
+              <NavLink
+                to={item.path!}
+                className={({ isActive }) =>
+                  cn(
+                    "flex items-center gap-2.5 rounded px-2.5 py-2 text-xs font-medium",
+                    "transition-all duration-200 ease-out",
+                    "hover:bg-sidebar-accent hover:text-white hover:translate-x-0.5",
+                    isActive
+                      ? "bg-sidebar-accent text-white border-l-2 border-brand-red"
+                      : "text-sidebar-foreground",
+                  )
+                }
+              >
+                <RenderIcon item={item} />
+                {!collapsed && <span>{item.title}</span>}
+              </NavLink>
+            )}
             </div>
           ))}
         </nav>

@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import { AppSidebar } from "./AppSidebar";
 import { AppHeader } from "./AppHeader";
 import { cn } from "@/lib/utils";
 
 export function AppLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const location = useLocation();
 
   return (
     <div className="min-h-screen bg-background">
@@ -15,13 +16,19 @@ export function AppLayout() {
       />
       <div
         className={cn(
-          "transition-all duration-300",
+          "transition-all duration-300 ease-out",
           sidebarCollapsed ? "ml-16" : "ml-64"
         )}
       >
         <AppHeader />
         <main className="p-6">
-          <Outlet />
+          {/* Page transition wrapper - key forces re-animation on route change */}
+          <div 
+            key={location.pathname}
+            className="animate-page-enter"
+          >
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>
