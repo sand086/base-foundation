@@ -372,6 +372,10 @@ class User(Base):
         JSONB, default=lambda: {"theme": "system", "notifications": True}
     )
 
+    # 2FA Fields (ADITIVO - No rompe funcionalidad existente)
+    two_factor_secret = Column(String(32), nullable=True)
+    is_2fa_enabled = Column(Boolean, default=False)
+
     last_login = Column(DateTime)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

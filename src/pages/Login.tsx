@@ -36,6 +36,31 @@ export default function Login() {
 
     await new Promise((resolve) => setTimeout(resolve, 500));
 
+    // Simulate backend 2FA check
+    // In production, this would call the /auth/login endpoint
+    const has2FAEnabled = twoFactor.length > 0; // Demo: if user typed in 2FA field, simulate 2FA flow
+
+    if (has2FAEnabled) {
+      // User has 2FA enabled - redirect to verification page
+      const tempToken = `temp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      
+      toast({
+        title: "Verificación requerida",
+        description: "Ingresa el código de tu autenticador",
+      });
+      
+      navigate("/verify-2fa", {
+        replace: true,
+        state: {
+          tempToken,
+          user: { nombre: username, email: username },
+        },
+      });
+      setIsLoading(false);
+      return;
+    }
+
+    // No 2FA - proceed with normal login
     const success = login(username, password);
 
     if (success) {
