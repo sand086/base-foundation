@@ -62,7 +62,6 @@ export default function TwoFactorAuth() {
 
   // Redirect if no temp token (only for verification mode from login flow)
   useEffect(() => {
-    // Solo redirigir si estamos en modo verificación Y no hay token
     if (!isSetupMode && !tempToken && location.pathname === "/verify-2fa") {
       navigate("/login", { replace: true });
     }
@@ -70,7 +69,7 @@ export default function TwoFactorAuth() {
 
   // Countdown timer (solo para modo verificación)
   useEffect(() => {
-    if (isSetupMode) return; // No countdown en modo setup
+    if (isSetupMode) return;
 
     if (countdown <= 0) {
       toast({
@@ -168,226 +167,342 @@ export default function TwoFactorAuth() {
       </div>
 
       {/* Content */}
-      <div className="relative z-10 flex h-full items-center justify-center px-6">
-        <Card className="w-full max-w-[520px] rounded-3xl border border-white/10 bg-black/40 backdrop-blur-2xl shadow-[0_8px_64px_rgba(0,0,0,0.5)]">
-          <CardContent className="px-10 py-10">
-            {/* Header */}
-            <div className="text-center">
-              <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-brand-red/20 to-brand-red/5 border border-brand-red/30 shadow-[0_0_30px_rgba(190,8,17,0.3)]">
-                {isSetupMode ? (
-                  <ShieldCheck className="h-10 w-10 text-brand-red drop-shadow-[0_0_10px_rgba(190,8,17,0.5)]" />
-                ) : (
-                  <Shield className="h-10 w-10 text-brand-red drop-shadow-[0_0_10px_rgba(190,8,17,0.5)]" />
-                )}
-              </div>
-              
-              <h1 className="mt-6 text-2xl font-bold text-white">
-                {isSetupMode ? "Configura tu Seguridad (2FA)" : "Verificación de Seguridad"}
-              </h1>
-              
-              <p className="mt-2 text-sm text-white/60">
-                {isSetupMode 
-                  ? "Protege tu cuenta con autenticación de dos factores"
-                  : <>Hola <span className="text-white/80 font-medium">{userName}</span>, ingresa el código de tu aplicación autenticadora</>
-                }
-              </p>
-            </div>
+      <div className="relative z-10 flex h-full items-center justify-center px-4 py-6">
+        <Card className={`w-full rounded-3xl border border-white/10 bg-black/40 backdrop-blur-2xl shadow-[0_8px_64px_rgba(0,0,0,0.5)] overflow-hidden ${
+          isSetupMode ? 'max-w-lg md:max-w-4xl' : 'max-w-[520px]'
+        }`}>
+          <CardContent className="p-6 md:p-8">
+            {/* ========== MODO CONFIGURACIÓN (QR) - Layout de 2 columnas ========== */}
+            {isSetupMode ? (
+              <div className="flex flex-col md:flex-row md:gap-8">
+                {/* Columna Izquierda - Instrucciones y Clave */}
+                <div className="flex-1 md:w-1/2">
+                  {/* Header */}
+                  <div className="text-center md:text-left">
+                    <div className="mx-auto md:mx-0 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-brand-red/20 to-brand-red/5 border border-brand-red/30 shadow-[0_0_30px_rgba(190,8,17,0.3)]">
+                      <ShieldCheck className="h-8 w-8 text-brand-red drop-shadow-[0_0_10px_rgba(190,8,17,0.5)]" />
+                    </div>
+                    
+                    <h1 className="mt-4 text-xl md:text-2xl font-bold text-white">
+                      Configura tu Seguridad (2FA)
+                    </h1>
+                    
+                    <p className="mt-2 text-sm text-white/60">
+                      Protege tu cuenta con autenticación de dos factores
+                    </p>
+                  </div>
 
-            {/* Timer badge (solo modo verificación) */}
-            {!isSetupMode && (
-              <div className="mt-6 flex justify-center">
-                <div className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm ${
-                  countdown <= 60 
-                    ? "bg-red-500/20 text-red-400 border border-red-500/30" 
-                    : "bg-white/5 text-white/60 border border-white/10"
-                }`}>
-                  <Loader2 className={`h-4 w-4 ${countdown <= 60 ? "animate-spin" : ""}`} />
-                  <span>Tiempo restante: <strong>{formatTime(countdown)}</strong></span>
-                </div>
-              </div>
-            )}
+                  {/* Instructions */}
+                  <div className="mt-6 space-y-4">
+                    <div className="flex items-start gap-3 text-white/70">
+                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-red/20 text-xs font-bold text-brand-red">1</div>
+                      <p className="text-sm">Abre tu aplicación autenticadora (Google Authenticator, Authy, etc.)</p>
+                    </div>
+                    <div className="flex items-start gap-3 text-white/70">
+                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-red/20 text-xs font-bold text-brand-red">2</div>
+                      <p className="text-sm">Escanea el código QR o ingresa la clave secreta manualmente</p>
+                    </div>
+                    <div className="flex items-start gap-3 text-white/70">
+                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-red/20 text-xs font-bold text-brand-red">3</div>
+                      <p className="text-sm">Introduce el código de 6 dígitos para confirmar</p>
+                    </div>
+                  </div>
 
-            {/* ========== MODO CONFIGURACIÓN (QR) ========== */}
-            {isSetupMode && (
-              <div className="mt-8 space-y-6">
-                {/* QR Code Frame */}
-                <div className="relative mx-auto w-fit">
-                  <div className="absolute -inset-1 rounded-2xl bg-gradient-to-br from-brand-red/50 via-brand-red/20 to-transparent blur-sm" />
-                  <div className="relative rounded-2xl border border-white/20 bg-white p-4 shadow-[0_0_40px_rgba(190,8,17,0.2)]">
-                    <img 
-                      src={MOCK_QR_DATA.qrUrl} 
-                      alt="QR Code para 2FA"
-                      className="h-48 w-48 rounded-lg"
-                    />
+                  {/* Secret Key Input */}
+                  <div className="mt-6 space-y-2">
+                    <label className="flex items-center gap-2 text-sm font-medium text-white/70">
+                      <KeyRound className="h-4 w-4" />
+                      Clave Secreta (manual)
+                    </label>
+                    <div className="flex gap-2">
+                      <Input
+                        value={MOCK_QR_DATA.secret}
+                        readOnly
+                        className="h-10 flex-1 rounded-xl border-white/10 bg-white/5 font-mono text-sm tracking-widest text-white/90 focus:border-brand-red/50 focus:ring-brand-red/20"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleCopySecret}
+                        className="h-10 w-10 rounded-xl border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white"
+                      >
+                        {copied ? (
+                          <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                        ) : (
+                          <Copy className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Back link - visible on desktop */}
+                  <div className="mt-6 hidden md:block">
+                    <button
+                      onClick={handleBack}
+                      className="inline-flex items-center gap-2 text-sm text-white/50 transition-colors hover:text-white/80"
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                      Volver al inicio de sesión
+                    </button>
                   </div>
                 </div>
 
-                {/* Instructions */}
-                <div className="flex items-center justify-center gap-2 text-white/50">
-                  <QrCode className="h-4 w-4" />
-                  <span className="text-sm">Escanea con Google Authenticator o Authy</span>
-                </div>
+                {/* Columna Derecha - QR y Confirmación */}
+                <div className="flex-1 md:w-1/2 mt-6 md:mt-0 md:border-l md:border-white/10 md:pl-8">
+                  {/* QR Code Frame */}
+                  <div className="relative mx-auto w-fit">
+                    <div className="absolute -inset-1 rounded-2xl bg-gradient-to-br from-brand-red/50 via-brand-red/20 to-transparent blur-sm" />
+                    <div className="relative rounded-2xl border border-white/20 bg-white p-3 shadow-[0_0_40px_rgba(190,8,17,0.2)]">
+                      <img 
+                        src={MOCK_QR_DATA.qrUrl} 
+                        alt="QR Code para 2FA"
+                        className="h-40 w-40 md:h-44 md:w-44 rounded-lg"
+                      />
+                    </div>
+                  </div>
 
-                {/* Secret Key Input */}
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-sm font-medium text-white/70">
-                    <KeyRound className="h-4 w-4" />
-                    Clave Secreta (manual)
-                  </label>
-                  <div className="flex gap-2">
-                    <Input
-                      value={MOCK_QR_DATA.secret}
-                      readOnly
-                      className="h-12 flex-1 rounded-xl border-white/10 bg-white/5 font-mono text-base tracking-widest text-white/90 focus:border-brand-red/50 focus:ring-brand-red/20"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleCopySecret}
-                      className="h-12 w-12 rounded-xl border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white"
+                  {/* QR Instructions */}
+                  <div className="mt-4 flex items-center justify-center gap-2 text-white/50">
+                    <QrCode className="h-4 w-4" />
+                    <span className="text-xs">Escanea con tu app</span>
+                  </div>
+
+                  {/* Divider */}
+                  <div className="relative my-4">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-white/10" />
+                    </div>
+                    <div className="relative flex justify-center">
+                      <span className="bg-transparent px-3 text-xs text-white/40">
+                        Confirma el código
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Error message */}
+                  {error && (
+                    <div className="mb-4 flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 backdrop-blur-sm p-3 text-sm text-red-300">
+                      <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                      <span>{error}</span>
+                    </div>
+                  )}
+
+                  {/* OTP Input */}
+                  <div className="flex flex-col items-center gap-4">
+                    <div className="flex items-center gap-2 text-white/40">
+                      <Smartphone className="h-4 w-4" />
+                      <span className="text-xs">Código de 6 dígitos</span>
+                    </div>
+
+                    <InputOTP
+                      value={code}
+                      onChange={setCode}
+                      maxLength={6}
+                      disabled={isVerifying}
+                      className="gap-1"
                     >
-                      {copied ? (
-                        <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+                      <InputOTPGroup className="gap-1">
+                        <InputOTPSlot 
+                          index={0} 
+                          className="h-11 w-10 rounded-lg border-white/20 bg-white/5 text-base font-bold text-white transition-all focus:bg-white/10 focus:border-brand-red/50 focus:shadow-[0_0_15px_rgba(190,8,17,0.3)]"
+                        />
+                        <InputOTPSlot 
+                          index={1} 
+                          className="h-11 w-10 rounded-lg border-white/20 bg-white/5 text-base font-bold text-white transition-all focus:bg-white/10 focus:border-brand-red/50 focus:shadow-[0_0_15px_rgba(190,8,17,0.3)]"
+                        />
+                        <InputOTPSlot 
+                          index={2} 
+                          className="h-11 w-10 rounded-lg border-white/20 bg-white/5 text-base font-bold text-white transition-all focus:bg-white/10 focus:border-brand-red/50 focus:shadow-[0_0_15px_rgba(190,8,17,0.3)]"
+                        />
+                      </InputOTPGroup>
+                      
+                      <InputOTPSeparator className="text-white/30" />
+                      
+                      <InputOTPGroup className="gap-1">
+                        <InputOTPSlot 
+                          index={3} 
+                          className="h-11 w-10 rounded-lg border-white/20 bg-white/5 text-base font-bold text-white transition-all focus:bg-white/10 focus:border-brand-red/50 focus:shadow-[0_0_15px_rgba(190,8,17,0.3)]"
+                        />
+                        <InputOTPSlot 
+                          index={4} 
+                          className="h-11 w-10 rounded-lg border-white/20 bg-white/5 text-base font-bold text-white transition-all focus:bg-white/10 focus:border-brand-red/50 focus:shadow-[0_0_15px_rgba(190,8,17,0.3)]"
+                        />
+                        <InputOTPSlot 
+                          index={5} 
+                          className="h-11 w-10 rounded-lg border-white/20 bg-white/5 text-base font-bold text-white transition-all focus:bg-white/10 focus:border-brand-red/50 focus:shadow-[0_0_15px_rgba(190,8,17,0.3)]"
+                        />
+                      </InputOTPGroup>
+                    </InputOTP>
+
+                    {/* Action Button */}
+                    <Button
+                      onClick={handleVerify}
+                      disabled={code.length !== 6 || isVerifying}
+                      className="mt-2 h-11 w-full rounded-xl bg-brand-red text-sm font-semibold text-white transition-all duration-300 hover:bg-brand-red/90 hover:-translate-y-[2px] hover:shadow-[0_0_30px_rgba(190,8,17,0.5)] active:translate-y-0 disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none border-0"
+                    >
+                      {isVerifying ? (
+                        <span className="flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Activando...
+                        </span>
                       ) : (
-                        <Copy className="h-5 w-5" />
+                        <span className="flex items-center justify-center gap-2">
+                          <ShieldCheck className="h-4 w-4" />
+                          Activar Seguridad
+                        </span>
                       )}
                     </Button>
+
+                    {/* Demo hint */}
+                    <p className="text-xs text-white/30">
+                      Demo: código <code className="rounded bg-white/10 px-1.5 py-0.5 text-white/50">123456</code>
+                    </p>
                   </div>
                 </div>
 
-                {/* Divider */}
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-white/10" />
-                  </div>
-                  <div className="relative flex justify-center">
-                    <span className="bg-transparent px-4 text-xs text-white/40">
-                      Confirma el código para activar
-                    </span>
-                  </div>
+                {/* Back link - visible on mobile */}
+                <div className="mt-6 text-center md:hidden">
+                  <button
+                    onClick={handleBack}
+                    className="inline-flex items-center gap-2 text-sm text-white/50 transition-colors hover:text-white/80"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    Volver al inicio de sesión
+                  </button>
                 </div>
               </div>
-            )}
+            ) : (
+              /* ========== MODO VERIFICACIÓN - Layout vertical ========== */
+              <div className="max-w-md mx-auto">
+                {/* Header */}
+                <div className="text-center">
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-brand-red/20 to-brand-red/5 border border-brand-red/30 shadow-[0_0_30px_rgba(190,8,17,0.3)]">
+                    <Shield className="h-8 w-8 text-brand-red drop-shadow-[0_0_10px_rgba(190,8,17,0.5)]" />
+                  </div>
+                  
+                  <h1 className="mt-4 text-xl md:text-2xl font-bold text-white">
+                    Verificación de Seguridad
+                  </h1>
+                  
+                  <p className="mt-2 text-sm text-white/60">
+                    Hola <span className="text-white/80 font-medium">{userName}</span>, ingresa el código de tu aplicación autenticadora
+                  </p>
+                </div>
 
-            {/* Error message */}
-            {error && (
-              <div className="mt-6 flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 backdrop-blur-sm p-3 text-sm text-red-300">
-                <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                <span>{error}</span>
-              </div>
-            )}
+                {/* Timer badge */}
+                <div className="mt-4 flex justify-center">
+                  <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm ${
+                    countdown <= 60 
+                      ? "bg-red-500/20 text-red-400 border border-red-500/30" 
+                      : "bg-white/5 text-white/60 border border-white/10"
+                  }`}>
+                    <Loader2 className={`h-3.5 w-3.5 ${countdown <= 60 ? "animate-spin" : ""}`} />
+                    <span>Tiempo: <strong>{formatTime(countdown)}</strong></span>
+                  </div>
+                </div>
 
-            {/* OTP Input */}
-            <div className={`flex flex-col items-center gap-6 ${isSetupMode ? 'mt-6' : 'mt-8'}`}>
-              <div className="flex items-center gap-3 text-white/40">
-                <Smartphone className="h-5 w-5" />
-                <span className="text-sm">Código de 6 dígitos</span>
-              </div>
+                {/* Error message */}
+                {error && (
+                  <div className="mt-4 flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 backdrop-blur-sm p-3 text-sm text-red-300">
+                    <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                    <span>{error}</span>
+                  </div>
+                )}
 
-              <InputOTP
-                value={code}
-                onChange={setCode}
-                maxLength={6}
-                disabled={isVerifying}
-                className="gap-2"
-              >
-                <InputOTPGroup className="gap-2">
-                  <InputOTPSlot 
-                    index={0} 
-                    className="h-14 w-12 rounded-xl border-white/20 bg-white/5 text-lg font-bold text-white transition-all focus:bg-white/10 focus:border-brand-red/50 focus:shadow-[0_0_15px_rgba(190,8,17,0.3)]"
-                  />
-                  <InputOTPSlot 
-                    index={1} 
-                    className="h-14 w-12 rounded-xl border-white/20 bg-white/5 text-lg font-bold text-white transition-all focus:bg-white/10 focus:border-brand-red/50 focus:shadow-[0_0_15px_rgba(190,8,17,0.3)]"
-                  />
-                  <InputOTPSlot 
-                    index={2} 
-                    className="h-14 w-12 rounded-xl border-white/20 bg-white/5 text-lg font-bold text-white transition-all focus:bg-white/10 focus:border-brand-red/50 focus:shadow-[0_0_15px_rgba(190,8,17,0.3)]"
-                  />
-                </InputOTPGroup>
-                
-                <InputOTPSeparator className="text-white/30" />
-                
-                <InputOTPGroup className="gap-2">
-                  <InputOTPSlot 
-                    index={3} 
-                    className="h-14 w-12 rounded-xl border-white/20 bg-white/5 text-lg font-bold text-white transition-all focus:bg-white/10 focus:border-brand-red/50 focus:shadow-[0_0_15px_rgba(190,8,17,0.3)]"
-                  />
-                  <InputOTPSlot 
-                    index={4} 
-                    className="h-14 w-12 rounded-xl border-white/20 bg-white/5 text-lg font-bold text-white transition-all focus:bg-white/10 focus:border-brand-red/50 focus:shadow-[0_0_15px_rgba(190,8,17,0.3)]"
-                  />
-                  <InputOTPSlot 
-                    index={5} 
-                    className="h-14 w-12 rounded-xl border-white/20 bg-white/5 text-lg font-bold text-white transition-all focus:bg-white/10 focus:border-brand-red/50 focus:shadow-[0_0_15px_rgba(190,8,17,0.3)]"
-                  />
-                </InputOTPGroup>
-              </InputOTP>
+                {/* OTP Input */}
+                <div className="mt-6 flex flex-col items-center gap-4">
+                  <div className="flex items-center gap-2 text-white/40">
+                    <Smartphone className="h-4 w-4" />
+                    <span className="text-sm">Código de 6 dígitos</span>
+                  </div>
 
-              {/* Action Button */}
-              <Button
-                onClick={handleVerify}
-                disabled={code.length !== 6 || isVerifying}
-                className="mt-4 h-12 w-full rounded-xl bg-brand-red text-base font-semibold text-white transition-all duration-300 hover:bg-brand-red/90 hover:-translate-y-[2px] hover:shadow-[0_0_30px_rgba(190,8,17,0.5)] active:translate-y-0 disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none border-0"
-              >
-                {isVerifying ? (
-                  <span className="flex items-center gap-2">
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    {isSetupMode ? "Activando..." : "Verificando..."}
-                  </span>
-                ) : (
-                  <span className="flex items-center justify-center gap-2">
-                    {isSetupMode ? (
-                      <>
-                        <ShieldCheck className="h-5 w-5" />
-                        Activar Seguridad
-                      </>
+                  <InputOTP
+                    value={code}
+                    onChange={setCode}
+                    maxLength={6}
+                    disabled={isVerifying}
+                    className="gap-2"
+                  >
+                    <InputOTPGroup className="gap-2">
+                      <InputOTPSlot 
+                        index={0} 
+                        className="h-12 w-11 rounded-xl border-white/20 bg-white/5 text-lg font-bold text-white transition-all focus:bg-white/10 focus:border-brand-red/50 focus:shadow-[0_0_15px_rgba(190,8,17,0.3)]"
+                      />
+                      <InputOTPSlot 
+                        index={1} 
+                        className="h-12 w-11 rounded-xl border-white/20 bg-white/5 text-lg font-bold text-white transition-all focus:bg-white/10 focus:border-brand-red/50 focus:shadow-[0_0_15px_rgba(190,8,17,0.3)]"
+                      />
+                      <InputOTPSlot 
+                        index={2} 
+                        className="h-12 w-11 rounded-xl border-white/20 bg-white/5 text-lg font-bold text-white transition-all focus:bg-white/10 focus:border-brand-red/50 focus:shadow-[0_0_15px_rgba(190,8,17,0.3)]"
+                      />
+                    </InputOTPGroup>
+                    
+                    <InputOTPSeparator className="text-white/30" />
+                    
+                    <InputOTPGroup className="gap-2">
+                      <InputOTPSlot 
+                        index={3} 
+                        className="h-12 w-11 rounded-xl border-white/20 bg-white/5 text-lg font-bold text-white transition-all focus:bg-white/10 focus:border-brand-red/50 focus:shadow-[0_0_15px_rgba(190,8,17,0.3)]"
+                      />
+                      <InputOTPSlot 
+                        index={4} 
+                        className="h-12 w-11 rounded-xl border-white/20 bg-white/5 text-lg font-bold text-white transition-all focus:bg-white/10 focus:border-brand-red/50 focus:shadow-[0_0_15px_rgba(190,8,17,0.3)]"
+                      />
+                      <InputOTPSlot 
+                        index={5} 
+                        className="h-12 w-11 rounded-xl border-white/20 bg-white/5 text-lg font-bold text-white transition-all focus:bg-white/10 focus:border-brand-red/50 focus:shadow-[0_0_15px_rgba(190,8,17,0.3)]"
+                      />
+                    </InputOTPGroup>
+                  </InputOTP>
+
+                  {/* Action Button */}
+                  <Button
+                    onClick={handleVerify}
+                    disabled={code.length !== 6 || isVerifying}
+                    className="mt-2 h-11 w-full rounded-xl bg-brand-red text-base font-semibold text-white transition-all duration-300 hover:bg-brand-red/90 hover:-translate-y-[2px] hover:shadow-[0_0_30px_rgba(190,8,17,0.5)] active:translate-y-0 disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none border-0"
+                  >
+                    {isVerifying ? (
+                      <span className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Verificando...
+                      </span>
                     ) : (
-                      <>
-                        <CheckCircle2 className="h-5 w-5" />
+                      <span className="flex items-center justify-center gap-2">
+                        <CheckCircle2 className="h-4 w-4" />
                         Verificar Código
-                      </>
+                      </span>
                     )}
-                  </span>
-                )}
-              </Button>
-            </div>
+                  </Button>
+                </div>
 
-            {/* Back to login */}
-            <div className="mt-6 text-center">
-              <button
-                onClick={handleBack}
-                className="inline-flex items-center gap-2 text-sm text-white/50 transition-colors hover:text-white/80"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                Volver al inicio de sesión
-              </button>
-            </div>
+                {/* Back to login */}
+                <div className="mt-6 text-center">
+                  <button
+                    onClick={handleBack}
+                    className="inline-flex items-center gap-2 text-sm text-white/50 transition-colors hover:text-white/80"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    Volver al inicio de sesión
+                  </button>
+                </div>
 
-            {/* Help text */}
-            <div className="mt-6 rounded-xl border border-white/5 bg-white/5 p-4">
-              <p className="text-xs text-white/40 text-center leading-relaxed">
-                {isSetupMode ? (
-                  <>
-                    Abre tu aplicación autenticadora, escanea el código QR o ingresa la clave secreta manualmente. 
-                    Luego introduce el código de 6 dígitos para confirmar la activación.
-                  </>
-                ) : (
-                  <>
-                    Abre tu aplicación autenticadora (Google Authenticator, Authy, etc.) 
-                    e ingresa el código de 6 dígitos que aparece para{" "}
+                {/* Help text */}
+                <div className="mt-4 rounded-xl border border-white/5 bg-white/5 p-3">
+                  <p className="text-xs text-white/40 text-center leading-relaxed">
+                    Abre tu aplicación autenticadora e ingresa el código de 6 dígitos para{" "}
                     <span className="text-white/60 font-medium">Rápidos 3T - TMS</span>
-                  </>
-                )}
-              </p>
-            </div>
+                  </p>
+                </div>
 
-            {/* Demo hint */}
-            <div className="mt-4 text-center">
-              <p className="text-xs text-white/30">
-                Demo: usa el código <code className="rounded bg-white/10 px-2 py-0.5 text-white/50">123456</code>
-              </p>
-            </div>
+                {/* Demo hint */}
+                <div className="mt-3 text-center">
+                  <p className="text-xs text-white/30">
+                    Demo: código <code className="rounded bg-white/10 px-1.5 py-0.5 text-white/50">123456</code>
+                  </p>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
