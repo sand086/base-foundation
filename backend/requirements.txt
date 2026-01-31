@@ -7,3 +7,6 @@ pydantic-settings==2.1.0
 python-dotenv==1.0.0
 alembic==1.11.1
 pytest==7.4.0
+# 2FA Dependencies
+pyotp==2.9.0
+qrcode[pil]==7.4.2

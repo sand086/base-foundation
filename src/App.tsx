@@ -35,6 +35,7 @@ import CargasMasivas from "./pages/CargasMasivas";
 import ProfilePage from "./pages/ProfilePage";
 import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
+import TwoFactorAuth from "./pages/TwoFactorAuth";
 
 const queryClient = new QueryClient();
 
@@ -46,8 +47,9 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <Routes>
-            {/* Public Route */}
+            {/* Public Routes */}
             <Route path="/login" element={<Login />} />
+            <Route path="/verify-2fa" element={<TwoFactorAuth />} />
             
             {/* Protected Routes */}
             <Route element={<ProtectedRoute />}>
