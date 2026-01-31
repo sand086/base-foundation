@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -29,6 +29,7 @@ import {
 } from '@/data/flotaData';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { OperatorDetailSheet } from './OperatorDetailSheet';
 
 interface OperadoresTableProps {
   operadores: Operador[];
@@ -79,6 +80,15 @@ const ExpiryBadge = ({ date, label }: { date: string; label: string }) => {
 };
 
 export function OperadoresTable({ operadores, onEdit, onDelete }: OperadoresTableProps) {
+  // State for detail sheet
+  const [selectedOperator, setSelectedOperator] = useState<Operador | null>(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+
+  const handleViewDetails = (operador: Operador) => {
+    setSelectedOperator(operador);
+    setIsDetailOpen(true);
+  };
+
   // Define columns for EnhancedDataTable
   const columns: ColumnDef<Operador>[] = useMemo(() => [
     {
@@ -180,7 +190,10 @@ export function OperadoresTable({ operadores, onEdit, onDelete }: OperadoresTabl
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="bg-popover">
-              <DropdownMenuItem className="gap-2">
+              <DropdownMenuItem 
+                className="gap-2"
+                onClick={() => handleViewDetails(operador)}
+              >
                 <Eye className="h-4 w-4" />
                 Ver detalles
               </DropdownMenuItem>
@@ -220,6 +233,13 @@ export function OperadoresTable({ operadores, onEdit, onDelete }: OperadoresTabl
           exportFileName="operadores"
         />
       </CardContent>
+
+      {/* Operator Detail Sheet */}
+      <OperatorDetailSheet
+        operator={selectedOperator}
+        open={isDetailOpen}
+        onOpenChange={setIsDetailOpen}
+      />
     </Card>
   );
 }
