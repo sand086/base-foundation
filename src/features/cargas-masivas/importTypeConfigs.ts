@@ -10,6 +10,8 @@ import {
   Truck,
   MapPin,
   UserCog,
+  Building2,
+  DollarSign,
 } from 'lucide-react';
 
 // ============= ENUMS (Mirror of backend/schemas.py) =============
@@ -38,6 +40,17 @@ export const ClientStatusEnum = {
   ACTIVO: 'activo',
   PENDIENTE: 'pendiente',
   INCOMPLETO: 'incompleto',
+} as const;
+
+export const SupplierStatusEnum = {
+  ACTIVO: 'activo',
+  INACTIVO: 'inactivo',
+  SUSPENDIDO: 'suspendido',
+} as const;
+
+export const CurrencyEnum = {
+  MXN: 'MXN',
+  USD: 'USD',
 } as const;
 
 // ============= COLUMN METADATA =============
@@ -134,6 +147,46 @@ export const importTypeConfigs: ImportTypeConfig[] = [
     recordCount: 128,
   },
   {
+    id: 'proveedores',
+    title: 'Importar Proveedores',
+    description: 'Catálogo de proveedores con datos fiscales para Cuentas por Pagar',
+    icon: Building2,
+    color: 'text-orange-500',
+    backendEndpoint: '/suppliers',
+    columns: [
+      { name: 'razon_social', type: 'string', required: true, minLength: 1, maxLength: 200 },
+      { 
+        name: 'rfc', 
+        type: 'string', 
+        required: true, 
+        minLength: 12, 
+        maxLength: 13,
+        pattern: /^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$/i,
+        patternMessage: 'RFC debe tener formato válido (12-13 caracteres)'
+      },
+      { name: 'email', type: 'string', required: false, maxLength: 100 },
+      { name: 'telefono', type: 'string', required: false, maxLength: 20 },
+      { name: 'direccion', type: 'string', required: false, maxLength: 300 },
+      { name: 'codigo_postal', type: 'string', required: false, minLength: 5, maxLength: 5 },
+      { name: 'dias_credito', type: 'number', required: true },
+      { name: 'limite_credito', type: 'number', required: false },
+      { name: 'contacto_principal', type: 'string', required: false, maxLength: 100 },
+      { name: 'categoria', type: 'string', required: false, maxLength: 50 },
+      { 
+        name: 'estatus', 
+        type: 'enum', 
+        required: false, 
+        enumValues: Object.values(SupplierStatusEnum)
+      },
+    ],
+    sampleData: [
+      ['Refaccionaria Industrial SA', 'RIN980512AB1', 'compras@refind.mx', '55 2222 3333', 'Av. Industrial 100, Naucalpan', '53370', '30', '500000', 'Pedro Ramírez', 'Refacciones', 'activo'],
+      ['Combustibles del Norte', 'CDN010320CD2', 'ventas@comnorte.com', '81 4444 5555', 'Carr. Norte Km 5, Monterrey', '64800', '15', '1000000', 'Laura Vega', 'Combustible', 'activo'],
+      ['Llantas Premium México', 'LPM150815EF3', 'contacto@llantaspremium.mx', '33 6666 7777', 'Blvd. Llantas 200, Guadalajara', '44600', '45', '750000', 'Carlos Mendoza', 'Llantas', 'activo'],
+    ],
+    recordCount: 87,
+  },
+  {
     id: 'refacciones',
     title: 'Catálogo de Refacciones',
     description: 'Inventario de refacciones y partes para mantenimiento',
@@ -182,9 +235,9 @@ export const importTypeConfigs: ImportTypeConfig[] = [
         required: false, 
         enumValues: Object.values(UnitStatusEnum)
       },
-      { name: 'seguro_vence', type: 'date', required: false },
-      { name: 'verificacion_vence', type: 'date', required: false },
-      { name: 'permiso_sct_vence', type: 'date', required: false },
+      { name: 'seguro_vence', type: 'date', required: true },
+      { name: 'verificacion_vence', type: 'date', required: true },
+      { name: 'permiso_sct_vence', type: 'date', required: true },
       { name: 'llantas_criticas', type: 'number', required: false },
     ],
     sampleData: [
@@ -253,9 +306,52 @@ export const importTypeConfigs: ImportTypeConfig[] = [
     ],
     recordCount: 67,
   },
+  {
+    id: 'tarifas',
+    title: 'Matriz de Tarifas',
+    description: 'Tarifas por ruta y subcliente con costos de casetas y vigencias',
+    icon: DollarSign,
+    color: 'text-emerald-500',
+    backendEndpoint: '/tariffs',
+    columns: [
+      { name: 'sub_client_id', type: 'string', required: true, minLength: 1, maxLength: 50 },
+      { name: 'nombre_subcliente', type: 'string', required: false, maxLength: 150 },
+      { name: 'nombre_ruta', type: 'string', required: true, minLength: 1, maxLength: 200 },
+      { name: 'origen', type: 'string', required: true, maxLength: 100 },
+      { name: 'destino', type: 'string', required: true, maxLength: 100 },
+      { 
+        name: 'tipo_unidad', 
+        type: 'enum', 
+        required: true, 
+        enumValues: Object.values(UnitTypeEnum)
+      },
+      { name: 'tarifa_base', type: 'number', required: true },
+      { name: 'costo_casetas', type: 'number', required: true },
+      { 
+        name: 'moneda', 
+        type: 'enum', 
+        required: true, 
+        enumValues: Object.values(CurrencyEnum)
+      },
+      { name: 'vigencia_inicio', type: 'date', required: true },
+      { name: 'vigencia_fin', type: 'date', required: true },
+      { name: 'notas', type: 'string', required: false, maxLength: 500 },
+    ],
+    sampleData: [
+      ['SC-001', 'CEDIS Veracruz - Sabino del Bene', 'CDMX-Veracruz Express', 'CDMX', 'Veracruz Puerto', 'full', '48500', '2800', 'MXN', '2026-01-01', '2026-12-31', 'Incluye maniobras de descarga'],
+      ['SC-002', 'Planta Querétaro - DHL', 'Bajío Industrial', 'Guadalajara', 'Querétaro', 'sencillo', '18000', '1200', 'MXN', '2026-01-01', '2026-06-30', 'Tarifa preferencial'],
+      ['SC-003', 'Almacén Laredo - Maersk', 'Norte Premium', 'Monterrey', 'Laredo', 'full', '32000', '0', 'USD', '2026-02-01', '2026-12-31', 'Frontera - sin casetas'],
+    ],
+    recordCount: 156,
+  },
 ];
 
 // Helper to get columns as string array for template
 export function getTemplateColumns(config: ImportTypeConfig): string[] {
   return config.columns.map(col => col.name);
+}
+
+// Helper to get config by id
+export function getImportConfigById(id: string): ImportTypeConfig | undefined {
+  return importTypeConfigs.find(config => config.id === id);
 }
