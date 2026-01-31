@@ -50,6 +50,7 @@ const App = () => (
             {/* Public Routes */}
             <Route path="/login" element={<Login />} />
             <Route path="/verify-2fa" element={<TwoFactorAuth />} />
+            <Route path="/2fa-setup" element={<TwoFactorAuth />} />
             
             {/* Protected Routes */}
             <Route element={<ProtectedRoute />}>
