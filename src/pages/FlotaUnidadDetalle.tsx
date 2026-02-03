@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Truck,
   AlertTriangle,
@@ -12,6 +12,7 @@ import {
   Save,
   Upload,
   Check,
+  Loader2, // Importamos loader
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -28,15 +29,16 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNavigate, useParams } from "react-router-dom";
-import { mockUnit } from "@/data/mockData";
+// import { mockUnit } from "@/data/mockData"; <--- ELIMINADO
 import { TruckChassisSVG } from "@/features/flota/TruckChassisSVG";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "@/hooks/use-toast"; // Asegúrate de que este hook exista y funcione
+import { unitService, UnidadDetalle } from "@/services/unitService"; // <--- NUEVO
 
 const getDocumentStatusBadge = (estatus: string, vencimiento: string) => {
   const today = new Date();
   const expDate = new Date(vencimiento);
   const daysUntil = Math.ceil(
-    (expDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+    (expDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
   );
 
   if (estatus === "vencido" || daysUntil < 0) {
@@ -54,45 +56,121 @@ const getDocumentStatusBadge = (estatus: string, vencimiento: string) => {
 
 export default function FlotaUnidadDetalle() {
   const navigate = useNavigate();
-  const { id } = useParams();
+  const { id } = useParams(); // Este 'id' es el numeroEconomico que viene de la URL
 
-  // Editing state
+  // --- ESTADOS PARA DATOS REALES ---
+  const [unit, setUnit] = useState<UnidadDetalle | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
 
-  // Form state (pre-filled with mock data)
+  // Form state
   const [formData, setFormData] = useState({
-    numeroEconomico: mockUnit.numeroEconomico,
-    placas: mockUnit.placas,
-    vin: mockUnit.vin,
-    marca: mockUnit.marca,
-    modelo: mockUnit.modelo,
-    year: mockUnit.year.toString(),
+    numeroEconomico: "",
+    placas: "",
+    vin: "",
+    marca: "",
+    modelo: "",
+    year: "",
   });
 
-  // In production, fetch by ID. For now, use mock data
-  const unit = mockUnit;
+  // --- CARGA DE DATOS ---
+  useEffect(() => {
+    const loadUnit = async () => {
+      if (!id) return;
+      setIsLoading(true);
+      try {
+        const data = await unitService.getByNumeroEconomico(id);
+        setUnit(data);
+        // Inicializar formulario con datos reales
+        setFormData({
+          numeroEconomico: data.numero_economico, // backend usa snake_case
+          placas: data.placas,
+          vin: data.vin || "",
+          marca: data.marca,
+          modelo: data.modelo,
+          year: data.year?.toString() || "",
+        });
+      } catch (error) {
+        console.error(error);
+        toast({
+          title: "Error",
+          description: "No se pudo cargar la información de la unidad",
+          variant: "destructive",
+        });
+        navigate("/flota"); // Redirigir si falla
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadUnit();
+  }, [id, navigate]);
+
+  // Si está cargando, mostramos spinner centrado
+  if (isLoading || !unit) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   const expiredDocs = unit.documents.filter((d) => d.estatus === "vencido");
   const hasBlocks = expiredDocs.length > 0;
 
-  const handleSaveChanges = () => {
-    toast({
-      title: "✓ Cambios guardados",
-      description: `Los datos de la unidad ${formData.numeroEconomico} han sido actualizados correctamente.`,
-    });
-    setIsEditing(false);
+  const handleSaveChanges = async () => {
+    try {
+      // Enviar actualización al backend
+      await unitService.update(unit.id, {
+        numero_economico: formData.numeroEconomico,
+        placas: formData.placas,
+        vin: formData.vin,
+        marca: formData.marca,
+        modelo: formData.modelo,
+        year: parseInt(formData.year),
+      });
+
+      toast({
+        title: "✓ Cambios guardados",
+        description: `Los datos de la unidad ${formData.numeroEconomico} han sido actualizados correctamente.`,
+      });
+
+      // Actualizar vista local
+      setUnit((prev) =>
+        prev
+          ? {
+              ...prev,
+              numero_economico: formData.numeroEconomico,
+              placas: formData.placas,
+              vin: formData.vin,
+              marca: formData.marca,
+              modelo: formData.modelo,
+              year: parseInt(formData.year),
+            }
+          : null,
+      );
+
+      setIsEditing(false);
+    } catch (error) {
+      toast({
+        title: "Error al guardar",
+        description: "No se pudieron guardar los cambios.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleCancelEdit = () => {
-    // Reset form to original values
-    setFormData({
-      numeroEconomico: mockUnit.numeroEconomico,
-      placas: mockUnit.placas,
-      vin: mockUnit.vin,
-      marca: mockUnit.marca,
-      modelo: mockUnit.modelo,
-      year: mockUnit.year.toString(),
-    });
+    // Reset form to original values from loaded unit
+    if (unit) {
+      setFormData({
+        numeroEconomico: unit.numero_economico,
+        placas: unit.placas,
+        vin: unit.vin || "",
+        marca: unit.marca,
+        modelo: unit.modelo,
+        year: unit.year?.toString() || "",
+      });
+    }
     setIsEditing(false);
   };
 
@@ -101,17 +179,13 @@ export default function FlotaUnidadDetalle() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate("/flota")}
-          >
+          <Button variant="ghost" size="sm" onClick={() => navigate("/flota")}>
             <ChevronLeft className="h-4 w-4 mr-1" /> Volver
           </Button>
           <Separator orientation="vertical" className="h-8" />
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Truck className="h-6 w-6" /> Unidad {unit.numeroEconomico}
+              <Truck className="h-6 w-6" /> Unidad {unit.numero_economico}
             </h1>
             <p className="text-muted-foreground">
               {unit.marca} {unit.modelo} - {unit.year}
@@ -260,7 +334,7 @@ export default function FlotaUnidadDetalle() {
                         No. Económico
                       </p>
                       <p className="font-bold text-lg text-foreground/90">
-                        {unit.numeroEconomico}
+                        {unit.numero_economico}
                       </p>
                     </div>
                     <div>
@@ -272,7 +346,7 @@ export default function FlotaUnidadDetalle() {
                     <div>
                       <p className="text-sm text-muted-foreground">VIN</p>
                       <p className="font-mono text-sm text-foreground/90">
-                        {unit.vin}
+                        {unit.vin || "---"}
                       </p>
                     </div>
                     <div>
@@ -295,9 +369,7 @@ export default function FlotaUnidadDetalle() {
             {/* Document Status Card */}
             <Card
               className={`backdrop-blur-xl bg-white/10 dark:bg-black/40 shadow-2xl ${
-                hasBlocks
-                  ? "border-status-danger border-2"
-                  : "border-white/20"
+                hasBlocks ? "border-status-danger border-2" : "border-white/20"
               }`}
             >
               <CardHeader>
@@ -327,8 +399,8 @@ export default function FlotaUnidadDetalle() {
                           doc.estatus === "vencido"
                             ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]"
                             : doc.estatus === "próximo"
-                            ? "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]"
-                            : "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"
+                              ? "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]"
+                              : "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"
                         }`}
                       />
 
@@ -348,7 +420,7 @@ export default function FlotaUnidadDetalle() {
                             <Calendar className="h-3 w-3" />
                             Vence:{" "}
                             {new Date(doc.vencimiento).toLocaleDateString(
-                              "es-MX"
+                              "es-MX",
                             )}
                           </p>
                         </div>
@@ -421,18 +493,20 @@ export default function FlotaUnidadDetalle() {
                                 isCritical
                                   ? "bg-red-500/20 text-red-400 border border-red-500/50"
                                   : isWarning
-                                  ? "bg-amber-500/20 text-amber-400 border border-amber-500/50"
-                                  : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/50"
+                                    ? "bg-amber-500/20 text-amber-400 border border-amber-500/50"
+                                    : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/50"
                               }
                             >
                               {isCritical
                                 ? "Crítico"
                                 : isWarning
-                                ? "Alerta"
-                                : "OK"}
+                                  ? "Alerta"
+                                  : "OK"}
                             </Badge>
                           </td>
-                          <td className="py-4 px-4 capitalize">{tire.estado}</td>
+                          <td className="py-4 px-4 capitalize">
+                            {tire.estado}
+                          </td>
                           <td className="py-4 px-4">
                             {tire.renovado > 0 ? `${tire.renovado}x` : "—"}
                           </td>

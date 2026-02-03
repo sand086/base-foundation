@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -6,71 +6,80 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { useToast } from '@/hooks/use-toast';
-import { User, Phone, CreditCard, Calendar, Truck, Heart } from 'lucide-react';
-import { unidadesDisponibles, Operador } from '@/data/flotaData';
+} from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import {
+  User,
+  Phone,
+  CreditCard,
+  Calendar,
+  Truck,
+  Heart,
+  Loader2,
+} from "lucide-react";
+import { unidadesDisponibles } from "@/data/flotaData"; // Puedes mantener esto o cargar unidades reales
+import { Operador } from "@/services/operatorService"; // Usar tipo real
 
 interface AddOperadorModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   operatorToEdit?: Operador | null;
-  onSave?: (operador: Omit<Operador, 'id'> & { id?: string }) => void;
+  onSave?: (operador: Operador) => void;
+  isSaving?: boolean;
 }
 
-const emptyFormData = {
-  name: '',
-  license_number: '',
-  license_type: '',
-  license_expiry: '',
-  medical_check_expiry: '',
-  phone: '',
-  assigned_unit: '',
-  hire_date: '',
-  emergency_contact: '',
-  emergency_phone: '',
+const emptyFormData: Partial<Operador> = {
+  name: "",
+  license_number: "",
+  license_type: "",
+  license_expiry: "",
+  medical_check_expiry: "",
+  phone: "",
+  assigned_unit_id: "",
+  hire_date: "",
+  emergency_contact: "",
+  emergency_phone: "",
 };
 
-export function AddOperadorModal({ 
-  open, 
-  onOpenChange, 
+export function AddOperadorModal({
+  open,
+  onOpenChange,
   operatorToEdit,
-  onSave 
+  onSave,
+  isSaving = false,
 }: AddOperadorModalProps) {
   const { toast } = useToast();
-  const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState(emptyFormData);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const isEditMode = !!operatorToEdit;
 
-  // Pre-load data when editing
   useEffect(() => {
-    if (operatorToEdit) {
+    if (open && operatorToEdit) {
       setFormData({
         name: operatorToEdit.name,
         license_number: operatorToEdit.license_number,
         license_type: operatorToEdit.license_type,
         license_expiry: operatorToEdit.license_expiry,
         medical_check_expiry: operatorToEdit.medical_check_expiry,
-        phone: operatorToEdit.phone,
-        assigned_unit: operatorToEdit.assigned_unit || '',
-        hire_date: operatorToEdit.hire_date,
-        emergency_contact: operatorToEdit.emergency_contact,
-        emergency_phone: operatorToEdit.emergency_phone,
+        phone: operatorToEdit.phone || "",
+        assigned_unit_id: operatorToEdit.assigned_unit_id || "",
+        hire_date: operatorToEdit.hire_date || "",
+        emergency_contact: operatorToEdit.emergency_contact || "",
+        emergency_phone: operatorToEdit.emergency_phone || "",
       });
       setErrors({});
-    } else {
+    } else if (!open) {
       setFormData(emptyFormData);
       setErrors({});
     }
@@ -79,27 +88,15 @@ export function AddOperadorModal({
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
 
-    if (!formData.name.trim()) {
-      newErrors.name = 'El nombre es obligatorio';
-    }
-    if (!formData.license_number.trim()) {
-      newErrors.license_number = 'El número de licencia es obligatorio';
-    }
-    if (!formData.license_type) {
-      newErrors.license_type = 'Seleccione un tipo de licencia';
-    }
-    if (!formData.license_expiry) {
-      newErrors.license_expiry = 'La vigencia de licencia es obligatoria';
-    }
-    if (!formData.medical_check_expiry) {
-      newErrors.medical_check_expiry = 'La vigencia del examen médico es obligatoria';
-    }
-    if (!formData.phone.trim()) {
-      newErrors.phone = 'El teléfono es obligatorio';
-    }
-    if (!formData.hire_date) {
-      newErrors.hire_date = 'La fecha de contratación es obligatoria';
-    }
+    if (!formData.name?.trim()) newErrors.name = "Requerido";
+    if (!formData.license_number?.trim())
+      newErrors.license_number = "Requerido";
+    if (!formData.license_type) newErrors.license_type = "Requerido";
+    if (!formData.license_expiry) newErrors.license_expiry = "Requerido";
+    if (!formData.medical_check_expiry)
+      newErrors.medical_check_expiry = "Requerido";
+    if (!formData.phone?.trim()) newErrors.phone = "Requerido";
+    if (!formData.hire_date) newErrors.hire_date = "Requerido";
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -107,47 +104,38 @@ export function AddOperadorModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       toast({
-        title: 'Faltan datos',
-        description: 'Por favor complete todos los campos obligatorios.',
-        variant: 'destructive',
+        title: "Faltan datos",
+        description: "Complete los campos obligatorios.",
+        variant: "destructive",
       });
       return;
     }
 
-    setIsLoading(true);
+    const operadorData: Operador = {
+      // Campos base
+      id: isEditMode && operatorToEdit?.id ? operatorToEdit.id : undefined!, // ID se maneja en padre/backend
+      status: operatorToEdit?.status || "activo",
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 800));
-
-    const operadorData = {
-      ...(isEditMode && operatorToEdit ? { id: operatorToEdit.id } : {}),
-      name: formData.name,
-      license_number: formData.license_number,
-      license_type: formData.license_type as Operador['license_type'],
-      license_expiry: formData.license_expiry,
-      medical_check_expiry: formData.medical_check_expiry,
+      // Campos del form
+      name: formData.name!,
+      license_number: formData.license_number!,
+      license_type: formData.license_type!,
+      license_expiry: formData.license_expiry!,
+      medical_check_expiry: formData.medical_check_expiry!,
       phone: formData.phone,
-      status: operatorToEdit?.status || 'activo' as const,
-      assigned_unit: formData.assigned_unit === 'none' ? null : formData.assigned_unit || null,
+      assigned_unit_id:
+        formData.assigned_unit_id === "none"
+          ? undefined
+          : formData.assigned_unit_id,
       hire_date: formData.hire_date,
       emergency_contact: formData.emergency_contact,
       emergency_phone: formData.emergency_phone,
     };
 
     onSave?.(operadorData);
-
-    toast({
-      title: isEditMode ? 'Operador actualizado' : 'Operador registrado',
-      description: `${formData.name} ha sido ${isEditMode ? 'actualizado' : 'agregado'} exitosamente.`,
-    });
-
-    setIsLoading(false);
-    onOpenChange(false);
-    setFormData(emptyFormData);
-    setErrors({});
   };
 
   const handleClose = () => {
@@ -162,12 +150,12 @@ export function AddOperadorModal({
         <DialogHeader className="bg-primary text-primary-foreground -mx-6 -mt-6 px-6 py-4 rounded-t-lg">
           <DialogTitle className="flex items-center gap-2 text-lg">
             <User className="h-5 w-5" />
-            {isEditMode ? 'Editar Operador' : 'Registrar Nuevo Operador'}
+            {isEditMode ? "Editar Operador" : "Registrar Nuevo Operador"}
           </DialogTitle>
           <DialogDescription className="text-primary-foreground/80">
-            {isEditMode 
-              ? 'Modifique la información del operador.' 
-              : 'Complete la información del conductor para agregarlo al sistema.'}
+            {isEditMode
+              ? "Modifique la información del operador."
+              : "Complete la información del conductor para agregarlo al sistema."}
           </DialogDescription>
         </DialogHeader>
 
@@ -178,7 +166,7 @@ export function AddOperadorModal({
               <User className="h-4 w-4 text-muted-foreground" />
               Información Personal
             </h3>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Nombre Completo *</Label>
@@ -186,10 +174,14 @@ export function AddOperadorModal({
                   id="name"
                   placeholder="Juan Pérez González"
                   value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className={errors.name ? 'border-destructive' : ''}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
+                  className={errors.name ? "border-destructive" : ""}
                 />
-                {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
+                {errors.name && (
+                  <p className="text-xs text-destructive">{errors.name}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="phone">Teléfono *</Label>
@@ -198,12 +190,16 @@ export function AddOperadorModal({
                   <Input
                     id="phone"
                     placeholder="+52 55 1234 5678"
-                    className={`pl-10 ${errors.phone ? 'border-destructive' : ''}`}
+                    className={`pl-10 ${errors.phone ? "border-destructive" : ""}`}
                     value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, phone: e.target.value })
+                    }
                   />
                 </div>
-                {errors.phone && <p className="text-xs text-destructive">{errors.phone}</p>}
+                {errors.phone && (
+                  <p className="text-xs text-destructive">{errors.phone}</p>
+                )}
               </div>
             </div>
 
@@ -214,12 +210,16 @@ export function AddOperadorModal({
                 <Input
                   id="hire_date"
                   type="date"
-                  className={`pl-10 ${errors.hire_date ? 'border-destructive' : ''}`}
+                  className={`pl-10 ${errors.hire_date ? "border-destructive" : ""}`}
                   value={formData.hire_date}
-                  onChange={(e) => setFormData({ ...formData, hire_date: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, hire_date: e.target.value })
+                  }
                 />
               </div>
-              {errors.hire_date && <p className="text-xs text-destructive">{errors.hire_date}</p>}
+              {errors.hire_date && (
+                <p className="text-xs text-destructive">{errors.hire_date}</p>
+              )}
             </div>
           </div>
 
@@ -229,7 +229,7 @@ export function AddOperadorModal({
               <CreditCard className="h-4 w-4 text-muted-foreground" />
               Información de Licencia
             </h3>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="license_number">Número de Licencia *</Label>
@@ -237,18 +237,28 @@ export function AddOperadorModal({
                   id="license_number"
                   placeholder="LIC-2024-12345"
                   value={formData.license_number}
-                  onChange={(e) => setFormData({ ...formData, license_number: e.target.value })}
-                  className={errors.license_number ? 'border-destructive' : ''}
+                  onChange={(e) =>
+                    setFormData({ ...formData, license_number: e.target.value })
+                  }
+                  className={errors.license_number ? "border-destructive" : ""}
                 />
-                {errors.license_number && <p className="text-xs text-destructive">{errors.license_number}</p>}
+                {errors.license_number && (
+                  <p className="text-xs text-destructive">
+                    {errors.license_number}
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="license_type">Tipo de Licencia *</Label>
                 <Select
                   value={formData.license_type}
-                  onValueChange={(value) => setFormData({ ...formData, license_type: value })}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, license_type: value })
+                  }
                 >
-                  <SelectTrigger className={errors.license_type ? 'border-destructive' : ''}>
+                  <SelectTrigger
+                    className={errors.license_type ? "border-destructive" : ""}
+                  >
                     <SelectValue placeholder="Seleccionar tipo" />
                   </SelectTrigger>
                   <SelectContent>
@@ -259,7 +269,11 @@ export function AddOperadorModal({
                     <SelectItem value="E">Tipo E - Tractocamión</SelectItem>
                   </SelectContent>
                 </Select>
-                {errors.license_type && <p className="text-xs text-destructive">{errors.license_type}</p>}
+                {errors.license_type && (
+                  <p className="text-xs text-destructive">
+                    {errors.license_type}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -270,21 +284,40 @@ export function AddOperadorModal({
                   id="license_expiry"
                   type="date"
                   value={formData.license_expiry}
-                  onChange={(e) => setFormData({ ...formData, license_expiry: e.target.value })}
-                  className={errors.license_expiry ? 'border-destructive' : ''}
+                  onChange={(e) =>
+                    setFormData({ ...formData, license_expiry: e.target.value })
+                  }
+                  className={errors.license_expiry ? "border-destructive" : ""}
                 />
-                {errors.license_expiry && <p className="text-xs text-destructive">{errors.license_expiry}</p>}
+                {errors.license_expiry && (
+                  <p className="text-xs text-destructive">
+                    {errors.license_expiry}
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="medical_check_expiry">Vigencia Examen Médico *</Label>
+                <Label htmlFor="medical_check_expiry">
+                  Vigencia Examen Médico *
+                </Label>
                 <Input
                   id="medical_check_expiry"
                   type="date"
                   value={formData.medical_check_expiry}
-                  onChange={(e) => setFormData({ ...formData, medical_check_expiry: e.target.value })}
-                  className={errors.medical_check_expiry ? 'border-destructive' : ''}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      medical_check_expiry: e.target.value,
+                    })
+                  }
+                  className={
+                    errors.medical_check_expiry ? "border-destructive" : ""
+                  }
                 />
-                {errors.medical_check_expiry && <p className="text-xs text-destructive">{errors.medical_check_expiry}</p>}
+                {errors.medical_check_expiry && (
+                  <p className="text-xs text-destructive">
+                    {errors.medical_check_expiry}
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -295,12 +328,14 @@ export function AddOperadorModal({
               <Truck className="h-4 w-4 text-muted-foreground" />
               Asignación de Unidad (Opcional)
             </h3>
-            
+
             <div className="space-y-2">
               <Label htmlFor="assigned_unit">Unidad Asignada</Label>
               <Select
-                value={formData.assigned_unit}
-                onValueChange={(value) => setFormData({ ...formData, assigned_unit: value })}
+                value={formData.assigned_unit_id || "none"}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, assigned_unit_id: value })
+                }
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Sin asignar" />
@@ -323,7 +358,7 @@ export function AddOperadorModal({
               <Heart className="h-4 w-4 text-muted-foreground" />
               Contacto de Emergencia
             </h3>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="emergency_contact">Nombre del Contacto</Label>
@@ -331,7 +366,12 @@ export function AddOperadorModal({
                   id="emergency_contact"
                   placeholder="María González"
                   value={formData.emergency_contact}
-                  onChange={(e) => setFormData({ ...formData, emergency_contact: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      emergency_contact: e.target.value,
+                    })
+                  }
                 />
               </div>
               <div className="space-y-2">
@@ -340,7 +380,12 @@ export function AddOperadorModal({
                   id="emergency_phone"
                   placeholder="+52 55 8765 4321"
                   value={formData.emergency_phone}
-                  onChange={(e) => setFormData({ ...formData, emergency_phone: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      emergency_phone: e.target.value,
+                    })
+                  }
                 />
               </div>
             </div>
@@ -351,22 +396,24 @@ export function AddOperadorModal({
               type="button"
               variant="outline"
               onClick={handleClose}
-              disabled={isLoading}
+              disabled={isSaving}
             >
               Cancelar
             </Button>
             <Button
               type="submit"
-              className="bg-action hover:bg-action-hover text-action-foreground"
-              disabled={isLoading}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground"
+              disabled={isSaving}
             >
-              {isLoading ? (
+              {isSaving ? (
                 <span className="flex items-center gap-2">
-                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <Loader2 className="h-4 w-4 animate-spin" />
                   Guardando...
                 </span>
+              ) : isEditMode ? (
+                "Actualizar Operador"
               ) : (
-                isEditMode ? 'Actualizar Operador' : 'Guardar Operador'
+                "Guardar Operador"
               )}
             </Button>
           </DialogFooter>
