@@ -1,57 +1,77 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  ReactNode,
+  useEffect,
+} from "react";
+import { authService } from "@/services/authService";
+import { useToast } from "@/hooks/use-toast";
 
 interface User {
-  username: string;
-  role: 'admin' | 'operativo' | 'finanzas' | 'taller';
+  id?: string;
+  nombre: string;
+  email: string;
+  role?: string;
 }
 
 interface AuthContextType {
   isAuthenticated: boolean;
   user: User | null;
-  login: (username: string, password: string) => boolean;
+  login: (email: string, password: string) => Promise<any>; // Cambiado a Promise para manejar errores en UI
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Demo credentials
-const DEMO_CREDENTIALS = {
-  username: 'admin',
-  password: 'admin',
-};
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const { toast } = useToast();
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [user, setUser] = useState<User | null>(null);
 
-interface AuthProviderProps {
-  children: ReactNode;
-}
-
-export function AuthProvider({ children }: AuthProviderProps) {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    return localStorage.getItem('isAuthenticated') === 'true';
-  });
-  
-  const [user, setUser] = useState<User | null>(() => {
-    const savedUser = localStorage.getItem('user');
-    return savedUser ? JSON.parse(savedUser) : null;
-  });
-
-  const login = useCallback((username: string, password: string): boolean => {
-    if (username === DEMO_CREDENTIALS.username && password === DEMO_CREDENTIALS.password) {
-      const userData: User = { username, role: 'admin' };
+  // Verificar sesión al cargar
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    const savedUser = localStorage.getItem("user");
+    if (token && savedUser) {
       setIsAuthenticated(true);
-      setUser(userData);
-      localStorage.setItem('isAuthenticated', 'true');
-      localStorage.setItem('user', JSON.stringify(userData));
-      return true;
+      setUser(JSON.parse(savedUser));
     }
-    return false;
+  }, []);
+
+  const login = useCallback(async (email: string, password: string) => {
+    try {
+      const data = await authService.login(email, password);
+
+      if (data.require_2fa) {
+        return {
+          require_2fa: true,
+          temp_token: data.temp_token,
+          user: data.user,
+        };
+      }
+
+      if (data.access_token) {
+        localStorage.setItem("token", data.access_token);
+        localStorage.setItem("user", JSON.stringify(data.user));
+        setIsAuthenticated(true);
+        setUser(data.user);
+        return { success: true };
+      }
+    } catch (error: any) {
+      console.error(error);
+      throw error; // Lanzar error para que lo maneje el componente Login
+    }
   }, []);
 
   const logout = useCallback(() => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
     setIsAuthenticated(false);
     setUser(null);
-    localStorage.removeItem('isAuthenticated');
-    localStorage.removeItem('user');
-  }, []);
+    toast({ title: "Sesión cerrada" });
+  }, [toast]);
 
   return (
     <AuthContext.Provider value={{ isAuthenticated, user, login, logout }}>
@@ -62,8 +82,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (context === undefined)
+    throw new Error("useAuth must be used within an AuthProvider");
   return context;
 }

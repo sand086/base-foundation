@@ -4,15 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  User,
-  Lock,
-  Check,
-  AlertCircle,
-  Eye,
-  EyeOff,
-  ArrowRight,
-} from "lucide-react";
+import { User, Lock, AlertCircle, Eye, EyeOff, ArrowRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Login() {
@@ -20,7 +12,6 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
 
-  const [twoFactor, setTwoFactor] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [remember, setRemember] = useState(true);
@@ -34,46 +25,53 @@ export default function Login() {
     setError("");
     setIsLoading(true);
 
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    try {
+      // 1. Llamada al Backend Real (vía AuthContext -> AuthService)
+      const response = await login(username, password);
 
-    // Simulate backend 2FA check
-    // In production, this would call the /auth/login endpoint
-    const has2FAEnabled = twoFactor.length > 0; // Demo: if user typed in 2FA field, simulate 2FA flow
+      // 2. Caso: El backend dice que el usuario tiene 2FA activado
+      if (response?.require_2fa) {
+        toast({
+          title: "Verificación requerida",
+          description: "Ingresa el código de tu autenticador",
+        });
 
-    if (has2FAEnabled) {
-      // User has 2FA enabled - redirect to verification page
-      const tempToken = `temp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-      
-      toast({
-        title: "Verificación requerida",
-        description: "Ingresa el código de tu autenticador",
-      });
-      
-      navigate("/verify-2fa", {
-        replace: true,
-        state: {
-          tempToken,
-          user: { nombre: username, email: username },
-        },
-      });
+        // Redirigimos a la pantalla de verificación pasando el token temporal
+        navigate("/verify-2fa", {
+          replace: true,
+          state: {
+            tempToken: response.temp_token,
+            user: response.user,
+          },
+        });
+        return;
+      }
+
+      // 3. Caso: Login directo exitoso (sin 2FA o ya verificado)
+      if (response?.success) {
+        toast({
+          title: "Bienvenido",
+          description: "Has iniciado sesión correctamente",
+        });
+        navigate("/", { replace: true });
+      }
+    } catch (err: any) {
+      // 4. Manejo de Errores HTTP del Backend
+      console.error("Error en login:", err);
+      const status = err.response?.status;
+
+      if (status === 401) {
+        setError("Usuario o contraseña incorrectos");
+      } else if (status === 403) {
+        setError("Tu usuario está desactivado. Contacta al administrador.");
+      } else if (status === 422) {
+        setError("Formato de correo inválido");
+      } else {
+        setError("No se pudo conectar con el servidor. Verifica tu conexión.");
+      }
+    } finally {
       setIsLoading(false);
-      return;
     }
-
-    // No 2FA - proceed with normal login
-    const success = login(username, password);
-
-    if (success) {
-      toast({
-        title: "Bienvenido",
-        description: "Has iniciado sesión correctamente",
-      });
-      navigate("/", { replace: true });
-    } else {
-      setError("Usuario o contraseña incorrectos");
-    }
-
-    setIsLoading(false);
   };
 
   return (
@@ -81,13 +79,11 @@ export default function Login() {
       {/* Background image with cinematic overlay */}
       <div className="absolute inset-0">
         <div className="absolute inset-0 bg-[url('/login-bg.jpg')] bg-cover bg-center scale-105 animate-[subtle-float_20s_ease-in-out_infinite]" />
-        {/* Cinematic dark overlay with gradient */}
         <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-black/50" />
-        {/* Subtle brand color accent overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-brand-red/10 via-transparent to-transparent" />
       </div>
 
-      {/* Logo top-right (solo en md+ para que en móvil se enfoque el form) */}
+      {/* Logo top-right */}
       <div className="hidden md:block absolute right-16 top-10 z-10 select-none">
         <img
           src="/logo-white.svg"
@@ -111,9 +107,9 @@ export default function Login() {
               </div>
             </div>
 
-            {/* Error */}
+            {/* Error Message */}
             {error && (
-              <div className="mt-6 flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 backdrop-blur-sm p-3 text-sm text-red-300">
+              <div className="mt-6 flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 backdrop-blur-sm p-3 text-sm text-red-300 animate-in fade-in slide-in-from-top-2">
                 <AlertCircle className="h-4 w-4 flex-shrink-0" />
                 <span>{error}</span>
               </div>
@@ -125,7 +121,7 @@ export default function Login() {
                 <User className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40 transition-all duration-300 group-focus-within:text-white group-focus-within:scale-110" />
                 <Input
                   id="username"
-                  type="text"
+                  type="email" // Cambiado a email para mejor validación nativa
                   placeholder="correo electrónico"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
@@ -135,7 +131,7 @@ export default function Login() {
                 />
               </div>
 
-              {/* Password with eye */}
+              {/* Password */}
               <div className="relative group">
                 <Lock className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40 transition-all duration-300 group-focus-within:text-white group-focus-within:scale-110" />
                 <Input
@@ -184,7 +180,7 @@ export default function Login() {
                     toast({
                       title: "Recuperación",
                       description:
-                        "Aquí iría tu flujo de recuperación de contraseña.",
+                        "Contacta a sistemas para restablecer tu acceso.",
                     });
                   }}
                 >
@@ -192,20 +188,7 @@ export default function Login() {
                 </button>
               </div>
 
-              {/* 2FA */}
-              <div className="relative group pt-1">
-                <Check className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/30 transition-all duration-300 group-focus-within:text-white group-focus-within:scale-110" />
-                <Input
-                  id="twoFactor"
-                  inputMode="numeric"
-                  placeholder="doble verificación"
-                  value={twoFactor}
-                  onChange={(e) => setTwoFactor(e.target.value)}
-                  className="login-input h-12 rounded-xl border border-white/20 bg-white/10 pl-11 pr-4 text-[15px] text-white placeholder:text-white/40 transition-all duration-300 focus:bg-white/15 focus:border-white/30 focus:shadow-[0_0_20px_rgba(255,255,255,0.1)] focus-visible:ring-0 focus-visible:ring-offset-0 hover:bg-white/12 hover:border-white/25"
-                />
-              </div>
-
-              {/* Button with glow */}
+              {/* Submit Button */}
               <Button
                 type="submit"
                 disabled={isLoading}
@@ -214,7 +197,7 @@ export default function Login() {
                 {isLoading ? (
                   <span className="flex items-center gap-2">
                     <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                    Entrando...
+                    Validando...
                   </span>
                 ) : (
                   <span className="flex items-center justify-center gap-3">

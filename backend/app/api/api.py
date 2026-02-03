@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import auth, clients, fleet, operations, finance
+from app.api.endpoints import auth, clients, fleet, operations, finance, users
 
 api_router = APIRouter()
 
@@ -9,3 +9,4 @@ api_router.include_router(clients.router, tags=["Clientes"])
 api_router.include_router(fleet.router, tags=["Flota"])
 api_router.include_router(operations.router, tags=["Operaciones"])
 api_router.include_router(finance.router, tags=["Finanzas"])
+api_router.include_router(users.router, tags=["Usuarios"])

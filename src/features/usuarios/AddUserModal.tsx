@@ -1,22 +1,22 @@
-import { useState } from 'react';
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { roles } from '@/data/usuariosData';
-import { UserPlus } from 'lucide-react';
+} from "@/components/ui/select";
+import { roles } from "@/data/usuariosData";
+import { UserPlus } from "lucide-react";
 
 interface AddUserModalProps {
   open: boolean;
@@ -27,29 +27,36 @@ interface AddUserModalProps {
 export interface UserFormData {
   nombre: string;
   email: string;
+  apellido?: string;
   password: string;
+  telefono?: string;
+  puesto?: string;
   rol: string;
   empresa: string;
 }
 
-export function AddUserModal({ open, onOpenChange, onSubmit }: AddUserModalProps) {
+export function AddUserModal({
+  open,
+  onOpenChange,
+  onSubmit,
+}: AddUserModalProps) {
   const [formData, setFormData] = useState<UserFormData>({
-    nombre: '',
-    email: '',
-    password: '',
-    rol: '',
-    empresa: 'Rápidos 3T',
+    nombre: "",
+    email: "",
+    password: "",
+    rol: "",
+    empresa: "Rápidos 3T",
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit(formData);
     setFormData({
-      nombre: '',
-      email: '',
-      password: '',
-      rol: '',
-      empresa: 'Rápidos 3T',
+      nombre: "",
+      email: "",
+      password: "",
+      rol: "",
+      empresa: "Rápidos 3T",
     });
     onOpenChange(false);
   };
@@ -65,24 +72,32 @@ export function AddUserModal({ open, onOpenChange, onSubmit }: AddUserModalProps
             Agregar Nuevo Usuario
           </DialogTitle>
         </DialogHeader>
-        
+
         <form onSubmit={handleSubmit} className="space-y-4 pt-4">
           <div className="space-y-2">
-            <Label htmlFor="nombre" className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            <Label
+              htmlFor="nombre"
+              className="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+            >
               Nombre Completo
             </Label>
             <Input
               id="nombre"
               placeholder="Ej: Carlos Mendoza García"
               value={formData.nombre}
-              onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, nombre: e.target.value })
+              }
               required
               className="h-9 text-sm"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="email" className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            <Label
+              htmlFor="email"
+              className="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+            >
               Correo Electrónico
             </Label>
             <Input
@@ -90,14 +105,19 @@ export function AddUserModal({ open, onOpenChange, onSubmit }: AddUserModalProps
               type="email"
               placeholder="usuario@rapidos3t.com"
               value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, email: e.target.value })
+              }
               required
               className="h-9 text-sm"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="password" className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            <Label
+              htmlFor="password"
+              className="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+            >
               Contraseña
             </Label>
             <Input
@@ -105,7 +125,9 @@ export function AddUserModal({ open, onOpenChange, onSubmit }: AddUserModalProps
               type="password"
               placeholder="••••••••"
               value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, password: e.target.value })
+              }
               required
               className="h-9 text-sm"
             />
@@ -113,12 +135,17 @@ export function AddUserModal({ open, onOpenChange, onSubmit }: AddUserModalProps
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="rol" className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              <Label
+                htmlFor="rol"
+                className="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+              >
                 Rol
               </Label>
               <Select
                 value={formData.rol}
-                onValueChange={(value) => setFormData({ ...formData, rol: value })}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, rol: value })
+                }
                 required
               >
                 <SelectTrigger className="h-9 text-sm">
@@ -135,13 +162,18 @@ export function AddUserModal({ open, onOpenChange, onSubmit }: AddUserModalProps
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="empresa" className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              <Label
+                htmlFor="empresa"
+                className="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+              >
                 Empresa
               </Label>
               <Input
                 id="empresa"
                 value={formData.empresa}
-                onChange={(e) => setFormData({ ...formData, empresa: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, empresa: e.target.value })
+                }
                 required
                 className="h-9 text-sm"
               />
