@@ -1,36 +1,28 @@
 import axios from "axios";
 
-// La URL base debe coincidir con la configuración de tu main.py en FastAPI
-const baseURL = "http://localhost:8000/api";
+// Vite: variables deben empezar con VITE_
+const baseURL =
+  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api";
 
 const axiosClient = axios.create({
   baseURL,
-  headers: {
-    "Content-Type": "application/json",
-  },
+  headers: { "Content-Type": "application/json" },
 });
 
-// Interceptor para inyectar el token en cada petición
 axiosClient.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("token");
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+    if (token) config.headers.Authorization = `Bearer ${token}`;
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  },
+  (error) => Promise.reject(error),
 );
 
-// Interceptor para manejar errores globales (ej: token expirado)
 axiosClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response && error.response.status === 401) {
-      // Si la petición original NO fue a /auth/login, entonces sí redirigimos
-      if (!error.config.url.includes("/auth/login")) {
+    if (error.response?.status === 401) {
+      if (!String(error.config?.url || "").includes("/auth/login")) {
         localStorage.removeItem("token");
         localStorage.removeItem("user");
         window.location.href = "/login";
