@@ -2,7 +2,7 @@ import axios from "axios";
 
 // Vite: variables deben empezar con VITE_
 const baseURL =
-  import.meta.env.VITE_API_BASE_URL ?? "http://23.29.114.149:80/api";
+  import.meta.env.VITE_API_BASE_URL ?? "http://23.29.114.149:8000/api";
 
 const axiosClient = axios.create({
   baseURL,
