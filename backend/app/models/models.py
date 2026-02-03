@@ -18,7 +18,7 @@ from sqlalchemy import (
     Text,
 )
 from sqlalchemy.orm import relationship
-from database import Base
+from backend.app.db.database import Base
 
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -397,3 +397,20 @@ class SystemConfig(Base):
     grupo = Column(String(50))  # Ej: "general", "legal", "notificaciones"
     tipo = Column(String(20), default="string")  # "string", "boolean", "int"
     is_public = Column(Boolean, default=False)  # Si es visible sin login
+
+
+class Provider(Base):
+    """
+    Catálogo de Proveedores para Cuentas por Pagar (CxP)
+    """
+
+    __tablename__ = "providers"
+
+    id = Column(String(50), primary_key=True)
+    razon_social = Column(String(200), nullable=False)
+    rfc = Column(String(13), unique=True, nullable=False)
+    email = Column(String(100))
+    telefono = Column(String(20))
+    direccion = Column(Text)
+    dias_credito = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)

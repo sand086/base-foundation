@@ -2,6 +2,7 @@
 Pydantic Schemas for TMS API
 Validation and serialization - mirrors TypeScript interfaces
 """
+
 from datetime import date, datetime
 from typing import Optional, List
 from pydantic import BaseModel, Field, ConfigDict
@@ -9,6 +10,7 @@ from enum import Enum
 
 
 # ============= ENUMS =============
+
 
 class UnitTypeEnum(str, Enum):
     SENCILLO = "sencillo"
@@ -59,6 +61,7 @@ class TariffStatusEnum(str, Enum):
 
 # ============= TARIFF SCHEMAS =============
 
+
 class TariffBase(BaseModel):
     nombre_ruta: str = Field(..., min_length=1, max_length=200)
     tipo_unidad: UnitTypeEnum
@@ -76,13 +79,14 @@ class TariffCreate(TariffBase):
 
 class TariffResponse(TariffBase):
     model_config = ConfigDict(from_attributes=True)
-    
+
     id: str
     sub_client_id: str
     created_at: Optional[datetime] = None
 
 
 # ============= SUB_CLIENT SCHEMAS =============
+
 
 class SubClientBase(BaseModel):
     nombre: str = Field(..., min_length=1, max_length=200)
@@ -109,7 +113,7 @@ class SubClientCreate(SubClientBase):
 
 class SubClientResponse(SubClientBase):
     model_config = ConfigDict(from_attributes=True)
-    
+
     id: str
     client_id: str
     tariffs: List[TariffResponse] = []
@@ -117,6 +121,7 @@ class SubClientResponse(SubClientBase):
 
 
 # ============= CLIENT SCHEMAS =============
+
 
 class ClientBase(BaseModel):
     razon_social: str = Field(..., min_length=1, max_length=200)
@@ -139,7 +144,7 @@ class ClientCreate(ClientBase):
 
 class ClientResponse(ClientBase):
     model_config = ConfigDict(from_attributes=True)
-    
+
     id: str
     sub_clients: List[SubClientResponse] = []
     created_at: Optional[datetime] = None
@@ -148,14 +153,16 @@ class ClientResponse(ClientBase):
 
 class ClientListResponse(ClientBase):
     """Versión ligera para listados sin subclientes anidados"""
+
     model_config = ConfigDict(from_attributes=True)
-    
+
     id: str
     sub_clients_count: int = 0
     created_at: Optional[datetime] = None
 
 
 # ============= UNIT SCHEMAS =============
+
 
 class UnitBase(BaseModel):
     numero_economico: str = Field(..., min_length=1, max_length=20)
@@ -179,7 +186,7 @@ class UnitCreate(UnitBase):
 
 class UnitResponse(UnitBase):
     model_config = ConfigDict(from_attributes=True)
-    
+
     id: str
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -187,8 +194,9 @@ class UnitResponse(UnitBase):
 
 class UnitAvailableResponse(BaseModel):
     """Respuesta para unidades disponibles en despacho"""
+
     model_config = ConfigDict(from_attributes=True)
-    
+
     id: str
     numero_economico: str
     marca: str
@@ -201,6 +209,7 @@ class UnitAvailableResponse(BaseModel):
 
 
 # ============= OPERATOR SCHEMAS =============
+
 
 class OperatorBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
@@ -222,7 +231,7 @@ class OperatorCreate(OperatorBase):
 
 class OperatorResponse(OperatorBase):
     model_config = ConfigDict(from_attributes=True)
-    
+
     id: str
     created_at: Optional[datetime] = None
     # Campos calculados para el frontend
@@ -233,6 +242,7 @@ class OperatorResponse(OperatorBase):
 
 
 # ============= TRIP SCHEMAS =============
+
 
 class TripTimelineEventBase(BaseModel):
     time: datetime
@@ -246,7 +256,7 @@ class TripTimelineEventCreate(TripTimelineEventBase):
 
 class TripTimelineEventResponse(TripTimelineEventBase):
     model_config = ConfigDict(from_attributes=True)
-    
+
     id: int
     trip_id: str
 
@@ -277,7 +287,7 @@ class TripCreate(TripBase):
 
 class TripResponse(TripBase):
     model_config = ConfigDict(from_attributes=True)
-    
+
     id: str
     client_id: str
     sub_client_id: str
@@ -290,7 +300,7 @@ class TripResponse(TripBase):
     actual_arrival: Optional[datetime] = None
     closed_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
-    
+
     # Nested info for display
     client_name: Optional[str] = None
     unit_number: Optional[str] = None
@@ -300,8 +310,9 @@ class TripResponse(TripBase):
 
 class TripListResponse(BaseModel):
     """Versión para listados del Centro de Monitoreo"""
+
     model_config = ConfigDict(from_attributes=True)
-    
+
     id: str
     client_name: str
     unit_number: str
@@ -311,3 +322,18 @@ class TripListResponse(BaseModel):
     status: TripStatusEnum
     last_update: Optional[datetime]
     tarifa_base: float
+
+
+class ProviderCreate(BaseModel):
+    id: str
+    razon_social: str
+    rfc: str
+    email: Optional[str] = None
+    telefono: Optional[str] = None
+    direccion: Optional[str] = None
+    dias_credito: int = 0
+
+
+class ProviderResponse(ProviderCreate):
+    model_config = ConfigDict(from_attributes=True)
+    created_at: datetime
