@@ -31,10 +31,16 @@ class OperatorCreate(OperatorBase):
 
 class OperatorUpdate(BaseModel):
     name: Optional[str] = None
+    license_number: Optional[str] = None
+    license_type: Optional[str] = None
+    license_expiry: Optional[date] = None
+    medical_check_expiry: Optional[date] = None
     phone: Optional[str] = None
     status: Optional[OperatorStatusEnum] = None
-    license_expiry: Optional[date] = None
-    # ... otros campos
+    assigned_unit_id: Optional[str] = None
+    hire_date: Optional[date] = None
+    emergency_contact: Optional[str] = None
+    emergency_phone: Optional[str] = None
 
 
 class OperatorResponse(OperatorBase):

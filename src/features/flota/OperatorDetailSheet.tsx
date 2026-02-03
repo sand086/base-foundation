@@ -39,10 +39,12 @@ import {
   FileText,
   Image as ImageIcon,
   Camera,
+  Eye,
+  Download,
 } from "lucide-react";
 // IMPORTANTE: Usamos la interfaz real del servicio
 import { Operador } from "@/services/operatorService";
-import { format, differenceInYears, isValid, parseISO } from "date-fns";
+import { format, differenceInYears, isValid } from "date-fns";
 import { es } from "date-fns/locale";
 
 interface OperatorDetailSheetProps {
@@ -59,6 +61,7 @@ interface DocumentItem {
   status: "vigente" | "por_vencer" | "faltante" | "vencido";
   expiryDate?: string;
   fileName?: string;
+  fileUrl?: string; // URL para previsualización local
 }
 
 // --- Helpers de Fecha y Estado (Adaptados para datos reales) ---
@@ -177,6 +180,8 @@ export function OperatorDetailSheet({
     license_number: "",
     license_expiry: new Date(),
     medical_check_expiry: new Date(),
+    emergency_contact: "",
+    emergency_phone: "",
   });
 
   // Mock documents (estos se generan dinámicamente según el operador)
@@ -185,7 +190,7 @@ export function OperatorDetailSheet({
   // Initialize form safely
   useEffect(() => {
     if (operator && open) {
-      // Safe date parsing
+      // Safe date parsing helper
       const parseDateSafe = (dateStr?: string) => {
         if (!dateStr) return new Date();
         const d = new Date(dateStr);
@@ -199,6 +204,8 @@ export function OperatorDetailSheet({
         license_number: operator.license_number || "",
         license_expiry: parseDateSafe(operator.license_expiry),
         medical_check_expiry: parseDateSafe(operator.medical_check_expiry),
+        emergency_contact: operator.emergency_contact || "",
+        emergency_phone: operator.emergency_phone || "",
       });
 
       // Generar estado de documentos basado en fechas reales
@@ -262,8 +269,13 @@ export function OperatorDetailSheet({
           formData.medical_check_expiry,
           "yyyy-MM-dd",
         ),
+        // CORRECCIÓN: Agregar campos de emergencia
+        emergency_contact: formData.emergency_contact,
+        emergency_phone: formData.emergency_phone,
       };
+
       onSave?.(updatedOperator);
+
       toast({
         title: "Cambios guardados",
         description: `El expediente de ${formData.name} ha sido actualizado.`,
@@ -281,13 +293,23 @@ export function OperatorDetailSheet({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && uploadingDocId) {
+      // Crear URL temporal para vista previa local
+      const tempUrl = URL.createObjectURL(file);
+
       setDocuments((prev) =>
         prev.map((doc) =>
           doc.id === uploadingDocId
-            ? { ...doc, fileName: file.name, status: "vigente" as const }
+            ? {
+                ...doc,
+                fileName: file.name,
+                status: "vigente" as const,
+                fileUrl: tempUrl, // Guardar URL para preview
+                type: file.type.includes("image") ? "image" : "pdf",
+              }
             : doc,
         ),
       );
+
       toast({
         title: "Documento subido",
         description: `${file.name} cargado correctamente.`,
@@ -295,6 +317,18 @@ export function OperatorDetailSheet({
       setUploadingDocId(null);
     }
     e.target.value = "";
+  };
+
+  const handleViewDocument = (doc: DocumentItem) => {
+    if (doc.fileUrl) {
+      window.open(doc.fileUrl, "_blank");
+    } else {
+      toast({
+        title: "Archivo no disponible",
+        description: "Este es un archivo de demostración sin contenido real.",
+        variant: "default",
+      });
+    }
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -309,8 +343,9 @@ export function OperatorDetailSheet({
     setIsDragOver(false);
     if (e.dataTransfer.files.length > 0) {
       toast({
-        title: "Archivos recibidos",
-        description: "Procesando documentos...",
+        title: "Archivos detectados",
+        description:
+          "Por favor usa el botón de carga individual por documento.",
       });
     }
   };
@@ -670,12 +705,29 @@ export function OperatorDetailSheet({
                   </div>
                   <div className="flex items-center gap-2">
                     {getDocStatusBadge(doc.status)}
+
+                    {/* Botón Ver/Descargar */}
+                    {(doc.fileName || doc.fileUrl) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleViewDocument(doc)}
+                        className="h-8 w-8 p-0 opacity-70 hover:opacity-100"
+                      >
+                        {doc.fileUrl ? (
+                          <Eye className="h-4 w-4 text-sky-400" />
+                        ) : (
+                          <Download className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </Button>
+                    )}
+
                     {isEditing && (
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleFileUpload(doc.id)}
-                        className="h-8 w-8 p-0"
+                        className="h-8 w-8 p-0 opacity-70 hover:opacity-100"
                       >
                         <UploadCloud className="h-4 w-4 text-primary" />
                       </Button>
@@ -715,37 +767,76 @@ export function OperatorDetailSheet({
             )}
           </div>
 
-          {/* Contact Info (Read-Only) */}
-          {!isEditing && (
-            <div className="rounded-xl p-4 bg-white/5 border border-white/10 backdrop-blur-sm">
-              <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                <Phone className="h-4 w-4 text-primary" /> Contacto
-              </h3>
-              <div className="space-y-3">
-                <div className="flex items-center gap-3 text-sm">
-                  <div className="p-2 rounded-lg bg-muted/30">
-                    <Phone className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Móvil</p>
-                    <p>{operator.phone || "N/A"}</p>
-                  </div>
+          {/* Contact Info (Editable) */}
+          <div className="rounded-xl p-4 bg-white/5 border border-white/10 backdrop-blur-sm">
+            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+              <Phone className="h-4 w-4 text-primary" /> Contacto
+            </h3>
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 text-sm">
+                <div className="p-2 rounded-lg bg-muted/30">
+                  <Phone className="h-4 w-4 text-muted-foreground" />
                 </div>
-                <div className="flex items-center gap-3 text-sm">
-                  <div className="p-2 rounded-lg bg-muted/30">
-                    <Heart className="h-4 w-4 text-rose-400" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Emergencia</p>
-                    <p>{operator.emergency_contact || "N/A"}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {operator.emergency_phone}
-                    </p>
-                  </div>
+                <div className="w-full">
+                  <p className="text-xs text-muted-foreground">Móvil</p>
+                  {isEditing ? (
+                    <Input
+                      value={formData.phone}
+                      onChange={(e) =>
+                        setFormData((p) => ({ ...p, phone: e.target.value }))
+                      }
+                      className="h-7 text-sm bg-white/5 border-white/10 mt-1"
+                    />
+                  ) : (
+                    <p>{operator.phone || "N/A"}</p>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-3 text-sm">
+                <div className="p-2 rounded-lg bg-muted/30">
+                  <Heart className="h-4 w-4 text-rose-400" />
+                </div>
+                <div className="w-full">
+                  <p className="text-xs text-muted-foreground">
+                    Emergencia (Contacto / Tel)
+                  </p>
+                  {isEditing ? (
+                    <div className="flex gap-2 mt-1">
+                      <Input
+                        placeholder="Nombre"
+                        value={formData.emergency_contact}
+                        onChange={(e) =>
+                          setFormData((p) => ({
+                            ...p,
+                            emergency_contact: e.target.value,
+                          }))
+                        }
+                        className="h-7 text-sm bg-white/5 border-white/10 w-1/2"
+                      />
+                      <Input
+                        placeholder="Teléfono"
+                        value={formData.emergency_phone}
+                        onChange={(e) =>
+                          setFormData((p) => ({
+                            ...p,
+                            emergency_phone: e.target.value,
+                          }))
+                        }
+                        className="h-7 text-sm bg-white/5 border-white/10 w-1/2"
+                      />
+                    </div>
+                  ) : (
+                    <>
+                      <p>{operator.emergency_contact || "Sin contacto"}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {operator.emergency_phone}
+                      </p>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
-          )}
+          </div>
 
           {/* Badges (Read-Only) */}
           {!isEditing && (
