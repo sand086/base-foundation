@@ -13,6 +13,7 @@ sys.path.append(os.getcwd())
 from datetime import date, datetime, timedelta
 from app.db.database import SessionLocal, engine
 from app.models import models
+from app.core.security import get_password_hash
 
 # Create tables
 models.Base.metadata.create_all(bind=engine)
@@ -85,7 +86,7 @@ def seed_users(db):
     admin_user = models.User(
         id="USR-001",
         email="admin@transportes.com",
-        password_hash="admin",
+        password_hash=get_password_hash("admin"),
         nombre="Administrador",
         apellido="Sistema",
         puesto="Gerente General",

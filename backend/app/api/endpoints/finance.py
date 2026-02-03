@@ -1,56 +1,28 @@
-# (Tarifas y Proveedores)
-
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
 from app.db.database import get_db
 from app.models import models
-from app.schemas import schemas
+from app.schemas import finance as schemas
+from app.crud import finance as crud
 
 router = APIRouter()
 
 
-@router.get("/tarifas/por-subcliente/{sub_client_id}")
-def get_tariffs_by_subclient(sub_client_id: str, db: Session = Depends(get_db)):
-    return (
-        db.query(models.Tariff)
-        .filter(models.Tariff.sub_client_id == sub_client_id)
-        .all()
-    )
+@router.get("/providers", response_model=List[schemas.ProviderResponse])
+def read_providers(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    return crud.get_providers(db, skip, limit)
 
 
-@router.post("/tariffs/bulk", tags=["Carga Masiva"])
-def create_tariffs_bulk(
-    tariffs: List[schemas.TariffCreate], db: Session = Depends(get_db)
-):
-    try:
-        db_tariffs = [models.Tariff(**t.model_dump()) for t in tariffs]
-        db.add_all(db_tariffs)
-        db.commit()
-        return {
-            "message": f"Se cargaron {len(db_tariffs)} tarifas",
-            "status": "success",
-        }
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(
-            status_code=400, detail=f"Error al cargar tarifas: {str(e)}"
-        )
+@router.post("/providers", response_model=schemas.ProviderResponse)
+def create_provider(provider: schemas.ProviderCreate, db: Session = Depends(get_db)):
+    if db.query(models.Provider).filter(models.Provider.rfc == provider.rfc).first():
+        raise HTTPException(status_code=400, detail="RFC ya registrado")
+    return crud.create_provider(db, provider)
 
 
-@router.post("/providers/bulk", tags=["Carga Masiva"])
-def create_providers_bulk(
-    providers: List[schemas.ProviderCreate], db: Session = Depends(get_db)
-):
-    try:
-        db_providers = [models.Provider(**prov.model_dump()) for prov in providers]
-        db.add_all(db_providers)
-        db.commit()
-        return {
-            "message": f"Se cargaron {len(db_providers)} proveedores",
-            "status": "success",
-        }
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(status_code=400, detail="El RFC de un proveedor ya existe.")
+@router.delete("/providers/{provider_id}")
+def delete_provider(provider_id: str, db: Session = Depends(get_db)):
+    if not crud.delete_provider(db, provider_id):
+        raise HTTPException(status_code=404, detail="Proveedor no encontrado")
+    return {"message": "Proveedor eliminado"}

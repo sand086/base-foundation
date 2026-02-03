@@ -1,68 +1,71 @@
-import secrets
+from datetime import datetime, timedelta
+from typing import Any, Union, Optional
+from jose import jwt, JWTError
+from passlib.context import CryptContext
+from app.core.config import settings
 import pyotp
 import qrcode
 import io
 import base64
-from datetime import datetime, timedelta
-from typing import Optional
 
-# Almacenamiento temporal de tokens (simulado)
-_temp_tokens: dict[str, dict] = {}
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+ALGORITHM = "HS256"
 
 
-def generate_temp_token() -> str:
-    """Genera token temporal para el flujo 2FA"""
-    return secrets.token_urlsafe(32)
-
-
-def generate_access_token(user_id: str) -> str:
-    """Genera token de acceso simple"""
-    return f"tms_token_{user_id}_{secrets.token_urlsafe(16)}"
-
-
+# --- Contraseñas ---
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verifica contraseña (Acepta 'admin' como maestra para demos)"""
-    return plain_password == "admin" or plain_password == hashed_password
+    return pwd_context.verify(plain_password, hashed_password)
 
 
+def get_password_hash(password: str) -> str:
+    return pwd_context.hash(password)
+
+
+# --- Tokens JWT ---
+def create_access_token(
+    subject: Union[str, Any], expires_delta: timedelta = None
+) -> str:
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(
+            minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
+        )
+
+    to_encode = {"sub": str(subject), "exp": expire, "type": "access"}
+    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+
+def generate_temp_token(user_id: str) -> str:
+    """Genera un token temporal de 5 minutos solo para verificar 2FA"""
+    expire = datetime.utcnow() + timedelta(minutes=5)
+    to_encode = {"sub": str(user_id), "exp": expire, "type": "2fa_temp"}
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
+
+
+def decode_temp_token(token: str) -> Optional[str]:
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("type") != "2fa_temp":
+            return None
+        return payload.get("sub")
+    except JWTError:
+        return None
+
+
+# --- 2FA (Google Authenticator) ---
 def generate_2fa_secret() -> str:
     return pyotp.random_base32()
 
 
-def get_totp(secret: str) -> pyotp.TOTP:
+def get_totp(secret: str):
     return pyotp.TOTP(secret)
 
 
-def generate_qr_code(totp_uri: str) -> str:
-    qr = qrcode.QRCode(version=1, box_size=10, border=5)
-    qr.add_data(totp_uri)
-    qr.make(fit=True)
-    img = qr.make_image(fill_color="black", back_color="white")
-    buffer = io.BytesIO()
-    img.save(buffer, format="PNG")
-    buffer.seek(0)
-    return base64.b64encode(buffer.getvalue()).decode()
-
-
-def store_temp_token(token: str, user_id: str, expires_minutes: int = 5):
-    _temp_tokens[token] = {
-        "user_id": user_id,
-        "expires_at": datetime.utcnow() + timedelta(minutes=expires_minutes),
-    }
-
-
-def validate_temp_token(token: str) -> Optional[str]:
-    if token not in _temp_tokens:
-        return None
-    data = _temp_tokens[token]
-    if datetime.utcnow() > data["expires_at"]:
-        del _temp_tokens[token]
-        return None
-    return data["user_id"]
-
-
-def consume_temp_token(token: str) -> Optional[str]:
-    user_id = validate_temp_token(token)
-    if user_id:
-        del _temp_tokens[token]
-    return user_id
+def generate_qr_code(uri: str) -> str:
+    """Genera imagen QR en base64"""
+    img = qrcode.make(uri)
+    buffered = io.BytesIO()
+    img.save(buffered, format="PNG")
+    return base64.b64encode(buffered.getvalue()).decode("utf-8")

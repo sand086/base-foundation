@@ -8,11 +8,15 @@ python-dotenv==1.0.0
 alembic==1.11.1
 pytest==7.4.0
 
-# Security & Auth
+# Seguridad y Autenticación
+python-jose[cryptography]==3.3.0
+passlib[argon2]==1.7.4
+python-multipart==0.0.6
+argon2-cffi==23.1.0
+
+# 2FA
 pyotp==2.9.0
 qrcode[pil]==7.4.2
-passlib[bcrypt]==1.7.4
-python-multipart==0.0.6
 
-# Validation (¡Esta era la que faltaba!)
+# Validationes
 email-validator>=2.1.0
