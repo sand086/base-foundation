@@ -39,7 +39,8 @@ const MOCK_IS_SETUP_REQUIRED = true; // true = Modo Config QR | false = Modo Ver
 
 const MOCK_QR_DATA = {
   secret: "JBSWY3DPEHPK3PXP",
-  qrUrl: "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=otpauth://totp/Rapidos3T:usuario@ejemplo.com?secret=JBSWY3DPEHPK3PXP&issuer=Rapidos3T"
+  qrUrl:
+    "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=otpauth://totp/Rapidos3T:usuario@ejemplo.com?secret=JBSWY3DPEHPK3PXP&issuer=Rapidos3T",
 };
 // ============================================
 
@@ -74,7 +75,8 @@ export default function TwoFactorAuth() {
     if (countdown <= 0) {
       toast({
         title: "Sesión expirada",
-        description: "El tiempo de verificación ha expirado. Inicia sesión nuevamente.",
+        description:
+          "El tiempo de verificación ha expirado. Inicia sesión nuevamente.",
         variant: "destructive",
       });
       navigate("/login", { replace: true });
@@ -115,8 +117,8 @@ export default function TwoFactorAuth() {
     if (code === "123456") {
       toast({
         title: isSetupMode ? "2FA Activado" : "Verificación exitosa",
-        description: isSetupMode 
-          ? "Tu cuenta ahora está protegida con doble factor" 
+        description: isSetupMode
+          ? "Tu cuenta ahora está protegida con doble factor"
           : "Bienvenido al sistema",
       });
 
@@ -161,16 +163,18 @@ export default function TwoFactorAuth() {
     <div className="fixed inset-0 z-[9999] overflow-hidden">
       {/* Background with subtle animation */}
       <div className="absolute inset-0">
-        <div className="absolute inset-0 bg-[url('/login-bg.jpg')] bg-cover bg-center scale-105 animate-[subtle-float_20s_ease-in-out_infinite]" />
+        <div className="absolute inset-0 bg-[url('../../src/assets/img/login-bg.jpg')] bg-cover bg-center scale-105 animate-[subtle-float_20s_ease-in-out_infinite]" />
         <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-black/50 to-black/60" />
         <div className="absolute inset-0 bg-gradient-to-t from-brand-red/10 via-transparent to-transparent" />
       </div>
 
       {/* Content */}
       <div className="relative z-10 flex h-full items-center justify-center px-4 py-6">
-        <Card className={`w-full rounded-3xl border border-white/10 bg-black/40 backdrop-blur-2xl shadow-[0_8px_64px_rgba(0,0,0,0.5)] overflow-hidden ${
-          isSetupMode ? 'max-w-lg md:max-w-4xl' : 'max-w-[520px]'
-        }`}>
+        <Card
+          className={`w-full rounded-3xl border border-white/10 bg-black/40 backdrop-blur-2xl shadow-[0_8px_64px_rgba(0,0,0,0.5)] overflow-hidden ${
+            isSetupMode ? "max-w-lg md:max-w-4xl" : "max-w-[520px]"
+          }`}
+        >
           <CardContent className="p-6 md:p-8">
             {/* ========== MODO CONFIGURACIÓN (QR) - Layout de 2 columnas ========== */}
             {isSetupMode ? (
@@ -182,11 +186,11 @@ export default function TwoFactorAuth() {
                     <div className="mx-auto md:mx-0 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-brand-red/20 to-brand-red/5 border border-brand-red/30 shadow-[0_0_30px_rgba(190,8,17,0.3)]">
                       <ShieldCheck className="h-8 w-8 text-brand-red drop-shadow-[0_0_10px_rgba(190,8,17,0.5)]" />
                     </div>
-                    
+
                     <h1 className="mt-4 text-xl md:text-2xl font-bold text-white">
                       Configura tu Seguridad (2FA)
                     </h1>
-                    
+
                     <p className="mt-2 text-sm text-white/60">
                       Protege tu cuenta con autenticación de dos factores
                     </p>
@@ -195,16 +199,30 @@ export default function TwoFactorAuth() {
                   {/* Instructions */}
                   <div className="mt-6 space-y-4">
                     <div className="flex items-start gap-3 text-white/70">
-                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-red/20 text-xs font-bold text-brand-red">1</div>
-                      <p className="text-sm">Abre tu aplicación autenticadora (Google Authenticator, Authy, etc.)</p>
+                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-red/20 text-xs font-bold text-brand-red">
+                        1
+                      </div>
+                      <p className="text-sm">
+                        Abre tu aplicación autenticadora (Google Authenticator,
+                        Authy, etc.)
+                      </p>
                     </div>
                     <div className="flex items-start gap-3 text-white/70">
-                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-red/20 text-xs font-bold text-brand-red">2</div>
-                      <p className="text-sm">Escanea el código QR o ingresa la clave secreta manualmente</p>
+                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-red/20 text-xs font-bold text-brand-red">
+                        2
+                      </div>
+                      <p className="text-sm">
+                        Escanea el código QR o ingresa la clave secreta
+                        manualmente
+                      </p>
                     </div>
                     <div className="flex items-start gap-3 text-white/70">
-                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-red/20 text-xs font-bold text-brand-red">3</div>
-                      <p className="text-sm">Introduce el código de 6 dígitos para confirmar</p>
+                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-red/20 text-xs font-bold text-brand-red">
+                        3
+                      </div>
+                      <p className="text-sm">
+                        Introduce el código de 6 dígitos para confirmar
+                      </p>
                     </div>
                   </div>
 
@@ -253,8 +271,8 @@ export default function TwoFactorAuth() {
                   <div className="relative mx-auto w-fit">
                     <div className="absolute -inset-1 rounded-2xl bg-gradient-to-br from-brand-red/50 via-brand-red/20 to-transparent blur-sm" />
                     <div className="relative rounded-2xl border border-white/20 bg-white p-3 shadow-[0_0_40px_rgba(190,8,17,0.2)]">
-                      <img 
-                        src={MOCK_QR_DATA.qrUrl} 
+                      <img
+                        src={MOCK_QR_DATA.qrUrl}
                         alt="QR Code para 2FA"
                         className="h-40 w-40 md:h-44 md:w-44 rounded-lg"
                       />
@@ -302,33 +320,33 @@ export default function TwoFactorAuth() {
                       className="gap-1"
                     >
                       <InputOTPGroup className="gap-1">
-                        <InputOTPSlot 
-                          index={0} 
+                        <InputOTPSlot
+                          index={0}
                           className="h-11 w-10 rounded-lg border-white/20 bg-white/5 text-base font-bold text-white transition-all focus:bg-white/10 focus:border-brand-red/50 focus:shadow-[0_0_15px_rgba(190,8,17,0.3)]"
                         />
-                        <InputOTPSlot 
-                          index={1} 
+                        <InputOTPSlot
+                          index={1}
                           className="h-11 w-10 rounded-lg border-white/20 bg-white/5 text-base font-bold text-white transition-all focus:bg-white/10 focus:border-brand-red/50 focus:shadow-[0_0_15px_rgba(190,8,17,0.3)]"
                         />
-                        <InputOTPSlot 
-                          index={2} 
+                        <InputOTPSlot
+                          index={2}
                           className="h-11 w-10 rounded-lg border-white/20 bg-white/5 text-base font-bold text-white transition-all focus:bg-white/10 focus:border-brand-red/50 focus:shadow-[0_0_15px_rgba(190,8,17,0.3)]"
                         />
                       </InputOTPGroup>
-                      
+
                       <InputOTPSeparator className="text-white/30" />
-                      
+
                       <InputOTPGroup className="gap-1">
-                        <InputOTPSlot 
-                          index={3} 
+                        <InputOTPSlot
+                          index={3}
                           className="h-11 w-10 rounded-lg border-white/20 bg-white/5 text-base font-bold text-white transition-all focus:bg-white/10 focus:border-brand-red/50 focus:shadow-[0_0_15px_rgba(190,8,17,0.3)]"
                         />
-                        <InputOTPSlot 
-                          index={4} 
+                        <InputOTPSlot
+                          index={4}
                           className="h-11 w-10 rounded-lg border-white/20 bg-white/5 text-base font-bold text-white transition-all focus:bg-white/10 focus:border-brand-red/50 focus:shadow-[0_0_15px_rgba(190,8,17,0.3)]"
                         />
-                        <InputOTPSlot 
-                          index={5} 
+                        <InputOTPSlot
+                          index={5}
                           className="h-11 w-10 rounded-lg border-white/20 bg-white/5 text-base font-bold text-white transition-all focus:bg-white/10 focus:border-brand-red/50 focus:shadow-[0_0_15px_rgba(190,8,17,0.3)]"
                         />
                       </InputOTPGroup>
@@ -355,7 +373,10 @@ export default function TwoFactorAuth() {
 
                     {/* Demo hint */}
                     <p className="text-xs text-white/30">
-                      Demo: código <code className="rounded bg-white/10 px-1.5 py-0.5 text-white/50">123456</code>
+                      Demo: código{" "}
+                      <code className="rounded bg-white/10 px-1.5 py-0.5 text-white/50">
+                        123456
+                      </code>
                     </p>
                   </div>
                 </div>
@@ -379,25 +400,35 @@ export default function TwoFactorAuth() {
                   <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-brand-red/20 to-brand-red/5 border border-brand-red/30 shadow-[0_0_30px_rgba(190,8,17,0.3)]">
                     <Shield className="h-8 w-8 text-brand-red drop-shadow-[0_0_10px_rgba(190,8,17,0.5)]" />
                   </div>
-                  
+
                   <h1 className="mt-4 text-xl md:text-2xl font-bold text-white">
                     Verificación de Seguridad
                   </h1>
-                  
+
                   <p className="mt-2 text-sm text-white/60">
-                    Hola <span className="text-white/80 font-medium">{userName}</span>, ingresa el código de tu aplicación autenticadora
+                    Hola{" "}
+                    <span className="text-white/80 font-medium">
+                      {userName}
+                    </span>
+                    , ingresa el código de tu aplicación autenticadora
                   </p>
                 </div>
 
                 {/* Timer badge */}
                 <div className="mt-4 flex justify-center">
-                  <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm ${
-                    countdown <= 60 
-                      ? "bg-red-500/20 text-red-400 border border-red-500/30" 
-                      : "bg-white/5 text-white/60 border border-white/10"
-                  }`}>
-                    <Loader2 className={`h-3.5 w-3.5 ${countdown <= 60 ? "animate-spin" : ""}`} />
-                    <span>Tiempo: <strong>{formatTime(countdown)}</strong></span>
+                  <div
+                    className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm ${
+                      countdown <= 60
+                        ? "bg-red-500/20 text-red-400 border border-red-500/30"
+                        : "bg-white/5 text-white/60 border border-white/10"
+                    }`}
+                  >
+                    <Loader2
+                      className={`h-3.5 w-3.5 ${countdown <= 60 ? "animate-spin" : ""}`}
+                    />
+                    <span>
+                      Tiempo: <strong>{formatTime(countdown)}</strong>
+                    </span>
                   </div>
                 </div>
 
@@ -424,33 +455,33 @@ export default function TwoFactorAuth() {
                     className="gap-2"
                   >
                     <InputOTPGroup className="gap-2">
-                      <InputOTPSlot 
-                        index={0} 
+                      <InputOTPSlot
+                        index={0}
                         className="h-12 w-11 rounded-xl border-white/20 bg-white/5 text-lg font-bold text-white transition-all focus:bg-white/10 focus:border-brand-red/50 focus:shadow-[0_0_15px_rgba(190,8,17,0.3)]"
                       />
-                      <InputOTPSlot 
-                        index={1} 
+                      <InputOTPSlot
+                        index={1}
                         className="h-12 w-11 rounded-xl border-white/20 bg-white/5 text-lg font-bold text-white transition-all focus:bg-white/10 focus:border-brand-red/50 focus:shadow-[0_0_15px_rgba(190,8,17,0.3)]"
                       />
-                      <InputOTPSlot 
-                        index={2} 
+                      <InputOTPSlot
+                        index={2}
                         className="h-12 w-11 rounded-xl border-white/20 bg-white/5 text-lg font-bold text-white transition-all focus:bg-white/10 focus:border-brand-red/50 focus:shadow-[0_0_15px_rgba(190,8,17,0.3)]"
                       />
                     </InputOTPGroup>
-                    
+
                     <InputOTPSeparator className="text-white/30" />
-                    
+
                     <InputOTPGroup className="gap-2">
-                      <InputOTPSlot 
-                        index={3} 
+                      <InputOTPSlot
+                        index={3}
                         className="h-12 w-11 rounded-xl border-white/20 bg-white/5 text-lg font-bold text-white transition-all focus:bg-white/10 focus:border-brand-red/50 focus:shadow-[0_0_15px_rgba(190,8,17,0.3)]"
                       />
-                      <InputOTPSlot 
-                        index={4} 
+                      <InputOTPSlot
+                        index={4}
                         className="h-12 w-11 rounded-xl border-white/20 bg-white/5 text-lg font-bold text-white transition-all focus:bg-white/10 focus:border-brand-red/50 focus:shadow-[0_0_15px_rgba(190,8,17,0.3)]"
                       />
-                      <InputOTPSlot 
-                        index={5} 
+                      <InputOTPSlot
+                        index={5}
                         className="h-12 w-11 rounded-xl border-white/20 bg-white/5 text-lg font-bold text-white transition-all focus:bg-white/10 focus:border-brand-red/50 focus:shadow-[0_0_15px_rgba(190,8,17,0.3)]"
                       />
                     </InputOTPGroup>
@@ -490,15 +521,21 @@ export default function TwoFactorAuth() {
                 {/* Help text */}
                 <div className="mt-4 rounded-xl border border-white/5 bg-white/5 p-3">
                   <p className="text-xs text-white/40 text-center leading-relaxed">
-                    Abre tu aplicación autenticadora e ingresa el código de 6 dígitos para{" "}
-                    <span className="text-white/60 font-medium">Rápidos 3T - TMS</span>
+                    Abre tu aplicación autenticadora e ingresa el código de 6
+                    dígitos para{" "}
+                    <span className="text-white/60 font-medium">
+                      Rápidos 3T - TMS
+                    </span>
                   </p>
                 </div>
 
                 {/* Demo hint */}
                 <div className="mt-3 text-center">
                   <p className="text-xs text-white/30">
-                    Demo: código <code className="rounded bg-white/10 px-1.5 py-0.5 text-white/50">123456</code>
+                    Demo: código{" "}
+                    <code className="rounded bg-white/10 px-1.5 py-0.5 text-white/50">
+                      123456
+                    </code>
                   </p>
                 </div>
               </div>

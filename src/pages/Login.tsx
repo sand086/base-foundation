@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { User, Lock, AlertCircle, Eye, EyeOff, ArrowRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { logos_3t } from "@/assets/img";
 
 export default function Login() {
   const [username, setUsername] = useState("");
@@ -55,10 +56,11 @@ export default function Login() {
         });
         navigate("/", { replace: true });
       }
-    } catch (err: any) {
+    } catch (err) {
       // 4. Manejo de Errores HTTP del Backend
       console.error("Error en login:", err);
-      const status = err.response?.status;
+      const status = (err as { response?: { status: number } }).response
+        ?.status;
 
       if (status === 401) {
         setError("Usuario o contraseña incorrectos");
@@ -78,7 +80,7 @@ export default function Login() {
     <div className="fixed inset-0 z-[9999] overflow-hidden">
       {/* Background image with cinematic overlay */}
       <div className="absolute inset-0">
-        <div className="absolute inset-0 bg-[url('/login-bg.jpg')] bg-cover bg-center scale-105 animate-[subtle-float_20s_ease-in-out_infinite]" />
+        <div className="absolute inset-0 bg-[url('../../src/assets/img/login-bg.jpg')] bg-cover bg-center scale-105 animate-[subtle-float_20s_ease-in-out_infinite]" />
         <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-black/50" />
         <div className="absolute inset-0 bg-gradient-to-t from-brand-red/10 via-transparent to-transparent" />
       </div>
@@ -86,7 +88,7 @@ export default function Login() {
       {/* Logo top-right */}
       <div className="hidden md:block absolute right-16 top-10 z-10 select-none">
         <img
-          src="/logo-white.svg"
+          src={logos_3t.logo_white_3t}
           alt="transport management system"
           className="h-20 drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]"
         />
