@@ -210,7 +210,7 @@ export default function Login() {
 
               <div className="pt-3 text-center text-[11px] text-white/60">
                 ¿No tienes acceso? Comunícate con el soporte técnico o con el
-                administrador.
+                administrador. <small>admin@transportes.com</small>
               </div>
             </form>
           </CardContent>

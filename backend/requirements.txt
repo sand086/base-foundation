@@ -7,6 +7,7 @@ pydantic-settings==2.1.0
 python-dotenv==1.0.0
 alembic==1.11.1
 pytest==7.4.0
+pandas==2.1.4
 
 # Seguridad y Autenticación
 python-jose[cryptography]==3.3.0

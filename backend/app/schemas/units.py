@@ -33,8 +33,22 @@ class UnitBase(BaseModel):
     permiso_sct_vence: Optional[date] = None
 
 
-class UnitCreate(UnitBase):
-    id: str
+class UnitCreate(BaseModel):
+    numero_economico: str
+    placas: str
+    vin: Optional[str]
+    marca: str
+    modelo: str
+    year: int
+    tipo: str # El original
+    tipo_1: Optional[str] # El nuevo (Tractocamión)
+    tipo_carga: Optional[str]
+    status: str
+    seguro_vence: Optional[date]
+    verificacion_humo_vence: Optional[date]
+    verificacion_fisico_mecanica_vence: Optional[date]
+    # Los campos de "Anexar archivo" se manejarán inicialmente como strings/URLs
+    tarjeta_circulacion: Optional[str]
 
 
 class UnitUpdate(BaseModel):

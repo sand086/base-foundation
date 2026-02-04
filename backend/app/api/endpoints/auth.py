@@ -7,11 +7,16 @@ from app.models import models
 from app.schemas import auth as schemas
 from app.core import security
 from app.core.config import settings  # Asegúrate de tener esto o usar timedelta directo
+from fastapi.security import OAuth2PasswordBearer
+from jose import JWTError, jwt
 
 # NOTA: Quitamos 'prefix' aquí porque ya lo defines en api.py como '/auth'
 # Si lo dejas aquí, la ruta sería /api/auth/auth/login
 router = APIRouter(tags=["Authentication"])
-
+# Configura el esquema de seguridad
+reusable_oauth2 = OAuth2PasswordBearer(
+    tokenUrl=f"{settings.API_V1_STR}/auth/login"
+)
 
 @router.post("/login", response_model=schemas.LoginResponse)
 def login(request: schemas.LoginRequest, db: Session = Depends(get_db)):
@@ -139,3 +144,33 @@ def enable_2fa(
     user.is_2fa_enabled = True
     db.commit()
     return {"message": "2FA Activado correctamente"}
+
+
+async def get_current_user(
+    db: Session = Depends(get_db), 
+    token: str = Depends(reusable_oauth2)
+) -> models.User:
+    try:
+        # Decodificar el token usando tu secret key
+        payload = jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[security.ALGORITHM]
+        )
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Token inválido")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="No se pudo validar el token")
+    
+    # Buscar el usuario en la base de datos
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    return user
+
+
+async def get_current_active_user(
+    current_user: models.User = Depends(get_current_user)
+):
+    if not current_user.activo: # Asegúrate que el campo sea 'activo' como en tu login
+        raise HTTPException(status_code=400, detail="Usuario inactivo")
+    return current_user
