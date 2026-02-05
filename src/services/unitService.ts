@@ -2,20 +2,25 @@ import axiosClient from "@/api/axiosClient";
 
 // 1. Interfaces Base
 export interface Unidad {
-  id: string;
+  id?: string; // Opcional al crear
   numero_economico: string;
   placas: string;
+  vin?: string;
   marca: string;
   modelo: string;
   year?: number;
-  tipo: "sencillo" | "full" | "rabon";
+  tipo: string; // Tipo original
+  tipo_1?: string; // NUEVO: Tractocamion, Remolque, etc.
+  tipo_carga?: string; // NUEVO: IMO, General
   status: "disponible" | "en_ruta" | "mantenimiento" | "bloqueado";
-  vin?: string;
-  documentos_vencidos?: number;
-  llantas_criticas?: number;
+
+  // Fechas de vencimiento
   seguro_vence?: string;
-  verificacion_vence?: string;
-  permiso_sct_vence?: string;
+  verificacion_humo?: string;
+  verificacion_fisico_mecanica?: string;
+
+  // Referencias a archivos (solo strings por ahora)
+  tarjeta_circulacion_ref?: string;
 }
 
 // 2. Interfaz Extendida para la Vista de Detalles (Incluye Docs y Llantas)
@@ -39,104 +44,45 @@ export interface UnidadDetalle extends Unidad {
 
 // 3. Servicio Completo
 export const unitService = {
-  // Obtener todas las unidades (para la tabla)
-  getAll: async (): Promise<Unidad[]> => {
-    const { data } = await axiosClient.get("/units");
-    return data;
+  getAll: async () => {
+    const response = await axiosClient.get<Unidad[]>("/units");
+    return response.data;
   },
 
-  // Crear unidad
-  create: async (unidad: Unidad): Promise<Unidad> => {
-    const { data } = await axiosClient.post("/units", unidad);
-    return data;
+  create: async (unit: Omit<Unidad, "id">) => {
+    const response = await axiosClient.post<Unidad>("/units", unit);
+    return response.data;
   },
 
-  // Actualizar unidad
-  update: async (id: string, unidad: Partial<Unidad>): Promise<Unidad> => {
-    const { data } = await axiosClient.put(`/units/${id}`, unidad);
-    return data;
+  update: async (id: string, unit: Partial<Unidad>) => {
+    const response = await axiosClient.put<Unidad>(`/units/${id}`, unit);
+    return response.data;
   },
 
-  // Eliminar unidad
-  delete: async (id: string): Promise<void> => {
-    await axiosClient.delete(`/units/${id}`);
+  delete: async (id: string) => {
+    const response = await axiosClient.delete(`/units/${id}`);
+    return response.data;
   },
 
-  // --- ¡ESTA ES LA FUNCIÓN QUE TE FALTABA! ---
-  // Obtener detalle por Número Económico + Mock de datos faltantes en BD
-  getByNumeroEconomico: async (num: string): Promise<UnidadDetalle> => {
-    // 1. Obtenemos las unidades reales del backend
-    const { data } = await axiosClient.get("/units");
+  // --- NUEVO MÉTODO QUE LLAMA EL HOOK ---
+  importBulk: async (file: File) => {
+    console.log("--> SERVICIO: Iniciando carga de archivo", file.name);
 
-    // 2. Buscamos la que coincida con el número económico
-    const unit = data.find((u: Unidad) => u.numero_economico === num);
+    const formData = new FormData();
+    formData.append("file", file);
 
-    if (!unit) throw new Error("Unidad no encontrada");
-
-    // 3. Como el backend aún no guarda documentos ni llantas,
-    // los simulamos aquí para que la vista de detalle no se rompa y se vea bonita.
-    return {
-      ...unit,
-      // Mock de Documentos
-      documents: [
-        {
-          name: "Póliza de Seguro",
-          estatus: "vigente",
-          vencimiento: "2026-12-31",
-          obligatorio: true,
+    try {
+      console.log("--> SERVICIO: Enviando POST a /units/bulk-upload");
+      const response = await axiosClient.post("/units/bulk-upload", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
         },
-        {
-          name: "Verificación Físico-Mecánica",
-          estatus: "próximo",
-          vencimiento: "2026-03-15",
-          obligatorio: true,
-        },
-        {
-          name: "Tarjeta de Circulación",
-          estatus: unit.documentos_vencidos ? "vencido" : "vigente",
-          vencimiento: "2025-11-20",
-          obligatorio: true,
-        },
-      ],
-      // Mock de Llantas (Generamos datos visuales basados en el tipo)
-      tires: [
-        {
-          id: "LL-101",
-          position: "1 (Dir. Izq)",
-          marca: "Michelin",
-          profundidad: 14,
-          estado: "bueno",
-          renovado: 0,
-          marcajeInterno: "M-101",
-        },
-        {
-          id: "LL-102",
-          position: "2 (Dir. Der)",
-          marca: "Michelin",
-          profundidad: 13,
-          estado: "bueno",
-          renovado: 0,
-          marcajeInterno: "M-102",
-        },
-        {
-          id: "LL-201",
-          position: "3 (Trac. Izq)",
-          marca: "Bridgestone",
-          profundidad: 5,
-          estado: "regular",
-          renovado: 1,
-          marcajeInterno: "B-205",
-        },
-        {
-          id: "LL-202",
-          position: "4 (Trac. Der)",
-          marca: "Bridgestone",
-          profundidad: unit.llantas_criticas ? 2 : 8,
-          estado: unit.llantas_criticas ? "malo" : "bueno",
-          renovado: 1,
-          marcajeInterno: "B-206",
-        },
-      ],
-    } as UnidadDetalle;
+      });
+      console.log("--> SERVICIO: Respuesta recibida", response.data);
+      return response.data;
+    } catch (error) {
+      console.error("--> SERVICIO ERROR:", error);
+      throw error;
+    }
   },
 };

@@ -5,18 +5,7 @@ Mirrors TypeScript interfaces from frontend
 
 from datetime import date, datetime
 from enum import Enum as PyEnum
-from sqlalchemy import (
-    Column,
-    String,
-    Integer,
-    Float,
-    Date,
-    DateTime,
-    ForeignKey,
-    Enum,
-    Boolean,
-    Text,
-)
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Date, func, Text, Boolean, Float, Enum
 from sqlalchemy.orm import relationship
 from app.db.database import Base
 
@@ -184,29 +173,53 @@ class Unit(Base):
 
     __tablename__ = "units"
 
+    # ============= IDENTIFICACIÓN =============
     id = Column(String(50), primary_key=True)
     numero_economico = Column(String(20), unique=True, nullable=False)  # Ej: TR-204
     placas = Column(String(15), unique=True, nullable=False)
     vin = Column(String(17))
+    
+    # ============= DETALLES TÉCNICOS =============
     marca = Column(String(50), nullable=False)
     modelo = Column(String(50), nullable=False)
     year = Column(Integer)
     tipo = Column(Enum(UnitType), nullable=False)  # sencillo, full, rabon
-    status = Column(Enum(UnitStatus), default=UnitStatus.DISPONIBLE)
+    
+    # Nuevos campos técnicos
+    tipo_1 = Column(String(50))      # TRACTOCAMION, REMOLQUE, DOLLY
+    tipo_carga = Column(String(50))  # IMO, General, Refrigerada
+    numero_serie_motor = Column(String, nullable=True)
+    marca_motor = Column(String, nullable=True)
+    capacidad_carga = Column(Float, nullable=True)
 
-    # Alertas de documentos
+    # ============= ESTADO =============
+    status = Column(Enum(UnitStatus), default=UnitStatus.DISPONIBLE)
+    
+    # Alertas automáticas (calculadas por el backend o triggers)
     documentos_vencidos = Column(Integer, default=0)
     llantas_criticas = Column(Integer, default=0)
 
-    # Fechas de vencimiento de documentos clave
-    seguro_vence = Column(Date)
-    verificacion_vence = Column(Date)
-    permiso_sct_vence = Column(Date)
+    # ============= DOCUMENTACIÓN Y VENCIMIENTOS =============
+    # Seguros
+    seguro_vence = Column(Date, nullable=True)
+    
+    # Verificaciones (Específicas y General)
+    verificacion_humo_vence = Column(Date, nullable=True)
+    verificacion_fisico_mecanica_vence = Column(Date, nullable=True)
+    verificacion_vence = Column(Date, nullable=True) # Campo legacy/general
+    
+    # Permisos SCT
+    permiso_sct_vence = Column(Date, nullable=True)
+    
+    # Referencias a Archivos (URLs o Paths)
+    tarjeta_circulacion_url = Column(String(500), nullable=True)
+    permiso_doble_articulado_url = Column(String(500), nullable=True)
 
+    # ============= TIMESTAMPS =============
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # Relationships
+    # ============= RELACIONES =============
     trips = relationship("Trip", back_populates="unit")
     operators = relationship("Operator", back_populates="assigned_unit")
 
@@ -414,3 +427,20 @@ class Provider(Base):
     direccion = Column(Text)
     dias_credito = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+    
+class BulkUploadHistory(Base):
+    __tablename__ = "bulk_upload_history"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    filename = Column(String(255))           # Nombre original
+    stored_filename = Column(String(255))    # Nombre UUID
+    file_path = Column(String(500))          # Ruta en app/uploads/
+    upload_type = Column(String(50))         # 'unidades'
+    status = Column(String(20))              # 'completado' o 'error'
+    record_count = Column(Integer, default=0)
+    created_at = Column(DateTime, default=func.now())
+    user_id = Column(String(50), ForeignKey("users.id"))
+    # Si tienes la relación configurada:
+    user = relationship("User")
