@@ -66,14 +66,23 @@ export const unitService = {
 
   // --- NUEVO MÉTODO QUE LLAMA EL HOOK ---
   importBulk: async (file: File) => {
+    console.log("--> SERVICIO: Iniciando carga de archivo", file.name);
+
     const formData = new FormData();
     formData.append("file", file);
 
-    const response = await axiosClient.post("/bulk-upload", formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    });
-    return response.data; // Espera { status: "success", records: N }
+    try {
+      console.log("--> SERVICIO: Enviando POST a /units/bulk-upload");
+      const response = await axiosClient.post("/units/bulk-upload", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+      console.log("--> SERVICIO: Respuesta recibida", response.data);
+      return response.data;
+    } catch (error) {
+      console.error("--> SERVICIO ERROR:", error);
+      throw error;
+    }
   },
 };

@@ -31,6 +31,7 @@ Constants:
 import os
 import uuid
 import pandas as pd
+import unicodedata
 from typing import List
 from fastapi import APIRouter, Depends, UploadFile, File, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -98,23 +99,50 @@ async def upload_units_bulk(
 
     try:
         # 4. Leer el archivo (CSV o Excel) para procesar los datos
-        df = pd.read_csv(file_path) # O pd.read_excel si es .xlsx
+        if file_extension == '.csv':
+            df = pd.read_csv(file_path)
+        else:
+            df = pd.read_excel(file_path)
+            
+        # Esto convierte ['Número Económico', 'Año'] en ['numero_economico', 'ano']
+        df.columns = [normalize_header(c) for c in df.columns]
         
+        # Depuración: Imprimir columnas encontradas (ver en la terminal donde corre uvicorn)
+        print(f"Columnas detectadas: {df.columns.tolist()}")
+
+        units_inserted = 0
         # Lógica de inserción en la base de datos (Unidades)
         for _, row in df.iterrows():
-                    new_unit = Unit(
-                        numero_economico=str(row['numero_economico']),
-                        placas=str(row['placas']),
-                        vin=str(row.get('vin', '')),
-                        marca=str(row['marca']),
-                        modelo=str(row['modelo']),
-                        year=int(row['year']) if pd.notnull(row['year']) else None,
-                        tipo_1=str(row.get('Tipo 1', 'TRACTOCAMION')),
-                        tipo_carga=str(row.get('Tipo de carga', 'IMO')),
-                        status=str(row.get('status', 'disponible')),
-                        seguro_vence=pd.to_datetime(row['seguro_vence']).date() if pd.notnull(row['seguro_vence']) else None,
-                )
-                    db.add(new_unit)
+            # Validar campo obligatorio clave
+            eco = str(row.get('numero_economico', '')).strip()
+            if not eco or eco == 'nan': 
+                continue # Saltar filas vacías
+
+            # Verificar si ya existe para no romper con error de duplicado
+            existing = db.query(Unit).filter(Unit.numero_economico == eco).first()
+            if existing:
+                continue # O podrías hacer un update aquí
+
+            new_unit = Unit(
+                numero_economico=eco,
+                placas=str(row.get('placas', 'SIN-PLACA')).strip(),
+                vin=str(row.get('vin', '')),
+                marca=str(row.get('marca', 'GENERICO')),
+                modelo=str(row.get('modelo', 'GENERICO')),
+                year=int(row['year']) if pd.notnull(row.get('year')) else 2024,
+                tipo=str(row.get('tipo', 'full')).lower(), # enum en minúscula
+                
+                # Nuevos campos (Usamos .get con nombres normalizados)
+                tipo_1=str(row.get('tipo_1', 'TRACTOCAMION')),
+                tipo_carga=str(row.get('tipo_carga', 'General')),
+                
+                # Fechas: Pandas es inteligente, pero hay que manejar nulos
+                seguro_vence=pd.to_datetime(row['seguro_vence']).date() if pd.notnull(row.get('seguro_vence')) else None,
+                verificacion_humo_vence=pd.to_datetime(row.get('verificacion_humo', None)).date() if pd.notnull(row.get('verificacion_humo')) else None,
+                verificacion_fisico_mecanica_vence=pd.to_datetime(row.get('verificacion_fisico_mecanica', None)).date() if pd.notnull(row.get('verificacion_fisico_mecanica')) else None,
+            )
+            db.add(new_unit)
+            units_inserted += 1
         
         # 5. Registrar en el historial de cargas masivas
         history = BulkUploadHistory(
@@ -142,3 +170,14 @@ async def download_upload(upload_id: int, db: Session = Depends(get_db)):
     if not record or not os.path.exists(record.file_path):
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
     return FileResponse(record.file_path, filename=record.filename)
+
+
+def normalize_header(header: str) -> str:
+    """Convierte 'Número Económico' a 'numero_economico'"""
+    # 1. Minúsculas
+    header = str(header).lower().strip()
+    # 2. Quitar acentos (Número -> Numero)
+    header = ''.join(c for c in unicodedata.normalize('NFD', header) if unicodedata.category(c) != 'Mn')
+    # 3. Reemplazar espacios por guiones bajos
+    header = header.replace(' ', '_').replace('.', '').replace('-', '_')
+    return header

@@ -382,30 +382,31 @@ export const importTypeConfigs: ImportTypeConfig[] = [
   {
     id: "unidades",
     title: "Importar Unidades",
-    description:
-      "Flota de tractocamiones y remolques con datos técnicos y documentos",
+    description: "Flota de tractocamiones y remolques",
     icon: Truck,
     color: "text-status-success",
     backendEndpoint: "/units",
     columns: [
+      // Usamos los nombres EXACTOS de tu Excel para que pase la validación
       { name: "numero_economico", type: "string", required: true },
       { name: "placas", type: "string", required: false },
       { name: "vin", type: "string", required: false },
       { name: "marca", type: "string", required: false },
-      { name: "tipo_1", type: "string", required: false }, // TRACTOCAMION
+      { name: "Tipo 1", type: "string", required: false }, // Coincide con tu Excel
       { name: "modelo", type: "string", required: false },
       { name: "year", type: "number", required: false },
-      { name: "tipo_carga", type: "string", required: false }, // IMO
+      { name: "Tipo de carga", type: "string", required: false }, // Coincide con tu Excel
       {
         name: "status",
         type: "enum",
         required: false,
-        enumValues: Object.values(UnitStatusEnum),
+        enumValues: ["disponible", "en_ruta", "mantenimiento", "bloqueado"],
       },
-      { name: "tarjeta_circulacion", type: "string", required: false }, // Texto recordatorio
+      { name: "Tarjeta de Circulacion", type: "string", required: false },
+      { name: "Permiso Doble Articulado", type: "string", required: false },
       { name: "seguro_vence", type: "date", required: false },
       { name: "verificacion_humo", type: "date", required: false },
-      { name: "verificacion_fisico_mecanica", type: "date", required: false },
+      { name: "Verificacion_Fisico Mecanica", type: "date", required: false },
     ],
     sampleData: [
       [
@@ -418,7 +419,8 @@ export const importTypeConfigs: ImportTypeConfig[] = [
         "2016",
         "IMO",
         "disponible",
-        "URL_O_TEXTO",
+        "Anexar...",
+        "Anexar...",
         "2025-12-31",
         "2025-06-01",
         "2025-06-01",

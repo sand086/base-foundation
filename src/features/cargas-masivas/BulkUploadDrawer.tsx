@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { AxiosError } from "axios";
 import {
   Sheet,
   SheetContent,
@@ -27,6 +26,7 @@ import {
   Loader2,
   X,
   AlertTriangle,
+  ArrowRight, // <--- Importante para el botón de "Siguiente"
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ImportTypeConfig, getTemplateColumns } from "./importTypeConfigs";
@@ -36,7 +36,9 @@ import {
   getErrorPreview,
 } from "./validationUtils";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import axiosClient from "@/api/axiosClient";
+
+import { useUnits } from "@/hooks/useUnits";
+
 interface BulkUploadDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -57,10 +59,13 @@ export function BulkUploadDrawer({
   const [validationResult, setValidationResult] =
     useState<ValidationResult | null>(null);
 
+  // Hook para conectar con el Backend real
+  const { importBulkUnits, isUploading } = useUnits();
+
   const handleDownloadTemplate = () => {
     if (!importType) return;
 
-    // Create CSV content with proper columns from config
+    // Generar CSV
     const columns = getTemplateColumns(importType);
     const headers = columns.join(",");
     const sampleRows = importType.sampleData
@@ -68,10 +73,10 @@ export function BulkUploadDrawer({
       .join("\n");
     const csvContent = `${headers}\n${sampleRows}`;
 
-    // Download file
+    // Descargar archivo
     const blob = new Blob(["\ufeff" + csvContent], {
       type: "text/csv;charset=utf-8",
-    }); // BOM for Excel
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -82,6 +87,8 @@ export function BulkUploadDrawer({
     toast.success("Plantilla descargada", {
       description: "Llena la plantilla y súbela en el siguiente paso.",
     });
+
+    // Avanzar automáticamente tras descargar
     setStep("upload");
   };
 
@@ -130,7 +137,7 @@ export function BulkUploadDrawer({
       );
       setPreviewData(data);
 
-      // Validate data if we have a config
+      // Validar datos contra la configuración
       if (importType && data.length > 1) {
         const result = validateImportData(data, importType);
         setValidationResult(result);
@@ -142,38 +149,46 @@ export function BulkUploadDrawer({
   };
 
   const handleProcessUpload = async () => {
-    if (!file) {
+    console.log("1. Botón presionado");
+    if (!file || !importType) {
       toast.error("Por favor selecciona un archivo");
+      return;
+    }
+    console.log("2. Archivo y tipo OK");
+    // Validación estricta
+    if (validationResult && !validationResult.isValid) {
+      toast.error("El archivo contiene errores", {
+        description: "Revisa las filas marcadas en rojo antes de subir.",
+      });
       return;
     }
 
     setStep("processing");
 
-    // Creamos el FormData para enviar el archivo real
-    const formData = new FormData();
-    formData.append("file", file);
-
     try {
-      // IMPORTANTE: El backendEndpoint ahora debe ser el que acepta archivos
-      await axiosClient.post(
-        `${importType.backendEndpoint}/bulk-upload`,
-        formData,
-        {
-          headers: {
-            "Content-Type": "multipart/form-data",
-          },
-        },
-      );
+      let success = false;
 
-      setStep("complete");
-      toast.success("Archivo guardado y procesado correctamente");
-    } catch (error: unknown) {
+      // Lógica real de subida según el tipo
+      if (importType.id === "unidades") {
+        console.log("3. Entrando a lógica de UNIDADES. Llamando hook...");
+        success = await importBulkUnits(file);
+        console.log("4. Hook terminó. Resultado:", success);
+      } else {
+        console.log("3. Entrando a lógica SIMULADA (Else)");
+        // Aquí irían los otros servicios
+        toast.info("Carga simulada (Backend pendiente)");
+        setTimeout(() => setStep("complete"), 1500);
+        return;
+      }
+
+      if (success) {
+        setStep("complete");
+      } else {
+        setStep("preview"); // Si falló (ej: error 500), regresamos
+      }
+    } catch (error) {
+      console.error("ERROR FATAL en handleProcessUpload:", error);
       setStep("preview");
-      const axiosError = error as AxiosError<{ detail: string }>;
-      const errorMsg =
-        axiosError.response?.data?.detail ||
-        "Error al conectar con el servidor";
-      toast.error("Error en la carga", { description: errorMsg });
     }
   };
 
@@ -197,8 +212,6 @@ export function BulkUploadDrawer({
   };
 
   if (!importType) return null;
-
-  const templateColumns = getTemplateColumns(importType);
 
   return (
     <Sheet open={open} onOpenChange={handleClose}>
@@ -271,23 +284,45 @@ export function BulkUploadDrawer({
                       Paso 1: Descarga la plantilla
                     </h3>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Descarga la plantilla, llénala con tus datos y luego
-                      súbela aquí.
+                      Si aún no tienes el archivo, descarga la plantilla para
+                      ver el formato requerido.
                     </p>
                   </div>
-                  <Button
-                    onClick={handleDownloadTemplate}
-                    className="gap-2 bg-primary hover:bg-primary/90"
-                  >
-                    <Download className="h-4 w-4" />
-                    Descargar Plantilla (CSV)
-                  </Button>
+
+                  {/* BOTONES DE ACCIÓN */}
+                  <div className="flex flex-col gap-3 max-w-sm mx-auto w-full">
+                    <Button
+                      onClick={handleDownloadTemplate}
+                      className="gap-2 bg-primary hover:bg-primary/90 w-full"
+                    >
+                      <Download className="h-4 w-4" />
+                      Descargar Plantilla (CSV)
+                    </Button>
+
+                    <div className="relative py-2">
+                      <div className="absolute inset-0 flex items-center">
+                        <span className="w-full border-t" />
+                      </div>
+                      <div className="relative flex justify-center text-xs uppercase">
+                        <span className="bg-background px-2 text-muted-foreground">
+                          O si ya la tienes
+                        </span>
+                      </div>
+                    </div>
+
+                    <Button
+                      variant="outline"
+                      onClick={() => setStep("upload")}
+                      className="gap-2 w-full hover:bg-muted/50"
+                    >
+                      Saltar a carga de archivo
+                      <ArrowRight className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="border rounded-lg p-4 space-y-3">
-                  <h4 className="text-sm font-medium">
-                    Columnas de la plantilla:
-                  </h4>
+                  <h4 className="text-sm font-medium">Columnas requeridas:</h4>
                   <div className="flex flex-wrap gap-2">
                     {importType.columns.map((col, i) => (
                       <Badge
@@ -304,39 +339,6 @@ export function BulkUploadDrawer({
                         )}
                       </Badge>
                     ))}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    <span className="text-primary">*</span> = Campo obligatorio
-                  </p>
-                </div>
-
-                {/* Column Type Reference */}
-                <div className="border rounded-lg p-4 space-y-2">
-                  <h4 className="text-sm font-medium">
-                    Referencia de formatos:
-                  </h4>
-                  <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                    {importType.columns
-                      .filter((c) => c.type === "enum")
-                      .map((col, i) => (
-                        <div key={i} className="bg-muted/30 rounded p-2">
-                          <span className="font-medium text-foreground">
-                            {col.name}:
-                          </span>
-                          <br />
-                          {col.enumValues?.join(", ")}
-                        </div>
-                      ))}
-                    {importType.columns.filter((c) => c.type === "date")
-                      .length > 0 && (
-                      <div className="bg-muted/30 rounded p-2">
-                        <span className="font-medium text-foreground">
-                          Fechas:
-                        </span>
-                        <br />
-                        YYYY-MM-DD (ej: 2026-06-15)
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>
@@ -383,11 +385,11 @@ export function BulkUploadDrawer({
                 </div>
 
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   onClick={() => setStep("download")}
-                  className="w-full"
+                  className="w-full text-muted-foreground"
                 >
-                  Volver a descargar plantilla
+                  Regresar a descargar plantilla
                 </Button>
               </div>
             )}
@@ -524,21 +526,29 @@ export function BulkUploadDrawer({
                     variant="outline"
                     onClick={() => setStep("upload")}
                     className="flex-1"
+                    disabled={isUploading}
                   >
                     Cambiar archivo
                   </Button>
                   <Button
                     onClick={handleProcessUpload}
-                    disabled={validationResult && !validationResult.isValid}
+                    disabled={
+                      isUploading ||
+                      (validationResult && !validationResult.isValid)
+                    }
                     className={cn(
                       "flex-1 gap-2",
                       validationResult?.isValid
-                        ? "bg-action hover:bg-action-hover text-action-foreground"
+                        ? "bg-primary hover:bg-primary/90"
                         : "",
                     )}
                   >
-                    <Upload className="h-4 w-4" />
-                    Procesar Carga
+                    {isUploading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Upload className="h-4 w-4" />
+                    )}
+                    {isUploading ? "Procesando..." : "Procesar Carga"}
                   </Button>
                 </div>
               </div>
@@ -572,8 +582,7 @@ export function BulkUploadDrawer({
                     ¡Carga completada!
                   </h3>
                   <p className="text-sm text-muted-foreground mt-1">
-                    {validationResult?.validRowCount || previewData.length - 1}{" "}
-                    registros fueron importados exitosamente.
+                    Los registros fueron importados exitosamente.
                   </p>
                 </div>
                 <Button
