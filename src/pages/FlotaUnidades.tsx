@@ -8,7 +8,11 @@ import {
   Trash2,
   Package,
   Loader2,
+  MoreHorizontal,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+
+// Componentes UI
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,44 +34,46 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import { AddUnidadModal } from "@/features/flota/AddUnidadModal";
-import { PatrimonialView } from "@/features/flota/PatrimonialView";
 import {
   EnhancedDataTable,
   ColumnDef,
 } from "@/components/ui/enhanced-data-table";
+
+// Features y Hooks
+import { AddUnidadModal } from "@/features/flota/AddUnidadModal";
+import { PatrimonialView } from "@/features/flota/PatrimonialView";
 import { useUnits } from "@/hooks/useUnits";
-import { Unidad } from "@/services/unitService";
 
-// --- NUEVA INTERFAZ PARA EL FORMULARIO (camelCase) ---
-// Esto define qué datos espera el Modal y qué datos devuelve al guardar
-export interface UnidadFormData {
-  public_id?: string;
-  numero_economico: string;
-  placas: string;
-  marca: string;
-  modelo: string;
-  year: number;
-  tipo: "sencillo" | "full" | "rabon";
-  status: "disponible" | "en_ruta" | "mantenimiento" | "bloqueado";
-  documentosVencidos?: number;
-  llantasCriticas?: number;
-}
+import { Unidad } from "@/types/api.types";
 
-// Helpers de Badges
+// --- Helpers Visuales ---
 const getStatusBadge = (status: string) => {
   const s = status?.toLowerCase() || "";
   switch (s) {
     case "disponible":
-      return <Badge className="bg-green-600 text-white">Disponible</Badge>;
+      return (
+        <Badge className="bg-green-600 text-white hover:bg-green-700">
+          Disponible
+        </Badge>
+      );
     case "en_ruta":
-      return <Badge className="bg-blue-600 text-white">En Ruta</Badge>;
+      return (
+        <Badge className="bg-blue-600 text-white hover:bg-blue-700">
+          En Ruta
+        </Badge>
+      );
     case "mantenimiento":
-      return <Badge className="bg-yellow-500 text-black">Mantenimiento</Badge>;
+      return (
+        <Badge className="bg-yellow-500 text-black hover:bg-yellow-600">
+          Mantenimiento
+        </Badge>
+      );
     case "bloqueado":
-      return <Badge className="bg-red-600 text-white">Bloqueado</Badge>;
+      return (
+        <Badge className="bg-red-600 text-white hover:bg-red-700">
+          Bloqueado
+        </Badge>
+      );
     default:
       return <Badge variant="secondary">{status}</Badge>;
   }
@@ -75,7 +81,7 @@ const getStatusBadge = (status: string) => {
 
 const getTipoBadge = (tipo: string) => {
   return (
-    <Badge variant="outline" className="text-xs uppercase">
+    <Badge variant="outline" className="text-xs uppercase font-medium">
       {tipo}
     </Badge>
   );
@@ -83,17 +89,20 @@ const getTipoBadge = (tipo: string) => {
 
 export default function FlotaUnidades() {
   const navigate = useNavigate();
+
+  // Hook de gestión de datos
   const { unidades, isLoading, createUnit, updateUnit, deleteUnit } =
     useUnits();
 
+  // Estados locales
   const [isModalOpen, setIsModalOpen] = useState(false);
-
-  // CORRECCIÓN 1: Usar el tipo UnidadFormData en lugar de any
-  const [unidadToEdit, setUnidadToEdit] = useState<UnidadFormData | null>(null);
-
-  const [unidadToDelete, setUnidadToDelete] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Tipado correcto: IDs son numéricos y la unidad a editar es tipo Unidad completa
+  const [unidadToEdit, setUnidadToEdit] = useState<Unidad | null>(null);
+  const [unidadToDelete, setUnidadToDelete] = useState<number | null>(null);
+
+  // Contadores para KPIs rápidos
   const disponibles = unidades.filter((u) => u.status === "disponible").length;
   const enRuta = unidades.filter((u) => u.status === "en_ruta").length;
   const bloqueadas = unidades.filter((u) => u.status === "bloqueado").length;
@@ -103,67 +112,40 @@ export default function FlotaUnidades() {
 
   // --- Handlers ---
 
-  // CORRECCIÓN 2: Tipar 'data' como UnidadFormData
-  const handleSave = async (data: UnidadFormData) => {
+  /**
+   * Recibe el payload LIMPIO desde AddUnidadModal.
+   * Ya no necesitamos transformar datos aquí.
+   */
+  const handleSave = async (unitData: Partial<Unidad>) => {
     setIsSaving(true);
-
-    // Transformar de camelCase (Form) a snake_case (Backend/Unidad)
-    // TypeScript ahora sabe qué propiedades existen
-    const payload: Unidad = {
-      id: unidadToEdit?.id ? parseInt(unidadToEdit.id) : Math.floor(Math.random() * 1000000), // Generar ID temporal si no existe
-      public_id: data.
-      numero_economico: data.numero_economico,
-      placas: data.placas,
-      marca: data.marca,
-      modelo: data.modelo,
-      year: data.year,
-      tipo: data.tipo,
-      status: data.status,
-      documentos_vencidos: data.documentosVencidos || 0,
-      llantas_criticas: data.llantasCriticas || 0,
-      // Campos opcionales que el backend podría necesitar vacíos
-      vin: undefined,
-      seguro_vence: undefined,
-      verificacion_vence: undefined,
-      permiso_sct_vence: undefined,
-    };
-
     let success = false;
-    // Si tenemos un ID real (no temporal o undefined), es update
-    if (unidadToEdit && unidadToEdit.id) {
-      success = await updateUnit(unidadToEdit.id, payload);
+
+    // Si tiene ID, es una actualización
+    if (unitData.id) {
+      // updateUnit en el hook debería aceptar (id, data)
+      success = await updateUnit(unitData.id.toString(), unitData);
     } else {
-      success = await createUnit(payload);
+      // Crear nueva unidad
+      success = await createUnit(unitData as any);
     }
 
     setIsSaving(false);
-    if (success) handleCloseModal(false);
+    if (success) {
+      handleCloseModal(false);
+    }
   };
 
   const handleDelete = async () => {
     if (unidadToDelete) {
-      await deleteUnit(unidadToDelete);
+      // deleteUnit espera string en tu hook actual, convertimos si es necesario
+      await deleteUnit(unidadToDelete.toString());
       setUnidadToDelete(null);
     }
   };
 
   const handleEdit = (unidad: Unidad) => {
-    // CORRECCIÓN 3: Transformar Unidad (backend) a UnidadFormData (frontend)
-    // Sin usar 'as any'
-    const formattedForModal: UnidadFormData = {
-      id: unidad.id,
-      numero_economico: unidad.numero_economico,
-      placas: unidad.placas,
-      marca: unidad.marca,
-      modelo: unidad.modelo,
-      year: unidad.year || new Date().getFullYear(),
-      tipo: unidad.tipo,
-      status: unidad.status,
-      documentosVencidos: unidad.documentos_vencidos,
-      llantasCriticas: unidad.llantas_criticas,
-    };
-
-    setUnidadToEdit(formattedForModal);
+    // Pasamos el objeto Unidad completo, el Modal sabrá mapearlo
+    setUnidadToEdit(unidad);
     setIsModalOpen(true);
   };
 
@@ -174,9 +156,13 @@ export default function FlotaUnidades() {
 
   const handleCloseModal = (open: boolean) => {
     setIsModalOpen(open);
-    if (!open) setUnidadToEdit(null);
+    if (!open) {
+      // Pequeño timeout para limpiar el estado después de cerrar la animación
+      setTimeout(() => setUnidadToEdit(null), 300);
+    }
   };
 
+  // Definición de columnas usando el tipo Unit correcto
   const columns: ColumnDef<Unidad>[] = useMemo(
     () => [
       {
@@ -187,7 +173,9 @@ export default function FlotaUnidades() {
       {
         key: "placas",
         header: "Placas",
-        render: (value) => <span className="font-mono text-sm">{value}</span>,
+        render: (value) => (
+          <span className="font-mono text-sm">{value || "S/P"}</span>
+        ),
       },
       {
         key: "marca",
@@ -211,9 +199,13 @@ export default function FlotaUnidades() {
         header: "Docs. Vencidos",
         render: (value) =>
           value > 0 ? (
-            <Badge className="bg-red-500 text-white">{value}</Badge>
+            <Badge className="bg-red-500 text-white hover:bg-red-600">
+              {value}
+            </Badge>
           ) : (
-            <Badge className="bg-green-500 text-white">0</Badge>
+            <Badge className="bg-green-500 text-white hover:bg-green-600 opacity-50">
+              0
+            </Badge>
           ),
       },
       {
@@ -221,9 +213,13 @@ export default function FlotaUnidades() {
         header: "Llantas Críticas",
         render: (value) =>
           value > 0 ? (
-            <Badge className="bg-red-500 text-white">{value}</Badge>
+            <Badge className="bg-red-500 text-white hover:bg-red-600">
+              {value}
+            </Badge>
           ) : (
-            <Badge className="bg-green-500 text-white">0</Badge>
+            <Badge className="bg-green-500 text-white hover:bg-green-600 opacity-50">
+              0
+            </Badge>
           ),
       },
       {
@@ -232,7 +228,7 @@ export default function FlotaUnidades() {
         render: (value) => getStatusBadge(value),
       },
       {
-        key: "id",
+        key: "id", // Usamos 'id' para la key, pero renderizamos acciones
         header: "Acciones",
         sortable: false,
         render: (_, row) => (
@@ -279,7 +275,7 @@ export default function FlotaUnidades() {
     );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -304,7 +300,7 @@ export default function FlotaUnidades() {
         <TabsContent value="unidades" className="space-y-6">
           <div className="flex justify-end">
             <Button
-              className="gap-2 bg-primary text-white"
+              className="gap-2 bg-primary text-white hover:bg-primary/90"
               onClick={handleOpenNewModal}
             >
               <Plus className="h-4 w-4" /> Nueva Unidad
@@ -312,46 +308,54 @@ export default function FlotaUnidades() {
           </div>
 
           <div className="grid gap-4 md:grid-cols-4">
-            <Card className="border-l-4 border-l-green-500">
+            <Card className="border-l-4 border-l-green-500 shadow-sm">
               <CardContent className="pt-6">
-                <p className="text-sm text-muted-foreground">Disponibles</p>
+                <p className="text-sm text-muted-foreground font-medium">
+                  Disponibles
+                </p>
                 <p className="text-3xl font-bold text-green-600">
                   {disponibles}
                 </p>
               </CardContent>
             </Card>
-            <Card className="border-l-4 border-l-blue-600">
+            <Card className="border-l-4 border-l-blue-600 shadow-sm">
               <CardContent className="pt-6">
-                <p className="text-sm text-muted-foreground">En Ruta</p>
+                <p className="text-sm text-muted-foreground font-medium">
+                  En Ruta
+                </p>
                 <p className="text-3xl font-bold text-blue-600">{enRuta}</p>
               </CardContent>
             </Card>
-            <Card className="border-l-4 border-l-yellow-500">
+            <Card className="border-l-4 border-l-yellow-500 shadow-sm">
               <CardContent className="pt-6">
-                <p className="text-sm text-muted-foreground">Mantenimiento</p>
+                <p className="text-sm text-muted-foreground font-medium">
+                  Mantenimiento
+                </p>
                 <p className="text-3xl font-bold text-yellow-600">
                   {mantenimiento}
                 </p>
               </CardContent>
             </Card>
-            <Card className="border-l-4 border-l-red-600">
+            <Card className="border-l-4 border-l-red-600 shadow-sm">
               <CardContent className="pt-6">
                 <div className="flex justify-between items-center">
                   <div>
-                    <p className="text-sm text-muted-foreground">Bloqueadas</p>
+                    <p className="text-sm text-muted-foreground font-medium">
+                      Bloqueadas
+                    </p>
                     <p className="text-3xl font-bold text-red-600">
                       {bloqueadas}
                     </p>
                   </div>
                   {bloqueadas > 0 && (
-                    <AlertTriangle className="h-6 w-6 text-red-500" />
+                    <AlertTriangle className="h-6 w-6 text-red-500 animate-pulse" />
                   )}
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          <Card>
+          <Card className="shadow-sm">
             <CardContent className="pt-6">
               <EnhancedDataTable
                 data={unidades}
@@ -367,47 +371,47 @@ export default function FlotaUnidades() {
         </TabsContent>
       </Tabs>
 
-      {/* Aquí el componente AddUnidadModal recibirá props con tipos correctos, 
-          pero como es un componente externo, debemos asegurarnos de que acepte 'any' o 'UnidadFormData' 
-          Si AddUnidadModal espera 'Unidad', puede que tengas que castear o actualizar AddUnidadModal 
-          Para este caso, TypeScript debería inferir el tipo correcto en handleSave
-      */}
+      {/* MODAL DE CREACIÓN/EDICIÓN */}
       <AddUnidadModal
         open={isModalOpen}
         onOpenChange={handleCloseModal}
-        unidadToEdit={unidadToEdit as any} // Cast seguro si AddUnidadModal no ha sido actualizado a UnidadFormData
+        unidadToEdit={unidadToEdit} // Ahora el tipo coincide perfectamente
         onSave={handleSave}
         isSaving={isSaving}
       />
 
+      {/* DIÁLOGO DE CONFIRMACIÓN DE ELIMINACIÓN */}
       <AlertDialog
         open={!!unidadToDelete}
-        onOpenChange={() => setUnidadToDelete(null)}
+        onOpenChange={(open) => !open && setUnidadToDelete(null)}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <Truck className="h-5 w-5 text-destructive" />
-              Confirmar Eliminación de Unidad
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <Truck className="h-5 w-5" />
+              Confirmar Eliminación
             </AlertDialogTitle>
             <AlertDialogDescription>
               ¿Está seguro que desea eliminar la unidad{" "}
-              <span className="font-semibold">
+              <span className="font-bold text-foreground">
                 {
                   unidades.find((u) => u.id === unidadToDelete)
                     ?.numero_economico
                 }
               </span>
-              ? Esta acción no se puede deshacer.
+              ?
+              <br />
+              Esta acción eliminará el historial técnico asociado y no se puede
+              deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-destructive hover:bg-destructive/90"
+              className="bg-destructive hover:bg-destructive/90 text-white"
               onClick={handleDelete}
             >
-              Eliminar
+              Sí, Eliminar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
