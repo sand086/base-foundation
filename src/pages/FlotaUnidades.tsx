@@ -44,7 +44,7 @@ import { Unidad } from "@/services/unitService";
 // --- NUEVA INTERFAZ PARA EL FORMULARIO (camelCase) ---
 // Esto define qué datos espera el Modal y qué datos devuelve al guardar
 export interface UnidadFormData {
-  id?: string;
+  public_id?: string;
   numero_economico: string;
   placas: string;
   marca: string;
@@ -54,7 +54,6 @@ export interface UnidadFormData {
   status: "disponible" | "en_ruta" | "mantenimiento" | "bloqueado";
   documentosVencidos?: number;
   llantasCriticas?: number;
-  // Agrega aquí otros campos si el modal los usa (ej: vin)
 }
 
 // Helpers de Badges
@@ -111,7 +110,8 @@ export default function FlotaUnidades() {
     // Transformar de camelCase (Form) a snake_case (Backend/Unidad)
     // TypeScript ahora sabe qué propiedades existen
     const payload: Unidad = {
-      id: unidadToEdit?.id || crypto.randomUUID(), // Generar ID temporal si no existe
+      id: unidadToEdit?.id ? parseInt(unidadToEdit.id) : Math.floor(Math.random() * 1000000), // Generar ID temporal si no existe
+      public_id: data.
       numero_economico: data.numero_economico,
       placas: data.placas,
       marca: data.marca,
