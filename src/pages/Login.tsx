@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { User, Lock, AlertCircle, Eye, EyeOff, ArrowRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { logos_3t } from "@/assets/img";
+import { logos_3t, login_bg_3t } from "@/assets/img";
 
 export default function Login() {
   const [username, setUsername] = useState("");
@@ -80,7 +80,10 @@ export default function Login() {
     <div className="fixed inset-0 z-[9999] overflow-hidden">
       {/* Background image with cinematic overlay */}
       <div className="absolute inset-0">
-        <div className="absolute inset-0 bg-[url('../../src/assets/img/login-bg.jpg')] bg-cover bg-center scale-105 animate-[subtle-float_20s_ease-in-out_infinite]" />
+        <div
+          className="absolute inset-0 bg-cover bg-center scale-105 animate-[subtle-float_20s_ease-in-out_infinite]"
+          style={{ backgroundImage: `url(${login_bg_3t})` }}
+        />
         <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-black/50" />
         <div className="absolute inset-0 bg-gradient-to-t from-brand-red/10 via-transparent to-transparent" />
       </div>
