@@ -19,57 +19,35 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useTiposUnidad } from "@/hooks/useTiposUnidad";
-import {
-  Truck,
-  CreditCard,
-  Calendar,
-  Hash,
-  Box,
-  Wrench,
-  Loader2,
-  FileText,
-  Info,
-  Plus,
-} from "lucide-react";
+import { Truck, Loader2, Info } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Unidad } from "@/types/api.types"; // Importamos el tipo correcto
 
-export type CategoriaActivo =
-  | "tractocamion"
-  | "remolque_dolly"
-  | "utilitario"
-  | string;
-
-export interface UnidadFormData {
-  id?: string;
-  categoriaActivo: CategoriaActivo;
+// Estado interno del formulario (Manejamos todo como string para los inputs)
+interface UnidadFormData {
+  categoriaActivo: string;
   numero_economico: string;
   placas: string;
   vin: string;
-
-  // Datos Técnicos
   marca: string;
   modelo: string;
   year: string;
   tipo: string;
-
-  // Motor y Capacidad
   numero_serie_motor: string;
   marca_motor: string;
   capacidad_carga: string;
-
-  // Documentación (Todos los vencimientos)
   tipo_carga: string;
-  tarjeta_circulacion: string;
+  tarjeta_circulacion: string; // Input de texto (Folio) -> Se mapeará según lógica
 
-  // FECHAS
+  // Fechas
   seguro_vence: string;
   verificacion_humo_vence: string;
   verificacion_fisico_mecanica_vence: string;
-  verificacion_vence: string; // Verificación ambiental
-  permiso_sct_vence: string; // Permiso SCT
+  verificacion_vence: string;
+  permiso_sct_vence: string;
 
-  status?: string;
+  status: string;
 }
 
 const emptyFormData: UnidadFormData = {
@@ -86,12 +64,12 @@ const emptyFormData: UnidadFormData = {
   capacidad_carga: "",
   tipo_carga: "",
   tarjeta_circulacion: "",
-  // Inicializamos fechas vacías
   seguro_vence: "",
   verificacion_humo_vence: "",
   verificacion_fisico_mecanica_vence: "",
   verificacion_vence: "",
   permiso_sct_vence: "",
+  status: "disponible",
 };
 
 // Helper visual para fechas
@@ -102,10 +80,10 @@ const getStatusBadge = (dateStr: string) => {
         PENDIENTE
       </Badge>
     );
+
   const today = new Date();
   const exp = new Date(dateStr);
-  // Ajuste de zona horaria simple
-  exp.setMinutes(exp.getMinutes() + exp.getTimezoneOffset());
+  exp.setMinutes(exp.getMinutes() + exp.getTimezoneOffset()); // Ajuste UTC
 
   const days = Math.ceil(
     (exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
@@ -123,6 +101,7 @@ const getStatusBadge = (dateStr: string) => {
         POR VENCER ({days}d)
       </Badge>
     );
+
   return (
     <Badge className="bg-green-100 text-green-700 hover:bg-green-100 text-[10px]">
       VIGENTE
@@ -133,8 +112,8 @@ const getStatusBadge = (dateStr: string) => {
 interface AddUnidadModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  unidadToEdit?: any | null;
-  onSave?: (unidad: any) => void;
+  unidadToEdit?: Unidad | null; // Tipado estricto
+  onSave?: (unidad: any) => void; // El padre manejará el envío
   isSaving?: boolean;
 }
 
@@ -146,7 +125,7 @@ export function AddUnidadModal({
   isSaving = false,
 }: AddUnidadModalProps) {
   const { toast } = useToast();
-  const { tiposActivos, loading: loadingTipos } = useTiposUnidad();
+  const { tiposActivos } = useTiposUnidad();
 
   const [formData, setFormData] = useState<UnidadFormData>(emptyFormData);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -156,7 +135,10 @@ export function AddUnidadModal({
 
   useEffect(() => {
     if (open && unidadToEdit) {
+      // Mapeo inverso: Backend -> Formulario
       let cat = unidadToEdit.tipo_1 || "tractocamion";
+
+      // Normalización de categorías legacy
       if (cat === "TRACTOCAMION") cat = "tractocamion";
       if (cat === "REMOLQUE") cat = "remolque_dolly";
       if (cat === "UTILITARIO") cat = "utilitario";
@@ -166,24 +148,30 @@ export function AddUnidadModal({
       }
 
       setFormData({
-        ...emptyFormData,
-        ...unidadToEdit,
         categoriaActivo: cat,
+        numero_economico: unidadToEdit.numero_economico,
+        placas: unidadToEdit.placas,
+        vin: unidadToEdit.vin || "",
+        marca: unidadToEdit.marca,
+        modelo: unidadToEdit.modelo,
         year:
           unidadToEdit.year?.toString() || new Date().getFullYear().toString(),
-        vin: unidadToEdit.vin || "",
+        tipo: unidadToEdit.tipo,
         numero_serie_motor: unidadToEdit.numero_serie_motor || "",
         marca_motor: unidadToEdit.marca_motor || "",
         capacidad_carga: unidadToEdit.capacidad_carga?.toString() || "",
-        tarjeta_circulacion: unidadToEdit.tarjeta_circulacion || "",
+        tipo_carga: unidadToEdit.tipo_carga || "",
+        // NOTA: Si el backend usa 'tarjeta_circulacion_url' para guardar el folio (hack), lo leemos de ahí
+        tarjeta_circulacion: unidadToEdit.tarjeta_circulacion_url || "",
 
-        // Mapeo seguro de fechas (Si es null, usar "")
+        // Fechas: Aseguramos string vacío si es null
         seguro_vence: unidadToEdit.seguro_vence || "",
         verificacion_humo_vence: unidadToEdit.verificacion_humo_vence || "",
         verificacion_fisico_mecanica_vence:
           unidadToEdit.verificacion_fisico_mecanica_vence || "",
         verificacion_vence: unidadToEdit.verificacion_vence || "",
         permiso_sct_vence: unidadToEdit.permiso_sct_vence || "",
+        status: unidadToEdit.status,
       });
       setErrors({});
     } else if (!open) {
@@ -199,10 +187,12 @@ export function AddUnidadModal({
     if (!formData.numero_economico.trim())
       newErrors.numero_economico = "Requerido";
 
+    // Validaciones condicionales
     if (formData.categoriaActivo === "tractocamion") {
       if (!formData.placas.trim()) newErrors.placas = "Requerido";
       if (!formData.marca.trim()) newErrors.marca = "Requerido";
     }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -219,6 +209,7 @@ export function AddUnidadModal({
       return;
     }
 
+    // Transformación: Formulario -> Backend
     let tipo1Backend = formData.categoriaActivo;
     if (formData.categoriaActivo === "tractocamion")
       tipo1Backend = "TRACTOCAMION";
@@ -226,44 +217,46 @@ export function AddUnidadModal({
       tipo1Backend = "REMOLQUE";
     else if (formData.categoriaActivo === "utilitario")
       tipo1Backend = "UTILITARIO";
-    else tipo1Backend = formData.categoriaActivo.toUpperCase();
+    else tipo1Backend = formData.categoriaActivo.toUpperCase(); // Custom categories
 
-    // 2. FUNCIÓN PARA LIMPIAR FECHAS (CRUCIAL)
-    // Convierte "" a null para que el backend no falle
+    // Limpieza de datos (Empty strings -> null)
     const cleanDate = (dateStr: string) =>
       dateStr && dateStr.trim() !== "" ? dateStr : null;
+    const cleanString = (str: string) =>
+      str && str.trim() !== "" ? str : null;
+    const cleanNumber = (numStr: string) =>
+      numStr && !isNaN(parseFloat(numStr)) ? parseFloat(numStr) : null;
 
-    const payload = {
-      id: isEditMode ? unidadToEdit.id : undefined,
+    const payload: Partial<Unidad> = {
+      // Si editamos, preservamos el ID
+      ...(isEditMode && unidadToEdit ? { id: unidadToEdit.id } : {}),
+
       numero_economico: formData.numero_economico,
       placas: formData.placas || "S/P",
       marca: formData.marca,
       modelo: formData.modelo,
-      year: parseInt(formData.year) || 2024,
-      tipo: formData.tipo || "sencillo",
+      year: parseInt(formData.year) || new Date().getFullYear(),
+      tipo: (formData.tipo as any) || "sencillo", // Cast seguro
       tipo_1: tipo1Backend,
-      vin: formData.vin || null,
+      vin: cleanString(formData.vin),
 
-      numero_serie_motor: formData.numero_serie_motor || null,
-      marca_motor: formData.marca_motor || null,
-      capacidad_carga: formData.capacidad_carga
-        ? parseFloat(formData.capacidad_carga)
-        : null,
-      tipo_carga: formData.tipo_carga || null,
-      tarjeta_circulacion: formData.tarjeta_circulacion || null,
+      numero_serie_motor: cleanString(formData.numero_serie_motor),
+      marca_motor: cleanString(formData.marca_motor),
+      capacidad_carga: cleanNumber(formData.capacidad_carga),
+      tipo_carga: cleanString(formData.tipo_carga),
 
-      // USAMOS LA FUNCIÓN DE LIMPIEZA AQUÍ
+      // Mapeamos el input "tarjeta_circulacion" al campo URL que el backend usa temporalmente
+      tarjeta_circulacion_url: cleanString(formData.tarjeta_circulacion),
+
       seguro_vence: cleanDate(formData.seguro_vence),
       verificacion_humo_vence: cleanDate(formData.verificacion_humo_vence),
       verificacion_fisico_mecanica_vence: cleanDate(
         formData.verificacion_fisico_mecanica_vence,
       ),
-
-      // AGREGADOS QUE FALTABAN
       verificacion_vence: cleanDate(formData.verificacion_vence),
       permiso_sct_vence: cleanDate(formData.permiso_sct_vence),
 
-      status: unidadToEdit?.status || "disponible",
+      status: (unidadToEdit?.status || "disponible") as any,
     };
 
     onSave?.(payload);
@@ -294,7 +287,7 @@ export function AddUnidadModal({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="px-6 py-6 space-y-6">
-          {/* SELECCIÓN DE TIPO */}
+          {/* SELECCIÓN DE CATEGORÍA */}
           <div className="bg-muted/30 p-4 rounded-lg border mb-4">
             <div className="space-y-2">
               <div className="flex justify-between items-center">
@@ -306,15 +299,17 @@ export function AddUnidadModal({
                   className="h-6 text-xs text-blue-600"
                   onClick={() => {
                     setCustomCategoryMode(!customCategoryMode);
-                    setFormData({ ...formData, categoriaActivo: "" });
+                    if (!customCategoryMode)
+                      setFormData({ ...formData, categoriaActivo: "" });
                   }}
                 >
                   {customCategoryMode ? "Volver a lista" : "+ Otra categoría"}
                 </Button>
               </div>
+
               {customCategoryMode ? (
                 <Input
-                  placeholder="Escriba la categoría (Ej: Montacargas)"
+                  placeholder="Ej: Montacargas"
                   value={formData.categoriaActivo}
                   onChange={(e) =>
                     setFormData({
@@ -328,7 +323,7 @@ export function AddUnidadModal({
               ) : (
                 <Select
                   value={formData.categoriaActivo}
-                  onValueChange={(val: CategoriaActivo) =>
+                  onValueChange={(val) =>
                     setFormData({ ...formData, categoriaActivo: val })
                   }
                 >
@@ -441,7 +436,6 @@ export function AddUnidadModal({
                     onChange={(e) =>
                       setFormData({ ...formData, modelo: e.target.value })
                     }
-                    className={errors.modelo ? "border-destructive" : ""}
                   />
                 </div>
 
@@ -466,9 +460,6 @@ export function AddUnidadModal({
                       ))}
                     </SelectContent>
                   </Select>
-                  {errors.year && (
-                    <p className="text-xs text-destructive">{errors.year}</p>
-                  )}
                 </div>
 
                 {formData.categoriaActivo === "tractocamion" && (
@@ -533,7 +524,6 @@ export function AddUnidadModal({
                     onChange={(e) =>
                       setFormData({ ...formData, marca_motor: e.target.value })
                     }
-                    placeholder="Ej: Cummins, Detroit..."
                   />
                 </div>
 
@@ -576,25 +566,73 @@ export function AddUnidadModal({
               </div>
             </TabsContent>
 
-            {/* TAB 3: DOCUMENTACIÓN INICIAL (AGREGADOS FALTANTES) */}
+            {/* TAB 3: DOCUMENTACIÓN */}
             <TabsContent value="documentacion" className="space-y-4">
               <div className="p-3 bg-blue-50 text-blue-700 text-sm rounded-md flex items-start gap-2 mb-4 border border-blue-100">
                 <Info className="h-4 w-4 mt-0.5 shrink-0" />
                 <p>
-                  Los archivos se suben en la vista de detalle. Aquí solo
-                  capturamos vencimientos.
+                  Aquí registramos los vencimientos. La carga de archivos PDF se
+                  realiza en el detalle de la unidad.
                 </p>
               </div>
 
               <div className="grid grid-cols-1 gap-4">
-                {/* 1. Tarjeta Circulación */}
+                {/* Helper para renderizar campos de fecha repetitivos */}
+                {[
+                  {
+                    label: "Póliza de Seguro",
+                    key: "seguro_vence" as keyof UnidadFormData,
+                  },
+                  {
+                    label: "Verif. Emisiones (Humo)",
+                    key: "verificacion_humo_vence" as keyof UnidadFormData,
+                  },
+                  {
+                    label: "Verif. Físico-Mecánica",
+                    key: "verificacion_fisico_mecanica_vence" as keyof UnidadFormData,
+                  },
+                  {
+                    label: "Verificación Ambiental",
+                    key: "verificacion_vence" as keyof UnidadFormData,
+                  },
+                  {
+                    label: "Permiso SCT",
+                    key: "permiso_sct_vence" as keyof UnidadFormData,
+                  },
+                ].map((field) => (
+                  <div
+                    key={field.key}
+                    className="flex items-end gap-3 p-3 border rounded-lg bg-gray-50/50"
+                  >
+                    <div className="flex-1 space-y-1">
+                      <Label className="text-xs font-semibold uppercase text-muted-foreground">
+                        {field.label}
+                      </Label>
+                      <Input
+                        type="date"
+                        value={formData[field.key]}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            [field.key]: e.target.value,
+                          })
+                        }
+                        className="h-8"
+                      />
+                    </div>
+                    <div className="w-[140px] flex justify-center pb-1">
+                      {getStatusBadge(formData[field.key])}
+                    </div>
+                  </div>
+                ))}
+
+                {/* Input especial para folio tarjeta circulación */}
                 <div className="flex items-end gap-3 p-3 border rounded-lg bg-gray-50/50">
                   <div className="flex-1 space-y-1">
                     <Label className="text-xs font-semibold uppercase text-muted-foreground">
-                      Tarjeta de Circulación
+                      Folio Tarjeta Circulación
                     </Label>
                     <Input
-                      placeholder="Folio"
                       value={formData.tarjeta_circulacion}
                       onChange={(e) =>
                         setFormData({
@@ -603,132 +641,16 @@ export function AddUnidadModal({
                         })
                       }
                       className="h-8"
+                      placeholder="Ingrese Folio"
                     />
                   </div>
                   <div className="w-[140px] flex justify-center pb-1">
                     <Badge
                       variant="outline"
-                      className="w-full justify-center h-8 bg-green-50 text-green-700 border-green-200"
+                      className="text-muted-foreground text-[10px]"
                     >
-                      VIGENTE
+                      INFO
                     </Badge>
-                  </div>
-                </div>
-
-                {/* 2. Seguro */}
-                <div className="flex items-end gap-3 p-3 border rounded-lg bg-gray-50/50">
-                  <div className="flex-1 space-y-1">
-                    <Label className="text-xs font-semibold uppercase text-muted-foreground">
-                      Póliza de Seguro
-                    </Label>
-                    <Input
-                      type="date"
-                      value={formData.seguro_vence}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          seguro_vence: e.target.value,
-                        })
-                      }
-                      className="h-8"
-                    />
-                  </div>
-                  <div className="w-[140px] flex justify-center pb-1">
-                    {getStatusBadge(formData.seguro_vence)}
-                  </div>
-                </div>
-
-                {/* 3. Verificación Humo */}
-                <div className="flex items-end gap-3 p-3 border rounded-lg bg-gray-50/50">
-                  <div className="flex-1 space-y-1">
-                    <Label className="text-xs font-semibold uppercase text-muted-foreground">
-                      Verif. Emisiones (Humo)
-                    </Label>
-                    <Input
-                      type="date"
-                      value={formData.verificacion_humo_vence}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          verificacion_humo_vence: e.target.value,
-                        })
-                      }
-                      className="h-8"
-                    />
-                  </div>
-                  <div className="w-[140px] flex justify-center pb-1">
-                    {getStatusBadge(formData.verificacion_humo_vence)}
-                  </div>
-                </div>
-
-                {/* 4. Verificación Físico Mecánica */}
-                <div className="flex items-end gap-3 p-3 border rounded-lg bg-gray-50/50">
-                  <div className="flex-1 space-y-1">
-                    <Label className="text-xs font-semibold uppercase text-muted-foreground">
-                      Verif. Físico-Mecánica
-                    </Label>
-                    <Input
-                      type="date"
-                      value={formData.verificacion_fisico_mecanica_vence}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          verificacion_fisico_mecanica_vence: e.target.value,
-                        })
-                      }
-                      className="h-8"
-                    />
-                  </div>
-                  <div className="w-[140px] flex justify-center pb-1">
-                    {getStatusBadge(
-                      formData.verificacion_fisico_mecanica_vence,
-                    )}
-                  </div>
-                </div>
-
-                {/* 5. Verificación (General/Estatal) */}
-                <div className="flex items-end gap-3 p-3 border rounded-lg bg-gray-50/50">
-                  <div className="flex-1 space-y-1">
-                    <Label className="text-xs font-semibold uppercase text-muted-foreground">
-                      Verificación Ambiental
-                    </Label>
-                    <Input
-                      type="date"
-                      value={formData.verificacion_vence}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          verificacion_vence: e.target.value,
-                        })
-                      }
-                      className="h-8"
-                    />
-                  </div>
-                  <div className="w-[140px] flex justify-center pb-1">
-                    {getStatusBadge(formData.verificacion_vence)}
-                  </div>
-                </div>
-
-                {/* 6. Permiso SCT */}
-                <div className="flex items-end gap-3 p-3 border rounded-lg bg-gray-50/50">
-                  <div className="flex-1 space-y-1">
-                    <Label className="text-xs font-semibold uppercase text-muted-foreground">
-                      Permiso SCT
-                    </Label>
-                    <Input
-                      type="date"
-                      value={formData.permiso_sct_vence}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          permiso_sct_vence: e.target.value,
-                        })
-                      }
-                      className="h-8"
-                    />
-                  </div>
-                  <div className="w-[140px] flex justify-center pb-1">
-                    {getStatusBadge(formData.permiso_sct_vence)}
                   </div>
                 </div>
               </div>

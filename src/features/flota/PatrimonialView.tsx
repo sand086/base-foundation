@@ -86,7 +86,7 @@ export function PatrimonialView() {
   // los simulamos para mantener la UI funcional sin romper nada.
   const activos: ActivoPatrimonial[] = useMemo(() => {
     return unidades.map((u) => ({
-      id: u.id,
+      id: String(u.id),
       numero_economico: u.numero_economico, // snake_case del backend
       tipoUnidad: u.tipo,
       marca: u.marca,

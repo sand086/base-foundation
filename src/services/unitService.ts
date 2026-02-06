@@ -1,55 +1,11 @@
 import axiosClient from "@/api/axiosClient";
-
+import { Unidad } from "@/types/api.types";
 // 1. Interfaces Base
-// CORRECCIÓN: Usamos snake_case para coincidir con Python/Postgres
-export interface Unidad {
-  id: number;
-  public_id: string;
-  numero_economico: string;
-  placas: string;
-  vin?: string;
-  marca: string;
-  modelo: string;
-  year?: number;
-  tipo: string;
-
-  // Campos técnicos
-  tipo_1?: string;
-  tipo_carga?: string;
-  numero_serie_motor?: string;
-  marca_motor?: string;
-  capacidad_carga?: number;
-
-  status: string;
-
-  // Alertas
-  documentos_vencidos: number;
-  llantas_criticas: number;
-
-  // Fechas (Strings ISO)
-  seguro_vence?: string;
-  verificacion_humo_vence?: string;
-  verificacion_fisico_mecanica_vence?: string;
-  verificacion_vence?: string;
-  permiso_sct_vence?: string;
-
-  // URLs de Documentos
-  tarjeta_circulacion_url?: string;
-  permiso_doble_articulado_url?: string;
-  poliza_seguro_url?: string;
-  verificacion_humo_url?: string;
-  verificacion_fisico_mecanica_url?: string;
-
-  created_at?: string;
-  updated_at?: string;
-}
-
-// 2. Interfaz Extendida
 export interface UnidadDetalle extends Unidad {
   documents: Array<{
     key: string;
     name: string;
-    url?: string; // Para botón ver
+    url?: string;
     estatus: "vigente" | "próximo" | "vencido";
     vencimiento: string;
     obligatorio: boolean;
@@ -61,12 +17,10 @@ export interface UnidadDetalle extends Unidad {
     profundidad: number;
     estado: string;
     renovado: number;
-    tire_id?: string; // Serial físico
-    marcajeInterno?: string; // Alias UI
+    tire_id?: string;
+    marcajeInterno?: string;
   }>;
 }
-
-// 3. Servicio Completo
 export const unitService = {
   getAll: async () => {
     const response = await axiosClient.get<Unidad[]>("/units");
@@ -78,12 +32,11 @@ export const unitService = {
     return response.data;
   },
 
-  create: async (unit: Omit<Unidad, "id">) => {
+  create: async (unit: Omit<Unidad, "id" | "public_id">) => {
     const response = await axiosClient.post<Unidad>("/units", unit);
     return response.data;
   },
 
-  // OJO: Aquí 'unit' debe enviar snake_case al backend
   update: async (id: string | number, unit: Partial<Unidad>) => {
     const response = await axiosClient.put<Unidad>(`/units/${id}`, unit);
     return response.data;
