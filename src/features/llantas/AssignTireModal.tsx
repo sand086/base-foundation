@@ -26,10 +26,20 @@ interface AssignTireModalProps {
   tire: GlobalTire | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onAssign: (tireId: string, unidad: string | null, posicion: string | null, notas: string) => void;
+  onAssign: (
+    tireId: string,
+    unidad: string | null,
+    posicion: string | null,
+    notas: string,
+  ) => void;
 }
 
-export function AssignTireModal({ tire, open, onOpenChange, onAssign }: AssignTireModalProps) {
+export function AssignTireModal({
+  tire,
+  open,
+  onOpenChange,
+  onAssign,
+}: AssignTireModalProps) {
   const [selectedUnit, setSelectedUnit] = useState<string>("");
   const [selectedPosition, setSelectedPosition] = useState<string>("");
   const [notas, setNotas] = useState("");
@@ -41,15 +51,22 @@ export function AssignTireModal({ tire, open, onOpenChange, onAssign }: AssignTi
       onAssign(tire.id, null, null, notas);
       toast.success(`Llanta ${tire.codigoInterno} enviada a almacén`);
     } else if (selectedUnit && selectedPosition) {
-      const unit = fleetUnits.find(u => u.id === selectedUnit);
-      const position = TIRE_POSITIONS.find(p => p.id === selectedPosition);
-      onAssign(tire.id, selectedUnit, position?.label || selectedPosition, notas);
-      toast.success(`Llanta ${tire.codigoInterno} asignada a ${unit?.numeroEconomico} - ${position?.label}`);
+      const unit = fleetUnits.find((u) => u.id === selectedUnit);
+      const position = TIRE_POSITIONS.find((p) => p.id === selectedPosition);
+      onAssign(
+        tire.id,
+        selectedUnit,
+        position?.label || selectedPosition,
+        notas,
+      );
+      toast.success(
+        `Llanta ${tire.codigoInterno} asignada a ${unit?.numero_economico} - ${position?.label}`,
+      );
     } else {
       toast.error("Selecciona unidad y posición");
       return;
     }
-    
+
     // Reset form
     setSelectedUnit("");
     setSelectedPosition("");
@@ -75,12 +92,13 @@ export function AssignTireModal({ tire, open, onOpenChange, onAssign }: AssignTi
         <div className="space-y-4 py-4">
           {/* Current Location */}
           <div className="p-3 bg-muted rounded-lg">
-            <p className="text-sm text-muted-foreground mb-1">Ubicación actual:</p>
+            <p className="text-sm text-muted-foreground mb-1">
+              Ubicación actual:
+            </p>
             <p className="font-medium">
-              {isCurrentlyMounted 
+              {isCurrentlyMounted
                 ? `${tire.unidadActual} - ${tire.posicion}`
-                : "En Almacén / Stock"
-              }
+                : "En Almacén / Stock"}
             </p>
           </div>
 
@@ -95,12 +113,10 @@ export function AssignTireModal({ tire, open, onOpenChange, onAssign }: AssignTi
                 <SelectValue placeholder="Seleccionar unidad..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="almacen">
-                  📦 Enviar a Almacén
-                </SelectItem>
+                <SelectItem value="almacen">📦 Enviar a Almacén</SelectItem>
                 {fleetUnits.map((unit) => (
                   <SelectItem key={unit.id} value={unit.id}>
-                    {unit.numeroEconomico} ({unit.tipo})
+                    {unit.numero_economico} ({unit.tipo})
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -114,7 +130,10 @@ export function AssignTireModal({ tire, open, onOpenChange, onAssign }: AssignTi
                 <MapPin className="h-4 w-4" />
                 Posición
               </Label>
-              <Select value={selectedPosition} onValueChange={setSelectedPosition}>
+              <Select
+                value={selectedPosition}
+                onValueChange={setSelectedPosition}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccionar posición..." />
                 </SelectTrigger>
@@ -145,9 +164,7 @@ export function AssignTireModal({ tire, open, onOpenChange, onAssign }: AssignTi
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button onClick={handleSubmit}>
-            Confirmar Asignación
-          </Button>
+          <Button onClick={handleSubmit}>Confirmar Asignación</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

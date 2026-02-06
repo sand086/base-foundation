@@ -20,6 +20,9 @@ export const UnitTypeEnum = {
   SENCILLO: "sencillo",
   FULL: "full",
   RABON: "rabon",
+  TRACTOCAMION: "tractocamion",
+  REMOLQUE: "remolque",
+  NONE: "",
 } as const;
 
 export const UnitStatusEnum = {
@@ -389,6 +392,19 @@ export const importTypeConfigs: ImportTypeConfig[] = [
     columns: [
       // Usamos los nombres EXACTOS de tu Excel para que pase la validación
       { name: "numero_economico", type: "string", required: true },
+      {
+        name: "tipo",
+        type: "enum",
+        required: false,
+        enumValues: [
+          "sencillo",
+          "full",
+          "rabon",
+          "tractocamion",
+          "remolque",
+          "",
+        ],
+      },
       { name: "placas", type: "string", required: false },
       { name: "vin", type: "string", required: false },
       { name: "marca", type: "string", required: false },
@@ -411,6 +427,7 @@ export const importTypeConfigs: ImportTypeConfig[] = [
     sampleData: [
       [
         "Eco-02",
+        "full",
         "30AC6J",
         "3AKJGL...",
         "FREIGHTLINER",

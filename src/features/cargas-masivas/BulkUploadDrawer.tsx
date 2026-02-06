@@ -215,7 +215,7 @@ export function BulkUploadDrawer({
 
   return (
     <Sheet open={open} onOpenChange={handleClose}>
-      <SheetContent className="sm:max-w-2xl w-full overflow-hidden flex flex-col">
+      <SheetContent className="sm:max-w-[90vw] w-full overflow-hidden flex flex-col">
         <SheetHeader className="pb-4 border-b shrink-0">
           <SheetTitle className="flex items-center gap-2">
             <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center">
@@ -229,12 +229,11 @@ export function BulkUploadDrawer({
         <ScrollArea className="flex-1 py-6">
           <div className="space-y-6 pr-4">
             {/* Progress Steps */}
-            <div className="flex items-center justify-between px-4">
+            <div className="flex items-center justify-between px-4 max-w-2xl mx-auto w-full">
               {["Plantilla", "Subir", "Validar", "Completar"].map(
                 (label, index) => {
                   const isActive = getStepNumber(step) === index + 1;
                   const isComplete = getStepNumber(step) > index + 1;
-
                   return (
                     <div
                       key={label}
@@ -272,9 +271,9 @@ export function BulkUploadDrawer({
               )}
             </div>
 
-            {/* Step 1: Download Template */}
+            {/* Step 1: Download */}
             {step === "download" && (
-              <div className="space-y-4">
+              <div className="space-y-4 max-w-xl mx-auto">
                 <div className="bg-muted/30 rounded-lg p-6 text-center space-y-4">
                   <div className="w-16 h-16 mx-auto rounded-full bg-primary/10 flex items-center justify-center">
                     <Download className="h-8 w-8 text-primary" />
@@ -288,17 +287,13 @@ export function BulkUploadDrawer({
                       ver el formato requerido.
                     </p>
                   </div>
-
-                  {/* BOTONES DE ACCIÓN */}
                   <div className="flex flex-col gap-3 max-w-sm mx-auto w-full">
                     <Button
                       onClick={handleDownloadTemplate}
                       className="gap-2 bg-primary hover:bg-primary/90 w-full"
                     >
-                      <Download className="h-4 w-4" />
-                      Descargar Plantilla (CSV)
+                      <Download className="h-4 w-4" /> Descargar Plantilla (CSV)
                     </Button>
-
                     <div className="relative py-2">
                       <div className="absolute inset-0 flex items-center">
                         <span className="w-full border-t" />
@@ -309,18 +304,16 @@ export function BulkUploadDrawer({
                         </span>
                       </div>
                     </div>
-
                     <Button
                       variant="outline"
                       onClick={() => setStep("upload")}
                       className="gap-2 w-full hover:bg-muted/50"
                     >
-                      Saltar a carga de archivo
+                      Saltar a carga de archivo{" "}
                       <ArrowRight className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
-
                 <div className="border rounded-lg p-4 space-y-3">
                   <h4 className="text-sm font-medium">Columnas requeridas:</h4>
                   <div className="flex flex-wrap gap-2">
@@ -333,7 +326,7 @@ export function BulkUploadDrawer({
                           col.required && "bg-primary/90",
                         )}
                       >
-                        {col.name}
+                        {col.name}{" "}
                         {col.required && (
                           <span className="ml-1 text-[10px]">*</span>
                         )}
@@ -344,9 +337,9 @@ export function BulkUploadDrawer({
               </div>
             )}
 
-            {/* Step 2: Upload File */}
+            {/* Step 2: Upload */}
             {step === "upload" && (
-              <div className="space-y-4">
+              <div className="space-y-4 max-w-xl mx-auto">
                 <div
                   className={cn(
                     "border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer",
@@ -383,7 +376,6 @@ export function BulkUploadDrawer({
                     </p>
                   </label>
                 </div>
-
                 <Button
                   variant="ghost"
                   onClick={() => setStep("download")}
@@ -394,7 +386,7 @@ export function BulkUploadDrawer({
               </div>
             )}
 
-            {/* Step 3: Preview Data with Validation */}
+            {/* Step 3: Preview Data inside ScrollArea */}
             {step === "preview" && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
@@ -417,7 +409,6 @@ export function BulkUploadDrawer({
                   </Button>
                 </div>
 
-                {/* Validation Status */}
                 {validationResult && (
                   <div
                     className={cn(
@@ -449,8 +440,6 @@ export function BulkUploadDrawer({
                         {validationResult.validRowCount} de{" "}
                         {validationResult.totalRowCount} registros válidos.
                       </p>
-
-                      {/* Show first errors */}
                       {!validationResult.isValid && (
                         <div className="mt-3 space-y-1">
                           {getErrorPreview(validationResult.errors).map(
@@ -478,7 +467,6 @@ export function BulkUploadDrawer({
                   </div>
                 )}
 
-                {/* Data Preview Table */}
                 <div className="border rounded-lg overflow-hidden">
                   <div className="bg-muted/50 px-4 py-2 border-b">
                     <h4 className="text-sm font-medium">
@@ -500,56 +488,45 @@ export function BulkUploadDrawer({
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {previewData.slice(1, 6).map((row, rowIndex) => (
-                          <TableRow key={rowIndex}>
-                            {row.map((cell, cellIndex) => (
-                              <TableCell
-                                key={cellIndex}
-                                className="text-sm whitespace-nowrap"
-                              >
-                                {cell || (
-                                  <span className="text-muted-foreground italic">
-                                    vacío
-                                  </span>
-                                )}
-                              </TableCell>
-                            ))}
-                          </TableRow>
-                        ))}
+                        {previewData.slice(1, 6).map((row, rowIndex) => {
+                          const actualRowNumber = rowIndex + 2;
+                          const rowErrors = validationResult?.errors.filter(
+                            (e) => e.row === actualRowNumber,
+                          );
+                          return (
+                            <TableRow key={rowIndex}>
+                              {row.map((cell, cellIndex) => {
+                                const headerName = previewData[0][cellIndex];
+                                const hasError = rowErrors?.some(
+                                  (e) =>
+                                    e.column.toLowerCase() ===
+                                      (headerName || "").toLowerCase() ||
+                                    e.column === "Requerido",
+                                );
+                                return (
+                                  <TableCell
+                                    key={cellIndex}
+                                    className={cn(
+                                      "text-sm whitespace-nowrap border-b",
+                                      hasError
+                                        ? "bg-red-50 text-red-600 font-medium border-red-100"
+                                        : "",
+                                    )}
+                                  >
+                                    {cell || (
+                                      <span className="text-muted-foreground italic text-xs">
+                                        vacío
+                                      </span>
+                                    )}
+                                  </TableCell>
+                                );
+                              })}
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </div>
-                </div>
-
-                <div className="flex gap-3">
-                  <Button
-                    variant="outline"
-                    onClick={() => setStep("upload")}
-                    className="flex-1"
-                    disabled={isUploading}
-                  >
-                    Cambiar archivo
-                  </Button>
-                  <Button
-                    onClick={handleProcessUpload}
-                    disabled={
-                      isUploading ||
-                      (validationResult && !validationResult.isValid)
-                    }
-                    className={cn(
-                      "flex-1 gap-2",
-                      validationResult?.isValid
-                        ? "bg-primary hover:bg-primary/90"
-                        : "",
-                    )}
-                  >
-                    {isUploading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Upload className="h-4 w-4" />
-                    )}
-                    {isUploading ? "Procesando..." : "Procesar Carga"}
-                  </Button>
                 </div>
               </div>
             )}
@@ -595,6 +572,41 @@ export function BulkUploadDrawer({
             )}
           </div>
         </ScrollArea>
+
+        {/* FOOTER FIJO PARA BOTONES */}
+        {step === "preview" && (
+          <div className="pt-4 border-t mt-auto shrink-0 p-6 bg-background">
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setStep("upload")}
+                className="flex-1"
+                disabled={isUploading}
+              >
+                Cambiar archivo
+              </Button>
+              <Button
+                onClick={handleProcessUpload}
+                disabled={
+                  isUploading || (validationResult && !validationResult.isValid)
+                }
+                className={cn(
+                  "flex-1 gap-2",
+                  validationResult?.isValid
+                    ? "bg-primary hover:bg-primary/90"
+                    : "",
+                )}
+              >
+                {isUploading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Upload className="h-4 w-4" />
+                )}
+                {isUploading ? "Procesando..." : "Procesar Carga"}
+              </Button>
+            </div>
+          </div>
+        )}
       </SheetContent>
     </Sheet>
   );

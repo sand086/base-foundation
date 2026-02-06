@@ -11,8 +11,7 @@ import {
   X,
   Save,
   Upload,
-  Check,
-  Loader2, // Importamos loader
+  Loader2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -29,12 +28,14 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNavigate, useParams } from "react-router-dom";
-// import { mockUnit } from "@/data/mockData"; <--- ELIMINADO
 import { TruckChassisSVG } from "@/features/flota/TruckChassisSVG";
-import { toast } from "@/hooks/use-toast"; // Asegúrate de que este hook exista y funcione
-import { unitService, UnidadDetalle } from "@/services/unitService"; // <--- NUEVO
+import { toast } from "@/hooks/use-toast";
+import { unitService, UnidadDetalle } from "@/services/unitService";
 
+// Helper Functions
 const getDocumentStatusBadge = (estatus: string, vencimiento: string) => {
+  if (!vencimiento) return <Badge variant="outline">PENDIENTE</Badge>;
+
   const today = new Date();
   const expDate = new Date(vencimiento);
   const daysUntil = Math.ceil(
@@ -54,18 +55,32 @@ const getDocumentStatusBadge = (estatus: string, vencimiento: string) => {
   return <Badge className="bg-status-success text-white">VIGENTE</Badge>;
 };
 
+const getEstatusFecha = (
+  fecha: string | null | undefined,
+): "vigente" | "próximo" | "vencido" => {
+  if (!fecha) return "vencido";
+  const today = new Date();
+  const vencimiento = new Date(fecha);
+  const days = Math.ceil(
+    (vencimiento.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+  );
+  if (days < 0) return "vencido";
+  if (days <= 30) return "próximo";
+  return "vigente";
+};
+
 export default function FlotaUnidadDetalle() {
   const navigate = useNavigate();
-  const { id } = useParams(); // Este 'id' es el numeroEconomico que viene de la URL
+  const { id } = useParams();
 
-  // --- ESTADOS PARA DATOS REALES ---
   const [unit, setUnit] = useState<UnidadDetalle | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
+  const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
-    numeroEconomico: "",
+    numero_economico: "",
     placas: "",
     vin: "",
     marca: "",
@@ -79,25 +94,70 @@ export default function FlotaUnidadDetalle() {
       if (!id) return;
       setIsLoading(true);
       try {
-        const data = await unitService.getByNumeroEconomico(id);
-        setUnit(data);
-        // Inicializar formulario con datos reales
+        const apiData = await unitService.getBynumero_economico(id);
+
+        // Construir documentos mapeando snake_case a la estructura UI
+        const constructedDocuments = [
+          {
+            name: "Póliza de Seguro",
+            key: "poliza_seguro",
+            url: apiData.poliza_seguro_url,
+            estatus: getEstatusFecha(apiData.seguro_vence),
+            vencimiento: apiData.seguro_vence || "",
+            obligatorio: true,
+          },
+          {
+            name: "Verificación de Humo",
+            key: "verificacion_humo",
+            url: apiData.verificacion_humo_url,
+            estatus: getEstatusFecha(apiData.verificacion_humo_vence),
+            vencimiento: apiData.verificacion_humo_vence || "",
+            obligatorio: true,
+          },
+          {
+            name: "Verificación Físico-Mecánica",
+            key: "verificacion_fisico_mecanica",
+            url: apiData.verificacion_fisico_mecanica_url,
+            estatus: getEstatusFecha(
+              apiData.verificacion_fisico_mecanica_vence,
+            ),
+            vencimiento: apiData.verificacion_fisico_mecanica_vence || "",
+            obligatorio: true,
+          },
+          {
+            name: "Tarjeta de Circulación",
+            key: "tarjeta_circulacion",
+            url: apiData.tarjeta_circulacion_url,
+            estatus: "vigente" as const,
+            vencimiento: new Date().toISOString(), // Normalmente no vence anual igual que otros
+            obligatorio: true,
+          },
+        ];
+
+        const enrichedUnit: UnidadDetalle = {
+          ...apiData,
+          documents: constructedDocuments,
+          tires: apiData.tires || [], // Backend ahora retorna tires si la relación está bien
+        };
+
+        setUnit(enrichedUnit);
+
+        // Inicializar formulario con snake_case
         setFormData({
-          numeroEconomico: data.numero_economico, // backend usa snake_case
-          placas: data.placas,
-          vin: data.vin || "",
-          marca: data.marca,
-          modelo: data.modelo,
-          year: data.year?.toString() || "",
+          numero_economico: apiData.numero_economico,
+          placas: apiData.placas,
+          vin: apiData.vin || "",
+          marca: apiData.marca,
+          modelo: apiData.modelo,
+          year: apiData.year?.toString() || "",
         });
       } catch (error) {
-        console.error(error);
+        console.error("Error cargando unidad:", error);
         toast({
           title: "Error",
           description: "No se pudo cargar la información de la unidad",
           variant: "destructive",
         });
-        navigate("/flota"); // Redirigir si falla
       } finally {
         setIsLoading(false);
       }
@@ -105,7 +165,72 @@ export default function FlotaUnidadDetalle() {
     loadUnit();
   }, [id, navigate]);
 
-  // Si está cargando, mostramos spinner centrado
+  const handleFileUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    docKey: string,
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file || !unit) return;
+
+    setUploadingDoc(docKey);
+    try {
+      const response = await unitService.uploadDocument(
+        unit.numero_economico,
+        docKey,
+        file,
+      );
+
+      // Actualizar estado local
+      const updatedDocs = unit.documents.map((d) =>
+        d.key === docKey ? { ...d, url: response.url } : d,
+      );
+      setUnit({ ...unit, documents: updatedDocs });
+
+      toast({
+        title: "Documento actualizado",
+        description: "El archivo se ha subido correctamente.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "No se pudo subir el archivo.",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingDoc(null);
+    }
+  };
+
+  const handleSaveChanges = async () => {
+    if (!unit) return;
+    try {
+      // Enviar snake_case al backend
+      await unitService.update(unit.id, {
+        numero_economico: formData.numero_economico,
+        placas: formData.placas,
+        vin: formData.vin,
+        marca: formData.marca,
+        modelo: formData.modelo,
+        year: parseInt(formData.year),
+      });
+
+      toast({
+        title: "Cambios guardados",
+        description: "Datos actualizados correctamente.",
+      });
+
+      // Actualizar vista local
+      setUnit({ ...unit, ...formData, year: parseInt(formData.year) });
+      setIsEditing(false);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "No se pudieron guardar los cambios.",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (isLoading || !unit) {
     return (
       <div className="flex justify-center items-center h-screen">
@@ -116,63 +241,6 @@ export default function FlotaUnidadDetalle() {
 
   const expiredDocs = unit.documents.filter((d) => d.estatus === "vencido");
   const hasBlocks = expiredDocs.length > 0;
-
-  const handleSaveChanges = async () => {
-    try {
-      // Enviar actualización al backend
-      await unitService.update(unit.id, {
-        numero_economico: formData.numeroEconomico,
-        placas: formData.placas,
-        vin: formData.vin,
-        marca: formData.marca,
-        modelo: formData.modelo,
-        year: parseInt(formData.year),
-      });
-
-      toast({
-        title: "✓ Cambios guardados",
-        description: `Los datos de la unidad ${formData.numeroEconomico} han sido actualizados correctamente.`,
-      });
-
-      // Actualizar vista local
-      setUnit((prev) =>
-        prev
-          ? {
-              ...prev,
-              numero_economico: formData.numeroEconomico,
-              placas: formData.placas,
-              vin: formData.vin,
-              marca: formData.marca,
-              modelo: formData.modelo,
-              year: parseInt(formData.year),
-            }
-          : null,
-      );
-
-      setIsEditing(false);
-    } catch (error) {
-      toast({
-        title: "Error al guardar",
-        description: "No se pudieron guardar los cambios.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleCancelEdit = () => {
-    // Reset form to original values from loaded unit
-    if (unit) {
-      setFormData({
-        numeroEconomico: unit.numero_economico,
-        placas: unit.placas,
-        vin: unit.vin || "",
-        marca: unit.marca,
-        modelo: unit.modelo,
-        year: unit.year?.toString() || "",
-      });
-    }
-    setIsEditing(false);
-  };
 
   return (
     <div className="space-y-6">
@@ -211,29 +279,25 @@ export default function FlotaUnidadDetalle() {
         </div>
       </div>
 
-      {/* Tabs Container */}
       <Tabs defaultValue="expediente" className="w-full">
         <TabsList className="backdrop-blur-xl bg-white/10 dark:bg-black/40 border border-white/20 p-1 rounded-xl">
           <TabsTrigger
             value="expediente"
-            className="data-[state=active]:bg-white/20 data-[state=active]:backdrop-blur-xl rounded-lg px-6"
+            className="data-[state=active]:bg-white/20 rounded-lg px-6"
           >
-            <FileText className="h-4 w-4 mr-2" />
-            Expediente Digital
+            <FileText className="h-4 w-4 mr-2" /> Expediente Digital
           </TabsTrigger>
           <TabsTrigger
             value="llantas"
-            className="data-[state=active]:bg-white/20 data-[state=active]:backdrop-blur-xl rounded-lg px-6"
+            className="data-[state=active]:bg-white/20 rounded-lg px-6"
           >
-            <AlertTriangle className="h-4 w-4 mr-2" />
-            Estado de Llantas (3D)
+            <AlertTriangle className="h-4 w-4 mr-2" /> Estado de Llantas (3D)
           </TabsTrigger>
         </TabsList>
 
-        {/* Tab 1: Expediente Digital */}
         <TabsContent value="expediente" className="mt-6 space-y-6">
           <div className="grid gap-6 lg:grid-cols-2">
-            {/* Technical Information Card */}
+            {/* Info Técnica */}
             <Card className="backdrop-blur-xl bg-white/10 dark:bg-black/40 border-white/20 shadow-2xl">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -244,86 +308,76 @@ export default function FlotaUnidadDetalle() {
                 {isEditing ? (
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="numeroEconomico">No. Económico</Label>
+                      <Label>No. Económico</Label>
                       <Input
-                        id="numeroEconomico"
-                        value={formData.numeroEconomico}
+                        value={formData.numero_economico}
                         onChange={(e) =>
                           setFormData({
                             ...formData,
-                            numeroEconomico: e.target.value,
+                            numero_economico: e.target.value,
                           })
                         }
-                        className="backdrop-blur-xl bg-white/5 border-white/20"
+                        className="bg-white/5"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="placas">Placas</Label>
+                      <Label>Placas</Label>
                       <Input
-                        id="placas"
                         value={formData.placas}
                         onChange={(e) =>
                           setFormData({ ...formData, placas: e.target.value })
                         }
-                        className="backdrop-blur-xl bg-white/5 border-white/20 font-mono"
+                        className="bg-white/5"
                       />
                     </div>
                     <div className="space-y-2 col-span-2">
-                      <Label htmlFor="vin">VIN</Label>
+                      <Label>VIN</Label>
                       <Input
-                        id="vin"
                         value={formData.vin}
                         onChange={(e) =>
                           setFormData({ ...formData, vin: e.target.value })
                         }
-                        className="backdrop-blur-xl bg-white/5 border-white/20 font-mono"
+                        className="bg-white/5"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="marca">Marca</Label>
-                      <Select
+                      <Label>Marca</Label>
+                      {/* Solución de Marca Libre */}
+                      <Input
+                        list="marcas-list"
                         value={formData.marca}
-                        onValueChange={(value) =>
-                          setFormData({ ...formData, marca: value })
+                        onChange={(e) =>
+                          setFormData({ ...formData, marca: e.target.value })
                         }
-                      >
-                        <SelectTrigger className="backdrop-blur-xl bg-white/5 border-white/20">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Freightliner">
-                            Freightliner
-                          </SelectItem>
-                          <SelectItem value="Kenworth">Kenworth</SelectItem>
-                          <SelectItem value="International">
-                            International
-                          </SelectItem>
-                          <SelectItem value="Volvo">Volvo</SelectItem>
-                          <SelectItem value="Peterbilt">Peterbilt</SelectItem>
-                        </SelectContent>
-                      </Select>
+                        className="bg-white/5"
+                        placeholder="Seleccione o escriba"
+                      />
+                      <datalist id="marcas-list">
+                        <option value="Freightliner" />
+                        <option value="Kenworth" />
+                        <option value="International" />
+                        <option value="Volvo" />
+                      </datalist>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="year">Año</Label>
+                      <Label>Año</Label>
                       <Input
-                        id="year"
                         type="number"
                         value={formData.year}
                         onChange={(e) =>
                           setFormData({ ...formData, year: e.target.value })
                         }
-                        className="backdrop-blur-xl bg-white/5 border-white/20"
+                        className="bg-white/5"
                       />
                     </div>
                     <div className="space-y-2 col-span-2">
-                      <Label htmlFor="modelo">Modelo</Label>
+                      <Label>Modelo</Label>
                       <Input
-                        id="modelo"
                         value={formData.modelo}
                         onChange={(e) =>
                           setFormData({ ...formData, modelo: e.target.value })
                         }
-                        className="backdrop-blur-xl bg-white/5 border-white/20"
+                        className="bg-white/5"
                       />
                     </div>
                   </div>
@@ -333,31 +387,25 @@ export default function FlotaUnidadDetalle() {
                       <p className="text-sm text-muted-foreground">
                         No. Económico
                       </p>
-                      <p className="font-bold text-lg text-foreground/90">
+                      <p className="font-bold text-lg">
                         {unit.numero_economico}
                       </p>
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Placas</p>
-                      <p className="font-mono font-bold text-lg text-foreground/90">
-                        {unit.placas}
-                      </p>
+                      <p className="font-bold text-lg">{unit.placas}</p>
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">VIN</p>
-                      <p className="font-mono text-sm text-foreground/90">
-                        {unit.vin || "---"}
-                      </p>
+                      <p className="text-sm">{unit.vin || "---"}</p>
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Año</p>
-                      <p className="font-bold text-foreground/90">
-                        {unit.year}
-                      </p>
+                      <p className="font-bold">{unit.year}</p>
                     </div>
                     <div className="col-span-2">
                       <p className="text-sm text-muted-foreground">Modelo</p>
-                      <p className="font-bold text-foreground/90">
+                      <p className="font-bold">
                         {unit.marca} {unit.modelo}
                       </p>
                     </div>
@@ -366,20 +414,13 @@ export default function FlotaUnidadDetalle() {
               </CardContent>
             </Card>
 
-            {/* Document Status Card */}
+            {/* Documentos */}
             <Card
-              className={`backdrop-blur-xl bg-white/10 dark:bg-black/40 shadow-2xl ${
-                hasBlocks ? "border-status-danger border-2" : "border-white/20"
-              }`}
+              className={`backdrop-blur-xl bg-white/10 dark:bg-black/40 shadow-2xl ${hasBlocks ? "border-status-danger border-2" : "border-white/20"}`}
             >
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <FileText className="h-5 w-5" /> Estatus de Documentos
-                  {hasBlocks && (
-                    <Badge className="bg-status-danger text-white ml-auto">
-                      {expiredDocs.length} VENCIDO(S)
-                    </Badge>
-                  )}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -387,54 +428,67 @@ export default function FlotaUnidadDetalle() {
                   {unit.documents.map((doc, idx) => (
                     <div
                       key={idx}
-                      className={`group relative flex items-center justify-between p-4 rounded-xl backdrop-blur-xl border transition-all duration-200 hover:scale-[1.01] ${
-                        doc.estatus === "vencido"
-                          ? "bg-status-danger/10 border-status-danger/50"
-                          : "bg-white/5 border-white/10 hover:bg-white/10"
-                      }`}
+                      className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10"
                     >
-                      {/* Status indicator dot */}
-                      <div
-                        className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 rounded-r-full ${
-                          doc.estatus === "vencido"
-                            ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]"
-                            : doc.estatus === "próximo"
-                              ? "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]"
-                              : "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"
-                        }`}
-                      />
-
-                      <div className="flex items-center gap-3 ml-3">
+                      <div className="flex items-center gap-3">
                         {doc.obligatorio && (
                           <Shield
-                            className={`h-4 w-4 ${
-                              doc.estatus === "vencido"
-                                ? "text-status-danger"
-                                : "text-muted-foreground"
-                            }`}
+                            className={`h-4 w-4 ${doc.estatus === "vencido" ? "text-status-danger" : "text-muted-foreground"}`}
                           />
                         )}
                         <div>
                           <p className="font-medium">{doc.name}</p>
                           <p className="text-sm text-muted-foreground flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
-                            Vence:{" "}
-                            {new Date(doc.vencimiento).toLocaleDateString(
-                              "es-MX",
-                            )}
+                            <Calendar className="h-3 w-3" /> Vence:{" "}
+                            {doc.vencimiento
+                              ? new Date(doc.vencimiento).toLocaleDateString(
+                                  "es-MX",
+                                )
+                              : "N/A"}
                           </p>
                         </div>
                       </div>
-
                       <div className="flex items-center gap-2">
-                        {isEditing && (
+                        {/* Botón VER */}
+                        {doc.url && (
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="opacity-0 group-hover:opacity-100 transition-opacity gap-1"
+                            onClick={() =>
+                              window.open(
+                                `http://localhost:8000${doc.url}`,
+                                "_blank",
+                              )
+                            }
+                            className="text-blue-400 hover:text-blue-300 h-8 px-2"
                           >
-                            <Upload className="h-3 w-3" /> Reemplazar
+                            <FileText className="h-3 w-3 mr-1" /> Ver
                           </Button>
+                        )}
+
+                        {/* Botón SUBIR */}
+                        {isEditing && (
+                          <div className="relative">
+                            <input
+                              type="file"
+                              id={`file-${idx}`}
+                              className="hidden"
+                              accept=".pdf,.jpg,.png"
+                              onChange={(e) => handleFileUpload(e, doc.key)}
+                              disabled={uploadingDoc === doc.key}
+                            />
+                            <Label
+                              htmlFor={`file-${idx}`}
+                              className={`cursor-pointer inline-flex items-center justify-center rounded-md text-xs font-medium h-8 px-2 bg-secondary text-secondary-foreground hover:bg-secondary/80 ${uploadingDoc === doc.key ? "opacity-50" : ""}`}
+                            >
+                              {uploadingDoc === doc.key ? (
+                                <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                              ) : (
+                                <Upload className="h-3 w-3 mr-1" />
+                              )}
+                              {uploadingDoc === doc.key ? "..." : "Subir"}
+                            </Label>
+                          </div>
                         )}
                         {getDocumentStatusBadge(doc.estatus, doc.vencimiento)}
                       </div>
@@ -445,77 +499,42 @@ export default function FlotaUnidadDetalle() {
             </Card>
           </div>
 
-          {/* Tire Details Table */}
+          {/* Tabla de Llantas */}
           <Card className="backdrop-blur-xl bg-white/10 dark:bg-black/40 border-white/20 shadow-2xl">
             <CardHeader>
               <CardTitle>Detalle de Llantas</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto rounded-xl">
-                <table className="w-full">
-                  <thead className="sticky top-0 z-10 backdrop-blur-xl bg-white/20 dark:bg-black/40">
-                    <tr className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      <th className="py-4 px-4">Posición</th>
-                      <th className="py-4 px-4">ID Llanta</th>
-                      <th className="py-4 px-4">Marca</th>
-                      <th className="py-4 px-4">Profundidad</th>
-                      <th className="py-4 px-4">Semáforo</th>
-                      <th className="py-4 px-4">Estado</th>
-                      <th className="py-4 px-4">Renovados</th>
-                      <th className="py-4 px-4">Marcaje</th>
+                <table className="w-full text-sm">
+                  <thead className="bg-white/10">
+                    <tr className="text-left">
+                      <th className="p-3">Posición</th>
+                      <th className="p-3">Marca</th>
+                      <th className="p-3">Profundidad</th>
+                      <th className="p-3">Estado</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {unit.tires.map((tire) => {
-                      const isCritical = tire.profundidad < 3;
-                      const isWarning =
-                        tire.profundidad >= 3 && tire.profundidad <= 6;
-                      return (
-                        <tr
-                          key={tire.id}
-                          className={`border-b border-white/5 hover:bg-white/5 transition-colors ${
-                            isCritical ? "bg-red-500/5" : ""
-                          }`}
-                        >
-                          <td className="py-4 px-4 font-medium">
-                            {tire.position}
-                          </td>
-                          <td className="py-4 px-4 font-mono text-sm">
-                            {tire.id}
-                          </td>
-                          <td className="py-4 px-4">{tire.marca}</td>
-                          <td className="py-4 px-4 font-bold">
-                            {tire.profundidad} mm
-                          </td>
-                          <td className="py-4 px-4">
-                            <Badge
-                              className={
-                                isCritical
-                                  ? "bg-red-500/20 text-red-400 border border-red-500/50"
-                                  : isWarning
-                                    ? "bg-amber-500/20 text-amber-400 border border-amber-500/50"
-                                    : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/50"
-                              }
-                            >
-                              {isCritical
-                                ? "Crítico"
-                                : isWarning
-                                  ? "Alerta"
-                                  : "OK"}
-                            </Badge>
-                          </td>
-                          <td className="py-4 px-4 capitalize">
-                            {tire.estado}
-                          </td>
-                          <td className="py-4 px-4">
-                            {tire.renovado > 0 ? `${tire.renovado}x` : "—"}
-                          </td>
-                          <td className="py-4 px-4 font-mono text-xs">
-                            {tire.marcajeInterno}
-                          </td>
+                    {unit.tires.length > 0 ? (
+                      unit.tires.map((tire, i) => (
+                        <tr key={i} className="border-b border-white/5">
+                          <td className="p-3">{tire.position}</td>
+                          <td className="p-3">{tire.marca || "-"}</td>
+                          <td className="p-3">{tire.profundidad} mm</td>
+                          <td className="p-3 capitalize">{tire.estado}</td>
                         </tr>
-                      );
-                    })}
+                      ))
+                    ) : (
+                      <tr>
+                        <td
+                          colSpan={4}
+                          className="p-4 text-center text-muted-foreground"
+                        >
+                          Sin información de llantas
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -523,18 +542,12 @@ export default function FlotaUnidadDetalle() {
           </Card>
         </TabsContent>
 
-        {/* Tab 2: Estado de Llantas 3D */}
         <TabsContent value="llantas" className="mt-6">
           <Card className="backdrop-blur-xl bg-white/10 dark:bg-black/40 border-white/20 shadow-2xl">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5" />
-                Visualización de Llantas - Vista Inferior (Worm's-Eye)
+                <AlertTriangle className="h-5 w-5" /> Visualización 3D
               </CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">
-                Pasa el cursor sobre cada llanta para ver detalles. Los colores
-                indican el nivel de desgaste.
-              </p>
             </CardHeader>
             <CardContent className="py-8">
               <TruckChassisSVG tires={unit.tires} unitType="sencillo" />
@@ -543,17 +556,17 @@ export default function FlotaUnidadDetalle() {
         </TabsContent>
       </Tabs>
 
-      {/* Floating Action Bar (only visible when editing) */}
+      {/* Barra flotante de guardado */}
       {isEditing && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
           <div className="backdrop-blur-xl bg-black/80 border border-white/20 rounded-2xl shadow-2xl p-4 flex items-center gap-4">
             <p className="text-sm text-muted-foreground px-4">
-              Editando unidad {formData.numeroEconomico}
+              Editando unidad {formData.numero_economico}
             </p>
             <Separator orientation="vertical" className="h-8" />
             <Button
               variant="ghost"
-              onClick={handleCancelEdit}
+              onClick={() => setIsEditing(false)}
               className="gap-2"
             >
               <X className="h-4 w-4" /> Cancelar

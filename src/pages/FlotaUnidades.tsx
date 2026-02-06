@@ -45,7 +45,7 @@ import { Unidad } from "@/services/unitService";
 // Esto define qué datos espera el Modal y qué datos devuelve al guardar
 export interface UnidadFormData {
   id?: string;
-  numeroEconomico: string;
+  numero_economico: string;
   placas: string;
   marca: string;
   modelo: string;
@@ -112,7 +112,7 @@ export default function FlotaUnidades() {
     // TypeScript ahora sabe qué propiedades existen
     const payload: Unidad = {
       id: unidadToEdit?.id || crypto.randomUUID(), // Generar ID temporal si no existe
-      numero_economico: data.numeroEconomico,
+      numero_economico: data.numero_economico,
       placas: data.placas,
       marca: data.marca,
       modelo: data.modelo,
@@ -152,7 +152,7 @@ export default function FlotaUnidades() {
     // Sin usar 'as any'
     const formattedForModal: UnidadFormData = {
       id: unidad.id,
-      numeroEconomico: unidad.numero_economico,
+      numero_economico: unidad.numero_economico,
       placas: unidad.placas,
       marca: unidad.marca,
       modelo: unidad.modelo,
