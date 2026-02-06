@@ -18,6 +18,11 @@ class UnitType(str, PyEnum):
     SENCILLO = "sencillo"
     FULL = "full"
     RABON = "rabon"
+    TRACTOCAMION = "tractocamion"
+    REMOLQUE = "remolque"
+    CAMIONETA = "camioneta"
+    CAMION = "camion"
+    OTRO = "otro"
 
 
 class Currency(str, PyEnum):
