@@ -17,7 +17,7 @@ Routes:
     POST /units - Create a new unit
     PUT /units/{unit_id} - Update an existing unit
     DELETE /units/{unit_id} - Delete a unit
-    POST /bulk-upload - Upload multiple units from file
+    POST /units/bulk-upload - Upload multiple units from file
     GET /download-upload/{upload_id} - Download a previously uploaded file
 Dependencies:
     - FastAPI: Web framework
@@ -43,9 +43,26 @@ from shutil import copyfileobj
 from fastapi.responses import FileResponse
 from app.api.endpoints.auth import get_current_user
 from app.models.models import User, Unit, BulkUploadHistory
+from fastapi.staticfiles import StaticFiles
 
 router = APIRouter()
+# Directorios
 UPLOAD_DIR = "app/uploads/bulk_unidades"
+DOCS_DIR = "app/uploads/documents"
+
+for directory in [UPLOAD_DIR, DOCS_DIR]:
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+
+
+def normalize_header(header: str) -> str:
+    """Normaliza encabezados de Excel (ej: 'Número Económico' -> 'numero_economico')"""
+    header = str(header).lower().strip()
+    header = ''.join(c for c in unicodedata.normalize('NFD', header) if unicodedata.category(c) != 'Mn')
+    header = header.replace(' ', '_').replace('.', '').replace('-', '_')
+    return header
+
+# --- RUTAS CRUD BÁSICAS ---
 
 @router.get("/units", response_model=List[schemas.UnitResponse])
 def read_units(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
@@ -54,13 +71,27 @@ def read_units(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
 
 @router.post("/units", response_model=schemas.UnitResponse)
 def create_unit(unit: schemas.UnitCreate, db: Session = Depends(get_db)):
-    if (
-        db.query(models.Unit)
-        .filter(models.Unit.numero_economico == unit.numero_economico)
-        .first()
-    ):
+    # 1. Validar duplicados
+    if db.query(models.Unit).filter(models.Unit.numero_economico == unit.numero_economico).first():
         raise HTTPException(status_code=400, detail="El número económico ya existe")
-    return crud.create_unit(db, unit)
+    
+    # 2. Preparar datos (Corregir nombres de campos que no coinciden)
+    unit_data = unit.model_dump() # O unit.dict() en versiones viejas de Pydantic
+    
+    # Mapeo manual: El esquema recibe 'tarjeta_circulacion', pero el modelo usa '_url'
+    if "tarjeta_circulacion" in unit_data:
+        unit_data["tarjeta_circulacion_url"] = unit_data.pop("tarjeta_circulacion")
+
+    # 3. Crear instancia del modelo
+    db_unit = models.Unit(
+        **unit_data,
+        public_id=str(uuid.uuid4())
+    )
+    
+    db.add(db_unit)
+    db.commit()
+    db.refresh(db_unit)
+    return db_unit
 
 
 @router.put("/units/{unit_id}", response_model=schemas.UnitResponse)
@@ -78,12 +109,14 @@ def delete_unit(unit_id: str, db: Session = Depends(get_db)):
     return {"message": "Unidad eliminada"}
 
 
-@router.post("/bulk-upload")
+@router.post("/units/bulk-upload")
 async def upload_units_bulk(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    
+    print(f"Usuario que sube el archivo: {file.filename}")
     # 1. Crear carpeta si no existe
     if not os.path.exists(UPLOAD_DIR):
         os.makedirs(UPLOAD_DIR)
@@ -116,34 +149,43 @@ async def upload_units_bulk(
             # Validar campo obligatorio clave
             eco = str(row.get('numero_economico', '')).strip()
             if not eco or eco == 'nan': 
-                continue # Saltar filas vacías
+                continue 
 
-            # Verificar si ya existe para no romper con error de duplicado
             existing = db.query(Unit).filter(Unit.numero_economico == eco).first()
             if existing:
-                continue # O podrías hacer un update aquí
+                continue 
+
+            # --- CORRECCIÓN AQUÍ ---
+            # Forzamos .lower() y .strip() para limpiar espacios y mayúsculas
+            tipo_limpio = str(row.get('tipo', 'full')).strip().lower()
+            status_limpio = str(row.get('status', 'disponible')).strip().lower()
+            
+            # Mapeo de seguridad por si el Excel trae "Sencillo" o "Tracto"
+            if tipo_limpio not in ['sencillo', 'full', 'rabon', 'tracto', 'dolly', 'trailer', 'camioneta', 'camion', 'otro']:
+                tipo_limpio = 'full' # Valor por defecto seguro
 
             new_unit = Unit(
+                public_id=str(uuid.uuid4()),
                 numero_economico=eco,
                 placas=str(row.get('placas', 'SIN-PLACA')).strip(),
                 vin=str(row.get('vin', '')),
                 marca=str(row.get('marca', 'GENERICO')),
                 modelo=str(row.get('modelo', 'GENERICO')),
                 year=int(row['year']) if pd.notnull(row.get('year')) else 2024,
-                tipo=str(row.get('tipo', 'full')).lower(), # enum en minúscula
                 
-                # Nuevos campos (Usamos .get con nombres normalizados)
+                # Usamos las variables limpias
+                tipo=tipo_limpio, 
+                status=status_limpio,
+
                 tipo_1=str(row.get('tipo_1', 'TRACTOCAMION')),
                 tipo_carga=str(row.get('tipo_carga', 'General')),
                 
-                # Fechas: Pandas es inteligente, pero hay que manejar nulos
-                seguro_vence=pd.to_datetime(row['seguro_vence']).date() if pd.notnull(row.get('seguro_vence')) else None,
-                verificacion_humo_vence=pd.to_datetime(row.get('verificacion_humo', None)).date() if pd.notnull(row.get('verificacion_humo')) else None,
-                verificacion_fisico_mecanica_vence=pd.to_datetime(row.get('verificacion_fisico_mecanica', None)).date() if pd.notnull(row.get('verificacion_fisico_mecanica')) else None,
+                seguro_vence=pd.to_datetime(row['seguro_vence'], dayfirst=True).date() if pd.notnull(row.get('seguro_vence')) else None,
+                verificacion_humo_vence=pd.to_datetime(row.get('verificacion_humo', None), dayfirst=True).date() if pd.notnull(row.get('verificacion_humo')) else None,
+                verificacion_fisico_mecanica_vence=pd.to_datetime(row.get('verificacion_fisico_mecanica', None), dayfirst=True).date() if pd.notnull(row.get('verificacion_fisico_mecanica')) else None,
             )
             db.add(new_unit)
             units_inserted += 1
-        
         # 5. Registrar en el historial de cargas masivas
         history = BulkUploadHistory(
             filename=file.filename,
@@ -172,12 +214,176 @@ async def download_upload(upload_id: int, db: Session = Depends(get_db)):
     return FileResponse(record.file_path, filename=record.filename)
 
 
-def normalize_header(header: str) -> str:
-    """Convierte 'Número Económico' a 'numero_economico'"""
-    # 1. Minúsculas
-    header = str(header).lower().strip()
-    # 2. Quitar acentos (Número -> Numero)
-    header = ''.join(c for c in unicodedata.normalize('NFD', header) if unicodedata.category(c) != 'Mn')
-    # 3. Reemplazar espacios por guiones bajos
-    header = header.replace(' ', '_').replace('.', '').replace('-', '_')
-    return header
+
+
+@router.get("/units/{term}", response_model=schemas.UnitResponse)
+def read_unit(term: str, db: Session = Depends(get_db)):
+    """
+    Busca una unidad por ID (entero) o por Número Económico (texto).
+    """
+    # Intentamos buscar por ID numérico primero
+    if term.isdigit():
+        db_unit = crud.get_unit(db, unit_id=int(term))
+        if db_unit:
+            return db_unit
+
+    # Si no es ID o no se encontró, buscamos por Número Económico
+    # (Decodificamos URL por si viene con espacios como 'Eco%2002')
+    from urllib.parse import unquote
+    term_decoded = unquote(term)
+    
+    db_unit = crud.get_unit_by_eco(db, numero_economico=term_decoded)
+    if db_unit:
+        return db_unit
+        
+    raise HTTPException(status_code=404, detail="Unidad no encontrada")
+
+#Subir Documentos
+@router.post("/units/{unit_term}/documents/{doc_type}")
+async def upload_unit_document(
+    unit_term: str,
+    doc_type: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    # Resolver unidad
+    unit = None
+    if unit_term.isdigit():
+        unit = crud.get_unit(db, int(unit_term))
+    if not unit:
+        unit = crud.get_unit_by_eco(db, unit_term)
+    
+    if not unit:
+        raise HTTPException(status_code=404, detail="Unidad no encontrada")
+
+    # Guardar archivo
+    file_ext = os.path.splitext(file.filename)[1]
+    filename = f"{unit.numero_economico}_{doc_type}_{uuid.uuid4()}{file_ext}"
+    file_path = os.path.join(DOCS_DIR, filename)
+    
+    with open(file_path, "wb") as f:
+        f.write(await file.read())
+    
+    file_url = f"/static/documents/{filename}"
+
+    # Actualizar BD
+    if doc_type == "poliza_seguro": unit.poliza_seguro_url = file_url
+    elif doc_type == "verificacion_humo": unit.verificacion_humo_url = file_url
+    elif doc_type == "verificacion_fisico_mecanica": unit.verificacion_fisico_mecanica_url = file_url
+    elif doc_type == "tarjeta_circulacion": unit.tarjeta_circulacion_url = file_url
+    
+    db.commit()
+    db.refresh(unit)
+    return {"url": file_url}
+
+# Guardar Llantas (Bulk Update)
+@router.put("/units/{unit_term}/tires", response_model=List[schemas.TireResponse])
+def update_unit_tires(
+    unit_term: str,
+    tires: List[schemas.TireCreate],
+    db: Session = Depends(get_db)
+):
+    # Resolver unidad
+    unit = None
+    if unit_term.isdigit():
+        unit = crud.get_unit(db, int(unit_term))
+    if not unit:
+        unit = crud.get_unit_by_eco(db, unit_term)
+        
+    if not unit:
+        raise HTTPException(status_code=404, detail="Unidad no encontrada")
+
+    # Reemplazar llantas
+    db.query(models.Tire).filter(models.Tire.unit_id == unit.id).delete()
+    
+    new_tires = []
+    for t in tires:
+        tire_db = models.Tire(**t.dict(), unit_id=unit.id)
+        db.add(tire_db)
+        new_tires.append(tire_db)
+    
+    db.commit()
+    for t in new_tires: db.refresh(t)
+        
+    return new_tires
+
+
+router.post("/units/{unit_term}/documents/{doc_type}")
+async def upload_unit_document(
+    unit_term: str, # Puede ser ID (int) o Económico (str)
+    doc_type: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    # 1. Buscar la unidad (reutilizamos lógica de búsqueda)
+    unit = None
+    if unit_term.isdigit():
+        unit = crud.get_unit(db, int(unit_term))
+    
+    if not unit:
+        unit = crud.get_unit_by_eco(db, unit_term)
+        
+    if not unit:
+        raise HTTPException(status_code=404, detail="Unidad no encontrada")
+
+    # 2. Guardar el archivo
+    file_ext = os.path.splitext(file.filename)[1]
+    # Nombre seguro: Eco_Tipo_UUID.ext
+    filename = f"{unit.numero_economico}_{doc_type}_{uuid.uuid4()}{file_ext}"
+    file_path = os.path.join(DOCS_DIR, filename)
+    
+    with open(file_path, "wb") as f:
+        f.write(await file.read())
+    
+    # 3. Generar URL pública
+    # NOTA: Asegúrate que 'static' coincide con lo que pusiste en main.py
+    file_url = f"/static/documents/{filename}"
+
+    # 4. Actualizar campo en BD
+    if doc_type == "poliza_seguro":
+        unit.poliza_seguro_url = file_url
+    elif doc_type == "verificacion_humo":
+        unit.verificacion_humo_url = file_url
+    elif doc_type == "verificacion_fisico_mecanica":
+        unit.verificacion_fisico_mecanica_url = file_url
+    elif doc_type == "tarjeta_circulacion":
+        unit.tarjeta_circulacion_url = file_url
+    
+    db.commit()
+    db.refresh(unit)
+    
+    return {"url": file_url, "filename": filename}
+
+@router.put("/units/{unit_term}/tires", response_model=List[schemas.TireResponse])
+def update_unit_tires(
+    unit_term: str,
+    tires: List[schemas.TireCreate],
+    db: Session = Depends(get_db)
+):
+    # 1. Buscar unidad
+    unit = None
+    if unit_term.isdigit():
+        unit = crud.get_unit(db, int(unit_term))
+    if not unit:
+        unit = crud.get_unit_by_eco(db, unit_term)
+        
+    if not unit:
+        raise HTTPException(status_code=404, detail="Unidad no encontrada")
+
+    # 2. Reemplazar llantas (Estrategia simple: Borrar y Crear)
+    db.query(models.Tire).filter(models.Tire.unit_id == unit.id).delete()
+    
+    new_tires = []
+    for t in tires:
+        # Convertir esquema a modelo
+        tire_db = models.Tire(**t.model_dump(), unit_id=unit.id)
+        db.add(tire_db)
+        new_tires.append(tire_db)
+    
+    db.commit()
+    
+    # Refrescar para obtener IDs
+    for t in new_tires:
+        db.refresh(t)
+        
+    return new_tires

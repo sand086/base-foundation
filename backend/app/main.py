@@ -1,10 +1,13 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+
 from datetime import datetime
 
 from app.db.database import engine
 from app.models import models
 from app.api.api import api_router
+
 
 # Crear tablas al inicio (esto se suele mover a Alembic en produccion, pero dejémoslo aqui por ahora)
 models.Base.metadata.create_all(bind=engine)
@@ -13,6 +16,7 @@ app = FastAPI(
     title="Rápidos 3T - TMS API",
     description="Sistema de Gestión de Transporte - Backend API Modular",
     version="1.0.0",
+    
 )
 
 # Configuración CORS
@@ -44,5 +48,6 @@ def health_check():
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
 
 
-# Incluir todas las rutas (el "cerebro" del sistema)
+# Incluir todas las rutas API
 app.include_router(api_router, prefix="/api")
+app.mount("/static", StaticFiles(directory="app/uploads"), name="static")

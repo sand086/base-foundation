@@ -58,7 +58,7 @@ import { Unidad } from "@/services/unitService";
 // Definimos la interfaz local que usa tu vista (ligeramente diferente a Unidad del backend)
 export interface ActivoPatrimonial {
   id: string;
-  numeroEconomico: string;
+  numero_economico: string;
   tipoUnidad: string;
   marca: string;
   modelo: string;
@@ -87,7 +87,7 @@ export function PatrimonialView() {
   const activos: ActivoPatrimonial[] = useMemo(() => {
     return unidades.map((u) => ({
       id: u.id,
-      numeroEconomico: u.numero_economico, // snake_case del backend
+      numero_economico: u.numero_economico, // snake_case del backend
       tipoUnidad: u.tipo,
       marca: u.marca,
       modelo: u.modelo,
@@ -228,7 +228,7 @@ export function PatrimonialView() {
       });
 
       toast.success("Activo dado de baja", {
-        description: `${activoToBaja.numeroEconomico} ha sido removido de la disponibilidad operativa.`,
+        description: `${activoToBaja.numero_economico} ha sido removido de la disponibilidad operativa.`,
       });
 
       setIsBajaModalOpen(false);
@@ -244,7 +244,7 @@ export function PatrimonialView() {
   const columns: ColumnDef<ActivoPatrimonial>[] = useMemo(
     () => [
       {
-        key: "numeroEconomico",
+        key: "numero_economico",
         header: "No. Económico",
         sortable: true,
         render: (value) => <span className="font-bold font-mono">{value}</span>,
@@ -476,7 +476,7 @@ export function PatrimonialView() {
             </DialogTitle>
             <DialogDescription>
               Esta acción removerá el activo{" "}
-              <strong>{activoToBaja?.numeroEconomico}</strong> de la
+              <strong>{activoToBaja?.numero_economico}</strong> de la
               disponibilidad operativa.
             </DialogDescription>
           </DialogHeader>

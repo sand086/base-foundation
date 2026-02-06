@@ -2,7 +2,7 @@
 SQLAlchemy ORM Models for TMS
 Mirrors TypeScript interfaces from frontend
 """
-
+import uuid
 from datetime import date, datetime
 from enum import Enum as PyEnum
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Date, func, Text, Boolean, Float, Enum
@@ -168,14 +168,15 @@ class Tariff(Base):
 class Unit(Base):
     """
     Unidad/Tracto - Vehículo de la flota
-    Status controla disponibilidad para despacho
     """
-
     __tablename__ = "units"
 
+    # --- ID numérico y Public ID ---
+    id = Column(Integer, primary_key=True, index=True)  # Ahora es Integer (Serial)
+    public_id = Column(String(50), unique=True, nullable=False, index=True) # Nuevo campo UUID
+    
     # ============= IDENTIFICACIÓN =============
-    id = Column(String(50), primary_key=True)
-    numero_economico = Column(String(20), unique=True, nullable=False)  # Ej: TR-204
+    numero_economico = Column(String(20), unique=True, nullable=False)
     placas = Column(String(15), unique=True, nullable=False)
     vin = Column(String(17))
     
@@ -183,37 +184,33 @@ class Unit(Base):
     marca = Column(String(50), nullable=False)
     modelo = Column(String(50), nullable=False)
     year = Column(Integer)
-    tipo = Column(Enum(UnitType), nullable=False)  # sencillo, full, rabon
+    tipo = Column(Enum(UnitType), nullable=False)
     
     # Nuevos campos técnicos
-    tipo_1 = Column(String(50))      # TRACTOCAMION, REMOLQUE, DOLLY
-    tipo_carga = Column(String(50))  # IMO, General, Refrigerada
+    tipo_1 = Column(String(50))
+    tipo_carga = Column(String(50))
     numero_serie_motor = Column(String, nullable=True)
     marca_motor = Column(String, nullable=True)
     capacidad_carga = Column(Float, nullable=True)
 
     # ============= ESTADO =============
     status = Column(Enum(UnitStatus), default=UnitStatus.DISPONIBLE)
-    
-    # Alertas automáticas (calculadas por el backend o triggers)
     documentos_vencidos = Column(Integer, default=0)
     llantas_criticas = Column(Integer, default=0)
 
     # ============= DOCUMENTACIÓN Y VENCIMIENTOS =============
-    # Seguros
     seguro_vence = Column(Date, nullable=True)
-    
-    # Verificaciones (Específicas y General)
     verificacion_humo_vence = Column(Date, nullable=True)
     verificacion_fisico_mecanica_vence = Column(Date, nullable=True)
-    verificacion_vence = Column(Date, nullable=True) # Campo legacy/general
-    
-    # Permisos SCT
+    verificacion_vence = Column(Date, nullable=True)
     permiso_sct_vence = Column(Date, nullable=True)
-    
-    # Referencias a Archivos (URLs o Paths)
     tarjeta_circulacion_url = Column(String(500), nullable=True)
     permiso_doble_articulado_url = Column(String(500), nullable=True)
+    
+    # === AGREGAR ESTAS COLUMNAS PARA DOCUMENTOS ===
+    poliza_seguro_url = Column(String(500), nullable=True)
+    verificacion_humo_url = Column(String(500), nullable=True)
+    verificacion_fisico_mecanica_url = Column(String(500), nullable=True)
 
     # ============= TIMESTAMPS =============
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -222,8 +219,27 @@ class Unit(Base):
     # ============= RELACIONES =============
     trips = relationship("Trip", back_populates="unit")
     operators = relationship("Operator", back_populates="assigned_unit")
+    tires = relationship("Tire", back_populates="unit", cascade="all, delete-orphan")
 
+class Tire(Base):
+    __tablename__ = "tires"
 
+    id = Column(Integer, primary_key=True, index=True)
+    unit_id = Column(Integer, ForeignKey("units.id"), nullable=False)
+    
+    position = Column(String(20), nullable=False) # Ej: "LI", "RD-INT"
+    tire_id = Column(String(50)) # ID Físico/Serial de la llanta
+    marca = Column(String(50))
+    modelo = Column(String(50))
+    profundidad = Column(Float, default=0.0) # mm
+    presion = Column(Float, default=0.0) # psi
+    estado = Column(String(20), default="bueno") # bueno, regular, malo
+    renovado = Column(Integer, default=0)
+    
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relación con Unidad   
+    unit = relationship("Unit", back_populates="tires")
 class Operator(Base):
     """
     Operador/Conductor - Con tracking de vencimientos
@@ -244,7 +260,8 @@ class Operator(Base):
     status = Column(Enum(OperatorStatus), default=OperatorStatus.ACTIVO)
 
     # Unidad asignada actualmente
-    assigned_unit_id = Column(String(50), ForeignKey("units.id"), nullable=True)
+    assigned_unit_id = Column(Integer, ForeignKey("units.id"), nullable=True)
+    
 
     # Datos adicionales
     hire_date = Column(Date)
@@ -271,7 +288,7 @@ class Trip(Base):
     # Relaciones principales
     client_id = Column(String(50), ForeignKey("clients.id"), nullable=False)
     sub_client_id = Column(String(50), ForeignKey("sub_clients.id"), nullable=False)
-    unit_id = Column(String(50), ForeignKey("units.id"), nullable=False)
+    unit_id = Column(Integer, ForeignKey("units.id"), nullable=False)
     operator_id = Column(String(50), ForeignKey("operators.id"), nullable=False)
     tariff_id = Column(String(50), ForeignKey("tariffs.id"), nullable=True)
 
