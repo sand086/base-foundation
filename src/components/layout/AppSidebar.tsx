@@ -100,6 +100,7 @@ const menuItems: MenuItem[] = [
     title: "Proveedores",
     icon: Briefcase,
     iconName: "Proveedores",
+    path: "/proveedores",
   },
   {
     title: "Cobranza",

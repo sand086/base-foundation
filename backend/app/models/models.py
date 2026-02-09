@@ -81,6 +81,21 @@ class TireEventType(str, PyEnum):
     ROTACION = "rotacion"
     INSPECCION = "inspeccion"
     DESECHO = "desecho"
+    
+# --- ENUMS PARA MANTENIMIENTO ---
+class WorkOrderStatus(str, PyEnum):
+    ABIERTA = "abierta"
+    EN_PROGRESO = "en_progreso"
+    CERRADA = "cerrada"
+    CANCELADA = "cancelada"
+
+class InventoryCategory(str, PyEnum):
+    MOTOR = "Motor"
+    FRENOS = "Frenos"
+    ELECTRICO = "Eléctrico"
+    SUSPENSION = "Suspensión"
+    TRANSMISION = "Transmisión"
+    GENERAL = "General"
 
 # ============= MODELS =============
 
@@ -198,6 +213,7 @@ class Unit(Base):
     operators = relationship("Operator", back_populates="assigned_unit")
     # Relación con llantas: una unidad tiene muchas llantas
     tires = relationship("Tire", back_populates="unit")
+    work_orders = relationship("WorkOrder", back_populates="unit")
 
 
 class Tire(Base):
@@ -415,3 +431,75 @@ class BulkUploadHistory(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     
     user = relationship("User")
+    
+    
+class InventoryItem(Base):
+    __tablename__ = "inventory_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    sku = Column(String(50), unique=True, nullable=False, index=True)
+    descripcion = Column(String(200), nullable=False)
+    categoria = Column(Enum(InventoryCategory), default=InventoryCategory.GENERAL)
+    
+    stock_actual = Column(Integer, default=0)
+    stock_minimo = Column(Integer, default=5)
+    ubicacion = Column(String(100))
+    precio_unitario = Column(Float, default=0.0)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relación con las partes usadas en órdenes de trabajo
+    work_order_parts = relationship("WorkOrderPart", back_populates="item")
+
+
+class Mechanic(Base):
+    __tablename__ = "mechanics"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nombre = Column(String(100), nullable=False)
+    especialidad = Column(String(100))
+    activo = Column(Boolean, default=True)
+    
+    work_orders = relationship("WorkOrder", back_populates="mechanic")
+
+
+class WorkOrder(Base):
+    __tablename__ = "work_orders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    folio = Column(String(20), unique=True, nullable=False) # Ej: OT-2024-001
+    
+    unit_id = Column(Integer, ForeignKey("units.id"), nullable=False)
+    mechanic_id = Column(Integer, ForeignKey("mechanics.id"), nullable=True)
+    
+    descripcion_problema = Column(Text, nullable=False)
+    status = Column(Enum(WorkOrderStatus), default=WorkOrderStatus.ABIERTA)
+    
+    fecha_apertura = Column(DateTime, default=datetime.utcnow)
+    fecha_cierre = Column(DateTime, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relaciones
+    unit = relationship("Unit", back_populates="work_orders") # Necesitas agregar backref en Unit si no existe
+    mechanic = relationship("Mechanic", back_populates="work_orders")
+    parts = relationship("WorkOrderPart", back_populates="work_order", cascade="all, delete-orphan")
+
+
+class WorkOrderPart(Base):
+    __tablename__ = "work_order_parts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    work_order_id = Column(Integer, ForeignKey("work_orders.id"), nullable=False)
+    inventory_item_id = Column(Integer, ForeignKey("inventory_items.id"), nullable=False)
+    
+    cantidad = Column(Integer, nullable=False)
+    costo_unitario_snapshot = Column(Float, nullable=False) # Guardar precio al momento de uso
+
+    work_order = relationship("WorkOrder", back_populates="parts")
+    item = relationship("InventoryItem", back_populates="work_order_parts")
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    

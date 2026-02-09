@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -6,48 +6,55 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { Package, Save, Loader2 } from 'lucide-react';
-import { toast } from 'sonner';
-import { InventoryItem, InventoryCategory } from '@/data/mantenimientoData';
+} from "@/components/ui/select";
+import { Package, Save, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+// Usamos el tipo REAL del servicio
+import { InventoryItem } from "@/services/maintenanceService";
 
 interface AddInventarioModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   itemToEdit?: InventoryItem | null;
-  onSave: (item: Omit<InventoryItem, 'id'> & { id?: string }) => void;
+  onSave: (item: any) => Promise<void>; // Ajustado para ser async
 }
 
-const categories: InventoryCategory[] = ['Motor', 'Frenos', 'Eléctrico', 'Suspensión', 'Transmisión', 'General'];
+const categories = [
+  "Motor",
+  "Frenos",
+  "Eléctrico",
+  "Suspensión",
+  "Transmisión",
+  "General",
+];
 
-export function AddInventarioModal({ open, onOpenChange, itemToEdit, onSave }: AddInventarioModalProps) {
+export function AddInventarioModal({
+  open,
+  onOpenChange,
+  itemToEdit,
+  onSave,
+}: AddInventarioModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState<{
-    sku: string;
-    descripcion: string;
-    categoria: InventoryCategory;
-    stockActual: number;
-    stockMinimo: number;
-    ubicacion: string;
-    precioUnitario: number;
-  }>({
-    sku: '',
-    descripcion: '',
-    categoria: 'General',
-    stockActual: 0,
-    stockMinimo: 0,
-    ubicacion: '',
-    precioUnitario: 0,
+
+  // Estado local usando snake_case para facilitar el envío
+  const [formData, setFormData] = useState({
+    sku: "",
+    descripcion: "",
+    categoria: "General",
+    stock_actual: 0,
+    stock_minimo: 0,
+    ubicacion: "",
+    precio_unitario: 0,
   });
 
   useEffect(() => {
@@ -56,20 +63,20 @@ export function AddInventarioModal({ open, onOpenChange, itemToEdit, onSave }: A
         sku: itemToEdit.sku,
         descripcion: itemToEdit.descripcion,
         categoria: itemToEdit.categoria,
-        stockActual: itemToEdit.stockActual,
-        stockMinimo: itemToEdit.stockMinimo,
+        stock_actual: itemToEdit.stock_actual,
+        stock_minimo: itemToEdit.stock_minimo,
         ubicacion: itemToEdit.ubicacion,
-        precioUnitario: itemToEdit.precioUnitario,
+        precio_unitario: itemToEdit.precio_unitario,
       });
     } else {
       setFormData({
-        sku: '',
-        descripcion: '',
-        categoria: 'General',
-        stockActual: 0,
-        stockMinimo: 0,
-        ubicacion: '',
-        precioUnitario: 0,
+        sku: "",
+        descripcion: "",
+        categoria: "General",
+        stock_actual: 0,
+        stock_minimo: 0,
+        ubicacion: "",
+        precio_unitario: 0,
       });
     }
   }, [itemToEdit, open]);
@@ -77,20 +84,28 @@ export function AddInventarioModal({ open, onOpenChange, itemToEdit, onSave }: A
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    onSave({
-      ...formData,
-      id: itemToEdit?.id,
-    });
-    
-    toast.success(itemToEdit ? 'Refacción actualizada' : 'Refacción agregada', {
-      description: `${formData.sku} - ${formData.descripcion}`,
-    });
-    
-    setIsSubmitting(false);
-    onOpenChange(false);
+
+    try {
+      // Enviamos los datos tal cual (ya están en snake_case)
+      await onSave({
+        ...formData,
+        // Si es edición, el ID se maneja en el padre, aquí solo enviamos el payload
+      });
+
+      toast.success(
+        itemToEdit ? "Refacción actualizada" : "Refacción agregada",
+        {
+          description: `${formData.sku} - ${formData.descripcion}`,
+        },
+      );
+
+      onOpenChange(false);
+    } catch (error) {
+      // El error ya lo maneja el hook usualmente, pero por seguridad
+      console.error(error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -99,10 +114,12 @@ export function AddInventarioModal({ open, onOpenChange, itemToEdit, onSave }: A
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Package className="h-5 w-5" />
-            {itemToEdit ? 'Editar Refacción' : 'Nueva Refacción'}
+            {itemToEdit ? "Editar Refacción" : "Nueva Refacción"}
           </DialogTitle>
           <DialogDescription>
-            {itemToEdit ? 'Modifica los datos de la refacción' : 'Agrega una nueva refacción al inventario'}
+            {itemToEdit
+              ? "Modifica los datos de la refacción"
+              : "Agrega una nueva refacción al inventario"}
           </DialogDescription>
         </DialogHeader>
 
@@ -113,23 +130,30 @@ export function AddInventarioModal({ open, onOpenChange, itemToEdit, onSave }: A
               <Input
                 id="sku"
                 value={formData.sku}
-                onChange={(e) => setFormData(prev => ({ ...prev, sku: e.target.value }))}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, sku: e.target.value }))
+                }
                 placeholder="REF-001"
                 required
+                disabled={!!itemToEdit} // SKU no editable usualmente
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="categoria">Categoría</Label>
               <Select
                 value={formData.categoria}
-                onValueChange={(value: InventoryCategory) => setFormData(prev => ({ ...prev, categoria: value }))}
+                onValueChange={(value) =>
+                  setFormData((prev) => ({ ...prev, categoria: value }))
+                }
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {categories.map(cat => (
-                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat} value={cat}>
+                      {cat}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -141,7 +165,12 @@ export function AddInventarioModal({ open, onOpenChange, itemToEdit, onSave }: A
             <Input
               id="descripcion"
               value={formData.descripcion}
-              onChange={(e) => setFormData(prev => ({ ...prev, descripcion: e.target.value }))}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  descripcion: e.target.value,
+                }))
+              }
               placeholder="Filtro de aceite motor"
               required
             />
@@ -149,34 +178,49 @@ export function AddInventarioModal({ open, onOpenChange, itemToEdit, onSave }: A
 
           <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="stockActual">Stock Actual</Label>
+              <Label htmlFor="stock_actual">Stock Actual</Label>
               <Input
-                id="stockActual"
+                id="stock_actual"
                 type="number"
                 min="0"
-                value={formData.stockActual}
-                onChange={(e) => setFormData(prev => ({ ...prev, stockActual: Number(e.target.value) }))}
+                value={formData.stock_actual}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    stock_actual: Number(e.target.value),
+                  }))
+                }
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="stockMinimo">Stock Mínimo</Label>
+              <Label htmlFor="stock_minimo">Stock Mínimo</Label>
               <Input
-                id="stockMinimo"
+                id="stock_minimo"
                 type="number"
                 min="0"
-                value={formData.stockMinimo}
-                onChange={(e) => setFormData(prev => ({ ...prev, stockMinimo: Number(e.target.value) }))}
+                value={formData.stock_minimo}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    stock_minimo: Number(e.target.value),
+                  }))
+                }
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="precioUnitario">Precio Unit.</Label>
+              <Label htmlFor="precio_unitario">Precio Unit.</Label>
               <Input
-                id="precioUnitario"
+                id="precio_unitario"
                 type="number"
                 min="0"
                 step="0.01"
-                value={formData.precioUnitario}
-                onChange={(e) => setFormData(prev => ({ ...prev, precioUnitario: Number(e.target.value) }))}
+                value={formData.precio_unitario}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    precio_unitario: Number(e.target.value),
+                  }))
+                }
               />
             </div>
           </div>
@@ -186,18 +230,28 @@ export function AddInventarioModal({ open, onOpenChange, itemToEdit, onSave }: A
             <Input
               id="ubicacion"
               value={formData.ubicacion}
-              onChange={(e) => setFormData(prev => ({ ...prev, ubicacion: e.target.value }))}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, ubicacion: e.target.value }))
+              }
               placeholder="Almacén A - Estante 3"
             />
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
               Cancelar
             </Button>
             <Button type="submit" disabled={isSubmitting} className="gap-2">
-              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              {itemToEdit ? 'Guardar Cambios' : 'Agregar Refacción'}
+              {isSubmitting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
+              {itemToEdit ? "Guardar Cambios" : "Agregar Refacción"}
             </Button>
           </DialogFooter>
         </form>

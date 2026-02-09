@@ -163,6 +163,43 @@ def seed_tires(db, unit):
     })
 
     print("✓ Llantas e Historial creados")
+    
+def seed_maintenance(db):
+    # 1. Mecánicos
+    mec1, _ = get_or_create(db, models.Mechanic, nombre="Carlos Ruiz", defaults={
+        "especialidad": "Motor Diesel", "activo": True
+    })
+    mec2, _ = get_or_create(db, models.Mechanic, nombre="Pedro Sánchez", defaults={
+        "especialidad": "Sistema Eléctrico", "activo": True
+    })
+    print("✓ Mecánicos creados")
+
+    # 2. Inventario (Refacciones)
+    # Filtro de Aceite
+    get_or_create(db, models.InventoryItem, sku="REF-001", defaults={
+        "descripcion": "Filtro de Aceite Freightliner",
+        "categoria": models.InventoryCategory.MOTOR,
+        "stock_actual": 15, "stock_minimo": 5,
+        "ubicacion": "Pasillo A-1", "precio_unitario": 450.00
+    })
+    
+    # Balatas
+    get_or_create(db, models.InventoryItem, sku="REF-002", defaults={
+        "descripcion": "Juego de Balatas Traseras",
+        "categoria": models.InventoryCategory.FRENOS,
+        "stock_actual": 8, "stock_minimo": 4,
+        "ubicacion": "Pasillo B-3", "precio_unitario": 1200.00
+    })
+
+    # Foco Led
+    get_or_create(db, models.InventoryItem, sku="REF-003", defaults={
+        "descripcion": "Foco LED H4",
+        "categoria": models.InventoryCategory.ELECTRICO,
+        "stock_actual": 50, "stock_minimo": 10,
+        "ubicacion": "Caja Rápida", "precio_unitario": 180.00
+    })
+    
+    print("✓ Inventario inicial creado")
 
 def main():
     print("\n🚛 Iniciando Seed V2 (Auto-Incremental + Llantas)...")
