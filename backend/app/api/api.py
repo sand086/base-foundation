@@ -7,10 +7,11 @@ api_router = APIRouter()
 
 # Seguridad y Usuarios
 api_router.include_router(auth.router, prefix="/auth", tags=["Auth"])
+
 api_router.include_router(users.router, tags=["Usuarios"])
 
 # Operación Principal
-api_router.include_router(clients.router, tags=["Clientes"])
+api_router.include_router(clients.router, tags=["Clients"])
 api_router.include_router(units.router, tags=["Unidades"])
 api_router.include_router(operators.router, tags=["Operadores"])
 api_router.include_router(trips.router, tags=["Viajes"])

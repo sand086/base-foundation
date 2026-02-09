@@ -47,8 +47,8 @@ const menuItems: MenuItem[] = [
     icon: Users, // fallback por si algo falla
     iconName: "Clientes", // ESTE es el que usa tu svg real
     children: [
-      { title: "Catálogo", path: "/clientes" },
-      { title: "Nuevo Cliente", path: "/clientes/nuevo" },
+      { title: "Catálogo", path: "/clients" },
+      { title: "Nuevo Client", path: "/clients/nuevo" },
     ],
   },
 
@@ -197,9 +197,9 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
     >
       {/* Header with Animated Logo */}
       <div className="flex h-14 items-center justify-center px-3 border-b border-sidebar-border">
-        <AnimatedLogo 
-          collapsed={collapsed} 
-          className={collapsed ? "h-8 w-8" : "h-10"} 
+        <AnimatedLogo
+          collapsed={collapsed}
+          className={collapsed ? "h-8 w-8" : "h-10"}
         />
       </div>
 
@@ -280,23 +280,23 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
                   )}
                 </>
               ) : (
-              <NavLink
-                to={item.path!}
-                className={({ isActive }) =>
-                  cn(
-                    "flex items-center gap-2.5 rounded px-2.5 py-2 text-xs font-medium",
-                    "transition-all duration-200 ease-out",
-                    "hover:bg-sidebar-accent hover:text-white hover:translate-x-0.5",
-                    isActive
-                      ? "bg-sidebar-accent text-white border-l-2 border-brand-red"
-                      : "text-sidebar-foreground",
-                  )
-                }
-              >
-                <RenderIcon item={item} />
-                {!collapsed && <span>{item.title}</span>}
-              </NavLink>
-            )}
+                <NavLink
+                  to={item.path!}
+                  className={({ isActive }) =>
+                    cn(
+                      "flex items-center gap-2.5 rounded px-2.5 py-2 text-xs font-medium",
+                      "transition-all duration-200 ease-out",
+                      "hover:bg-sidebar-accent hover:text-white hover:translate-x-0.5",
+                      isActive
+                        ? "bg-sidebar-accent text-white border-l-2 border-brand-red"
+                        : "text-sidebar-foreground",
+                    )
+                  }
+                >
+                  <RenderIcon item={item} />
+                  {!collapsed && <span>{item.title}</span>}
+                </NavLink>
+              )}
             </div>
           ))}
         </nav>

@@ -1,6 +1,6 @@
-import { 
-  Receipt, 
-  Download, 
+import {
+  Receipt,
+  Download,
   Printer,
   Building2,
   Calendar,
@@ -20,7 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { 
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -29,7 +29,11 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { useState, useMemo } from "react";
-import { ReceivableInvoice, getInvoiceStatusInfo, calculateDaysOverdue } from "./types";
+import {
+  ReceivableInvoice,
+  getInvoiceStatusInfo,
+  calculateDaysOverdue,
+} from "./types";
 import { toast } from "sonner";
 
 interface AccountStatementModalProps {
@@ -40,20 +44,20 @@ interface AccountStatementModalProps {
 
 // Mock company bank data
 const companyBankData = {
-  razonSocial: 'Transportes Rápidos 3T S.A. de C.V.',
-  rfc: 'TR3T850101ABC',
+  razonSocial: "Transportes Rápidos 3T S.A. de C.V.",
+  rfc: "TR3T850101ABC",
   cuentas: [
     {
-      banco: 'Banamex',
-      clabe: '002180700100000001',
-      cuenta: '70010000000',
-      titular: 'Transportes Rápidos 3T S.A. de C.V.',
+      banco: "Banamex",
+      clabe: "002180700100000001",
+      cuenta: "70010000000",
+      titular: "Transportes Rápidos 3T S.A. de C.V.",
     },
     {
-      banco: 'Banorte',
-      clabe: '072180000000000001',
-      cuenta: '0000000001',
-      titular: 'Transportes Rápidos 3T S.A. de C.V.',
+      banco: "Banorte",
+      clabe: "072180000000000001",
+      cuenta: "0000000001",
+      titular: "Transportes Rápidos 3T S.A. de C.V.",
     },
   ],
 };
@@ -63,35 +67,37 @@ export function AccountStatementModal({
   onClose,
   invoices,
 }: AccountStatementModalProps) {
-  const [selectedClient, setSelectedClient] = useState<string>('all');
+  const [selectedClient, setSelectedClient] = useState<string>("all");
 
   // Get unique clients
   const clients = useMemo(() => {
-    const uniqueClients = [...new Set(invoices.map(inv => inv.cliente))];
+    const uniqueClients = [...new Set(invoices.map((inv) => inv.cliente))];
     return uniqueClients.sort();
   }, [invoices]);
 
   // Filter invoices by client and pending balance
   const filteredInvoices = useMemo(() => {
-    let filtered = invoices.filter(inv => inv.saldoPendiente > 0);
-    if (selectedClient !== 'all') {
-      filtered = filtered.filter(inv => inv.cliente === selectedClient);
+    let filtered = invoices.filter((inv) => inv.saldoPendiente > 0);
+    if (selectedClient !== "all") {
+      filtered = filtered.filter((inv) => inv.cliente === selectedClient);
     }
-    return filtered.sort((a, b) => 
-      new Date(a.fechaVencimiento).getTime() - new Date(b.fechaVencimiento).getTime()
+    return filtered.sort(
+      (a, b) =>
+        new Date(a.fechaVencimiento).getTime() -
+        new Date(b.fechaVencimiento).getTime(),
     );
   }, [invoices, selectedClient]);
 
   // Calculate totals
   const totals = useMemo(() => {
     const corriente = filteredInvoices
-      .filter(inv => calculateDaysOverdue(inv.fechaVencimiento) <= 0)
+      .filter((inv) => calculateDaysOverdue(inv.fechaVencimiento) <= 0)
       .reduce((sum, inv) => sum + inv.saldoPendiente, 0);
-    
+
     const vencido = filteredInvoices
-      .filter(inv => calculateDaysOverdue(inv.fechaVencimiento) > 0)
+      .filter((inv) => calculateDaysOverdue(inv.fechaVencimiento) > 0)
       .reduce((sum, inv) => sum + inv.saldoPendiente, 0);
-    
+
     return {
       corriente,
       vencido,
@@ -100,28 +106,28 @@ export function AccountStatementModal({
   }, [filteredInvoices]);
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency: 'MXN',
+    return new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: "MXN",
     }).format(amount);
   };
 
   const handleDownload = () => {
-    toast.success('Generando PDF...', {
-      description: 'El estado de cuenta se descargará en unos segundos.',
+    toast.success("Generando PDF...", {
+      description: "El estado de cuenta se descargará en unos segundos.",
     });
   };
 
   const handlePrint = () => {
-    toast.success('Preparando impresión...', {
-      description: 'Se abrirá la ventana de impresión.',
+    toast.success("Preparando impresión...", {
+      description: "Se abrirá la ventana de impresión.",
     });
   };
 
-  const currentDate = new Date().toLocaleDateString('es-MX', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
+  const currentDate = new Date().toLocaleDateString("es-MX", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
   });
 
   return (
@@ -141,11 +147,11 @@ export function AccountStatementModal({
         <div className="flex items-center gap-4 p-4 bg-muted/50 rounded-lg">
           <div className="flex-1">
             <Label className="text-xs uppercase tracking-wider text-muted-foreground mb-2 block">
-              Filtrar por Cliente
+              Filtrar por Client
             </Label>
             <Select value={selectedClient} onValueChange={setSelectedClient}>
               <SelectTrigger>
-                <SelectValue placeholder="Todos los clientes" />
+                <SelectValue placeholder="Todos los clients" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos los Clientes</SelectItem>
@@ -172,17 +178,19 @@ export function AccountStatementModal({
                 <Building2 className="h-5 w-5" />
                 {companyBankData.razonSocial}
               </h2>
-              <p className="text-sm text-muted-foreground">RFC: {companyBankData.rfc}</p>
+              <p className="text-sm text-muted-foreground">
+                RFC: {companyBankData.rfc}
+              </p>
             </div>
-            <Badge className="bg-primary text-white">
-              ESTADO DE CUENTA
-            </Badge>
+            <Badge className="bg-primary text-white">ESTADO DE CUENTA</Badge>
           </div>
 
           {/* Client Info (if filtered) */}
-          {selectedClient !== 'all' && (
+          {selectedClient !== "all" && (
             <div className="p-3 bg-muted/30 rounded-lg">
-              <p className="text-xs text-muted-foreground uppercase tracking-wider">Cliente</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wider">
+                Client
+              </p>
               <p className="font-semibold text-lg">{selectedClient}</p>
             </div>
           )}
@@ -192,7 +200,7 @@ export function AccountStatementModal({
             <h3 className="font-bold text-sm uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
               <DollarSign className="h-4 w-4" /> Facturas Pendientes
             </h3>
-            
+
             {filteredInvoices.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <CheckCircle2 className="h-12 w-12 mx-auto mb-2 text-status-success" />
@@ -203,38 +211,52 @@ export function AccountStatementModal({
                 {/* Table Header */}
                 <div className="grid grid-cols-12 gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider py-2 border-b">
                   <div className="col-span-2">Folio</div>
-                  <div className="col-span-3">Cliente</div>
+                  <div className="col-span-3">Client</div>
                   <div className="col-span-2 text-right">Monto</div>
                   <div className="col-span-2 text-right">Saldo</div>
                   <div className="col-span-2">Vencimiento</div>
                   <div className="col-span-1">Estado</div>
                 </div>
-                
+
                 {/* Invoice Rows */}
                 {filteredInvoices.map((invoice) => {
                   const statusInfo = getInvoiceStatusInfo(invoice);
-                  const daysOverdue = calculateDaysOverdue(invoice.fechaVencimiento);
+                  const daysOverdue = calculateDaysOverdue(
+                    invoice.fechaVencimiento,
+                  );
                   const isOverdue = daysOverdue > 0;
-                  
+
                   return (
-                    <div 
+                    <div
                       key={invoice.id}
                       className={`grid grid-cols-12 gap-2 text-sm py-2 border-b border-muted/50 ${
-                        isOverdue ? 'bg-red-50' : ''
+                        isOverdue ? "bg-red-50" : ""
                       }`}
                     >
-                      <div className="col-span-2 font-mono font-medium">{invoice.folio}</div>
-                      <div className="col-span-3 truncate">{invoice.cliente}</div>
+                      <div className="col-span-2 font-mono font-medium">
+                        {invoice.folio}
+                      </div>
+                      <div className="col-span-3 truncate">
+                        {invoice.cliente}
+                      </div>
                       <div className="col-span-2 text-right font-mono">
                         {formatCurrency(invoice.montoTotal)}
                       </div>
-                      <div className={`col-span-2 text-right font-mono font-bold ${
-                        isOverdue ? 'text-status-danger' : 'text-status-warning'
-                      }`}>
+                      <div
+                        className={`col-span-2 text-right font-mono font-bold ${
+                          isOverdue
+                            ? "text-status-danger"
+                            : "text-status-warning"
+                        }`}
+                      >
                         {formatCurrency(invoice.saldoPendiente)}
                       </div>
                       <div className="col-span-2 flex flex-col">
-                        <span>{new Date(invoice.fechaVencimiento).toLocaleDateString('es-MX')}</span>
+                        <span>
+                          {new Date(
+                            invoice.fechaVencimiento,
+                          ).toLocaleDateString("es-MX")}
+                        </span>
                         {isOverdue && (
                           <span className="text-[10px] text-status-danger font-medium">
                             +{daysOverdue}d vencido
@@ -298,11 +320,15 @@ export function AccountStatementModal({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {companyBankData.cuentas.map((cuenta, idx) => (
                 <div key={idx} className="p-4 bg-slate-50 border rounded-lg">
-                  <p className="font-semibold text-primary mb-2">{cuenta.banco}</p>
+                  <p className="font-semibold text-primary mb-2">
+                    {cuenta.banco}
+                  </p>
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">CLABE:</span>
-                      <span className="font-mono font-medium">{cuenta.clabe}</span>
+                      <span className="font-mono font-medium">
+                        {cuenta.clabe}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Cuenta:</span>
@@ -310,7 +336,9 @@ export function AccountStatementModal({
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Titular:</span>
-                      <span className="text-xs truncate max-w-[200px]">{cuenta.titular}</span>
+                      <span className="text-xs truncate max-w-[200px]">
+                        {cuenta.titular}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -321,7 +349,9 @@ export function AccountStatementModal({
           {/* Footer */}
           <div className="text-center text-xs text-muted-foreground pt-4 border-t border-dashed">
             <p>Documento generado el {currentDate}</p>
-            <p className="mt-1">Transportes Rápidos 3T © 2025 - Sistema de Gestión</p>
+            <p className="mt-1">
+              Transportes Rápidos 3T © 2025 - Sistema de Gestión
+            </p>
           </div>
         </div>
 

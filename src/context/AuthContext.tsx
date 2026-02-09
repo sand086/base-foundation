@@ -7,19 +7,14 @@ import React, {
   useEffect,
 } from "react";
 import { authService } from "@/services/authService";
+import { User, LoginResponse } from "@/types/api.types";
 import { useToast } from "@/hooks/use-toast";
-
-interface User {
-  id?: string;
-  nombre: string;
-  email: string;
-  role?: string;
-}
 
 interface AuthContextType {
   isAuthenticated: boolean;
   user: User | null;
-  login: (email: string, password: string) => Promise<any>; // Cambiado a Promise para manejar errores en UI
+  login: (email: string, password: string) => Promise<LoginResponse>;
+  verifyOtp: (tempToken: string, code: string) => Promise<void>; // Nueva función
   logout: () => void;
 }
 
@@ -30,40 +25,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [user, setUser] = useState<User | null>(null);
 
-  // Verificar sesión al cargar
+  // Inicializar sesión desde localStorage
   useEffect(() => {
     const token = localStorage.getItem("token");
     const savedUser = localStorage.getItem("user");
     if (token && savedUser) {
-      setIsAuthenticated(true);
-      setUser(JSON.parse(savedUser));
+      try {
+        setIsAuthenticated(true);
+        setUser(JSON.parse(savedUser));
+      } catch (e) {
+        console.error("Error parsing user from storage", e);
+        localStorage.clear();
+      }
     }
   }, []);
+
+  const handleSessionSuccess = (data: LoginResponse) => {
+    if (data.access_token && data.user) {
+      localStorage.setItem("token", data.access_token);
+      localStorage.setItem("user", JSON.stringify(data.user));
+      setIsAuthenticated(true);
+      setUser(data.user);
+    }
+  };
 
   const login = useCallback(async (email: string, password: string) => {
     try {
       const data = await authService.login(email, password);
 
+      // Si el backend pide 2FA, retornamos la data para que el UI redirija
       if (data.require_2fa) {
-        return {
-          require_2fa: true,
-          temp_token: data.temp_token,
-          user: data.user,
-        };
+        return data;
       }
 
-      if (data.access_token) {
-        localStorage.setItem("token", data.access_token);
-        localStorage.setItem("user", JSON.stringify(data.user));
-        setIsAuthenticated(true);
-        setUser(data.user);
-        return { success: true };
-      }
+      // Si es login directo, guardamos sesión
+      handleSessionSuccess(data);
+      return data;
     } catch (error: any) {
-      console.error(error);
-      throw error; // Lanzar error para que lo maneje el componente Login
+      throw error;
     }
   }, []);
+
+  // Función para el paso 2 del login
+  const verifyOtp = useCallback(
+    async (tempToken: string, code: string) => {
+      try {
+        const data = await authService.verify2FA(tempToken, code);
+        handleSessionSuccess(data);
+        toast({
+          title: "Acceso concedido",
+          description: "Identidad verificada correctamente.",
+        });
+      } catch (error: any) {
+        throw error;
+      }
+    },
+    [toast],
+  );
 
   const logout = useCallback(() => {
     localStorage.removeItem("token");
@@ -74,7 +92,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [toast]);
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, login, logout }}>
+    <AuthContext.Provider
+      value={{ isAuthenticated, user, login, verifyOtp, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );

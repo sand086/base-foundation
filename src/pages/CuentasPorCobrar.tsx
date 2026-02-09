@@ -1,24 +1,27 @@
 import { useState, useMemo } from "react";
-import { 
-  Download, 
-  AlertCircle, 
-  Eye, 
-  MoreHorizontal, 
-  Plus, 
+import {
+  Download,
+  AlertCircle,
+  Eye,
+  MoreHorizontal,
+  Plus,
   FileInput,
   CreditCard,
   Trash2,
   Clock,
   Ban,
   CheckCircle2,
-  DollarSign
+  DollarSign,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ActionButton } from "@/components/ui/action-button";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { EnhancedDataTable, ColumnDef } from "@/components/ui/enhanced-data-table";
+import {
+  EnhancedDataTable,
+  ColumnDef,
+} from "@/components/ui/enhanced-data-table";
 import { toast } from "sonner";
 import {
   DropdownMenu,
@@ -44,24 +47,27 @@ import { CreateInvoiceModal } from "@/features/cxc/CreateInvoiceModal";
 import { InvoiceDetailSheet } from "@/features/cxc/InvoiceDetailSheet";
 import { RegisterPaymentModal } from "@/features/cxc/RegisterPaymentModal";
 import { AccountStatementModal } from "@/features/cxc/AccountStatementModal";
-import { 
-  ReceivableInvoice, 
+import {
+  ReceivableInvoice,
   InvoicePayment,
   FinalizableService,
   getInvoiceStatusInfo,
   getAgingCategory,
-  calculateDaysOverdue
+  calculateDaysOverdue,
 } from "@/features/cxc/types";
-import { 
-  initialReceivableInvoices, 
-  finalizableServices as initialServices
+import {
+  initialReceivableInvoices,
+  finalizableServices as initialServices,
 } from "@/features/cxc/data";
 
 export default function CuentasPorCobrar() {
   // State for invoices and services
-  const [invoices, setInvoices] = useState<ReceivableInvoice[]>(initialReceivableInvoices);
-  const [services, setServices] = useState<FinalizableService[]>(initialServices);
-  
+  const [invoices, setInvoices] = useState<ReceivableInvoice[]>(
+    initialReceivableInvoices,
+  );
+  const [services, setServices] =
+    useState<FinalizableService[]>(initialServices);
+
   // Modal states
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -69,30 +75,37 @@ export default function CuentasPorCobrar() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isAccountStatementOpen, setIsAccountStatementOpen] = useState(false);
-  
+
   // Selected invoice for actions
-  const [selectedInvoice, setSelectedInvoice] = useState<ReceivableInvoice | null>(null);
-  const [importedServices, setImportedServices] = useState<FinalizableService[] | undefined>();
-  const [invoiceToDelete, setInvoiceToDelete] = useState<ReceivableInvoice | null>(null);
+  const [selectedInvoice, setSelectedInvoice] =
+    useState<ReceivableInvoice | null>(null);
+  const [importedServices, setImportedServices] = useState<
+    FinalizableService[] | undefined
+  >();
+  const [invoiceToDelete, setInvoiceToDelete] =
+    useState<ReceivableInvoice | null>(null);
 
   // Calculate Aging Report KPIs
   const agingReport = useMemo(() => {
     const corriente = invoices
-      .filter(inv => getAgingCategory(inv) === 'corriente' && inv.saldoPendiente > 0)
+      .filter(
+        (inv) =>
+          getAgingCategory(inv) === "corriente" && inv.saldoPendiente > 0,
+      )
       .reduce((sum, inv) => sum + inv.saldoPendiente, 0);
-    
+
     const vencido1_30 = invoices
-      .filter(inv => getAgingCategory(inv) === 'vencido_1_30')
+      .filter((inv) => getAgingCategory(inv) === "vencido_1_30")
       .reduce((sum, inv) => sum + inv.saldoPendiente, 0);
-    
+
     const vencido31_60 = invoices
-      .filter(inv => getAgingCategory(inv) === 'vencido_31_60')
+      .filter((inv) => getAgingCategory(inv) === "vencido_31_60")
       .reduce((sum, inv) => sum + inv.saldoPendiente, 0);
-    
+
     const incobrable = invoices
-      .filter(inv => getAgingCategory(inv) === 'incobrable')
+      .filter((inv) => getAgingCategory(inv) === "incobrable")
       .reduce((sum, inv) => sum + inv.saldoPendiente, 0);
-    
+
     return { corriente, vencido1_30, vencido31_60, incobrable };
   }, [invoices]);
 
@@ -104,79 +117,89 @@ export default function CuentasPorCobrar() {
   };
 
   // Handle creating invoice
-  const handleCreateInvoice = (invoiceData: Omit<ReceivableInvoice, 'id' | 'folio' | 'cobros' | 'estatus'>) => {
-    const newId = `FAC-${String(invoices.length + 1).padStart(3, '0')}`;
-    const newFolio = `A-2025-${String(invoices.length + 1).padStart(3, '0')}`;
-    
+  const handleCreateInvoice = (
+    invoiceData: Omit<ReceivableInvoice, "id" | "folio" | "cobros" | "estatus">,
+  ) => {
+    const newId = `FAC-${String(invoices.length + 1).padStart(3, "0")}`;
+    const newFolio = `A-2025-${String(invoices.length + 1).padStart(3, "0")}`;
+
     const newInvoice: ReceivableInvoice = {
       ...invoiceData,
       id: newId,
       folio: newFolio,
       cobros: [],
-      estatus: 'corriente',
+      estatus: "corriente",
     };
-    
+
     setInvoices([newInvoice, ...invoices]);
-    
+
     // Mark imported services as invoiced
     if (importedServices) {
-      setServices(services.map(s => 
-        importedServices.find(imp => imp.id === s.id) 
-          ? { ...s, facturado: true } 
-          : s
-      ));
+      setServices(
+        services.map((s) =>
+          importedServices.find((imp) => imp.id === s.id)
+            ? { ...s, facturado: true }
+            : s,
+        ),
+      );
       setImportedServices(undefined);
     }
-    
-    toast.success('Factura creada correctamente', {
-      description: `${newFolio} - ${invoiceData.cliente} - $${invoiceData.montoTotal.toLocaleString('es-MX')}`,
+
+    toast.success("Factura creada correctamente", {
+      description: `${newFolio} - ${invoiceData.cliente} - $${invoiceData.montoTotal.toLocaleString("es-MX")}`,
     });
   };
 
   // Handle registering payment
-  const handleRegisterPayment = (invoiceId: string, payment: Omit<InvoicePayment, 'id'>) => {
-    setInvoices(invoices.map(inv => {
-      if (inv.id === invoiceId) {
-        const newPayment: InvoicePayment = {
-          ...payment,
-          id: `COB-${Date.now()}`,
-        };
-        
-        const newSaldo = inv.saldoPendiente - payment.monto;
-        const newEstatus = newSaldo === 0 ? 'pagada' : 'pago_parcial';
-        
-        return {
-          ...inv,
-          saldoPendiente: newSaldo,
-          estatus: newEstatus,
-          cobros: [...inv.cobros, newPayment],
-          requiereREP: payment.requiereREP || inv.requiereREP,
-        };
-      }
-      return inv;
-    }));
+  const handleRegisterPayment = (
+    invoiceId: string,
+    payment: Omit<InvoicePayment, "id">,
+  ) => {
+    setInvoices(
+      invoices.map((inv) => {
+        if (inv.id === invoiceId) {
+          const newPayment: InvoicePayment = {
+            ...payment,
+            id: `COB-${Date.now()}`,
+          };
 
-    toast.success('Cobro registrado correctamente', {
-      description: `$${payment.monto.toLocaleString('es-MX')} aplicado a ${invoiceId}`,
+          const newSaldo = inv.saldoPendiente - payment.monto;
+          const newEstatus = newSaldo === 0 ? "pagada" : "pago_parcial";
+
+          return {
+            ...inv,
+            saldoPendiente: newSaldo,
+            estatus: newEstatus,
+            cobros: [...inv.cobros, newPayment],
+            requiereREP: payment.requiereREP || inv.requiereREP,
+          };
+        }
+        return inv;
+      }),
+    );
+
+    toast.success("Cobro registrado correctamente", {
+      description: `$${payment.monto.toLocaleString("es-MX")} aplicado a ${invoiceId}`,
     });
   };
 
   // Handle delete invoice
   const handleDeleteInvoice = () => {
     if (!invoiceToDelete) return;
-    
+
     // Check if invoice has payments
     if (invoiceToDelete.saldoPendiente < invoiceToDelete.montoTotal) {
-      toast.error('No se puede eliminar', {
-        description: 'Esta factura tiene abonos registrados. No es posible eliminarla.',
+      toast.error("No se puede eliminar", {
+        description:
+          "Esta factura tiene abonos registrados. No es posible eliminarla.",
       });
       setIsDeleteDialogOpen(false);
       setInvoiceToDelete(null);
       return;
     }
-    
-    setInvoices(invoices.filter(inv => inv.id !== invoiceToDelete.id));
-    toast.success('Factura eliminada correctamente', {
+
+    setInvoices(invoices.filter((inv) => inv.id !== invoiceToDelete.id));
+    toast.success("Factura eliminada correctamente", {
       description: `${invoiceToDelete.folio} ha sido eliminada.`,
     });
     setIsDeleteDialogOpen(false);
@@ -206,147 +229,166 @@ export default function CuentasPorCobrar() {
   };
 
   // Define columns for EnhancedDataTable
-  const columns: ColumnDef<ReceivableInvoice>[] = useMemo(() => [
-    {
-      key: 'folio',
-      header: 'Folio',
-      render: (value, row) => {
-        const statusInfo = getInvoiceStatusInfo(row);
-        return (
-          <div className="flex flex-col">
-            <span className={`font-mono text-sm font-medium ${statusInfo.status === 'danger' ? 'text-red-700' : 'text-slate-700'}`}>
-              {value}
-            </span>
-            {row.requiereREP && (
-              <span className="text-[9px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded font-medium w-fit mt-0.5">
-                PEND. REP
+  const columns: ColumnDef<ReceivableInvoice>[] = useMemo(
+    () => [
+      {
+        key: "folio",
+        header: "Folio",
+        render: (value, row) => {
+          const statusInfo = getInvoiceStatusInfo(row);
+          return (
+            <div className="flex flex-col">
+              <span
+                className={`font-mono text-sm font-medium ${statusInfo.status === "danger" ? "text-red-700" : "text-slate-700"}`}
+              >
+                {value}
               </span>
-            )}
-          </div>
-        );
+              {row.requiereREP && (
+                <span className="text-[9px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded font-medium w-fit mt-0.5">
+                  PEND. REP
+                </span>
+              )}
+            </div>
+          );
+        },
       },
-    },
-    {
-      key: 'cliente',
-      header: 'Cliente',
-      render: (value) => (
-        <span className="text-sm font-medium text-slate-700 max-w-[150px] truncate block">
-          {value}
-        </span>
-      ),
-    },
-    {
-      key: 'montoTotal',
-      header: 'Monto',
-      type: 'number',
-      render: (value, row) => (
-        <span className="text-sm font-bold text-slate-700">
-          ${value.toLocaleString('es-MX')}
-          <span className="text-xs text-muted-foreground ml-1">{row.moneda}</span>
-        </span>
-      ),
-    },
-    {
-      key: 'saldoPendiente',
-      header: 'Saldo',
-      type: 'number',
-      render: (value, row) => {
-        const statusInfo = getInvoiceStatusInfo(row);
-        return (
-          <span className={`text-sm font-bold ${
-            value === 0 
-              ? 'text-emerald-700' 
-              : statusInfo.status === 'danger' 
-                ? 'text-red-700' 
-                : 'text-amber-700'
-          }`}>
-            ${value.toLocaleString('es-MX')}
+      {
+        key: "cliente",
+        header: "Client",
+        render: (value) => (
+          <span className="text-sm font-medium text-slate-700 max-w-[150px] truncate block">
+            {value}
           </span>
-        );
+        ),
       },
-    },
-    {
-      key: 'fechaEmision',
-      header: 'Emisión',
-      type: 'date',
-      render: (value) => (
-        <span className="text-sm text-muted-foreground">
-          {new Date(value).toLocaleDateString('es-MX')}
-        </span>
-      ),
-    },
-    {
-      key: 'fechaVencimiento',
-      header: 'Vencimiento',
-      type: 'date',
-      render: (value, row) => {
-        const daysOverdue = calculateDaysOverdue(value);
-        const isPastDue = daysOverdue > 0 && row.saldoPendiente > 0;
-        return (
-          <div className="flex flex-col">
-            <span className={`text-sm ${isPastDue ? 'text-red-700 font-medium' : 'text-slate-700'}`}>
-              {new Date(value).toLocaleDateString('es-MX')}
+      {
+        key: "montoTotal",
+        header: "Monto",
+        type: "number",
+        render: (value, row) => (
+          <span className="text-sm font-bold text-slate-700">
+            ${value.toLocaleString("es-MX")}
+            <span className="text-xs text-muted-foreground ml-1">
+              {row.moneda}
             </span>
-            {isPastDue && (
-              <span className="text-[10px] text-red-600 font-medium">+{daysOverdue}d vencido</span>
-            )}
-          </div>
-        );
+          </span>
+        ),
       },
-    },
-    {
-      key: 'estatus',
-      header: 'Estatus',
-      type: 'status',
-      statusOptions: ['corriente', 'vencida', 'pagada', 'pago_parcial'],
-      render: (_, row) => {
-        const statusInfo = getInvoiceStatusInfo(row);
-        return <StatusBadge status={statusInfo.status}>{statusInfo.label}</StatusBadge>;
+      {
+        key: "saldoPendiente",
+        header: "Saldo",
+        type: "number",
+        render: (value, row) => {
+          const statusInfo = getInvoiceStatusInfo(row);
+          return (
+            <span
+              className={`text-sm font-bold ${
+                value === 0
+                  ? "text-emerald-700"
+                  : statusInfo.status === "danger"
+                    ? "text-red-700"
+                    : "text-amber-700"
+              }`}
+            >
+              ${value.toLocaleString("es-MX")}
+            </span>
+          );
+        },
       },
-    },
-    {
-      key: 'id',
-      header: 'Acciones',
-      sortable: false,
-      render: (_, row) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="bg-card">
-            <DropdownMenuItem onClick={() => handleViewInvoice(row)}>
-              <Eye className="h-4 w-4 mr-2" />
-              Ver Detalle
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem 
-              onClick={() => handlePayInvoice(row)}
-              disabled={row.saldoPendiente === 0}
-              className={row.saldoPendiente > 0 ? 'text-brand-green font-medium' : ''}
-            >
-              <CreditCard className="h-4 w-4 mr-2" />
-              Registrar Cobro
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem 
-              onClick={() => handleDeleteClick(row)}
-              className="text-status-danger"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Eliminar
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ),
-    },
-  ], []);
+      {
+        key: "fechaEmision",
+        header: "Emisión",
+        type: "date",
+        render: (value) => (
+          <span className="text-sm text-muted-foreground">
+            {new Date(value).toLocaleDateString("es-MX")}
+          </span>
+        ),
+      },
+      {
+        key: "fechaVencimiento",
+        header: "Vencimiento",
+        type: "date",
+        render: (value, row) => {
+          const daysOverdue = calculateDaysOverdue(value);
+          const isPastDue = daysOverdue > 0 && row.saldoPendiente > 0;
+          return (
+            <div className="flex flex-col">
+              <span
+                className={`text-sm ${isPastDue ? "text-red-700 font-medium" : "text-slate-700"}`}
+              >
+                {new Date(value).toLocaleDateString("es-MX")}
+              </span>
+              {isPastDue && (
+                <span className="text-[10px] text-red-600 font-medium">
+                  +{daysOverdue}d vencido
+                </span>
+              )}
+            </div>
+          );
+        },
+      },
+      {
+        key: "estatus",
+        header: "Estatus",
+        type: "status",
+        statusOptions: ["corriente", "vencida", "pagada", "pago_parcial"],
+        render: (_, row) => {
+          const statusInfo = getInvoiceStatusInfo(row);
+          return (
+            <StatusBadge status={statusInfo.status}>
+              {statusInfo.label}
+            </StatusBadge>
+          );
+        },
+      },
+      {
+        key: "id",
+        header: "Acciones",
+        sortable: false,
+        render: (_, row) => (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="bg-card">
+              <DropdownMenuItem onClick={() => handleViewInvoice(row)}>
+                <Eye className="h-4 w-4 mr-2" />
+                Ver Detalle
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => handlePayInvoice(row)}
+                disabled={row.saldoPendiente === 0}
+                className={
+                  row.saldoPendiente > 0 ? "text-brand-green font-medium" : ""
+                }
+              >
+                <CreditCard className="h-4 w-4 mr-2" />
+                Registrar Cobro
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => handleDeleteClick(row)}
+                className="text-status-danger"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Eliminar
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ),
+      },
+    ],
+    [],
+  );
 
   return (
     <div className="space-y-6">
-      <PageHeader 
-        title="Cuentas por Cobrar" 
+      <PageHeader
+        title="Cuentas por Cobrar"
         description="Gestión de cartera y estado de cuenta"
       >
         <div className="flex items-center gap-2">
@@ -358,10 +400,12 @@ export default function CuentasPorCobrar() {
               </ActionButton>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="bg-card w-48">
-              <DropdownMenuItem onClick={() => {
-                setImportedServices(undefined);
-                setIsCreateModalOpen(true);
-              }}>
+              <DropdownMenuItem
+                onClick={() => {
+                  setImportedServices(undefined);
+                  setIsCreateModalOpen(true);
+                }}
+              >
                 <Plus className="h-4 w-4 mr-2" />
                 Factura Manual
               </DropdownMenuItem>
@@ -389,7 +433,7 @@ export default function CuentasPorCobrar() {
                   Por Cobrar (Corriente)
                 </p>
                 <p className="text-2xl font-bold text-status-success mt-1">
-                  ${agingReport.corriente.toLocaleString('es-MX')}
+                  ${agingReport.corriente.toLocaleString("es-MX")}
                 </p>
               </div>
             </div>
@@ -404,7 +448,7 @@ export default function CuentasPorCobrar() {
                   Vencido 1-30 días
                 </p>
                 <p className="text-2xl font-bold text-status-warning mt-1">
-                  ${agingReport.vencido1_30.toLocaleString('es-MX')}
+                  ${agingReport.vencido1_30.toLocaleString("es-MX")}
                 </p>
               </div>
             </div>
@@ -419,7 +463,7 @@ export default function CuentasPorCobrar() {
                   Vencido 31-60 días
                 </p>
                 <p className="text-2xl font-bold text-orange-600 mt-1">
-                  ${agingReport.vencido31_60.toLocaleString('es-MX')}
+                  ${agingReport.vencido31_60.toLocaleString("es-MX")}
                 </p>
               </div>
             </div>
@@ -434,7 +478,7 @@ export default function CuentasPorCobrar() {
                   Incobrable (+90 días)
                 </p>
                 <p className="text-2xl font-bold text-status-danger mt-1">
-                  ${agingReport.incobrable.toLocaleString('es-MX')}
+                  ${agingReport.incobrable.toLocaleString("es-MX")}
                 </p>
               </div>
             </div>
@@ -456,7 +500,9 @@ export default function CuentasPorCobrar() {
       {/* Legend */}
       <Card>
         <CardContent className="pt-6">
-          <h4 className="font-semibold text-slate-700 mb-3">Leyenda de Estados</h4>
+          <h4 className="font-semibold text-slate-700 mb-3">
+            Leyenda de Estados
+          </h4>
           <div className="flex flex-wrap gap-6">
             <div className="flex items-center gap-2">
               <StatusBadge status="warning">POR COBRAR</StatusBadge>
@@ -468,11 +514,15 @@ export default function CuentasPorCobrar() {
             </div>
             <div className="flex items-center gap-2">
               <StatusBadge status="danger">VENCIDA</StatusBadge>
-              <span className="text-sm text-slate-600">Fecha límite excedida</span>
+              <span className="text-sm text-slate-600">
+                Fecha límite excedida
+              </span>
             </div>
             <div className="flex items-center gap-2">
               <StatusBadge status="success">PAGADA</StatusBadge>
-              <span className="text-sm text-slate-600">Cobrada en su totalidad</span>
+              <span className="text-sm text-slate-600">
+                Cobrada en su totalidad
+              </span>
             </div>
           </div>
         </CardContent>
@@ -517,18 +567,23 @@ export default function CuentasPorCobrar() {
       />
 
       {/* Delete Confirmation Dialog */}
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+      <AlertDialog
+        open={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>¿Eliminar factura?</AlertDialogTitle>
             <AlertDialogDescription>
-              {invoiceToDelete && invoiceToDelete.saldoPendiente < invoiceToDelete.montoTotal ? (
+              {invoiceToDelete &&
+              invoiceToDelete.saldoPendiente < invoiceToDelete.montoTotal ? (
                 <span className="text-status-danger font-medium">
-                  ⚠️ Esta factura tiene abonos registrados y no puede ser eliminada.
+                  ⚠️ Esta factura tiene abonos registrados y no puede ser
+                  eliminada.
                 </span>
               ) : (
                 <>
-                  Esta acción no se puede deshacer. Se eliminará la factura{' '}
+                  Esta acción no se puede deshacer. Se eliminará la factura{" "}
                   <strong>{invoiceToDelete?.folio}</strong> de forma permanente.
                 </>
               )}
@@ -536,14 +591,15 @@ export default function CuentasPorCobrar() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            {invoiceToDelete && invoiceToDelete.saldoPendiente === invoiceToDelete.montoTotal && (
-              <AlertDialogAction
-                onClick={handleDeleteInvoice}
-                className="bg-status-danger hover:bg-status-danger/90 text-white"
-              >
-                Eliminar
-              </AlertDialogAction>
-            )}
+            {invoiceToDelete &&
+              invoiceToDelete.saldoPendiente === invoiceToDelete.montoTotal && (
+                <AlertDialogAction
+                  onClick={handleDeleteInvoice}
+                  className="bg-status-danger hover:bg-status-danger/90 text-white"
+                >
+                  Eliminar
+                </AlertDialogAction>
+              )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

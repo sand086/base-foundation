@@ -1,24 +1,24 @@
-import { useState } from 'react';
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox';
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { MapPin, Navigation, MessageSquare, Mail, Clock } from 'lucide-react';
-import { toast } from 'sonner';
+} from "@/components/ui/select";
+import { MapPin, Navigation, MessageSquare, Mail, Clock } from "lucide-react";
+import { toast } from "sonner";
 
 interface UpdateStatusModalProps {
   open: boolean;
@@ -38,10 +38,10 @@ export interface StatusUpdateData {
 }
 
 const statusOptions = [
-  { value: 'en_ruta', label: 'En Ruta', color: 'bg-status-success' },
-  { value: 'detenido', label: 'Detenido', color: 'bg-status-warning' },
-  { value: 'retraso', label: 'Retraso', color: 'bg-status-danger' },
-  { value: 'accidente', label: 'Accidente', color: 'bg-status-danger' },
+  { value: "en_ruta", label: "En Ruta", color: "bg-status-success" },
+  { value: "detenido", label: "Detenido", color: "bg-status-warning" },
+  { value: "retraso", label: "Retraso", color: "bg-status-danger" },
+  { value: "accidente", label: "Accidente", color: "bg-status-danger" },
 ];
 
 export function UpdateStatusModal({
@@ -51,56 +51,58 @@ export function UpdateStatusModal({
   onSubmit,
 }: UpdateStatusModalProps) {
   const [formData, setFormData] = useState<StatusUpdateData>({
-    status: '',
-    location: '',
-    lat: '',
-    lng: '',
-    comments: '',
+    status: "",
+    location: "",
+    lat: "",
+    lng: "",
+    comments: "",
     notifyClient: true,
-    timestamp: '',
+    timestamp: "",
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const now = new Date();
-    const timestamp = now.toLocaleString('es-MX', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
+    const timestamp = now.toLocaleString("es-MX", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
-    
-    const selectedStatusLabel = statusOptions.find(s => s.value === formData.status)?.label || formData.status;
-    
+
+    const selectedStatusLabel =
+      statusOptions.find((s) => s.value === formData.status)?.label ||
+      formData.status;
+
     onSubmit({
       ...formData,
       timestamp,
     });
-    
+
     // Simulate email notification if enabled
     if (formData.notifyClient) {
       // In real implementation, this would trigger an actual email
-      toast.success('Correo enviado al cliente', {
+      toast.success("Correo enviado al cliente", {
         description: `Tu unidad [${serviceId}] está en [${formData.location}] - ${selectedStatusLabel}`,
         duration: 5000,
       });
     }
-    
+
     // Reset form
     setFormData({
-      status: '',
-      location: '',
-      lat: '',
-      lng: '',
-      comments: '',
+      status: "",
+      location: "",
+      lat: "",
+      lng: "",
+      comments: "",
       notifyClient: true,
-      timestamp: '',
+      timestamp: "",
     });
     onOpenChange(false);
   };
 
-  const selectedStatus = statusOptions.find(s => s.value === formData.status);
+  const selectedStatus = statusOptions.find((s) => s.value === formData.status);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -121,14 +123,18 @@ export function UpdateStatusModal({
             </Label>
             <Select
               value={formData.status}
-              onValueChange={(value) => setFormData({ ...formData, status: value })}
+              onValueChange={(value) =>
+                setFormData({ ...formData, status: value })
+              }
               required
             >
               <SelectTrigger className="h-10 text-sm">
                 <SelectValue placeholder="Seleccionar estatus">
                   {selectedStatus && (
                     <div className="flex items-center gap-2">
-                      <span className={`w-2.5 h-2.5 rounded-full ${selectedStatus.color}`} />
+                      <span
+                        className={`w-2.5 h-2.5 rounded-full ${selectedStatus.color}`}
+                      />
                       {selectedStatus.label}
                     </div>
                   )}
@@ -136,9 +142,15 @@ export function UpdateStatusModal({
               </SelectTrigger>
               <SelectContent className="bg-card">
                 {statusOptions.map((status) => (
-                  <SelectItem key={status.value} value={status.value} className="text-sm">
+                  <SelectItem
+                    key={status.value}
+                    value={status.value}
+                    className="text-sm"
+                  >
                     <div className="flex items-center gap-2">
-                      <span className={`w-2.5 h-2.5 rounded-full ${status.color}`} />
+                      <span
+                        className={`w-2.5 h-2.5 rounded-full ${status.color}`}
+                      />
                       {status.label}
                     </div>
                   </SelectItem>
@@ -156,7 +168,9 @@ export function UpdateStatusModal({
             <Textarea
               placeholder="Paste GPS location text here (e.g., Km 45 Autopista México-Qro)"
               value={formData.location}
-              onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, location: e.target.value })
+              }
               rows={3}
               className="text-sm resize-none"
               required
@@ -170,7 +184,10 @@ export function UpdateStatusModal({
             </Label>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label htmlFor="lat" className="text-[10px] text-muted-foreground">
+                <Label
+                  htmlFor="lat"
+                  className="text-[10px] text-muted-foreground"
+                >
                   Latitud
                 </Label>
                 <Input
@@ -178,12 +195,17 @@ export function UpdateStatusModal({
                   type="text"
                   placeholder="19.4326"
                   value={formData.lat}
-                  onChange={(e) => setFormData({ ...formData, lat: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, lat: e.target.value })
+                  }
                   className="h-9 text-sm font-mono"
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="lng" className="text-[10px] text-muted-foreground">
+                <Label
+                  htmlFor="lng"
+                  className="text-[10px] text-muted-foreground"
+                >
                   Longitud
                 </Label>
                 <Input
@@ -191,7 +213,9 @@ export function UpdateStatusModal({
                   type="text"
                   placeholder="-99.1332"
                   value={formData.lng}
-                  onChange={(e) => setFormData({ ...formData, lng: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, lng: e.target.value })
+                  }
                   className="h-9 text-sm font-mono"
                 />
               </div>
@@ -207,7 +231,9 @@ export function UpdateStatusModal({
             <Textarea
               placeholder="Notas internas sobre la actualización..."
               value={formData.comments}
-              onChange={(e) => setFormData({ ...formData, comments: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, comments: e.target.value })
+              }
               rows={2}
               className="text-sm resize-none"
             />
@@ -228,7 +254,7 @@ export function UpdateStatusModal({
               className="text-sm flex items-center gap-2 cursor-pointer"
             >
               <Mail className="h-4 w-4 text-muted-foreground" />
-              Notificar al Cliente por Correo
+              Notificar al Client por Correo
             </Label>
           </div>
 

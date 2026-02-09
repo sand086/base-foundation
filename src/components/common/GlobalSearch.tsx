@@ -32,35 +32,147 @@ interface SearchItem {
 
 const searchItems: SearchItem[] = [
   // Navegación principal
-  { title: "Dashboard", path: "/", icon: LayoutDashboard, category: "Navegación", keywords: ["inicio", "home", "kpis"] },
-  { title: "Centro de Monitoreo", path: "/monitoreo", icon: Radar, category: "Navegación", keywords: ["gps", "tracking", "viajes"] },
-  { title: "Despacho", path: "/despacho", icon: CalendarPlus, category: "Navegación", keywords: ["asignar", "viaje", "programar"] },
-  
-  // Clientes
-  { title: "Catálogo de Clientes", path: "/clientes", icon: Users, category: "Clientes", keywords: ["lista", "empresas"] },
-  { title: "Nuevo Cliente", path: "/clientes/nuevo", icon: Users, category: "Clientes", keywords: ["agregar", "crear", "alta"] },
-  { title: "Gestión de Tarifas", path: "/tarifas", icon: Calculator, category: "Clientes", keywords: ["precios", "costos"] },
-  
+  {
+    title: "Dashboard",
+    path: "/",
+    icon: LayoutDashboard,
+    category: "Navegación",
+    keywords: ["inicio", "home", "kpis"],
+  },
+  {
+    title: "Centro de Monitoreo",
+    path: "/monitoreo",
+    icon: Radar,
+    category: "Navegación",
+    keywords: ["gps", "tracking", "viajes"],
+  },
+  {
+    title: "Despacho",
+    path: "/despacho",
+    icon: CalendarPlus,
+    category: "Navegación",
+    keywords: ["asignar", "viaje", "programar"],
+  },
+
+  // Clients
+  {
+    title: "Catálogo de Clients",
+    path: "/clients",
+    icon: Users,
+    category: "Clients",
+    keywords: ["lista", "empresas"],
+  },
+  {
+    title: "Nuevo Client",
+    path: "/clients/nuevo",
+    icon: Users,
+    category: "Clients",
+    keywords: ["agregar", "crear", "alta"],
+  },
+  {
+    title: "Gestión de Tarifas",
+    path: "/tarifas",
+    icon: Calculator,
+    category: "Clients",
+    keywords: ["precios", "costos"],
+  },
+
   // Flota
-  { title: "Unidades", path: "/flota", icon: Truck, category: "Flota", keywords: ["camiones", "tractores", "remolques"] },
-  { title: "Operadores", path: "/flota/operadores", icon: Users, category: "Flota", keywords: ["choferes", "conductores"] },
-  { title: "Control de Llantas", path: "/flota/llantas", icon: Truck, category: "Flota", keywords: ["neumaticos", "desgaste"] },
-  { title: "Mantenimiento", path: "/flota/mantenimiento", icon: Settings, category: "Flota", keywords: ["servicio", "reparacion"] },
-  
+  {
+    title: "Unidades",
+    path: "/flota",
+    icon: Truck,
+    category: "Flota",
+    keywords: ["camiones", "tractores", "remolques"],
+  },
+  {
+    title: "Operadores",
+    path: "/flota/operadores",
+    icon: Users,
+    category: "Flota",
+    keywords: ["choferes", "conductores"],
+  },
+  {
+    title: "Control de Llantas",
+    path: "/flota/llantas",
+    icon: Truck,
+    category: "Flota",
+    keywords: ["neumaticos", "desgaste"],
+  },
+  {
+    title: "Mantenimiento",
+    path: "/flota/mantenimiento",
+    icon: Settings,
+    category: "Flota",
+    keywords: ["servicio", "reparacion"],
+  },
+
   // Combustible
-  { title: "Cargas de Combustible", path: "/combustible", icon: Fuel, category: "Combustible", keywords: ["diesel", "gasolina"] },
-  { title: "Conciliación", path: "/combustible/conciliacion", icon: Fuel, category: "Combustible", keywords: ["rendimiento", "ecm"] },
-  
+  {
+    title: "Cargas de Combustible",
+    path: "/combustible",
+    icon: Fuel,
+    category: "Combustible",
+    keywords: ["diesel", "gasolina"],
+  },
+  {
+    title: "Conciliación",
+    path: "/combustible/conciliacion",
+    icon: Fuel,
+    category: "Combustible",
+    keywords: ["rendimiento", "ecm"],
+  },
+
   // Finanzas
-  { title: "Liquidación de Viajes", path: "/cierre", icon: FileText, category: "Finanzas", keywords: ["cierre", "factura"] },
-  { title: "Cuentas por Cobrar", path: "/cuentas-por-cobrar", icon: DollarSign, category: "Finanzas", keywords: ["cobranza", "facturas"] },
-  { title: "Tesorería", path: "/tesoreria", icon: DollarSign, category: "Finanzas", keywords: ["banco", "pagos"] },
-  
+  {
+    title: "Liquidación de Viajes",
+    path: "/cierre",
+    icon: FileText,
+    category: "Finanzas",
+    keywords: ["cierre", "factura"],
+  },
+  {
+    title: "Cuentas por Cobrar",
+    path: "/cuentas-por-cobrar",
+    icon: DollarSign,
+    category: "Finanzas",
+    keywords: ["cobranza", "facturas"],
+  },
+  {
+    title: "Tesorería",
+    path: "/tesoreria",
+    icon: DollarSign,
+    category: "Finanzas",
+    keywords: ["banco", "pagos"],
+  },
+
   // Admin
-  { title: "Usuarios", path: "/usuarios", icon: Users, category: "Administración", keywords: ["cuentas", "accesos"] },
-  { title: "Roles y Permisos", path: "/roles-permisos", icon: Settings, category: "Administración", keywords: ["seguridad"] },
-  { title: "Mi Perfil", path: "/perfil", icon: Users, category: "Administración" },
-  { title: "Configuración", path: "/configuracion", icon: Settings, category: "Administración" },
+  {
+    title: "Usuarios",
+    path: "/usuarios",
+    icon: Users,
+    category: "Administración",
+    keywords: ["cuentas", "accesos"],
+  },
+  {
+    title: "Roles y Permisos",
+    path: "/roles-permisos",
+    icon: Settings,
+    category: "Administración",
+    keywords: ["seguridad"],
+  },
+  {
+    title: "Mi Perfil",
+    path: "/perfil",
+    icon: Users,
+    category: "Administración",
+  },
+  {
+    title: "Configuración",
+    path: "/configuracion",
+    icon: Settings,
+    category: "Administración",
+  },
 ];
 
 // Export a function to open the search from outside
@@ -73,7 +185,7 @@ export function openGlobalSearch() {
 export function GlobalSearch() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
-  
+
   // Register the open function for external access
   openSearchFn = () => setOpen(true);
 
@@ -91,26 +203,32 @@ export function GlobalSearch() {
     return () => document.removeEventListener("keydown", down, true);
   }, []);
 
-  const handleSelect = useCallback((path: string) => {
-    setOpen(false);
-    navigate(path);
-  }, [navigate]);
+  const handleSelect = useCallback(
+    (path: string) => {
+      setOpen(false);
+      navigate(path);
+    },
+    [navigate],
+  );
 
   // Group items by category
-  const groupedItems = searchItems.reduce((acc, item) => {
-    if (!acc[item.category]) {
-      acc[item.category] = [];
-    }
-    acc[item.category].push(item);
-    return acc;
-  }, {} as Record<string, SearchItem[]>);
+  const groupedItems = searchItems.reduce(
+    (acc, item) => {
+      if (!acc[item.category]) {
+        acc[item.category] = [];
+      }
+      acc[item.category].push(item);
+      return acc;
+    },
+    {} as Record<string, SearchItem[]>,
+  );
 
   return (
     <CommandDialog open={open} onOpenChange={setOpen}>
-      <CommandInput placeholder="Buscar módulos, clientes, unidades..." />
+      <CommandInput placeholder="Buscar módulos, clients, unidades..." />
       <CommandList>
         <CommandEmpty>No se encontraron resultados.</CommandEmpty>
-        
+
         {Object.entries(groupedItems).map(([category, items], idx) => (
           <div key={category}>
             <CommandGroup heading={category}>
@@ -130,7 +248,7 @@ export function GlobalSearch() {
           </div>
         ))}
       </CommandList>
-      
+
       {/* Keyboard hint */}
       <div className="border-t border-white/10 px-4 py-2 text-xs text-white/40 flex items-center justify-between">
         <span>Navega con ↑↓ • Selecciona con Enter</span>

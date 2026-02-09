@@ -298,7 +298,7 @@ export default function DespachoNuevo() {
             <FileText className="h-6 w-6" /> Mesa de Control - Nuevo Despacho
           </h1>
           <p className="text-muted-foreground">
-            Asigna viajes integrando tarifas de clientes y recursos de flota
+            Asigna viajes integrando tarifas de clients y recursos de flota
           </p>
         </div>
       </div>
@@ -365,10 +365,10 @@ export default function DespachoNuevo() {
             <div className="grid gap-6 md:grid-cols-2">
               {/* Left Column - Selectors */}
               <div className="space-y-4">
-                {/* Cliente Selector */}
+                {/* Client Selector */}
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2">
-                    <Building2 className="h-4 w-4" /> Cliente
+                    <Building2 className="h-4 w-4" /> Client
                   </Label>
                   <Select
                     value={data.clienteId}
@@ -871,7 +871,7 @@ export default function DespachoNuevo() {
                     {/* Route Info */}
                     <div className="space-y-2 pb-4 border-b">
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Cliente:</span>
+                        <span className="text-muted-foreground">Client:</span>
                         <span className="font-medium">
                           {data.clienteNombre}
                         </span>

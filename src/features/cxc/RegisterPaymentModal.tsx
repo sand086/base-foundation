@@ -1,62 +1,62 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { CreditCard, DollarSign, AlertCircle, Upload } from 'lucide-react';
-import { ReceivableInvoice, InvoicePayment } from './types';
-import { bankAccountsDestino } from './data';
+} from "@/components/ui/select";
+import { CreditCard, DollarSign, AlertCircle, Upload } from "lucide-react";
+import { ReceivableInvoice, InvoicePayment } from "./types";
+import { bankAccountsDestino } from "./data";
 
 interface RegisterPaymentModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   invoice: ReceivableInvoice | null;
-  onSubmit: (invoiceId: string, payment: Omit<InvoicePayment, 'id'>) => void;
+  onSubmit: (invoiceId: string, payment: Omit<InvoicePayment, "id">) => void;
 }
 
-export function RegisterPaymentModal({ 
-  open, 
-  onOpenChange, 
+export function RegisterPaymentModal({
+  open,
+  onOpenChange,
   invoice,
-  onSubmit 
+  onSubmit,
 }: RegisterPaymentModalProps) {
   const [formData, setFormData] = useState({
-    fecha: new Date().toISOString().split('T')[0],
+    fecha: new Date().toISOString().split("T")[0],
     monto: 0,
-    cuentaDestino: '',
-    referencia: '',
-    comprobanteUrl: '',
+    cuentaDestino: "",
+    referencia: "",
+    comprobanteUrl: "",
     requiereREP: false,
   });
 
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   // Reset form when invoice changes
   useEffect(() => {
     if (invoice) {
       setFormData({
-        fecha: new Date().toISOString().split('T')[0],
+        fecha: new Date().toISOString().split("T")[0],
         monto: invoice.saldoPendiente,
-        cuentaDestino: '',
-        referencia: '',
-        comprobanteUrl: '',
+        cuentaDestino: "",
+        referencia: "",
+        comprobanteUrl: "",
         requiereREP: false,
       });
-      setError('');
+      setError("");
     }
   }, [invoice, open]);
 
@@ -65,21 +65,25 @@ export function RegisterPaymentModal({
   const handleSubmit = () => {
     // Validate amount
     if (formData.monto <= 0) {
-      setError('El monto debe ser mayor a 0');
+      setError("El monto debe ser mayor a 0");
       return;
     }
 
     if (formData.monto > invoice.saldoPendiente) {
-      setError(`El monto no puede exceder el saldo pendiente ($${invoice.saldoPendiente.toLocaleString('es-MX')})`);
+      setError(
+        `El monto no puede exceder el saldo pendiente ($${invoice.saldoPendiente.toLocaleString("es-MX")})`,
+      );
       return;
     }
 
     if (!formData.cuentaDestino) {
-      setError('Debe seleccionar una cuenta de destino');
+      setError("Debe seleccionar una cuenta de destino");
       return;
     }
 
-    const account = bankAccountsDestino.find(a => a.id === formData.cuentaDestino);
+    const account = bankAccountsDestino.find(
+      (a) => a.id === formData.cuentaDestino,
+    );
 
     onSubmit(invoice.id, {
       fecha: formData.fecha,
@@ -88,7 +92,7 @@ export function RegisterPaymentModal({
       referencia: formData.referencia,
       comprobanteUrl: formData.comprobanteUrl,
       requiereREP: formData.requiereREP,
-      estatusREP: formData.requiereREP ? 'pendiente' : 'no_aplica',
+      estatusREP: formData.requiereREP ? "pendiente" : "no_aplica",
     });
 
     onOpenChange(false);
@@ -116,16 +120,20 @@ export function RegisterPaymentModal({
                 <p className="font-medium">{invoice.folio}</p>
               </div>
               <div>
-                <p className="text-muted-foreground text-xs">Cliente</p>
+                <p className="text-muted-foreground text-xs">Client</p>
                 <p className="font-medium truncate">{invoice.cliente}</p>
               </div>
               <div>
                 <p className="text-muted-foreground text-xs">Monto Total</p>
-                <p className="font-medium">${invoice.montoTotal.toLocaleString('es-MX')}</p>
+                <p className="font-medium">
+                  ${invoice.montoTotal.toLocaleString("es-MX")}
+                </p>
               </div>
               <div>
                 <p className="text-muted-foreground text-xs">Saldo Pendiente</p>
-                <p className="font-bold text-amber-700">${invoice.saldoPendiente.toLocaleString('es-MX')}</p>
+                <p className="font-bold text-amber-700">
+                  ${invoice.saldoPendiente.toLocaleString("es-MX")}
+                </p>
               </div>
             </div>
           </div>
@@ -138,7 +146,9 @@ export function RegisterPaymentModal({
             <Input
               type="date"
               value={formData.fecha}
-              onChange={(e) => setFormData({ ...formData, fecha: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, fecha: e.target.value })
+              }
               className="h-10"
             />
           </div>
@@ -152,24 +162,29 @@ export function RegisterPaymentModal({
             <Input
               type="number"
               placeholder="0.00"
-              value={formData.monto || ''}
+              value={formData.monto || ""}
               onChange={(e) => {
-                setFormData({ ...formData, monto: parseFloat(e.target.value) || 0 });
-                setError('');
+                setFormData({
+                  ...formData,
+                  monto: parseFloat(e.target.value) || 0,
+                });
+                setError("");
               }}
               className="h-10 text-lg font-medium"
               max={invoice.saldoPendiente}
             />
             <div className="flex items-center justify-between text-xs">
-              <button 
+              <button
                 type="button"
-                onClick={() => setFormData({ ...formData, monto: invoice.saldoPendiente })}
+                onClick={() =>
+                  setFormData({ ...formData, monto: invoice.saldoPendiente })
+                }
                 className="text-brand-navy hover:underline"
               >
                 Cobrar saldo completo
               </button>
               <span className="text-muted-foreground">
-                Máximo: ${invoice.saldoPendiente.toLocaleString('es-MX')}
+                Máximo: ${invoice.saldoPendiente.toLocaleString("es-MX")}
               </span>
             </div>
           </div>
@@ -183,7 +198,7 @@ export function RegisterPaymentModal({
               value={formData.cuentaDestino}
               onValueChange={(value) => {
                 setFormData({ ...formData, cuentaDestino: value });
-                setError('');
+                setError("");
               }}
             >
               <SelectTrigger className="h-10">
@@ -193,7 +208,9 @@ export function RegisterPaymentModal({
                 {bankAccountsDestino.map((account) => (
                   <SelectItem key={account.id} value={account.id}>
                     <span className="font-medium">{account.name}</span>
-                    <span className="text-muted-foreground ml-2">****{account.lastDigits}</span>
+                    <span className="text-muted-foreground ml-2">
+                      ****{account.lastDigits}
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -208,7 +225,9 @@ export function RegisterPaymentModal({
             <Input
               placeholder="Ej: TRF-2025-001"
               value={formData.referencia}
-              onChange={(e) => setFormData({ ...formData, referencia: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, referencia: e.target.value })
+              }
               className="h-10"
             />
           </div>
@@ -231,7 +250,9 @@ export function RegisterPaymentModal({
               }}
             />
             {formData.comprobanteUrl && (
-              <p className="text-xs text-muted-foreground">📎 {formData.comprobanteUrl}</p>
+              <p className="text-xs text-muted-foreground">
+                📎 {formData.comprobanteUrl}
+              </p>
             )}
           </div>
 
@@ -240,7 +261,9 @@ export function RegisterPaymentModal({
             <Checkbox
               id="requiereREP"
               checked={formData.requiereREP}
-              onCheckedChange={(checked) => setFormData({ ...formData, requiereREP: checked as boolean })}
+              onCheckedChange={(checked) =>
+                setFormData({ ...formData, requiereREP: checked as boolean })
+              }
             />
             <label
               htmlFor="requiereREP"
@@ -252,15 +275,25 @@ export function RegisterPaymentModal({
 
           {/* Payment Preview */}
           {formData.monto > 0 && (
-            <div className={`p-3 rounded-lg border ${willBeFullyPaid ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
+            <div
+              className={`p-3 rounded-lg border ${willBeFullyPaid ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"}`}
+            >
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Saldo después del cobro:</span>
-                <span className={`font-bold ${willBeFullyPaid ? 'text-emerald-700' : 'text-amber-700'}`}>
-                  ${remainingAfterPayment.toLocaleString('es-MX')}
+                <span className="text-muted-foreground">
+                  Saldo después del cobro:
+                </span>
+                <span
+                  className={`font-bold ${willBeFullyPaid ? "text-emerald-700" : "text-amber-700"}`}
+                >
+                  ${remainingAfterPayment.toLocaleString("es-MX")}
                 </span>
               </div>
-              <p className={`text-xs mt-1 ${willBeFullyPaid ? 'text-emerald-600' : 'text-amber-600'}`}>
-                {willBeFullyPaid ? '✓ La factura quedará completamente pagada' : '⚠ Quedará como Pago Parcial'}
+              <p
+                className={`text-xs mt-1 ${willBeFullyPaid ? "text-emerald-600" : "text-amber-600"}`}
+              >
+                {willBeFullyPaid
+                  ? "✓ La factura quedará completamente pagada"
+                  : "⚠ Quedará como Pago Parcial"}
               </p>
             </div>
           )}
@@ -275,10 +308,7 @@ export function RegisterPaymentModal({
         </div>
 
         <DialogFooter className="pt-4 border-t">
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-          >
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
           <Button

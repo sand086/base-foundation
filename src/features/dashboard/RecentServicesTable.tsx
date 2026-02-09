@@ -15,7 +15,9 @@ interface RecentServicesTableProps {
   services: RecentService[];
 }
 
-const getStatusConfig = (status: string): { type: StatusType; label: string } => {
+const getStatusConfig = (
+  status: string,
+): { type: StatusType; label: string } => {
   const statusMap: Record<string, { type: StatusType; label: string }> = {
     en_ruta: { type: "success", label: "En Ruta" },
     detenido: { type: "warning", label: "Detenido" },
@@ -38,11 +40,14 @@ export function RecentServicesTable({ services }: RecentServicesTableProps) {
     navigate(`/monitoreo?${params.toString()}`);
   };
 
-  const handleViewInDispatch = (e: React.MouseEvent, service: RecentService) => {
+  const handleViewInDispatch = (
+    e: React.MouseEvent,
+    service: RecentService,
+  ) => {
     e.stopPropagation();
     const params = new URLSearchParams({
       serviceId: service.id,
-      filter: 'service',
+      filter: "service",
     });
     navigate(`/despacho?${params.toString()}`);
   };
@@ -67,7 +72,7 @@ export function RecentServicesTable({ services }: RecentServicesTableProps) {
                     ID
                   </th>
                   <th className="text-left py-3 px-4 text-[11px] font-semibold uppercase text-muted-foreground tracking-wider">
-                    Cliente
+                    Client
                   </th>
                   <th className="text-left py-3 px-4 text-[11px] font-semibold uppercase text-muted-foreground tracking-wider">
                     Ruta
@@ -115,7 +120,9 @@ export function RecentServicesTable({ services }: RecentServicesTableProps) {
                         </TooltipProvider>
                       </td>
                       <td className="py-4 px-4 text-sm">
-                        <span className="text-muted-foreground">{service.origin}</span>
+                        <span className="text-muted-foreground">
+                          {service.origin}
+                        </span>
                         <span className="mx-2 text-muted-foreground/40">→</span>
                         <span>{service.destination}</span>
                       </td>
@@ -138,7 +145,9 @@ export function RecentServicesTable({ services }: RecentServicesTableProps) {
                                 variant="ghost"
                                 size="sm"
                                 className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-                                onClick={(e) => handleViewInDispatch(e, service)}
+                                onClick={(e) =>
+                                  handleViewInDispatch(e, service)
+                                }
                               >
                                 <ExternalLink className="h-4 w-4 text-muted-foreground hover:text-brand-dark" />
                               </Button>

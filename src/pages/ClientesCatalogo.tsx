@@ -15,6 +15,7 @@ import {
   Clock,
   AlertTriangle,
   CreditCard,
+  Loader2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,7 +24,14 @@ import { Badge } from "@/components/ui/badge";
 import { ActionButton } from "@/components/ui/action-button";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusBadge, StatusType } from "@/components/ui/status-badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,7 +50,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useNavigate } from "react-router-dom";
-import { mockClients, mockTrips, type Client, type SubClienteDetalle } from "@/data/mockData";
+import { useClients } from "@/hooks/useClients"; // Hook Real
+import { Client } from "@/types/api.types"; // Tipos Reales
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -52,23 +61,33 @@ const statusConfig: Record<string, { label: string; type: StatusType }> = {
   incompleto: { label: "Incompleto", type: "danger" },
 };
 
+// ... getOperationBadge se mantiene igual ...
 const getOperationBadge = (tipo: string) => {
-  switch (tipo) {
+  switch (tipo?.toLowerCase()) {
     case "nacional":
       return (
-        <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200">
+        <Badge
+          variant="outline"
+          className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200"
+        >
           Nacional
         </Badge>
       );
     case "importación":
       return (
-        <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+        <Badge
+          variant="outline"
+          className="text-xs bg-blue-50 text-blue-700 border-blue-200"
+        >
           Import
         </Badge>
       );
     case "exportación":
       return (
-        <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
+        <Badge
+          variant="outline"
+          className="text-xs bg-amber-50 text-amber-700 border-amber-200"
+        >
           Export
         </Badge>
       );
@@ -85,16 +104,33 @@ interface ExpandableClientRowProps {
   onDelete: () => void;
 }
 
-function ExpandableClientRow({ client, isExpanded, onToggle, onEdit, onDelete }: ExpandableClientRowProps) {
-  const diasCredito = (client as any).diasCredito || 30;
-  
+function ExpandableClientRow({
+  client,
+  isExpanded,
+  onToggle,
+  onEdit,
+  onDelete,
+}: ExpandableClientRowProps) {
+  // Adaptamos las propiedades que vienen del backend
+  const subClientes = client.sub_clients || [];
+  const diasCredito = client.dias_credito || 0;
+
+  // Calculamos tarifas activas para mostrar en la tabla principal
+  const totalTarifas = subClientes.reduce(
+    (acc, sub) => acc + (sub.tariffs?.length || 0),
+    0,
+  );
+
   return (
     <>
       <TableRow
         onClick={() => {
-          if (client.subClientesDetalle.length > 0) onToggle();
+          if (subClientes.length > 0) onToggle();
         }}
-        className={cn("hover:bg-muted/30 transition-colors cursor-pointer group", isExpanded && "bg-muted/20")}
+        className={cn(
+          "hover:bg-muted/30 transition-colors cursor-pointer group",
+          isExpanded && "bg-muted/20",
+        )}
       >
         <TableCell className="py-2 w-10">
           <Button
@@ -103,7 +139,7 @@ function ExpandableClientRow({ client, isExpanded, onToggle, onEdit, onDelete }:
             className="h-6 w-6"
             onClick={(e) => {
               e.stopPropagation();
-              if (client.subClientesDetalle.length > 0) onToggle();
+              if (subClientes.length > 0) onToggle();
             }}
           >
             {isExpanded ? (
@@ -115,29 +151,26 @@ function ExpandableClientRow({ client, isExpanded, onToggle, onEdit, onDelete }:
         </TableCell>
         <TableCell className="py-2">
           <div>
-            <p className="font-medium text-sm text-slate-700">{client.razónSocial}</p>
-            <p className="text-xs text-muted-foreground">{client.contactoPrincipal}</p>
+            <p className="font-medium text-sm text-slate-700">
+              {client.razon_social}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {client.contacto_principal || "Sin contacto"}
+            </p>
           </div>
         </TableCell>
-        <TableCell className="font-mono text-sm text-slate-700 py-2">{client.rfc}</TableCell>
-        <TableCell className="py-2">
-          <Badge variant="outline" className="text-xs font-mono">
-            {client.regimenFiscal || "---"}
-          </Badge>
+        <TableCell className="font-mono text-sm text-slate-700 py-2">
+          {client.rfc}
         </TableCell>
         <TableCell className="text-center py-2">
           <Badge
             variant="secondary"
             className={cn(
-              "font-medium cursor-pointer",
-              client.subClientesDetalle.length > 0 && "bg-blue-100 text-blue-700 hover:bg-blue-200",
+              "font-medium",
+              subClientes.length > 0 && "bg-blue-100 text-blue-700",
             )}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (client.subClientesDetalle.length > 0) onToggle();
-            }}
           >
-            {client.subClientesDetalle.length}
+            {subClientes.length}
           </Badge>
         </TableCell>
         <TableCell className="py-2">
@@ -148,46 +181,50 @@ function ExpandableClientRow({ client, isExpanded, onToggle, onEdit, onDelete }:
           </div>
         </TableCell>
         <TableCell className="py-2">
-          <div className="flex flex-wrap gap-1">
-            {client.tarifasActivas.length > 0 ? (
-              client.tarifasActivas.slice(0, 2).map((tarifa, idx) => (
-                <Badge key={idx} variant="outline" className="text-xs">
-                  {tarifa}
-                </Badge>
-              ))
-            ) : (
-              <span className="text-xs text-muted-foreground italic">Sin tarifas</span>
-            )}
-            {client.tarifasActivas.length > 2 && (
-              <Badge variant="outline" className="text-xs">
-                +{client.tarifasActivas.length - 2}
-              </Badge>
-            )}
-          </div>
+          <Badge variant="outline" className="text-xs">
+            {totalTarifas} Tarifas
+          </Badge>
         </TableCell>
         <TableCell className="py-2">
-          <StatusBadge status={statusConfig[client.estatus as keyof typeof statusConfig].type}>
-            {statusConfig[client.estatus as keyof typeof statusConfig].label}
+          <StatusBadge
+            status={
+              statusConfig[
+                client.estatus?.toLowerCase() as keyof typeof statusConfig
+              ]?.type || "default"
+            }
+          >
+            {statusConfig[client.estatus?.toLowerCase()]?.label ||
+              client.estatus}
           </StatusBadge>
         </TableCell>
         <TableCell className="text-right py-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => e.stopPropagation()}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={(e) => e.stopPropagation()}
+              >
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="bg-popover border shadow-lg z-50">
-              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); window.location.href = `/clientes/nuevo?edit=${client.id}`; }}>
-                <Eye className="h-4 w-4 mr-2" /> Ver Detalle
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(); }}>
+            <DropdownMenuContent align="end" className="z-50">
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit();
+                }}
+              >
                 <Edit className="h-4 w-4 mr-2" /> Editar
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem 
-                className="text-destructive focus:text-destructive focus:bg-destructive/10" 
-                onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              <DropdownMenuItem
+                className="text-destructive"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete();
+                }}
               >
                 <Trash2 className="h-4 w-4 mr-2" /> Eliminar
               </DropdownMenuItem>
@@ -203,80 +240,22 @@ function ExpandableClientRow({ client, isExpanded, onToggle, onEdit, onDelete }:
               <div className="flex items-center gap-2 mb-3">
                 <MapPin className="h-4 w-4 text-primary" />
                 <span className="text-sm font-semibold text-slate-700">
-                  Destinos de Entrega ({client.subClientesDetalle.length})
+                  Destinos de Entrega ({subClientes.length})
                 </span>
               </div>
-
               <div className="grid gap-2">
-                {client.subClientesDetalle.map((sub, idx) => (
+                {subClientes.map((sub, idx) => (
                   <div
                     key={sub.id}
-                    className={cn(
-                      "flex items-center justify-between p-3 rounded-lg border bg-white transition-all",
-                      "hover:shadow-sm hover:border-primary/30",
-                      sub.estatus === "inactivo" && "opacity-60",
-                    )}
-                    style={{
-                      animationDelay: `${idx * 50}ms`,
-                      animation: "fadeIn 0.2s ease-out forwards",
-                    }}
+                    className="flex items-center justify-between p-3 rounded-lg border bg-white shadow-sm"
                   >
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium text-sm">
-                        {idx + 1}
-                      </div>
-
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium text-sm">{sub.nombre}</p>
-                          {sub.alias && (
-                            <Badge variant="outline" className="text-[10px] font-normal">
-                              {sub.alias}
-                            </Badge>
-                          )}
-                          {sub.estatus === "inactivo" && (
-                            <Badge variant="secondary" className="text-[10px]">
-                              Inactivo
-                            </Badge>
-                          )}
-                        </div>
-
-                        <p className="text-xs text-muted-foreground">
-                          {sub.direccion}, {sub.ciudad}, {sub.estado} {sub.codigoPostal}
-                        </p>
-                      </div>
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">{sub.nombre}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {sub.direccion}, {sub.ciudad}, {sub.estado}
+                      </p>
                     </div>
-
-                    <div className="flex items-center gap-4">
-                      {/* Show tarifa if exists */}
-                      {(sub as any).tarifaPactada && (
-                        <div className="text-right text-xs">
-                          <p className="font-mono font-medium text-emerald-700">
-                            ${(sub as any).tarifaPactada.toLocaleString()} {(sub as any).moneda || 'MXN'}
-                          </p>
-                        </div>
-                      )}
-                      
-                      {sub.contacto && (
-                        <div className="text-right text-xs">
-                          <p className="text-muted-foreground">{sub.contacto}</p>
-                          {sub.telefono && (
-                            <p className="flex items-center justify-end gap-1 text-muted-foreground">
-                              <Phone className="h-3 w-3" /> {sub.telefono}
-                            </p>
-                          )}
-                        </div>
-                      )}
-
-                      {sub.horarioRecepcion && (
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Clock className="h-3 w-3" />
-                          {sub.horarioRecepcion}
-                        </div>
-                      )}
-
-                      {getOperationBadge(sub.tipoOperacion)}
-                    </div>
+                    {getOperationBadge(sub.tipo_operacion)}
                   </div>
                 ))}
               </div>
@@ -290,129 +269,106 @@ function ExpandableClientRow({ client, isExpanded, onToggle, onEdit, onDelete }:
 
 export default function ClientesCatalogo() {
   const navigate = useNavigate();
-  const [clients, setClients] = useState<Client[]>(mockClients);
+  // HOOK REAL: Datos directos de la BD
+  const { clients, isLoading, deleteClient } = useClients();
+
   const [searchTerm, setSearchTerm] = useState("");
-  const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
+  const [expandedClients, setExpandedClients] = useState<Set<number>>(
+    new Set(),
+  );
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
 
   const filteredClients = clients.filter(
     (client) =>
-      client.razónSocial.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.rfc.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.contactoPrincipal?.toLowerCase().includes(searchTerm.toLowerCase()),
+      client.razon_social.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      client.rfc.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
-  const totalClients = clients.length;
   const activeClients = clients.filter((c) => c.estatus === "activo").length;
-  const totalSubClients = clients.reduce((acc, c) => acc + c.subClientesDetalle.length, 0);
+  // Calculamos total subclientes con la nueva estructura
+  const totalSubClients = clients.reduce(
+    (acc, c) => acc + (c.sub_clients?.length || 0),
+    0,
+  );
 
-  const toggleClientExpanded = (clientId: string) => {
+  const toggleClientExpanded = (clientId: number) => {
     setExpandedClients((prev) => {
       const newSet = new Set(prev);
-      if (newSet.has(clientId)) {
-        newSet.delete(clientId);
-      } else {
-        newSet.add(clientId);
-      }
+      if (newSet.has(clientId)) newSet.delete(clientId);
+      else newSet.add(clientId);
       return newSet;
     });
   };
 
-  const handleEdit = (client: Client) => {
-    navigate(`/clientes/nuevo?edit=${client.id}`);
-  };
-
-  const handleDeleteRequest = (client: Client) => {
-    // Check if client has active trips
-    const activeTrips = mockTrips.filter(trip => 
-      trip.clientName.toLowerCase().includes(client.razónSocial.toLowerCase()) &&
-      ['en_ruta', 'detenido', 'retraso'].includes(trip.status)
-    );
-    
-    if (activeTrips.length > 0) {
-      toast.error("No se puede eliminar", {
-        description: `${client.razónSocial} tiene ${activeTrips.length} viaje(s) activo(s)`,
-      });
-      return;
-    }
-    
-    setClientToDelete(client);
-    setDeleteDialogOpen(true);
-  };
-
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (clientToDelete) {
-      setClients(prev => prev.filter(c => c.id !== clientToDelete.id));
-      toast.success("Cliente eliminado", {
-        description: `${clientToDelete.razónSocial} ha sido eliminado del catálogo`,
-      });
-      setClientToDelete(null);
+      const success = await deleteClient(clientToDelete.id);
+      if (success) setClientToDelete(null);
     }
     setDeleteDialogOpen(false);
   };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <PageHeader title="Gestión de Clientes" description="Administra clientes, destinos de entrega y tarifas comerciales">
-        <ActionButton onClick={() => navigate("/clientes/nuevo")}>
-          <Plus className="h-4 w-4" /> Nuevo Cliente
+      <PageHeader
+        title="Gestión de Clientes"
+        description="Administra clients, destinos de entrega y tarifas comerciales"
+      >
+        <ActionButton onClick={() => navigate("/clients/nuevo")}>
+          <Plus className="h-4 w-4" /> Nuevo Client
         </ActionButton>
       </PageHeader>
 
-      {/* Summary Cards */}
+      {/* KPI Cards */}
       <div className="grid grid-cols-3 gap-4">
         <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-md">
-                <Building2 className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total Clientes</p>
-                <p className="text-2xl font-bold">{totalClients}</p>
-              </div>
+          <CardContent className="pt-4 flex items-center gap-3">
+            <div className="p-2 bg-primary/10 rounded-md">
+              <Building2 className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Total Clientes</p>
+              <p className="text-2xl font-bold">{clients.length}</p>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-emerald-100 rounded-md">
-                <Users className="h-5 w-5 text-emerald-700" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Clientes Activos</p>
-                <p className="text-2xl font-bold text-emerald-700">{activeClients}</p>
-              </div>
+          <CardContent className="pt-4 flex items-center gap-3">
+            <div className="p-2 bg-emerald-100 rounded-md">
+              <Users className="h-5 w-5 text-emerald-700" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Activos</p>
+              <p className="text-2xl font-bold text-emerald-700">
+                {activeClients}
+              </p>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-100 rounded-md">
-                <MapPin className="h-5 w-5 text-blue-700" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total Destinos</p>
-                <p className="text-2xl font-bold text-blue-700">{totalSubClients}</p>
-              </div>
+          <CardContent className="pt-4 flex items-center gap-3">
+            <div className="p-2 bg-blue-100 rounded-md">
+              <MapPin className="h-5 w-5 text-blue-700" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Destinos</p>
+              <p className="text-2xl font-bold text-blue-700">
+                {totalSubClients}
+              </p>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Table Card */}
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-lg">Catálogo de Clientes</CardTitle>
+            <CardTitle className="text-lg">Catálogo</CardTitle>
             <div className="relative w-72">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar por razón social, RFC o contacto..."
+                placeholder="Buscar..."
                 className="pl-9"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -421,104 +377,75 @@ export default function ClientesCatalogo() {
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-gray-50">
-                <TableHead className="w-10"></TableHead>
-                <TableHead className="text-xs font-semibold uppercase text-slate-600 tracking-wider">
-                  Razón Social
-                </TableHead>
-                <TableHead className="text-xs font-semibold uppercase text-slate-600 tracking-wider">RFC</TableHead>
-                <TableHead className="text-xs font-semibold uppercase text-slate-600 tracking-wider">Régimen</TableHead>
-                <TableHead className="text-xs font-semibold uppercase text-slate-600 tracking-wider text-center">
-                  Destinos
-                </TableHead>
-                <TableHead className="text-xs font-semibold uppercase text-slate-600 tracking-wider">
-                  Crédito
-                </TableHead>
-                <TableHead className="text-xs font-semibold uppercase text-slate-600 tracking-wider">
-                  Tarifas Activas
-                </TableHead>
-                <TableHead className="text-xs font-semibold uppercase text-slate-600 tracking-wider">Estatus</TableHead>
-                <TableHead className="text-xs font-semibold uppercase text-slate-600 tracking-wider text-right">
-                  Acciones
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredClients.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="text-center py-12">
-                    <Building2 className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
-                    <p className="text-muted-foreground">No se encontraron clientes</p>
-                  </TableCell>
+          {isLoading ? (
+            <div className="flex justify-center p-8">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-gray-50">
+                  <TableHead className="w-10"></TableHead>
+                  <TableHead>Razón Social</TableHead>
+                  <TableHead>RFC</TableHead>
+                  <TableHead className="text-center">Destinos</TableHead>
+                  <TableHead>Crédito</TableHead>
+                  <TableHead>Tarifas</TableHead>
+                  <TableHead>Estatus</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
-              ) : (
-                filteredClients.map((client) => (
-                  <ExpandableClientRow
-                    key={client.id}
-                    client={client}
-                    isExpanded={expandedClients.has(client.id)}
-                    onToggle={() => toggleClientExpanded(client.id)}
-                    onEdit={() => handleEdit(client)}
-                    onDelete={() => handleDeleteRequest(client)}
-                  />
-                ))
-              )}
-            </TableBody>
-          </Table>
-
-          {/* Footer hint */}
-          <div className="px-4 py-3 border-t text-xs text-muted-foreground">
-            💡 Haz clic en la flecha o en el número de destinos para ver los subclientes
-          </div>
+              </TableHeader>
+              <TableBody>
+                {filteredClients.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={8}
+                      className="text-center py-8 text-muted-foreground"
+                    >
+                      No se encontraron clients
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredClients.map((client) => (
+                    <ExpandableClientRow
+                      key={client.id}
+                      client={client}
+                      isExpanded={expandedClients.has(client.id)}
+                      onToggle={() => toggleClientExpanded(client.id)}
+                      onEdit={() => navigate(`/clients/${client.id}`)}
+                      onDelete={() => {
+                        setClientToDelete(client);
+                        setDeleteDialogOpen(true);
+                      }}
+                    />
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
-      {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-destructive" />
-              ¿Eliminar cliente?
-            </AlertDialogTitle>
+            <AlertDialogTitle>¿Eliminar cliente?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción no se puede deshacer. Se eliminará permanentemente:
-              <div className="mt-3 p-3 bg-muted rounded-lg">
-                <p className="font-semibold">{clientToDelete?.razónSocial}</p>
-                <p className="text-sm font-mono">{clientToDelete?.rfc}</p>
-                <p className="text-sm mt-1">
-                  {clientToDelete?.subClientesDetalle.length || 0} destino(s) asociado(s)
-                </p>
-              </div>
+              Se eliminará permanentemente <b>{clientToDelete?.razon_social}</b>{" "}
+              y todos sus destinos asociados.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={confirmDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-destructive hover:bg-destructive/90"
             >
-              Eliminar Cliente
+              Eliminar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      {/* Animation styles */}
-      <style>{`
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(-5px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-      `}</style>
     </div>
   );
 }

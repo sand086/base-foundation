@@ -51,24 +51,37 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route path="/verify-2fa" element={<TwoFactorAuth />} />
             <Route path="/2fa-setup" element={<TwoFactorAuth />} />
-            
+
             {/* Protected Routes */}
             <Route element={<ProtectedRoute />}>
               <Route path="/" element={<AppLayout />}>
                 <Route index element={<Dashboard />} />
                 <Route path="monitoreo" element={<CentroMonitoreo />} />
                 <Route path="flota" element={<FlotaUnidades />} />
-                <Route path="flota/unidad/:id" element={<FlotaUnidadDetalle />} />
+                <Route
+                  path="flota/unidad/:id"
+                  element={<FlotaUnidadDetalle />}
+                />
                 <Route path="flota/operadores" element={<FlotaOperadores />} />
                 <Route path="flota/llantas" element={<FlotaLlantas />} />
                 <Route path="flota/mantenimiento" element={<Mantenimiento />} />
                 <Route path="combustible" element={<CombustibleCargas />} />
-                <Route path="combustible/cargas" element={<CombustibleCargas />} />
-                <Route path="combustible/conciliacion" element={<CombustibleConciliacion />} />
-                <Route path="clientes" element={<ClientesCatalogo />} />
-                <Route path="clientes/nuevo" element={<ClientesNuevo />} />
+                <Route
+                  path="combustible/cargas"
+                  element={<CombustibleCargas />}
+                />
+                <Route
+                  path="combustible/conciliacion"
+                  element={<CombustibleConciliacion />}
+                />
+                <Route path="clients" element={<ClientesCatalogo />} />
+                <Route path="clients/nuevo" element={<ClientesNuevo />} />
+                <Route path="clients/:clientId" element={<ClientesNuevo />} />
                 <Route path="cierre" element={<CierreViaje />} />
-                <Route path="cuentas-por-cobrar" element={<CuentasPorCobrar />} />
+                <Route
+                  path="cuentas-por-cobrar"
+                  element={<CuentasPorCobrar />}
+                />
                 <Route path="proveedores" element={<ProveedoresCxP />} />
                 <Route path="compras" element={<Compras />} />
                 <Route path="tarifas" element={<GestionTarifas />} />
@@ -77,14 +90,20 @@ const App = () => (
                 <Route path="usuarios" element={<UsuariosPage />} />
                 <Route path="roles-permisos" element={<RolesPermisosPage />} />
                 <Route path="tesoreria" element={<Tesoreria />} />
-                <Route path="finanzas-direccion" element={<FinanzasDireccion />} />
-                <Route path="notificaciones" element={<NotificacionesConfig />} />
+                <Route
+                  path="finanzas-direccion"
+                  element={<FinanzasDireccion />}
+                />
+                <Route
+                  path="notificaciones"
+                  element={<NotificacionesConfig />}
+                />
                 <Route path="cargas-masivas" element={<CargasMasivas />} />
                 <Route path="perfil" element={<ProfilePage />} />
                 <Route path="configuracion" element={<SettingsPage />} />
               </Route>
             </Route>
-            
+
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>

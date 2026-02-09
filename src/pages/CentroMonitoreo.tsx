@@ -3,10 +3,18 @@ import { Eye, Edit2, Truck, User, MapPin, Navigation } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusBadge, StatusType } from "@/components/ui/status-badge";
-import { UpdateStatusModal, StatusUpdateData } from "@/features/monitoreo/UpdateStatusModal";
+import {
+  UpdateStatusModal,
+  StatusUpdateData,
+} from "@/features/monitoreo/UpdateStatusModal";
 import { TripMapPlaceholder } from "@/features/monitoreo/TripMapPlaceholder";
 import { mockTrips, Trip, TimelineEvent } from "@/data/mockData";
 import { toast } from "sonner";
@@ -20,7 +28,10 @@ const getStatusBadge = (status: string) => {
     accidente: { type: "danger", label: "Accidente" },
     entregado: { type: "success", label: "Entregado" },
   };
-  const config = statusMap[status] || { type: "info" as StatusType, label: status };
+  const config = statusMap[status] || {
+    type: "info" as StatusType,
+    label: status,
+  };
   return <StatusBadge status={config.type}>{config.label}</StatusBadge>;
 };
 
@@ -52,12 +63,15 @@ export default function CentroMonitoreo() {
     // Create new timeline event
     const newEvent: TimelineEvent = {
       time: data.timestamp,
-      event: `Estatus actualizado a "${getStatusLabel(data.status)}" - ${data.location}${data.comments ? `. Nota: ${data.comments}` : ''}`,
-      type: data.status === 'accidente' || data.status === 'retraso' ? 'alert' : 'checkpoint',
+      event: `Estatus actualizado a "${getStatusLabel(data.status)}" - ${data.location}${data.comments ? `. Nota: ${data.comments}` : ""}`,
+      type:
+        data.status === "accidente" || data.status === "retraso"
+          ? "alert"
+          : "checkpoint",
     };
 
     // Cast the status to the proper type
-    const newStatus = data.status as Trip['status'];
+    const newStatus = data.status as Trip["status"];
 
     // Update trips state
     setTrips((prevTrips) =>
@@ -71,7 +85,7 @@ export default function CentroMonitoreo() {
           };
         }
         return trip;
-      })
+      }),
     );
 
     // If the drawer is open for this trip, update it too
@@ -104,7 +118,10 @@ export default function CentroMonitoreo() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Centro de Monitoreo" description="Control de viajes activos en tiempo real">
+      <PageHeader
+        title="Centro de Monitoreo"
+        description="Control de viajes activos en tiempo real"
+      >
         <Badge variant="outline" className="text-sm px-3 py-1.5 font-medium">
           {trips.length} Viajes Activos
         </Badge>
@@ -121,14 +138,30 @@ export default function CentroMonitoreo() {
             <table className="w-full table-dense">
               <thead>
                 <tr className="bg-table-header text-left border-b">
-                  <th className="py-2.5 px-3 text-xs font-semibold uppercase text-muted-foreground tracking-wider">Servicio ID</th>
-                  <th className="py-2.5 px-3 text-xs font-semibold uppercase text-muted-foreground tracking-wider">Cliente</th>
-                  <th className="py-2.5 px-3 text-xs font-semibold uppercase text-muted-foreground tracking-wider">Unidad</th>
-                  <th className="py-2.5 px-3 text-xs font-semibold uppercase text-muted-foreground tracking-wider">Operador</th>
-                  <th className="py-2.5 px-3 text-xs font-semibold uppercase text-muted-foreground tracking-wider">Origen - Destino</th>
-                  <th className="py-2.5 px-3 text-xs font-semibold uppercase text-muted-foreground tracking-wider text-center">Estatus</th>
-                  <th className="py-2.5 px-3 text-xs font-semibold uppercase text-muted-foreground tracking-wider">Última Actualización</th>
-                  <th className="py-2.5 px-3 text-xs font-semibold uppercase text-muted-foreground tracking-wider text-center">Acciones</th>
+                  <th className="py-2.5 px-3 text-xs font-semibold uppercase text-muted-foreground tracking-wider">
+                    Servicio ID
+                  </th>
+                  <th className="py-2.5 px-3 text-xs font-semibold uppercase text-muted-foreground tracking-wider">
+                    Client
+                  </th>
+                  <th className="py-2.5 px-3 text-xs font-semibold uppercase text-muted-foreground tracking-wider">
+                    Unidad
+                  </th>
+                  <th className="py-2.5 px-3 text-xs font-semibold uppercase text-muted-foreground tracking-wider">
+                    Operador
+                  </th>
+                  <th className="py-2.5 px-3 text-xs font-semibold uppercase text-muted-foreground tracking-wider">
+                    Origen - Destino
+                  </th>
+                  <th className="py-2.5 px-3 text-xs font-semibold uppercase text-muted-foreground tracking-wider text-center">
+                    Estatus
+                  </th>
+                  <th className="py-2.5 px-3 text-xs font-semibold uppercase text-muted-foreground tracking-wider">
+                    Última Actualización
+                  </th>
+                  <th className="py-2.5 px-3 text-xs font-semibold uppercase text-muted-foreground tracking-wider text-center">
+                    Acciones
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -138,15 +171,27 @@ export default function CentroMonitoreo() {
                     className="border-b hover:bg-muted/50 transition-colors cursor-pointer"
                     onClick={() => setSelectedTrip(trip)}
                   >
-                    <td className="py-2.5 px-3 font-medium text-sm text-brand-dark">{trip.id}</td>
-                    <td className="py-2.5 px-3 text-sm text-brand-dark">{trip.clientName}</td>
-                    <td className="py-2.5 px-3 font-mono text-sm text-brand-dark">{trip.unitNumber}</td>
-                    <td className="py-2.5 px-3 text-sm text-brand-dark">{trip.operator}</td>
+                    <td className="py-2.5 px-3 font-medium text-sm text-brand-dark">
+                      {trip.id}
+                    </td>
+                    <td className="py-2.5 px-3 text-sm text-brand-dark">
+                      {trip.clientName}
+                    </td>
+                    <td className="py-2.5 px-3 font-mono text-sm text-brand-dark">
+                      {trip.unitNumber}
+                    </td>
+                    <td className="py-2.5 px-3 text-sm text-brand-dark">
+                      {trip.operator}
+                    </td>
                     <td className="py-2.5 px-3 text-sm text-muted-foreground">
                       {trip.origin} → {trip.destination}
                     </td>
-                    <td className="py-2.5 px-3 text-center">{getStatusBadge(trip.status)}</td>
-                    <td className="py-2.5 px-3 text-sm text-muted-foreground">{trip.lastUpdate}</td>
+                    <td className="py-2.5 px-3 text-center">
+                      {getStatusBadge(trip.status)}
+                    </td>
+                    <td className="py-2.5 px-3 text-sm text-muted-foreground">
+                      {trip.lastUpdate}
+                    </td>
                     <td className="py-2.5 px-3">
                       <div className="flex items-center justify-center gap-1">
                         <Button
@@ -191,7 +236,7 @@ export default function CentroMonitoreo() {
                 Detalle del Servicio - {selectedTrip?.id}
               </SheetTitle>
             </SheetHeader>
-            
+
             {selectedTrip && (
               <ScrollArea className="flex-1">
                 <div className="p-4 space-y-4">
@@ -237,7 +282,10 @@ export default function CentroMonitoreo() {
                           {selectedTrip.operator}
                         </p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          Unidad: <span className="font-mono">{selectedTrip.unitNumber}</span>
+                          Unidad:{" "}
+                          <span className="font-mono">
+                            {selectedTrip.unitNumber}
+                          </span>
                         </p>
                       </div>
 
@@ -269,8 +317,12 @@ export default function CentroMonitoreo() {
                       checkpoints={selectedTrip.timeline}
                       lastUpdate={selectedTrip.lastUpdate}
                       lastLocation={
-                        selectedTrip.timeline[0]?.event.includes('Estatus actualizado')
-                          ? selectedTrip.timeline[0].event.split(' - ')[1]?.split('.')[0]
+                        selectedTrip.timeline[0]?.event.includes(
+                          "Estatus actualizado",
+                        )
+                          ? selectedTrip.timeline[0].event
+                              .split(" - ")[1]
+                              ?.split(".")[0]
                           : selectedTrip.timeline[0]?.event
                       }
                       className="h-[280px]"
@@ -280,7 +332,7 @@ export default function CentroMonitoreo() {
                   {/* Client Info */}
                   <div className="p-3 bg-muted/50 rounded-lg border">
                     <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
-                      Cliente
+                      Client
                     </span>
                     <p className="text-sm font-medium text-brand-dark mt-0.5">
                       {selectedTrip.clientName}
@@ -307,11 +359,11 @@ export default function CentroMonitoreo() {
                           <div className="flex flex-col items-center">
                             <div
                               className={`w-2.5 h-2.5 rounded-full mt-1.5 ${
-                                event.type === 'alert'
-                                  ? 'bg-status-danger'
-                                  : event.type === 'checkpoint'
-                                  ? 'bg-status-success'
-                                  : 'bg-status-info'
+                                event.type === "alert"
+                                  ? "bg-status-danger"
+                                  : event.type === "checkpoint"
+                                    ? "bg-status-success"
+                                    : "bg-status-info"
                               }`}
                             />
                             {idx < selectedTrip.timeline.length - 1 && (

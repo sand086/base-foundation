@@ -40,7 +40,7 @@ export function AppHeader() {
       >
         <Search className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
         <span className="text-muted-foreground group-hover:text-foreground/80 transition-colors flex-1 text-left">
-          Buscar guías, clientes, unidades...
+          Buscar guías, clients, unidades...
         </span>
         {/* Keyboard shortcut hint */}
         <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground bg-background/80 rounded border border-border/50">

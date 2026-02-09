@@ -1,38 +1,40 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { Plus, Trash2, FileText, DollarSign } from 'lucide-react';
-import { ReceivableInvoice, InvoiceConcept, FinalizableService } from './types';
-import { mockClients } from '@/data/mockData';
+} from "@/components/ui/select";
+import { Plus, Trash2, FileText, DollarSign } from "lucide-react";
+import { ReceivableInvoice, InvoiceConcept, FinalizableService } from "./types";
+import { mockClients } from "@/data/mockData";
 
 interface CreateInvoiceModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (invoice: Omit<ReceivableInvoice, 'id' | 'folio' | 'cobros' | 'estatus'>) => void;
+  onSubmit: (
+    invoice: Omit<ReceivableInvoice, "id" | "folio" | "cobros" | "estatus">,
+  ) => void;
   importedServices?: FinalizableService[];
 }
 
 const creditDaysOptions = [
-  { value: 0, label: 'Contado' },
-  { value: 15, label: '15 días' },
-  { value: 30, label: '30 días' },
-  { value: 45, label: '45 días' },
-  { value: 60, label: '60 días' },
+  { value: 0, label: "Contado" },
+  { value: 15, label: "15 días" },
+  { value: 30, label: "30 días" },
+  { value: 45, label: "45 días" },
+  { value: 60, label: "60 días" },
 ];
 
 export function CreateInvoiceModal({
@@ -41,10 +43,12 @@ export function CreateInvoiceModal({
   onSubmit,
   importedServices,
 }: CreateInvoiceModalProps) {
-  const [clienteId, setClienteId] = useState('');
+  const [clienteId, setClienteId] = useState("");
   const [diasCredito, setDiasCredito] = useState(30);
-  const [moneda, setMoneda] = useState<'MXN' | 'USD'>('MXN');
-  const [fechaEmision, setFechaEmision] = useState(new Date().toISOString().split('T')[0]);
+  const [moneda, setMoneda] = useState<"MXN" | "USD">("MXN");
+  const [fechaEmision, setFechaEmision] = useState(
+    new Date().toISOString().split("T")[0],
+  );
   const [conceptos, setConceptos] = useState<InvoiceConcept[]>([]);
 
   // Initialize with imported services
@@ -52,33 +56,41 @@ export function CreateInvoiceModal({
     if (importedServices && importedServices.length > 0 && open) {
       // Set client from first service
       setClienteId(importedServices[0].clienteId);
-      
+
       // Create concepts from services
-      const newConceptos: InvoiceConcept[] = importedServices.map((srv, idx) => ({
-        id: `IMP-${idx}`,
-        descripcion: `Servicio de transporte: ${srv.ruta} (${srv.tipoUnidad})`,
-        cantidad: 1,
-        precioUnitario: srv.monto,
-        importe: srv.monto,
-      }));
-      
+      const newConceptos: InvoiceConcept[] = importedServices.map(
+        (srv, idx) => ({
+          id: `IMP-${idx}`,
+          descripcion: `Servicio de transporte: ${srv.ruta} (${srv.tipoUnidad})`,
+          cantidad: 1,
+          precioUnitario: srv.monto,
+          importe: srv.monto,
+        }),
+      );
+
       setConceptos(newConceptos);
     } else if (open && !importedServices) {
       // Reset for manual creation
-      setClienteId('');
+      setClienteId("");
       setConceptos([
-        { id: '1', descripcion: '', cantidad: 1, precioUnitario: 0, importe: 0 }
+        {
+          id: "1",
+          descripcion: "",
+          cantidad: 1,
+          precioUnitario: 0,
+          importe: 0,
+        },
       ]);
     }
   }, [importedServices, open]);
 
-  const selectedClient = mockClients.find(c => c.id === clienteId);
-  
+  const selectedClient = mockClients.find((c) => c.id === clienteId);
+
   // Calculate due date
   const fechaVencimiento = (() => {
     const date = new Date(fechaEmision);
     date.setDate(date.getDate() + diasCredito);
-    return date.toISOString().split('T')[0];
+    return date.toISOString().split("T")[0];
   })();
 
   // Calculate total
@@ -87,28 +99,40 @@ export function CreateInvoiceModal({
   const addConcepto = () => {
     setConceptos([
       ...conceptos,
-      { id: String(Date.now()), descripcion: '', cantidad: 1, precioUnitario: 0, importe: 0 }
+      {
+        id: String(Date.now()),
+        descripcion: "",
+        cantidad: 1,
+        precioUnitario: 0,
+        importe: 0,
+      },
     ]);
   };
 
   const removeConcepto = (id: string) => {
     if (conceptos.length > 1) {
-      setConceptos(conceptos.filter(c => c.id !== id));
+      setConceptos(conceptos.filter((c) => c.id !== id));
     }
   };
 
-  const updateConcepto = (id: string, field: keyof InvoiceConcept, value: string | number) => {
-    setConceptos(conceptos.map(c => {
-      if (c.id === id) {
-        const updated = { ...c, [field]: value };
-        // Recalculate importe
-        if (field === 'cantidad' || field === 'precioUnitario') {
-          updated.importe = updated.cantidad * updated.precioUnitario;
+  const updateConcepto = (
+    id: string,
+    field: keyof InvoiceConcept,
+    value: string | number,
+  ) => {
+    setConceptos(
+      conceptos.map((c) => {
+        if (c.id === id) {
+          const updated = { ...c, [field]: value };
+          // Recalculate importe
+          if (field === "cantidad" || field === "precioUnitario") {
+            updated.importe = updated.cantidad * updated.precioUnitario;
+          }
+          return updated;
         }
-        return updated;
-      }
-      return c;
-    }));
+        return c;
+      }),
+    );
   };
 
   const handleSubmit = () => {
@@ -116,8 +140,8 @@ export function CreateInvoiceModal({
 
     onSubmit({
       clienteId,
-      cliente: selectedClient?.razónSocial || '',
-      clienteRfc: selectedClient?.rfc || '',
+      cliente: selectedClient?.razónSocial || "",
+      clienteRfc: selectedClient?.rfc || "",
       conceptos,
       montoTotal,
       saldoPendiente: montoTotal,
@@ -125,7 +149,7 @@ export function CreateInvoiceModal({
       fechaEmision,
       fechaVencimiento,
       diasCredito,
-      serviciosRelacionados: importedServices?.map(s => s.id) || [],
+      serviciosRelacionados: importedServices?.map((s) => s.id) || [],
       requiereREP: false,
     });
 
@@ -138,7 +162,7 @@ export function CreateInvoiceModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-brand-dark">
             <FileText className="h-5 w-5" />
-            {importedServices ? 'Facturar Servicios' : 'Nueva Factura Manual'}
+            {importedServices ? "Facturar Servicios" : "Nueva Factura Manual"}
           </DialogTitle>
         </DialogHeader>
 
@@ -147,18 +171,20 @@ export function CreateInvoiceModal({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Cliente <span className="text-status-danger">*</span>
+                Client <span className="text-status-danger">*</span>
               </Label>
               <Select value={clienteId} onValueChange={setClienteId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccionar cliente" />
                 </SelectTrigger>
                 <SelectContent className="bg-card">
-                  {mockClients.filter(c => c.estatus === 'activo').map((client) => (
-                    <SelectItem key={client.id} value={client.id}>
-                      {client.razónSocial}
-                    </SelectItem>
-                  ))}
+                  {mockClients
+                    .filter((c) => c.estatus === "activo")
+                    .map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.razónSocial}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
@@ -166,9 +192,9 @@ export function CreateInvoiceModal({
               <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 RFC
               </Label>
-              <Input 
-                value={selectedClient?.rfc || ''} 
-                disabled 
+              <Input
+                value={selectedClient?.rfc || ""}
+                disabled
                 className="bg-muted"
               />
             </div>
@@ -190,7 +216,10 @@ export function CreateInvoiceModal({
               <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 Días de Crédito
               </Label>
-              <Select value={String(diasCredito)} onValueChange={(v) => setDiasCredito(Number(v))}>
+              <Select
+                value={String(diasCredito)}
+                onValueChange={(v) => setDiasCredito(Number(v))}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -207,7 +236,10 @@ export function CreateInvoiceModal({
               <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 Moneda
               </Label>
-              <Select value={moneda} onValueChange={(v: 'MXN' | 'USD') => setMoneda(v)}>
+              <Select
+                value={moneda}
+                onValueChange={(v: "MXN" | "USD") => setMoneda(v)}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -222,8 +254,12 @@ export function CreateInvoiceModal({
           {/* Due Date Preview */}
           <div className="p-3 bg-muted/50 rounded-md border">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Fecha de Vencimiento (calculada):</span>
-              <span className="font-semibold text-brand-dark">{fechaVencimiento}</span>
+              <span className="text-sm text-muted-foreground">
+                Fecha de Vencimiento (calculada):
+              </span>
+              <span className="font-semibold text-brand-dark">
+                {fechaVencimiento}
+              </span>
             </div>
           </div>
 
@@ -233,10 +269,10 @@ export function CreateInvoiceModal({
               <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 Conceptos
               </Label>
-              <Button 
-                type="button" 
-                variant="outline" 
-                size="sm" 
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
                 onClick={addConcepto}
                 className="gap-1"
               >
@@ -247,15 +283,21 @@ export function CreateInvoiceModal({
 
             <div className="space-y-2 max-h-[200px] overflow-y-auto">
               {conceptos.map((concepto, idx) => (
-                <div 
-                  key={concepto.id} 
+                <div
+                  key={concepto.id}
                   className="grid grid-cols-12 gap-2 items-center p-2 bg-muted/30 rounded border"
                 >
                   <div className="col-span-5">
                     <Input
                       placeholder="Descripción del concepto"
                       value={concepto.descripcion}
-                      onChange={(e) => updateConcepto(concepto.id, 'descripcion', e.target.value)}
+                      onChange={(e) =>
+                        updateConcepto(
+                          concepto.id,
+                          "descripcion",
+                          e.target.value,
+                        )
+                      }
                       className="h-8 text-sm"
                     />
                   </div>
@@ -263,8 +305,14 @@ export function CreateInvoiceModal({
                     <Input
                       type="number"
                       placeholder="Cant."
-                      value={concepto.cantidad || ''}
-                      onChange={(e) => updateConcepto(concepto.id, 'cantidad', Number(e.target.value))}
+                      value={concepto.cantidad || ""}
+                      onChange={(e) =>
+                        updateConcepto(
+                          concepto.id,
+                          "cantidad",
+                          Number(e.target.value),
+                        )
+                      }
                       className="h-8 text-sm text-center"
                       min={1}
                     />
@@ -273,14 +321,20 @@ export function CreateInvoiceModal({
                     <Input
                       type="number"
                       placeholder="Precio"
-                      value={concepto.precioUnitario || ''}
-                      onChange={(e) => updateConcepto(concepto.id, 'precioUnitario', Number(e.target.value))}
+                      value={concepto.precioUnitario || ""}
+                      onChange={(e) =>
+                        updateConcepto(
+                          concepto.id,
+                          "precioUnitario",
+                          Number(e.target.value),
+                        )
+                      }
                       className="h-8 text-sm"
                     />
                   </div>
                   <div className="col-span-2 text-right">
                     <span className="font-medium text-sm">
-                      ${concepto.importe.toLocaleString('es-MX')}
+                      ${concepto.importe.toLocaleString("es-MX")}
                     </span>
                   </div>
                   <div className="col-span-1 text-right">
@@ -308,7 +362,7 @@ export function CreateInvoiceModal({
                 <span className="font-medium">Total a Facturar</span>
               </div>
               <span className="text-2xl font-bold text-brand-green">
-                ${montoTotal.toLocaleString('es-MX')} {moneda}
+                ${montoTotal.toLocaleString("es-MX")} {moneda}
               </span>
             </div>
           </div>
@@ -317,8 +371,8 @@ export function CreateInvoiceModal({
           {importedServices && importedServices.length > 0 && (
             <div className="p-3 bg-emerald-50 rounded border border-emerald-200">
               <p className="text-sm text-emerald-700">
-                ✓ Esta factura incluye {importedServices.length} servicio(s) importados: {' '}
-                {importedServices.map(s => s.id).join(', ')}
+                ✓ Esta factura incluye {importedServices.length} servicio(s)
+                importados: {importedServices.map((s) => s.id).join(", ")}
               </p>
             </div>
           )}

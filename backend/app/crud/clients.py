@@ -4,7 +4,6 @@ from app.schemas import clients as schemas
 
 
 def get_clients(db: Session, skip: int = 0, limit: int = 100):
-    """Trae clientes con todas sus relaciones cargadas"""
     return (
         db.query(models.Client)
         .options(
@@ -16,7 +15,7 @@ def get_clients(db: Session, skip: int = 0, limit: int = 100):
     )
 
 
-def get_client(db: Session, client_id: str):
+def get_client(db: Session, client_id: int): # ID es int
     return (
         db.query(models.Client)
         .options(
@@ -26,11 +25,10 @@ def get_client(db: Session, client_id: str):
         .first()
     )
 
-
 def create_client(db: Session, client: schemas.ClientCreate):
-    # 1. Crear Cliente
+    # 1. Crear Client (Sin pasar ID manual)
     db_client = models.Client(
-        id=client.id,
+        public_id=client.public_id, # Si el front lo manda, lo guardamos
         razon_social=client.razon_social,
         rfc=client.rfc,
         regimen_fiscal=client.regimen_fiscal,
@@ -44,12 +42,12 @@ def create_client(db: Session, client: schemas.ClientCreate):
         dias_credito=client.dias_credito,
     )
     db.add(db_client)
+    db.flush() # Importante: Genera el db_client.id sin hacer commit final
 
     # 2. Crear Subclientes
     for sub in client.sub_clients:
         db_sub = models.SubClient(
-            id=sub.id,
-            client_id=client.id,
+            client_id=db_client.id, # Usamos el ID generado
             nombre=sub.nombre,
             alias=sub.alias,
             direccion=sub.direccion,
@@ -65,12 +63,12 @@ def create_client(db: Session, client: schemas.ClientCreate):
             convenio_especial=sub.convenio_especial,
         )
         db.add(db_sub)
+        db.flush() # Generar ID del subcliente
 
         # 3. Crear Tarifas
         for tariff in sub.tariffs:
             db_tariff = models.Tariff(
-                id=tariff.id,
-                sub_client_id=sub.id,
+                sub_client_id=db_sub.id, # Usamos ID del subcliente
                 nombre_ruta=tariff.nombre_ruta,
                 tipo_unidad=tariff.tipo_unidad,
                 tarifa_base=tariff.tarifa_base,
@@ -84,7 +82,6 @@ def create_client(db: Session, client: schemas.ClientCreate):
     db.commit()
     db.refresh(db_client)
     return db_client
-
 
 def update_client(db: Session, client_id: str, client_data: schemas.ClientUpdate):
     db_client = get_client(db, client_id)

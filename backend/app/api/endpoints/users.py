@@ -148,7 +148,7 @@ def delete_role(role_id: str, db: Session = Depends(get_db)):
 DEFAULT_MODULES = [
     {"id": "dashboard", "nombre": "Dashboard", "icono": "LayoutDashboard"},
     {"id": "monitoreo", "nombre": "Centro de Monitoreo", "icono": "Radio"},
-    {"id": "clientes", "nombre": "Clientes", "icono": "Users"},
+    {"id": "clients", "nombre": "Clientes", "icono": "Users"},
     {"id": "flota", "nombre": "Flota", "icono": "Truck"},
     {"id": "combustible", "nombre": "Combustible", "icono": "Fuel"},
     {"id": "tarifas", "nombre": "Tarifas", "icono": "DollarSign"},
