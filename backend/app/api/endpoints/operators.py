@@ -27,7 +27,7 @@ def create_operator(operator: schemas.OperatorCreate, db: Session = Depends(get_
 
 @router.put("/operators/{operator_id}", response_model=schemas.OperatorResponse)
 def update_operator(
-    operator_id: str, operator: schemas.OperatorUpdate, db: Session = Depends(get_db)
+    operator_id: int, operator: schemas.OperatorUpdate, db: Session = Depends(get_db) # <--- int
 ):
     db_op = crud.update_operator(db, operator_id, operator)
     if not db_op:
@@ -36,7 +36,7 @@ def update_operator(
 
 
 @router.delete("/operators/{operator_id}")
-def delete_operator(operator_id: str, db: Session = Depends(get_db)):
+def delete_operator(operator_id: int, db: Session = Depends(get_db)):
     if not crud.delete_operator(db, operator_id):
         raise HTTPException(status_code=404, detail="Operador no encontrado")
     return {"message": "Operador eliminado"}

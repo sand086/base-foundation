@@ -41,7 +41,6 @@ const getExpiryStatus = (dateString: string) => {
 export default function FlotaOperadores() {
   const { toast } = useToast();
 
-  // --- USAR HOOK REAL ---
   const {
     operadores,
     isLoading,
@@ -91,8 +90,7 @@ export default function FlotaOperadores() {
       success = await updateOperator(operadorToEdit.id, operadorData);
     } else {
       // Generar ID temporal si el backend lo requiere o dejar que backend genere
-      const newOp = { ...operadorData, id: `OP-${Date.now()}` };
-      success = await createOperator(newOp);
+      success = await createOperator(operadorData);
     }
 
     setIsSaving(false);

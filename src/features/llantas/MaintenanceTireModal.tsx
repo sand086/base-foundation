@@ -19,19 +19,29 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { GlobalTire } from "./types";
+import { GlobalTire } from "@/services/tireService";
 import { Wrench, RefreshCw, Trash2, DollarSign } from "lucide-react";
 
-type MaintenanceType = 'reparacion' | 'renovado' | 'desecho';
+type MaintenanceType = "reparacion" | "renovado" | "desecho";
 
 interface MaintenanceTireModalProps {
   tire: GlobalTire | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (tireId: string, tipo: MaintenanceType, costo: number, descripcion: string) => void;
+  onSubmit: (
+    tireId: string,
+    tipo: MaintenanceType,
+    costo: number,
+    descripcion: string,
+  ) => void;
 }
 
-export function MaintenanceTireModal({ tire, open, onOpenChange, onSubmit }: MaintenanceTireModalProps) {
+export function MaintenanceTireModal({
+  tire,
+  open,
+  onOpenChange,
+  onSubmit,
+}: MaintenanceTireModalProps) {
   const [tipo, setTipo] = useState<MaintenanceType | "">("");
   const [costo, setCosto] = useState("");
   const [descripcion, setDescripcion] = useState("");
@@ -45,29 +55,15 @@ export function MaintenanceTireModal({ tire, open, onOpenChange, onSubmit }: Mai
     }
 
     const costoNum = parseFloat(costo) || 0;
-    onSubmit(tire.id, tipo, costoNum, descripcion);
-    
-    const tipoLabels = {
-      reparacion: 'Reparación',
-      renovado: 'Renovado',
-      desecho: 'Desecho'
-    };
-    
-    toast.success(`Llanta ${tire.codigoInterno} enviada a ${tipoLabels[tipo]}`);
-    
+
+    // Enviamos ID como string, el padre lo convierte a number
+    onSubmit(tire.id.toString(), tipo, costoNum, descripcion);
+
     // Reset form
     setTipo("");
     setCosto("");
     setDescripcion("");
-    onOpenChange(false);
-  };
-
-  const getIcon = (t: MaintenanceType) => {
-    switch (t) {
-      case 'reparacion': return <Wrench className="h-4 w-4" />;
-      case 'renovado': return <RefreshCw className="h-4 w-4" />;
-      case 'desecho': return <Trash2 className="h-4 w-4" />;
-    }
+    // No cerramos aquí, dejamos que el padre cierre tras el éxito o error
   };
 
   return (
@@ -79,68 +75,61 @@ export function MaintenanceTireModal({ tire, open, onOpenChange, onSubmit }: Mai
             Mantenimiento de Llanta
           </DialogTitle>
           <DialogDescription>
-            {tire.codigoInterno} - {tire.marca} {tire.modelo}
+            {tire.codigo_interno} - {tire.marca} {tire.modelo}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* Current Status */}
+          {/* Resumen Estado Actual */}
           <div className="p-3 bg-muted rounded-lg grid grid-cols-2 gap-2 text-sm">
             <div>
-              <span className="text-muted-foreground">Estado actual:</span>
+              <span className="text-muted-foreground">Estado:</span>
               <p className="font-medium capitalize">{tire.estado}</p>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Profundidad:</span>
-              <p className="font-medium">{tire.profundidadActual} mm</p>
             </div>
             <div>
               <span className="text-muted-foreground">Ubicación:</span>
               <p className="font-medium">
-                {tire.unidadActual ? `${tire.unidadActual}` : 'Almacén'}
+                {tire.unidad_actual_economico || "Almacén"}
               </p>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Km recorridos:</span>
-              <p className="font-medium">{tire.kmRecorridos.toLocaleString()}</p>
             </div>
           </div>
 
-          {/* Maintenance Type */}
+          {/* Tipo Mantenimiento */}
           <div className="space-y-2">
-            <Label>Tipo de Mantenimiento</Label>
-            <Select value={tipo} onValueChange={(v) => setTipo(v as MaintenanceType)}>
+            <Label>Tipo de Acción</Label>
+            <Select
+              value={tipo}
+              onValueChange={(v) => setTipo(v as MaintenanceType)}
+            >
               <SelectTrigger>
-                <SelectValue placeholder="Seleccionar tipo..." />
+                <SelectValue placeholder="Seleccionar..." />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="reparacion">
                   <div className="flex items-center gap-2">
-                    <Wrench className="h-4 w-4 text-amber-600" />
-                    Reparación
+                    <Wrench className="h-4 w-4 text-amber-600" /> Reparación
                   </div>
                 </SelectItem>
                 <SelectItem value="renovado">
                   <div className="flex items-center gap-2">
-                    <RefreshCw className="h-4 w-4 text-purple-600" />
-                    Enviar a Renovado
+                    <RefreshCw className="h-4 w-4 text-purple-600" /> Enviar a
+                    Renovado
                   </div>
                 </SelectItem>
                 <SelectItem value="desecho">
                   <div className="flex items-center gap-2">
-                    <Trash2 className="h-4 w-4 text-rose-600" />
-                    Enviar a Desecho
+                    <Trash2 className="h-4 w-4 text-rose-600" /> Enviar a
+                    Desecho
                   </div>
                 </SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          {/* Cost */}
+          {/* Costo */}
           <div className="space-y-2">
             <Label className="flex items-center gap-2">
-              <DollarSign className="h-4 w-4" />
-              Costo Estimado (MXN)
+              <DollarSign className="h-4 w-4" /> Costo Estimado (MXN)
             </Label>
             <Input
               type="number"
@@ -150,21 +139,21 @@ export function MaintenanceTireModal({ tire, open, onOpenChange, onSubmit }: Mai
             />
           </div>
 
-          {/* Description */}
+          {/* Descripción */}
           <div className="space-y-2">
-            <Label>Descripción / Observaciones</Label>
+            <Label>Observaciones</Label>
             <Textarea
-              placeholder="Detalles del mantenimiento, daños observados, proveedor..."
+              placeholder="Detalles del daño, proveedor, factura..."
               value={descripcion}
               onChange={(e) => setDescripcion(e.target.value)}
               rows={3}
             />
           </div>
 
-          {/* Warning for Desecho */}
-          {tipo === 'desecho' && (
+          {tipo === "desecho" && (
             <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-sm text-rose-700">
-              ⚠️ Al enviar a desecho, la llanta quedará marcada como inutilizable y se descontará del inventario activo.
+              ⚠️ Al confirmar desecho, la llanta se marcará como inactiva
+              permanentemente.
             </div>
           )}
         </div>
@@ -173,11 +162,11 @@ export function MaintenanceTireModal({ tire, open, onOpenChange, onSubmit }: Mai
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button 
+          <Button
             onClick={handleSubmit}
-            variant={tipo === 'desecho' ? 'destructive' : 'default'}
+            variant={tipo === "desecho" ? "destructive" : "default"}
           >
-            {tipo === 'desecho' ? 'Confirmar Desecho' : 'Registrar Mantenimiento'}
+            {tipo === "desecho" ? "Confirmar Baja" : "Registrar"}
           </Button>
         </DialogFooter>
       </DialogContent>

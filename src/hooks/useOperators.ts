@@ -23,7 +23,8 @@ export const useOperators = () => {
     fetchOperators();
   }, [fetchOperators]);
 
-  const createOperator = async (operador: Operador) => {
+  // CORRECCIÓN: Usamos Omit<Operador, "id"> para crear, ya que no tenemos ID aún
+  const createOperator = async (operador: Omit<Operador, "id">) => {
     try {
       await operatorService.create(operador);
       toast.success("Operador registrado exitosamente");
@@ -35,7 +36,8 @@ export const useOperators = () => {
     }
   };
 
-  const updateOperator = async (id: string, operador: Partial<Operador>) => {
+  // CORRECCIÓN: id es number
+  const updateOperator = async (id: number, operador: Partial<Operador>) => {
     try {
       await operatorService.update(id, operador);
       toast.success("Operador actualizado");
@@ -47,7 +49,8 @@ export const useOperators = () => {
     }
   };
 
-  const deleteOperator = async (id: string) => {
+  // CORRECCIÓN: id es number
+  const deleteOperator = async (id: number) => {
     try {
       await operatorService.delete(id);
       toast.success("Operador dado de baja");

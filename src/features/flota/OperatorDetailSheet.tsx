@@ -42,8 +42,10 @@ import {
   Eye,
   Download,
 } from "lucide-react";
-// IMPORTANTE: Usamos la interfaz real del servicio
+
+// IMPORTANTE: interfaz real del servicio (ID numérico, etc.)
 import { Operador } from "@/services/operatorService";
+
 import { format, differenceInYears, isValid } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -64,7 +66,7 @@ interface DocumentItem {
   fileUrl?: string; // URL para previsualización local
 }
 
-// --- Helpers de Fecha y Estado (Adaptados para datos reales) ---
+// --- Helpers de Fecha y Estado ---
 
 const getDaysUntilExpiry = (dateString?: string): number => {
   if (!dateString) return -1;
@@ -84,8 +86,8 @@ const getExpiryStatus = (
   return "success";
 };
 
-const getStatusColor = (status: string) => {
-  switch (status) {
+const getStatusColor = (status?: string) => {
+  switch ((status || "").toLowerCase()) {
     case "activo":
       return "ring-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.4)]";
     case "inactivo":
@@ -99,7 +101,7 @@ const getStatusColor = (status: string) => {
   }
 };
 
-const getStatusLabel = (status: string) => {
+const getStatusLabel = (status?: string) => {
   if (!status) return "Desconocido";
   const s = status.toLowerCase();
   switch (s) {
@@ -168,11 +170,12 @@ export function OperatorDetailSheet({
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
+
   const [isEditing, setIsEditing] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadingDocId, setUploadingDocId] = useState<string | null>(null);
 
-  // Form State
+  // Form State (fechas como Date)
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
@@ -184,13 +187,10 @@ export function OperatorDetailSheet({
     emergency_phone: "",
   });
 
-  // Mock documents (estos se generan dinámicamente según el operador)
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
 
-  // Initialize form safely
   useEffect(() => {
     if (operator && open) {
-      // Safe date parsing helper
       const parseDateSafe = (dateStr?: string) => {
         if (!dateStr) return new Date();
         const d = new Date(dateStr);
@@ -200,15 +200,16 @@ export function OperatorDetailSheet({
       setFormData({
         name: operator.name || "",
         phone: operator.phone || "",
+        // Email temporal si no existe
         email: `${operator.name?.toLowerCase().replace(/\s+/g, ".") || "user"}@rapidos3t.com`,
         license_number: operator.license_number || "",
+        // Backend: string "YYYY-MM-DD" => Date
         license_expiry: parseDateSafe(operator.license_expiry),
         medical_check_expiry: parseDateSafe(operator.medical_check_expiry),
         emergency_contact: operator.emergency_contact || "",
         emergency_phone: operator.emergency_phone || "",
       });
 
-      // Generar estado de documentos basado en fechas reales
       setDocuments([
         {
           id: "lic",
@@ -255,36 +256,35 @@ export function OperatorDetailSheet({
   }, [operator, open]);
 
   const handleStartEditing = () => setIsEditing(true);
-  const handleCancelEditing = () => setIsEditing(false); // Reset se maneja en useEffect
+  const handleCancelEditing = () => setIsEditing(false); // reset por useEffect
 
   const handleSave = () => {
-    if (operator) {
-      const updatedOperator: Operador = {
-        ...operator,
-        name: formData.name,
-        phone: formData.phone,
-        license_number: formData.license_number,
-        license_expiry: format(formData.license_expiry, "yyyy-MM-dd"),
-        medical_check_expiry: format(
-          formData.medical_check_expiry,
-          "yyyy-MM-dd",
-        ),
-        // CORRECCIÓN: Agregar campos de emergencia
-        emergency_contact: formData.emergency_contact,
-        emergency_phone: formData.emergency_phone,
-      };
+    if (!operator) return;
 
-      onSave?.(updatedOperator);
+    const updatedOperator: Operador = {
+      ...operator, // mantiene id:number, status, assigned_unit_id, etc.
+      name: formData.name,
+      phone: formData.phone,
+      license_number: formData.license_number,
+      // Date => "YYYY-MM-DD"
+      license_expiry: format(formData.license_expiry, "yyyy-MM-dd"),
+      medical_check_expiry: format(formData.medical_check_expiry, "yyyy-MM-dd"),
+      // emergencia
+      emergency_contact: formData.emergency_contact,
+      emergency_phone: formData.emergency_phone,
+    };
 
-      toast({
-        title: "Cambios guardados",
-        description: `El expediente de ${formData.name} ha sido actualizado.`,
-      });
-    }
+    onSave?.(updatedOperator);
+
+    toast({
+      title: "Cambios guardados",
+      description: `El expediente de ${formData.name} ha sido actualizado.`,
+    });
+
     setIsEditing(false);
   };
 
-  // --- File Handlers (Mantenemos la lógica de UI intacta) ---
+  // --- File Handlers ---
   const handleFileUpload = (docId: string) => {
     setUploadingDocId(docId);
     fileInputRef.current?.click();
@@ -293,7 +293,6 @@ export function OperatorDetailSheet({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && uploadingDocId) {
-      // Crear URL temporal para vista previa local
       const tempUrl = URL.createObjectURL(file);
 
       setDocuments((prev) =>
@@ -302,8 +301,8 @@ export function OperatorDetailSheet({
             ? {
                 ...doc,
                 fileName: file.name,
-                status: "vigente" as const,
-                fileUrl: tempUrl, // Guardar URL para preview
+                status: "vigente",
+                fileUrl: tempUrl,
                 type: file.type.includes("image") ? "image" : "pdf",
               }
             : doc,
@@ -314,6 +313,7 @@ export function OperatorDetailSheet({
         title: "Documento subido",
         description: `${file.name} cargado correctamente.`,
       });
+
       setUploadingDocId(null);
     }
     e.target.value = "";
@@ -322,25 +322,26 @@ export function OperatorDetailSheet({
   const handleViewDocument = (doc: DocumentItem) => {
     if (doc.fileUrl) {
       window.open(doc.fileUrl, "_blank");
-    } else {
-      toast({
-        title: "Archivo no disponible",
-        description: "Este es un archivo de demostración sin contenido real.",
-        variant: "default",
-      });
+      return;
     }
+
+    toast({
+      title: "Archivo no disponible",
+      description: "Este es un archivo de demostración sin contenido real.",
+    });
   };
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(true);
   };
-  const handleDragLeave = () => {
-    setIsDragOver(false);
-  };
+
+  const handleDragLeave = () => setIsDragOver(false);
+
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
+
     if (e.dataTransfer.files.length > 0) {
       toast({
         title: "Archivos detectados",
@@ -352,7 +353,6 @@ export function OperatorDetailSheet({
 
   if (!operator) return null;
 
-  // Calculamos variables derivadas de forma segura
   const daysUntilLicense = getDaysUntilExpiry(operator.license_expiry);
   const daysUntilMedical = getDaysUntilExpiry(operator.medical_check_expiry);
   const licenseStatus = getExpiryStatus(operator.license_expiry);
@@ -384,6 +384,7 @@ export function OperatorDetailSheet({
           <SheetTitle className="text-lg font-semibold">
             Expediente de Operador
           </SheetTitle>
+
           <div className="flex items-center gap-2">
             {isEditing ? (
               <>
@@ -395,6 +396,7 @@ export function OperatorDetailSheet({
                 >
                   <X className="h-4 w-4" /> Cancelar
                 </Button>
+
                 <Button
                   size="sm"
                   onClick={handleSave}
@@ -416,7 +418,7 @@ export function OperatorDetailSheet({
           </div>
         </SheetHeader>
 
-        {/* Hero Section */}
+        {/* Hero */}
         <div className="flex flex-col items-center text-center mb-6 pt-2">
           <div className="relative group">
             <div
@@ -427,24 +429,27 @@ export function OperatorDetailSheet({
                   src={`https://api.dicebear.com/7.x/initials/svg?seed=${operator.name}`}
                 />
                 <AvatarFallback className="text-2xl font-bold">
-                  {operator.name.slice(0, 2).toUpperCase()}
+                  {(operator.name || "OP").slice(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
+
               {isEditing && (
                 <button
                   onClick={() => avatarInputRef.current?.click()}
                   className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  type="button"
                 >
                   <Camera className="h-6 w-6 text-white" />
                 </button>
               )}
             </div>
+
             <div
               className={cn(
                 "absolute -bottom-1 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full text-xs font-semibold",
-                operator.status === "activo"
+                (operator.status || "").toLowerCase() === "activo"
                   ? "bg-emerald-500 text-white"
-                  : operator.status === "inactivo"
+                  : (operator.status || "").toLowerCase() === "inactivo"
                     ? "bg-rose-500 text-white"
                     : "bg-amber-500 text-black",
               )}
@@ -459,14 +464,14 @@ export function OperatorDetailSheet({
                 <Input
                   value={formData.name}
                   onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, name: e.target.value }))
+                    setFormData((p) => ({ ...p, name: e.target.value }))
                   }
                   className="text-center text-xl font-bold bg-white/5"
                 />
                 <Input
                   value={formData.phone}
                   onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, phone: e.target.value }))
+                    setFormData((p) => ({ ...p, phone: e.target.value }))
                   }
                   className="text-center text-sm bg-white/5"
                   placeholder="Teléfono"
@@ -476,7 +481,7 @@ export function OperatorDetailSheet({
               <>
                 <h2 className="text-xl font-bold">{operator.name}</h2>
                 <p className="text-sm text-muted-foreground flex items-center justify-center gap-1">
-                  <User className="h-3.5 w-3.5" /> {operator.id}
+                  <User className="h-3.5 w-3.5" /> ID: {operator.id}
                 </p>
               </>
             )}
@@ -487,6 +492,7 @@ export function OperatorDetailSheet({
               <Truck className="h-3 w-3" /> Unidad {operator.assigned_unit}
             </Badge>
           )}
+
           {!isEditing && (
             <p className="text-xs text-muted-foreground mt-1">
               {yearsOfService > 0 ? `${yearsOfService} años` : "Menos de 1 año"}{" "}
@@ -495,7 +501,7 @@ export function OperatorDetailSheet({
           )}
         </div>
 
-        {/* Bento Grid Content */}
+        {/* Content */}
         <div className="space-y-4">
           {/* License Card */}
           <div className="relative overflow-hidden rounded-2xl p-4 bg-gradient-to-br from-primary/10 to-transparent border border-white/10 backdrop-blur-sm">
@@ -512,6 +518,7 @@ export function OperatorDetailSheet({
                   Tipo {operator.license_type}
                 </p>
               </div>
+
               <Badge
                 className={cn(
                   "text-[10px]",
@@ -541,6 +548,7 @@ export function OperatorDetailSheet({
                     className="h-8 text-sm font-mono mt-1"
                   />
                 </div>
+
                 <div>
                   <Label className="text-xs">Vencimiento</Label>
                   <div className="mt-1">
@@ -590,7 +598,9 @@ export function OperatorDetailSheet({
                   </div>
                   <div className="relative h-2 rounded-full bg-muted/50 overflow-hidden">
                     <div
-                      className={`absolute inset-y-0 left-0 rounded-full ${getLicenseProgressColor(operator.license_expiry)}`}
+                      className={`absolute inset-y-0 left-0 rounded-full ${getLicenseProgressColor(
+                        operator.license_expiry,
+                      )}`}
                       style={{ width: "100%" }}
                     />
                   </div>
@@ -627,6 +637,7 @@ export function OperatorDetailSheet({
                   <XCircle className="h-6 w-6 text-rose-500" />
                 )}
               </div>
+
               <div className="flex-1">
                 <p className="text-sm font-semibold">Examen Psicofísico</p>
                 <p
@@ -645,6 +656,7 @@ export function OperatorDetailSheet({
                       : "VIGENTE"}
                 </p>
               </div>
+
               {isEditing ? (
                 <Popover>
                   <PopoverTrigger asChild>
@@ -679,11 +691,12 @@ export function OperatorDetailSheet({
             </div>
           </div>
 
-          {/* Document Management Section */}
+          {/* Document Management */}
           <div className="rounded-xl p-4 bg-white/5 border border-white/10 backdrop-blur-sm">
             <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
               <FileText className="h-4 w-4 text-primary" /> Documentación Legal
             </h3>
+
             <div className="space-y-2 mb-4">
               {documents.map((doc) => (
                 <div
@@ -697,22 +710,24 @@ export function OperatorDetailSheet({
                       <ImageIcon className="h-4 w-4 text-sky-400" />
                     )}
                   </div>
+
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{doc.name}</p>
                     <p className="text-xs text-muted-foreground truncate">
                       {doc.fileName || "Sin archivo"}
                     </p>
                   </div>
+
                   <div className="flex items-center gap-2">
                     {getDocStatusBadge(doc.status)}
 
-                    {/* Botón Ver/Descargar */}
                     {(doc.fileName || doc.fileUrl) && (
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleViewDocument(doc)}
                         className="h-8 w-8 p-0 opacity-70 hover:opacity-100"
+                        type="button"
                       >
                         {doc.fileUrl ? (
                           <Eye className="h-4 w-4 text-sky-400" />
@@ -728,6 +743,7 @@ export function OperatorDetailSheet({
                         size="sm"
                         onClick={() => handleFileUpload(doc.id)}
                         className="h-8 w-8 p-0 opacity-70 hover:opacity-100"
+                        type="button"
                       >
                         <UploadCloud className="h-4 w-4 text-primary" />
                       </Button>
@@ -737,7 +753,6 @@ export function OperatorDetailSheet({
               ))}
             </div>
 
-            {/* Drag & Drop Zone */}
             {isEditing && (
               <div
                 onDragOver={handleDragOver}
@@ -767,16 +782,18 @@ export function OperatorDetailSheet({
             )}
           </div>
 
-          {/* Contact Info (Editable) */}
+          {/* Contact Info */}
           <div className="rounded-xl p-4 bg-white/5 border border-white/10 backdrop-blur-sm">
             <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
               <Phone className="h-4 w-4 text-primary" /> Contacto
             </h3>
+
             <div className="space-y-3">
               <div className="flex items-center gap-3 text-sm">
                 <div className="p-2 rounded-lg bg-muted/30">
                   <Phone className="h-4 w-4 text-muted-foreground" />
                 </div>
+
                 <div className="w-full">
                   <p className="text-xs text-muted-foreground">Móvil</p>
                   {isEditing ? (
@@ -792,10 +809,12 @@ export function OperatorDetailSheet({
                   )}
                 </div>
               </div>
+
               <div className="flex items-center gap-3 text-sm">
                 <div className="p-2 rounded-lg bg-muted/30">
                   <Heart className="h-4 w-4 text-rose-400" />
                 </div>
+
                 <div className="w-full">
                   <p className="text-xs text-muted-foreground">
                     Emergencia (Contacto / Tel)
@@ -838,12 +857,13 @@ export function OperatorDetailSheet({
             </div>
           </div>
 
-          {/* Badges (Read-Only) */}
+          {/* Badges Read-only */}
           {!isEditing && (
             <div className="rounded-xl p-4 bg-gradient-to-br from-amber-500/5 to-transparent border border-white/10">
               <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
                 <Award className="h-4 w-4 text-amber-500" /> Reconocimientos
               </h3>
+
               <div className="flex flex-wrap gap-2">
                 <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
                   <Shield className="h-3 w-3 mr-1" /> Sin Accidentes

@@ -281,77 +281,76 @@ export default function ClientsNew() {
   // Cargar datos (READ) desde backend
   // -----------------------------
 
+  // --- CARGAR DATOS (READ) ---
   useEffect(() => {
-    const loadClient = async () => {
-      if (!clientId) return;
+    const loadClientData = async () => {
+      if (!clientId) return; // Modo crear, no hacemos nada
+
+      const id = parseInt(clientId); // Convertir ID de URL a número
+      if (isNaN(id)) return;
 
       setLoadingData(true);
       try {
-        const id = parseInt(clientId, 10);
-        if (Number.isNaN(id)) throw new Error("ID inválido");
-
+        // 1. Petición al Backend Real
         const data = await clientService.getClient(id);
 
-        // 1) Mapear fiscales backend -> form
+        // 2. Mapear Datos Fiscales (Snake Case del Backend -> Camel Case del Form)
         setFiscalData({
-          razonSocial: (data as any).razon_social ?? "",
-          rfc: (data as any).rfc ?? "",
-          regimenFiscal: (data as any).regimen_fiscal ?? "",
-          usoCFDI: (data as any).uso_cfdi ?? "",
-          codigoPostalFiscal: (data as any).codigo_postal_fiscal ?? "",
-          direccionFiscal: (data as any).direccion_fiscal ?? "",
-          contactoPrincipal: (data as any).contacto_principal ?? "",
-          telefono: (data as any).telefono ?? "",
-          email: (data as any).email ?? "",
-          contratoUrl: (data as any).contrato_url ?? "",
+          razonSocial: data.razon_social,
+          rfc: data.rfc,
+          regimenFiscal: data.regimen_fiscal || "",
+          usoCFDI: data.uso_cfdi || "",
+          codigoPostalFiscal: data.codigo_postal_fiscal || "",
+          direccionFiscal: data.direccion_fiscal || "",
+          contactoPrincipal: data.contacto_principal || "",
+          telefono: data.telefono || "",
+          email: data.email || "",
+          contratoUrl: data.contrato_url || "",
         });
 
-        // 2) Mapear subclientes y tarifas backend -> form (IDs number -> string)
-        const subsMapped: SubClienteForm[] = (
-          (data as any).sub_clients ?? []
-        ).map((sub: any) => ({
-          id: String(sub.id ?? ""),
-          nombre: sub.nombre ?? "",
-          alias: sub.alias ?? "",
-          direccion: sub.direccion ?? "",
-          ciudad: sub.ciudad ?? "",
-          estado: sub.estado ?? "",
-          codigoPostal: sub.codigo_postal ?? "",
-          tipoOperacion: sub.tipo_operacion ?? "",
-          contacto: sub.contacto ?? "",
-          telefono: sub.telefono ?? "",
-          horarioRecepcion: sub.horario_recepcion ?? "",
-          horarioCita: sub.horario_cita ?? "", // si no existe, se queda ""
-          diasCredito: sub.dias_credito ?? 0,
-          requiereContrato: !!sub.requiere_contrato,
-          convenioEspecial: !!sub.convenio_especial,
-          contratoAdjunto: sub.contrato_adjunto ?? "",
-          tarifas: (sub.tariffs ?? []).map((t: any) => ({
-            id: String(t.id ?? ""),
-            nombreRuta: t.nombre_ruta ?? "",
-            tipoUnidad: t.tipo_unidad ?? "sencillo",
-            tarifaBase: t.tarifa_base ?? 0,
-            costoCasetas: t.costo_casetas ?? 0,
-            moneda: (t.moneda ?? "MXN") as "MXN" | "USD",
-            vigencia: t.vigencia ?? "",
-          })),
-        }));
+        // 3. Mapear Subclientes y Tarifas anidadas
+        // Nota: El backend devuelve `sub_clients` y `tariffs`
+        const mappedSubClients: SubClienteForm[] = (data.sub_clients || []).map(
+          (sub) => ({
+            id: sub.id.toString(), // Convertimos a string para que el form lo maneje
+            nombre: sub.nombre,
+            alias: sub.alias || "",
+            direccion: sub.direccion,
+            ciudad: sub.ciudad,
+            estado: sub.estado,
+            codigoPostal: sub.codigo_postal || "",
+            tipoOperacion: sub.tipo_operacion,
+            contacto: sub.contacto || "",
+            telefono: sub.telefono || "",
+            horarioRecepcion: sub.horario_recepcion || "",
+            horarioCita: "", // Campo visual, quizas no en BD aun
+            diasCredito: sub.dias_credito || 0,
+            requiereContrato: sub.requiere_contrato,
+            convenioEspecial: sub.convenio_especial,
+            tarifas: (sub.tariffs || []).map((t) => ({
+              id: t.id.toString(),
+              nombreRuta: t.nombre_ruta,
+              tipoUnidad: t.tipo_unidad,
+              tarifaBase: t.tarifa_base,
+              costoCasetas: t.costo_casetas,
+              moneda: t.moneda as "MXN" | "USD",
+              vigencia: t.vigencia,
+            })),
+          }),
+        );
 
-        setSubClientes(subsMapped);
-
-        toast.info("Modo edición", {
-          description: `Editando: ${(data as any).razon_social ?? "Cliente"}`,
-        });
+        setSubClientes(mappedSubClients);
+        toast.info(`Cliente cargado: ${data.razon_social}`);
       } catch (error) {
-        console.error(error);
-        toast.error("Error al cargar cliente");
+        console.error("Error cargando cliente:", error);
+        toast.error("Error al cargar los datos del cliente");
         navigate("/clients");
       } finally {
         setLoadingData(false);
       }
     };
 
-    loadClient();
+    loadClientData();
   }, [clientId, navigate]);
 
   // -----------------------------
@@ -476,12 +475,13 @@ export default function ClientsNew() {
   };
 
   const getOperationBadge = (tipo: string) => {
-    switch (tipo) {
+    // Aseguramos minúsculas por si acaso
+    switch (tipo?.toLowerCase()) {
       case "nacional":
-        return <Badge className="bg-status-success text-white">Nacional</Badge>;
-      case "importacion":
-        return <Badge className="bg-status-info text-white">Importación</Badge>;
-      case "exportacion":
+        return <Badge className="bg-emerald-500 text-white">Nacional</Badge>;
+      case "importación":
+        return <Badge className="bg-blue-500 text-white">Importación</Badge>;
+      case "exportación":
         return <Badge className="bg-amber-500 text-white">Exportación</Badge>;
       default:
         return <Badge variant="outline">Sin definir</Badge>;
@@ -493,30 +493,18 @@ export default function ClientsNew() {
   // -----------------------------
 
   const handleSave = async () => {
-    // Validaciones
     if (!fiscalData.razonSocial || !fiscalData.rfc) {
-      toast.error("Razón Social y RFC son obligatorios");
+      toast.error("Complete los datos fiscales obligatorios");
       return;
     }
     if (!validateRFC(fiscalData.rfc)) {
-      toast.error("RFC inválido", {
-        description: "Debe tener 12-13 caracteres",
-      });
-      return;
-    }
-    if (
-      fiscalData.codigoPostalFiscal &&
-      !validateCodigoPostal(fiscalData.codigoPostalFiscal)
-    ) {
-      toast.error("Código Postal inválido", {
-        description: "Debe tener 5 dígitos",
-      });
+      toast.error("RFC inválido");
       return;
     }
     if (!validateTarifas()) return;
 
     try {
-      // Payload snake_case + IDs number
+      // Payload para el backend (Snake Case)
       const payload: Partial<Client> = {
         razon_social: fiscalData.razonSocial,
         rfc: fiscalData.rfc,
@@ -530,12 +518,14 @@ export default function ClientsNew() {
         contrato_url: fiscalData.contratoUrl,
         estatus: "activo",
 
+        // Mapeo inverso de subclientes y tarifas
         sub_clients: subClientes.map((sub) => {
-          const isNewSub = isTempSubId(sub.id);
+          // Detectar si es un ID temporal (empieza con SUB-) o real
+          const subId = sub.id.startsWith("SUB-") ? 0 : parseInt(sub.id);
 
           return {
-            id: isNewSub ? 0 : safeToInt(sub.id),
-            client_id: 0, // backend lo asigna
+            id: subId,
+            client_id: 0, // Se ignora en create/update
             nombre: sub.nombre,
             alias: sub.alias,
             direccion: sub.direccion,
@@ -546,15 +536,18 @@ export default function ClientsNew() {
             contacto: sub.contacto,
             telefono: sub.telefono,
             horario_recepcion: sub.horarioRecepcion,
-            // horario_cita: sub.horarioCita, // actívalo si tu backend existe este campo
             dias_credito: sub.diasCredito,
             requiere_contrato: sub.requiereContrato,
             convenio_especial: sub.convenioEspecial,
-            // contrato_adjunto: sub.contratoAdjunto, // idem
             tariffs: sub.tarifas.map((t) => {
-              const isNewTariff = isTempTarId(t.id);
+              // Detectar si es tarifa temporal (TAR-) o real
+              const tarId =
+                t.id && t.id.toString().startsWith("TAR-")
+                  ? 0
+                  : parseInt(t.id?.toString() || "0");
+
               return {
-                id: isNewTariff ? 0 : safeToInt(t.id),
+                id: tarId,
                 sub_client_id: 0,
                 nombre_ruta: t.nombreRuta,
                 tipo_unidad: t.tipoUnidad,
@@ -567,12 +560,14 @@ export default function ClientsNew() {
             }),
           };
         }),
-      } as any;
+      };
 
       if (isEditMode && clientId) {
-        await clientService.updateClient(parseInt(clientId, 10), payload);
+        // UPDATE
+        await clientService.updateClient(parseInt(clientId), payload);
         toast.success("Cliente actualizado exitosamente");
       } else {
+        // CREATE
         await clientService.createClient(payload);
         toast.success("Cliente creado exitosamente");
       }
@@ -580,10 +575,7 @@ export default function ClientsNew() {
       navigate("/clients");
     } catch (error: any) {
       console.error(error);
-      const msg =
-        error?.response?.data?.detail ||
-        error?.message ||
-        "Error al guardar cliente";
+      const msg = error.response?.data?.detail || "Error al guardar cliente";
       toast.error(msg);
     }
   };
@@ -630,7 +622,7 @@ export default function ClientsNew() {
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Users className="h-6 w-6" />{" "}
-            {isEditMode ? "Editar Client" : "Alta de Client"}
+            {isEditMode ? "Editar Cliente" : "Alta de Cliente"}
           </h1>
           <p className="text-muted-foreground">
             Wizard de registro - Paso {step} de 3
@@ -1290,10 +1282,10 @@ export default function ClientsNew() {
                                   <SelectItem value="nacional">
                                     Nacional
                                   </SelectItem>
-                                  <SelectItem value="importacion">
+                                  <SelectItem value="importación">
                                     Importación
                                   </SelectItem>
-                                  <SelectItem value="exportacion">
+                                  <SelectItem value="exportación">
                                     Exportación
                                   </SelectItem>
                                 </SelectContent>

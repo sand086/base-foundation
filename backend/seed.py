@@ -1,5 +1,5 @@
 """
-Seed Script for TMS Database (Refactored for Integer IDs)
+Seed Script for TMS Database (Refactored for Integer IDs + Tires)
 Run: python seed.py
 """
 import sys
@@ -18,7 +18,7 @@ models.Base.metadata.create_all(bind=engine)
 def truncate_all(db):
     print("🧹 Limpiando base de datos (TRUNCATE CASCADE)...")
     tables = [
-        "trip_timeline_events", "trips", "tariffs", "sub_clients",
+        "tire_history", "trip_timeline_events", "trips", "tariffs", "sub_clients",
         "operators", "tires", "units", "clients", "bulk_upload_history",
         "providers", "system_configs", "users", "roles",
     ]
@@ -31,7 +31,7 @@ def truncate_all(db):
         db.rollback()
         print(f"⚠️  Error en Truncate: {e}. Intentando borrado manual...")
         # Fallback simple delete
-        for model in [models.TripTimelineEvent, models.Trip, models.Tariff, models.SubClient, 
+        for model in [models.TireHistory, models.TripTimelineEvent, models.Trip, models.Tariff, models.SubClient, 
                       models.Operator, models.Tire, models.Unit, models.Client, 
                       models.BulkUploadHistory, models.Provider, models.User, models.Role]:
             db.query(model).delete()
@@ -46,7 +46,7 @@ def get_or_create(db, model, defaults=None, **filters):
         params.update(defaults)
     instance = model(**params)
     db.add(instance)
-    db.commit() # Commit inmediato para obtener el ID autogenerado
+    db.commit() 
     db.refresh(instance)
     return instance, True
 
@@ -76,7 +76,7 @@ def seed_client_sub_tariffs(db):
     # Client
     client, _ = get_or_create(db, models.Client, rfc="CLA021001AA1", defaults={
         "razon_social": "Corporativo Logístico Alfa S.A. de C.V.",
-        "public_id": "CLI-001", # ID Visual legacy
+        "public_id": "CLI-001", 
         "estatus": models.ClientStatus.ACTIVO
     })
 
@@ -92,11 +92,17 @@ def seed_client_sub_tariffs(db):
     print("✓ Clients y Tarifas creados")
 
 def seed_units(db):
-    # Unidad
+    # Unidad 1
     u1, _ = get_or_create(db, models.Unit, numero_economico="TR-204", defaults={
         "public_id": "UNIT-001",
         "placas": "AAA-000-A", "marca": "Freightliner", "modelo": "Cascadia",
         "tipo": models.UnitType.FULL, "status": models.UnitStatus.DISPONIBLE
+    })
+    # Unidad 2
+    u2, _ = get_or_create(db, models.Unit, numero_economico="R-050", defaults={
+        "public_id": "UNIT-002",
+        "placas": "BBB-111-B", "marca": "Kenworth", "modelo": "T680",
+        "tipo": models.UnitType.SENCILLO, "status": models.UnitStatus.EN_RUTA
     })
     print("✓ Unidades creadas")
     return u1
@@ -123,8 +129,43 @@ def seed_operators_trips(db, unit):
         })
         print("✓ Operadores y Viajes creados")
 
+def seed_tires(db, unit):
+    # Llanta 1 (Montada)
+    t1, created = get_or_create(db, models.Tire, codigo_interno="LL-1001", defaults={
+        "marca": "Michelin", "modelo": "X Multi", "medida": "295/80R22.5",
+        "profundidad_original": 18.0, "profundidad_actual": 15.5,
+        "unit_id": unit.id, "posicion": "Eje 1 Izq",
+        "fecha_compra": date(2024, 1, 15), "precio_compra": 8500.00
+    })
+    
+    if created:
+        # Historial de compra
+        h1 = models.TireHistory(
+            tire_id=t1.id, fecha=datetime(2024, 1, 15), tipo="compra", 
+            descripcion="Compra Inicial", costo=8500.00, responsable="Admin"
+        )
+        # Historial de montaje
+        h2 = models.TireHistory(
+            tire_id=t1.id, fecha=datetime(2024, 1, 20), tipo="montaje", 
+            descripcion=f"Montaje en {unit.numero_economico}", 
+            unidad_id=unit.id, unidad_economico=unit.numero_economico, 
+            posicion="Eje 1 Izq", responsable="Taller"
+        )
+        db.add_all([h1, h2])
+        db.commit()
+
+    # Llanta 2 (Almacén)
+    t2, _ = get_or_create(db, models.Tire, codigo_interno="LL-1002", defaults={
+        "marca": "Bridgestone", "modelo": "R268", "medida": "11R22.5",
+        "profundidad_original": 16.0, "profundidad_actual": 16.0,
+        "unit_id": None, "posicion": None, # En almacén
+        "fecha_compra": date(2024, 5, 10), "precio_compra": 7200.00
+    })
+
+    print("✓ Llantas e Historial creados")
+
 def main():
-    print("\n🚛 Iniciando Seed V2 (Auto-Incremental)...")
+    print("\n🚛 Iniciando Seed V2 (Auto-Incremental + Llantas)...")
     db = SessionLocal()
     try:
         truncate_all(db)
@@ -133,7 +174,8 @@ def main():
         seed_client_sub_tariffs(db)
         unit = seed_units(db)
         seed_operators_trips(db, unit)
-        print("\n✅ Seed completado. BD lista con IDs numéricos.")
+        seed_tires(db, unit) # <--- Nueva función
+        print("\n✅ Seed completado con éxito.")
     except Exception as e:
         print(f"\n❌ Error: {e}")
         db.rollback()

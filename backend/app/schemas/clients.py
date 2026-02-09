@@ -13,7 +13,7 @@ class TariffBase(BaseModel):
     estatus: str = "activa"
 
 class TariffCreate(TariffBase):
-    pass # No enviamos ID, se genera solo
+   id: Optional[int] = 0
 
 class TariffResponse(TariffBase):
     id: int # <--- Integer
@@ -41,6 +41,7 @@ class SubClientBase(BaseModel):
 
 class SubClientCreate(SubClientBase):
     # Nested creation: Recibimos las tarifas al crear el subcliente
+    id: Optional[int] = 0
     tariffs: List[TariffCreate] = [] 
 
 class SubClientResponse(SubClientBase):

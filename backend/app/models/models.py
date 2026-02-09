@@ -1,15 +1,15 @@
 """
-SQLAlchemy ORM Models for TMS - REFACTORED FOR AUTO-INCREMENT (FINAL FIX)
+SQLAlchemy ORM Models for TMS - REFACTORED FOR AUTO-INCREMENT
 """
-import uuid
 from datetime import date, datetime
 from enum import Enum as PyEnum
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Date, func, Text, Boolean, Float, Enum
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Date, Text, Boolean, Float, Enum
 from sqlalchemy.orm import relationship
 from app.db.database import Base
 from sqlalchemy.dialects.postgresql import JSONB
 
 # ============= ENUMS =============
+
 class UnitType(str, PyEnum):
     SENCILLO = "sencillo"
     FULL = "full"
@@ -59,6 +59,28 @@ class OperationType(str, PyEnum):
     IMPORTACION = "importación"
     EXPORTACION = "exportación"
     NACIONAL = "nacional"
+
+# --- ENUMS PARA LLANTAS ---
+class TireStatus(str, PyEnum):
+    NUEVO = "nuevo"
+    USADO = "usado"
+    RENOVADO = "renovado"
+    DESECHO = "desecho"
+
+class TireCondition(str, PyEnum):
+    BUENA = "buena"
+    REGULAR = "regular"
+    MALA = "mala"
+
+class TireEventType(str, PyEnum):
+    COMPRA = "compra"
+    MONTAJE = "montaje"
+    DESMONTAJE = "desmontaje"
+    REPARACION = "reparacion"
+    RENOVADO = "renovado"
+    ROTACION = "rotacion"
+    INSPECCION = "inspeccion"
+    DESECHO = "desecho"
 
 # ============= MODELS =============
 
@@ -174,26 +196,70 @@ class Unit(Base):
     # Relationships
     trips = relationship("Trip", back_populates="unit")
     operators = relationship("Operator", back_populates="assigned_unit")
-    tires = relationship("Tire", back_populates="unit", cascade="all, delete-orphan")
+    # Relación con llantas: una unidad tiene muchas llantas
+    tires = relationship("Tire", back_populates="unit")
 
 
 class Tire(Base):
     __tablename__ = "tires"
 
     id = Column(Integer, primary_key=True, index=True)
-    unit_id = Column(Integer, ForeignKey("units.id"), nullable=False)
     
-    position = Column(String(20), nullable=False)
-    tire_id = Column(String(50))
-    marca = Column(String(50))
+    # Identificación
+    codigo_interno = Column(String(50), unique=True, nullable=False, index=True)
+    marca = Column(String(50), nullable=False)
     modelo = Column(String(50))
-    profundidad = Column(Float, default=0.0)
-    presion = Column(Float, default=0.0)
-    estado = Column(String(20), default="bueno")
-    renovado = Column(Integer, default=0)
+    medida = Column(String(20))
+    dot = Column(String(10))
+
+    # Ubicación (Relación con Unit)
+    # Si unit_id es NULL, la llanta está en Almacén/Stock
+    unit_id = Column(Integer, ForeignKey("units.id"), nullable=True)
+    posicion = Column(String(50), nullable=True) # Ej: "Eje 1 Izq"
+
+    # Estado
+    estado = Column(Enum(TireStatus), default=TireStatus.NUEVO)
+    estado_fisico = Column(Enum(TireCondition), default=TireCondition.BUENA)
+    
+    profundidad_actual = Column(Float, default=0.0)
+    profundidad_original = Column(Float, default=0.0)
+    km_recorridos = Column(Float, default=0.0)
+
+    # Costos y Tracking
+    fecha_compra = Column(Date)
+    precio_compra = Column(Float, default=0.0)
+    costo_acumulado = Column(Float, default=0.0)
+    proveedor = Column(String(100))
+
+    created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # Relationships
     unit = relationship("Unit", back_populates="tires")
+    history = relationship("TireHistory", back_populates="tire", cascade="all, delete-orphan")
+
+
+class TireHistory(Base):
+    __tablename__ = "tire_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tire_id = Column(Integer, ForeignKey("tires.id"), nullable=False)
+    
+    fecha = Column(DateTime, default=datetime.utcnow)
+    tipo = Column(Enum(TireEventType), nullable=False)
+    descripcion = Column(String(255))
+    
+    # Snapshot de ubicación
+    unidad_id = Column(Integer, ForeignKey("units.id"), nullable=True) 
+    unidad_economico = Column(String(50), nullable=True) # Guardamos texto por histórico
+    posicion = Column(String(50))
+    
+    km = Column(Float, default=0.0)
+    costo = Column(Float, default=0.0)
+    responsable = Column(String(100))
+
+    # Relationships
+    tire = relationship("Tire", back_populates="history")
 
 
 class Operator(Base):
@@ -344,7 +410,6 @@ class BulkUploadHistory(Base):
     status = Column(String(20))
     record_count = Column(Integer, default=0)
     
-    # CORRECCIÓN: Definir tipo DateTime explícito y usar default
     created_at = Column(DateTime, default=datetime.utcnow)
     
     user_id = Column(Integer, ForeignKey("users.id"))

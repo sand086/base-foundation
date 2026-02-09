@@ -18,7 +18,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-// Importamos Calendar como CalendarIcon para evitar conflictos
 import {
   User,
   Phone,
@@ -35,10 +34,13 @@ interface AddOperadorModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   operatorToEdit?: Operador | null;
-  onSave?: (operador: Operador) => void;
+  // Omitimos ID al crear (y permitimos payload flexible)
+  onSave?: (operador: any) => void;
   isSaving?: boolean;
 }
 
+// Nota: assigned_unit_id sigue siendo string aquí SOLO para el Select.
+// En el submit lo convertimos a number | null.
 const emptyFormData = {
   name: "",
   license_number: "",
@@ -46,7 +48,7 @@ const emptyFormData = {
   license_expiry: "",
   medical_check_expiry: "",
   phone: "",
-  assigned_unit_id: "", // Inicializamos vacío
+  assigned_unit_id: "", // String temporal para el Select
   hire_date: "",
   emergency_contact: "",
   emergency_phone: "",
@@ -60,7 +62,7 @@ export function AddOperadorModal({
   isSaving = false,
 }: AddOperadorModalProps) {
   const { toast } = useToast();
-  const { unidades } = useUnits(); // Unidades reales
+  const { unidades } = useUnits();
   const [formData, setFormData] = useState(emptyFormData);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -82,8 +84,8 @@ export function AddOperadorModal({
         license_expiry: operatorToEdit.license_expiry,
         medical_check_expiry: operatorToEdit.medical_check_expiry,
         phone: operatorToEdit.phone || "",
-        // Aseguramos que si es null, sea "" para el estado del select
-        assigned_unit_id: operatorToEdit.assigned_unit_id || "",
+        // Convertimos el ID numérico a string para el Select, o "" si es null
+        assigned_unit_id: operatorToEdit.assigned_unit_id?.toString() || "",
         hire_date: operatorToEdit.hire_date || "",
         emergency_contact: operatorToEdit.emergency_contact || "",
         emergency_phone: operatorToEdit.emergency_phone || "",
@@ -106,6 +108,7 @@ export function AddOperadorModal({
       newErrors.medical_check_expiry = "Requerido";
     if (!formData.phone?.trim()) newErrors.phone = "Requerido";
     if (!formData.hire_date) newErrors.hire_date = "Requerido";
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -122,18 +125,22 @@ export function AddOperadorModal({
       return;
     }
 
-    // --- CORRECCIÓN CRÍTICA AQUÍ ---
-    // Si el valor es "none", "", o null, enviamos undefined o null al backend.
-    // NUNCA enviamos "" para un ID.
-    const unitIdToSend =
-      !formData.assigned_unit_id ||
-      formData.assigned_unit_id === "none" ||
-      formData.assigned_unit_id === ""
-        ? undefined // O null, dependiendo de tu gusto, undefined hace que axios no lo mande o mande null
-        : formData.assigned_unit_id;
+    // CORRECCIÓN: Convertir String del Select a Number o Null
+    let unitIdToSend: number | null = null;
 
-    const operadorData: Operador = {
-      id: isEditMode && operatorToEdit?.id ? operatorToEdit.id : undefined!,
+    if (
+      formData.assigned_unit_id &&
+      formData.assigned_unit_id !== "none" &&
+      formData.assigned_unit_id !== ""
+    ) {
+      const parsed = parseInt(formData.assigned_unit_id, 10);
+      unitIdToSend = Number.isNaN(parsed) ? null : parsed;
+    }
+
+    const operadorData: any = {
+      // No mandamos ID si es nuevo (el backend lo crea)
+      ...(isEditMode && { id: operatorToEdit?.id }),
+
       status: operatorToEdit?.status || "activo",
       name: formData.name,
       license_number: formData.license_number,
@@ -141,8 +148,10 @@ export function AddOperadorModal({
       license_expiry: formData.license_expiry,
       medical_check_expiry: formData.medical_check_expiry,
       phone: formData.phone,
-      // Usamos la variable saneada
+
+      // Enviamos el número o null
       assigned_unit_id: unitIdToSend,
+
       hire_date: formData.hire_date,
       emergency_contact: formData.emergency_contact,
       emergency_phone: formData.emergency_phone,
@@ -179,6 +188,7 @@ export function AddOperadorModal({
               <User className="h-4 w-4 text-muted-foreground" />
               Información Personal
             </h3>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Nombre Completo *</Label>
@@ -195,6 +205,7 @@ export function AddOperadorModal({
                   <p className="text-xs text-destructive">{errors.name}</p>
                 )}
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="phone">Teléfono *</Label>
                 <div className="relative">
@@ -241,6 +252,7 @@ export function AddOperadorModal({
               <CreditCard className="h-4 w-4 text-muted-foreground" />
               Información de Licencia
             </h3>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="license_number">Número de Licencia *</Label>
@@ -249,7 +261,10 @@ export function AddOperadorModal({
                   placeholder="LIC-2024-12345"
                   value={formData.license_number}
                   onChange={(e) =>
-                    setFormData({ ...formData, license_number: e.target.value })
+                    setFormData({
+                      ...formData,
+                      license_number: e.target.value,
+                    })
                   }
                   className={errors.license_number ? "border-destructive" : ""}
                 />
@@ -259,6 +274,7 @@ export function AddOperadorModal({
                   </p>
                 )}
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="license_type">Tipo de Licencia *</Label>
                 <Select
@@ -287,6 +303,7 @@ export function AddOperadorModal({
                 )}
               </div>
             </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="license_expiry">Vigencia de Licencia *</Label>
@@ -305,6 +322,7 @@ export function AddOperadorModal({
                   </p>
                 )}
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="medical_check_expiry">
                   Vigencia Examen Médico *
@@ -338,6 +356,7 @@ export function AddOperadorModal({
               <Truck className="h-4 w-4 text-muted-foreground" />
               Asignación de Unidad (Opcional)
             </h3>
+
             <div className="space-y-2">
               <Label htmlFor="assigned_unit">Unidad Asignada</Label>
               <Select
@@ -352,7 +371,8 @@ export function AddOperadorModal({
                 <SelectContent>
                   <SelectItem value="none">Sin asignar</SelectItem>
                   {unidadesSelectables.map((unit) => (
-                    <SelectItem key={unit.id} value={unit.id}>
+                    // Convertimos ID a string para el value del select
+                    <SelectItem key={unit.id} value={unit.id.toString()}>
                       {unit.numero_economico} - {unit.marca}
                     </SelectItem>
                   ))}
@@ -367,6 +387,7 @@ export function AddOperadorModal({
               <Heart className="h-4 w-4 text-muted-foreground" />
               Contacto de Emergencia
             </h3>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="emergency_contact">Nombre del Contacto</Label>
@@ -382,6 +403,7 @@ export function AddOperadorModal({
                   }
                 />
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="emergency_phone">Teléfono de Emergencia</Label>
                 <Input
@@ -408,6 +430,7 @@ export function AddOperadorModal({
             >
               Cancelar
             </Button>
+
             <Button
               type="submit"
               className="bg-primary hover:bg-primary/90 text-primary-foreground"
