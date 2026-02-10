@@ -3,14 +3,11 @@ import {
   Truck,
   AlertTriangle,
   FileText,
-  Calendar,
-  Shield,
   ChevronLeft,
   Wrench,
   Edit,
   X,
   Save,
-  Upload,
   Loader2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,13 +16,6 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNavigate, useParams } from "react-router-dom";
 import { TruckChassisSVG } from "@/features/flota/TruckChassisSVG";
@@ -34,28 +24,42 @@ import { unitService, UnidadDetalle } from "@/services/unitService";
 import { DocumentUploadManager } from "@/features/flota/DocumentUploadManager";
 
 // Helper Functions
-const getDocumentStatusBadge = (estatus: string, vencimiento: string) => {
-  if (!vencimiento) return <Badge variant="outline">PENDIENTE</Badge>;
 
+// Helper para badges de fecha
+const getDateBadge = (dateStr: string | null | undefined) => {
+  if (!dateStr)
+    return (
+      <Badge variant="outline" className="text-muted-foreground border-dashed">
+        Sin Fecha
+      </Badge>
+    );
   const today = new Date();
-  const expDate = new Date(vencimiento);
-  const daysUntil = Math.ceil(
+  const expDate = new Date(dateStr);
+  expDate.setMinutes(expDate.getMinutes() + expDate.getTimezoneOffset());
+
+  const days = Math.ceil(
     (expDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
   );
 
-  if (estatus === "vencido" || daysUntil < 0) {
-    return <Badge className="bg-status-danger text-white">VENCIDO</Badge>;
-  }
-  if (estatus === "próximo" || daysUntil <= 30) {
+  if (days < 0)
     return (
-      <Badge className="bg-status-warning text-black">
-        POR VENCER ({daysUntil}d)
+      <Badge className="bg-red-100 text-red-700 border-red-200 hover:bg-red-200">
+        VENCIDO ({days * -1} días)
       </Badge>
     );
-  }
-  return <Badge className="bg-status-success text-white">VIGENTE</Badge>;
+  if (days <= 30)
+    return (
+      <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-200">
+        POR VENCER ({days} días)
+      </Badge>
+    );
+  return (
+    <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-200">
+      VIGENTE
+    </Badge>
+  );
 };
-
+// Helper formateo fecha input
 const getEstatusFecha = (
   fecha: string | null | undefined,
 ): "vigente" | "próximo" | "vencido" => {
@@ -70,6 +74,22 @@ const getEstatusFecha = (
   return "vigente";
 };
 
+// Convierte cualquier fecha (YYYY-MM-DD o ISO) a formato input date (YYYY-MM-DD)
+// Sin alterar estilos ni lógica; solo normaliza el valor.
+const toInputDate = (value: string | null | undefined) => {
+  if (!value) return "";
+  // Si ya viene YYYY-MM-DD...
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
+
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  // Formato local YYYY-MM-DD (evita brincos por timezone)
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+};
+
 export default function FlotaUnidadDetalle() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -77,9 +97,8 @@ export default function FlotaUnidadDetalle() {
   const [unit, setUnit] = useState<UnidadDetalle | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
-  const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
 
-  // Form state
+  // Form state (se mantiene igual, solo agregamos vigencias)
   const [formData, setFormData] = useState({
     numero_economico: "",
     placas: "",
@@ -87,6 +106,12 @@ export default function FlotaUnidadDetalle() {
     marca: "",
     modelo: "",
     year: "",
+    seguro_vence: "",
+    verificacion_humo_vence: "",
+    verificacion_fisico_mecanica_vence: "",
+    caat_vence: "",
+    permiso_sct_folio: "",
+    caat_folio: "",
   });
 
   // --- CARGA DE DATOS ---
@@ -133,12 +158,28 @@ export default function FlotaUnidadDetalle() {
             vencimiento: new Date().toISOString(), // Normalmente no vence anual igual que otros
             obligatorio: true,
           },
+          {
+            name: "Registro CAAT",
+            key: "caat",
+            url: apiData.caat_url,
+            estatus: getEstatusFecha(apiData.caat_vence),
+            vencimiento: apiData.caat_vence || "",
+            obligatorio: false,
+          },
+          {
+            name: "Permiso SCT",
+            key: "permiso_sct",
+            url: apiData.permiso_sct_url,
+            estatus: "vigente" as const, // Permiso SCT is often permanent or just a folio
+            vencimiento: "",
+            obligatorio: false,
+          },
         ];
 
         const enrichedUnit: UnidadDetalle = {
           ...apiData,
           documents: constructedDocuments,
-          tires: apiData.tires || [], // Backend ahora retorna tires si la relación está bien
+          tires: apiData.tires || [],
         };
 
         setUnit(enrichedUnit);
@@ -151,6 +192,13 @@ export default function FlotaUnidadDetalle() {
           marca: apiData.marca,
           modelo: apiData.modelo,
           year: apiData.year?.toString() || "",
+          // ✅ NUEVO: fechas de documentos a formato input date
+          seguro_vence: toInputDate(apiData.seguro_vence),
+          verificacion_humo_vence: toInputDate(apiData.verificacion_humo_vence),
+          verificacion_fisico_mecanica_vence: toInputDate(
+            apiData.verificacion_fisico_mecanica_vence,
+          ),
+          caat_vence: toInputDate(apiData.caat_vence),
         });
       } catch (error) {
         console.error("Error cargando unidad:", error);
@@ -166,46 +214,35 @@ export default function FlotaUnidadDetalle() {
     loadUnit();
   }, [id, navigate]);
 
-  const handleFileUpload = async (
-    e: React.ChangeEvent<HTMLInputElement>,
-    docKey: string,
+  // ✅ Helper: actualiza vencimientos/estatus dentro de unit.documents (para bloqueo/badges)
+  const syncUnitDocumentsWithFormDates = (
+    currentUnit: UnidadDetalle,
+    fd: typeof formData,
   ) => {
-    const file = e.target.files?.[0];
-    if (!file || !unit) return;
+    const mapVence: Record<string, string> = {
+      poliza_seguro: fd.seguro_vence || "",
+      verificacion_humo: fd.verificacion_humo_vence || "",
+      verificacion_fisico_mecanica: fd.verificacion_fisico_mecanica_vence || "",
+      caat: fd.caat_vence || "",
+    };
 
-    setUploadingDoc(docKey);
-    try {
-      const response = await unitService.uploadDocument(
-        unit.numero_economico,
-        docKey,
-        file,
-      );
+    const updatedDocs = currentUnit.documents.map((d) => {
+      if (!mapVence.hasOwnProperty(d.key)) return d;
+      const newVenc = mapVence[d.key];
+      return {
+        ...d,
+        vencimiento: newVenc,
+        estatus: getEstatusFecha(newVenc),
+      };
+    });
 
-      // Actualizar estado local
-      const updatedDocs = unit.documents.map((d) =>
-        d.key === docKey ? { ...d, url: response.url } : d,
-      );
-      setUnit({ ...unit, documents: updatedDocs });
-
-      toast({
-        title: "Documento actualizado",
-        description: "El archivo se ha subido correctamente.",
-      });
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "No se pudo subir el archivo.",
-        variant: "destructive",
-      });
-    } finally {
-      setUploadingDoc(null);
-    }
+    return { ...currentUnit, documents: updatedDocs };
   };
 
   const handleSaveChanges = async () => {
     if (!unit) return;
     try {
-      // Enviar snake_case al backend
+      // Enviar snake_case al backend (igual que antes, solo agregando vigencias)
       await unitService.update(unit.id, {
         numero_economico: formData.numero_economico,
         placas: formData.placas,
@@ -213,6 +250,17 @@ export default function FlotaUnidadDetalle() {
         marca: formData.marca,
         modelo: formData.modelo,
         year: parseInt(formData.year),
+
+        // ✅ NUEVO: vigencias (si se dejan vacías -> null)
+        seguro_vence: formData.seguro_vence ? formData.seguro_vence : null,
+        verificacion_humo_vence: formData.verificacion_humo_vence
+          ? formData.verificacion_humo_vence
+          : null,
+        verificacion_fisico_mecanica_vence:
+          formData.verificacion_fisico_mecanica_vence
+            ? formData.verificacion_fisico_mecanica_vence
+            : null,
+        caat_vence: formData.caat_vence ? formData.caat_vence : null,
       });
 
       toast({
@@ -220,8 +268,21 @@ export default function FlotaUnidadDetalle() {
         description: "Datos actualizados correctamente.",
       });
 
-      // Actualizar vista local
-      setUnit({ ...unit, ...formData, year: parseInt(formData.year) });
+      // Actualizar vista local (igual, pero ahora también sincroniza documentos)
+      const updatedUnit: UnidadDetalle = {
+        ...unit,
+        ...formData,
+        year: parseInt(formData.year),
+        // Si tu UnidadDetalle NO trae estas props tipadas, puedes removerlas;
+        // pero normalmente vienen del backend.
+        seguro_vence: formData.seguro_vence || null,
+        verificacion_humo_vence: formData.verificacion_humo_vence || null,
+        verificacion_fisico_mecanica_vence:
+          formData.verificacion_fisico_mecanica_vence || null,
+        caat_vence: formData.caat_vence || null,
+      } as any;
+
+      setUnit(syncUnitDocumentsWithFormDates(updatedUnit, formData));
       setIsEditing(false);
     } catch (error) {
       toast({
@@ -281,7 +342,7 @@ export default function FlotaUnidadDetalle() {
       </div>
 
       <Tabs defaultValue="expediente" className="w-full">
-        <TabsList className="backdrop-blur-xl bg-white/10 dark:bg-black/40 border border-white/20 p-1 rounded-xl">
+        <TabsList className="backdrop-blur-xl bg-white/10 dark:bg-black/40 border border-white/20 p-1 rounded-xl grid grid-cols-4">
           <TabsTrigger
             value="expediente"
             className="data-[state=active]:bg-white/20 rounded-lg px-6"
@@ -297,9 +358,9 @@ export default function FlotaUnidadDetalle() {
         </TabsList>
 
         <TabsContent value="expediente" className="mt-6 space-y-6">
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className="grid gap-6 lg:grid-cols-12">
             {/* Info Técnica */}
-            <Card className="backdrop-blur-xl bg-white/10 dark:bg-black/40 border-white/20 shadow-2xl">
+            <Card className="backdrop-blur-xl bg-white/10 dark:bg-black/40 border-white/20 shadow-2xl lg:col-span-4">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Wrench className="h-5 w-5" /> Información Técnica
@@ -343,7 +404,6 @@ export default function FlotaUnidadDetalle() {
                     </div>
                     <div className="space-y-2">
                       <Label>Marca</Label>
-                      {/* Solución de Marca Libre */}
                       <Input
                         list="marcas-list"
                         value={formData.marca}
@@ -416,89 +476,221 @@ export default function FlotaUnidadDetalle() {
             </Card>
 
             {/* Documentos */}
+
             <Card
-              className={`backdrop-blur-xl bg-white/10 dark:bg-black/40 shadow-2xl ${hasBlocks ? "border-status-danger border-2" : "border-white/20"}`}
+              className={`backdrop-blur-xl bg-white/10 dark:bg-black/40 shadow-2xl lg:col-span-8 ${hasBlocks ? "border-status-danger border-2" : "border-white/50"}`}
             >
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <FileText className="h-5 w-5" /> Estatus de Documentos
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="grid gap-4 md:grid-cols-2">
-                  {/* Póliza de Seguro */}
-                  <DocumentUploadManager
-                    unitId={unit.id}
-                    unitEconomico={unit.numero_economico}
-                    docType="poliza_seguro"
-                    docLabel="Póliza de Seguro"
-                    currentUrl={unit.poliza_seguro_url}
-                    onUploadSuccess={(url) =>
-                      setUnit({ ...unit, poliza_seguro_url: url })
-                    }
-                  />
 
-                  {/* Verificación de Humo */}
-                  <DocumentUploadManager
-                    unitId={unit.id}
-                    unitEconomico={unit.numero_economico}
-                    docType="verificacion_humo"
-                    docLabel="Verificación de Emisiones"
-                    currentUrl={unit.verificacion_humo_url}
-                    onUploadSuccess={(url) =>
-                      setUnit({ ...unit, verificacion_humo_url: url })
-                    }
-                  />
+              <CardContent className="grid gap-6 md:grid-cols-2">
+                {/* Póliza */}
+                <DocumentUploadManager
+                  unitId={unit.id}
+                  unitEconomico={unit.numero_economico}
+                  docType="poliza_seguro"
+                  docLabel="Póliza de Seguro"
+                  currentUrl={unit.poliza_seguro_url}
+                  onUploadSuccess={(url) =>
+                    setUnit({ ...unit, poliza_seguro_url: url })
+                  }
+                  statusBadge={getDateBadge(formData.seguro_vence)}
+                  dateInput={
+                    <div className="space-y-1">
+                      <Label className="text-[10px] text-muted-foreground uppercase font-bold">
+                        Vigencia
+                      </Label>
+                      <Input
+                        type="date"
+                        className="h-9 text-xs bg-background"
+                        value={formData.seguro_vence}
+                        disabled={!isEditing}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            seguro_vence: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                  }
+                />
 
-                  {/* Verificación Físico-Mecánica */}
-                  <DocumentUploadManager
-                    unitId={unit.id}
-                    unitEconomico={unit.numero_economico}
-                    docType="verificacion_fisico_mecanica"
-                    docLabel="Verif. Físico-Mecánica"
-                    currentUrl={unit.verificacion_fisico_mecanica_url}
-                    onUploadSuccess={(url) =>
-                      setUnit({
-                        ...unit,
-                        verificacion_fisico_mecanica_url: url,
-                      })
-                    }
-                  />
+                {/* Verificación Humo */}
+                <DocumentUploadManager
+                  unitId={unit.id}
+                  unitEconomico={unit.numero_economico}
+                  docType="verificacion_humo"
+                  docLabel="Verificación de Emisiones"
+                  currentUrl={unit.verificacion_humo_url}
+                  onUploadSuccess={(url) =>
+                    setUnit({ ...unit, verificacion_humo_url: url })
+                  }
+                  statusBadge={getDateBadge(formData.verificacion_humo_vence)}
+                  dateInput={
+                    <div className="space-y-1">
+                      <Label className="text-[10px] text-muted-foreground uppercase font-bold">
+                        Vigencia
+                      </Label>
+                      <Input
+                        type="date"
+                        className="h-9 text-xs bg-background"
+                        value={formData.verificacion_humo_vence}
+                        disabled={!isEditing}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            verificacion_humo_vence: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                  }
+                />
 
-                  {/* Tarjeta de Circulación */}
-                  <DocumentUploadManager
-                    unitId={unit.id}
-                    unitEconomico={unit.numero_economico}
-                    docType="tarjeta_circulacion"
-                    docLabel="Tarjeta de Circulación"
-                    currentUrl={unit.tarjeta_circulacion_url}
-                    onUploadSuccess={(url) =>
-                      setUnit({ ...unit, tarjeta_circulacion_url: url })
-                    }
-                  />
+                {/* Físico Mecánica */}
+                <DocumentUploadManager
+                  unitId={unit.id}
+                  unitEconomico={unit.numero_economico}
+                  docType="verificacion_fisico_mecanica"
+                  docLabel="Verif. Físico-Mecánica"
+                  currentUrl={unit.verificacion_fisico_mecanica_url}
+                  onUploadSuccess={(url) =>
+                    setUnit({ ...unit, verificacion_fisico_mecanica_url: url })
+                  }
+                  statusBadge={getDateBadge(
+                    formData.verificacion_fisico_mecanica_vence,
+                  )}
+                  dateInput={
+                    <div className="space-y-1">
+                      <Label className="text-[10px] text-muted-foreground uppercase font-bold">
+                        Vigencia
+                      </Label>
+                      <Input
+                        type="date"
+                        className="h-9 text-xs bg-background"
+                        value={formData.verificacion_fisico_mecanica_vence}
+                        disabled={!isEditing}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            verificacion_fisico_mecanica_vence: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                  }
+                />
 
-                  {/* NUEVOS DOCUMENTOS SOLICITADOS */}
-                  <DocumentUploadManager
-                    unitId={unit.id}
-                    unitEconomico={unit.numero_economico}
-                    docType="permiso_sct"
-                    docLabel="Permiso SCT (PDF)"
-                    currentUrl={unit.permiso_sct_url}
-                    onUploadSuccess={(url) =>
-                      setUnit({ ...unit, permiso_sct_url: url })
-                    }
-                  />
-
+                {/* CAAT */}
+                <div className="col-span-1">
                   <DocumentUploadManager
                     unitId={unit.id}
                     unitEconomico={unit.numero_economico}
                     docType="caat"
-                    docLabel="Registro CAAT (PDF)"
+                    docLabel="Registro CAAT"
                     currentUrl={unit.caat_url}
                     onUploadSuccess={(url) =>
                       setUnit({ ...unit, caat_url: url })
                     }
+                    statusBadge={getDateBadge(formData.caat_vence)}
+                    dateInput={
+                      <div className="space-y-1">
+                        <Label className="text-[10px] text-muted-foreground uppercase font-bold">
+                          Vigencia
+                        </Label>
+                        <Input
+                          type="date"
+                          className="h-9 text-xs bg-background"
+                          value={formData.caat_vence}
+                          disabled={!isEditing}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              caat_vence: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                    }
                   />
+                  {/* Campo Extra para Folio CAAT justo debajo */}
+                  <div className="mt-2 flex items-center gap-2 px-1">
+                    <Label className="text-xs w-auto whitespace-nowrap text-muted-foreground">
+                      Folio CAAT:
+                    </Label>
+                    <Input
+                      className="h-8 text-xs w-full bg-white/5"
+                      value={formData.caat_folio}
+                      disabled={!isEditing}
+                      onChange={(e) =>
+                        setFormData({ ...formData, caat_folio: e.target.value })
+                      }
+                      placeholder="Ingrese folio..."
+                    />
+                  </div>
+                </div>
+
+                {/* Tarjeta Circulación */}
+                <DocumentUploadManager
+                  unitId={unit.id}
+                  unitEconomico={unit.numero_economico}
+                  docType="tarjeta_circulacion"
+                  docLabel="Tarjeta de Circulación"
+                  currentUrl={unit.tarjeta_circulacion_url}
+                  onUploadSuccess={(url) =>
+                    setUnit({ ...unit, tarjeta_circulacion_url: url })
+                  }
+                  statusBadge={
+                    <Badge
+                      variant="outline"
+                      className="text-green-600 bg-green-50 border-green-200"
+                    >
+                      PERMANENTE
+                    </Badge>
+                  }
+                />
+
+                {/* Permiso SCT */}
+                <div className="col-span-1">
+                  <DocumentUploadManager
+                    unitId={unit.id}
+                    unitEconomico={unit.numero_economico}
+                    docType="permiso_sct"
+                    docLabel="Permiso SCT"
+                    currentUrl={unit.permiso_sct_url}
+                    onUploadSuccess={(url) =>
+                      setUnit({ ...unit, permiso_sct_url: url })
+                    }
+                    statusBadge={
+                      <Badge
+                        variant="outline"
+                        className="text-green-600 bg-green-50 border-green-200"
+                      >
+                        PERMANENTE
+                      </Badge>
+                    }
+                  />
+                  <div className="mt-2 flex items-center gap-2 px-1">
+                    <Label className="text-xs w-auto whitespace-nowrap text-muted-foreground">
+                      Folio SCT:
+                    </Label>
+                    <Input
+                      className="h-8 text-xs w-full bg-white/5"
+                      value={formData.permiso_sct_folio}
+                      disabled={!isEditing}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          permiso_sct_folio: e.target.value,
+                        })
+                      }
+                      placeholder="Ingrese folio..."
+                    />
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -571,7 +763,26 @@ export default function FlotaUnidadDetalle() {
             <Separator orientation="vertical" className="h-8" />
             <Button
               variant="ghost"
-              onClick={() => setIsEditing(false)}
+              onClick={() => {
+                // ✅ Cancelar: revierte fechas a lo que tiene unit (sin recargar)
+                setFormData({
+                  numero_economico: unit.numero_economico,
+                  placas: unit.placas,
+                  vin: unit.vin || "",
+                  marca: unit.marca,
+                  modelo: unit.modelo,
+                  year: unit.year?.toString() || "",
+                  seguro_vence: toInputDate((unit as any).seguro_vence),
+                  verificacion_humo_vence: toInputDate(
+                    (unit as any).verificacion_humo_vence,
+                  ),
+                  verificacion_fisico_mecanica_vence: toInputDate(
+                    (unit as any).verificacion_fisico_mecanica_vence,
+                  ),
+                  caat_vence: toInputDate((unit as any).caat_vence),
+                });
+                setIsEditing(false);
+              }}
               className="gap-2"
             >
               <X className="h-4 w-4" /> Cancelar
