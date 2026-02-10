@@ -1,7 +1,7 @@
 import axiosClient from "@/api/axiosClient";
 
 export interface Operador {
-  id: string;
+  id: number;
   name: string;
   license_number: string;
   license_type: string;
@@ -9,7 +9,7 @@ export interface Operador {
   medical_check_expiry: string; // YYYY-MM-DD
   phone?: string;
   status: "activo" | "inactivo" | "vacaciones" | "incapacidad";
-  assigned_unit_id?: string; // ID de la unidad (relación)
+  assigned_unit_id?: number; // ID de la unidad (relación)
   assigned_unit?: string; // Nombre/NumEco para mostrar (opcional si el backend lo popula)
   hire_date?: string;
   emergency_contact?: string;
@@ -22,20 +22,22 @@ export const operatorService = {
     return data;
   },
 
-  create: async (operador: Operador): Promise<Operador> => {
+  create: async (operador: Omit<Operador, "id">): Promise<Operador> => {
     const { data } = await axiosClient.post("/operators", operador);
     return data;
   },
 
   update: async (
-    id: string,
+    id: number,
     operador: Partial<Operador>,
   ): Promise<Operador> => {
+    // <--- number
     const { data } = await axiosClient.put(`/operators/${id}`, operador);
     return data;
   },
 
-  delete: async (id: string): Promise<void> => {
+  delete: async (id: number): Promise<void> => {
+    // <--- number
     await axiosClient.delete(`/operators/${id}`);
   },
 };

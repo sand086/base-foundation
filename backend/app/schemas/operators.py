@@ -19,14 +19,14 @@ class OperatorBase(BaseModel):
     medical_check_expiry: date
     phone: Optional[str] = None
     status: OperatorStatusEnum = OperatorStatusEnum.ACTIVO
-    assigned_unit_id: Optional[str] = None
+    assigned_unit_id: Optional[int] = None 
     hire_date: Optional[date] = None
     emergency_contact: Optional[str] = None
     emergency_phone: Optional[str] = None
 
 
 class OperatorCreate(OperatorBase):
-    id: str
+    pass
 
 
 class OperatorUpdate(BaseModel):
@@ -37,7 +37,7 @@ class OperatorUpdate(BaseModel):
     medical_check_expiry: Optional[date] = None
     phone: Optional[str] = None
     status: Optional[OperatorStatusEnum] = None
-    assigned_unit_id: Optional[str] = None
+    assigned_unit_id: Optional[int] = None # int
     hire_date: Optional[date] = None
     emergency_contact: Optional[str] = None
     emergency_phone: Optional[str] = None
@@ -45,5 +45,5 @@ class OperatorUpdate(BaseModel):
 
 class OperatorResponse(OperatorBase):
     model_config = ConfigDict(from_attributes=True)
-    id: str
+    id: int 
     created_at: Optional[datetime] = None

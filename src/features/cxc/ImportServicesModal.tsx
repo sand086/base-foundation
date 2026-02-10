@@ -1,14 +1,14 @@
-import { useState } from 'react';
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import {
   DataTable,
   DataTableHeader,
@@ -16,9 +16,9 @@ import {
   DataTableRow,
   DataTableHead,
   DataTableCell,
-} from '@/components/ui/data-table';
-import { Search, FileInput, Truck } from 'lucide-react';
-import { FinalizableService } from './types';
+} from "@/components/ui/data-table";
+import { Search, FileInput, Truck } from "lucide-react";
+import { FinalizableService } from "./types";
 
 interface ImportServicesModalProps {
   open: boolean;
@@ -34,14 +34,15 @@ export function ImportServicesModal({
   onImport,
 }: ImportServicesModalProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
 
-  const availableServices = services.filter(s => !s.facturado);
-  
-  const filteredServices = availableServices.filter(s =>
-    s.cliente.toLowerCase().includes(search.toLowerCase()) ||
-    s.ruta.toLowerCase().includes(search.toLowerCase()) ||
-    s.id.toLowerCase().includes(search.toLowerCase())
+  const availableServices = services.filter((s) => !s.facturado);
+
+  const filteredServices = availableServices.filter(
+    (s) =>
+      s.cliente.toLowerCase().includes(search.toLowerCase()) ||
+      s.ruta.toLowerCase().includes(search.toLowerCase()) ||
+      s.id.toLowerCase().includes(search.toLowerCase()),
   );
 
   const handleToggle = (id: string) => {
@@ -58,11 +59,13 @@ export function ImportServicesModal({
     if (selectedIds.size === filteredServices.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(filteredServices.map(s => s.id)));
+      setSelectedIds(new Set(filteredServices.map((s) => s.id)));
     }
   };
 
-  const selectedServices = availableServices.filter(s => selectedIds.has(s.id));
+  const selectedServices = availableServices.filter((s) =>
+    selectedIds.has(s.id),
+  );
   const totalMonto = selectedServices.reduce((sum, s) => sum + s.monto, 0);
 
   const handleImport = () => {
@@ -97,7 +100,9 @@ export function ImportServicesModal({
           {filteredServices.length === 0 ? (
             <div className="p-8 text-center bg-muted/30 rounded-lg border border-dashed">
               <Truck className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
-              <p className="text-muted-foreground">No hay servicios finalizados sin facturar</p>
+              <p className="text-muted-foreground">
+                No hay servicios finalizados sin facturar
+              </p>
             </div>
           ) : (
             <DataTable>
@@ -105,12 +110,15 @@ export function ImportServicesModal({
                 <DataTableRow>
                   <DataTableHead className="w-12">
                     <Checkbox
-                      checked={selectedIds.size === filteredServices.length && filteredServices.length > 0}
+                      checked={
+                        selectedIds.size === filteredServices.length &&
+                        filteredServices.length > 0
+                      }
                       onCheckedChange={handleSelectAll}
                     />
                   </DataTableHead>
                   <DataTableHead>ID Servicio</DataTableHead>
-                  <DataTableHead>Cliente</DataTableHead>
+                  <DataTableHead>Client</DataTableHead>
                   <DataTableHead>Ruta</DataTableHead>
                   <DataTableHead>Entrega</DataTableHead>
                   <DataTableHead className="text-right">Monto</DataTableHead>
@@ -118,9 +126,11 @@ export function ImportServicesModal({
               </DataTableHeader>
               <DataTableBody>
                 {filteredServices.map((service) => (
-                  <DataTableRow 
+                  <DataTableRow
                     key={service.id}
-                    className={selectedIds.has(service.id) ? 'bg-brand-navy/5' : ''}
+                    className={
+                      selectedIds.has(service.id) ? "bg-brand-navy/5" : ""
+                    }
                   >
                     <DataTableCell>
                       <Checkbox
@@ -141,7 +151,7 @@ export function ImportServicesModal({
                       {service.fechaEntrega}
                     </DataTableCell>
                     <DataTableCell className="text-right font-medium">
-                      ${service.monto.toLocaleString('es-MX')}
+                      ${service.monto.toLocaleString("es-MX")}
                     </DataTableCell>
                   </DataTableRow>
                 ))}
@@ -154,13 +164,19 @@ export function ImportServicesModal({
             <div className="p-4 bg-brand-navy/5 rounded-lg border border-brand-navy/20">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Servicios seleccionados</p>
-                  <p className="font-semibold text-brand-dark">{selectedIds.size} servicio(s)</p>
+                  <p className="text-sm text-muted-foreground">
+                    Servicios seleccionados
+                  </p>
+                  <p className="font-semibold text-brand-dark">
+                    {selectedIds.size} servicio(s)
+                  </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm text-muted-foreground">Total a facturar</p>
+                  <p className="text-sm text-muted-foreground">
+                    Total a facturar
+                  </p>
                   <p className="text-xl font-bold text-brand-green">
-                    ${totalMonto.toLocaleString('es-MX')} MXN
+                    ${totalMonto.toLocaleString("es-MX")} MXN
                   </p>
                 </div>
               </div>

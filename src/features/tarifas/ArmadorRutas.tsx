@@ -1,5 +1,15 @@
 import { useState, useMemo } from "react";
-import { Plus, Trash2, GripVertical, Route, Calculator, ArrowRight, MoreHorizontal, Edit, History } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  GripVertical,
+  Route,
+  Calculator,
+  ArrowRight,
+  MoreHorizontal,
+  Edit,
+  History,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { ActionButton } from "@/components/ui/action-button";
@@ -36,17 +46,26 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { mockTollBooths, mockClientes, TollBooth, RouteTemplate, mockRouteTemplates } from "@/data/tarifasData";
+import {
+  mockTollBooths,
+  mockClientes,
+  TollBooth,
+  RouteTemplate,
+  mockRouteTemplates,
+} from "@/data/tarifasData";
 import { useTiposUnidad } from "@/hooks/useTiposUnidad";
 import { useRutasAutorizadas } from "@/hooks/useRutasAutorizadas";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { EnhancedDataTable, ColumnDef } from "@/components/ui/enhanced-data-table";
+import {
+  EnhancedDataTable,
+  ColumnDef,
+} from "@/components/ui/enhanced-data-table";
 
 export const ArmadorRutas = () => {
   const { tiposActivos } = useTiposUnidad();
   const { rutasActivas } = useRutasAutorizadas();
-  
+
   const [selectedCliente, setSelectedCliente] = useState("");
   const [rutaSeleccionada, setRutaSeleccionada] = useState("");
   const [origen, setOrigen] = useState("");
@@ -54,15 +73,18 @@ export const ArmadorRutas = () => {
   const [tipoUnidad, setTipoUnidad] = useState("");
   const [selectedTolls, setSelectedTolls] = useState<TollBooth[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [savedRoutes, setSavedRoutes] = useState<RouteTemplate[]>(mockRouteTemplates);
+  const [savedRoutes, setSavedRoutes] =
+    useState<RouteTemplate[]>(mockRouteTemplates);
   const [editingRoute, setEditingRoute] = useState<RouteTemplate | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [routeToDelete, setRouteToDelete] = useState<RouteTemplate | null>(null);
+  const [routeToDelete, setRouteToDelete] = useState<RouteTemplate | null>(
+    null,
+  );
 
   // Handle route selection from catalog
   const handleRutaChange = (rutaId: string) => {
     setRutaSeleccionada(rutaId);
-    const ruta = rutasActivas.find(r => r.id === rutaId);
+    const ruta = rutasActivas.find((r) => r.id === rutaId);
     if (ruta) {
       setOrigen(ruta.origen);
       setDestino(ruta.destino);
@@ -71,9 +93,11 @@ export const ArmadorRutas = () => {
 
   // Calculate total cost based on selected tolls and unit type
   const costoTotal = useMemo(() => {
-    const tipo = tiposActivos.find(t => t.id === tipoUnidad);
-    const esFull = tipo?.nombre.toLowerCase().includes('full') || tipo?.nombre.toLowerCase().includes('9 ejes');
-    
+    const tipo = tiposActivos.find((t) => t.id === tipoUnidad);
+    const esFull =
+      tipo?.nombre.toLowerCase().includes("full") ||
+      tipo?.nombre.toLowerCase().includes("9 ejes");
+
     return selectedTolls.reduce((total, toll) => {
       const costo = esFull ? toll.costo9EjesSencillo : toll.costo5EjesSencillo;
       return total + costo;
@@ -81,9 +105,11 @@ export const ArmadorRutas = () => {
   }, [selectedTolls, tipoUnidad, tiposActivos]);
 
   const costoTotalFull = useMemo(() => {
-    const tipo = tiposActivos.find(t => t.id === tipoUnidad);
-    const esFull = tipo?.nombre.toLowerCase().includes('full') || tipo?.nombre.toLowerCase().includes('9 ejes');
-    
+    const tipo = tiposActivos.find((t) => t.id === tipoUnidad);
+    const esFull =
+      tipo?.nombre.toLowerCase().includes("full") ||
+      tipo?.nombre.toLowerCase().includes("9 ejes");
+
     return selectedTolls.reduce((total, toll) => {
       const costo = esFull ? toll.costo9EjesFull : toll.costo5EjesFull;
       return total + costo;
@@ -110,41 +136,43 @@ export const ArmadorRutas = () => {
 
   const handleSaveRoute = () => {
     if (!selectedCliente || !origen || !destino || !tipoUnidad) {
-      toast.error('Completa todos los campos obligatorios');
+      toast.error("Completa todos los campos obligatorios");
       return;
     }
 
-    const cliente = mockClientes.find(c => c.id === selectedCliente);
-    const tipo = tiposActivos.find(t => t.id === tipoUnidad);
-    
+    const cliente = mockClientes.find((c) => c.id === selectedCliente);
+    const tipo = tiposActivos.find((t) => t.id === tipoUnidad);
+
     const newRoute: RouteTemplate = {
       id: editingRoute?.id || `ruta-${Date.now()}`,
       clienteId: selectedCliente,
-      clienteNombre: cliente?.nombre || '',
+      clienteNombre: cliente?.nombre || "",
       origen: origen,
       destino: destino,
-      tipoUnidad: tipo?.nombre.toLowerCase().includes('9') ? '9ejes' : '5ejes',
-      casetas: selectedTolls.map(t => t.id),
+      tipoUnidad: tipo?.nombre.toLowerCase().includes("9") ? "9ejes" : "5ejes",
+      casetas: selectedTolls.map((t) => t.id),
       costoTotal: costoTotalFull,
     };
 
     if (editingRoute) {
-      setSavedRoutes(savedRoutes.map(r => r.id === editingRoute.id ? newRoute : r));
-      toast.success('Tarifa actualizada correctamente');
+      setSavedRoutes(
+        savedRoutes.map((r) => (r.id === editingRoute.id ? newRoute : r)),
+      );
+      toast.success("Tarifa actualizada correctamente");
     } else {
       setSavedRoutes([...savedRoutes, newRoute]);
-      toast.success('Nueva tarifa guardada');
+      toast.success("Nueva tarifa guardada");
     }
 
     handleClearForm();
   };
 
   const handleClearForm = () => {
-    setSelectedCliente('');
-    setRutaSeleccionada('');
-    setOrigen('');
-    setDestino('');
-    setTipoUnidad('');
+    setSelectedCliente("");
+    setRutaSeleccionada("");
+    setOrigen("");
+    setDestino("");
+    setTipoUnidad("");
     setSelectedTolls([]);
     setEditingRoute(null);
   };
@@ -154,20 +182,25 @@ export const ArmadorRutas = () => {
     setSelectedCliente(route.clienteId);
     setOrigen(route.origen);
     setDestino(route.destino);
-    
+
     // Find matching unit type
-    const tipo = tiposActivos.find(t => 
-      (route.tipoUnidad === '9ejes' && (t.nombre.toLowerCase().includes('full') || t.nombre.toLowerCase().includes('9'))) ||
-      (route.tipoUnidad === '5ejes' && !t.nombre.toLowerCase().includes('full') && !t.nombre.toLowerCase().includes('9'))
+    const tipo = tiposActivos.find(
+      (t) =>
+        (route.tipoUnidad === "9ejes" &&
+          (t.nombre.toLowerCase().includes("full") ||
+            t.nombre.toLowerCase().includes("9"))) ||
+        (route.tipoUnidad === "5ejes" &&
+          !t.nombre.toLowerCase().includes("full") &&
+          !t.nombre.toLowerCase().includes("9")),
     );
-    setTipoUnidad(tipo?.id || '');
-    
+    setTipoUnidad(tipo?.id || "");
+
     // Load casetas
-    const tolls = mockTollBooths.filter(t => route.casetas.includes(t.id));
+    const tolls = mockTollBooths.filter((t) => route.casetas.includes(t.id));
     setSelectedTolls(tolls);
-    
+
     // Scroll to form
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleDeleteClick = (route: RouteTemplate) => {
@@ -177,100 +210,105 @@ export const ArmadorRutas = () => {
 
   const handleConfirmDelete = () => {
     if (routeToDelete) {
-      setSavedRoutes(savedRoutes.filter(r => r.id !== routeToDelete.id));
-      toast.success('Tarifa eliminada');
+      setSavedRoutes(savedRoutes.filter((r) => r.id !== routeToDelete.id));
+      toast.success("Tarifa eliminada");
       setRouteToDelete(null);
     }
     setDeleteDialogOpen(false);
   };
 
   const availableTolls = mockTollBooths.filter(
-    (toll) => !selectedTolls.find((t) => t.id === toll.id)
+    (toll) => !selectedTolls.find((t) => t.id === toll.id),
   );
 
   // Table columns for saved routes with actions
-  const columns: ColumnDef<RouteTemplate>[] = useMemo(() => [
-    {
-      key: 'clienteNombre',
-      header: 'Cliente',
-      sortable: true,
-    },
-    {
-      key: 'origen',
-      header: 'Ruta',
-      sortable: true,
-      render: (_, row) => (
-        <div className="flex items-center gap-2">
-          <span className="font-medium">{row.origen}</span>
-          <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-          <span className="font-medium">{row.destino}</span>
-        </div>
-      ),
-    },
-    {
-      key: 'tipoUnidad',
-      header: 'Tipo Unidad',
-      type: 'status',
-      statusOptions: ['5ejes', '9ejes'],
-      sortable: true,
-      render: (value) => (
-        <span className={cn(
-          "px-2 py-1 rounded text-xs font-medium",
-          value === '9ejes' 
-            ? 'bg-amber-100 text-amber-800' 
-            : 'bg-blue-100 text-blue-800'
-        )}>
-          {value === '9ejes' ? '9 Ejes (Full)' : '5 Ejes'}
-        </span>
-      ),
-    },
-    {
-      key: 'casetas',
-      header: 'Casetas',
-      render: (value) => (
-        <span className="text-sm">{(value as string[]).length} casetas</span>
-      ),
-    },
-    {
-      key: 'costoTotal',
-      header: 'Costo Total',
-      type: 'number',
-      sortable: true,
-      render: (value) => (
-        <span className="font-mono font-semibold text-emerald-700">
-          {formatCurrency(value as number)}
-        </span>
-      ),
-    },
-    {
-      key: 'id',
-      header: 'Acciones',
-      sortable: false,
-      render: (_, row) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => handleEditRoute(row)}>
-              <Edit className="h-4 w-4 mr-2" />
-              Editar
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem 
-              onClick={() => handleDeleteClick(row)}
-              className="text-destructive focus:text-destructive"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Eliminar
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ),
-    },
-  ], [savedRoutes]);
+  const columns: ColumnDef<RouteTemplate>[] = useMemo(
+    () => [
+      {
+        key: "clienteNombre",
+        header: "Client",
+        sortable: true,
+      },
+      {
+        key: "origen",
+        header: "Ruta",
+        sortable: true,
+        render: (_, row) => (
+          <div className="flex items-center gap-2">
+            <span className="font-medium">{row.origen}</span>
+            <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+            <span className="font-medium">{row.destino}</span>
+          </div>
+        ),
+      },
+      {
+        key: "tipoUnidad",
+        header: "Tipo Unidad",
+        type: "status",
+        statusOptions: ["5ejes", "9ejes"],
+        sortable: true,
+        render: (value) => (
+          <span
+            className={cn(
+              "px-2 py-1 rounded text-xs font-medium",
+              value === "9ejes"
+                ? "bg-amber-100 text-amber-800"
+                : "bg-blue-100 text-blue-800",
+            )}
+          >
+            {value === "9ejes" ? "9 Ejes (Full)" : "5 Ejes"}
+          </span>
+        ),
+      },
+      {
+        key: "casetas",
+        header: "Casetas",
+        render: (value) => (
+          <span className="text-sm">{(value as string[]).length} casetas</span>
+        ),
+      },
+      {
+        key: "costoTotal",
+        header: "Costo Total",
+        type: "number",
+        sortable: true,
+        render: (value) => (
+          <span className="font-mono font-semibold text-emerald-700">
+            {formatCurrency(value as number)}
+          </span>
+        ),
+      },
+      {
+        key: "id",
+        header: "Acciones",
+        sortable: false,
+        render: (_, row) => (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleEditRoute(row)}>
+                <Edit className="h-4 w-4 mr-2" />
+                Editar
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => handleDeleteClick(row)}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Eliminar
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ),
+      },
+    ],
+    [savedRoutes],
+  );
 
   return (
     <div className="space-y-6">
@@ -281,14 +319,17 @@ export const ArmadorRutas = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-slate-800">
               <Route className="h-5 w-5" />
-              {editingRoute ? 'Editar Tarifa' : 'Nueva Tarifa de Ruta'}
+              {editingRoute ? "Editar Tarifa" : "Nueva Tarifa de Ruta"}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* Cliente Selection */}
+            {/* Client Selection */}
             <div className="space-y-2">
-              <Label htmlFor="cliente">Cliente *</Label>
-              <Select value={selectedCliente} onValueChange={setSelectedCliente}>
+              <Label htmlFor="cliente">Client *</Label>
+              <Select
+                value={selectedCliente}
+                onValueChange={setSelectedCliente}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccionar cliente..." />
                 </SelectTrigger>
@@ -348,7 +389,9 @@ export const ArmadorRutas = () => {
             {/* Preview of Route Display */}
             {origen && destino && (
               <div className="p-3 bg-muted rounded-lg border">
-                <p className="text-xs text-muted-foreground mb-1">Vista previa de ruta:</p>
+                <p className="text-xs text-muted-foreground mb-1">
+                  Vista previa de ruta:
+                </p>
                 <div className="flex items-center gap-2 font-semibold">
                   <span>{origen}</span>
                   <span className="text-primary">➝</span>
@@ -403,13 +446,17 @@ export const ArmadorRutas = () => {
                             <p className="font-medium text-slate-900">
                               {toll.nombre}
                             </p>
-                            <p className="text-sm text-slate-500">{toll.tramo}</p>
+                            <p className="text-sm text-slate-500">
+                              {toll.tramo}
+                            </p>
                           </div>
                           <div className="text-right">
                             <p className="text-sm font-mono text-slate-700">
                               {formatCurrency(toll.costo5EjesSencillo)}
                             </p>
-                            <p className="text-xs text-slate-400">5 Ejes Sencillo</p>
+                            <p className="text-xs text-slate-400">
+                              5 Ejes Sencillo
+                            </p>
                           </div>
                         </div>
                       ))
@@ -422,16 +469,22 @@ export const ArmadorRutas = () => {
             {/* Action Buttons */}
             <div className="flex gap-2">
               {editingRoute && (
-                <Button variant="outline" onClick={handleClearForm} className="flex-1">
+                <Button
+                  variant="outline"
+                  onClick={handleClearForm}
+                  className="flex-1"
+                >
                   Cancelar
                 </Button>
               )}
-              <ActionButton 
-                className="flex-1" 
-                disabled={!selectedCliente || !origen || !destino || !tipoUnidad}
+              <ActionButton
+                className="flex-1"
+                disabled={
+                  !selectedCliente || !origen || !destino || !tipoUnidad
+                }
                 onClick={handleSaveRoute}
               >
-                {editingRoute ? 'Actualizar Tarifa' : 'Guardar Tarifa'}
+                {editingRoute ? "Actualizar Tarifa" : "Guardar Tarifa"}
               </ActionButton>
             </div>
           </CardContent>
@@ -446,7 +499,8 @@ export const ArmadorRutas = () => {
                 Lista de Casetas
               </span>
               <span className="text-sm font-normal text-slate-500">
-                {selectedTolls.length} caseta{selectedTolls.length !== 1 ? "s" : ""}
+                {selectedTolls.length} caseta
+                {selectedTolls.length !== 1 ? "s" : ""}
               </span>
             </CardTitle>
           </CardHeader>
@@ -468,7 +522,9 @@ export const ArmadorRutas = () => {
                   >
                     <div className="flex items-center gap-2 text-slate-400">
                       <GripVertical className="h-4 w-4" />
-                      <span className="text-xs font-medium w-5">{index + 1}</span>
+                      <span className="text-xs font-medium w-5">
+                        {index + 1}
+                      </span>
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-slate-900 truncate">
@@ -540,9 +596,13 @@ export const ArmadorRutas = () => {
               {routeToDelete && (
                 <>
                   Estás a punto de eliminar la tarifa de la ruta{" "}
-                  <strong>{routeToDelete.origen} ➝ {routeToDelete.destino}</strong>{" "}
-                  para el cliente <strong>{routeToDelete.clienteNombre}</strong>.
-                  <br /><br />
+                  <strong>
+                    {routeToDelete.origen} ➝ {routeToDelete.destino}
+                  </strong>{" "}
+                  para el cliente <strong>{routeToDelete.clienteNombre}</strong>
+                  .
+                  <br />
+                  <br />
                   Esta acción no se puede deshacer.
                 </>
               )}

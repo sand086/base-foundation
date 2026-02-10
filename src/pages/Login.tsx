@@ -6,7 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { User, Lock, AlertCircle, Eye, EyeOff, ArrowRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+// Ajusta la importación de assets según tu estructura real
 import { logos_3t } from "@/assets/img";
+import { AxiosError } from "axios";
 
 export default function Login() {
   const [username, setUsername] = useState("");
@@ -27,7 +29,7 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      // 1. Llamada al Backend Real (vía AuthContext -> AuthService)
+      // 1. Llamada al Backend Real
       const response = await login(username, password);
 
       // 2. Caso: El backend dice que el usuario tiene 2FA activado
@@ -37,7 +39,6 @@ export default function Login() {
           description: "Ingresa el código de tu autenticador",
         });
 
-        // Redirigimos a la pantalla de verificación pasando el token temporal
         navigate("/verify-2fa", {
           replace: true,
           state: {
@@ -48,8 +49,8 @@ export default function Login() {
         return;
       }
 
-      // 3. Caso: Login directo exitoso (sin 2FA o ya verificado)
-      if (response?.success) {
+      // 3. CORRECCIÓN CRÍTICA: Verificamos access_token en lugar de success
+      if (response?.access_token) {
         toast({
           title: "Bienvenido",
           description: "Has iniciado sesión correctamente",
@@ -57,19 +58,24 @@ export default function Login() {
         navigate("/", { replace: true });
       }
     } catch (err) {
-      // 4. Manejo de Errores HTTP del Backend
       console.error("Error en login:", err);
-      const status = (err as { response?: { status: number } }).response
-        ?.status;
 
-      if (status === 401) {
-        setError("Usuario o contraseña incorrectos");
-      } else if (status === 403) {
-        setError("Tu usuario está desactivado. Contacta al administrador.");
-      } else if (status === 422) {
-        setError("Formato de correo inválido");
+      if (err instanceof AxiosError) {
+        // Aquí TypeScript YA SABE que 'err' tiene response y status
+        const status = err.response?.status;
+
+        if (status === 401) {
+          setError("Usuario o contraseña incorrectos");
+        } else if (status === 403) {
+          setError("Tu usuario está desactivado. Contacta al administrador.");
+        } else if (status === 422) {
+          setError("Formato de correo inválido");
+        } else {
+          setError(`Error del servidor: ${status}`);
+        }
       } else {
-        setError("No se pudo conectar con el servidor. Verifica tu conexión.");
+        // 4. Si el error NO es de Axios (ej. error de código o red sin respuesta)
+        setError("Ocurrió un error inesperado. Verifica tu conexión.");
       }
     } finally {
       setIsLoading(false);
@@ -78,11 +84,13 @@ export default function Login() {
 
   return (
     <div className="fixed inset-0 z-[9999] overflow-hidden">
-      {/* Background image with cinematic overlay */}
+      {/* Background image */}
       <div className="absolute inset-0">
         <div
           className="absolute inset-0 bg-cover bg-center scale-105 animate-[subtle-float_20s_ease-in-out_infinite]"
-          style={{ backgroundImage: `url(${logos_3t.login_bg_3t})` }}
+          style={{
+            backgroundImage: `url(${logos_3t?.login_bg_3t || "/assets/img/login-bg.jpg"})`,
+          }}
         />
         <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-black/50" />
         <div className="absolute inset-0 bg-gradient-to-t from-brand-red/10 via-transparent to-transparent" />
@@ -91,8 +99,8 @@ export default function Login() {
       {/* Logo top-right */}
       <div className="hidden md:block absolute right-16 top-10 z-10 select-none">
         <img
-          src={logos_3t.logo_white_3t}
-          alt="transport management system"
+          src={logos_3t?.logo_white_3t || "/assets/img/logo-white.svg"}
+          alt="TMS Logo"
           className="h-20 drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]"
         />
       </div>
@@ -121,12 +129,12 @@ export default function Login() {
             )}
 
             <form onSubmit={handleSubmit} className="mt-8 space-y-4">
-              {/* Email/username */}
+              {/* Username */}
               <div className="relative group">
                 <User className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40 transition-all duration-300 group-focus-within:text-white group-focus-within:scale-110" />
                 <Input
                   id="username"
-                  type="email" // Cambiado a email para mejor validación nativa
+                  type="email"
                   placeholder="correo electrónico"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
@@ -149,14 +157,10 @@ export default function Login() {
                   autoComplete="current-password"
                   className="login-input h-12 rounded-xl border border-white/20 bg-white/10 pl-11 pr-12 text-[15px] text-white placeholder:text-white/40 transition-all duration-300 focus:bg-white/15 focus:border-white/30 focus:shadow-[0_0_20px_rgba(255,255,255,0.1)] focus-visible:ring-0 focus-visible:ring-offset-0 hover:bg-white/12 hover:border-white/25"
                 />
-
                 <button
                   type="button"
                   onClick={() => setShowPass((v) => !v)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex h-9 w-9 items-center justify-center rounded-lg text-white/40 transition-all duration-300 hover:bg-white/10 hover:text-white active:scale-95"
-                  aria-label={
-                    showPass ? "Ocultar contraseña" : "Mostrar contraseña"
-                  }
                 >
                   {showPass ? (
                     <EyeOff className="h-5 w-5" />
@@ -166,7 +170,7 @@ export default function Login() {
                 </button>
               </div>
 
-              {/* Remember / Forgot */}
+              {/* Extras */}
               <div className="flex items-center justify-between pt-1 text-sm">
                 <label className="flex cursor-pointer items-center gap-2 text-white/60 hover:text-white/80 transition-colors">
                   <input
@@ -177,23 +181,15 @@ export default function Login() {
                   />
                   Recuérdame
                 </label>
-
                 <button
                   type="button"
                   className="text-white/50 transition-colors hover:text-white/80"
-                  onClick={() => {
-                    toast({
-                      title: "Recuperación",
-                      description:
-                        "Contacta a sistemas para restablecer tu acceso.",
-                    });
-                  }}
                 >
                   ¿Olvidaste tu contraseña?
                 </button>
               </div>
 
-              {/* Submit Button */}
+              {/* Submit */}
               <Button
                 type="submit"
                 disabled={isLoading}

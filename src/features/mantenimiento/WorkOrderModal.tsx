@@ -1,5 +1,12 @@
 import { useState, useMemo } from "react";
-import { Plus, Trash2, AlertTriangle, Package } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  AlertTriangle,
+  Package,
+  Save,
+  Loader2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ActionButton } from "@/components/ui/action-button";
 import { Input } from "@/components/ui/input";
@@ -20,13 +27,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  mockInventory,
-  mockMechanics,
-  mockFleetUnits,
-  InventoryItem,
-} from "@/data/mantenimientoData";
 import { cn } from "@/lib/utils";
+
+// Hooks y Tipos Reales
+import { useMaintenance } from "@/hooks/useMaintenance";
+import { useUnits } from "@/hooks/useUnits";
+import { InventoryItem } from "@/services/maintenanceService";
 
 interface SelectedPart {
   item: InventoryItem;
@@ -36,46 +42,61 @@ interface SelectedPart {
 interface WorkOrderModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onCreate: (order: any) => Promise<boolean>; // Función del hook para crear
 }
 
-export const WorkOrderModal = ({ open, onOpenChange }: WorkOrderModalProps) => {
+export const WorkOrderModal = ({
+  open,
+  onOpenChange,
+  onCreate,
+}: WorkOrderModalProps) => {
+  // Cargar datos reales
+  const { inventory, mechanics } = useMaintenance();
+  const { unidades } = useUnits();
+
   const [selectedUnit, setSelectedUnit] = useState("");
   const [selectedMechanic, setSelectedMechanic] = useState("");
   const [descripcion, setDescripcion] = useState("");
-  const [selectedParts, setSelectedParts] = useState<SelectedPart[]>([]);
-  const [addingPart, setAddingPart] = useState(false);
-  const [selectedSku, setSelectedSku] = useState("");
-  const [partQuantity, setPartQuantity] = useState(1);
 
+  // Partes seleccionadas
+  const [selectedParts, setSelectedParts] = useState<SelectedPart[]>([]);
+
+  // Estado para agregar parte
+  const [addingPart, setAddingPart] = useState(false);
+  const [selectedSkuId, setSelectedSkuId] = useState(""); // ID del item (string temp)
+  const [partQuantity, setPartQuantity] = useState(1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Filtrar partes disponibles (que no hayan sido seleccionadas ya)
   const availableParts = useMemo(() => {
     const usedIds = selectedParts.map((p) => p.item.id);
-    return mockInventory.filter((item) => !usedIds.includes(item.id));
-  }, [selectedParts]);
+    return inventory.filter((item) => !usedIds.includes(item.id));
+  }, [selectedParts, inventory]);
 
   const totalDeduction = useMemo(() => {
     return selectedParts.reduce((sum, p) => sum + p.cantidad, 0);
   }, [selectedParts]);
 
   const handleAddPart = () => {
-    const item = mockInventory.find((i) => i.id === selectedSku);
+    const item = inventory.find((i) => i.id.toString() === selectedSkuId);
     if (item && partQuantity > 0) {
       setSelectedParts([...selectedParts, { item, cantidad: partQuantity }]);
-      setSelectedSku("");
+      setSelectedSkuId("");
       setPartQuantity(1);
       setAddingPart(false);
     }
   };
 
-  const handleRemovePart = (itemId: string) => {
+  const handleRemovePart = (itemId: number) => {
     setSelectedParts(selectedParts.filter((p) => p.item.id !== itemId));
   };
 
-  const handleUpdateQuantity = (itemId: string, newQuantity: number) => {
+  const handleUpdateQuantity = (itemId: number, newQuantity: number) => {
     if (newQuantity < 1) return;
     setSelectedParts(
       selectedParts.map((p) =>
-        p.item.id === itemId ? { ...p, cantidad: newQuantity } : p
-      )
+        p.item.id === itemId ? { ...p, cantidad: newQuantity } : p,
+      ),
     );
   };
 
@@ -85,26 +106,40 @@ export const WorkOrderModal = ({ open, onOpenChange }: WorkOrderModalProps) => {
     setDescripcion("");
     setSelectedParts([]);
     setAddingPart(false);
-    setSelectedSku("");
+    setSelectedSkuId("");
     setPartQuantity(1);
+    setIsSubmitting(false);
     onOpenChange(false);
   };
 
-  const handleSubmit = () => {
-    // Here you would typically save the work order
-    console.log({
-      unit: selectedUnit,
-      mechanic: selectedMechanic,
-      descripcion,
-      parts: selectedParts,
-    });
-    handleClose();
+  const handleSubmit = async () => {
+    if (!selectedUnit || !descripcion) return;
+
+    setIsSubmitting(true);
+
+    // Preparar payload para el backend
+    const payload = {
+      unit_id: parseInt(selectedUnit),
+      mechanic_id: selectedMechanic ? parseInt(selectedMechanic) : undefined,
+      descripcion_problema: descripcion,
+      parts: selectedParts.map((p) => ({
+        inventory_item_id: p.item.id,
+        cantidad: p.cantidad,
+      })),
+    };
+
+    const success = await onCreate(payload);
+
+    setIsSubmitting(false);
+    if (success) {
+      handleClose();
+    }
   };
 
-  const isValid = selectedUnit && selectedMechanic && descripcion.trim();
+  const isValid = selectedUnit && descripcion.trim().length > 0;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-slate-800">
@@ -116,15 +151,17 @@ export const WorkOrderModal = ({ open, onOpenChange }: WorkOrderModalProps) => {
         <div className="space-y-6 py-4">
           {/* Unit Selection */}
           <div className="space-y-2">
-            <Label htmlFor="unit">Unidad</Label>
+            <Label htmlFor="unit">Unidad *</Label>
             <Select value={selectedUnit} onValueChange={setSelectedUnit}>
               <SelectTrigger>
                 <SelectValue placeholder="Seleccionar unidad..." />
               </SelectTrigger>
               <SelectContent>
-                {mockFleetUnits.map((unit) => (
-                  <SelectItem key={unit.id} value={unit.id}>
-                    <span className="font-semibold">{unit.numero}</span>
+                {unidades.map((unit) => (
+                  <SelectItem key={unit.id} value={unit.id.toString()}>
+                    <span className="font-semibold">
+                      {unit.numero_economico}
+                    </span>
                     <span className="text-slate-500 ml-2">
                       - {unit.marca} {unit.modelo}
                     </span>
@@ -137,13 +174,16 @@ export const WorkOrderModal = ({ open, onOpenChange }: WorkOrderModalProps) => {
           {/* Mechanic Selection */}
           <div className="space-y-2">
             <Label htmlFor="mechanic">Mecánico Asignado</Label>
-            <Select value={selectedMechanic} onValueChange={setSelectedMechanic}>
+            <Select
+              value={selectedMechanic}
+              onValueChange={setSelectedMechanic}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Seleccionar mecánico..." />
               </SelectTrigger>
               <SelectContent>
-                {mockMechanics.map((mech) => (
-                  <SelectItem key={mech.id} value={mech.id}>
+                {mechanics.map((mech) => (
+                  <SelectItem key={mech.id} value={mech.id.toString()}>
                     <span className="font-medium">{mech.nombre}</span>
                     <span className="text-slate-500 ml-2">
                       ({mech.especialidad})
@@ -156,7 +196,7 @@ export const WorkOrderModal = ({ open, onOpenChange }: WorkOrderModalProps) => {
 
           {/* Issue Description */}
           <div className="space-y-2">
-            <Label htmlFor="descripcion">Descripción del Problema</Label>
+            <Label htmlFor="descripcion">Descripción del Problema *</Label>
             <Textarea
               id="descripcion"
               placeholder="Describa el problema o trabajo a realizar..."
@@ -189,13 +229,16 @@ export const WorkOrderModal = ({ open, onOpenChange }: WorkOrderModalProps) => {
                 <div className="grid grid-cols-3 gap-3">
                   <div className="col-span-2">
                     <Label className="text-xs">SKU / Refacción</Label>
-                    <Select value={selectedSku} onValueChange={setSelectedSku}>
+                    <Select
+                      value={selectedSkuId}
+                      onValueChange={setSelectedSkuId}
+                    >
                       <SelectTrigger className="mt-1">
                         <SelectValue placeholder="Seleccionar..." />
                       </SelectTrigger>
                       <SelectContent>
                         {availableParts.map((item) => (
-                          <SelectItem key={item.id} value={item.id}>
+                          <SelectItem key={item.id} value={item.id.toString()}>
                             <div className="flex items-center gap-2">
                               <span className="font-mono text-xs">
                                 {item.sku}
@@ -203,7 +246,7 @@ export const WorkOrderModal = ({ open, onOpenChange }: WorkOrderModalProps) => {
                               <span className="text-slate-600 text-sm truncate max-w-[200px]">
                                 {item.descripcion}
                               </span>
-                              {item.stockActual < item.stockMinimo && (
+                              {item.stock_actual < item.stock_minimo && (
                                 <AlertTriangle className="h-3 w-3 text-red-500" />
                               )}
                             </div>
@@ -231,7 +274,7 @@ export const WorkOrderModal = ({ open, onOpenChange }: WorkOrderModalProps) => {
                     size="sm"
                     onClick={() => {
                       setAddingPart(false);
-                      setSelectedSku("");
+                      setSelectedSkuId("");
                       setPartQuantity(1);
                     }}
                   >
@@ -240,7 +283,7 @@ export const WorkOrderModal = ({ open, onOpenChange }: WorkOrderModalProps) => {
                   <Button
                     size="sm"
                     onClick={handleAddPart}
-                    disabled={!selectedSku}
+                    disabled={!selectedSkuId}
                     className="bg-emerald-600 hover:bg-emerald-700"
                   >
                     Agregar
@@ -253,13 +296,13 @@ export const WorkOrderModal = ({ open, onOpenChange }: WorkOrderModalProps) => {
             {selectedParts.length > 0 ? (
               <div className="space-y-2">
                 {selectedParts.map((part) => {
-                  const isLowStock = part.item.stockActual < part.cantidad;
+                  const isLowStock = part.item.stock_actual < part.cantidad;
                   return (
                     <div
                       key={part.item.id}
                       className={cn(
                         "flex items-center gap-3 p-3 border rounded-lg",
-                        isLowStock ? "bg-red-50 border-red-200" : "bg-white"
+                        isLowStock ? "bg-red-50 border-red-200" : "bg-white",
                       )}
                     >
                       <div className="flex-1 min-w-0">
@@ -270,19 +313,19 @@ export const WorkOrderModal = ({ open, onOpenChange }: WorkOrderModalProps) => {
                           {part.item.descripcion}
                         </p>
                         <p className="text-xs text-slate-500">
-                          Stock disponible: {part.item.stockActual}
+                          Stock disponible: {part.item.stock_actual}
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
                         <Input
                           type="number"
                           min={1}
-                          max={part.item.stockActual}
+                          max={part.item.stock_actual} // Opcional: Limitar al stock
                           value={part.cantidad}
                           onChange={(e) =>
                             handleUpdateQuantity(
                               part.item.id,
-                              parseInt(e.target.value) || 1
+                              parseInt(e.target.value) || 1,
                             )
                           }
                           className="w-20 h-8 text-center"
@@ -313,8 +356,10 @@ export const WorkOrderModal = ({ open, onOpenChange }: WorkOrderModalProps) => {
               <Alert className="bg-amber-50 border-amber-200">
                 <AlertTriangle className="h-4 w-4 text-amber-600" />
                 <AlertDescription className="text-amber-800">
-                  <strong>Nota:</strong> Al cerrar esta orden, se descontarán{" "}
-                  <strong>{totalDeduction} artículo{totalDeduction !== 1 ? "s" : ""}</strong>{" "}
+                  <strong>Nota:</strong> Al crear esta orden, se descontarán{" "}
+                  <strong>
+                    {totalDeduction} artículo{totalDeduction !== 1 ? "s" : ""}
+                  </strong>{" "}
                   del inventario.
                 </AlertDescription>
               </Alert>
@@ -323,10 +368,22 @@ export const WorkOrderModal = ({ open, onOpenChange }: WorkOrderModalProps) => {
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={handleClose}>
+          <Button
+            variant="outline"
+            onClick={handleClose}
+            disabled={isSubmitting}
+          >
             Cancelar
           </Button>
-          <ActionButton onClick={handleSubmit} disabled={!isValid}>
+          <ActionButton
+            onClick={handleSubmit}
+            disabled={!isValid || isSubmitting}
+          >
+            {isSubmitting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4 mr-2" />
+            )}
             Crear Orden de Trabajo
           </ActionButton>
         </DialogFooter>

@@ -1,5 +1,6 @@
-// Basado en UnitResponse de schemas.py
-//
+// ==========================================
+// ENUMS (Coinciden con models.py)
+// ==========================================
 
 export type UnitTipo =
   | "sencillo"
@@ -17,9 +18,21 @@ export type UnitStatus =
   | "mantenimiento"
   | "bloqueado";
 
+export type OperatorStatus =
+  | "activo"
+  | "inactivo"
+  | "vacaciones"
+  | "incapacidad";
+
+export type ClientStatus = "activo" | "pendiente" | "incompleto";
+
+// ==========================================
+// INTERFACES (Ids Numéricos)
+// ==========================================
+
 export interface Unidad {
-  id: number;
-  public_id: string;
+  id: number; // <--- INTEGER
+  public_id: string; // ID Visual (ej. UNIT-001)
 
   numero_economico: string;
   placas: string;
@@ -28,9 +41,8 @@ export interface Unidad {
   modelo: string;
   year?: number;
 
-  tipo: "sencillo" | "full" | "rabon" | "tractocamion" | "remolque" | "otro";
-
-  status: "disponible" | "en_ruta" | "mantenimiento" | "bloqueado";
+  tipo: UnitTipo;
+  status: UnitStatus;
 
   // Campos técnicos
   tipo_1?: string;
@@ -43,7 +55,7 @@ export interface Unidad {
   documentos_vencidos: number;
   llantas_criticas: number;
 
-  // Fechas (Strings ISO YYYY-MM-DD)
+  // Fechas (Strings ISO YYYY-MM-DD que vienen del JSON)
   seguro_vence?: string | null;
   verificacion_humo_vence?: string | null;
   verificacion_fisico_mecanica_vence?: string | null;
@@ -61,36 +73,117 @@ export interface Unidad {
   updated_at?: string;
 }
 
-// Basado en OperatorResponse
 export interface Operator {
-  id: string;
+  id: number; // <--- INTEGER
+  public_id?: string; // Opcional (ej. OP-001)
+
   name: string;
   license_number: string;
   license_expiry: string;
   medical_check_expiry: string;
   phone?: string;
-  status: "activo" | "inactivo" | "vacaciones" | "incapacidad";
-  assigned_unit_id?: string;
+
+  status: OperatorStatus;
+
+  assigned_unit_id?: number | null; // <--- INTEGER (Relación FK)
+
+  // Datos opcionales para visualización
+  unit_economico?: string;
 }
 
-// Basado en ClientResponse
+// --- COMERCIAL (Clientes, Subclientes, Tarifas) ---
+
+export interface Tariff {
+  id: number; // <--- INTEGER
+  sub_client_id: number;
+  nombre_ruta: string;
+  tipo_unidad: string; // O UnitTipo si el backend lo valida estricto
+  tarifa_base: number;
+  costo_casetas: number;
+  moneda: string;
+  vigencia: string; // YYYY-MM-DD
+  estatus: string;
+}
+
+export interface SubClient {
+  id: number; // <--- INTEGER
+  client_id: number;
+
+  nombre: string;
+  alias?: string;
+  direccion: string;
+  ciudad: string;
+  estado: string;
+  codigo_postal?: string;
+
+  tipo_operacion: string; // 'nacional', 'importacion', etc.
+  contacto?: string;
+  telefono?: string;
+  horario_recepcion?: string;
+  dias_credito?: number;
+
+  requiere_contrato: boolean;
+  convenio_especial: boolean;
+
+  tariffs: Tariff[]; // Array de tarifas anidadas
+}
+
 export interface Client {
-  id: string;
+  id: number; // <--- INTEGER
+  public_id?: string; // Opcional (ej. CLI-001)
+
   razon_social: string;
   rfc: string;
-  estatus: "activo" | "pendiente" | "incompleto";
-  sub_clients_count?: number; // Para listados
+  regimen_fiscal?: string;
+  uso_cfdi?: string;
+  estatus: ClientStatus;
+
+  contacto_principal?: string;
+  telefono?: string;
+  email?: string;
+
+  direccion_fiscal?: string;
+  codigo_postal_fiscal?: string;
+  contrato_url?: string;
+  dias_credito?: number;
+
+  sub_clients: SubClient[]; // Array de subclientes anidados
+
+  created_at?: string;
+}
+
+// ==========================================
+// AUTH & SYSTEM
+// ==========================================
+
+export interface User {
+  id: number; // <--- INTEGER
+  nombre: string;
+  email: string;
+  role_id?: number | null; // <--- INTEGER
+  avatar_url?: string;
+  activo?: boolean;
 }
 
 export interface LoginResponse {
   access_token?: string;
   token_type?: string;
+
+  // Flujo 2FA
   require_2fa?: boolean;
   temp_token?: string;
-  user: {
-    id?: string;
-    nombre: string;
-    email: string;
-    role_id?: string;
-  };
+
+  user?: User;
+}
+
+export interface TwoFactorVerifyRequest {
+  temp_token: string;
+  code: string;
+}
+
+export interface TwoFactorVerifyResponse {
+  access_token?: string;
+  token_type?: string;
+
+  user?: User;
 }

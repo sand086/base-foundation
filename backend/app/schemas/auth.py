@@ -2,6 +2,17 @@ from pydantic import BaseModel, EmailStr
 from typing import Optional, Dict, Any
 
 
+# Esquema básico de Usuario para respuestas de Auth
+class UserAuthSchema(BaseModel):
+    id: int  # <--- IMPORTANTE: Ahora es int
+    nombre: str
+    email: EmailStr
+    role_id: Optional[int] = None # Puede ser int o null
+    avatar_url: Optional[str] = None
+
+    class Config:
+        from_attributes = True # Antes orm_mode = True
+
 # Lo que envía el usuario para loguearse
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -12,7 +23,7 @@ class LoginRequest(BaseModel):
 class LoginResponse(BaseModel):
     access_token: Optional[str] = None
     token_type: str = "bearer"
-    user: Optional[Dict[str, Any]] = None
+    user: Optional[UserAuthSchema] = None
 
     # Campos para flujo 2FA
     require_2fa: bool = False
@@ -35,11 +46,13 @@ class TwoFactorSetupResponse(BaseModel):
 # Activar 2FA
 class TwoFactorEnableRequest(BaseModel):
     code: str
+    user_id: int
 
 
 # Desactivar 2FA
 class TwoFactorDisableRequest(BaseModel):
     code: str
+    user_id: int
 
 
 # Cambio de contraseña
@@ -50,7 +63,7 @@ class PasswordChangeRequest(BaseModel):
 
 # Respuesta de información del usuario
 class UserInfoResponse(BaseModel):
-    id: str
+    id: int
     nombre: str
     apellido: Optional[str] = None
     email: EmailStr

@@ -1,10 +1,41 @@
 import { useState, useEffect } from "react";
-import { Users, Plus, Trash2, Upload, ArrowLeft, Check, MapPin, Building2, Phone, Clock, DollarSign, FileText, Paperclip, FileCheck, Route, Truck, Calendar, CheckCircle2 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
+import {
+  Users,
+  Plus,
+  Trash2,
+  Upload,
+  ArrowLeft,
+  Check,
+  MapPin,
+  Building2,
+  Phone,
+  Clock,
+  DollarSign,
+  FileText,
+  Paperclip,
+  FileCheck,
+  Route,
+  Calendar,
+  CheckCircle2,
+  Loader2,
+} from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -15,21 +46,28 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { mockClients, type Client } from "@/data/mockData";
 import { useTiposUnidad } from "@/hooks/useTiposUnidad";
+
+// 👇 CAMBIO AQUÍ: Imports reales
+import { clientService } from "@/services/clientService";
+import { Client } from "@/types/api.types";
+
+// -----------------------------
+// Types / Interfaces del Form
+// -----------------------------
 
 // Interface for authorized route tariff
 interface TarifaAutorizada {
   id: string;
-  nombreRuta: string;        // Ej: "Veracruz - CDMX (Vía Xalapa)"
-  tipoUnidad: 'sencillo' | 'full' | 'rabon'; // El costo cambia drásticamente por esto
-  tarifaBase: number;        // El precio del flete pactado
-  costoCasetas?: number;     // (Opcional) Referencia del costo de casetas para esa ruta
-  moneda: 'MXN' | 'USD';
-  vigencia: string;          // Fecha hasta la cual se respeta este precio
+  nombreRuta: string; // Ej: "Veracruz - CDMX (Vía Xalapa)"
+  tipoUnidad: string; // lo manejas dinámico desde hook, no forzamos union fija
+  tarifaBase: number; // El precio del flete pactado
+  costoCasetas?: number; // (Opcional) Referencia del costo de casetas para esa ruta
+  moneda: "MXN" | "USD";
+  vigencia: string; // Fecha hasta la cual se respeta este precio
 }
 
 interface SubClienteForm {
@@ -44,7 +82,7 @@ interface SubClienteForm {
   contacto: string;
   telefono: string;
   horarioRecepcion: string;
-  horarioCita: string; // NEW: Horario de cita específico
+  horarioCita: string; // NEW
   // Step 3: Commercial conditions
   diasCredito: number;
   requiereContrato: boolean;
@@ -63,6 +101,10 @@ interface DocumentosObligatorios {
   comprobanteDomicilio: boolean;
   comprobanteDomicilioFile?: string;
 }
+
+// -----------------------------
+// Constantes
+// -----------------------------
 
 const emptyTarifa: TarifaAutorizada = {
   id: "",
@@ -86,7 +128,7 @@ const emptySubCliente: SubClienteForm = {
   contacto: "",
   telefono: "",
   horarioRecepcion: "",
-  horarioCita: "", // NEW
+  horarioCita: "",
   diasCredito: 30,
   requiereContrato: false,
   convenioEspecial: false,
@@ -96,27 +138,91 @@ const emptySubCliente: SubClienteForm = {
 
 // Opciones estandarizadas de días de crédito
 const opcionesDiasCredito = [
-  { value: 0, label: 'Contado', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
-  { value: 15, label: '15 días', color: 'bg-blue-100 text-blue-700 border-blue-200' },
-  { value: 30, label: '30 días', color: 'bg-amber-100 text-amber-700 border-amber-200' },
+  {
+    value: 0,
+    label: "Contado",
+    color: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  },
+  {
+    value: 15,
+    label: "15 días",
+    color: "bg-blue-100 text-blue-700 border-blue-200",
+  },
+  {
+    value: 30,
+    label: "30 días",
+    color: "bg-amber-100 text-amber-700 border-amber-200",
+  },
 ];
 
 const estadosMexico = [
-  "Aguascalientes", "Baja California", "Baja California Sur", "Campeche", "Chiapas",
-  "Chihuahua", "Ciudad de México", "Coahuila", "Colima", "Durango", "Estado de México",
-  "Guanajuato", "Guerrero", "Hidalgo", "Jalisco", "Michoacán", "Morelos", "Nayarit",
-  "Nuevo León", "Oaxaca", "Puebla", "Querétaro", "Quintana Roo", "San Luis Potosí",
-  "Sinaloa", "Sonora", "Tabasco", "Tamaulipas", "Tlaxcala", "Veracruz", "Yucatán", "Zacatecas"
+  "Aguascalientes",
+  "Baja California",
+  "Baja California Sur",
+  "Campeche",
+  "Chiapas",
+  "Chihuahua",
+  "Ciudad de México",
+  "Coahuila",
+  "Colima",
+  "Durango",
+  "Estado de México",
+  "Guanajuato",
+  "Guerrero",
+  "Hidalgo",
+  "Jalisco",
+  "Michoacán",
+  "Morelos",
+  "Nayarit",
+  "Nuevo León",
+  "Oaxaca",
+  "Puebla",
+  "Querétaro",
+  "Quintana Roo",
+  "San Luis Potosí",
+  "Sinaloa",
+  "Sonora",
+  "Tabasco",
+  "Tamaulipas",
+  "Tlaxcala",
+  "Veracruz",
+  "Yucatán",
+  "Zacatecas",
 ];
 
-export default function ClientesNuevo() {
+// -----------------------------
+// Helpers de conversión IDs
+// -----------------------------
+
+const isTempSubId = (id: string) => id.startsWith("SUB-");
+const isTempTarId = (id: string) => id.startsWith("TAR-");
+
+const safeToInt = (value: string): number => {
+  const n = parseInt(value, 10);
+  return Number.isFinite(n) ? n : 0;
+};
+
+// -----------------------------
+// Componente
+// -----------------------------
+
+export default function ClientsNew() {
   const navigate = useNavigate();
   const { clientId } = useParams();
-  const [searchParams] = useSearchParams();
-  const isEditMode = !!clientId || searchParams.get('edit') !== null;
-  const { tiposActivos, getTipoLabel, getTipoIcono, loading: loadingTipos } = useTiposUnidad();
-  
+  const isEditMode = !!clientId;
+
+  const {
+    tiposActivos,
+    getTipoLabel,
+    getTipoIcono,
+    loading: loadingTipos,
+  } = useTiposUnidad();
+
   const [step, setStep] = useState(1);
+
+  // 👇 NUEVO: estado de carga (READ)
+  const [loadingData, setLoadingData] = useState(false);
+
   const [fiscalData, setFiscalData] = useState({
     razonSocial: "",
     rfc: "",
@@ -129,77 +235,143 @@ export default function ClientesNuevo() {
     email: "",
     contratoUrl: "",
   });
-  
-  // NEW: Estado para documentos obligatorios
+
+  // Documentos obligatorios
   const [documentos, setDocumentos] = useState<DocumentosObligatorios>({
     constanciaFiscal: false,
     actaConstitutiva: false,
     comprobanteDomicilio: false,
   });
-  
+
   const [subClientes, setSubClientes] = useState<SubClienteForm[]>([]);
-  const [editingSubCliente, setEditingSubCliente] = useState<SubClienteForm | null>(null);
+  const [editingSubCliente, setEditingSubCliente] =
+    useState<SubClienteForm | null>(null);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
 
-  // Load client data in edit mode
-  useEffect(() => {
-    const editId = clientId || searchParams.get('edit');
-    if (editId) {
-      const client = mockClients.find(c => c.id === editId);
-      if (client) {
-        setFiscalData({
-          razonSocial: client.razónSocial,
-          rfc: client.rfc,
-          regimenFiscal: client.regimenFiscal || "",
-          usoCFDI: client.usoCFDI || "",
-          codigoPostalFiscal: client.direccionFiscal?.match(/CP\s*(\d{5})/)?.[1] || "",
-          direccionFiscal: client.direccionFiscal || "",
-          contactoPrincipal: client.contactoPrincipal,
-          telefono: client.telefono,
-          email: client.email || "",
-          contratoUrl: (client as any).contratoUrl || "",
-        });
-        
-        // Convert SubClienteDetalle to SubClienteForm
-        const converted: SubClienteForm[] = client.subClientesDetalle.map(sub => ({
-          id: sub.id,
-          nombre: sub.nombre,
-          alias: sub.alias,
-          direccion: sub.direccion,
-          ciudad: sub.ciudad,
-          estado: sub.estado,
-          codigoPostal: sub.codigoPostal,
-          tipoOperacion: sub.tipoOperacion,
-          contacto: sub.contacto || "",
-          telefono: sub.telefono || "",
-          horarioRecepcion: sub.horarioRecepcion || "",
-          horarioCita: (sub as any).horarioCita || "",
-          diasCredito: (sub as any).diasCredito || 30,
-          requiereContrato: (sub as any).requiereContrato || false,
-          convenioEspecial: (sub as any).convenioEspecial || false,
-          contratoAdjunto: (sub as any).contratoAdjunto || "",
-          tarifas: (sub as any).tarifas || [],
-        }));
-        setSubClientes(converted);
-        
-        toast.info("Modo edición", {
-          description: `Editando cliente: ${client.razónSocial}`,
-        });
+  // -----------------------------
+  // Validaciones
+  // -----------------------------
+
+  // RFC Validation (12-13 characters)
+  const validateRFC = (rfc: string): boolean => {
+    return rfc.length >= 12 && rfc.length <= 13;
+  };
+
+  // Postal code validation (5 digits)
+  const validateCodigoPostal = (cp: string): boolean => {
+    return /^\d{5}$/.test(cp);
+  };
+
+  // Validate tariff before saving
+  const validateTarifas = (): boolean => {
+    for (const sub of subClientes) {
+      for (const tarifa of sub.tarifas) {
+        if (!tarifa.nombreRuta || tarifa.tarifaBase <= 0) {
+          toast.error("Tarifa incompleta", {
+            description: `En "${sub.nombre}": Ruta y Monto son obligatorios`,
+          });
+          return false;
+        }
       }
     }
-  }, [clientId, searchParams]);
+    return true;
+  };
+
+  // -----------------------------
+  // Cargar datos (READ) desde backend
+  // -----------------------------
+
+  // --- CARGAR DATOS (READ) ---
+  useEffect(() => {
+    const loadClientData = async () => {
+      if (!clientId) return; // Modo crear, no hacemos nada
+
+      const id = parseInt(clientId); // Convertir ID de URL a número
+      if (isNaN(id)) return;
+
+      setLoadingData(true);
+      try {
+        // 1. Petición al Backend Real
+        const data = await clientService.getClient(id);
+
+        // 2. Mapear Datos Fiscales (Snake Case del Backend -> Camel Case del Form)
+        setFiscalData({
+          razonSocial: data.razon_social,
+          rfc: data.rfc,
+          regimenFiscal: data.regimen_fiscal || "",
+          usoCFDI: data.uso_cfdi || "",
+          codigoPostalFiscal: data.codigo_postal_fiscal || "",
+          direccionFiscal: data.direccion_fiscal || "",
+          contactoPrincipal: data.contacto_principal || "",
+          telefono: data.telefono || "",
+          email: data.email || "",
+          contratoUrl: data.contrato_url || "",
+        });
+
+        // 3. Mapear Subclientes y Tarifas anidadas
+        // Nota: El backend devuelve `sub_clients` y `tariffs`
+        const mappedSubClients: SubClienteForm[] = (data.sub_clients || []).map(
+          (sub) => ({
+            id: sub.id.toString(), // Convertimos a string para que el form lo maneje
+            nombre: sub.nombre,
+            alias: sub.alias || "",
+            direccion: sub.direccion,
+            ciudad: sub.ciudad,
+            estado: sub.estado,
+            codigoPostal: sub.codigo_postal || "",
+            tipoOperacion: sub.tipo_operacion,
+            contacto: sub.contacto || "",
+            telefono: sub.telefono || "",
+            horarioRecepcion: sub.horario_recepcion || "",
+            horarioCita: "", // Campo visual, quizas no en BD aun
+            diasCredito: sub.dias_credito || 0,
+            requiereContrato: sub.requiere_contrato,
+            convenioEspecial: sub.convenio_especial,
+            tarifas: (sub.tariffs || []).map((t) => ({
+              id: t.id.toString(),
+              nombreRuta: t.nombre_ruta,
+              tipoUnidad: t.tipo_unidad,
+              tarifaBase: t.tarifa_base,
+              costoCasetas: t.costo_casetas,
+              moneda: t.moneda as "MXN" | "USD",
+              vigencia: t.vigencia,
+            })),
+          }),
+        );
+
+        setSubClientes(mappedSubClients);
+        toast.info(`Cliente cargado: ${data.razon_social}`);
+      } catch (error) {
+        console.error("Error cargando cliente:", error);
+        toast.error("Error al cargar los datos del cliente");
+        navigate("/clients");
+      } finally {
+        setLoadingData(false);
+      }
+    };
+
+    loadClientData();
+  }, [clientId, navigate]);
+
+  // -----------------------------
+  // CRUD SubClientes (Form local)
+  // -----------------------------
 
   const addSubCliente = () => {
     const newSub: SubClienteForm = {
       ...emptySubCliente,
-      id: `SUB-${Date.now()}`,
+      id: `SUB-${Date.now()}`, // temporal
     };
     setSubClientes([...subClientes, newSub]);
     setEditingSubCliente(newSub);
     setEditingIndex(subClientes.length);
   };
 
-  const updateSubCliente = (index: number, field: keyof SubClienteForm, value: any) => {
+  const updateSubCliente = (
+    index: number,
+    field: keyof SubClienteForm,
+    value: any,
+  ) => {
     const updated = [...subClientes];
     updated[index] = { ...updated[index], [field]: value };
     setSubClientes(updated);
@@ -217,12 +389,31 @@ export default function ClientesNuevo() {
     toast.success("Subcliente eliminado");
   };
 
-  // Tarifa management functions
+  const saveSubCliente = () => {
+    if (editingIndex !== null && editingSubCliente) {
+      if (
+        !editingSubCliente.nombre ||
+        !editingSubCliente.direccion ||
+        !editingSubCliente.ciudad
+      ) {
+        toast.error("Complete los campos obligatorios del subcliente");
+        return;
+      }
+      toast.success("Subcliente guardado");
+      setEditingSubCliente(null);
+      setEditingIndex(null);
+    }
+  };
+
+  // -----------------------------
+  // CRUD Tarifas (Form local)
+  // -----------------------------
+
   const addTarifa = (subClienteIndex: number) => {
     const updated = [...subClientes];
     const newTarifa: TarifaAutorizada = {
       ...emptyTarifa,
-      id: `TAR-${Date.now()}`,
+      id: `TAR-${Date.now()}`, // temporal
       nombreRuta: "",
     };
     updated[subClienteIndex] = {
@@ -232,7 +423,12 @@ export default function ClientesNuevo() {
     setSubClientes(updated);
   };
 
-  const updateTarifa = (subClienteIndex: number, tarifaIndex: number, field: keyof TarifaAutorizada, value: any) => {
+  const updateTarifa = (
+    subClienteIndex: number,
+    tarifaIndex: number,
+    field: keyof TarifaAutorizada,
+    value: any,
+  ) => {
     const updated = [...subClientes];
     const tarifas = [...updated[subClienteIndex].tarifas];
     tarifas[tarifaIndex] = { ...tarifas[tarifaIndex], [field]: value };
@@ -244,41 +440,33 @@ export default function ClientesNuevo() {
     const updated = [...subClientes];
     updated[subClienteIndex] = {
       ...updated[subClienteIndex],
-      tarifas: updated[subClienteIndex].tarifas.filter((_, i) => i !== tarifaIndex),
+      tarifas: updated[subClienteIndex].tarifas.filter(
+        (_, i) => i !== tarifaIndex,
+      ),
     };
     setSubClientes(updated);
     toast.success("Tarifa eliminada");
   };
 
-  // Validate tariff before saving
-  const validateTarifas = (): boolean => {
-    for (const sub of subClientes) {
-      for (const tarifa of sub.tarifas) {
-        if (!tarifa.nombreRuta || tarifa.tarifaBase <= 0) {
-          toast.error("Tarifa incompleta", { 
-            description: `En "${sub.nombre}": Ruta y Monto son obligatorios` 
-          });
-          return false;
-        }
-      }
-    }
-    return true;
-  };
+  // -----------------------------
+  // UI helpers
+  // -----------------------------
 
-  // Get unit type badge with appropriate styling - using dynamic types
   const getUnidadBadge = (tipo: string) => {
     const icono = getTipoIcono(tipo);
-    const label = getTipoLabel(tipo).replace(icono, '').trim();
-    
+    const label = getTipoLabel(tipo).replace(icono, "").trim();
+
     const colorMap: Record<string, string> = {
-      'sencillo': 'bg-blue-100 text-blue-700 border-blue-200',
-      'full': 'bg-purple-100 text-purple-700 border-purple-200',
-      'rabon': 'bg-orange-100 text-orange-700 border-orange-200',
-      'rabón': 'bg-orange-100 text-orange-700 border-orange-200',
+      sencillo: "bg-blue-100 text-blue-700 border-blue-200",
+      full: "bg-purple-100 text-purple-700 border-purple-200",
+      rabon: "bg-orange-100 text-orange-700 border-orange-200",
+      rabón: "bg-orange-100 text-orange-700 border-orange-200",
     };
-    
-    const colorClass = colorMap[tipo.toLowerCase()] || 'bg-muted text-muted-foreground border-muted';
-    
+
+    const colorClass =
+      colorMap[tipo.toLowerCase()] ||
+      "bg-muted text-muted-foreground border-muted";
+
     return (
       <Badge className={`${colorClass} text-[10px]`}>
         {icono} {label}
@@ -286,120 +474,209 @@ export default function ClientesNuevo() {
     );
   };
 
-  const saveSubCliente = () => {
-    if (editingIndex !== null && editingSubCliente) {
-      if (!editingSubCliente.nombre || !editingSubCliente.direccion || !editingSubCliente.ciudad) {
-        toast.error("Complete los campos obligatorios del subcliente");
-        return;
-      }
-      toast.success("Subcliente guardado");
-      setEditingSubCliente(null);
-      setEditingIndex(null);
-    }
-  };
-
-  // RFC Validation (12-13 characters)
-  const validateRFC = (rfc: string): boolean => {
-    return rfc.length >= 12 && rfc.length <= 13;
-  };
-
-  // Postal code validation (5 digits)
-  const validateCodigoPostal = (cp: string): boolean => {
-    return /^\d{5}$/.test(cp);
-  };
-
-  const handleSave = () => {
-    // Validate fiscal data
-    if (!fiscalData.razonSocial || !fiscalData.rfc) {
-      toast.error("Complete los datos fiscales obligatorios");
-      return;
-    }
-
-    if (!validateRFC(fiscalData.rfc)) {
-      toast.error("RFC inválido", { description: "Debe tener 12-13 caracteres" });
-      return;
-    }
-
-    if (fiscalData.codigoPostalFiscal && !validateCodigoPostal(fiscalData.codigoPostalFiscal)) {
-      toast.error("Código Postal inválido", { description: "Debe tener 5 dígitos" });
-      return;
-    }
-
-    // Validate all tariffs have required fields
-    if (!validateTarifas()) {
-      return;
-    }
-
-    // Count total tariffs assigned
-    const totalTarifas = subClientes.reduce((acc, sub) => acc + sub.tarifas.length, 0);
-
-    toast.success(isEditMode ? "Cliente actualizado exitosamente" : "Cliente guardado exitosamente", {
-      description: `${fiscalData.razonSocial} con ${subClientes.length} destino(s) y ${totalTarifas} tarifa(s) configuradas`,
-    });
-    navigate("/clientes");
-  };
-
-  const canProceed = fiscalData.razonSocial && fiscalData.rfc && validateRFC(fiscalData.rfc);
-  const canProceedStep2 = subClientes.length > 0 && subClientes.every(s => s.nombre && s.direccion && s.ciudad);
-
   const getOperationBadge = (tipo: string) => {
-    switch (tipo) {
-      case 'nacional':
-        return <Badge className="bg-status-success text-white">Nacional</Badge>;
-      case 'importacion':
-        return <Badge className="bg-status-info text-white">Importación</Badge>;
-      case 'exportacion':
+    // Aseguramos minúsculas por si acaso
+    switch (tipo?.toLowerCase()) {
+      case "nacional":
+        return <Badge className="bg-emerald-500 text-white">Nacional</Badge>;
+      case "importación":
+        return <Badge className="bg-blue-500 text-white">Importación</Badge>;
+      case "exportación":
         return <Badge className="bg-amber-500 text-white">Exportación</Badge>;
       default:
         return <Badge variant="outline">Sin definir</Badge>;
     }
   };
 
-  const getTipoUnidadLabel = (tipo: string) => {
-    switch (tipo) {
-      case 'sencillo': return 'Sencillo';
-      case 'full': return 'Full';
-      case 'rabon': return 'Rabón';
-      default: return tipo;
+  // -----------------------------
+  // Guardar (CREATE/UPDATE) al backend
+  // -----------------------------
+
+  const handleSave = async () => {
+    if (!fiscalData.razonSocial || !fiscalData.rfc) {
+      toast.error("Complete los datos fiscales obligatorios");
+      return;
+    }
+    if (!validateRFC(fiscalData.rfc)) {
+      toast.error("RFC inválido");
+      return;
+    }
+    if (!validateTarifas()) return;
+
+    try {
+      // Payload para el backend (Snake Case)
+      const payload: Partial<Client> = {
+        razon_social: fiscalData.razonSocial,
+        rfc: fiscalData.rfc,
+        regimen_fiscal: fiscalData.regimenFiscal,
+        uso_cfdi: fiscalData.usoCFDI,
+        codigo_postal_fiscal: fiscalData.codigoPostalFiscal,
+        direccion_fiscal: fiscalData.direccionFiscal,
+        contacto_principal: fiscalData.contactoPrincipal,
+        telefono: fiscalData.telefono,
+        email: fiscalData.email,
+        contrato_url: fiscalData.contratoUrl,
+        estatus: "activo",
+
+        // Mapeo inverso de subclientes y tarifas
+        sub_clients: subClientes.map((sub) => {
+          // Detectar si es un ID temporal (empieza con SUB-) o real
+          const subId = sub.id.startsWith("SUB-") ? 0 : parseInt(sub.id);
+
+          return {
+            id: subId,
+            client_id: 0, // Se ignora en create/update
+            nombre: sub.nombre,
+            alias: sub.alias,
+            direccion: sub.direccion,
+            ciudad: sub.ciudad,
+            estado: sub.estado,
+            codigo_postal: sub.codigoPostal,
+            tipo_operacion: sub.tipoOperacion,
+            contacto: sub.contacto,
+            telefono: sub.telefono,
+            horario_recepcion: sub.horarioRecepcion,
+            dias_credito: sub.diasCredito,
+            requiere_contrato: sub.requiereContrato,
+            convenio_especial: sub.convenioEspecial,
+            tariffs: sub.tarifas.map((t) => {
+              // Detectar si es tarifa temporal (TAR-) o real
+              const tarId =
+                t.id && t.id.toString().startsWith("TAR-")
+                  ? 0
+                  : parseInt(t.id?.toString() || "0");
+
+              return {
+                id: tarId,
+                sub_client_id: 0,
+                nombre_ruta: t.nombreRuta,
+                tipo_unidad: t.tipoUnidad,
+                tarifa_base: t.tarifaBase,
+                costo_casetas: t.costoCasetas,
+                moneda: t.moneda,
+                vigencia: t.vigencia,
+                estatus: "activa",
+              };
+            }),
+          };
+        }),
+      };
+
+      if (isEditMode && clientId) {
+        // UPDATE
+        await clientService.updateClient(parseInt(clientId), payload);
+        toast.success("Cliente actualizado exitosamente");
+      } else {
+        // CREATE
+        await clientService.createClient(payload);
+        toast.success("Cliente creado exitosamente");
+      }
+
+      navigate("/clients");
+    } catch (error: any) {
+      console.error(error);
+      const msg = error.response?.data?.detail || "Error al guardar cliente";
+      toast.error(msg);
     }
   };
+
+  // -----------------------------
+  // Gating por pasos
+  // -----------------------------
+
+  const canProceed =
+    fiscalData.razonSocial && fiscalData.rfc && validateRFC(fiscalData.rfc);
+
+  const canProceedStep2 =
+    subClientes.length > 0 &&
+    subClientes.every((s) => s.nombre && s.direccion && s.ciudad);
+
+  // -----------------------------
+  // Render condicional mientras carga
+  // -----------------------------
+
+  if (loadingData) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 space-y-4">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-muted-foreground">Cargando datos del cliente...</p>
+      </div>
+    );
+  }
+
+  // -----------------------------
+  // JSX
+  // -----------------------------
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/clientes")}>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => navigate("/clients")}
+        >
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Users className="h-6 w-6" /> {isEditMode ? "Editar Cliente" : "Alta de Cliente"}
+            <Users className="h-6 w-6" />{" "}
+            {isEditMode ? "Editar Cliente" : "Alta de Cliente"}
           </h1>
-          <p className="text-muted-foreground">Wizard de registro - Paso {step} de 3</p>
+          <p className="text-muted-foreground">
+            Wizard de registro - Paso {step} de 3
+          </p>
         </div>
       </div>
 
-      {/* Step Indicator - Now 3 steps */}
+      {/* Step Indicator */}
       <div className="flex items-center gap-4">
-        <div className={`flex items-center gap-2 ${step >= 1 ? "text-primary" : "text-muted-foreground"}`}>
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-medium ${step >= 1 ? "bg-primary text-primary-foreground" : "bg-muted"}`}>
+        <div
+          className={`flex items-center gap-2 ${
+            step >= 1 ? "text-primary" : "text-muted-foreground"
+          }`}
+        >
+          <div
+            className={`w-8 h-8 rounded-full flex items-center justify-center font-medium ${
+              step >= 1 ? "bg-primary text-primary-foreground" : "bg-muted"
+            }`}
+          >
             {step > 1 ? <Check className="h-4 w-4" /> : "1"}
           </div>
           <span className="font-medium hidden sm:block">Datos Fiscales</span>
         </div>
         <div className="flex-1 h-0.5 bg-border" />
-        <div className={`flex items-center gap-2 ${step >= 2 ? "text-primary" : "text-muted-foreground"}`}>
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-medium ${step >= 2 ? "bg-primary text-primary-foreground" : "bg-muted"}`}>
+        <div
+          className={`flex items-center gap-2 ${
+            step >= 2 ? "text-primary" : "text-muted-foreground"
+          }`}
+        >
+          <div
+            className={`w-8 h-8 rounded-full flex items-center justify-center font-medium ${
+              step >= 2 ? "bg-primary text-primary-foreground" : "bg-muted"
+            }`}
+          >
             {step > 2 ? <Check className="h-4 w-4" /> : "2"}
           </div>
           <span className="font-medium hidden sm:block">Destinos</span>
         </div>
         <div className="flex-1 h-0.5 bg-border" />
-        <div className={`flex items-center gap-2 ${step >= 3 ? "text-primary" : "text-muted-foreground"}`}>
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-medium ${step >= 3 ? "bg-primary text-primary-foreground" : "bg-muted"}`}>
+        <div
+          className={`flex items-center gap-2 ${
+            step >= 3 ? "text-primary" : "text-muted-foreground"
+          }`}
+        >
+          <div
+            className={`w-8 h-8 rounded-full flex items-center justify-center font-medium ${
+              step >= 3 ? "bg-primary text-primary-foreground" : "bg-muted"
+            }`}
+          >
             3
           </div>
-          <span className="font-medium hidden sm:block">Tarifas y Convenios</span>
+          <span className="font-medium hidden sm:block">
+            Tarifas y Convenios
+          </span>
         </div>
       </div>
 
@@ -411,7 +688,9 @@ export default function ClientesNuevo() {
               <Building2 className="h-5 w-5" />
               Datos Fiscales (Receptor CFDI 4.0)
             </CardTitle>
-            <CardDescription>Información fiscal del cliente para facturación electrónica</CardDescription>
+            <CardDescription>
+              Información fiscal del cliente para facturación electrónica
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
@@ -420,7 +699,12 @@ export default function ClientesNuevo() {
                 <Input
                   placeholder="Empresa S.A. de C.V."
                   value={fiscalData.razonSocial}
-                  onChange={(e) => setFiscalData({ ...fiscalData, razonSocial: e.target.value })}
+                  onChange={(e) =>
+                    setFiscalData({
+                      ...fiscalData,
+                      razonSocial: e.target.value,
+                    })
+                  }
                 />
               </div>
               <div className="space-y-2">
@@ -428,15 +712,24 @@ export default function ClientesNuevo() {
                 <Input
                   placeholder="XXX000000XXX"
                   value={fiscalData.rfc}
-                  onChange={(e) => setFiscalData({ ...fiscalData, rfc: e.target.value.toUpperCase() })}
+                  onChange={(e) =>
+                    setFiscalData({
+                      ...fiscalData,
+                      rfc: e.target.value.toUpperCase(),
+                    })
+                  }
                   maxLength={13}
                   className={cn(
                     "font-mono",
-                    fiscalData.rfc && !validateRFC(fiscalData.rfc) && "border-destructive focus-visible:ring-destructive"
+                    fiscalData.rfc &&
+                      !validateRFC(fiscalData.rfc) &&
+                      "border-destructive focus-visible:ring-destructive",
                   )}
                 />
                 {fiscalData.rfc && !validateRFC(fiscalData.rfc) && (
-                  <p className="text-xs text-destructive">RFC debe tener 12-13 caracteres</p>
+                  <p className="text-xs text-destructive">
+                    RFC debe tener 12-13 caracteres
+                  </p>
                 )}
               </div>
             </div>
@@ -446,44 +739,64 @@ export default function ClientesNuevo() {
                 <Label>Régimen Fiscal *</Label>
                 <Select
                   value={fiscalData.regimenFiscal}
-                  onValueChange={(value) => setFiscalData({ ...fiscalData, regimenFiscal: value })}
+                  onValueChange={(value) =>
+                    setFiscalData({ ...fiscalData, regimenFiscal: value })
+                  }
                 >
-                  <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar..." />
+                  </SelectTrigger>
                   <SelectContent className="bg-popover border shadow-lg z-50">
                     <SelectItem value="601">601 - General de Ley</SelectItem>
-                    <SelectItem value="603">603 - Personas Morales sin Fines de Lucro</SelectItem>
-                    <SelectItem value="612">612 - Personas Físicas con Actividades Empresariales</SelectItem>
-                    <SelectItem value="626">626 - Régimen Simplificado de Confianza</SelectItem>
+                    <SelectItem value="603">
+                      603 - Personas Morales sin Fines de Lucro
+                    </SelectItem>
+                    <SelectItem value="612">
+                      612 - Personas Físicas con Actividades Empresariales
+                    </SelectItem>
+                    <SelectItem value="626">
+                      626 - Régimen Simplificado de Confianza
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+
               <div className="space-y-2">
                 <Label>Uso de CFDI</Label>
                 <Select
                   value={fiscalData.usoCFDI}
-                  onValueChange={(value) => setFiscalData({ ...fiscalData, usoCFDI: value })}
+                  onValueChange={(value) =>
+                    setFiscalData({ ...fiscalData, usoCFDI: value })
+                  }
                 >
-                  <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar..." />
+                  </SelectTrigger>
                   <SelectContent className="bg-popover border shadow-lg z-50">
                     <SelectItem value="G03">G03 - Gastos en general</SelectItem>
                     <SelectItem value="P01">P01 - Por definir</SelectItem>
-                    <SelectItem value="S01">S01 - Sin efectos fiscales</SelectItem>
+                    <SelectItem value="S01">
+                      S01 - Sin efectos fiscales
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+
               <div className="space-y-2">
                 <Label>Código Postal Fiscal *</Label>
                 <Input
                   placeholder="00000"
                   value={fiscalData.codigoPostalFiscal}
                   onChange={(e) => {
-                    const value = e.target.value.replace(/\D/g, '').slice(0, 5);
+                    const value = e.target.value.replace(/\D/g, "").slice(0, 5);
                     setFiscalData({ ...fiscalData, codigoPostalFiscal: value });
                   }}
                   maxLength={5}
                   className={cn(
                     "font-mono",
-                    fiscalData.codigoPostalFiscal && !validateCodigoPostal(fiscalData.codigoPostalFiscal) && "border-destructive"
+                    fiscalData.codigoPostalFiscal &&
+                      !validateCodigoPostal(fiscalData.codigoPostalFiscal) &&
+                      "border-destructive",
                   )}
                 />
               </div>
@@ -494,7 +807,12 @@ export default function ClientesNuevo() {
               <Input
                 placeholder="Av. Ejemplo 123, Col. Centro, Ciudad, Estado, CP"
                 value={fiscalData.direccionFiscal}
-                onChange={(e) => setFiscalData({ ...fiscalData, direccionFiscal: e.target.value })}
+                onChange={(e) =>
+                  setFiscalData({
+                    ...fiscalData,
+                    direccionFiscal: e.target.value,
+                  })
+                }
               />
             </div>
 
@@ -504,7 +822,12 @@ export default function ClientesNuevo() {
                 <Input
                   placeholder="Lic. Juan Pérez"
                   value={fiscalData.contactoPrincipal}
-                  onChange={(e) => setFiscalData({ ...fiscalData, contactoPrincipal: e.target.value })}
+                  onChange={(e) =>
+                    setFiscalData({
+                      ...fiscalData,
+                      contactoPrincipal: e.target.value,
+                    })
+                  }
                 />
               </div>
               <div className="space-y-2">
@@ -512,7 +835,9 @@ export default function ClientesNuevo() {
                 <Input
                   placeholder="55 1234 5678"
                   value={fiscalData.telefono}
-                  onChange={(e) => setFiscalData({ ...fiscalData, telefono: e.target.value })}
+                  onChange={(e) =>
+                    setFiscalData({ ...fiscalData, telefono: e.target.value })
+                  }
                 />
               </div>
               <div className="space-y-2">
@@ -521,40 +846,63 @@ export default function ClientesNuevo() {
                   type="email"
                   placeholder="contacto@empresa.com"
                   value={fiscalData.email}
-                  onChange={(e) => setFiscalData({ ...fiscalData, email: e.target.value })}
+                  onChange={(e) =>
+                    setFiscalData({ ...fiscalData, email: e.target.value })
+                  }
                 />
               </div>
             </div>
 
-            {/* Documentos Obligatorios - NEW */}
+            {/* Documentos Obligatorios */}
             <div className="space-y-4">
               <h4 className="text-sm font-semibold text-foreground flex items-center gap-2 border-b pb-2">
                 <FileCheck className="h-4 w-4 text-primary" />
                 Documentos Obligatorios
               </h4>
+
               <div className="grid grid-cols-3 gap-4">
                 {/* Constancia Fiscal */}
-                <div className={cn(
-                  "border-2 border-dashed rounded-lg p-4 transition-all",
-                  documentos.constanciaFiscal ? "border-emerald-400 bg-emerald-50/50" : "border-muted-foreground/30 hover:border-primary/50"
-                )}>
+                <div
+                  className={cn(
+                    "border-2 border-dashed rounded-lg p-4 transition-all",
+                    documentos.constanciaFiscal
+                      ? "border-emerald-400 bg-emerald-50/50"
+                      : "border-muted-foreground/30 hover:border-primary/50",
+                  )}
+                >
                   <div className="flex items-start gap-3">
-                    <Checkbox 
+                    <Checkbox
                       id="constanciaFiscal"
                       checked={documentos.constanciaFiscal}
-                      onCheckedChange={(checked) => setDocumentos(prev => ({ ...prev, constanciaFiscal: !!checked }))}
+                      onCheckedChange={(checked) =>
+                        setDocumentos((prev) => ({
+                          ...prev,
+                          constanciaFiscal: !!checked,
+                        }))
+                      }
                       className="mt-1"
                     />
                     <div className="flex-1">
-                      <Label htmlFor="constanciaFiscal" className="cursor-pointer font-medium">
+                      <Label
+                        htmlFor="constanciaFiscal"
+                        className="cursor-pointer font-medium"
+                      >
                         Constancia Fiscal
                       </Label>
-                      <p className="text-xs text-muted-foreground mt-1">Constancia de Situación Fiscal (SAT)</p>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Constancia de Situación Fiscal (SAT)
+                      </p>
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         className="mt-2 h-7 text-xs gap-1 text-primary"
-                        onClick={() => setDocumentos(prev => ({ ...prev, constanciaFiscal: true, constanciaFiscalFile: 'constancia.pdf' }))}
+                        onClick={() =>
+                          setDocumentos((prev) => ({
+                            ...prev,
+                            constanciaFiscal: true,
+                            constanciaFiscalFile: "constancia.pdf",
+                          }))
+                        }
                       >
                         <Upload className="h-3 w-3" /> Subir PDF
                       </Button>
@@ -566,27 +914,47 @@ export default function ClientesNuevo() {
                 </div>
 
                 {/* Acta Constitutiva */}
-                <div className={cn(
-                  "border-2 border-dashed rounded-lg p-4 transition-all",
-                  documentos.actaConstitutiva ? "border-emerald-400 bg-emerald-50/50" : "border-muted-foreground/30 hover:border-primary/50"
-                )}>
+                <div
+                  className={cn(
+                    "border-2 border-dashed rounded-lg p-4 transition-all",
+                    documentos.actaConstitutiva
+                      ? "border-emerald-400 bg-emerald-50/50"
+                      : "border-muted-foreground/30 hover:border-primary/50",
+                  )}
+                >
                   <div className="flex items-start gap-3">
-                    <Checkbox 
+                    <Checkbox
                       id="actaConstitutiva"
                       checked={documentos.actaConstitutiva}
-                      onCheckedChange={(checked) => setDocumentos(prev => ({ ...prev, actaConstitutiva: !!checked }))}
+                      onCheckedChange={(checked) =>
+                        setDocumentos((prev) => ({
+                          ...prev,
+                          actaConstitutiva: !!checked,
+                        }))
+                      }
                       className="mt-1"
                     />
                     <div className="flex-1">
-                      <Label htmlFor="actaConstitutiva" className="cursor-pointer font-medium">
+                      <Label
+                        htmlFor="actaConstitutiva"
+                        className="cursor-pointer font-medium"
+                      >
                         Acta Constitutiva
                       </Label>
-                      <p className="text-xs text-muted-foreground mt-1">Escritura de la empresa</p>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Escritura de la empresa
+                      </p>
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         className="mt-2 h-7 text-xs gap-1 text-primary"
-                        onClick={() => setDocumentos(prev => ({ ...prev, actaConstitutiva: true, actaConstitutivaFile: 'acta.pdf' }))}
+                        onClick={() =>
+                          setDocumentos((prev) => ({
+                            ...prev,
+                            actaConstitutiva: true,
+                            actaConstitutivaFile: "acta.pdf",
+                          }))
+                        }
                       >
                         <Upload className="h-3 w-3" /> Subir PDF
                       </Button>
@@ -598,27 +966,47 @@ export default function ClientesNuevo() {
                 </div>
 
                 {/* Comprobante Domicilio */}
-                <div className={cn(
-                  "border-2 border-dashed rounded-lg p-4 transition-all",
-                  documentos.comprobanteDomicilio ? "border-emerald-400 bg-emerald-50/50" : "border-muted-foreground/30 hover:border-primary/50"
-                )}>
+                <div
+                  className={cn(
+                    "border-2 border-dashed rounded-lg p-4 transition-all",
+                    documentos.comprobanteDomicilio
+                      ? "border-emerald-400 bg-emerald-50/50"
+                      : "border-muted-foreground/30 hover:border-primary/50",
+                  )}
+                >
                   <div className="flex items-start gap-3">
-                    <Checkbox 
+                    <Checkbox
                       id="comprobanteDomicilio"
                       checked={documentos.comprobanteDomicilio}
-                      onCheckedChange={(checked) => setDocumentos(prev => ({ ...prev, comprobanteDomicilio: !!checked }))}
+                      onCheckedChange={(checked) =>
+                        setDocumentos((prev) => ({
+                          ...prev,
+                          comprobanteDomicilio: !!checked,
+                        }))
+                      }
                       className="mt-1"
                     />
                     <div className="flex-1">
-                      <Label htmlFor="comprobanteDomicilio" className="cursor-pointer font-medium">
+                      <Label
+                        htmlFor="comprobanteDomicilio"
+                        className="cursor-pointer font-medium"
+                      >
                         Comprobante Domicilio
                       </Label>
-                      <p className="text-xs text-muted-foreground mt-1">Luz, agua o predial</p>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Luz, agua o predial
+                      </p>
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         className="mt-2 h-7 text-xs gap-1 text-primary"
-                        onClick={() => setDocumentos(prev => ({ ...prev, comprobanteDomicilio: true, comprobanteDomicilioFile: 'domicilio.pdf' }))}
+                        onClick={() =>
+                          setDocumentos((prev) => ({
+                            ...prev,
+                            comprobanteDomicilio: true,
+                            comprobanteDomicilioFile: "domicilio.pdf",
+                          }))
+                        }
                       >
                         <Upload className="h-3 w-3" /> Subir PDF
                       </Button>
@@ -629,21 +1017,32 @@ export default function ClientesNuevo() {
                   </div>
                 </div>
               </div>
-              
+
               {/* Progress indicator */}
               <div className="flex items-center gap-2 text-sm">
-                <div className={cn(
-                  "h-2 flex-1 rounded-full bg-muted overflow-hidden"
-                )}>
-                  <div 
+                <div
+                  className={cn(
+                    "h-2 flex-1 rounded-full bg-muted overflow-hidden",
+                  )}
+                >
+                  <div
                     className="h-full bg-emerald-500 transition-all"
-                    style={{ 
-                      width: `${((documentos.constanciaFiscal ? 1 : 0) + (documentos.actaConstitutiva ? 1 : 0) + (documentos.comprobanteDomicilio ? 1 : 0)) / 3 * 100}%` 
+                    style={{
+                      width: `${
+                        (((documentos.constanciaFiscal ? 1 : 0) +
+                          (documentos.actaConstitutiva ? 1 : 0) +
+                          (documentos.comprobanteDomicilio ? 1 : 0)) /
+                          3) *
+                        100
+                      }%`,
                     }}
                   />
                 </div>
                 <span className="text-xs text-muted-foreground">
-                  {(documentos.constanciaFiscal ? 1 : 0) + (documentos.actaConstitutiva ? 1 : 0) + (documentos.comprobanteDomicilio ? 1 : 0)}/3 documentos
+                  {(documentos.constanciaFiscal ? 1 : 0) +
+                    (documentos.actaConstitutiva ? 1 : 0) +
+                    (documentos.comprobanteDomicilio ? 1 : 0)}
+                  /3 documentos
                 </span>
               </div>
             </div>
@@ -658,12 +1057,24 @@ export default function ClientesNuevo() {
                 <Upload className="h-6 w-6 mx-auto text-muted-foreground mb-2" />
                 <p className="text-xs text-muted-foreground">
                   {fiscalData.contratoUrl ? (
-                    <span className="text-emerald-600 font-medium">✓ Contrato cargado</span>
+                    <span className="text-emerald-600 font-medium">
+                      ✓ Contrato cargado
+                    </span>
                   ) : (
-                    <>Arrastra o <span className="text-primary font-medium">selecciona</span></>
+                    <>
+                      Arrastra o{" "}
+                      <span className="text-primary font-medium">
+                        selecciona
+                      </span>
+                    </>
                   )}
                 </p>
-                <Input type="file" accept=".pdf" className="hidden" id="contract-file" />
+                <Input
+                  type="file"
+                  accept=".pdf"
+                  className="hidden"
+                  id="contract-file"
+                />
               </div>
             </div>
 
@@ -676,7 +1087,7 @@ export default function ClientesNuevo() {
         </Card>
       )}
 
-      {/* Step 2: Sub-Clients with Dynamic Array */}
+      {/* Step 2: Sub-Clients */}
       {step === 2 && (
         <div className="space-y-4">
           <Card>
@@ -688,10 +1099,14 @@ export default function ClientesNuevo() {
                     Subclientes y Direcciones de Entrega
                   </CardTitle>
                   <CardDescription>
-                    Agrega las sucursales, plantas o ubicaciones de entrega del cliente "{fiscalData.razonSocial}"
+                    Agrega las sucursales, plantas o ubicaciones de entrega del
+                    cliente "{fiscalData.razonSocial}"
                   </CardDescription>
                 </div>
-                <Button onClick={addSubCliente} className="gap-2 bg-action hover:bg-action-hover text-action-foreground">
+                <Button
+                  onClick={addSubCliente}
+                  className="gap-2 bg-action hover:bg-action-hover text-action-foreground"
+                >
                   <Plus className="h-4 w-4" /> Agregar Destino
                 </Button>
               </div>
@@ -700,23 +1115,33 @@ export default function ClientesNuevo() {
               {subClientes.length === 0 ? (
                 <div className="text-center py-12 border-2 border-dashed rounded-lg bg-muted/20">
                   <MapPin className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
-                  <h3 className="font-semibold text-lg mb-1">Sin subclientes registrados</h3>
+                  <h3 className="font-semibold text-lg mb-1">
+                    Sin subclientes registrados
+                  </h3>
                   <p className="text-muted-foreground text-sm mb-4">
-                    Agrega ubicaciones de entrega como plantas, almacenes o sucursales
+                    Agrega ubicaciones de entrega como plantas, almacenes o
+                    sucursales
                   </p>
                   <Button variant="outline" onClick={addSubCliente}>
                     <Plus className="h-4 w-4 mr-2" /> Agregar primer destino
                   </Button>
                 </div>
               ) : (
-                <Accordion type="single" collapsible className="space-y-2" value={editingIndex !== null ? `sub-${editingIndex}` : undefined}>
+                <Accordion
+                  type="single"
+                  collapsible
+                  className="space-y-2"
+                  value={
+                    editingIndex !== null ? `sub-${editingIndex}` : undefined
+                  }
+                >
                   {subClientes.map((sub, idx) => (
-                    <AccordionItem 
-                      key={sub.id} 
+                    <AccordionItem
+                      key={sub.id}
                       value={`sub-${idx}`}
                       className={cn(
                         "border rounded-lg overflow-hidden transition-all",
-                        editingIndex === idx ? "ring-2 ring-primary" : ""
+                        editingIndex === idx ? "ring-2 ring-primary" : "",
                       )}
                     >
                       <AccordionTrigger className="px-4 py-3 hover:bg-muted/50 [&[data-state=open]]:bg-muted/50">
@@ -726,15 +1151,23 @@ export default function ClientesNuevo() {
                           </div>
                           <div className="flex-1">
                             <p className="font-semibold">
-                              {sub.nombre || <span className="text-muted-foreground italic">Nombre del destino...</span>}
+                              {sub.nombre || (
+                                <span className="text-muted-foreground italic">
+                                  Nombre del destino...
+                                </span>
+                              )}
                             </p>
                             <p className="text-sm text-muted-foreground">
-                              {sub.ciudad && sub.estado ? `${sub.ciudad}, ${sub.estado}` : 'Sin ubicación'}
+                              {sub.ciudad && sub.estado
+                                ? `${sub.ciudad}, ${sub.estado}`
+                                : "Sin ubicación"}
                             </p>
                           </div>
-                          {sub.tipoOperacion && getOperationBadge(sub.tipoOperacion)}
+                          {sub.tipoOperacion &&
+                            getOperationBadge(sub.tipoOperacion)}
                         </div>
                       </AccordionTrigger>
+
                       <AccordionContent className="px-4 pb-4">
                         <div className="space-y-4 pt-4 border-t">
                           <div className="grid grid-cols-2 gap-4">
@@ -743,7 +1176,13 @@ export default function ClientesNuevo() {
                               <Input
                                 placeholder="Ej: Planta Norte Monterrey"
                                 value={sub.nombre}
-                                onChange={(e) => updateSubCliente(idx, 'nombre', e.target.value)}
+                                onChange={(e) =>
+                                  updateSubCliente(
+                                    idx,
+                                    "nombre",
+                                    e.target.value,
+                                  )
+                                }
                               />
                             </div>
                             <div className="space-y-2">
@@ -751,7 +1190,9 @@ export default function ClientesNuevo() {
                               <Input
                                 placeholder="Ej: Planta Norte"
                                 value={sub.alias}
-                                onChange={(e) => updateSubCliente(idx, 'alias', e.target.value)}
+                                onChange={(e) =>
+                                  updateSubCliente(idx, "alias", e.target.value)
+                                }
                               />
                             </div>
                           </div>
@@ -761,7 +1202,13 @@ export default function ClientesNuevo() {
                             <Input
                               placeholder="Av. Industrial 123, Parque Industrial..."
                               value={sub.direccion}
-                              onChange={(e) => updateSubCliente(idx, 'direccion', e.target.value)}
+                              onChange={(e) =>
+                                updateSubCliente(
+                                  idx,
+                                  "direccion",
+                                  e.target.value,
+                                )
+                              }
                             />
                           </div>
 
@@ -771,43 +1218,76 @@ export default function ClientesNuevo() {
                               <Input
                                 placeholder="Monterrey"
                                 value={sub.ciudad}
-                                onChange={(e) => updateSubCliente(idx, 'ciudad', e.target.value)}
+                                onChange={(e) =>
+                                  updateSubCliente(
+                                    idx,
+                                    "ciudad",
+                                    e.target.value,
+                                  )
+                                }
                               />
                             </div>
+
                             <div className="space-y-2">
                               <Label>Estado</Label>
                               <Select
                                 value={sub.estado}
-                                onValueChange={(value) => updateSubCliente(idx, 'estado', value)}
+                                onValueChange={(value) =>
+                                  updateSubCliente(idx, "estado", value)
+                                }
                               >
-                                <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Seleccionar..." />
+                                </SelectTrigger>
                                 <SelectContent className="bg-popover border shadow-lg z-50 max-h-60">
                                   {estadosMexico.map((edo) => (
-                                    <SelectItem key={edo} value={edo}>{edo}</SelectItem>
+                                    <SelectItem key={edo} value={edo}>
+                                      {edo}
+                                    </SelectItem>
                                   ))}
                                 </SelectContent>
                               </Select>
                             </div>
+
                             <div className="space-y-2">
                               <Label>Código Postal</Label>
                               <Input
                                 placeholder="64000"
                                 value={sub.codigoPostal}
-                                onChange={(e) => updateSubCliente(idx, 'codigoPostal', e.target.value.replace(/\D/g, '').slice(0, 5))}
+                                onChange={(e) =>
+                                  updateSubCliente(
+                                    idx,
+                                    "codigoPostal",
+                                    e.target.value
+                                      .replace(/\D/g, "")
+                                      .slice(0, 5),
+                                  )
+                                }
                                 maxLength={5}
                               />
                             </div>
+
                             <div className="space-y-2">
                               <Label>Tipo Operación</Label>
                               <Select
                                 value={sub.tipoOperacion}
-                                onValueChange={(value) => updateSubCliente(idx, 'tipoOperacion', value)}
+                                onValueChange={(value) =>
+                                  updateSubCliente(idx, "tipoOperacion", value)
+                                }
                               >
-                                <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Seleccionar..." />
+                                </SelectTrigger>
                                 <SelectContent className="bg-popover border shadow-lg z-50">
-                                  <SelectItem value="nacional">Nacional</SelectItem>
-                                  <SelectItem value="importacion">Importación</SelectItem>
-                                  <SelectItem value="exportacion">Exportación</SelectItem>
+                                  <SelectItem value="nacional">
+                                    Nacional
+                                  </SelectItem>
+                                  <SelectItem value="importación">
+                                    Importación
+                                  </SelectItem>
+                                  <SelectItem value="exportación">
+                                    Exportación
+                                  </SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
@@ -821,9 +1301,16 @@ export default function ClientesNuevo() {
                               <Input
                                 placeholder="Ing. Roberto Salinas"
                                 value={sub.contacto}
-                                onChange={(e) => updateSubCliente(idx, 'contacto', e.target.value)}
+                                onChange={(e) =>
+                                  updateSubCliente(
+                                    idx,
+                                    "contacto",
+                                    e.target.value,
+                                  )
+                                }
                               />
                             </div>
+
                             <div className="space-y-2">
                               <Label className="flex items-center gap-1">
                                 <Phone className="h-3 w-3" /> Teléfono
@@ -831,9 +1318,16 @@ export default function ClientesNuevo() {
                               <Input
                                 placeholder="81 5555 4444"
                                 value={sub.telefono}
-                                onChange={(e) => updateSubCliente(idx, 'telefono', e.target.value)}
+                                onChange={(e) =>
+                                  updateSubCliente(
+                                    idx,
+                                    "telefono",
+                                    e.target.value,
+                                  )
+                                }
                               />
                             </div>
+
                             <div className="space-y-2">
                               <Label className="flex items-center gap-1">
                                 <Clock className="h-3 w-3" /> Horario Recepción
@@ -841,9 +1335,16 @@ export default function ClientesNuevo() {
                               <Input
                                 placeholder="Lun-Vie 7:00-17:00"
                                 value={sub.horarioRecepcion}
-                                onChange={(e) => updateSubCliente(idx, 'horarioRecepcion', e.target.value)}
+                                onChange={(e) =>
+                                  updateSubCliente(
+                                    idx,
+                                    "horarioRecepcion",
+                                    e.target.value,
+                                  )
+                                }
                               />
                             </div>
+
                             <div className="space-y-2">
                               <Label className="flex items-center gap-1">
                                 <Calendar className="h-3 w-3" /> Horario de Cita
@@ -851,7 +1352,13 @@ export default function ClientesNuevo() {
                               <Input
                                 placeholder="Ej: 08:00-10:00"
                                 value={sub.horarioCita}
-                                onChange={(e) => updateSubCliente(idx, 'horarioCita', e.target.value)}
+                                onChange={(e) =>
+                                  updateSubCliente(
+                                    idx,
+                                    "horarioCita",
+                                    e.target.value,
+                                  )
+                                }
                               />
                             </div>
                           </div>
@@ -876,30 +1383,6 @@ export default function ClientesNuevo() {
             </CardContent>
           </Card>
 
-          {/* Summary Card */}
-          {subClientes.length > 0 && (
-            <Card className="bg-muted/30">
-              <CardContent className="py-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-6">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Cliente</p>
-                      <p className="font-semibold">{fiscalData.razonSocial}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">RFC</p>
-                      <p className="font-mono">{fiscalData.rfc}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Destinos</p>
-                      <p className="font-semibold text-primary">{subClientes.length}</p>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
           {/* Navigation */}
           <div className="flex justify-between pt-4">
             <Button variant="outline" onClick={() => setStep(1)}>
@@ -912,7 +1395,7 @@ export default function ClientesNuevo() {
         </div>
       )}
 
-      {/* Step 3: Tarifas y Convenios - Enhanced with Multiple Tariffs per Route/Unit */}
+      {/* Step 3: Tarifas y Convenios */}
       {step === 3 && (
         <div className="space-y-6">
           <Card>
@@ -922,14 +1405,18 @@ export default function ClientesNuevo() {
                 Tarifas y Convenios Comerciales
               </CardTitle>
               <CardDescription>
-                Configura las condiciones comerciales y tarifas por ruta/unidad para cada destino de "{fiscalData.razonSocial}"
+                Configura las condiciones comerciales y tarifas por ruta/unidad
+                para cada destino de "{fiscalData.razonSocial}"
               </CardDescription>
             </CardHeader>
+
             <CardContent>
               {subClientes.length === 0 ? (
                 <div className="text-center py-12 border-2 border-dashed rounded-lg bg-muted/20">
                   <DollarSign className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
-                  <h3 className="font-semibold text-lg mb-1">Sin destinos para asignar tarifas</h3>
+                  <h3 className="font-semibold text-lg mb-1">
+                    Sin destinos para asignar tarifas
+                  </h3>
                   <p className="text-muted-foreground text-sm">
                     Regresa al paso anterior para agregar destinos
                   </p>
@@ -937,35 +1424,41 @@ export default function ClientesNuevo() {
               ) : (
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                   {subClientes.map((sub, idx) => (
-                    <Card 
-                      key={sub.id} 
+                    <Card
+                      key={sub.id}
                       className={cn(
                         "overflow-hidden transition-all duration-200 hover:shadow-md",
-                        sub.tarifas.length > 0 
-                          ? "border-emerald-300 bg-gradient-to-br from-emerald-50/50 to-white shadow-sm" 
-                          : "border-border bg-card hover:border-primary/40"
+                        sub.tarifas.length > 0
+                          ? "border-emerald-300 bg-gradient-to-br from-emerald-50/50 to-white shadow-sm"
+                          : "border-border bg-card hover:border-primary/40",
                       )}
                     >
-                      {/* Card Header with Destination Info */}
                       <CardHeader className="pb-3 bg-muted/30 border-b">
                         <div className="flex items-start gap-3">
-                          <div className={cn(
-                            "w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm shadow-sm",
-                            sub.tarifas.length > 0 
-                              ? "bg-emerald-500 text-white" 
-                              : "bg-primary/10 text-primary"
-                          )}>
+                          <div
+                            className={cn(
+                              "w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm shadow-sm",
+                              sub.tarifas.length > 0
+                                ? "bg-emerald-500 text-white"
+                                : "bg-primary/10 text-primary",
+                            )}
+                          >
                             {idx + 1}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <CardTitle className="text-base truncate">{sub.nombre}</CardTitle>
+                            <CardTitle className="text-base truncate">
+                              {sub.nombre}
+                            </CardTitle>
                             <CardDescription className="flex items-center gap-1 mt-0.5">
                               <MapPin className="h-3 w-3" />
                               {sub.ciudad}, {sub.estado}
                             </CardDescription>
                           </div>
                           {sub.tarifas.length > 0 && (
-                            <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200" variant="outline">
+                            <Badge
+                              className="bg-emerald-100 text-emerald-700 border-emerald-200"
+                              variant="outline"
+                            >
                               <FileCheck className="h-3 w-3 mr-1" />
                               {sub.tarifas.length} tarifa(s)
                             </Badge>
@@ -974,27 +1467,35 @@ export default function ClientesNuevo() {
                       </CardHeader>
 
                       <CardContent className="pt-4 space-y-5">
-                        {/* Section A: Commercial Conditions */}
+                        {/* Condiciones Comerciales */}
                         <div className="space-y-4">
                           <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
                             <Building2 className="h-3.5 w-3.5" />
                             Condiciones Comerciales
                           </h4>
-                          
+
                           <div className="grid grid-cols-2 gap-3">
-                            {/* Credit Days - Select with standard options */}
                             <div className="space-y-1.5">
                               <Label className="text-xs">Días de Crédito</Label>
                               <Select
                                 value={sub.diasCredito.toString()}
-                                onValueChange={(value) => updateSubCliente(idx, 'diasCredito', parseInt(value))}
+                                onValueChange={(value) =>
+                                  updateSubCliente(
+                                    idx,
+                                    "diasCredito",
+                                    parseInt(value, 10),
+                                  )
+                                }
                               >
                                 <SelectTrigger className="h-9">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent className="bg-popover border shadow-lg z-50">
                                   {opcionesDiasCredito.map((opcion) => (
-                                    <SelectItem key={opcion.value} value={opcion.value.toString()}>
+                                    <SelectItem
+                                      key={opcion.value}
+                                      value={opcion.value.toString()}
+                                    >
                                       <span className="flex items-center gap-2">
                                         {opcion.label}
                                       </span>
@@ -1004,46 +1505,74 @@ export default function ClientesNuevo() {
                               </Select>
                             </div>
 
-                            {/* Attach Contract Button */}
                             <div className="space-y-1.5">
-                              <Label className="text-xs">Contrato/Convenio</Label>
-                              <Button 
-                                variant="outline" 
+                              <Label className="text-xs">
+                                Contrato/Convenio
+                              </Label>
+                              <Button
+                                variant="outline"
                                 size="sm"
                                 className={cn(
                                   "w-full h-9 text-xs gap-1.5",
-                                  sub.contratoAdjunto && "border-emerald-300 text-emerald-700 bg-emerald-50"
+                                  sub.contratoAdjunto &&
+                                    "border-emerald-300 text-emerald-700 bg-emerald-50",
                                 )}
                                 onClick={() => {
-                                  updateSubCliente(idx, 'contratoAdjunto', 'contrato-adjunto.pdf');
-                                  toast.success("Archivo adjunto", { description: `Contrato adjuntado a ${sub.nombre}` });
+                                  updateSubCliente(
+                                    idx,
+                                    "contratoAdjunto",
+                                    "contrato-adjunto.pdf",
+                                  );
+                                  toast.success("Archivo adjunto", {
+                                    description: `Contrato adjuntado a ${sub.nombre}`,
+                                  });
                                 }}
                               >
                                 <Paperclip className="h-3.5 w-3.5" />
-                                {sub.contratoAdjunto ? "✓ PDF Adjunto" : "Adjuntar PDF"}
+                                {sub.contratoAdjunto
+                                  ? "✓ PDF Adjunto"
+                                  : "Adjuntar PDF"}
                               </Button>
                             </div>
                           </div>
 
-                          {/* Switches Row */}
                           <div className="flex items-center gap-6 pt-1">
                             <div className="flex items-center gap-2">
                               <Switch
                                 id={`contrato-${sub.id}`}
                                 checked={sub.requiereContrato}
-                                onCheckedChange={(checked) => updateSubCliente(idx, 'requiereContrato', checked)}
+                                onCheckedChange={(checked) =>
+                                  updateSubCliente(
+                                    idx,
+                                    "requiereContrato",
+                                    checked,
+                                  )
+                                }
                               />
-                              <Label htmlFor={`contrato-${sub.id}`} className="text-xs cursor-pointer">
+                              <Label
+                                htmlFor={`contrato-${sub.id}`}
+                                className="text-xs cursor-pointer"
+                              >
                                 Requiere Contrato
                               </Label>
                             </div>
+
                             <div className="flex items-center gap-2">
                               <Switch
                                 id={`convenio-${sub.id}`}
                                 checked={sub.convenioEspecial}
-                                onCheckedChange={(checked) => updateSubCliente(idx, 'convenioEspecial', checked)}
+                                onCheckedChange={(checked) =>
+                                  updateSubCliente(
+                                    idx,
+                                    "convenioEspecial",
+                                    checked,
+                                  )
+                                }
                               />
-                              <Label htmlFor={`convenio-${sub.id}`} className="text-xs cursor-pointer">
+                              <Label
+                                htmlFor={`convenio-${sub.id}`}
+                                className="text-xs cursor-pointer"
+                              >
                                 Convenio Especial
                               </Label>
                             </div>
@@ -1052,7 +1581,7 @@ export default function ClientesNuevo() {
 
                         <Separator />
 
-                        {/* Section B: Routes and Authorized Tariffs */}
+                        {/* Rutas y Tarifas */}
                         <div className="space-y-3">
                           <div className="flex items-center justify-between">
                             <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
@@ -1087,7 +1616,6 @@ export default function ClientesNuevo() {
                             </div>
                           ) : (
                             <div className="space-y-2">
-                              {/* Table Header */}
                               <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-muted/50 rounded-t-lg text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                                 <div className="col-span-3">Ruta</div>
                                 <div className="col-span-2">Unidad</div>
@@ -1096,92 +1624,135 @@ export default function ClientesNuevo() {
                                 <div className="col-span-2">Vigencia</div>
                                 <div className="col-span-1"></div>
                               </div>
-                              
-                              {/* Tariff Rows */}
+
                               {sub.tarifas.map((tarifa, tIdx) => (
-                                <div 
-                                  key={tarifa.id} 
+                                <div
+                                  key={tarifa.id}
                                   className="grid grid-cols-12 gap-2 px-3 py-2 border rounded-lg bg-background/50 items-center group hover:border-primary/30 transition-colors"
                                 >
-                                  {/* Route Name */}
                                   <div className="col-span-3">
                                     <Input
                                       placeholder="Ruta Bajío - Vía Corta"
                                       value={tarifa.nombreRuta}
-                                      onChange={(e) => updateTarifa(idx, tIdx, 'nombreRuta', e.target.value)}
+                                      onChange={(e) =>
+                                        updateTarifa(
+                                          idx,
+                                          tIdx,
+                                          "nombreRuta",
+                                          e.target.value,
+                                        )
+                                      }
                                       className={cn(
                                         "h-8 text-xs",
-                                        !tarifa.nombreRuta && "border-amber-300 bg-amber-50/50"
+                                        !tarifa.nombreRuta &&
+                                          "border-amber-300 bg-amber-50/50",
                                       )}
                                     />
                                   </div>
-                                  
-                                  {/* Unit Type - Dynamic */}
+
                                   <div className="col-span-2">
                                     <Select
                                       value={tarifa.tipoUnidad}
-                                      onValueChange={(value) => updateTarifa(idx, tIdx, 'tipoUnidad', value)}
+                                      onValueChange={(value) =>
+                                        updateTarifa(
+                                          idx,
+                                          tIdx,
+                                          "tipoUnidad",
+                                          value,
+                                        )
+                                      }
                                       disabled={loadingTipos}
                                     >
                                       <SelectTrigger className="h-8 text-xs">
-                                        <SelectValue placeholder={loadingTipos ? '...' : 'Tipo'} />
+                                        <SelectValue
+                                          placeholder={
+                                            loadingTipos ? "..." : "Tipo"
+                                          }
+                                        />
                                       </SelectTrigger>
                                       <SelectContent className="bg-popover border shadow-lg z-50">
                                         {tiposActivos.map((tipo) => (
-                                          <SelectItem key={tipo.id} value={tipo.nombre.toLowerCase()}>
-                                            <span className="flex items-center gap-1">{tipo.icono} {tipo.nombre}</span>
+                                          <SelectItem
+                                            key={tipo.id}
+                                            value={tipo.nombre.toLowerCase()}
+                                          >
+                                            <span className="flex items-center gap-1">
+                                              {tipo.icono} {tipo.nombre}
+                                            </span>
                                           </SelectItem>
                                         ))}
                                       </SelectContent>
                                     </Select>
                                   </div>
-                                  
-                                  {/* Base Tariff - Prominent */}
+
                                   <div className="col-span-2">
                                     <div className="relative">
-                                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">$</span>
+                                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">
+                                        $
+                                      </span>
                                       <Input
                                         type="number"
                                         min="0"
                                         step="100"
                                         placeholder="0"
                                         value={tarifa.tarifaBase || ""}
-                                        onChange={(e) => updateTarifa(idx, tIdx, 'tarifaBase', parseFloat(e.target.value) || 0)}
+                                        onChange={(e) =>
+                                          updateTarifa(
+                                            idx,
+                                            tIdx,
+                                            "tarifaBase",
+                                            parseFloat(e.target.value) || 0,
+                                          )
+                                        }
                                         className={cn(
                                           "h-8 text-xs pl-5 font-mono font-semibold",
-                                          !tarifa.tarifaBase && "border-amber-300 bg-amber-50/50"
+                                          !tarifa.tarifaBase &&
+                                            "border-amber-300 bg-amber-50/50",
                                         )}
                                       />
                                     </div>
                                   </div>
-                                  
-                                  {/* Toll Costs - Informative/Gray */}
+
                                   <div className="col-span-2">
                                     <div className="relative">
-                                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">$</span>
+                                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">
+                                        $
+                                      </span>
                                       <Input
                                         type="number"
                                         min="0"
                                         step="50"
                                         placeholder="0"
                                         value={tarifa.costoCasetas || ""}
-                                        onChange={(e) => updateTarifa(idx, tIdx, 'costoCasetas', parseFloat(e.target.value) || 0)}
+                                        onChange={(e) =>
+                                          updateTarifa(
+                                            idx,
+                                            tIdx,
+                                            "costoCasetas",
+                                            parseFloat(e.target.value) || 0,
+                                          )
+                                        }
                                         className="h-8 text-xs pl-5 font-mono bg-muted/30 text-muted-foreground"
                                       />
                                     </div>
                                   </div>
-                                  
-                                  {/* Validity Date */}
+
                                   <div className="col-span-2">
                                     <Input
                                       type="date"
                                       value={tarifa.vigencia}
-                                      onChange={(e) => updateTarifa(idx, tIdx, 'vigencia', e.target.value)}
+                                      onChange={(e) =>
+                                        updateTarifa(
+                                          idx,
+                                          tIdx,
+                                          "vigencia",
+                                          e.target.value,
+                                        )
+                                      }
                                       className="h-8 text-xs"
                                     />
                                   </div>
-                                  
-                                  {/* Delete Action */}
+
                                   <div className="col-span-1 flex justify-center">
                                     <Button
                                       variant="ghost"
@@ -1194,8 +1765,7 @@ export default function ClientesNuevo() {
                                   </div>
                                 </div>
                               ))}
-                              
-                              {/* Add New Tariff Row */}
+
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -1205,31 +1775,40 @@ export default function ClientesNuevo() {
                                 <Plus className="h-3.5 w-3.5" />
                                 Agregar Tarifa
                               </Button>
-                              
-                              {/* Saved Tariffs Summary */}
+
                               {sub.tarifas.length > 0 && (
                                 <div className="pt-3 border-t mt-3">
                                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
                                     Resumen de Tarifas Configuradas
                                   </p>
                                   <div className="flex flex-wrap gap-2">
-                                    {sub.tarifas.filter(t => t.nombreRuta && t.tarifaBase > 0).map((tarifa) => (
-                                      <div 
-                                        key={tarifa.id}
-                                        className="flex items-center gap-2 px-2 py-1 rounded-lg bg-muted/50 border"
-                                      >
-                                        <span className="text-xs truncate max-w-[120px]">{tarifa.nombreRuta}</span>
-                                        {getUnidadBadge(tarifa.tipoUnidad)}
-                                        <span className="font-mono font-bold text-xs text-primary">
-                                          ${tarifa.tarifaBase.toLocaleString()} {tarifa.moneda}
-                                        </span>
-                                        {tarifa.costoCasetas ? (
-                                          <span className="text-[10px] text-muted-foreground">
-                                            (+${tarifa.costoCasetas.toLocaleString()} casetas)
+                                    {sub.tarifas
+                                      .filter(
+                                        (t) => t.nombreRuta && t.tarifaBase > 0,
+                                      )
+                                      .map((tarifa) => (
+                                        <div
+                                          key={tarifa.id}
+                                          className="flex items-center gap-2 px-2 py-1 rounded-lg bg-muted/50 border"
+                                        >
+                                          <span className="text-xs truncate max-w-[120px]">
+                                            {tarifa.nombreRuta}
                                           </span>
-                                        ) : null}
-                                      </div>
-                                    ))}
+                                          {getUnidadBadge(tarifa.tipoUnidad)}
+                                          <span className="font-mono font-bold text-xs text-primary">
+                                            $
+                                            {tarifa.tarifaBase.toLocaleString()}{" "}
+                                            {tarifa.moneda}
+                                          </span>
+                                          {tarifa.costoCasetas ? (
+                                            <span className="text-[10px] text-muted-foreground">
+                                              (+$
+                                              {tarifa.costoCasetas.toLocaleString()}{" "}
+                                              casetas)
+                                            </span>
+                                          ) : null}
+                                        </div>
+                                      ))}
                                   </div>
                                 </div>
                               )}
@@ -1244,56 +1823,17 @@ export default function ClientesNuevo() {
             </CardContent>
           </Card>
 
-          {/* Final Summary Card */}
-          <Card className="bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
-            <CardContent className="py-6">
-              <div className="flex items-center justify-between flex-wrap gap-4">
-                <div className="flex items-center gap-8 flex-wrap">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Cliente</p>
-                    <p className="font-bold text-lg">{fiscalData.razonSocial}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">RFC</p>
-                    <p className="font-mono font-semibold">{fiscalData.rfc}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Destinos</p>
-                    <p className="font-bold text-primary text-lg">{subClientes.length}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Total Tarifas</p>
-                    <p className="font-bold text-emerald-600 text-lg">
-                      {subClientes.reduce((acc, sub) => acc + sub.tarifas.length, 0)}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {fiscalData.contratoUrl && (
-                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
-                      <FileText className="h-3 w-3 mr-1" />
-                      Contrato General
-                    </Badge>
-                  )}
-                  {subClientes.some(s => s.convenioEspecial) && (
-                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                      <FileCheck className="h-3 w-3 mr-1" />
-                      Convenios Especiales
-                    </Badge>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
           {/* Navigation */}
           <div className="flex justify-between pt-4">
             <Button variant="outline" onClick={() => setStep(2)}>
               <ArrowLeft className="h-4 w-4 mr-2" /> Anterior
             </Button>
-            <Button onClick={handleSave} className="bg-action hover:bg-action-hover text-action-foreground">
+            <Button
+              onClick={handleSave}
+              className="bg-action hover:bg-action-hover text-action-foreground"
+            >
               <Check className="h-4 w-4 mr-2" />
-              {isEditMode ? "Actualizar Cliente" : "Guardar Cliente"}
+              {isEditMode ? "Actualizar Client" : "Guardar Client"}
             </Button>
           </div>
         </div>

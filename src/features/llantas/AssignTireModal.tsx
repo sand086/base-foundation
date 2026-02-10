@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -18,9 +18,10 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { GlobalTire, TIRE_POSITIONS } from "./types";
-import { fleetUnits } from "./data";
 import { ArrowRightLeft, Truck, MapPin } from "lucide-react";
+
+import { GlobalTire, TIRE_POSITIONS } from "./types";
+import { useUnits } from "@/hooks/useUnits";
 
 interface AssignTireModalProps {
   tire: GlobalTire | null;
@@ -40,27 +41,52 @@ export function AssignTireModal({
   onOpenChange,
   onAssign,
 }: AssignTireModalProps) {
+  const { unidades } = useUnits();
+
   const [selectedUnit, setSelectedUnit] = useState<string>("");
   const [selectedPosition, setSelectedPosition] = useState<string>("");
   const [notas, setNotas] = useState("");
 
+  // Unidades disponibles (si tu backend maneja status, filtramos "disponible")
+  const unidadesSelectables = useMemo(() => {
+    // Si no existe status en tu tipo de unidad, simplemente quita el filtro.
+    return (unidades || []).filter(
+      (u: any) => !u.status || u.status === "disponible",
+    );
+  }, [unidades]);
+
+  // reset al abrir/cambiar llanta
+  useEffect(() => {
+    if (open) {
+      setSelectedUnit("");
+      setSelectedPosition("");
+      setNotas("");
+    }
+  }, [open, tire?.id]);
+
   if (!tire) return null;
+
+  const isCurrentlyMounted = tire.unidadActual !== null;
 
   const handleSubmit = () => {
     if (selectedUnit === "almacen") {
       onAssign(tire.id, null, null, notas);
       toast.success(`Llanta ${tire.codigoInterno} enviada a almacén`);
     } else if (selectedUnit && selectedPosition) {
-      const unit = fleetUnits.find((u) => u.id === selectedUnit);
+      const unit = unidadesSelectables.find(
+        (u: any) => u.id?.toString() === selectedUnit,
+      );
       const position = TIRE_POSITIONS.find((p) => p.id === selectedPosition);
+
       onAssign(
         tire.id,
-        selectedUnit,
+        selectedUnit, // se envía como string (si tu backend requiere number, aquí haces parseInt)
         position?.label || selectedPosition,
         notas,
       );
+
       toast.success(
-        `Llanta ${tire.codigoInterno} asignada a ${unit?.numero_economico} - ${position?.label}`,
+        `Llanta ${tire.codigoInterno} asignada a ${unit?.numero_economico || selectedUnit} - ${position?.label || selectedPosition}`,
       );
     } else {
       toast.error("Selecciona unidad y posición");
@@ -73,8 +99,6 @@ export function AssignTireModal({
     setNotas("");
     onOpenChange(false);
   };
-
-  const isCurrentlyMounted = tire.unidadActual !== null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -108,15 +132,27 @@ export function AssignTireModal({
               <Truck className="h-4 w-4" />
               Nueva Unidad
             </Label>
-            <Select value={selectedUnit} onValueChange={setSelectedUnit}>
+
+            <Select
+              value={selectedUnit}
+              onValueChange={(v) => {
+                setSelectedUnit(v);
+                // si cambian unidad, resetea posición
+                if (v === "almacen") setSelectedPosition("");
+              }}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Seleccionar unidad..." />
               </SelectTrigger>
+
               <SelectContent>
                 <SelectItem value="almacen">📦 Enviar a Almacén</SelectItem>
-                {fleetUnits.map((unit) => (
-                  <SelectItem key={unit.id} value={unit.id}>
-                    {unit.numero_economico} ({unit.tipo})
+
+                {unidadesSelectables.map((u: any) => (
+                  <SelectItem key={u.id} value={u.id.toString()}>
+                    {u.numero_economico}
+                    {u.marca ? ` - ${u.marca}` : ""}
+                    {u.tipo ? ` (${u.tipo})` : ""}
                   </SelectItem>
                 ))}
               </SelectContent>

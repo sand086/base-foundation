@@ -1,5 +1,16 @@
 import { useState, useMemo } from "react";
-import { Check, ChevronRight, AlertTriangle, MapPin, Truck, User, FileText, ShieldAlert, Lock, Container } from "lucide-react";
+import {
+  Check,
+  ChevronRight,
+  AlertTriangle,
+  MapPin,
+  Truck,
+  User,
+  FileText,
+  ShieldAlert,
+  Lock,
+  Container,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ActionButton } from "@/components/ui/action-button";
@@ -48,7 +59,7 @@ interface WizardData {
   destino: string;
   unitId: string;
   unitNumero: string;
-  unitTipo: '5ejes' | '9ejes';
+  unitTipo: "5ejes" | "9ejes";
   driverId: string;
   driverNombre: string;
   precio: number;
@@ -62,33 +73,33 @@ interface WizardData {
 }
 
 const initialData: WizardData = {
-  clienteId: '',
-  clienteNombre: '',
-  subClienteId: '',
-  subClienteNombre: '',
-  subClienteDireccion: '',
-  routeId: '',
-  routeNombre: '',
-  origen: '',
-  destino: '',
-  unitId: '',
-  unitNumero: '',
-  unitTipo: '5ejes',
-  driverId: '',
-  driverNombre: '',
+  clienteId: "",
+  clienteNombre: "",
+  subClienteId: "",
+  subClienteNombre: "",
+  subClienteDireccion: "",
+  routeId: "",
+  routeNombre: "",
+  origen: "",
+  destino: "",
+  unitId: "",
+  unitNumero: "",
+  unitTipo: "5ejes",
+  driverId: "",
+  driverNombre: "",
   precio: 0,
   // Multirremolque fields
-  remolque1Id: '',
-  remolque1Numero: '',
-  dollyId: '',
-  dollyNumero: '',
-  remolque2Id: '',
-  remolque2Numero: '',
+  remolque1Id: "",
+  remolque1Numero: "",
+  dollyId: "",
+  dollyNumero: "",
+  remolque2Id: "",
+  remolque2Numero: "",
 };
 
 // Simulated current user role - In production this would come from auth context
-const CURRENT_USER_ROLE = 'SuperAdmin'; // Change to 'Operador' to test non-admin behavior
-const CURRENT_USER_NAME = 'Carlos Administrador';
+const CURRENT_USER_ROLE = "SuperAdmin"; // Change to 'Operador' to test non-admin behavior
+const CURRENT_USER_NAME = "Carlos Administrador";
 
 export const DespachoWizard = () => {
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
@@ -97,15 +108,15 @@ export const DespachoWizard = () => {
   const [driverBlocked, setDriverBlocked] = useState(false);
   const [blockReasons, setBlockReasons] = useState<string[]>([]);
   const [forceOverrideDialogOpen, setForceOverrideDialogOpen] = useState(false);
-  const [overrideReason, setOverrideReason] = useState('');
+  const [overrideReason, setOverrideReason] = useState("");
   const [overrideApplied, setOverrideApplied] = useState(false);
 
   const { sendSecurityNotification } = useSecurityNotifications();
 
   const steps = [
-    { number: 1, title: 'El Servicio', description: 'Cliente, Destino y Ruta' },
-    { number: 2, title: 'Los Recursos', description: 'Unidad y Operador' },
-    { number: 3, title: 'Confirmación', description: 'Resumen y Carta Porte' },
+    { number: 1, title: "El Servicio", description: "Client, Destino y Ruta" },
+    { number: 2, title: "Los Recursos", description: "Unidad y Operador" },
+    { number: 3, title: "Confirmación", description: "Resumen y Carta Porte" },
   ];
 
   const formatCurrency = (amount: number) => {
@@ -130,7 +141,7 @@ export const DespachoWizard = () => {
     setData({
       ...initialData,
       clienteId,
-      clienteNombre: cliente?.nombre || '',
+      clienteNombre: cliente?.nombre || "",
     });
     setOverrideApplied(false);
   };
@@ -140,8 +151,10 @@ export const DespachoWizard = () => {
     setData({
       ...data,
       subClienteId,
-      subClienteNombre: subCliente?.nombre || '',
-      subClienteDireccion: subCliente ? `${subCliente.direccion}, ${subCliente.ciudad}, ${subCliente.estado}` : '',
+      subClienteNombre: subCliente?.nombre || "",
+      subClienteDireccion: subCliente
+        ? `${subCliente.direccion}, ${subCliente.ciudad}, ${subCliente.estado}`
+        : "",
     });
   };
 
@@ -154,7 +167,8 @@ export const DespachoWizard = () => {
         routeNombre: route.nombre,
         origen: route.origen,
         destino: route.destino,
-        precio: data.unitTipo === '9ejes' ? route.precio9Ejes : route.precio5Ejes,
+        precio:
+          data.unitTipo === "9ejes" ? route.precio9Ejes : route.precio5Ejes,
       });
     }
   };
@@ -163,8 +177,10 @@ export const DespachoWizard = () => {
     const unit = mockDispatchUnits.find((u) => u.id === unitId);
     if (unit) {
       const route = mockDispatchRoutes.find((r) => r.id === data.routeId);
-      const newPrecio = route 
-        ? (unit.tipo === '9ejes' ? route.precio9Ejes : route.precio5Ejes)
+      const newPrecio = route
+        ? unit.tipo === "9ejes"
+          ? route.precio9Ejes
+          : route.precio5Ejes
         : data.precio;
 
       setData({
@@ -174,12 +190,12 @@ export const DespachoWizard = () => {
         unitTipo: unit.tipo,
         precio: newPrecio,
         // Reset trailer selections when unit type changes
-        remolque1Id: '',
-        remolque1Numero: '',
-        dollyId: '',
-        dollyNumero: '',
-        remolque2Id: '',
-        remolque2Numero: '',
+        remolque1Id: "",
+        remolque1Numero: "",
+        dollyId: "",
+        dollyNumero: "",
+        remolque2Id: "",
+        remolque2Numero: "",
       });
 
       // Reset override when changing selection
@@ -187,14 +203,18 @@ export const DespachoWizard = () => {
 
       // Check for blocked status based on document expiration
       const reasons: string[] = [];
-      if (unit.documentStatus === 'vencido') {
-        reasons.push(`Unidad: ${unit.documentoVencido || 'Documentación'} vencida`);
+      if (unit.documentStatus === "vencido") {
+        reasons.push(
+          `Unidad: ${unit.documentoVencido || "Documentación"} vencida`,
+        );
       }
-      
-      setUnitBlocked(unit.documentStatus === 'vencido');
-      
+
+      setUnitBlocked(unit.documentStatus === "vencido");
+
       // Update combined block reasons
-      const driverReasons = blockReasons.filter(r => r.startsWith('Operador:'));
+      const driverReasons = blockReasons.filter((r) =>
+        r.startsWith("Operador:"),
+      );
       setBlockReasons([...reasons, ...driverReasons]);
     }
   };
@@ -235,15 +255,19 @@ export const DespachoWizard = () => {
 
   // Available trailers (not already selected)
   const availableRemolquesForSlot1 = useMemo(() => {
-    return mockRemolques.filter(r => r.status === 'disponible' && r.id !== data.remolque2Id);
+    return mockRemolques.filter(
+      (r) => r.status === "disponible" && r.id !== data.remolque2Id,
+    );
   }, [data.remolque2Id]);
 
   const availableRemolquesForSlot2 = useMemo(() => {
-    return mockRemolques.filter(r => r.status === 'disponible' && r.id !== data.remolque1Id);
+    return mockRemolques.filter(
+      (r) => r.status === "disponible" && r.id !== data.remolque1Id,
+    );
   }, [data.remolque1Id]);
 
   const availableDollies = useMemo(() => {
-    return mockDollies.filter(d => d.status === 'disponible');
+    return mockDollies.filter((d) => d.status === "disponible");
   }, []);
 
   const handleDriverChange = (driverId: string) => {
@@ -260,27 +284,27 @@ export const DespachoWizard = () => {
 
       // Check for blocked status based on license expiration
       const reasons: string[] = [];
-      if (driver.licenciaStatus === 'vencido') {
+      if (driver.licenciaStatus === "vencido") {
         reasons.push(`Operador: Licencia vencida`);
       }
-      
-      setDriverBlocked(driver.licenciaStatus === 'vencido');
-      
+
+      setDriverBlocked(driver.licenciaStatus === "vencido");
+
       // Update combined block reasons
-      const unitReasons = blockReasons.filter(r => r.startsWith('Unidad:'));
+      const unitReasons = blockReasons.filter((r) => r.startsWith("Unidad:"));
       setBlockReasons([...unitReasons, ...reasons]);
     }
   };
 
   const handleForceOverride = () => {
     if (!overrideReason.trim()) {
-      toast.error('Debes proporcionar un motivo para el desbloqueo');
+      toast.error("Debes proporcionar un motivo para el desbloqueo");
       return;
     }
 
     // Log the override action
     sendSecurityNotification({
-      event: 'forced_assignment',
+      event: "forced_assignment",
       details: {
         adminName: CURRENT_USER_NAME,
         reason: overrideReason,
@@ -290,30 +314,40 @@ export const DespachoWizard = () => {
 
     setOverrideApplied(true);
     setForceOverrideDialogOpen(false);
-    setOverrideReason('');
-    
-    toast.success('Bloqueo anulado', {
-      description: 'Se registró la acción en el log de auditoría.',
+    setOverrideReason("");
+
+    toast.success("Bloqueo anulado", {
+      description: "Se registró la acción en el log de auditoría.",
     });
   };
 
   // Check if there are any blocking issues
   const hasBlockingIssues = unitBlocked || driverBlocked;
-  
+
   // Validate trailer requirements based on unit type
   const isTrailerRequirementMet = useMemo(() => {
     if (!data.unitId) return false;
-    
-    if (data.unitTipo === '9ejes') {
+
+    if (data.unitTipo === "9ejes") {
       // Full requires: Remolque 1 + Dolly + Remolque 2
       return !!data.remolque1Id && !!data.dollyId && !!data.remolque2Id;
     } else {
       // Sencillo requires: Remolque 1 only
       return !!data.remolque1Id;
     }
-  }, [data.unitId, data.unitTipo, data.remolque1Id, data.dollyId, data.remolque2Id]);
+  }, [
+    data.unitId,
+    data.unitTipo,
+    data.remolque1Id,
+    data.dollyId,
+    data.remolque2Id,
+  ]);
 
-  const canProceedStep2 = data.unitId && data.driverId && isTrailerRequirementMet && (!hasBlockingIssues || overrideApplied);
+  const canProceedStep2 =
+    data.unitId &&
+    data.driverId &&
+    isTrailerRequirementMet &&
+    (!hasBlockingIssues || overrideApplied);
 
   // Step validation
   const isStep1Valid = data.clienteId && data.subClienteId && data.routeId;
@@ -326,18 +360,18 @@ export const DespachoWizard = () => {
 
   const getDocStatusBadge = (status: string) => {
     switch (status) {
-      case 'vigente':
+      case "vigente":
         return <StatusBadge status="success">Vigente</StatusBadge>;
-      case 'por_vencer':
+      case "por_vencer":
         return <StatusBadge status="warning">Por Vencer</StatusBadge>;
-      case 'vencido':
+      case "vencido":
         return <StatusBadge status="danger">Vencido</StatusBadge>;
       default:
         return null;
     }
   };
 
-  const isSuperAdmin = CURRENT_USER_ROLE === 'SuperAdmin';
+  const isSuperAdmin = CURRENT_USER_ROLE === "SuperAdmin";
 
   return (
     <div className="space-y-6">
@@ -352,8 +386,8 @@ export const DespachoWizard = () => {
                   currentStep > step.number
                     ? "bg-emerald-600 text-white"
                     : currentStep === step.number
-                    ? "bg-slate-900 text-white"
-                    : "bg-slate-200 text-slate-500"
+                      ? "bg-slate-900 text-white"
+                      : "bg-slate-200 text-slate-500",
                 )}
               >
                 {currentStep > step.number ? (
@@ -368,7 +402,7 @@ export const DespachoWizard = () => {
                     "text-sm font-medium",
                     currentStep >= step.number
                       ? "text-slate-800"
-                      : "text-slate-400"
+                      : "text-slate-400",
                   )}
                 >
                   {step.title}
@@ -382,7 +416,7 @@ export const DespachoWizard = () => {
                   "h-5 w-5 mx-4 mt-[-20px]",
                   currentStep > step.number
                     ? "text-emerald-600"
-                    : "text-slate-300"
+                    : "text-slate-300",
                 )}
               />
             )}
@@ -402,10 +436,13 @@ export const DespachoWizard = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Cliente */}
+                {/* Client */}
                 <div className="space-y-2">
-                  <Label>Cliente</Label>
-                  <Select value={data.clienteId} onValueChange={handleClienteChange}>
+                  <Label>Client</Label>
+                  <Select
+                    value={data.clienteId}
+                    onValueChange={handleClienteChange}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccionar cliente..." />
                     </SelectTrigger>
@@ -419,9 +456,9 @@ export const DespachoWizard = () => {
                   </Select>
                 </div>
 
-                {/* Sub-Cliente */}
+                {/* Sub-Client */}
                 <div className="space-y-2">
-                  <Label>Destino (Sub-Cliente)</Label>
+                  <Label>Destino (Sub-Client)</Label>
                   <Select
                     value={data.subClienteId}
                     onValueChange={handleSubClienteChange}
@@ -477,9 +514,14 @@ export const DespachoWizard = () => {
                 <div className="p-4 bg-emerald-50 rounded-lg border border-emerald-200">
                   <div className="flex justify-between items-center">
                     <div>
-                      <p className="text-sm text-emerald-800">Precio de Ruta (Base 5 Ejes)</p>
+                      <p className="text-sm text-emerald-800">
+                        Precio de Ruta (Base 5 Ejes)
+                      </p>
                       <p className="text-xs text-emerald-600">
-                        Incluye {mockDispatchRoutes.find(r => r.id === data.routeId)?.casetasIncluidas || 0} casetas
+                        Incluye{" "}
+                        {mockDispatchRoutes.find((r) => r.id === data.routeId)
+                          ?.casetasIncluidas || 0}{" "}
+                        casetas
                       </p>
                     </div>
                     <p className="text-2xl font-bold font-mono text-emerald-700">
@@ -513,7 +555,7 @@ export const DespachoWizard = () => {
                           key={unit.id}
                           value={unit.id}
                           className={cn(
-                            unit.documentStatus === 'vencido' && "opacity-60"
+                            unit.documentStatus === "vencido" && "opacity-60",
                           )}
                         >
                           <div className="flex items-center gap-3">
@@ -522,7 +564,7 @@ export const DespachoWizard = () => {
                               {unit.marca} {unit.modelo}
                             </span>
                             <span className="text-xs text-slate-400">
-                              ({unit.tipo === '9ejes' ? '9 Ejes' : '5 Ejes'})
+                              ({unit.tipo === "9ejes" ? "9 Ejes" : "5 Ejes"})
                             </span>
                             {getDocStatusBadge(unit.documentStatus)}
                           </div>
@@ -534,9 +576,12 @@ export const DespachoWizard = () => {
                   {/* Unit Status Display */}
                   {data.unitId && (
                     <div className="flex items-center gap-2 mt-2">
-                      <span className="text-sm text-slate-600">Estado Documentos:</span>
+                      <span className="text-sm text-slate-600">
+                        Estado Documentos:
+                      </span>
                       {getDocStatusBadge(
-                        mockDispatchUnits.find((u) => u.id === data.unitId)?.documentStatus || ''
+                        mockDispatchUnits.find((u) => u.id === data.unitId)
+                          ?.documentStatus || "",
                       )}
                     </div>
                   )}
@@ -545,17 +590,20 @@ export const DespachoWizard = () => {
                 {/* Driver Selection */}
                 <div className="space-y-2">
                   <Label>Operador</Label>
-                  <Select value={data.driverId} onValueChange={handleDriverChange}>
+                  <Select
+                    value={data.driverId}
+                    onValueChange={handleDriverChange}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccionar operador..." />
                     </SelectTrigger>
                     <SelectContent>
                       {mockDrivers.map((driver) => (
-                        <SelectItem 
-                          key={driver.id} 
+                        <SelectItem
+                          key={driver.id}
                           value={driver.id}
                           className={cn(
-                            driver.licenciaStatus === 'vencido' && "opacity-60"
+                            driver.licenciaStatus === "vencido" && "opacity-60",
                           )}
                         >
                           <div className="flex items-center gap-3">
@@ -572,7 +620,8 @@ export const DespachoWizard = () => {
                     <div className="flex items-center gap-2 mt-2">
                       <span className="text-sm text-slate-600">Licencia:</span>
                       {getDocStatusBadge(
-                        mockDrivers.find((d) => d.id === data.driverId)?.licenciaStatus || ''
+                        mockDrivers.find((d) => d.id === data.driverId)
+                          ?.licenciaStatus || "",
                       )}
                     </div>
                   )}
@@ -585,21 +634,32 @@ export const DespachoWizard = () => {
                   <div className="flex items-center gap-2 text-slate-700 font-medium">
                     <Container className="h-4 w-4" />
                     <span>
-                      Configuración de Remolques 
-                      {data.unitTipo === '9ejes' ? ' (Full - 9 Ejes)' : ' (Sencillo - 5 Ejes)'}
+                      Configuración de Remolques
+                      {data.unitTipo === "9ejes"
+                        ? " (Full - 9 Ejes)"
+                        : " (Sencillo - 5 Ejes)"}
                     </span>
                   </div>
-                  
-                  <div className={cn(
-                    "grid gap-4",
-                    data.unitTipo === '9ejes' ? "grid-cols-1 md:grid-cols-3" : "grid-cols-1 md:grid-cols-2"
-                  )}>
+
+                  <div
+                    className={cn(
+                      "grid gap-4",
+                      data.unitTipo === "9ejes"
+                        ? "grid-cols-1 md:grid-cols-3"
+                        : "grid-cols-1 md:grid-cols-2",
+                    )}
+                  >
                     {/* Remolque 1 - Always required */}
                     <div className="space-y-2">
                       <Label className="flex items-center gap-1">
-                        {data.unitTipo === '9ejes' ? 'Remolque 1 *' : 'Remolque *'}
+                        {data.unitTipo === "9ejes"
+                          ? "Remolque 1 *"
+                          : "Remolque *"}
                       </Label>
-                      <Select value={data.remolque1Id} onValueChange={handleRemolque1Change}>
+                      <Select
+                        value={data.remolque1Id}
+                        onValueChange={handleRemolque1Change}
+                      >
                         <SelectTrigger>
                           <SelectValue placeholder="Seleccionar remolque..." />
                         </SelectTrigger>
@@ -607,8 +667,12 @@ export const DespachoWizard = () => {
                           {availableRemolquesForSlot1.map((rem) => (
                             <SelectItem key={rem.id} value={rem.id}>
                               <div className="flex items-center gap-2">
-                                <span className="font-semibold">{rem.numero}</span>
-                                <span className="text-slate-500 text-sm">{rem.descripcion}</span>
+                                <span className="font-semibold">
+                                  {rem.numero}
+                                </span>
+                                <span className="text-slate-500 text-sm">
+                                  {rem.descripcion}
+                                </span>
                               </div>
                             </SelectItem>
                           ))}
@@ -617,10 +681,13 @@ export const DespachoWizard = () => {
                     </div>
 
                     {/* Dolly - Only for 9 ejes (Full) */}
-                    {data.unitTipo === '9ejes' && (
+                    {data.unitTipo === "9ejes" && (
                       <div className="space-y-2">
                         <Label>Dolly *</Label>
-                        <Select value={data.dollyId} onValueChange={handleDollyChange}>
+                        <Select
+                          value={data.dollyId}
+                          onValueChange={handleDollyChange}
+                        >
                           <SelectTrigger>
                             <SelectValue placeholder="Seleccionar dolly..." />
                           </SelectTrigger>
@@ -628,9 +695,11 @@ export const DespachoWizard = () => {
                             {availableDollies.map((dolly) => (
                               <SelectItem key={dolly.id} value={dolly.id}>
                                 <div className="flex items-center gap-2">
-                                  <span className="font-semibold">{dolly.numero}</span>
+                                  <span className="font-semibold">
+                                    {dolly.numero}
+                                  </span>
                                   <span className="text-slate-500 text-sm capitalize">
-                                    {dolly.tipo.replace('_', ' ')}
+                                    {dolly.tipo.replace("_", " ")}
                                   </span>
                                 </div>
                               </SelectItem>
@@ -641,10 +710,13 @@ export const DespachoWizard = () => {
                     )}
 
                     {/* Remolque 2 - Only for 9 ejes (Full) */}
-                    {data.unitTipo === '9ejes' && (
+                    {data.unitTipo === "9ejes" && (
                       <div className="space-y-2">
                         <Label>Remolque 2 *</Label>
-                        <Select value={data.remolque2Id} onValueChange={handleRemolque2Change}>
+                        <Select
+                          value={data.remolque2Id}
+                          onValueChange={handleRemolque2Change}
+                        >
                           <SelectTrigger>
                             <SelectValue placeholder="Seleccionar remolque..." />
                           </SelectTrigger>
@@ -652,8 +724,12 @@ export const DespachoWizard = () => {
                             {availableRemolquesForSlot2.map((rem) => (
                               <SelectItem key={rem.id} value={rem.id}>
                                 <div className="flex items-center gap-2">
-                                  <span className="font-semibold">{rem.numero}</span>
-                                  <span className="text-slate-500 text-sm">{rem.descripcion}</span>
+                                  <span className="font-semibold">
+                                    {rem.numero}
+                                  </span>
+                                  <span className="text-slate-500 text-sm">
+                                    {rem.descripcion}
+                                  </span>
                                 </div>
                               </SelectItem>
                             ))}
@@ -667,9 +743,9 @@ export const DespachoWizard = () => {
                   {!isTrailerRequirementMet && (
                     <p className="text-xs text-amber-600 flex items-center gap-1">
                       <AlertTriangle className="h-3 w-3" />
-                      {data.unitTipo === '9ejes' 
-                        ? 'Debe seleccionar Remolque 1, Dolly y Remolque 2 para unidad Full'
-                        : 'Debe seleccionar un Remolque para continuar'}
+                      {data.unitTipo === "9ejes"
+                        ? "Debe seleccionar Remolque 1, Dolly y Remolque 2 para unidad Full"
+                        : "Debe seleccionar un Remolque para continuar"}
                     </p>
                   )}
                 </div>
@@ -689,9 +765,10 @@ export const DespachoWizard = () => {
                       ))}
                     </ul>
                     <p className="mt-3 text-sm">
-                      No es posible continuar hasta regularizar la documentación.
+                      No es posible continuar hasta regularizar la
+                      documentación.
                     </p>
-                    
+
                     {/* SuperAdmin Override Button */}
                     {isSuperAdmin && (
                       <div className="mt-4 pt-3 border-t border-red-200">
@@ -705,7 +782,8 @@ export const DespachoWizard = () => {
                           Forzar Asignación (Admin Override)
                         </Button>
                         <p className="text-xs mt-2 text-red-600">
-                          Solo visible para SuperAdmin. Esta acción quedará registrada.
+                          Solo visible para SuperAdmin. Esta acción quedará
+                          registrada.
                         </p>
                       </div>
                     )}
@@ -721,18 +799,21 @@ export const DespachoWizard = () => {
                     ⚡ Bloqueo Anulado por Administrador
                   </AlertTitle>
                   <AlertDescription className="text-amber-700">
-                    {CURRENT_USER_NAME} autorizó continuar a pesar de la documentación vencida.
-                    Esta acción fue registrada en el log de auditoría.
+                    {CURRENT_USER_NAME} autorizó continuar a pesar de la
+                    documentación vencida. Esta acción fue registrada en el log
+                    de auditoría.
                   </AlertDescription>
                 </Alert>
               )}
 
               {/* Updated Price based on unit type */}
-              {data.unitId && data.unitTipo === '9ejes' && (
+              {data.unitId && data.unitTipo === "9ejes" && (
                 <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
                   <div className="flex justify-between items-center">
                     <div>
-                      <p className="text-sm text-amber-800">Precio Ajustado (9 Ejes - Full)</p>
+                      <p className="text-sm text-amber-800">
+                        Precio Ajustado (9 Ejes - Full)
+                      </p>
                       <p className="text-xs text-amber-600">
                         El precio se actualizó por seleccionar unidad de 9 ejes
                       </p>
@@ -762,36 +843,68 @@ export const DespachoWizard = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-3">
                       <div>
-                        <p className="text-xs text-slate-500 uppercase tracking-wide">Cliente</p>
-                        <p className="font-semibold text-slate-800">{data.clienteNombre}</p>
+                        <p className="text-xs text-slate-500 uppercase tracking-wide">
+                          Client
+                        </p>
+                        <p className="font-semibold text-slate-800">
+                          {data.clienteNombre}
+                        </p>
                       </div>
                       <div>
-                        <p className="text-xs text-slate-500 uppercase tracking-wide">Destino</p>
-                        <p className="font-medium text-slate-700">{data.subClienteNombre}</p>
-                        <p className="text-sm text-slate-500">{data.subClienteDireccion}</p>
+                        <p className="text-xs text-slate-500 uppercase tracking-wide">
+                          Destino
+                        </p>
+                        <p className="font-medium text-slate-700">
+                          {data.subClienteNombre}
+                        </p>
+                        <p className="text-sm text-slate-500">
+                          {data.subClienteDireccion}
+                        </p>
                       </div>
                       <div>
-                        <p className="text-xs text-slate-500 uppercase tracking-wide">Ruta</p>
-                        <p className="font-medium text-slate-700">{data.routeNombre}</p>
+                        <p className="text-xs text-slate-500 uppercase tracking-wide">
+                          Ruta
+                        </p>
+                        <p className="font-medium text-slate-700">
+                          {data.routeNombre}
+                        </p>
                       </div>
                     </div>
 
                     <div className="space-y-3">
                       <div>
-                        <p className="text-xs text-slate-500 uppercase tracking-wide">Origen</p>
-                        <p className="font-medium text-slate-700">{data.origen}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-500 uppercase tracking-wide">Unidad</p>
-                        <p className="font-semibold text-slate-800">{data.unitNumero}</p>
-                        <p className="text-sm text-slate-500">
-                          {mockDispatchUnits.find(u => u.id === data.unitId)?.marca}{' '}
-                          {mockDispatchUnits.find(u => u.id === data.unitId)?.modelo}
+                        <p className="text-xs text-slate-500 uppercase tracking-wide">
+                          Origen
+                        </p>
+                        <p className="font-medium text-slate-700">
+                          {data.origen}
                         </p>
                       </div>
                       <div>
-                        <p className="text-xs text-slate-500 uppercase tracking-wide">Operador</p>
-                        <p className="font-medium text-slate-700">{data.driverNombre}</p>
+                        <p className="text-xs text-slate-500 uppercase tracking-wide">
+                          Unidad
+                        </p>
+                        <p className="font-semibold text-slate-800">
+                          {data.unitNumero}
+                        </p>
+                        <p className="text-sm text-slate-500">
+                          {
+                            mockDispatchUnits.find((u) => u.id === data.unitId)
+                              ?.marca
+                          }{" "}
+                          {
+                            mockDispatchUnits.find((u) => u.id === data.unitId)
+                              ?.modelo
+                          }
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500 uppercase tracking-wide">
+                          Operador
+                        </p>
+                        <p className="font-medium text-slate-700">
+                          {data.driverNombre}
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -801,7 +914,8 @@ export const DespachoWizard = () => {
                     <Alert className="bg-amber-50 border-amber-200">
                       <ShieldAlert className="h-4 w-4 text-amber-600" />
                       <AlertDescription className="text-amber-700 text-sm">
-                        Este viaje fue autorizado con override administrativo por {CURRENT_USER_NAME}.
+                        Este viaje fue autorizado con override administrativo
+                        por {CURRENT_USER_NAME}.
                       </AlertDescription>
                     </Alert>
                   )}
@@ -809,9 +923,14 @@ export const DespachoWizard = () => {
                   <div className="pt-4 border-t">
                     <div className="flex justify-between items-center p-4 bg-emerald-100 rounded-lg">
                       <div>
-                        <p className="text-sm font-medium text-emerald-800">Precio Total del Servicio</p>
+                        <p className="text-sm font-medium text-emerald-800">
+                          Precio Total del Servicio
+                        </p>
                         <p className="text-xs text-emerald-600">
-                          Tipo: {data.unitTipo === '9ejes' ? '9 Ejes (Full)' : '5 Ejes (Sencillo)'}
+                          Tipo:{" "}
+                          {data.unitTipo === "9ejes"
+                            ? "9 Ejes (Full)"
+                            : "5 Ejes (Sencillo)"}
                         </p>
                       </div>
                       <p className="text-3xl font-bold font-mono text-emerald-700">
@@ -836,7 +955,9 @@ export const DespachoWizard = () => {
 
             {currentStep < 3 ? (
               <ActionButton
-                onClick={() => setCurrentStep((prev) => (prev + 1) as WizardStep)}
+                onClick={() =>
+                  setCurrentStep((prev) => (prev + 1) as WizardStep)
+                }
                 disabled={!canProceed()}
               >
                 Siguiente
@@ -845,8 +966,8 @@ export const DespachoWizard = () => {
             ) : (
               <ActionButton
                 onClick={() => {
-                  console.log('Generating Carta Porte with data:', data);
-                  toast.success('¡Carta Porte generada exitosamente!');
+                  console.log("Generating Carta Porte with data:", data);
+                  toast.success("¡Carta Porte generada exitosamente!");
                 }}
               >
                 <FileText className="h-4 w-4 mr-2" />
@@ -858,7 +979,10 @@ export const DespachoWizard = () => {
       </Card>
 
       {/* Force Override Dialog */}
-      <Dialog open={forceOverrideDialogOpen} onOpenChange={setForceOverrideDialogOpen}>
+      <Dialog
+        open={forceOverrideDialogOpen}
+        onOpenChange={setForceOverrideDialogOpen}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600">
@@ -866,39 +990,44 @@ export const DespachoWizard = () => {
               Forzar Asignación - Admin Override
             </DialogTitle>
             <DialogDescription>
-              Esta acción permitirá continuar a pesar de la documentación vencida.
-              Se registrará en el log de auditoría.
+              Esta acción permitirá continuar a pesar de la documentación
+              vencida. Se registrará en el log de auditoría.
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4">
             <div className="p-3 bg-red-50 rounded-lg border border-red-200">
-              <p className="text-sm font-medium text-red-800">Documentos bloqueantes:</p>
+              <p className="text-sm font-medium text-red-800">
+                Documentos bloqueantes:
+              </p>
               <ul className="list-disc list-inside text-sm text-red-700 mt-1">
                 {blockReasons.map((reason, idx) => (
                   <li key={idx}>{reason}</li>
                 ))}
               </ul>
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="override-reason">Motivo del Desbloqueo *</Label>
               <Textarea
                 id="override-reason"
-                placeholder="Ej: Cliente confirmó urgencia, documentos en trámite de renovación..."
+                placeholder="Ej: Client confirmó urgencia, documentos en trámite de renovación..."
                 value={overrideReason}
                 onChange={(e) => setOverrideReason(e.target.value)}
                 rows={3}
               />
             </div>
           </div>
-          
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setForceOverrideDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setForceOverrideDialogOpen(false)}
+            >
               Cancelar
             </Button>
-            <Button 
-              variant="destructive" 
+            <Button
+              variant="destructive"
               onClick={handleForceOverride}
               disabled={!overrideReason.trim()}
             >

@@ -2,8 +2,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 from datetime import date, datetime
 
-
-# --- 1. TARIFAS (Nivel más bajo) ---
+# --- 1. TARIFAS ---
 class TariffBase(BaseModel):
     nombre_ruta: str
     tipo_unidad: str
@@ -13,20 +12,17 @@ class TariffBase(BaseModel):
     vigencia: date
     estatus: str = "activa"
 
-
 class TariffCreate(TariffBase):
-    id: str  # El frontend manda UUIDs temporales o reales
-
+   id: Optional[int] = 0
 
 class TariffResponse(TariffBase):
-    id: str
-    sub_client_id: str
+    id: int # <--- Integer
+    sub_client_id: int
 
     class Config:
         from_attributes = True
 
-
-# --- 2. SUBCLIENTES (Nivel medio) ---
+# --- 2. SUBCLIENTES ---
 class SubClientBase(BaseModel):
     nombre: str
     alias: Optional[str] = None
@@ -43,24 +39,23 @@ class SubClientBase(BaseModel):
     convenio_especial: bool = False
     contrato_url: Optional[str] = None
 
-
 class SubClientCreate(SubClientBase):
-    id: str
-    tariffs: List[TariffCreate] = []  # Lista anidada
-
+    # Nested creation: Recibimos las tarifas al crear el subcliente
+    id: Optional[int] = 0
+    tariffs: List[TariffCreate] = [] 
 
 class SubClientResponse(SubClientBase):
-    id: str
-    client_id: str
+    id: int # <--- Integer
+    client_id: int
     tariffs: List[TariffResponse] = []
 
     class Config:
         from_attributes = True
 
-
-# --- 3. CLIENTES (Nivel superior) ---
+# --- 3. CLIENTES ---
 class ClientBase(BaseModel):
     razon_social: str
+    public_id: Optional[str] = None # Para tu ID visual "CLI-001"
     rfc: str
     regimen_fiscal: Optional[str] = None
     uso_cfdi: Optional[str] = None
@@ -73,20 +68,17 @@ class ClientBase(BaseModel):
     contrato_url: Optional[str] = None
     dias_credito: Optional[int] = 0
 
-
 class ClientCreate(ClientBase):
-    id: str
-    sub_clients: List[SubClientCreate] = []  # Lista anidada
-
+    # Nested creation: Recibimos subclientes al crear el cliente
+    sub_clients: List[SubClientCreate] = []
 
 class ClientUpdate(ClientBase):
     sub_clients: List[SubClientCreate] = []
 
-
 class ClientResponse(ClientBase):
-    id: str
+    id: int # <--- Integer
     created_at: datetime
-    sub_clients: List[SubClientResponse] = []  # Devuelve todo el árbol
+    sub_clients: List[SubClientResponse] = []
 
     class Config:
         from_attributes = True

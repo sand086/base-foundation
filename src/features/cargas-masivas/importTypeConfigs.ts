@@ -127,9 +127,9 @@ export const importTypeConfigs: ImportTypeConfig[] = [
     recordCount: 245,
   },
   {
-    id: "clientes",
+    id: "clients",
     title: "Importar Clientes",
-    description: "Datos de clientes con información fiscal completa (CFDI 4.0)",
+    description: "Datos de clients con información fiscal completa (CFDI 4.0)",
     icon: Users,
     color: "text-primary",
     backendEndpoint: "/clients",
