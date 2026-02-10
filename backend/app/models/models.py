@@ -96,6 +96,17 @@ class InventoryCategory(str, PyEnum):
     SUSPENSION = "Suspensión"
     TRANSMISION = "Transmisión"
     GENERAL = "General"
+class SupplierStatus(str, PyEnum):
+    ACTIVO = "activo"
+    INACTIVO = "inactivo"
+    SUSPENDIDO = "suspendido"
+
+class InvoiceStatus(str, PyEnum):
+    PENDIENTE = "pendiente"
+    PAGO_PARCIAL = "pago_parcial"
+    PAGADO = "pagado"
+    CANCELADO = "cancelado"
+
 
 # ============= MODELS =============
 
@@ -503,3 +514,78 @@ class WorkOrderPart(Base):
     
     created_at = Column(DateTime, default=datetime.utcnow)
     
+class Supplier(Base):
+    __tablename__ = "suppliers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    razon_social = Column(String(200), nullable=False)
+    rfc = Column(String(13), unique=True, nullable=False)
+    email = Column(String(100))
+    telefono = Column(String(20))
+    direccion = Column(Text)
+    codigo_postal = Column(String(10))
+    
+    # Datos de crédito
+    dias_credito = Column(Integer, default=0)
+    limite_credito = Column(Float, default=0.0)
+    
+    contacto_principal = Column(String(100))
+    categoria = Column(String(50)) # Combustible, Refacciones, etc.
+    estatus = Column(Enum(SupplierStatus), default=SupplierStatus.ACTIVO)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    invoices = relationship("PayableInvoice", back_populates="supplier")
+
+
+class PayableInvoice(Base):
+    __tablename__ = "payable_invoices"
+
+    id = Column(Integer, primary_key=True, index=True)
+    supplier_id = Column(Integer, ForeignKey("suppliers.id"), nullable=False)
+    
+    uuid = Column(String(36), unique=True, nullable=False) # Folio Fiscal
+    folio_interno = Column(String(50))
+    
+    monto_total = Column(Float, nullable=False)
+    saldo_pendiente = Column(Float, nullable=False)
+    moneda = Column(String(3), default="MXN")
+    
+    fecha_emision = Column(Date, nullable=False)
+    fecha_vencimiento = Column(Date, nullable=False)
+    
+    concepto = Column(String(200))
+    clasificacion = Column(String(50)) # Gasto Op, Administrativo, etc.
+    
+    estatus = Column(Enum(InvoiceStatus), default=InvoiceStatus.PENDIENTE)
+    
+    pdf_url = Column(String(500))
+    xml_url = Column(String(500))
+    
+    # Relación opcional con orden de compra (si existiera el módulo)
+    orden_compra_id = Column(String(50), nullable=True) 
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    supplier = relationship("Supplier", back_populates="invoices")
+    payments = relationship("InvoicePayment", back_populates="invoice", cascade="all, delete-orphan")
+
+
+class InvoicePayment(Base):
+    __tablename__ = "invoice_payments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    invoice_id = Column(Integer, ForeignKey("payable_invoices.id"), nullable=False)
+    
+    fecha_pago = Column(Date, default=date.today)
+    monto = Column(Float, nullable=False)
+    metodo_pago = Column(String(50)) # Transferencia, Cheque
+    referencia = Column(String(100))
+    cuenta_retiro = Column(String(50))
+    
+    complemento_uuid = Column(String(36))
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    invoice = relationship("PayableInvoice", back_populates="payments")

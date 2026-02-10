@@ -200,6 +200,31 @@ def seed_maintenance(db):
     })
     
     print("✓ Inventario inicial creado")
+    
+
+def seed_suppliers(db):
+    # Proveedor 1
+    prov1, _ = get_or_create(db, models.Supplier, rfc="GOM980101KH2", defaults={
+        "razon_social": "Gasolineras del Norte SA de CV",
+        "categoria": "Combustible", "dias_credito": 15
+    })
+    
+    # Proveedor 2
+    prov2, _ = get_or_create(db, models.Supplier, rfc="REF880520H45", defaults={
+        "razon_social": "Refacciones Diesel de Monterrey",
+        "categoria": "Refacciones", "dias_credito": 30
+    })
+    print("✓ Proveedores creados")
+    
+    # Factura CxP Inicial
+    if prov1:
+        get_or_create(db, models.PayableInvoice, uuid="550e8400-e29b-41d4-a716-446655440000", defaults={
+            "supplier_id": prov1.id,
+            "monto_total": 25000.00, "saldo_pendiente": 25000.00,
+            "fecha_emision": date(2024, 1, 10), "fecha_vencimiento": date(2024, 1, 25),
+            "concepto": "Consumo Diesel Semana 2", "estatus": "pendiente"
+        })
+        print("✓ Facturas CxP creadas")
 
 def main():
     print("\n🚛 Iniciando Seed V2 (Auto-Incremental + Llantas)...")
