@@ -238,75 +238,6 @@ def read_unit(term: str, db: Session = Depends(get_db)):
         
     raise HTTPException(status_code=404, detail="Unidad no encontrada")
 
-#Subir Documentos
-@router.post("/units/{unit_term}/documents/{doc_type}")
-async def upload_unit_document(
-    unit_term: str,
-    doc_type: str,
-    file: UploadFile = File(...),
-    db: Session = Depends(get_db)
-):
-    # Resolver unidad
-    unit = None
-    if unit_term.isdigit():
-        unit = crud.get_unit(db, int(unit_term))
-    if not unit:
-        unit = crud.get_unit_by_eco(db, unit_term)
-    
-    if not unit:
-        raise HTTPException(status_code=404, detail="Unidad no encontrada")
-
-    # Guardar archivo
-    file_ext = os.path.splitext(file.filename)[1]
-    filename = f"{unit.numero_economico}_{doc_type}_{uuid.uuid4()}{file_ext}"
-    file_path = os.path.join(DOCS_DIR, filename)
-    
-    with open(file_path, "wb") as f:
-        f.write(await file.read())
-    
-    file_url = f"/static/documents/{filename}"
-
-    # Actualizar BD
-    if doc_type == "poliza_seguro": unit.poliza_seguro_url = file_url
-    elif doc_type == "verificacion_humo": unit.verificacion_humo_url = file_url
-    elif doc_type == "verificacion_fisico_mecanica": unit.verificacion_fisico_mecanica_url = file_url
-    elif doc_type == "tarjeta_circulacion": unit.tarjeta_circulacion_url = file_url
-    
-    db.commit()
-    db.refresh(unit)
-    return {"url": file_url}
-
-# Guardar Llantas (Bulk Update)
-@router.put("/units/{unit_term}/tires", response_model=List[schemas.TireResponse])
-def update_unit_tires(
-    unit_term: str,
-    tires: List[schemas.TireCreate],
-    db: Session = Depends(get_db)
-):
-    # Resolver unidad
-    unit = None
-    if unit_term.isdigit():
-        unit = crud.get_unit(db, int(unit_term))
-    if not unit:
-        unit = crud.get_unit_by_eco(db, unit_term)
-        
-    if not unit:
-        raise HTTPException(status_code=404, detail="Unidad no encontrada")
-
-    # Reemplazar llantas
-    db.query(models.Tire).filter(models.Tire.unit_id == unit.id).delete()
-    
-    new_tires = []
-    for t in tires:
-        tire_db = models.Tire(**t.dict(), unit_id=unit.id)
-        db.add(tire_db)
-        new_tires.append(tire_db)
-    
-    db.commit()
-    for t in new_tires: db.refresh(t)
-        
-    return new_tires
-
 @router.post("/units/{unit_term}/documents/{doc_type}")
 async def upload_unit_document(
     unit_term: str,
@@ -385,6 +316,101 @@ def get_document_history(
         .all()
     return history
 
+
+# Guardar Llantas (Bulk Update)
+@router.put("/units/{unit_term}/tires", response_model=List[schemas.TireResponse])
+def update_unit_tires(
+    unit_term: str,
+    tires: List[schemas.TireCreate],
+    db: Session = Depends(get_db)
+):
+    # Resolver unidad
+    unit = None
+    if unit_term.isdigit():
+        unit = crud.get_unit(db, int(unit_term))
+    if not unit:
+        unit = crud.get_unit_by_eco(db, unit_term)
+        
+    if not unit:
+        raise HTTPException(status_code=404, detail="Unidad no encontrada")
+
+    # Reemplazar llantas
+    db.query(models.Tire).filter(models.Tire.unit_id == unit.id).delete()
+    
+    new_tires = []
+    for t in tires:
+        tire_db = models.Tire(**t.dict(), unit_id=unit.id)
+        db.add(tire_db)
+        new_tires.append(tire_db)
+    
+    db.commit()
+    for t in new_tires: db.refresh(t)
+        
+    return new_tires
+
+@router.post("/units/{unit_term}/documents/{doc_type}")
+async def upload_unit_document(
+    unit_term: str,
+    doc_type: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # 1. Buscar unidad
+    unit = None
+    if unit_term.isdigit():
+        unit = crud.get_unit(db, int(unit_term))
+    if not unit:
+        unit = crud.get_unit_by_eco(db, unit_term)
+    
+    if not unit:
+        raise HTTPException(status_code=404, detail="Unidad no encontrada")
+
+    # 2. Guardar archivo físico
+    file_ext = os.path.splitext(file.filename)[1]
+    unique_name = f"{unit.numero_economico}_{doc_type}_{uuid.uuid4()}{file_ext}"
+    file_path = os.path.join(DOCS_DIR, unique_name)
+    
+    content = await file.read()
+    with open(file_path, "wb") as f:
+        f.write(content)
+    
+    file_url = f"/static/documents/{unique_name}"
+
+    # 3. Guardar en Historial (VERSIONAMIENTO)
+    # Esta es la parte que te faltaba porque la función anterior la ocultaba
+    history_record = UnitDocumentHistory(
+        unit_id=unit.id,
+        document_type=doc_type,
+        filename=file.filename,
+        file_url=file_url,
+        file_size=len(content),
+        uploaded_by=current_user.id 
+    )
+    db.add(history_record)
+
+    # 4. Actualizar registro principal
+    if doc_type == "poliza_seguro":
+        unit.poliza_seguro_url = file_url
+    elif doc_type == "verificacion_humo":
+        unit.verificacion_humo_url = file_url
+    elif doc_type == "verificacion_fisico_mecanica":
+        unit.verificacion_fisico_mecanica_url = file_url
+    elif doc_type == "tarjeta_circulacion":
+        unit.tarjeta_circulacion_url = file_url
+    elif doc_type == "permiso_sct":
+        unit.permiso_sct_url = file_url
+    elif doc_type == "caat":
+        unit.caat_url = file_url
+
+    db.commit()
+    db.refresh(unit)
+    
+    return {
+        "url": file_url, 
+        "filename": unique_name, 
+        "message": "Archivo subido y versionado correctamente"
+    }
 
 @router.put("/units/{unit_term}/tires", response_model=List[schemas.TireResponse])
 def update_unit_tires(

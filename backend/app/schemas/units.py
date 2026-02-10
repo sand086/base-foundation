@@ -48,6 +48,9 @@ class UnitBase(BaseModel):
     permiso_doble_articulado_url: Optional[str] = None
     permiso_sct_url: Optional[str] = None
     caat_url: Optional[str] = None
+    
+    
+    
 class UnitCreate(UnitBase):
     # En creación, algunos campos pueden ser opcionales o tener lógica extra
     tarjeta_circulacion: Optional[str] = None  # Campo temporal para folio
@@ -69,11 +72,15 @@ class UnitUpdate(BaseModel):
     marca_motor: Optional[str] = None
     capacidad_carga: Optional[float] = None
     
+    # Fechas
     seguro_vence: Optional[date] = None
     verificacion_humo_vence: Optional[date] = None
     verificacion_fisico_mecanica_vence: Optional[date] = None
     verificacion_vence: Optional[date] = None
-    permiso_sct_vence: Optional[date] = None
+    permiso_sct_vence: Optional[date] = None    
+    caat_vence: Optional[date] = None
+    caat_folio: Optional[str] = None
+    permiso_sct_folio: Optional[str] = None
     
     tarjeta_circulacion: Optional[str] = None
 
