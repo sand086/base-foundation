@@ -31,6 +31,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { TruckChassisSVG } from "@/features/flota/TruckChassisSVG";
 import { toast } from "@/hooks/use-toast";
 import { unitService, UnidadDetalle } from "@/services/unitService";
+import { DocumentUploadManager } from "@/features/flota/DocumentUploadManager";
 
 // Helper Functions
 const getDocumentStatusBadge = (estatus: string, vencimiento: string) => {
@@ -424,76 +425,80 @@ export default function FlotaUnidadDetalle() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  {unit.documents.map((doc, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10"
-                    >
-                      <div className="flex items-center gap-3">
-                        {doc.obligatorio && (
-                          <Shield
-                            className={`h-4 w-4 ${doc.estatus === "vencido" ? "text-status-danger" : "text-muted-foreground"}`}
-                          />
-                        )}
-                        <div>
-                          <p className="font-medium">{doc.name}</p>
-                          <p className="text-sm text-muted-foreground flex items-center gap-1">
-                            <Calendar className="h-3 w-3" /> Vence:{" "}
-                            {doc.vencimiento
-                              ? new Date(doc.vencimiento).toLocaleDateString(
-                                  "es-MX",
-                                )
-                              : "N/A"}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {/* Botón VER */}
-                        {doc.url && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                              window.open(
-                                `http://localhost:8000${doc.url}`,
-                                "_blank",
-                              )
-                            }
-                            className="text-blue-400 hover:text-blue-300 h-8 px-2"
-                          >
-                            <FileText className="h-3 w-3 mr-1" /> Ver
-                          </Button>
-                        )}
+                <div className="grid gap-4 md:grid-cols-2">
+                  {/* Póliza de Seguro */}
+                  <DocumentUploadManager
+                    unitId={unit.id}
+                    unitEconomico={unit.numero_economico}
+                    docType="poliza_seguro"
+                    docLabel="Póliza de Seguro"
+                    currentUrl={unit.poliza_seguro_url}
+                    onUploadSuccess={(url) =>
+                      setUnit({ ...unit, poliza_seguro_url: url })
+                    }
+                  />
 
-                        {/* Botón SUBIR */}
-                        {isEditing && (
-                          <div className="relative">
-                            <input
-                              type="file"
-                              id={`file-${idx}`}
-                              className="hidden"
-                              accept=".pdf,.jpg,.png"
-                              onChange={(e) => handleFileUpload(e, doc.key)}
-                              disabled={uploadingDoc === doc.key}
-                            />
-                            <Label
-                              htmlFor={`file-${idx}`}
-                              className={`cursor-pointer inline-flex items-center justify-center rounded-md text-xs font-medium h-8 px-2 bg-secondary text-secondary-foreground hover:bg-secondary/80 ${uploadingDoc === doc.key ? "opacity-50" : ""}`}
-                            >
-                              {uploadingDoc === doc.key ? (
-                                <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                              ) : (
-                                <Upload className="h-3 w-3 mr-1" />
-                              )}
-                              {uploadingDoc === doc.key ? "..." : "Subir"}
-                            </Label>
-                          </div>
-                        )}
-                        {getDocumentStatusBadge(doc.estatus, doc.vencimiento)}
-                      </div>
-                    </div>
-                  ))}
+                  {/* Verificación de Humo */}
+                  <DocumentUploadManager
+                    unitId={unit.id}
+                    unitEconomico={unit.numero_economico}
+                    docType="verificacion_humo"
+                    docLabel="Verificación de Emisiones"
+                    currentUrl={unit.verificacion_humo_url}
+                    onUploadSuccess={(url) =>
+                      setUnit({ ...unit, verificacion_humo_url: url })
+                    }
+                  />
+
+                  {/* Verificación Físico-Mecánica */}
+                  <DocumentUploadManager
+                    unitId={unit.id}
+                    unitEconomico={unit.numero_economico}
+                    docType="verificacion_fisico_mecanica"
+                    docLabel="Verif. Físico-Mecánica"
+                    currentUrl={unit.verificacion_fisico_mecanica_url}
+                    onUploadSuccess={(url) =>
+                      setUnit({
+                        ...unit,
+                        verificacion_fisico_mecanica_url: url,
+                      })
+                    }
+                  />
+
+                  {/* Tarjeta de Circulación */}
+                  <DocumentUploadManager
+                    unitId={unit.id}
+                    unitEconomico={unit.numero_economico}
+                    docType="tarjeta_circulacion"
+                    docLabel="Tarjeta de Circulación"
+                    currentUrl={unit.tarjeta_circulacion_url}
+                    onUploadSuccess={(url) =>
+                      setUnit({ ...unit, tarjeta_circulacion_url: url })
+                    }
+                  />
+
+                  {/* NUEVOS DOCUMENTOS SOLICITADOS */}
+                  <DocumentUploadManager
+                    unitId={unit.id}
+                    unitEconomico={unit.numero_economico}
+                    docType="permiso_sct"
+                    docLabel="Permiso SCT (PDF)"
+                    currentUrl={unit.permiso_sct_url}
+                    onUploadSuccess={(url) =>
+                      setUnit({ ...unit, permiso_sct_url: url })
+                    }
+                  />
+
+                  <DocumentUploadManager
+                    unitId={unit.id}
+                    unitEconomico={unit.numero_economico}
+                    docType="caat"
+                    docLabel="Registro CAAT (PDF)"
+                    currentUrl={unit.caat_url}
+                    onUploadSuccess={(url) =>
+                      setUnit({ ...unit, caat_url: url })
+                    }
+                  />
                 </div>
               </CardContent>
             </Card>

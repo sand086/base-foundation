@@ -40,3 +40,4 @@ backend/.env.*
 /.pnp
 /vendor
 /backend/venv/
+backend/.env

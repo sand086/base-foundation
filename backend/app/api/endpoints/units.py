@@ -42,7 +42,7 @@ from app.crud import units as crud
 from shutil import copyfileobj
 from fastapi.responses import FileResponse
 from app.api.endpoints.auth import get_current_user
-from app.models.models import User, Unit, BulkUploadHistory
+from app.models.models import User, Unit, BulkUploadHistory, UnitDocumentHistory
 from fastapi.staticfiles import StaticFiles
 
 router = APIRouter()
@@ -307,39 +307,48 @@ def update_unit_tires(
         
     return new_tires
 
-
-router.post("/units/{unit_term}/documents/{doc_type}")
+@router.post("/units/{unit_term}/documents/{doc_type}")
 async def upload_unit_document(
-    unit_term: str, # Puede ser ID (int) o Económico (str)
+    unit_term: str,
     doc_type: str,
     file: UploadFile = File(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user) # Asegúrate de tener el usuario actual
 ):
-    # 1. Buscar la unidad (reutilizamos lógica de búsqueda)
+    # 1. Buscar unidad
     unit = None
     if unit_term.isdigit():
         unit = crud.get_unit(db, int(unit_term))
-    
     if not unit:
         unit = crud.get_unit_by_eco(db, unit_term)
-        
+    
     if not unit:
         raise HTTPException(status_code=404, detail="Unidad no encontrada")
 
-    # 2. Guardar el archivo
+    # 2. Guardar archivo físico
     file_ext = os.path.splitext(file.filename)[1]
-    # Nombre seguro: Eco_Tipo_UUID.ext
-    filename = f"{unit.numero_economico}_{doc_type}_{uuid.uuid4()}{file_ext}"
-    file_path = os.path.join(DOCS_DIR, filename)
+    unique_name = f"{unit.numero_economico}_{doc_type}_{uuid.uuid4()}{file_ext}"
+    file_path = os.path.join(DOCS_DIR, unique_name)
     
+    # Leer contenido para guardar y obtener tamaño
+    content = await file.read()
     with open(file_path, "wb") as f:
-        f.write(await file.read())
+        f.write(content)
     
-    # 3. Generar URL pública
-    # NOTA: Asegúrate que 'static' coincide con lo que pusiste en main.py
-    file_url = f"/static/documents/{filename}"
+    file_url = f"/static/documents/{unique_name}"
 
-    # 4. Actualizar campo en BD
+    # 3. Guardar en Historial (VERSIONAMIENTO)
+    history_record = UnitDocumentHistory(
+        unit_id=unit.id,
+        document_type=doc_type,
+        filename=file.filename, # Nombre original para referencia
+        file_url=file_url,
+        file_size=len(content),
+        uploaded_by=current_user.id 
+    )
+    db.add(history_record)
+
+    # 4. Actualizar registro principal (para acceso rápido al 'actual')
     if doc_type == "poliza_seguro":
         unit.poliza_seguro_url = file_url
     elif doc_type == "verificacion_humo":
@@ -348,11 +357,34 @@ async def upload_unit_document(
         unit.verificacion_fisico_mecanica_url = file_url
     elif doc_type == "tarjeta_circulacion":
         unit.tarjeta_circulacion_url = file_url
-    
+    elif doc_type == "permiso_sct":       # NUEVO
+        unit.permiso_sct_url = file_url
+    elif doc_type == "caat":              # NUEVO
+        unit.caat_url = file_url
+
     db.commit()
     db.refresh(unit)
     
-    return {"url": file_url, "filename": filename}
+    return {
+        "url": file_url, 
+        "filename": unique_name, 
+        "message": "Archivo subido y versionado correctamente"
+    }
+
+
+# Endpoint para obtener el historial
+@router.get("/units/{unit_id}/documents/{doc_type}/history")
+def get_document_history(
+    unit_id: int, 
+    doc_type: str, 
+    db: Session = Depends(get_db)
+):
+    history = db.query(UnitDocumentHistory)\
+        .filter(UnitDocumentHistory.unit_id == unit_id, UnitDocumentHistory.document_type == doc_type)\
+        .order_by(UnitDocumentHistory.uploaded_at.desc())\
+        .all()
+    return history
+
 
 @router.put("/units/{unit_term}/tires", response_model=List[schemas.TireResponse])
 def update_unit_tires(
