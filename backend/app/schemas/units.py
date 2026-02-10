@@ -28,11 +28,16 @@ class UnitBase(BaseModel):
     documentos_vencidos: int = 0
     llantas_criticas: int = 0
     
+    # Documentación técnica y legal
+    permiso_sct_folio: Optional[str] = None # Nuevo: Folio en lugar de fecha
+    caat_folio: Optional[str] = None        # Nuevo
+    caat_vence: Optional[date] = None       # Nuevo
+    
     # Fechas (Opcionales)
     seguro_vence: Optional[date] = None
     verificacion_humo_vence: Optional[date] = None
     verificacion_fisico_mecanica_vence: Optional[date] = None
-    verificacion_vence: Optional[date] = None
+    verificacion_vence: Optional[date] = None 
     permiso_sct_vence: Optional[date] = None
     
     # URLs de documentos
@@ -41,7 +46,8 @@ class UnitBase(BaseModel):
     verificacion_humo_url: Optional[str] = None
     verificacion_fisico_mecanica_url: Optional[str] = None
     permiso_doble_articulado_url: Optional[str] = None
-
+    permiso_sct_url: Optional[str] = None
+    caat_url: Optional[str] = None
 class UnitCreate(UnitBase):
     # En creación, algunos campos pueden ser opcionales o tener lógica extra
     tarjeta_circulacion: Optional[str] = None  # Campo temporal para folio

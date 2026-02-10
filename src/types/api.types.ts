@@ -44,6 +44,12 @@ export interface Unidad {
   tipo: UnitTipo;
   status: UnitStatus;
 
+  permiso_sct_folio?: string;
+  permiso_sct_url?: string | null;
+  caat_folio?: string;
+  caat_vence?: string;
+  caat_url?: string | null;
+
   // Campos técnicos
   tipo_1?: string;
   tipo_carga?: string | null;

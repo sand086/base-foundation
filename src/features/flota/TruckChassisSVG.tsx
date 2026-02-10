@@ -6,14 +6,15 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-interface Tire {
-  id: string;
-  position: string;
-  marca: string;
+// Interfaz actualizada para coincidir con la API (UnidadDetalle)
+export interface Tire {
+  id?: number | string; // Puede ser number desde DB o string temporal
+  position: string; // La API suele devolver string "1", "2"
+  marca?: string; // Opcional
   profundidad: number;
   estado: string;
-  renovado: number;
-  marcajeInterno: string;
+  renovado?: number;
+  marcajeInterno?: string; // Opcional
 }
 
 interface TruckChassisSVGProps {
@@ -53,10 +54,10 @@ const getTireStatus = (depth: number) => {
 };
 
 export function TruckChassisSVG({
-  tires,
+  tires = [], // Valor por defecto para evitar crash si es undefined
   unitType = "sencillo",
 }: TruckChassisSVGProps) {
-  const [hoveredTire, setHoveredTire] = useState<string | null>(null);
+  const [hoveredTire, setHoveredTire] = useState<string | number | null>(null);
 
   // Tire positions for the SVG (worm's-eye view - from below)
   const tirePositions = [
@@ -104,7 +105,9 @@ export function TruckChassisSVG({
           </div>
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 rounded bg-emerald-500/50 border border-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]" />
-            <span className="text-xs text-muted-foreground">{">6mm Óptimo"}</span>
+            <span className="text-xs text-muted-foreground">
+              {">6mm Óptimo"}
+            </span>
           </div>
         </div>
 
@@ -222,20 +225,26 @@ export function TruckChassisSVG({
 
           {/* Tires with neon effect */}
           {allTirePositions.map((pos) => {
-            const tire = tires[pos.position - 1];
+            // CORRECCIÓN IMPORTANTE: Buscar por posición string en lugar de índice
+            const tire = tires.find(
+              (t) => parseInt(t.position) === pos.position,
+            );
+
+            // Si no hay llanta en esa posición, no renderizamos nada (o podrías renderizar un placeholder)
             if (!tire) return null;
 
+            const tireId = tire.id || `pos-${pos.position}`; // Fallback para ID
             const status = getTireStatus(tire.profundidad);
-            const isHovered = hoveredTire === tire.id;
+            const isHovered = hoveredTire === tireId;
             const isDualTire = pos.position >= 5;
             const tireWidth = isDualTire ? 22 : 28;
             const tireHeight = isDualTire ? 50 : 60;
 
             return (
-              <Tooltip key={tire.id}>
+              <Tooltip key={tireId}>
                 <TooltipTrigger asChild>
                   <g
-                    onMouseEnter={() => setHoveredTire(tire.id)}
+                    onMouseEnter={() => setHoveredTire(tireId)}
                     onMouseLeave={() => setHoveredTire(null)}
                     className="cursor-pointer"
                     style={{
@@ -298,7 +307,7 @@ export function TruckChassisSVG({
                       Posición {pos.position}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {tire.marca}
+                      {tire.marca || "Marca N/A"}
                     </p>
                     <div className="flex items-center gap-2">
                       <span
@@ -311,15 +320,15 @@ export function TruckChassisSVG({
                           tire.profundidad < 3
                             ? "bg-red-500/20 text-red-400"
                             : tire.profundidad <= 6
-                            ? "bg-amber-500/20 text-amber-400"
-                            : "bg-emerald-500/20 text-emerald-400"
+                              ? "bg-amber-500/20 text-amber-400"
+                              : "bg-emerald-500/20 text-emerald-400"
                         }`}
                       >
                         {status.label}
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground/70">
-                      ID: {tire.marcajeInterno}
+                      ID: {tire.marcajeInterno || "S/N"}
                     </p>
                   </div>
                 </TooltipContent>
@@ -384,7 +393,10 @@ export function TruckChassisSVG({
           </div>
           <div className="backdrop-blur-xl bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 text-center">
             <p className="text-2xl font-bold text-amber-400">
-              {tires.filter((t) => t.profundidad >= 3 && t.profundidad <= 6).length}
+              {
+                tires.filter((t) => t.profundidad >= 3 && t.profundidad <= 6)
+                  .length
+              }
             </p>
             <p className="text-xs text-muted-foreground">Alerta</p>
           </div>

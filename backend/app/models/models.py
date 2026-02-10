@@ -190,7 +190,7 @@ class Unit(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     public_id = Column(String(50), unique=True, nullable=False, index=True)
-    
+
     numero_economico = Column(String(20), unique=True, nullable=False)
     placas = Column(String(15), unique=True, nullable=False)
     vin = Column(String(17))
@@ -206,27 +206,59 @@ class Unit(Base):
     status = Column(Enum(UnitStatus), default=UnitStatus.DISPONIBLE)
     documentos_vencidos = Column(Integer, default=0)
     llantas_criticas = Column(Integer, default=0)
+
     seguro_vence = Column(Date, nullable=True)
+
+    # --- Vencimientos existentes ---
     verificacion_humo_vence = Column(Date, nullable=True)
     verificacion_fisico_mecanica_vence = Column(Date, nullable=True)
     verificacion_vence = Column(Date, nullable=True)
     permiso_sct_vence = Column(Date, nullable=True)
+
+    # ✅ NUEVO: Folios / CAAT
+    permiso_sct_folio = Column(String(50), nullable=True)
+    caat_folio = Column(String(50), nullable=True)
+    caat_vence = Column(Date, nullable=True)
+
+    # --- URLs existentes ---
     tarjeta_circulacion_url = Column(String(500), nullable=True)
     permiso_doble_articulado_url = Column(String(500), nullable=True)
     poliza_seguro_url = Column(String(500), nullable=True)
     verificacion_humo_url = Column(String(500), nullable=True)
     verificacion_fisico_mecanica_url = Column(String(500), nullable=True)
+
+    # ✅ NUEVO: URLs para subida de archivos
+    permiso_sct_url = Column(String(500), nullable=True)
+    caat_url = Column(String(500), nullable=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # Relationships
     trips = relationship("Trip", back_populates="unit")
     operators = relationship("Operator", back_populates="assigned_unit")
-    # Relación con llantas: una unidad tiene muchas llantas
     tires = relationship("Tire", back_populates="unit")
     work_orders = relationship("WorkOrder", back_populates="unit")
+    
+    
+# backend/app/models/models.py
 
+class UnitDocumentHistory(Base):
+    __tablename__ = "unit_document_history"
 
+    id = Column(Integer, primary_key=True, index=True)
+    unit_id = Column(Integer, ForeignKey("units.id"), nullable=False)
+    
+    document_type = Column(String(50), nullable=False) # ej: 'poliza_seguro', 'caat'
+    filename = Column(String(255), nullable=False)     # Nombre original del archivo
+    file_url = Column(String(500), nullable=False)     # Ruta donde se guardó
+    file_size = Column(Integer, nullable=True)         # Peso en bytes
+    
+    uploaded_at = Column(DateTime, default=datetime.utcnow)
+    uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=True) # Si tienes auth
+
+    # Relación
+    unit = relationship("Unit")
+    user = relationship("User") #
 class Tire(Base):
     __tablename__ = "tires"
 

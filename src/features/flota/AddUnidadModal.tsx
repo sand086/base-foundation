@@ -39,12 +39,15 @@ interface UnidadFormData {
   capacidad_carga: string;
   tipo_carga: string;
   tarjeta_circulacion: string; // Input de texto (Folio) -> Se mapeará según lógica
+  permiso_sct_folio: string; // Cambio a texto
+  caat_folio: string;
+  caat_vence: string;
 
   // Fechas
   seguro_vence: string;
   verificacion_humo_vence: string;
   verificacion_fisico_mecanica_vence: string;
-  verificacion_vence: string;
+  // verificacion_vence: string;
   permiso_sct_vence: string;
 
   status: string;
@@ -67,9 +70,12 @@ const emptyFormData: UnidadFormData = {
   seguro_vence: "",
   verificacion_humo_vence: "",
   verificacion_fisico_mecanica_vence: "",
-  verificacion_vence: "",
+  permiso_sct_folio: "",
   permiso_sct_vence: "",
   status: "disponible",
+  caat_folio: "",
+  caat_vence: "",
+  // verificacion_vence: "",
 };
 
 // Helper visual para fechas
@@ -253,7 +259,10 @@ export function AddUnidadModal({
       verificacion_fisico_mecanica_vence: cleanDate(
         formData.verificacion_fisico_mecanica_vence,
       ),
-      verificacion_vence: cleanDate(formData.verificacion_vence),
+      // verificacion_vence: cleanDate(formData.verificacion_vence),
+      permiso_sct_folio: cleanString(formData.permiso_sct_folio), //
+      caat_folio: cleanString(formData.caat_folio), //
+      caat_vence: cleanDate(formData.caat_vence), //
       permiso_sct_vence: cleanDate(formData.permiso_sct_vence),
 
       status: (unidadToEdit?.status || "disponible") as any,
@@ -577,7 +586,7 @@ export function AddUnidadModal({
               </div>
 
               <div className="grid grid-cols-1 gap-4">
-                {/* Helper para renderizar campos de fecha repetitivos */}
+                {/* 1. MAPEO DE FECHAS (Se eliminaron Ambiental y SCT Fecha de esta lista) */}
                 {[
                   {
                     label: "Póliza de Seguro",
@@ -590,14 +599,6 @@ export function AddUnidadModal({
                   {
                     label: "Verif. Físico-Mecánica",
                     key: "verificacion_fisico_mecanica_vence" as keyof UnidadFormData,
-                  },
-                  {
-                    label: "Verificación Ambiental",
-                    key: "verificacion_vence" as keyof UnidadFormData,
-                  },
-                  {
-                    label: "Permiso SCT",
-                    key: "permiso_sct_vence" as keyof UnidadFormData,
                   },
                 ].map((field) => (
                   <div
@@ -626,7 +627,73 @@ export function AddUnidadModal({
                   </div>
                 ))}
 
-                {/* Input especial para folio tarjeta circulación */}
+                {/* 2. REGISTRO CAAT (NUEVO: Folio + Vigencia) */}
+                <div className="flex items-end gap-3 p-3 border rounded-lg bg-blue-50/20 border-blue-100">
+                  <div className="flex-1 space-y-1">
+                    <Label className="text-xs font-semibold uppercase text-blue-700">
+                      Registro CAAT (Folio y Vigencia)
+                    </Label>
+                    <div className="flex gap-2">
+                      {/* Input Folio */}
+                      <Input
+                        placeholder="Folio CAAT"
+                        value={formData.caat_folio}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            caat_folio: e.target.value,
+                          })
+                        }
+                        className="h-8 flex-[2]"
+                      />
+                      {/* Input Fecha Vigencia */}
+                      <Input
+                        type="date"
+                        value={formData.caat_vence}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            caat_vence: e.target.value,
+                          })
+                        }
+                        className="h-8 flex-1"
+                      />
+                    </div>
+                  </div>
+                  <div className="w-[140px] flex justify-center pb-1">
+                    {getStatusBadge(formData.caat_vence)}
+                  </div>
+                </div>
+
+                {/* 3. PERMISO SCT (AHORA ES FOLIO / TEXTO) */}
+                <div className="flex items-end gap-3 p-3 border rounded-lg bg-gray-50/50">
+                  <div className="flex-1 space-y-1">
+                    <Label className="text-xs font-semibold uppercase text-muted-foreground">
+                      Folio Permiso de Carga SCT
+                    </Label>
+                    <Input
+                      value={formData.permiso_sct_folio}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          permiso_sct_folio: e.target.value,
+                        })
+                      }
+                      className="h-8"
+                      placeholder="Ingrese Folio SCT"
+                    />
+                  </div>
+                  <div className="w-[140px] flex justify-center pb-1">
+                    <Badge
+                      variant="outline"
+                      className="text-muted-foreground text-[10px]"
+                    >
+                      PERMANENTE
+                    </Badge>
+                  </div>
+                </div>
+
+                {/* 4. TARJETA DE CIRCULACIÓN (Existente, se mantiene igual) */}
                 <div className="flex items-end gap-3 p-3 border rounded-lg bg-gray-50/50">
                   <div className="flex-1 space-y-1">
                     <Label className="text-xs font-semibold uppercase text-muted-foreground">
