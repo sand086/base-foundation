@@ -10,6 +10,8 @@ import {
   Plus,
   MoreHorizontal,
   Loader2,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -26,33 +28,55 @@ import {
   EnhancedDataTable,
   ColumnDef,
 } from "@/components/ui/enhanced-data-table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
-// Imports actualizados
+// Imports de Tipos y Hooks
 import {
   GlobalTire,
   getTireLifePercentage,
   getTireSemaphoreStatus,
   getEstadoBadge,
-  getEstadoFisicoBadge,
 } from "@/features/llantas/types";
-import { useTires } from "@/hooks/useTires"; // Hook Real
-import { tireBrands } from "@/features/llantas/data"; // Solo marcas estáticas
+import { useTires } from "@/hooks/useTires";
+import { tireBrands } from "@/features/llantas/data";
 
-// Components
+// Componentes Modales
 import { TireHistorySheet } from "@/features/llantas/TireHistorySheet";
 import { AssignTireModal } from "@/features/llantas/AssignTireModal";
 import { MaintenanceTireModal } from "@/features/llantas/MaintenanceTireModal";
+import { CreateTireModal } from "@/features/llantas/CreateTireModal";
 
 export default function FlotaLlantas() {
-  // 1. Usar Hook Real
-  const { tires, isLoading, assignTire, registerMaintenance } = useTires();
+  // 1. Hook Principal (CRUD completo)
+  const {
+    tires,
+    isLoading,
+    assignTire,
+    registerMaintenance,
+    createTire,
+    updateTire,
+    deleteTire,
+  } = useTires();
 
   const [selectedTire, setSelectedTire] = useState<GlobalTire | null>(null);
+
+  // Estados de Visibilidad de Modales
   const [historySheetOpen, setHistorySheetOpen] = useState(false);
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [maintenanceModalOpen, setMaintenanceModalOpen] = useState(false);
+  const [createModalOpen, setCreateModalOpen] = useState(false); // Sirve para Crear y Editar
+  const [deleteAlertOpen, setDeleteAlertOpen] = useState(false); // Alerta de eliminación
 
-  // 2. Calcular KPIs con datos reales (Snake Case)
+  // 2. Calcular KPIs
   const kpis = useMemo(() => {
     const activeTires = tires.filter((t) => t.estado !== "desecho");
     const critical = activeTires.filter((t) => t.profundidad_actual < 5);
@@ -65,7 +89,7 @@ export default function FlotaLlantas() {
     return { critical, warning, good, inStock, total: activeTires.length };
   }, [tires]);
 
-  // Filtros únicos
+  // Filtros de Unidad
   const uniqueUnits = useMemo(() => {
     const units = new Set<string>();
     tires.forEach((t) => {
@@ -74,40 +98,28 @@ export default function FlotaLlantas() {
     return ["En Almacén", ...Array.from(units)];
   }, [tires]);
 
-  // Handlers
+  // --- HANDLERS ---
+
+  // Historial
   const handleViewHistory = (tire: GlobalTire) => {
     setSelectedTire(tire);
     setHistorySheetOpen(true);
   };
 
+  // Asignar
   const handleOpenAssign = (tire: GlobalTire) => {
     setSelectedTire(tire);
     setAssignModalOpen(true);
   };
 
-  const handleOpenMaintenance = (tire: GlobalTire) => {
-    setSelectedTire(tire);
-    setMaintenanceModalOpen(true);
-  };
-
-  // 3. Conectar Handlers al Backend
-  const handleAssign = async (
+  const handleAssignSubmit = async (
     tireId: string,
     unidad: string | null,
     posicion: string | null,
     notas: string,
   ) => {
-    // El ID viene como string del componente, lo pasamos a number
     const idNum = parseInt(tireId);
-
-    // Si unidad es null, es a almacén (unidad_id = null)
-    // Si unidad tiene valor, es el ID de la unidad.
-    // NOTA: AssignTireModal debe devolver el ID de la unidad, no el nombre.
-    // Asumiremos que el modal ya fue corregido o lo corregiremos luego.
-    // Por ahora, asumamos que 'unidad' es el ID stringificado si viene del select.
-
     const unidadIdNum = unidad ? parseInt(unidad) : null;
-
     await assignTire(idNum, {
       unidad_id: unidadIdNum,
       posicion: posicion,
@@ -116,7 +128,13 @@ export default function FlotaLlantas() {
     setAssignModalOpen(false);
   };
 
-  const handleMaintenance = async (
+  // Mantenimiento
+  const handleOpenMaintenance = (tire: GlobalTire) => {
+    setSelectedTire(tire);
+    setMaintenanceModalOpen(true);
+  };
+
+  const handleMaintenanceSubmit = async (
     tireId: string,
     tipo: any,
     costo: number,
@@ -131,11 +149,46 @@ export default function FlotaLlantas() {
     setMaintenanceModalOpen(false);
   };
 
-  // 4. Columnas actualizadas (Snake Case)
+  // Crear / Editar (Handler Unificado)
+  const handleOpenCreate = () => {
+    setSelectedTire(null); // Limpiamos selección -> Modo Crear
+    setCreateModalOpen(true);
+  };
+
+  const handleOpenEdit = (tire: GlobalTire) => {
+    setSelectedTire(tire); // Establecemos selección -> Modo Editar
+    setCreateModalOpen(true);
+  };
+
+  const handleCreateOrUpdateSubmit = async (data: any) => {
+    if (selectedTire) {
+      // Modo Edición
+      return await updateTire(selectedTire.id, data);
+    } else {
+      // Modo Creación
+      return await createTire(data);
+    }
+  };
+
+  // Eliminar
+  const handleOpenDelete = (tire: GlobalTire) => {
+    setSelectedTire(tire);
+    setDeleteAlertOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (selectedTire) {
+      await deleteTire(selectedTire.id);
+      setDeleteAlertOpen(false);
+      setSelectedTire(null);
+    }
+  };
+
+  // 3. Definición de Columnas
   const columns: ColumnDef<GlobalTire>[] = useMemo(
     () => [
       {
-        key: "codigo_interno", // Backend Key
+        key: "codigo_interno",
         header: "ID Llanta",
         render: (value) => (
           <span className="font-mono font-medium">{value}</span>
@@ -157,7 +210,7 @@ export default function FlotaLlantas() {
         render: (value) => <span className="text-xs font-mono">{value}</span>,
       },
       {
-        key: "unidad_actual_economico", // Backend Key
+        key: "unidad_actual_economico",
         header: "Unidad Actual",
         type: "status",
         statusOptions: uniqueUnits,
@@ -194,7 +247,7 @@ export default function FlotaLlantas() {
         },
       },
       {
-        key: "profundidad_actual", // Backend Key
+        key: "profundidad_actual",
         header: "Semáforo de Vida",
         type: "number",
         render: (value, row) => {
@@ -216,7 +269,7 @@ export default function FlotaLlantas() {
         },
       },
       {
-        key: "km_recorridos", // Backend Key
+        key: "km_recorridos",
         header: "Km Recorridos",
         type: "number",
         render: (value) => (
@@ -254,6 +307,19 @@ export default function FlotaLlantas() {
                 <Wrench className="h-4 w-4 mr-2" />
                 Mantenimiento
               </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {/* ACCIONES DE EDICIÓN / ELIMINACIÓN */}
+              <DropdownMenuItem onClick={() => handleOpenEdit(row)}>
+                <Pencil className="h-4 w-4 mr-2" />
+                Editar Datos
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => handleOpenDelete(row)}
+                className="text-red-600 focus:text-red-600"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Eliminar
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         ),
@@ -288,7 +354,7 @@ export default function FlotaLlantas() {
             Gestión centralizada de {kpis.total} llantas activas en la flota
           </p>
         </div>
-        <Button className="gap-2">
+        <Button className="gap-2" onClick={handleOpenCreate}>
           <Plus className="h-4 w-4" />
           Nueva Llanta
         </Button>
@@ -342,7 +408,7 @@ export default function FlotaLlantas() {
         </Card>
       </div>
 
-      {/* Main Data Table */}
+      {/* Tabla Principal */}
       <Card>
         <CardContent className="pt-6">
           <EnhancedDataTable
@@ -353,27 +419,66 @@ export default function FlotaLlantas() {
         </CardContent>
       </Card>
 
-      {/* Modals */}
-      {/* Nota: Necesitarás actualizar TireHistorySheet para usar snake_case también si no se ve bien */}
+      {/* --- MODALES Y DIÁLOGOS --- */}
+
+      {/* 1. Crear / Editar Llanta */}
+      <CreateTireModal
+        open={createModalOpen}
+        onOpenChange={setCreateModalOpen}
+        onSubmit={handleCreateOrUpdateSubmit}
+        tireToEdit={selectedTire} // Pasa la llanta seleccionada (null si es crear)
+      />
+
+      {/* 2. Historial */}
       <TireHistorySheet
         tire={selectedTire}
         open={historySheetOpen}
         onOpenChange={setHistorySheetOpen}
       />
 
+      {/* 3. Asignar */}
       <AssignTireModal
         tire={selectedTire}
         open={assignModalOpen}
         onOpenChange={setAssignModalOpen}
-        onAssign={handleAssign}
+        onAssign={handleAssignSubmit}
       />
 
+      {/* 4. Mantenimiento */}
       <MaintenanceTireModal
         tire={selectedTire}
         open={maintenanceModalOpen}
         onOpenChange={setMaintenanceModalOpen}
-        onSubmit={handleMaintenance}
+        onSubmit={handleMaintenanceSubmit}
       />
+
+      {/* 5. Alerta de Eliminación */}
+      <AlertDialog open={deleteAlertOpen} onOpenChange={setDeleteAlertOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción eliminará permanentemente la llanta
+              <span className="font-bold text-foreground">
+                {" "}
+                {selectedTire?.codigo_interno}{" "}
+              </span>
+              y todo su historial de eventos. Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setSelectedTire(null)}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              Eliminar Definitivamente
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
