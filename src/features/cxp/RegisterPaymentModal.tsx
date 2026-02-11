@@ -1,10 +1,10 @@
 // src/features/cxp/RegisterPaymentModal.tsx
-// ✅ ALINEADO a la actualización "DB real" (snake_case)
-// ✅ Sin bankAccounts fake (se reciben por props)
-// ✅ Soporta invoice con snake_case o camelCase (para no romper si llega mezclado)
-// ✅ Valida monto, saldo, cuenta, fecha; preview de saldo post-pago
-// ✅ Devuelve payload listo para backend: { fecha_pago, monto, metodo_pago, referencia, cuenta_retiro }
-// ✅ onSubmit ahora es (invoiceId: number, payload) => Promise|void (como tu flujo actual con parseInt)
+//  ALINEADO a la actualización "DB real" (snake_case)
+//  Sin bankAccounts fake (se reciben por props)
+//  Soporta invoice con snake_case o camelCase (para no romper si llega mezclado)
+//  Valida monto, saldo, cuenta, fecha; preview de saldo post-pago
+//  Devuelve payload listo para backend: { fecha_pago, monto, metodo_pago, referencia, cuenta_retiro }
+//  onSubmit ahora es (invoiceId: number, payload) => Promise|void (como tu flujo actual con parseInt)
 
 // Ajusta rutas si tu proyecto las tiene distintas
 import { useEffect, useMemo, useState } from "react";
@@ -32,9 +32,9 @@ import { toast } from "sonner";
 import type { PayableInvoice } from "@/features/cxp/types";
 
 export type BankAccount = {
-  id: number; // ✅ DB
-  name: string; // ✅ DB
-  last_digits?: string; // ✅ DB (opcional)
+  id: number; //  DB
+  name: string; //  DB
+  last_digits?: string; //  DB (opcional)
 };
 
 export type RegisterPaymentPayload = {
@@ -51,10 +51,10 @@ interface RegisterPaymentModalProps {
 
   invoice: PayableInvoice | null;
 
-  // ✅ ahora vienen reales (no data.ts fake)
+  //  ahora vienen reales (no data.ts fake)
   bankAccounts: BankAccount[];
 
-  // ✅ alineado a tu flujo actualizado (id number + payload snake_case)
+  //  alineado a tu flujo actualizado (id number + payload snake_case)
   onSubmit: (
     invoiceId: number,
     payment: RegisterPaymentPayload,

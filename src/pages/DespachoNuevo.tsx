@@ -234,7 +234,7 @@ export default function DespachoNuevo() {
   const handleConfirmDispatch = () => {
     console.log("Dispatch Data:", data);
     toast({
-      title: "✅ Viaje Despachado",
+      title: " Viaje Despachado",
       description: `Carta Porte generada para ${data.unidadNumero} - Ruta: ${data.tarifaSeleccionada?.nombreRuta}`,
     });
     // Reset form
