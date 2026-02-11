@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -22,72 +22,94 @@ import { useTiposUnidad } from "@/hooks/useTiposUnidad";
 import { Truck, Loader2, Info } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Unidad } from "@/types/api.types"; // Importamos el tipo correcto
+import { Unidad } from "@/types/api.types";
 
-// Estado interno del formulario (Manejamos todo como string para los inputs)
+// =====================
+// Types
+// =====================
 interface UnidadFormData {
-  categoriaActivo: string;
+  // UI-only
+  categoriaActivo: string; // UI category selector (tractocamion / remolque_dolly / utilitario / custom)
+
+  // Core
   numero_economico: string;
   placas: string;
   vin: string;
   marca: string;
   modelo: string;
   year: string;
-  tipo: string;
+
+  // IMPORTANT:
+  // tipo = configuracion (enum backend: SENCILLO/FULL/RABON/...)
+  // tipo_1 = categoria backend (TRACTOCAMION/REMOLQUE/UTILITARIO/custom)
+  tipo: Unidad["tipo"] | "";
+  tipo_1: string;
+
+  // Tech
   numero_serie_motor: string;
   marca_motor: string;
   capacidad_carga: string;
   tipo_carga: string;
+
+  // Docs
   tarjeta_circulacion_url: string;
-  permiso_sct_folio: string; // Cambio a texto
+  tarjeta_circulacion_folio: string;
+  permiso_sct_folio: string;
   caat_folio: string;
   caat_vence: string;
 
-  // Fechas
+  // Dates
   seguro_vence: string;
   verificacion_humo_vence: string;
   verificacion_fisico_mecanica_vence: string;
-  // verificacion_vence: string;
   permiso_sct_vence: string;
-  tarjeta_circulacion_folio: string;
 
   status: string;
 }
 
 const emptyFormData: UnidadFormData = {
   categoriaActivo: "",
+
   numero_economico: "",
   placas: "",
   vin: "",
   marca: "",
   modelo: "",
   year: new Date().getFullYear().toString(),
+
   tipo: "",
+  tipo_1: "",
+
   numero_serie_motor: "",
   marca_motor: "",
   capacidad_carga: "",
   tipo_carga: "",
+
+  tarjeta_circulacion_url: "",
   tarjeta_circulacion_folio: "",
+  permiso_sct_folio: "",
+  caat_folio: "",
+  caat_vence: "",
+
   seguro_vence: "",
   verificacion_humo_vence: "",
   verificacion_fisico_mecanica_vence: "",
-  permiso_sct_folio: "",
   permiso_sct_vence: "",
+
   status: "disponible",
-  caat_folio: "",
-  caat_vence: "",
-  tarjeta_circulacion_url: "",
-  // verificacion_vence: "",
 };
 
-// Helper visual para fechas
+// =====================
+// Helpers
+// =====================
 const getStatusBadge = (dateStr: string) => {
-  if (!dateStr)
+  if (!dateStr) {
     return (
       <Badge variant="outline" className="text-muted-foreground text-[10px]">
         PENDIENTE
       </Badge>
     );
+  }
 
   const today = new Date();
   const exp = new Date(dateStr);
@@ -117,11 +139,50 @@ const getStatusBadge = (dateStr: string) => {
   );
 };
 
+const normalizeCategoriaUI = (tipo1?: string | null) => {
+  // Backend -> UI category
+  let cat = (tipo1 || "TRACTOCAMION").toString().trim();
+
+  if (cat === "TRACTOCAMION") return "tractocamion";
+  if (cat === "REMOLQUE") return "remolque_dolly";
+  if (cat === "UTILITARIO") return "utilitario";
+
+  return cat.toLowerCase();
+};
+
+const mapCategoriaToBackend = (categoriaActivo: string) => {
+  // UI -> backend tipo_1
+  if (categoriaActivo === "tractocamion") return "TRACTOCAMION";
+  if (categoriaActivo === "remolque_dolly") return "REMOLQUE";
+  if (categoriaActivo === "utilitario") return "UTILITARIO";
+
+  return (categoriaActivo || "").trim().toUpperCase();
+};
+
+/**
+ * Normaliza cualquier input (UI / backend / catálogo) al formato
+ * que "debe guardar": MAYÚSCULAS + sin acentos.
+ * Ej:
+ *  - "rabón" -> "RABON"
+ *  - "Rabon" -> "RABON"
+ *  - "full"  -> "FULL"
+ */
+const normalizeTipoToSave = (value: unknown): Unidad["tipo"] | "" => {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+
+  const noAccents = raw.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return noAccents.toUpperCase() as Unidad["tipo"];
+};
+
+// =====================
+// Component
+// =====================
 interface AddUnidadModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  unidadToEdit?: Unidad | null; // Tipado estricto
-  onSave?: (unidad: any) => void; // El padre manejará el envío
+  unidadToEdit?: Unidad | null;
+  onSave?: (unidad: any) => void;
   isSaving?: boolean;
 }
 
@@ -141,30 +202,42 @@ export function AddUnidadModal({
 
   const isEditMode = !!unidadToEdit;
 
+  // Ocultar sencillo/full del listado, pero permitir que se muestren si ya vienen en la unidad
+  // (en tu backend probablemente es MAYÚSCULAS, pero aquí lo normalizamos para comparar)
+  const hiddenTipos = useMemo(() => ["SENCILLO", "FULL"], []);
+  const currentTipoIsHidden = hiddenTipos.includes(
+    normalizeTipoToSave(formData.tipo),
+  );
+
+  // =====================
+  // Load edit data
+  // =====================
   useEffect(() => {
     if (open && unidadToEdit) {
-      // Mapeo inverso: Backend -> Formulario
-      let cat = unidadToEdit.tipo_1 || "tractocamion";
+      const catUI = normalizeCategoriaUI(unidadToEdit.tipo_1);
 
-      // Normalización de categorías legacy
-      if (cat === "TRACTOCAMION") cat = "tractocamion";
-      if (cat === "REMOLQUE") cat = "remolque_dolly";
-      if (cat === "UTILITARIO") cat = "utilitario";
-
-      if (!["tractocamion", "remolque_dolly", "utilitario"].includes(cat)) {
-        setCustomCategoryMode(true);
-      }
+      // Si no es de las 3 categorías predefinidas -> custom input
+      const isKnown = ["tractocamion", "remolque_dolly", "utilitario"].includes(
+        catUI,
+      );
+      setCustomCategoryMode(!isKnown);
 
       setFormData({
-        categoriaActivo: cat,
-        numero_economico: unidadToEdit.numero_economico,
-        placas: unidadToEdit.placas,
+        categoriaActivo: isKnown ? catUI : unidadToEdit.tipo_1 || catUI,
+
+        numero_economico: unidadToEdit.numero_economico || "",
+        placas: unidadToEdit.placas || "",
         vin: unidadToEdit.vin || "",
-        marca: unidadToEdit.marca,
-        modelo: unidadToEdit.modelo,
+        marca: unidadToEdit.marca || "",
+        modelo: unidadToEdit.modelo || "",
         year:
           unidadToEdit.year?.toString() || new Date().getFullYear().toString(),
-        tipo: unidadToEdit.tipo,
+
+        // IMPORTANT: guardamos ya normalizado para que el SELECT lo refleje y se guarde bien
+        tipo: normalizeTipoToSave(unidadToEdit.tipo),
+        // tipo_1 backend (solo para referencia; se recalcula al guardar)
+        tipo_1: (unidadToEdit.tipo_1 || "").toString(),
+
         numero_serie_motor: unidadToEdit.numero_serie_motor || "",
         marca_motor: unidadToEdit.marca_motor || "",
         capacidad_carga: unidadToEdit.capacidad_carga?.toString() || "",
@@ -183,32 +256,44 @@ export function AddUnidadModal({
         verificacion_fisico_mecanica_vence:
           unidadToEdit.verificacion_fisico_mecanica_vence || "",
 
-        status: unidadToEdit.status,
+        status: (unidadToEdit.status || "disponible") as any,
       });
+
       setErrors({});
-    } else if (!open) {
+      return;
+    }
+
+    if (!open) {
       setFormData(emptyFormData);
       setErrors({});
       setCustomCategoryMode(false);
     }
   }, [unidadToEdit, open]);
 
+  // =====================
+  // Validation
+  // =====================
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
     if (!formData.categoriaActivo) newErrors.categoriaActivo = "Requerido";
     if (!formData.numero_economico.trim())
       newErrors.numero_economico = "Requerido";
 
-    // Validaciones condicionales
+    // Condicionales
     if (formData.categoriaActivo === "tractocamion") {
       if (!formData.placas.trim()) newErrors.placas = "Requerido";
       if (!formData.marca.trim()) newErrors.marca = "Requerido";
+      // Si quieres obligar configuración:
+      // if (!formData.tipo) newErrors.tipo = "Requerido";
     }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
+  // =====================
+  // Submit
+  // =====================
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -221,17 +306,7 @@ export function AddUnidadModal({
       return;
     }
 
-    // Transformación: Formulario -> Backend
-    let tipo1Backend = formData.categoriaActivo;
-    if (formData.categoriaActivo === "tractocamion")
-      tipo1Backend = "TRACTOCAMION";
-    else if (formData.categoriaActivo === "remolque_dolly")
-      tipo1Backend = "REMOLQUE";
-    else if (formData.categoriaActivo === "utilitario")
-      tipo1Backend = "UTILITARIO";
-    else tipo1Backend = formData.categoriaActivo.toUpperCase(); // Custom categories
-
-    // Limpieza de datos (Empty strings -> null)
+    // Limpieza (Empty strings -> null)
     const cleanDate = (dateStr: string) =>
       dateStr && dateStr.trim() !== "" ? dateStr : null;
     const cleanString = (str: string) =>
@@ -239,8 +314,16 @@ export function AddUnidadModal({
     const cleanNumber = (numStr: string) =>
       numStr && !isNaN(parseFloat(numStr)) ? parseFloat(numStr) : null;
 
+    const tipo1Backend = mapCategoriaToBackend(formData.categoriaActivo);
+
+    // tipo = "configuración" -> SIEMPRE normalizada para guardar
+    const tipoPayload: Unidad["tipo"] =
+      formData.categoriaActivo === "tractocamion" && formData.tipo
+        ? (normalizeTipoToSave(formData.tipo) as Unidad["tipo"])
+        : ((normalizeTipoToSave(unidadToEdit?.tipo) ||
+            "FULL") as Unidad["tipo"]);
+
     const payload: Partial<Unidad> = {
-      // Si editamos, preservamos el ID
       ...(isEditMode && unidadToEdit ? { id: unidadToEdit.id } : {}),
 
       numero_economico: formData.numero_economico,
@@ -248,7 +331,8 @@ export function AddUnidadModal({
       marca: formData.marca,
       modelo: formData.modelo,
       year: parseInt(formData.year) || new Date().getFullYear(),
-      tipo: (formData.tipo as any) || "sencillo", // Cast seguro
+
+      tipo: tipoPayload as any,
       tipo_1: tipo1Backend,
       vin: cleanString(formData.vin),
 
@@ -257,7 +341,6 @@ export function AddUnidadModal({
       capacidad_carga: cleanNumber(formData.capacidad_carga),
       tipo_carga: cleanString(formData.tipo_carga),
 
-      // Mapeamos el input "tarjeta_circulacion_folio" al campo URL que el backend usa temporalmentec
       tarjeta_circulacion_url: cleanString(formData.tarjeta_circulacion_url),
       tarjeta_circulacion_folio: cleanString(
         formData.tarjeta_circulacion_folio,
@@ -268,10 +351,10 @@ export function AddUnidadModal({
       verificacion_fisico_mecanica_vence: cleanDate(
         formData.verificacion_fisico_mecanica_vence,
       ),
-      // verificacion_vence: cleanDate(formData.verificacion_vence),
-      permiso_sct_folio: cleanString(formData.permiso_sct_folio), //
-      caat_folio: cleanString(formData.caat_folio), //
-      caat_vence: cleanDate(formData.caat_vence), //
+
+      permiso_sct_folio: cleanString(formData.permiso_sct_folio),
+      caat_folio: cleanString(formData.caat_folio),
+      caat_vence: cleanDate(formData.caat_vence),
       permiso_sct_vence: cleanDate(formData.permiso_sct_vence),
 
       status: (unidadToEdit?.status || "disponible") as any,
@@ -284,13 +367,19 @@ export function AddUnidadModal({
     onOpenChange(false);
     setFormData(emptyFormData);
     setErrors({});
+    setCustomCategoryMode(false);
   };
 
   const currentYear = new Date().getFullYear();
   const yearOptions = Array.from({ length: 25 }, (_, i) => currentYear - i + 1);
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
+    <Dialog
+      open={open}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) handleClose();
+      }}
+    >
       <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto p-0 gap-0">
         <DialogHeader className="bg-primary text-primary-foreground px-6 py-4 sticky top-0 z-10">
           <DialogTitle className="flex items-center gap-2 text-lg">
@@ -316,9 +405,10 @@ export function AddUnidadModal({
                   size="sm"
                   className="h-6 text-xs text-blue-600"
                   onClick={() => {
-                    setCustomCategoryMode(!customCategoryMode);
-                    if (!customCategoryMode)
-                      setFormData({ ...formData, categoriaActivo: "" });
+                    setCustomCategoryMode((prev) => !prev);
+                    if (!customCategoryMode) {
+                      setFormData((prev) => ({ ...prev, categoriaActivo: "" }));
+                    }
                   }}
                 >
                   {customCategoryMode ? "Volver a lista" : "+ Otra categoría"}
@@ -330,10 +420,10 @@ export function AddUnidadModal({
                   placeholder="Ej: Montacargas"
                   value={formData.categoriaActivo}
                   onChange={(e) =>
-                    setFormData({
-                      ...formData,
+                    setFormData((prev) => ({
+                      ...prev,
                       categoriaActivo: e.target.value,
-                    })
+                    }))
                   }
                   className={errors.categoriaActivo ? "border-destructive" : ""}
                   autoFocus
@@ -342,7 +432,7 @@ export function AddUnidadModal({
                 <Select
                   value={formData.categoriaActivo}
                   onValueChange={(val) =>
-                    setFormData({ ...formData, categoriaActivo: val })
+                    setFormData((prev) => ({ ...prev, categoriaActivo: val }))
                   }
                 >
                   <SelectTrigger
@@ -365,6 +455,7 @@ export function AddUnidadModal({
                   </SelectContent>
                 </Select>
               )}
+
               {errors.categoriaActivo && (
                 <p className="text-xs text-destructive">
                   {errors.categoriaActivo}
@@ -388,10 +479,10 @@ export function AddUnidadModal({
                   <Input
                     value={formData.numero_economico}
                     onChange={(e) =>
-                      setFormData({
-                        ...formData,
+                      setFormData((prev) => ({
+                        ...prev,
                         numero_economico: e.target.value.toUpperCase(),
-                      })
+                      }))
                     }
                     placeholder="Ej: TR-001"
                     className={
@@ -412,10 +503,10 @@ export function AddUnidadModal({
                   <Input
                     value={formData.placas}
                     onChange={(e) =>
-                      setFormData({
-                        ...formData,
+                      setFormData((prev) => ({
+                        ...prev,
                         placas: e.target.value.toUpperCase(),
-                      })
+                      }))
                     }
                     className={errors.placas ? "border-destructive" : ""}
                   />
@@ -430,7 +521,10 @@ export function AddUnidadModal({
                     list="marcas-list"
                     value={formData.marca}
                     onChange={(e) =>
-                      setFormData({ ...formData, marca: e.target.value })
+                      setFormData((prev) => ({
+                        ...prev,
+                        marca: e.target.value,
+                      }))
                     }
                     placeholder="Seleccione o escriba..."
                     className={errors.marca ? "border-destructive" : ""}
@@ -452,7 +546,10 @@ export function AddUnidadModal({
                   <Input
                     value={formData.modelo}
                     onChange={(e) =>
-                      setFormData({ ...formData, modelo: e.target.value })
+                      setFormData((prev) => ({
+                        ...prev,
+                        modelo: e.target.value,
+                      }))
                     }
                   />
                 </div>
@@ -462,7 +559,7 @@ export function AddUnidadModal({
                   <Select
                     value={formData.year}
                     onValueChange={(val) =>
-                      setFormData({ ...formData, year: val })
+                      setFormData((prev) => ({ ...prev, year: val }))
                     }
                   >
                     <SelectTrigger
@@ -480,26 +577,54 @@ export function AddUnidadModal({
                   </Select>
                 </div>
 
+                {/* CONFIGURACIÓN (usa tipo, NO tipo_1) */}
                 {formData.categoriaActivo === "tractocamion" && (
                   <div className="space-y-2">
                     <Label>Configuración</Label>
                     <Select
                       value={formData.tipo}
                       onValueChange={(val) =>
-                        setFormData({ ...formData, tipo: val })
+                        setFormData((prev) => ({
+                          ...prev,
+                          tipo: normalizeTipoToSave(val),
+                        }))
                       }
                     >
-                      <SelectTrigger>
+                      <SelectTrigger
+                        className={errors.tipo ? "border-destructive" : ""}
+                      >
                         <SelectValue placeholder="Seleccione..." />
                       </SelectTrigger>
+
                       <SelectContent>
-                        {tiposActivos.map((t) => (
-                          <SelectItem key={t.id} value={t.nombre.toLowerCase()}>
-                            {t.nombre}
+                        {/* Mostrar valor oculto si ya viene (SENCILLO/FULL) */}
+                        {currentTipoIsHidden && formData.tipo && (
+                          <SelectItem value={formData.tipo}>
+                            {String(formData.tipo).toUpperCase()} (oculto)
                           </SelectItem>
-                        ))}
+                        )}
+
+                        {tiposActivos
+                          .filter(
+                            (t) =>
+                              !hiddenTipos.includes(
+                                normalizeTipoToSave(t.nombre) || "",
+                              ),
+                          )
+                          .map((t) => {
+                            const normalizedValue =
+                              normalizeTipoToSave(t.nombre) || "";
+                            return (
+                              <SelectItem key={t.id} value={normalizedValue}>
+                                {t.nombre}
+                              </SelectItem>
+                            );
+                          })}
                       </SelectContent>
                     </Select>
+                    {errors.tipo && (
+                      <p className="text-xs text-destructive">{errors.tipo}</p>
+                    )}
                   </div>
                 )}
               </div>
@@ -513,10 +638,10 @@ export function AddUnidadModal({
                   <Input
                     value={formData.vin}
                     onChange={(e) =>
-                      setFormData({
-                        ...formData,
+                      setFormData((prev) => ({
+                        ...prev,
                         vin: e.target.value.toUpperCase(),
-                      })
+                      }))
                     }
                     placeholder="17 caracteres alfanuméricos"
                   />
@@ -527,10 +652,10 @@ export function AddUnidadModal({
                   <Input
                     value={formData.numero_serie_motor}
                     onChange={(e) =>
-                      setFormData({
-                        ...formData,
+                      setFormData((prev) => ({
+                        ...prev,
                         numero_serie_motor: e.target.value,
-                      })
+                      }))
                     }
                   />
                 </div>
@@ -540,7 +665,10 @@ export function AddUnidadModal({
                   <Input
                     value={formData.marca_motor}
                     onChange={(e) =>
-                      setFormData({ ...formData, marca_motor: e.target.value })
+                      setFormData((prev) => ({
+                        ...prev,
+                        marca_motor: e.target.value,
+                      }))
                     }
                   />
                 </div>
@@ -552,10 +680,10 @@ export function AddUnidadModal({
                     step="0.1"
                     value={formData.capacidad_carga}
                     onChange={(e) =>
-                      setFormData({
-                        ...formData,
+                      setFormData((prev) => ({
+                        ...prev,
                         capacidad_carga: e.target.value,
-                      })
+                      }))
                     }
                   />
                 </div>
@@ -565,7 +693,7 @@ export function AddUnidadModal({
                   <Select
                     value={formData.tipo_carga}
                     onValueChange={(val) =>
-                      setFormData({ ...formData, tipo_carga: val })
+                      setFormData((prev) => ({ ...prev, tipo_carga: val }))
                     }
                   >
                     <SelectTrigger>
@@ -595,19 +723,15 @@ export function AddUnidadModal({
               </div>
 
               <div className="grid grid-cols-1 gap-4">
-                {/* 1. MAPEO DE FECHAS (Se eliminaron Ambiental y SCT Fecha de esta lista) */}
                 {[
-                  {
-                    label: "Póliza de Seguro",
-                    key: "seguro_vence" as keyof UnidadFormData,
-                  },
+                  { label: "Póliza de Seguro", key: "seguro_vence" as const },
                   {
                     label: "Verif. Emisiones (Humo)",
-                    key: "verificacion_humo_vence" as keyof UnidadFormData,
+                    key: "verificacion_humo_vence" as const,
                   },
                   {
                     label: "Verif. Físico-Mecánica",
-                    key: "verificacion_fisico_mecanica_vence" as keyof UnidadFormData,
+                    key: "verificacion_fisico_mecanica_vence" as const,
                   },
                 ].map((field) => (
                   <div
@@ -622,10 +746,10 @@ export function AddUnidadModal({
                         type="date"
                         value={formData[field.key]}
                         onChange={(e) =>
-                          setFormData({
-                            ...formData,
+                          setFormData((prev) => ({
+                            ...prev,
                             [field.key]: e.target.value,
-                          })
+                          }))
                         }
                         className="h-8"
                       />
@@ -636,34 +760,32 @@ export function AddUnidadModal({
                   </div>
                 ))}
 
-                {/* 2. REGISTRO CAAT (NUEVO: Folio + Vigencia) */}
+                {/* CAAT */}
                 <div className="flex items-end gap-3 p-3 border rounded-lg bg-blue-50/20 border-blue-100">
                   <div className="flex-1 space-y-1">
                     <Label className="text-xs font-semibold uppercase text-blue-700">
                       Registro CAAT (Folio y Vigencia)
                     </Label>
                     <div className="flex gap-2">
-                      {/* Input Folio */}
                       <Input
                         placeholder="Folio CAAT"
                         value={formData.caat_folio}
                         onChange={(e) =>
-                          setFormData({
-                            ...formData,
+                          setFormData((prev) => ({
+                            ...prev,
                             caat_folio: e.target.value,
-                          })
+                          }))
                         }
                         className="h-8 flex-[2]"
                       />
-                      {/* Input Fecha Vigencia */}
                       <Input
                         type="date"
                         value={formData.caat_vence}
                         onChange={(e) =>
-                          setFormData({
-                            ...formData,
+                          setFormData((prev) => ({
+                            ...prev,
                             caat_vence: e.target.value,
-                          })
+                          }))
                         }
                         className="h-8 flex-1"
                       />
@@ -674,7 +796,7 @@ export function AddUnidadModal({
                   </div>
                 </div>
 
-                {/* 3. PERMISO SCT (AHORA ES FOLIO / TEXTO) */}
+                {/* Permiso SCT Folio */}
                 <div className="flex items-end gap-3 p-3 border rounded-lg bg-gray-50/50">
                   <div className="flex-1 space-y-1">
                     <Label className="text-xs font-semibold uppercase text-muted-foreground">
@@ -683,10 +805,10 @@ export function AddUnidadModal({
                     <Input
                       value={formData.permiso_sct_folio}
                       onChange={(e) =>
-                        setFormData({
-                          ...formData,
+                        setFormData((prev) => ({
+                          ...prev,
                           permiso_sct_folio: e.target.value,
-                        })
+                        }))
                       }
                       className="h-8"
                       placeholder="Ingrese Folio SCT"
@@ -702,7 +824,7 @@ export function AddUnidadModal({
                   </div>
                 </div>
 
-                {/* 4. TARJETA DE CIRCULACIÓN (Existente, se mantiene igual) */}
+                {/* Tarjeta Circulación Folio */}
                 <div className="flex items-end gap-3 p-3 border rounded-lg bg-gray-50/50">
                   <div className="flex-1 space-y-1">
                     <Label className="text-xs font-semibold uppercase text-muted-foreground">
@@ -711,10 +833,10 @@ export function AddUnidadModal({
                     <Input
                       value={formData.tarjeta_circulacion_folio}
                       onChange={(e) =>
-                        setFormData({
-                          ...formData,
+                        setFormData((prev) => ({
+                          ...prev,
                           tarjeta_circulacion_folio: e.target.value,
-                        })
+                        }))
                       }
                       className="h-8"
                       placeholder="Ingrese Folio"
@@ -733,7 +855,7 @@ export function AddUnidadModal({
             </TabsContent>
           </Tabs>
 
-          <DialogFooter className="border-t pt-4 sticky bottom-0 bg-background pb-2">
+          <DialogFooter className="border-t pt-4 sticky bottom-0 pb-2">
             <Button
               type="button"
               variant="outline"
