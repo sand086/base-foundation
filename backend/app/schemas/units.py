@@ -84,7 +84,8 @@ class UnitUpdate(BaseModel):
     permiso_sct_folio: Optional[str] = None
     
     tarjeta_circulacion_folio: Optional[str] = None
-    tarjeta_circulacion_folio: Optional[str] = None
+    
+
 
 class UnitResponse(UnitBase):
     id: int
