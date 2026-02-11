@@ -257,7 +257,7 @@ export function AddUnidadModal({
       capacidad_carga: cleanNumber(formData.capacidad_carga),
       tipo_carga: cleanString(formData.tipo_carga),
 
-      // Mapeamos el input "tarjeta_circulacion_folio" al campo URL que el backend usa temporalmente
+      // Mapeamos el input "tarjeta_circulacion_folio" al campo URL que el backend usa temporalmentec
       tarjeta_circulacion_url: cleanString(formData.tarjeta_circulacion_url),
       tarjeta_circulacion_folio: cleanString(
         formData.tarjeta_circulacion_folio,
