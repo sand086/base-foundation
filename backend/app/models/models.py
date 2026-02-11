@@ -197,7 +197,8 @@ class Unit(Base):
     marca = Column(String(50), nullable=False)
     modelo = Column(String(50), nullable=False)
     year = Column(Integer)
-    tipo = Column(Enum(UnitType), nullable=False)
+    tipo = Column(String(50), nullable=True)
+    
     tipo_1 = Column(String(50))
     tipo_carga = Column(String(50))
     numero_serie_motor = Column(String, nullable=True)

@@ -2,15 +2,7 @@
 // ENUMS (Coinciden con models.py)
 // ==========================================
 
-export type UnitTipo =
-  | "sencillo"
-  | "full"
-  | "rabon"
-  | "tractocamion"
-  | "remolque"
-  | "camioneta"
-  | "camion"
-  | "otro";
+export type UnitTipo = string;
 
 export type UnitStatus =
   | "disponible"
