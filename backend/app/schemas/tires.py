@@ -1,70 +1,129 @@
-from typing import List, Optional
-from pydantic import BaseModel, ConfigDict
-from datetime import date, datetime
+from typing import List, Optional, Literal, Union
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from datetime import datetime, date
+
+# --- ENUMS (Definiciones de tipo) ---
+EstadoLlanta = Literal["nuevo", "usado", "renovado", "desecho"]
+EstadoFisico = Literal["buena", "regular", "mala"]
+# Definimos TipoEvento también como str general para evitar conflictos si la BD trae algo nuevo
+TipoEvento = Union[
+    Literal[
+        "compra",
+        "montaje",
+        "desmontaje",
+        "reparacion",
+        "renovado",
+        "rotacion",
+        "inspeccion",
+        "desecho",
+    ],
+    str,
+]
+
 
 # --- HISTORIAL (Nested) ---
 class TireHistoryResponse(BaseModel):
     id: int
     fecha: datetime
-    tipo: str
+    tipo: TipoEvento
     descripcion: str
-    unidad: Optional[str] = None # Mapearemos unidad_economico aqui
+    unidad: Optional[str] = None
     posicion: Optional[str] = None
     km: Optional[float] = 0
     costo: Optional[float] = 0
-    responsable: Optional[str] = None
+    responsable: Optional[str] = "Sistema"
 
     model_config = ConfigDict(from_attributes=True)
 
-# --- LLANTA BASE ---
-class TireBase(BaseModel):
-    codigo_interno: str
-    marca: str
-    modelo: Optional[str] = None
-    medida: Optional[str] = None
-    dot: Optional[str] = None
-    
-    profundidad_original: float
-    profundidad_actual: float
-    
-    fecha_compra: date
-    precio_compra: float
-    proveedor: Optional[str] = None
-    
-    estado: str = "nuevo"        # nuevo, usado, renovado, desecho
-    estado_fisico: str = "buena" # buena, regular, mala
+    # VALIDADOR MÁGICO: Convierte Enum -> String antes de validar
+    @field_validator("tipo", mode="before")
+    @classmethod
+    def parse_enum(cls, v):
+        if hasattr(v, "value"):
+            return v.value
+        return str(v)
 
-class TireCreate(TireBase):
-    pass # El ID se genera en BD
 
-class TireUpdate(BaseModel):
-    profundidad_actual: Optional[float] = None
-    km_recorridos: Optional[float] = None
-    estado_fisico: Optional[str] = None
-    estado: Optional[str] = None
-
-# --- PAYLOADS PARA ACCIONES ESPECIALES ---
+# --- PAYLOADS ---
 class AssignTirePayload(BaseModel):
-    unidad_id: Optional[int] = None # Si es None, se envía a almacén
+    unidad_id: Optional[int] = None
     posicion: Optional[str] = None
     notas: Optional[str] = ""
 
+
 class MaintenanceTirePayload(BaseModel):
-    tipo: str # reparacion, renovado, desecho
+    tipo: str
     costo: float
     descripcion: str
 
-# --- RESPUESTA COMPLETA (Para GET) ---
-class TireResponse(TireBase):
+
+class TireCreate(BaseModel):
+    codigo_interno: str
+    marca: str
+    modelo: str
+    medida: str
+    dot: Optional[str] = None  # CORRECCIÓN: Opcional
+    profundidad_original: float
+    profundidad_actual: float
+    precio_compra: float
+    fecha_compra: date
+    proveedor: str
+    estado: str = "nuevo"
+
+
+# --- RESPUESTA PRINCIPAL ---
+class TireResponse(BaseModel):
     id: int
-    km_recorridos: float
-    costo_acumulado: float
-    
-    # Datos de ubicación actual
-    unidad_actual_id: Optional[int] = None
+    codigo_interno: str
+    marca: str
+    modelo: str
+    medida: str
+    dot: Optional[str] = None  # CORRECCIÓN: Opcional
+
+    # Ubicación
+    unidad_actual_id: Optional[int] = Field(
+        default=None, serialization_alias="unidad_actual_id"
+    )
     unidad_actual_economico: Optional[str] = None
     posicion: Optional[str] = None
-    
+
+    # Estado
+    estado: EstadoLlanta
+    estado_fisico: EstadoFisico
+    profundidad_actual: float
+    profundidad_original: float
+    km_recorridos: float
+
+    # Tracking
+    fecha_compra: date
+    precio_compra: float
+    costo_acumulado: float
+    proveedor: Optional[str] = None
+
     historial: List[TireHistoryResponse] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+    # --- LA SOLUCIÓN DEFINITIVA AL ERROR 500 ---
+    # Este validador se ejecuta ANTES de que Pydantic verifique los tipos.
+    # Toma el objeto Enum de SQLAlchemy y devuelve su string simple.
+    @field_validator("estado", "estado_fisico", mode="before")
+    @classmethod
+    def parse_enums(cls, v):
+        # Si es un objeto Enum (tiene atributo .value), retornamos el valor
+        if hasattr(v, "value"):
+            return v.value
+        # Si ya es string o null, lo dejamos pasar
+        return v
+
+
+class TireUpdate(BaseModel):
+    marca: Optional[str] = None
+    modelo: Optional[str] = None
+    medida: Optional[str] = None
+    dot: Optional[str] = None
+    proveedor: Optional[str] = None
+    precio_compra: Optional[float] = None
+    # Nota: No permitimos editar codigo_interno ni historial aquí por seguridad
 
     model_config = ConfigDict(from_attributes=True)

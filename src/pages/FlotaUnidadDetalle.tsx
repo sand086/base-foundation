@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Truck,
   AlertTriangle,
@@ -23,9 +23,9 @@ import { toast } from "@/hooks/use-toast";
 import { unitService, UnidadDetalle } from "@/services/unitService";
 import { DocumentUploadManager } from "@/features/flota/DocumentUploadManager";
 
-// Helper Functions
-
-// Helper para badges de fecha
+/**
+ * Helper para badges de fecha
+ */
 const getDateBadge = (dateStr: string | null | undefined) => {
   if (!dateStr)
     return (
@@ -33,8 +33,11 @@ const getDateBadge = (dateStr: string | null | undefined) => {
         Sin Fecha
       </Badge>
     );
+
   const today = new Date();
   const expDate = new Date(dateStr);
+
+  // Ajuste para evitar brincos por timezone cuando viene ISO
   expDate.setMinutes(expDate.getMinutes() + expDate.getTimezoneOffset());
 
   const days = Math.ceil(
@@ -47,19 +50,21 @@ const getDateBadge = (dateStr: string | null | undefined) => {
         VENCIDO ({days * -1} días)
       </Badge>
     );
+
   if (days <= 30)
     return (
       <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-200">
         POR VENCER ({days} días)
       </Badge>
     );
+
   return (
     <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-200">
       VIGENTE
     </Badge>
   );
 };
-// Helper formateo fecha input
+
 const getEstatusFecha = (
   fecha: string | null | undefined,
 ): "vigente" | "próximo" | "vencido" => {
@@ -74,20 +79,55 @@ const getEstatusFecha = (
   return "vigente";
 };
 
-// Convierte cualquier fecha (YYYY-MM-DD o ISO) a formato input date (YYYY-MM-DD)
-// Sin alterar estilos ni lógica; solo normaliza el valor.
+// Normaliza cualquier fecha (YYYY-MM-DD o ISO) a formato input date (YYYY-MM-DD)
 const toInputDate = (value: string | null | undefined) => {
   if (!value) return "";
-  // Si ya viene YYYY-MM-DD...
   if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
 
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "";
-  // Formato local YYYY-MM-DD (evita brincos por timezone)
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
+};
+
+type FormState = {
+  numero_economico: string;
+  placas: string;
+  vin: string;
+  marca: string;
+  modelo: string;
+  year: string;
+
+  // vigencias
+  seguro_vence: string;
+  verificacion_humo_vence: string;
+  verificacion_fisico_mecanica_vence: string;
+  caat_vence: string;
+
+  // folios
+  permiso_sct_folio: string;
+  caat_folio: string;
+  tarjeta_circulacion_folio: string;
+};
+
+const emptyForm: FormState = {
+  numero_economico: "",
+  placas: "",
+  vin: "",
+  marca: "",
+  modelo: "",
+  year: "",
+
+  seguro_vence: "",
+  verificacion_humo_vence: "",
+  verificacion_fisico_mecanica_vence: "",
+  caat_vence: "",
+
+  permiso_sct_folio: "",
+  caat_folio: "",
+  tarjeta_circulacion_folio: "",
 };
 
 export default function FlotaUnidadDetalle() {
@@ -98,31 +138,19 @@ export default function FlotaUnidadDetalle() {
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
 
-  // Form state (se mantiene igual, solo agregamos vigencias)
-  const [formData, setFormData] = useState({
-    numero_economico: "",
-    placas: "",
-    vin: "",
-    marca: "",
-    modelo: "",
-    year: "",
-    seguro_vence: "",
-    verificacion_humo_vence: "",
-    verificacion_fisico_mecanica_vence: "",
-    caat_vence: "",
-    permiso_sct_folio: "",
-    caat_folio: "",
-  });
+  const [formData, setFormData] = useState<FormState>(emptyForm);
 
-  // --- CARGA DE DATOS ---
+  /**
+   * Carga de datos
+   */
   useEffect(() => {
     const loadUnit = async () => {
       if (!id) return;
+
       setIsLoading(true);
       try {
-        const apiData = await unitService.getBynumero_economico(id);
+        const apiData: any = await unitService.getBynumero_economico(id);
 
-        // Construir documentos mapeando snake_case a la estructura UI
         const constructedDocuments = [
           {
             name: "Póliza de Seguro",
@@ -155,7 +183,7 @@ export default function FlotaUnidadDetalle() {
             key: "tarjeta_circulacion_folio",
             url: apiData.tarjeta_circulacion_url,
             estatus: "vigente" as const,
-            vencimiento: new Date().toISOString(), // Normalmente no vence anual igual que otros
+            vencimiento: "",
             obligatorio: true,
           },
           {
@@ -170,7 +198,7 @@ export default function FlotaUnidadDetalle() {
             name: "Permiso SCT",
             key: "permiso_sct",
             url: apiData.permiso_sct_url,
-            estatus: "vigente" as const, // Permiso SCT is often permanent or just a folio
+            estatus: "vigente" as const,
             vencimiento: "",
             obligatorio: false,
           },
@@ -184,21 +212,25 @@ export default function FlotaUnidadDetalle() {
 
         setUnit(enrichedUnit);
 
-        // Inicializar formulario con snake_case
+        // ✅ CORRECCIÓN: inicializar TODO el formulario (incluye folios)
         setFormData({
-          numero_economico: apiData.numero_economico,
-          placas: apiData.placas,
+          numero_economico: apiData.numero_economico || "",
+          placas: apiData.placas || "",
           vin: apiData.vin || "",
-          marca: apiData.marca,
-          modelo: apiData.modelo,
-          year: apiData.year?.toString() || "",
-          //  NUEVO: fechas de documentos a formato input date
+          marca: apiData.marca || "",
+          modelo: apiData.modelo || "",
+          year: apiData.year?.toString?.() || "",
+
           seguro_vence: toInputDate(apiData.seguro_vence),
           verificacion_humo_vence: toInputDate(apiData.verificacion_humo_vence),
           verificacion_fisico_mecanica_vence: toInputDate(
             apiData.verificacion_fisico_mecanica_vence,
           ),
           caat_vence: toInputDate(apiData.caat_vence),
+
+          permiso_sct_folio: apiData.permiso_sct_folio || "",
+          caat_folio: apiData.caat_folio || "",
+          tarjeta_circulacion_folio: apiData.tarjeta_circulacion_folio || "",
         });
       } catch (error) {
         console.error("Error cargando unidad:", error);
@@ -211,13 +243,17 @@ export default function FlotaUnidadDetalle() {
         setIsLoading(false);
       }
     };
-    loadUnit();
-  }, [id, navigate]);
 
-  //  Helper: actualiza vencimientos/estatus dentro de unit.documents (para bloqueo/badges)
+    loadUnit();
+  }, [id]);
+
+  /**
+   * Helper: sincroniza en UI los estatus/vencimientos de unit.documents con el form
+   * (solo para refrescar badges sin recargar)
+   */
   const syncUnitDocumentsWithFormDates = (
     currentUnit: UnidadDetalle,
-    fd: typeof formData,
+    fd: FormState,
   ) => {
     const mapVence: Record<string, string> = {
       poliza_seguro: fd.seguro_vence || "",
@@ -226,8 +262,8 @@ export default function FlotaUnidadDetalle() {
       caat: fd.caat_vence || "",
     };
 
-    const updatedDocs = currentUnit.documents.map((d) => {
-      if (!mapVence.hasOwnProperty(d.key)) return d;
+    const updatedDocs = currentUnit.documents.map((d: any) => {
+      if (!Object.prototype.hasOwnProperty.call(mapVence, d.key)) return d;
       const newVenc = mapVence[d.key];
       return {
         ...d,
@@ -239,19 +275,34 @@ export default function FlotaUnidadDetalle() {
     return { ...currentUnit, documents: updatedDocs };
   };
 
+  const yearInt = useMemo(() => {
+    const y = parseInt(formData.year, 10);
+    return Number.isFinite(y) ? y : null;
+  }, [formData.year]);
+
   const handleSaveChanges = async () => {
     if (!unit) return;
+
+    if (yearInt === null) {
+      toast({
+        title: "Año inválido",
+        description: "Revisa el campo 'Año' antes de guardar.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
-      // Enviar snake_case al backend (igual que antes, solo agregando vigencias)
-      await unitService.update(unit.id, {
+      // ✅ Payload limpio al backend
+      const payload: any = {
         numero_economico: formData.numero_economico,
         placas: formData.placas,
         vin: formData.vin,
         marca: formData.marca,
         modelo: formData.modelo,
-        year: parseInt(formData.year),
+        year: yearInt,
 
-        //  NUEVO: vigencias (si se dejan vacías -> null)
+        // vigencias (vacío -> null)
         seguro_vence: formData.seguro_vence ? formData.seguro_vence : null,
         verificacion_humo_vence: formData.verificacion_humo_vence
           ? formData.verificacion_humo_vence
@@ -261,36 +312,69 @@ export default function FlotaUnidadDetalle() {
             ? formData.verificacion_fisico_mecanica_vence
             : null,
         caat_vence: formData.caat_vence ? formData.caat_vence : null,
-      });
+
+        // ✅ folios (si quieres null cuando venga vacío)
+        permiso_sct_folio: formData.permiso_sct_folio
+          ? formData.permiso_sct_folio
+          : null,
+        caat_folio: formData.caat_folio ? formData.caat_folio : null,
+        tarjeta_circulacion_folio: formData.tarjeta_circulacion_folio
+          ? formData.tarjeta_circulacion_folio
+          : null,
+      };
+
+      await unitService.update(unit.id, payload);
 
       toast({
         title: "Cambios guardados",
         description: "Datos actualizados correctamente.",
       });
 
-      // Actualizar vista local (igual, pero ahora también sincroniza documentos)
-      const updatedUnit: UnidadDetalle = {
+      // ✅ refresca vista local (y badges)
+      const updatedUnit: any = {
         ...unit,
-        ...formData,
-        year: parseInt(formData.year),
-        // Si tu UnidadDetalle NO trae estas props tipadas, puedes removerlas;
-        // pero normalmente vienen del backend.
-        seguro_vence: formData.seguro_vence || null,
-        verificacion_humo_vence: formData.verificacion_humo_vence || null,
-        verificacion_fisico_mecanica_vence:
-          formData.verificacion_fisico_mecanica_vence || null,
-        caat_vence: formData.caat_vence || null,
-      } as any;
+        ...payload,
+        year: yearInt,
+      };
 
       setUnit(syncUnitDocumentsWithFormDates(updatedUnit, formData));
       setIsEditing(false);
     } catch (error) {
+      console.error("Error guardando cambios:", error);
       toast({
         title: "Error",
         description: "No se pudieron guardar los cambios.",
         variant: "destructive",
       });
     }
+  };
+
+  const handleCancel = () => {
+    if (!unit) return;
+
+    const u: any = unit;
+    setFormData({
+      numero_economico: u.numero_economico || "",
+      placas: u.placas || "",
+      vin: u.vin || "",
+      marca: u.marca || "",
+      modelo: u.modelo || "",
+      year: u.year?.toString?.() || "",
+
+      seguro_vence: toInputDate(u.seguro_vence),
+      verificacion_humo_vence: toInputDate(u.verificacion_humo_vence),
+      verificacion_fisico_mecanica_vence: toInputDate(
+        u.verificacion_fisico_mecanica_vence,
+      ),
+      caat_vence: toInputDate(u.caat_vence),
+
+      // ✅ CORRECCIÓN: también revierte folios
+      permiso_sct_folio: u.permiso_sct_folio || "",
+      caat_folio: u.caat_folio || "",
+      tarjeta_circulacion_folio: u.tarjeta_circulacion_folio || "",
+    });
+
+    setIsEditing(false);
   };
 
   if (isLoading || !unit) {
@@ -301,11 +385,13 @@ export default function FlotaUnidadDetalle() {
     );
   }
 
-  const expiredDocs = unit.documents.filter((d) => d.estatus === "vencido");
+  const expiredDocs = unit.documents.filter(
+    (d: any) => d.estatus === "vencido",
+  );
   const hasBlocks = expiredDocs.length > 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-24">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -322,12 +408,14 @@ export default function FlotaUnidadDetalle() {
             </p>
           </div>
         </div>
+
         <div className="flex items-center gap-3">
           {hasBlocks && (
             <Badge className="bg-status-danger text-white text-sm py-1 px-3 gap-2">
               <AlertTriangle className="h-4 w-4" /> UNIDAD BLOQUEADA
             </Badge>
           )}
+
           {!isEditing && (
             <Button
               variant="outline"
@@ -342,7 +430,7 @@ export default function FlotaUnidadDetalle() {
       </div>
 
       <Tabs defaultValue="expediente" className="w-full">
-        <TabsList className="backdrop-blur-xl bg-white/10 dark:bg-black/40 border border-white/20 p-1 rounded-xl grid grid-cols-4">
+        <TabsList className="backdrop-blur-xl bg-white/10 dark:bg-black/40 border border-white/20 p-1 rounded-xl grid grid-cols-2">
           <TabsTrigger
             value="expediente"
             className="data-[state=active]:bg-white/20 rounded-lg px-6"
@@ -366,6 +454,7 @@ export default function FlotaUnidadDetalle() {
                   <Wrench className="h-5 w-5" /> Información Técnica
                 </CardTitle>
               </CardHeader>
+
               <CardContent className="space-y-4">
                 {isEditing ? (
                   <div className="grid grid-cols-2 gap-4">
@@ -374,41 +463,53 @@ export default function FlotaUnidadDetalle() {
                       <Input
                         value={formData.numero_economico}
                         onChange={(e) =>
-                          setFormData({
-                            ...formData,
+                          setFormData((prev) => ({
+                            ...prev,
                             numero_economico: e.target.value,
-                          })
+                          }))
                         }
                         className="bg-white/5"
                       />
                     </div>
+
                     <div className="space-y-2">
                       <Label>Placas</Label>
                       <Input
                         value={formData.placas}
                         onChange={(e) =>
-                          setFormData({ ...formData, placas: e.target.value })
+                          setFormData((prev) => ({
+                            ...prev,
+                            placas: e.target.value,
+                          }))
                         }
                         className="bg-white/5"
                       />
                     </div>
+
                     <div className="space-y-2 col-span-2">
                       <Label>VIN</Label>
                       <Input
                         value={formData.vin}
                         onChange={(e) =>
-                          setFormData({ ...formData, vin: e.target.value })
+                          setFormData((prev) => ({
+                            ...prev,
+                            vin: e.target.value,
+                          }))
                         }
                         className="bg-white/5"
                       />
                     </div>
+
                     <div className="space-y-2">
                       <Label>Marca</Label>
                       <Input
                         list="marcas-list"
                         value={formData.marca}
                         onChange={(e) =>
-                          setFormData({ ...formData, marca: e.target.value })
+                          setFormData((prev) => ({
+                            ...prev,
+                            marca: e.target.value,
+                          }))
                         }
                         className="bg-white/5"
                         placeholder="Seleccione o escriba"
@@ -420,23 +521,31 @@ export default function FlotaUnidadDetalle() {
                         <option value="Volvo" />
                       </datalist>
                     </div>
+
                     <div className="space-y-2">
                       <Label>Año</Label>
                       <Input
                         type="number"
                         value={formData.year}
                         onChange={(e) =>
-                          setFormData({ ...formData, year: e.target.value })
+                          setFormData((prev) => ({
+                            ...prev,
+                            year: e.target.value,
+                          }))
                         }
                         className="bg-white/5"
                       />
                     </div>
+
                     <div className="space-y-2 col-span-2">
                       <Label>Modelo</Label>
                       <Input
                         value={formData.modelo}
                         onChange={(e) =>
-                          setFormData({ ...formData, modelo: e.target.value })
+                          setFormData((prev) => ({
+                            ...prev,
+                            modelo: e.target.value,
+                          }))
                         }
                         className="bg-white/5"
                       />
@@ -476,9 +585,10 @@ export default function FlotaUnidadDetalle() {
             </Card>
 
             {/* Documentos */}
-
             <Card
-              className={`backdrop-blur-xl bg-white/10 dark:bg-black/40 shadow-2xl lg:col-span-8 ${hasBlocks ? "border-status-danger border-2" : "border-white/50"}`}
+              className={`backdrop-blur-xl bg-white/10 dark:bg-black/40 shadow-2xl lg:col-span-8 ${
+                hasBlocks ? "border-status-danger border-2" : "border-white/50"
+              }`}
             >
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -493,9 +603,12 @@ export default function FlotaUnidadDetalle() {
                   unitEconomico={unit.numero_economico}
                   docType="poliza_seguro"
                   docLabel="Póliza de Seguro"
-                  currentUrl={unit.poliza_seguro_url}
+                  currentUrl={(unit as any).poliza_seguro_url}
                   onUploadSuccess={(url) =>
-                    setUnit({ ...unit, poliza_seguro_url: url })
+                    setUnit((prev: any) => ({
+                      ...prev,
+                      poliza_seguro_url: url,
+                    }))
                   }
                   statusBadge={getDateBadge(formData.seguro_vence)}
                   dateInput={
@@ -509,10 +622,10 @@ export default function FlotaUnidadDetalle() {
                         value={formData.seguro_vence}
                         disabled={!isEditing}
                         onChange={(e) =>
-                          setFormData({
-                            ...formData,
+                          setFormData((prev) => ({
+                            ...prev,
                             seguro_vence: e.target.value,
-                          })
+                          }))
                         }
                       />
                     </div>
@@ -525,9 +638,12 @@ export default function FlotaUnidadDetalle() {
                   unitEconomico={unit.numero_economico}
                   docType="verificacion_humo"
                   docLabel="Verificación de Emisiones"
-                  currentUrl={unit.verificacion_humo_url}
+                  currentUrl={(unit as any).verificacion_humo_url}
                   onUploadSuccess={(url) =>
-                    setUnit({ ...unit, verificacion_humo_url: url })
+                    setUnit((prev: any) => ({
+                      ...prev,
+                      verificacion_humo_url: url,
+                    }))
                   }
                   statusBadge={getDateBadge(formData.verificacion_humo_vence)}
                   dateInput={
@@ -541,10 +657,10 @@ export default function FlotaUnidadDetalle() {
                         value={formData.verificacion_humo_vence}
                         disabled={!isEditing}
                         onChange={(e) =>
-                          setFormData({
-                            ...formData,
+                          setFormData((prev) => ({
+                            ...prev,
                             verificacion_humo_vence: e.target.value,
-                          })
+                          }))
                         }
                       />
                     </div>
@@ -557,9 +673,12 @@ export default function FlotaUnidadDetalle() {
                   unitEconomico={unit.numero_economico}
                   docType="verificacion_fisico_mecanica"
                   docLabel="Verif. Físico-Mecánica"
-                  currentUrl={unit.verificacion_fisico_mecanica_url}
+                  currentUrl={(unit as any).verificacion_fisico_mecanica_url}
                   onUploadSuccess={(url) =>
-                    setUnit({ ...unit, verificacion_fisico_mecanica_url: url })
+                    setUnit((prev: any) => ({
+                      ...prev,
+                      verificacion_fisico_mecanica_url: url,
+                    }))
                   }
                   statusBadge={getDateBadge(
                     formData.verificacion_fisico_mecanica_vence,
@@ -575,26 +694,26 @@ export default function FlotaUnidadDetalle() {
                         value={formData.verificacion_fisico_mecanica_vence}
                         disabled={!isEditing}
                         onChange={(e) =>
-                          setFormData({
-                            ...formData,
+                          setFormData((prev) => ({
+                            ...prev,
                             verificacion_fisico_mecanica_vence: e.target.value,
-                          })
+                          }))
                         }
                       />
                     </div>
                   }
                 />
 
-                {/* CAAT */}
+                {/* CAAT + Folio */}
                 <div className="col-span-1">
                   <DocumentUploadManager
                     unitId={unit.id}
                     unitEconomico={unit.numero_economico}
                     docType="caat"
                     docLabel="Registro CAAT"
-                    currentUrl={unit.caat_url}
+                    currentUrl={(unit as any).caat_url}
                     onUploadSuccess={(url) =>
-                      setUnit({ ...unit, caat_url: url })
+                      setUnit((prev: any) => ({ ...prev, caat_url: url }))
                     }
                     statusBadge={getDateBadge(formData.caat_vence)}
                     dateInput={
@@ -608,16 +727,16 @@ export default function FlotaUnidadDetalle() {
                           value={formData.caat_vence}
                           disabled={!isEditing}
                           onChange={(e) =>
-                            setFormData({
-                              ...formData,
+                            setFormData((prev) => ({
+                              ...prev,
                               caat_vence: e.target.value,
-                            })
+                            }))
                           }
                         />
                       </div>
                     }
                   />
-                  {/* Campo Extra para Folio CAAT justo debajo */}
+
                   <div className="mt-2 flex items-center gap-2 px-1">
                     <Label className="text-xs w-auto whitespace-nowrap text-muted-foreground">
                       Folio CAAT:
@@ -627,43 +746,29 @@ export default function FlotaUnidadDetalle() {
                       value={formData.caat_folio}
                       disabled={!isEditing}
                       onChange={(e) =>
-                        setFormData({ ...formData, caat_folio: e.target.value })
+                        setFormData((prev) => ({
+                          ...prev,
+                          caat_folio: e.target.value,
+                        }))
                       }
                       placeholder="Ingrese folio..."
                     />
                   </div>
                 </div>
 
-                {/* Tarjeta Circulación */}
-                <DocumentUploadManager
-                  unitId={unit.id}
-                  unitEconomico={unit.numero_economico}
-                  docType="tarjeta_circulacion_folio"
-                  docLabel="Tarjeta de Circulación"
-                  currentUrl={unit.tarjeta_circulacion_url}
-                  onUploadSuccess={(url) =>
-                    setUnit({ ...unit, tarjeta_circulacion_url: url })
-                  }
-                  statusBadge={
-                    <Badge
-                      variant="outline"
-                      className="text-green-600 bg-green-50 border-green-200"
-                    >
-                      PERMANENTE
-                    </Badge>
-                  }
-                />
-
-                {/* Permiso SCT */}
+                {/* Tarjeta Circulación + Folio */}
                 <div className="col-span-1">
                   <DocumentUploadManager
                     unitId={unit.id}
                     unitEconomico={unit.numero_economico}
-                    docType="permiso_sct"
-                    docLabel="Permiso SCT"
-                    currentUrl={unit.permiso_sct_url}
+                    docType="tarjeta_circulacion_folio"
+                    docLabel="Tarjeta de Circulación"
+                    currentUrl={(unit as any).tarjeta_circulacion_url}
                     onUploadSuccess={(url) =>
-                      setUnit({ ...unit, permiso_sct_url: url })
+                      setUnit((prev: any) => ({
+                        ...prev,
+                        tarjeta_circulacion_url: url,
+                      }))
                     }
                     statusBadge={
                       <Badge
@@ -674,6 +779,51 @@ export default function FlotaUnidadDetalle() {
                       </Badge>
                     }
                   />
+
+                  {/* ✅ NUEVO: Folio Tarjeta */}
+                  <div className="mt-2 flex items-center gap-2 px-1">
+                    <Label className="text-xs w-auto whitespace-nowrap text-muted-foreground">
+                      Folio Tarjeta:
+                    </Label>
+                    <Input
+                      className="h-8 text-xs w-full bg-white/5"
+                      value={formData.tarjeta_circulacion_folio}
+                      disabled={!isEditing}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          tarjeta_circulacion_folio: e.target.value,
+                        }))
+                      }
+                      placeholder="Ingrese folio..."
+                    />
+                  </div>
+                </div>
+
+                {/* Permiso SCT + Folio */}
+                <div className="col-span-1">
+                  <DocumentUploadManager
+                    unitId={unit.id}
+                    unitEconomico={unit.numero_economico}
+                    docType="permiso_sct"
+                    docLabel="Permiso SCT"
+                    currentUrl={(unit as any).permiso_sct_url}
+                    onUploadSuccess={(url) =>
+                      setUnit((prev: any) => ({
+                        ...prev,
+                        permiso_sct_url: url,
+                      }))
+                    }
+                    statusBadge={
+                      <Badge
+                        variant="outline"
+                        className="text-green-600 bg-green-50 border-green-200"
+                      >
+                        PERMANENTE
+                      </Badge>
+                    }
+                  />
+
                   <div className="mt-2 flex items-center gap-2 px-1">
                     <Label className="text-xs w-auto whitespace-nowrap text-muted-foreground">
                       Folio SCT:
@@ -683,10 +833,10 @@ export default function FlotaUnidadDetalle() {
                       value={formData.permiso_sct_folio}
                       disabled={!isEditing}
                       onChange={(e) =>
-                        setFormData({
-                          ...formData,
+                        setFormData((prev) => ({
+                          ...prev,
                           permiso_sct_folio: e.target.value,
-                        })
+                        }))
                       }
                       placeholder="Ingrese folio..."
                     />
@@ -713,8 +863,8 @@ export default function FlotaUnidadDetalle() {
                     </tr>
                   </thead>
                   <tbody>
-                    {unit.tires.length > 0 ? (
-                      unit.tires.map((tire, i) => (
+                    {unit.tires?.length > 0 ? (
+                      unit.tires.map((tire: any, i: number) => (
                         <tr key={i} className="border-b border-white/5">
                           <td className="p-3">{tire.position}</td>
                           <td className="p-3">{tire.marca || "-"}</td>
@@ -761,32 +911,11 @@ export default function FlotaUnidadDetalle() {
               Editando unidad {formData.numero_economico}
             </p>
             <Separator orientation="vertical" className="h-8" />
-            <Button
-              variant="ghost"
-              onClick={() => {
-                //  Cancelar: revierte fechas a lo que tiene unit (sin recargar)
-                setFormData({
-                  numero_economico: unit.numero_economico,
-                  placas: unit.placas,
-                  vin: unit.vin || "",
-                  marca: unit.marca,
-                  modelo: unit.modelo,
-                  year: unit.year?.toString() || "",
-                  seguro_vence: toInputDate((unit as any).seguro_vence),
-                  verificacion_humo_vence: toInputDate(
-                    (unit as any).verificacion_humo_vence,
-                  ),
-                  verificacion_fisico_mecanica_vence: toInputDate(
-                    (unit as any).verificacion_fisico_mecanica_vence,
-                  ),
-                  caat_vence: toInputDate((unit as any).caat_vence),
-                });
-                setIsEditing(false);
-              }}
-              className="gap-2"
-            >
+
+            <Button variant="ghost" onClick={handleCancel} className="gap-2">
               <X className="h-4 w-4" /> Cancelar
             </Button>
+
             <Button onClick={handleSaveChanges} className="gap-2">
               <Save className="h-4 w-4" /> Guardar Cambios
             </Button>

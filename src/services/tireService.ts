@@ -4,7 +4,7 @@ import axiosClient from "@/api/axiosClient";
 
 export interface TireHistoryEvent {
   id: number;
-  fecha: string; // ISO String
+  fecha: string;
   tipo:
     | "compra"
     | "montaje"
@@ -15,7 +15,7 @@ export interface TireHistoryEvent {
     | "inspeccion"
     | "desecho";
   descripcion: string;
-  unidad?: string; // Placas o Económico para display
+  unidad?: string;
   posicion?: string;
   km?: number;
   costo?: number;
@@ -24,20 +24,20 @@ export interface TireHistoryEvent {
 
 export interface GlobalTire {
   id: number;
-  codigo_interno: string; // Antes codigoInterno
+  codigo_interno: string;
   marca: string;
   modelo: string;
   medida: string;
   dot: string;
 
   // Ubicación
-  unidad_actual_id?: number | null; // ID de la unidad
-  unidad_actual_economico?: string | null; // Nombre de la unidad (para mostrar)
+  unidad_actual_id?: number | null;
+  unidad_actual_economico?: string | null;
   posicion?: string | null;
 
   // Estado
   estado: "nuevo" | "usado" | "renovado" | "desecho";
-  estado_fisico: "buena" | "regular" | "mala"; // Antes estadoFisico
+  estado_fisico: "buena" | "regular" | "mala";
   profundidad_actual: number;
   profundidad_original: number;
   km_recorridos: number;
@@ -51,49 +51,45 @@ export interface GlobalTire {
   historial?: TireHistoryEvent[];
 }
 
-// --- Payloads para acciones ---
-
 export interface AssignTirePayload {
-  unidad_id: number | null; // ID real de la unidad
+  unidad_id: number | null;
   posicion: string | null;
   notas?: string;
 }
 
 export interface MaintenanceTirePayload {
-  tipo: string; // reparacion, renovado, desecho
+  tipo: string;
   costo: number;
   descripcion: string;
 }
 
-// --- Servicio ---
+// --- SERVICIO ACTUALIZADO ---
 
 export const tireService = {
-  // Obtener todas las llantas
+  // Obtener todas
   getAll: async (): Promise<GlobalTire[]> => {
     const { data } = await axiosClient.get("/tires");
     return data;
   },
 
-  // Obtener una sola (con historial completo)
+  // Obtener una
   getById: async (id: number): Promise<GlobalTire> => {
     const { data } = await axiosClient.get(`/tires/${id}`);
     return data;
   },
 
-  // Crear nueva llanta
-  create: async (
-    tire: Omit<GlobalTire, "id" | "historial">,
-  ): Promise<GlobalTire> => {
+  // Crear
+  create: async (tire: any): Promise<GlobalTire> => {
     const { data } = await axiosClient.post("/tires", tire);
     return data;
   },
 
-  // Asignar / Montar / Desmontar
+  // Asignar
   assign: async (id: number, payload: AssignTirePayload): Promise<void> => {
     await axiosClient.post(`/tires/${id}/assign`, payload);
   },
 
-  // Registrar Mantenimiento
+  // Mantenimiento
   maintenance: async (
     id: number,
     payload: MaintenanceTirePayload,
@@ -101,7 +97,15 @@ export const tireService = {
     await axiosClient.post(`/tires/${id}/maintenance`, payload);
   },
 
-  // Eliminar (solo si no tiene historial crítico, usualmente se usa desecho)
+  // --- NUEVOS MÉTODOS ---
+
+  // Actualizar (Editar)
+  update: async (id: number, data: any): Promise<GlobalTire> => {
+    const { data: res } = await axiosClient.put(`/tires/${id}`, data);
+    return res;
+  },
+
+  // Eliminar
   delete: async (id: number): Promise<void> => {
     await axiosClient.delete(`/tires/${id}`);
   },

@@ -1,5 +1,3 @@
-// Archivo: src/hooks/useTires.ts
-
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import {
@@ -33,15 +31,15 @@ export const useTires = () => {
     fetchTires();
   }, [fetchTires]);
 
-  // Acción: Asignar / Rotar
+  // --- ACCIONES ---
+
+  // 1. Asignar / Rotar
   const assignTire = async (tireId: number, payload: AssignTirePayload) => {
     try {
       await tireService.assign(tireId, payload);
-
       const accion = payload.unidad_id ? "asignada" : "enviada a almacén";
       toast.success(`Llanta ${accion} correctamente`);
-
-      fetchTires(); // Recargar datos
+      fetchTires();
       return true;
     } catch (error: unknown) {
       let msg = "Error al asignar llanta";
@@ -53,7 +51,7 @@ export const useTires = () => {
     }
   };
 
-  // Acción: Mantenimiento
+  // 2. Mantenimiento
   const registerMaintenance = async (
     tireId: number,
     payload: MaintenanceTirePayload,
@@ -73,7 +71,7 @@ export const useTires = () => {
     }
   };
 
-  // Acción: Crear
+  // 3. Crear
   const createTire = async (tireData: any) => {
     try {
       await tireService.create(tireData);
@@ -86,6 +84,34 @@ export const useTires = () => {
     }
   };
 
+  // 4. Actualizar (NUEVO)
+  const updateTire = async (id: number, data: any) => {
+    try {
+      await tireService.update(id, data);
+      toast.success("Llanta actualizada correctamente");
+      fetchTires();
+      return true;
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || "Error al actualizar llanta");
+      return false;
+    }
+  };
+
+  // 5. Eliminar (NUEVO)
+  const deleteTire = async (id: number) => {
+    try {
+      await tireService.delete(id);
+      toast.success("Llanta eliminada del sistema");
+      fetchTires();
+      return true;
+    } catch (error: any) {
+      toast.error(
+        error.response?.data?.detail || "No se puede eliminar la llanta",
+      );
+      return false;
+    }
+  };
+
   return {
     tires,
     isLoading,
@@ -93,5 +119,7 @@ export const useTires = () => {
     assignTire,
     registerMaintenance,
     createTire,
+    updateTire,
+    deleteTire,
   };
 };

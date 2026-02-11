@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -18,10 +18,10 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { ArrowRightLeft, Truck, MapPin } from "lucide-react";
+import { ArrowRightLeft, Truck, MapPin, Loader2 } from "lucide-react";
 
 import { GlobalTire, TIRE_POSITIONS } from "./types";
-import { useUnits } from "@/hooks/useUnits";
+import { useUnits } from "@/hooks/useUnits"; // <--- TU HOOK REAL
 
 interface AssignTireModalProps {
   tire: GlobalTire | null;
@@ -41,63 +41,61 @@ export function AssignTireModal({
   onOpenChange,
   onAssign,
 }: AssignTireModalProps) {
-  const { unidades } = useUnits();
+  // 1. Consumir hook de unidades
+  const { unidades, isLoading: loadingUnits } = useUnits();
 
   const [selectedUnit, setSelectedUnit] = useState<string>("");
   const [selectedPosition, setSelectedPosition] = useState<string>("");
   const [notas, setNotas] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Unidades disponibles (si tu backend maneja status, filtramos "disponible")
-  const unidadesSelectables = useMemo(() => {
-    // Si no existe status en tu tipo de unidad, simplemente quita el filtro.
-    return (unidades || []).filter(
-      (u: any) => !u.status || u.status === "disponible",
-    );
+  // Filtramos unidades (opcional: solo mostrar activas si quisieras)
+  const unidadesList = useMemo(() => {
+    return unidades || [];
   }, [unidades]);
 
-  // reset al abrir/cambiar llanta
+  // Reset al abrir
   useEffect(() => {
     if (open) {
       setSelectedUnit("");
       setSelectedPosition("");
       setNotas("");
+      setIsSubmitting(false);
     }
   }, [open, tire?.id]);
 
   if (!tire) return null;
 
-  const isCurrentlyMounted = tire.unidadActual !== null;
+  const isCurrentlyMounted = !!tire.unidad_actual_id;
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (selectedUnit === "almacen") {
-      onAssign(tire.id, null, null, notas);
-      toast.success(`Llanta ${tire.codigoInterno} enviada a almacén`);
+      // Enviar a Stock
+      setIsSubmitting(true);
+      await onAssign(tire.id.toString(), null, null, notas);
+      setIsSubmitting(false);
+      onOpenChange(false);
     } else if (selectedUnit && selectedPosition) {
-      const unit = unidadesSelectables.find(
-        (u: any) => u.id?.toString() === selectedUnit,
-      );
+      // Montar en Unidad
+      const unit = unidadesList.find((u) => u.id.toString() === selectedUnit);
       const position = TIRE_POSITIONS.find((p) => p.id === selectedPosition);
 
-      onAssign(
-        tire.id,
-        selectedUnit, // se envía como string (si tu backend requiere number, aquí haces parseInt)
-        position?.label || selectedPosition,
+      setIsSubmitting(true);
+      await onAssign(
+        tire.id.toString(),
+        selectedUnit, // Enviamos ID como string, el padre lo parsea
+        position?.label || selectedPosition, // Enviamos el Label ("Eje 1 Izq")
         notas,
       );
 
       toast.success(
-        `Llanta ${tire.codigoInterno} asignada a ${unit?.numero_economico || selectedUnit} - ${position?.label || selectedPosition}`,
+        `Llanta asignada a ${unit?.numero_economico} en ${position?.label}`,
       );
+      setIsSubmitting(false);
+      onOpenChange(false);
     } else {
-      toast.error("Selecciona unidad y posición");
-      return;
+      toast.error("Selecciona una unidad y una posición válida");
     }
-
-    // Reset form
-    setSelectedUnit("");
-    setSelectedPosition("");
-    setNotas("");
-    onOpenChange(false);
   };
 
   return (
@@ -109,66 +107,89 @@ export function AssignTireModal({
             Asignar / Rotar Llanta
           </DialogTitle>
           <DialogDescription>
-            {tire.codigoInterno} - {tire.marca} {tire.modelo}
+            {tire.codigo_interno} - {tire.marca} {tire.medida}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* Current Location */}
-          <div className="p-3 bg-muted rounded-lg">
-            <p className="text-sm text-muted-foreground mb-1">
-              Ubicación actual:
-            </p>
-            <p className="font-medium">
-              {isCurrentlyMounted
-                ? `${tire.unidadActual} - ${tire.posicion}`
-                : "En Almacén / Stock"}
-            </p>
+          {/* Ubicación Actual */}
+          <div className="p-3 bg-muted rounded-lg flex items-center justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground uppercase font-bold">
+                Ubicación Actual
+              </p>
+              <p className="text-sm font-medium mt-1">
+                {isCurrentlyMounted
+                  ? `${tire.unidad_actual_economico} - ${tire.posicion}`
+                  : "📦 En Almacén"}
+              </p>
+            </div>
+            {isCurrentlyMounted && (
+              <Badge variant="secondary" className="text-xs">
+                Montada
+              </Badge>
+            )}
           </div>
 
-          {/* New Unit */}
+          {/* Selector de Unidad */}
           <div className="space-y-2">
             <Label className="flex items-center gap-2">
               <Truck className="h-4 w-4" />
-              Nueva Unidad
+              Nueva Ubicación (Unidad)
             </Label>
 
             <Select
               value={selectedUnit}
               onValueChange={(v) => {
                 setSelectedUnit(v);
-                // si cambian unidad, resetea posición
                 if (v === "almacen") setSelectedPosition("");
               }}
+              disabled={loadingUnits || isSubmitting}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Seleccionar unidad..." />
+                <SelectValue
+                  placeholder={
+                    loadingUnits
+                      ? "Cargando unidades..."
+                      : "Seleccionar destino..."
+                  }
+                />
               </SelectTrigger>
 
               <SelectContent>
-                <SelectItem value="almacen">📦 Enviar a Almacén</SelectItem>
+                <SelectItem
+                  value="almacen"
+                  className="text-amber-600 font-medium"
+                >
+                  📦 Desmontar / Enviar a Almacén
+                </SelectItem>
 
-                {unidadesSelectables.map((u: any) => (
+                {/* Separador visual */}
+                <div className="h-px bg-muted my-1 mx-2" />
+
+                {unidadesList.map((u) => (
                   <SelectItem key={u.id} value={u.id.toString()}>
                     {u.numero_economico}
-                    {u.marca ? ` - ${u.marca}` : ""}
-                    {u.tipo ? ` (${u.tipo})` : ""}
+                    <span className="text-muted-foreground ml-2 text-xs">
+                      {u.marca} {u.placas ? `(${u.placas})` : ""}
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
 
-          {/* Position - only show if unit selected and not almacen */}
+          {/* Selector de Posición (Solo si se elige unidad) */}
           {selectedUnit && selectedUnit !== "almacen" && (
-            <div className="space-y-2">
+            <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
               <Label className="flex items-center gap-2">
                 <MapPin className="h-4 w-4" />
-                Posición
+                Posición en el Vehículo
               </Label>
               <Select
                 value={selectedPosition}
                 onValueChange={setSelectedPosition}
+                disabled={isSubmitting}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccionar posición..." />
@@ -184,25 +205,44 @@ export function AssignTireModal({
             </div>
           )}
 
-          {/* Notes */}
+          {/* Notas */}
           <div className="space-y-2">
-            <Label>Notas (opcional)</Label>
+            <Label>Notas / Observaciones</Label>
             <Textarea
-              placeholder="Razón de la rotación, observaciones..."
+              placeholder="Razón del cambio, condición, etc."
               value={notas}
               onChange={(e) => setNotas(e.target.value)}
               rows={2}
+              disabled={isSubmitting}
             />
           </div>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={isSubmitting}
+          >
             Cancelar
           </Button>
-          <Button onClick={handleSubmit}>Confirmar Asignación</Button>
+          <Button onClick={handleSubmit} disabled={isSubmitting}>
+            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Confirmar Movimiento
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Importar Badge localmente si no está global
+function Badge({ className, variant, children }: any) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${className} ${variant === "secondary" ? "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80" : ""}`}
+    >
+      {children}
+    </span>
   );
 }
