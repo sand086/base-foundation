@@ -1,8 +1,8 @@
 // src/pages/ProveedoresCxP.tsx
-// ✅ Versión SIN datos fake: usa hooks/servicios (DB) en lugar de mockSuppliers/initialPayableInvoices/bankAccounts/initialPayments
-// ✅ Mantiene el mismo UI/UX (Tabs, KPIs, tablas, modales)
-// ✅ Soporta prefill desde Compras por URL params
-// ✅ Aplana pagos desde invoices.payments (tab "Pagos")
+//  Versión SIN datos fake: usa hooks/servicios (DB) en lugar de mockSuppliers/initialPayableInvoices/bankAccounts/initialPayments
+//  Mantiene el mismo UI/UX (Tabs, KPIs, tablas, modales)
+//  Soporta prefill desde Compras por URL params
+//  Aplana pagos desde invoices.payments (tab "Pagos")
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -50,7 +50,7 @@ import { RegisterExpenseModal } from "@/features/cxp/RegisterExpenseModal";
 import { InvoiceDetailSheet } from "@/features/cxp/InvoiceDetailSheet";
 import { RegisterPaymentModal } from "@/features/cxp/RegisterPaymentModal";
 
-// ✅ Tipos & helpers (ajusta si tu proyecto ya los tiene)
+//  Tipos & helpers (ajusta si tu proyecto ya los tiene)
 import {
   PayableInvoice,
   InvoicePayment,
@@ -59,7 +59,7 @@ import {
   getClasificacionColor,
 } from "@/features/cxp/types";
 
-// ✅ Hooks reales (DB/API) — crea/ajusta según tus endpoints
+//  Hooks reales (DB/API) — crea/ajusta según tus endpoints
 import { useSuppliers } from "@/hooks/useSuppliers";
 import { useBankAccounts } from "@/hooks/useBankAccounts";
 
@@ -100,7 +100,7 @@ const parseDateSafe = (v: unknown): Date | null => {
 export default function ProveedoresCxP() {
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // ✅ Data real desde DB/API
+  //  Data real desde DB/API
   const {
     suppliers,
     invoices,
@@ -137,7 +137,7 @@ export default function ProveedoresCxP() {
   const [prefillData, setPrefillData] = useState<PrefillData | null>(null);
 
   /**
-   * ✅ Prefill desde Compras vía URL params:
+   *  Prefill desde Compras vía URL params:
    * /cxp?fromCompras=true&proveedor=...&proveedorId=...&concepto=...&monto=...&ordenId=...&ordenFolio=...
    */
   useEffect(() => {
@@ -163,7 +163,7 @@ export default function ProveedoresCxP() {
     }
   }, [searchParams, setSearchParams]);
 
-  // ✅ KPIs (usa snake_case en invoices si así viene de API)
+  //  KPIs (usa snake_case en invoices si así viene de API)
   const kpis = useMemo(() => {
     const totalVencido = invoices
       .filter((inv) => getInvoiceStatusInfo(inv).status === "danger")
@@ -196,7 +196,7 @@ export default function ProveedoresCxP() {
     return { totalVencido, totalPorPagar, totalParcial, fromComprasCount };
   }, [invoices]);
 
-  // ✅ Filters
+  //  Filters
   const filteredSuppliers = useMemo(() => {
     const q = safeLower(searchCatalog);
     return (suppliers as Supplier[]).filter((s) => {
@@ -218,7 +218,7 @@ export default function ProveedoresCxP() {
     });
   }, [invoices, searchCxP]);
 
-  // ✅ Aplanar pagos desde invoices.payments (DB)
+  //  Aplanar pagos desde invoices.payments (DB)
   const allPayments = useMemo(() => {
     const rows =
       invoices.flatMap((inv) => {
@@ -253,7 +253,7 @@ export default function ProveedoresCxP() {
     });
   }, [invoices]);
 
-  // ✅ Acciones
+  //  Acciones
   const handleCreateInvoice = async (invoiceData: any) => {
     // invoiceData viene del modal (tu modal ya debe enviar snake_case o tú mapeas aquí)
     const ok = await createInvoice(invoiceData);
@@ -775,7 +775,7 @@ export default function ProveedoresCxP() {
         open={isPaymentModalOpen}
         onOpenChange={setIsPaymentModalOpen}
         invoice={selectedInvoice as any}
-        bankAccounts={bankAccounts as any} // ✅ pásalo al modal para evitar bankAccounts fake
+        bankAccounts={bankAccounts as any} //  pásalo al modal para evitar bankAccounts fake
         onSubmit={handleRegisterPayment}
       />
     </div>

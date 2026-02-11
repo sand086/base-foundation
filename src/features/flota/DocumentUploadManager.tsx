@@ -25,7 +25,7 @@ interface Props {
   currentUrl?: string | null;
   onUploadSuccess: (newUrl: string) => void;
   statusBadge?: React.ReactNode;
-  // ✅ NUEVO: Recibe el input de fecha para renderizarlo dentro
+  //  NUEVO: Recibe el input de fecha para renderizarlo dentro
   dateInput?: React.ReactNode;
 }
 
@@ -89,12 +89,12 @@ export function DocumentUploadManager({
             <Label className="font-bold text-sm text-foreground/90">
               {docLabel}
             </Label>
-            {/* ✅ ESTATUS AQUÍ: Muy visible al lado del nombre */}
+            {/*  ESTATUS AQUÍ: Muy visible al lado del nombre */}
             {statusBadge}
           </div>
         </div>
 
-        {/* ✅ BOTÓN HISTORIAL (Color Azul Claro) */}
+        {/*  BOTÓN HISTORIAL (Color Azul Claro) */}
         <Dialog
           open={showHistory}
           onOpenChange={(open) => {
@@ -193,10 +193,10 @@ export function DocumentUploadManager({
           </Label>
         </div>
 
-        {/* ✅ CAMPO DE FECHA (Integrado aquí para que se vea junto) */}
+        {/*  CAMPO DE FECHA (Integrado aquí para que se vea junto) */}
         {dateInput && <div className="flex-1 min-w-[130px]">{dateInput}</div>}
 
-        {/* ✅ BOTÓN VER ACTUAL (Color Verde/Esmeralda) */}
+        {/*  BOTÓN VER ACTUAL (Color Verde/Esmeralda) */}
         {currentUrl && (
           <Button
             variant="default"

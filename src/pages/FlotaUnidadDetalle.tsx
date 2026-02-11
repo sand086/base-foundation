@@ -192,7 +192,7 @@ export default function FlotaUnidadDetalle() {
           marca: apiData.marca,
           modelo: apiData.modelo,
           year: apiData.year?.toString() || "",
-          // ✅ NUEVO: fechas de documentos a formato input date
+          //  NUEVO: fechas de documentos a formato input date
           seguro_vence: toInputDate(apiData.seguro_vence),
           verificacion_humo_vence: toInputDate(apiData.verificacion_humo_vence),
           verificacion_fisico_mecanica_vence: toInputDate(
@@ -214,7 +214,7 @@ export default function FlotaUnidadDetalle() {
     loadUnit();
   }, [id, navigate]);
 
-  // ✅ Helper: actualiza vencimientos/estatus dentro de unit.documents (para bloqueo/badges)
+  //  Helper: actualiza vencimientos/estatus dentro de unit.documents (para bloqueo/badges)
   const syncUnitDocumentsWithFormDates = (
     currentUnit: UnidadDetalle,
     fd: typeof formData,
@@ -251,7 +251,7 @@ export default function FlotaUnidadDetalle() {
         modelo: formData.modelo,
         year: parseInt(formData.year),
 
-        // ✅ NUEVO: vigencias (si se dejan vacías -> null)
+        //  NUEVO: vigencias (si se dejan vacías -> null)
         seguro_vence: formData.seguro_vence ? formData.seguro_vence : null,
         verificacion_humo_vence: formData.verificacion_humo_vence
           ? formData.verificacion_humo_vence
@@ -764,7 +764,7 @@ export default function FlotaUnidadDetalle() {
             <Button
               variant="ghost"
               onClick={() => {
-                // ✅ Cancelar: revierte fechas a lo que tiene unit (sin recargar)
+                //  Cancelar: revierte fechas a lo que tiene unit (sin recargar)
                 setFormData({
                   numero_economico: unit.numero_economico,
                   placas: unit.placas,

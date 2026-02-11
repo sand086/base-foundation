@@ -1,12 +1,12 @@
 // src/features/cxp/RegisterExpenseModal.tsx
-// ✅ ALINEADO a versión "real DB" (snake_case payload) + sin mocks (mockTrips/mockUnits/defaultIndirectCategories/data fake)
-// ✅ Soporta: crear + editar
-// ✅ Prefill desde Compras (proveedorId / proveedor) y mantiene orden_compra_*
-// ✅ Calcula fecha_vencimiento con calculateDueDate(fecha_emision, dias_credito)
-// ✅ Bloquea proveedor/monto si la factura ya tiene pagos o está pagada/parcial
-// ✅ Campos condicionales por clasificación (viaje_id / unidad_id / categoria_indirecto_id)
-// ✅ Manejo de categorías indirectas: lista desde props (DB) + crear categoría desde props callback (opcional)
-// ✅ Adjuntos PDF/XML: sube archivos vía callbacks (opcional) o guarda File en estado (sin “file.name” fake)
+//  ALINEADO a versión "real DB" (snake_case payload) + sin mocks (mockTrips/mockUnits/defaultIndirectCategories/data fake)
+//  Soporta: crear + editar
+//  Prefill desde Compras (proveedorId / proveedor) y mantiene orden_compra_*
+//  Calcula fecha_vencimiento con calculateDueDate(fecha_emision, dias_credito)
+//  Bloquea proveedor/monto si la factura ya tiene pagos o está pagada/parcial
+//  Campos condicionales por clasificación (viaje_id / unidad_id / categoria_indirecto_id)
+//  Manejo de categorías indirectas: lista desde props (DB) + crear categoría desde props callback (opcional)
+//  Adjuntos PDF/XML: sube archivos vía callbacks (opcional) o guarda File en estado (sin “file.name” fake)
 
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -38,7 +38,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-// ✅ Reusa tus helpers/tipos (ajusta rutas si cambian)
+//  Reusa tus helpers/tipos (ajusta rutas si cambian)
 import {
   PayableInvoice,
   calculateDueDate,
@@ -128,33 +128,33 @@ interface RegisterExpenseModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 
-  // ✅ ahora la página decide si crea o actualiza (según editInvoice)
+  //  ahora la página decide si crea o actualiza (según editInvoice)
   onSubmit: (payload: RegisterExpensePayload) => void | Promise<void>;
 
   suppliers: Supplier[];
 
-  // ✅ para edición (DB invoice)
+  //  para edición (DB invoice)
   editInvoice?: PayableInvoice | null;
 
-  // ✅ prefill desde Compras
+  //  prefill desde Compras
   prefillData?: PrefillData | null;
 
-  // ✅ datos reales para selects (sin mocks)
+  //  datos reales para selects (sin mocks)
   trips?: TripLite[];
   units?: UnitLite[];
   indirectCategories?: IndirectCategory[];
 
-  // ✅ si quieres permitir crear categorías en DB desde aquí:
+  //  si quieres permitir crear categorías en DB desde aquí:
   onCreateIndirectCategory?: (input: {
     nombre: string;
     tipo: "fijo" | "variable";
   }) => Promise<IndirectCategory | null>;
 
-  // ✅ si quieres subir archivos desde aquí:
+  //  si quieres subir archivos desde aquí:
   onUploadPdf?: (file: File) => Promise<UploadResult>;
   onUploadXml?: (file: File) => Promise<UploadResult>;
 
-  // ✅ opciones de días crédito (sin data.ts fake)
+  //  opciones de días crédito (sin data.ts fake)
   creditDaysOptions?: Array<{ value: number; label: string }>;
 }
 

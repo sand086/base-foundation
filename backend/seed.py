@@ -237,7 +237,7 @@ def main():
         unit = seed_units(db)
         seed_operators_trips(db, unit)
         seed_tires(db, unit) # <--- Nueva función
-        print("\n✅ Seed completado con éxito.")
+        print("\n Seed completado con éxito.")
     except Exception as e:
         print(f"\n❌ Error: {e}")
         db.rollback()
