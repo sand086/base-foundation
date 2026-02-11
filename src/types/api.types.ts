@@ -75,6 +75,8 @@ export interface Unidad {
   verificacion_fisico_mecanica_url?: string | null;
   permiso_doble_articulado_url?: string | null;
 
+  tarjeta_circulacion_folio?: string | null;
+
   created_at?: string;
   updated_at?: string;
 }

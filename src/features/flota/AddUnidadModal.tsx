@@ -38,7 +38,7 @@ interface UnidadFormData {
   marca_motor: string;
   capacidad_carga: string;
   tipo_carga: string;
-  tarjeta_circulacion: string; // Input de texto (Folio) -> Se mapeará según lógica
+  tarjeta_circulacion_url: string;
   permiso_sct_folio: string; // Cambio a texto
   caat_folio: string;
   caat_vence: string;
@@ -49,6 +49,7 @@ interface UnidadFormData {
   verificacion_fisico_mecanica_vence: string;
   // verificacion_vence: string;
   permiso_sct_vence: string;
+  tarjeta_circulacion_folio: string;
 
   status: string;
 }
@@ -66,7 +67,7 @@ const emptyFormData: UnidadFormData = {
   marca_motor: "",
   capacidad_carga: "",
   tipo_carga: "",
-  tarjeta_circulacion: "",
+  tarjeta_circulacion_folio: "",
   seguro_vence: "",
   verificacion_humo_vence: "",
   verificacion_fisico_mecanica_vence: "",
@@ -75,6 +76,7 @@ const emptyFormData: UnidadFormData = {
   status: "disponible",
   caat_folio: "",
   caat_vence: "",
+  tarjeta_circulacion_url: "",
   // verificacion_vence: "",
 };
 
@@ -167,16 +169,20 @@ export function AddUnidadModal({
         marca_motor: unidadToEdit.marca_motor || "",
         capacidad_carga: unidadToEdit.capacidad_carga?.toString() || "",
         tipo_carga: unidadToEdit.tipo_carga || "",
-        // NOTA: Si el backend usa 'tarjeta_circulacion_url' para guardar el folio (hack), lo leemos de ahí
-        tarjeta_circulacion: unidadToEdit.tarjeta_circulacion_url || "",
 
-        // Fechas: Aseguramos string vacío si es null
+        tarjeta_circulacion_folio: unidadToEdit.tarjeta_circulacion_folio || "",
+        tarjeta_circulacion_url: unidadToEdit.tarjeta_circulacion_url || "",
+
+        permiso_sct_folio: unidadToEdit.permiso_sct_folio || "",
+        caat_folio: unidadToEdit.caat_folio || "",
+        caat_vence: unidadToEdit.caat_vence || "",
+        permiso_sct_vence: unidadToEdit.permiso_sct_vence || "",
+
         seguro_vence: unidadToEdit.seguro_vence || "",
         verificacion_humo_vence: unidadToEdit.verificacion_humo_vence || "",
         verificacion_fisico_mecanica_vence:
           unidadToEdit.verificacion_fisico_mecanica_vence || "",
-        verificacion_vence: unidadToEdit.verificacion_vence || "",
-        permiso_sct_vence: unidadToEdit.permiso_sct_vence || "",
+
         status: unidadToEdit.status,
       });
       setErrors({});
@@ -251,8 +257,11 @@ export function AddUnidadModal({
       capacidad_carga: cleanNumber(formData.capacidad_carga),
       tipo_carga: cleanString(formData.tipo_carga),
 
-      // Mapeamos el input "tarjeta_circulacion" al campo URL que el backend usa temporalmente
-      tarjeta_circulacion_url: cleanString(formData.tarjeta_circulacion),
+      // Mapeamos el input "tarjeta_circulacion_folio" al campo URL que el backend usa temporalmente
+      tarjeta_circulacion_url: cleanString(formData.tarjeta_circulacion_url),
+      tarjeta_circulacion_folio: cleanString(
+        formData.tarjeta_circulacion_folio,
+      ),
 
       seguro_vence: cleanDate(formData.seguro_vence),
       verificacion_humo_vence: cleanDate(formData.verificacion_humo_vence),
@@ -700,11 +709,11 @@ export function AddUnidadModal({
                       Folio Tarjeta Circulación
                     </Label>
                     <Input
-                      value={formData.tarjeta_circulacion}
+                      value={formData.tarjeta_circulacion_folio}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          tarjeta_circulacion: e.target.value,
+                          tarjeta_circulacion_folio: e.target.value,
                         })
                       }
                       className="h-8"

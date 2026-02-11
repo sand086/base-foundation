@@ -78,9 +78,9 @@ def create_unit(unit: schemas.UnitCreate, db: Session = Depends(get_db)):
     # 2. Preparar datos (Corregir nombres de campos que no coinciden)
     unit_data = unit.model_dump() # O unit.dict() en versiones viejas de Pydantic
     
-    # Mapeo manual: El esquema recibe 'tarjeta_circulacion', pero el modelo usa '_url'
-    if "tarjeta_circulacion" in unit_data:
-        unit_data["tarjeta_circulacion_url"] = unit_data.pop("tarjeta_circulacion")
+    # Mapeo manual: El esquema recibe 'tarjeta_circulacion_folio', pero el modelo usa '_url'
+    if "tarjeta_circulacion_folio" in unit_data:
+        unit_data["tarjeta_circulacion_url"] = unit_data.pop("tarjeta_circulacion_folio")
 
     # 3. Crear instancia del modelo
     db_unit = models.Unit(
@@ -286,7 +286,7 @@ async def upload_unit_document(
         unit.verificacion_humo_url = file_url
     elif doc_type == "verificacion_fisico_mecanica":
         unit.verificacion_fisico_mecanica_url = file_url
-    elif doc_type == "tarjeta_circulacion":
+    elif doc_type == "tarjeta_circulacion_folio":
         unit.tarjeta_circulacion_url = file_url
     elif doc_type == "permiso_sct":       # NUEVO
         unit.permiso_sct_url = file_url
@@ -396,7 +396,7 @@ async def upload_unit_document(
         unit.verificacion_humo_url = file_url
     elif doc_type == "verificacion_fisico_mecanica":
         unit.verificacion_fisico_mecanica_url = file_url
-    elif doc_type == "tarjeta_circulacion":
+    elif doc_type == "tarjeta_circulacion_folio":
         unit.tarjeta_circulacion_url = file_url
     elif doc_type == "permiso_sct":
         unit.permiso_sct_url = file_url

@@ -230,6 +230,8 @@ class Unit(Base):
     # ✅ NUEVO: URLs para subida de archivos
     permiso_sct_url = Column(String(500), nullable=True)
     caat_url = Column(String(500), nullable=True)
+    tarjeta_circulacion_folio = Column(String(50), nullable=True)
+
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -48,12 +48,13 @@ class UnitBase(BaseModel):
     permiso_doble_articulado_url: Optional[str] = None
     permiso_sct_url: Optional[str] = None
     caat_url: Optional[str] = None
+    tarjeta_circulacion_folio: Optional[str] = None
+
     
     
     
 class UnitCreate(UnitBase):
-    # En creación, algunos campos pueden ser opcionales o tener lógica extra
-    tarjeta_circulacion: Optional[str] = None  # Campo temporal para folio
+    pass
 
 class UnitUpdate(BaseModel):
     # Todos opcionales para PATCH
@@ -82,7 +83,8 @@ class UnitUpdate(BaseModel):
     caat_folio: Optional[str] = None
     permiso_sct_folio: Optional[str] = None
     
-    tarjeta_circulacion: Optional[str] = None
+    tarjeta_circulacion_folio: Optional[str] = None
+    tarjeta_circulacion_folio: Optional[str] = None
 
 class UnitResponse(UnitBase):
     id: int

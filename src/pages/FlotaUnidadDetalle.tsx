@@ -152,7 +152,7 @@ export default function FlotaUnidadDetalle() {
           },
           {
             name: "Tarjeta de Circulación",
-            key: "tarjeta_circulacion",
+            key: "tarjeta_circulacion_folio",
             url: apiData.tarjeta_circulacion_url,
             estatus: "vigente" as const,
             vencimiento: new Date().toISOString(), // Normalmente no vence anual igual que otros
@@ -638,7 +638,7 @@ export default function FlotaUnidadDetalle() {
                 <DocumentUploadManager
                   unitId={unit.id}
                   unitEconomico={unit.numero_economico}
-                  docType="tarjeta_circulacion"
+                  docType="tarjeta_circulacion_folio"
                   docLabel="Tarjeta de Circulación"
                   currentUrl={unit.tarjeta_circulacion_url}
                   onUploadSuccess={(url) =>
