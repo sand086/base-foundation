@@ -1,9 +1,9 @@
 // src/features/cxp/InvoiceDetailSheet.tsx
-// ✅ ALINEADO a la actualización "DB real" (snake_case)
-// ✅ Soporta invoice mezclado (snake_case o camelCase) sin romper
-// ✅ Historial de pagos: invoice.payments (DB) y compat invoice.pagos (legacy)
-// ✅ Adjuntos: pdf_url / xml_url (DB) y compat pdfUrl / xmlUrl (legacy)
-// ✅ Render consistente con tu UI (DataTable + StatusBadge)
+//  ALINEADO a la actualización "DB real" (snake_case)
+//  Soporta invoice mezclado (snake_case o camelCase) sin romper
+//  Historial de pagos: invoice.payments (DB) y compat invoice.pagos (legacy)
+//  Adjuntos: pdf_url / xml_url (DB) y compat pdfUrl / xmlUrl (legacy)
+//  Render consistente con tu UI (DataTable + StatusBadge)
 
 import {
   Sheet,

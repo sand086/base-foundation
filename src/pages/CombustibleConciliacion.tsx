@@ -182,11 +182,11 @@ export default function CombustibleConciliacion() {
         title:
           auditResult.estatus === "COBRO_OPERADOR"
             ? "⚠️ Vale de Cobro Generado"
-            : "✅ Viaje Conciliado",
+            : " Viaje Conciliado",
         description:
           auditResult.estatus === "COBRO_OPERADOR"
             ? `Diferencia de ${auditResult.diferenciaLitros.toFixed(
-                2
+                2,
               )} L detectada. Cargo aplicado al operador.`
             : "El viaje ha sido conciliado exitosamente sin diferencias significativas.",
         variant:
@@ -443,8 +443,8 @@ export default function CombustibleConciliacion() {
           auditResult?.esRoboSospechado
             ? "border-2 border-status-danger bg-status-danger-bg/30 shadow-lg shadow-status-danger/10"
             : auditResult?.estatus === "CONCILIADO"
-            ? "border-2 border-status-success bg-status-success-bg/30 shadow-lg shadow-status-success/10"
-            : "border border-border"
+              ? "border-2 border-status-success bg-status-success-bg/30 shadow-lg shadow-status-success/10"
+              : "border border-border"
         }`}
       >
         <CardHeader>
@@ -582,7 +582,7 @@ export default function CombustibleConciliacion() {
                     <CheckCircle className="h-6 w-6 text-status-success flex-shrink-0 mt-0.5" />
                     <div>
                       <h4 className="font-bold text-status-success">
-                        ✅ Auditoría Exitosa
+                        Auditoría Exitosa
                       </h4>
                       <p className="text-sm text-muted-foreground mt-1">
                         La diferencia de{" "}

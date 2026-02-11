@@ -215,7 +215,7 @@ class Unit(Base):
     verificacion_vence = Column(Date, nullable=True)
     permiso_sct_vence = Column(Date, nullable=True)
 
-    # ✅ NUEVO: Folios / CAAT
+    #  NUEVO: Folios / CAAT
     permiso_sct_folio = Column(String(50), nullable=True)
     caat_folio = Column(String(50), nullable=True)
     caat_vence = Column(Date, nullable=True)
@@ -227,7 +227,7 @@ class Unit(Base):
     verificacion_humo_url = Column(String(500), nullable=True)
     verificacion_fisico_mecanica_url = Column(String(500), nullable=True)
 
-    # ✅ NUEVO: URLs para subida de archivos
+    #  NUEVO: URLs para subida de archivos
     permiso_sct_url = Column(String(500), nullable=True)
     caat_url = Column(String(500), nullable=True)
     tarjeta_circulacion_folio = Column(String(50), nullable=True)

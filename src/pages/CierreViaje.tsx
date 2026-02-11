@@ -1,14 +1,14 @@
 import { useState } from "react";
-import { 
-  FileCheck, 
-  Camera, 
-  Fuel, 
-  CreditCard, 
-  CheckCircle, 
-  XCircle, 
-  Clock, 
-  Truck, 
-  User, 
+import {
+  FileCheck,
+  Camera,
+  Fuel,
+  CreditCard,
+  CheckCircle,
+  XCircle,
+  Clock,
+  Truck,
+  User,
   MapPin,
   AlertTriangle,
   DollarSign,
@@ -22,7 +22,13 @@ import {
   Plus,
   Award,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,9 +42,9 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { 
-  mockTripSettlement, 
-  TripSettlement, 
+import {
+  mockTripSettlement,
+  TripSettlement,
   ConceptoPago,
 } from "@/data/liquidacionData";
 import { SettlementReceiptModal } from "@/features/cierre/SettlementReceiptModal";
@@ -48,66 +54,68 @@ interface Checkpoint {
   title: string;
   description: string;
   icon: React.ElementType;
-  status: 'ok' | 'pending' | 'error';
+  status: "ok" | "pending" | "error";
   details?: string;
 }
 
 export default function CierreViaje() {
-  const [settlement, setSettlement] = useState<TripSettlement>(mockTripSettlement);
+  const [settlement, setSettlement] =
+    useState<TripSettlement>(mockTripSettlement);
   const [showReceipt, setShowReceipt] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const [showAddBonoDialog, setShowAddBonoDialog] = useState(false);
-  const [bonoAmount, setBonoAmount] = useState('');
-  const [bonoDescription, setBonoDescription] = useState('');
+  const [bonoAmount, setBonoAmount] = useState("");
+  const [bonoDescription, setBonoDescription] = useState("");
 
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([
     {
-      id: 'pod',
-      title: 'POD / Evidencias',
-      description: 'Prueba de entrega y fotografías',
+      id: "pod",
+      title: "POD / Evidencias",
+      description: "Prueba de entrega y fotografías",
       icon: Camera,
-      status: 'ok',
-      details: '3 fotos cargadas, firma digital recibida',
+      status: "ok",
+      details: "3 fotos cargadas, firma digital recibida",
     },
     {
-      id: 'combustible',
-      title: 'Combustible',
-      description: 'Conciliación ECM vs Ticket',
+      id: "combustible",
+      title: "Combustible",
+      description: "Conciliación ECM vs Ticket",
       icon: Fuel,
-      status: settlement.diferenciaLitros > 0 ? 'pending' : 'ok',
-      details: settlement.diferenciaLitros > 0 
-        ? `Exceso detectado: ${settlement.diferenciaLitros}L - Vale generado`
-        : 'Consumo dentro de tolerancia',
+      status: settlement.diferenciaLitros > 0 ? "pending" : "ok",
+      details:
+        settlement.diferenciaLitros > 0
+          ? `Exceso detectado: ${settlement.diferenciaLitros}L - Vale generado`
+          : "Consumo dentro de tolerancia",
     },
     {
-      id: 'casetas',
-      title: 'Casetas',
-      description: 'Cruces de caseta y pagos',
+      id: "casetas",
+      title: "Casetas",
+      description: "Cruces de caseta y pagos",
       icon: CreditCard,
-      status: 'ok',
-      details: '4 casetas registradas - $1,250 MXN',
+      status: "ok",
+      details: "4 casetas registradas - $1,250 MXN",
     },
   ]);
 
-  const allCheckpointsOk = checkpoints.every((cp) => cp.status === 'ok');
+  const allCheckpointsOk = checkpoints.every((cp) => cp.status === "ok");
 
   const toggleCheckpoint = (id: string) => {
     setCheckpoints((prev) =>
       prev.map((cp) =>
         cp.id === id
-          ? { ...cp, status: cp.status === 'ok' ? 'pending' : 'ok' }
-          : cp
-      )
+          ? { ...cp, status: cp.status === "ok" ? "pending" : "ok" }
+          : cp,
+      ),
     );
   };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'ok':
+      case "ok":
         return <CheckCircle className="h-8 w-8 text-status-success" />;
-      case 'pending':
+      case "pending":
         return <Clock className="h-8 w-8 text-status-warning" />;
-      case 'error':
+      case "error":
         return <XCircle className="h-8 w-8 text-status-danger" />;
       default:
         return <Clock className="h-8 w-8 text-muted-foreground" />;
@@ -116,11 +124,13 @@ export default function CierreViaje() {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'ok':
+      case "ok":
         return <Badge className="bg-status-success text-white">Completo</Badge>;
-      case 'pending':
-        return <Badge className="bg-status-warning text-black">Pendiente</Badge>;
-      case 'error':
+      case "pending":
+        return (
+          <Badge className="bg-status-warning text-black">Pendiente</Badge>
+        );
+      case "error":
         return <Badge className="bg-status-danger text-white">Error</Badge>;
       default:
         return <Badge variant="secondary">Desconocido</Badge>;
@@ -128,9 +138,9 @@ export default function CierreViaje() {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency: 'MXN',
+    return new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: "MXN",
     }).format(amount);
   };
 
@@ -147,9 +157,9 @@ export default function CierreViaje() {
 
     const newBono: ConceptoPago = {
       id: `CP-BONO-${Date.now()}`,
-      tipo: 'ingreso',
-      categoria: 'bono',
-      descripcion: bonoDescription.trim() || 'Bono adicional',
+      tipo: "ingreso",
+      categoria: "bono",
+      descripcion: bonoDescription.trim() || "Bono adicional",
       monto: amount,
       esAutomatico: false,
     };
@@ -166,47 +176,53 @@ export default function CierreViaje() {
     });
 
     setShowAddBonoDialog(false);
-    setBonoAmount('');
-    setBonoDescription('');
+    setBonoAmount("");
+    setBonoDescription("");
 
     toast({
-      title: "✅ Bono agregado",
+      title: " Bono agregado",
       description: `Se agregó un bono de ${formatCurrency(amount)} al operador.`,
     });
   };
 
   const handleAuthorizeAndClose = () => {
     setIsAnimating(true);
-    
+
     // Simulate authorization process
     setTimeout(() => {
-      setSettlement(prev => ({
+      setSettlement((prev) => ({
         ...prev,
-        estatus: 'liquidado',
+        estatus: "liquidado",
         fechaAutorizacion: new Date().toISOString(),
-        autorizadoPor: 'Admin TMS',
+        autorizadoPor: "Admin TMS",
       }));
-      
+
       setIsAnimating(false);
       setShowReceipt(true);
-      
+
       toast({
-        title: "✅ Viaje Liquidado Exitosamente",
+        title: " Viaje Liquidado Exitosamente",
         description: `El operador ${settlement.operadorNombre} recibirá ${formatCurrency(settlement.netoAPagar)}.`,
       });
     }, 1500);
   };
 
-  const ingresos = settlement.conceptos.filter(c => c.tipo === 'ingreso');
-  const deducciones = settlement.conceptos.filter(c => c.tipo === 'deduccion');
-  const fuelDeduction = deducciones.find(d => d.categoria === 'combustible');
-  const bonos = ingresos.filter(c => c.categoria === 'bono');
-  const anticipos = deducciones.filter(c => c.categoria === 'anticipo');
+  const ingresos = settlement.conceptos.filter((c) => c.tipo === "ingreso");
+  const deducciones = settlement.conceptos.filter(
+    (c) => c.tipo === "deduccion",
+  );
+  const fuelDeduction = deducciones.find((d) => d.categoria === "combustible");
+  const bonos = ingresos.filter((c) => c.categoria === "bono");
+  const anticipos = deducciones.filter((c) => c.categoria === "anticipo");
 
   // Calculate excess percentage
-  const excessPercentage = settlement.consumoEsperadoLitros > 0 
-    ? ((settlement.diferenciaLitros / settlement.consumoEsperadoLitros) * 100).toFixed(1)
-    : 0;
+  const excessPercentage =
+    settlement.consumoEsperadoLitros > 0
+      ? (
+          (settlement.diferenciaLitros / settlement.consumoEsperadoLitros) *
+          100
+        ).toFixed(1)
+      : 0;
 
   return (
     <div className="space-y-6">
@@ -214,7 +230,9 @@ export default function CierreViaje() {
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <FileCheck className="h-6 w-6" /> Cierre de Viaje y Liquidación
         </h1>
-        <p className="text-muted-foreground">Validación de checkpoints y cálculo de pago al operador</p>
+        <p className="text-muted-foreground">
+          Validación de checkpoints y cálculo de pago al operador
+        </p>
       </div>
 
       {/* Trip Summary */}
@@ -254,21 +272,26 @@ export default function CierreViaje() {
             </div>
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground">Kms Recorridos</p>
-              <p className="font-bold text-lg">{settlement.kmsRecorridos.toLocaleString()} km</p>
+              <p className="font-bold text-lg">
+                {settlement.kmsRecorridos.toLocaleString()} km
+              </p>
             </div>
             <div className="space-y-1 col-span-2">
               <p className="text-sm text-muted-foreground">Estatus</p>
-              <Badge 
+              <Badge
                 className={
-                  settlement.estatus === 'liquidado' 
-                    ? 'bg-status-success text-white' 
-                    : settlement.estatus === 'autorizado'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-status-warning text-black'
+                  settlement.estatus === "liquidado"
+                    ? "bg-status-success text-white"
+                    : settlement.estatus === "autorizado"
+                      ? "bg-blue-500 text-white"
+                      : "bg-status-warning text-black"
                 }
               >
-                {settlement.estatus === 'liquidado' ? 'Liquidado' : 
-                 settlement.estatus === 'autorizado' ? 'Autorizado' : 'Pendiente'}
+                {settlement.estatus === "liquidado"
+                  ? "Liquidado"
+                  : settlement.estatus === "autorizado"
+                    ? "Autorizado"
+                    : "Pendiente"}
               </Badge>
             </div>
           </div>
@@ -284,7 +307,8 @@ export default function CierreViaje() {
               ⚠️ Alerta de Consumo Excesivo - Conexión con Módulo Combustible
             </CardTitle>
             <CardDescription>
-              El sistema detectó que el consumo real excedió el consumo esperado para este viaje
+              El sistema detectó que el consumo real excedió el consumo esperado
+              para este viaje
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -293,7 +317,9 @@ export default function CierreViaje() {
                 <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
                   <Fuel className="h-4 w-4" /> Consumo Esperado
                 </div>
-                <p className="text-xl font-bold">{settlement.consumoEsperadoLitros} L</p>
+                <p className="text-xl font-bold">
+                  {settlement.consumoEsperadoLitros} L
+                </p>
                 <p className="text-xs text-muted-foreground">
                   {settlement.kmsRecorridos} km ÷ 3.2 km/L
                 </p>
@@ -302,7 +328,9 @@ export default function CierreViaje() {
                 <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
                   <Droplets className="h-4 w-4" /> Consumo Real (Tickets)
                 </div>
-                <p className="text-xl font-bold">{settlement.consumoRealLitros} L</p>
+                <p className="text-xl font-bold">
+                  {settlement.consumoRealLitros} L
+                </p>
                 <p className="text-xs text-muted-foreground">
                   Según cargas registradas
                 </p>
@@ -326,7 +354,8 @@ export default function CierreViaje() {
                   {formatCurrency(settlement.deduccionCombustible)}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {settlement.diferenciaLitros}L × {formatCurrency(settlement.precioPorLitro)}
+                  {settlement.diferenciaLitros}L ×{" "}
+                  {formatCurrency(settlement.precioPorLitro)}
                 </p>
               </div>
             </div>
@@ -339,41 +368,49 @@ export default function CierreViaje() {
         {checkpoints.map((checkpoint) => {
           const Icon = checkpoint.icon;
           return (
-            <Card 
+            <Card
               key={checkpoint.id}
               className={`cursor-pointer transition-all hover:shadow-md ${
-                checkpoint.status === 'ok' 
-                  ? 'border-status-success border-2 bg-status-success/5' 
-                  : checkpoint.status === 'pending'
-                  ? 'border-status-warning border-2 bg-status-warning/5'
-                  : 'border-status-danger border-2 bg-status-danger/5'
+                checkpoint.status === "ok"
+                  ? "border-status-success border-2 bg-status-success/5"
+                  : checkpoint.status === "pending"
+                    ? "border-status-warning border-2 bg-status-warning/5"
+                    : "border-status-danger border-2 bg-status-danger/5"
               }`}
               onClick={() => toggleCheckpoint(checkpoint.id)}
             >
               <CardContent className="pt-6">
                 <div className="flex items-start justify-between mb-4">
-                  <div className={`p-3 rounded-md ${
-                    checkpoint.status === 'ok' 
-                      ? 'bg-status-success/20' 
-                      : checkpoint.status === 'pending'
-                      ? 'bg-status-warning/20'
-                      : 'bg-status-danger/20'
-                  }`}>
-                    <Icon className={`h-8 w-8 ${
-                      checkpoint.status === 'ok' 
-                        ? 'text-status-success' 
-                        : checkpoint.status === 'pending'
-                        ? 'text-status-warning'
-                        : 'text-status-danger'
-                    }`} />
+                  <div
+                    className={`p-3 rounded-md ${
+                      checkpoint.status === "ok"
+                        ? "bg-status-success/20"
+                        : checkpoint.status === "pending"
+                          ? "bg-status-warning/20"
+                          : "bg-status-danger/20"
+                    }`}
+                  >
+                    <Icon
+                      className={`h-8 w-8 ${
+                        checkpoint.status === "ok"
+                          ? "text-status-success"
+                          : checkpoint.status === "pending"
+                            ? "text-status-warning"
+                            : "text-status-danger"
+                      }`}
+                    />
                   </div>
                   {getStatusIcon(checkpoint.status)}
                 </div>
                 <h3 className="font-bold text-lg mb-1">{checkpoint.title}</h3>
-                <p className="text-sm text-muted-foreground mb-3">{checkpoint.description}</p>
+                <p className="text-sm text-muted-foreground mb-3">
+                  {checkpoint.description}
+                </p>
                 <Separator className="my-3" />
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-muted-foreground">{checkpoint.details}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {checkpoint.details}
+                  </p>
                   {getStatusBadge(checkpoint.status)}
                 </div>
               </CardContent>
@@ -389,7 +426,8 @@ export default function CierreViaje() {
             <Banknote className="h-5 w-5" /> Liquidación del Operador
           </CardTitle>
           <CardDescription>
-            Cálculo: Pago Base + Bonos - Anticipos de Liquidación - Deducción Combustible = Neto a Pagar
+            Cálculo: Pago Base + Bonos - Anticipos de Liquidación - Deducción
+            Combustible = Neto a Pagar
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -401,12 +439,12 @@ export default function CierreViaje() {
                   <ArrowUpCircle className="h-5 w-5" />
                   INGRESOS
                 </div>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  variant="outline"
+                  size="sm"
                   className="gap-1"
                   onClick={() => setShowAddBonoDialog(true)}
-                  disabled={settlement.estatus === 'liquidado'}
+                  disabled={settlement.estatus === "liquidado"}
                 >
                   <Award className="h-4 w-4" />
                   Agregar Bono
@@ -414,22 +452,26 @@ export default function CierreViaje() {
               </div>
               <div className="space-y-2">
                 {ingresos.map((concepto, index) => (
-                  <div 
-                    key={concepto.id} 
+                  <div
+                    key={concepto.id}
                     className={`flex justify-between items-center p-3 rounded-lg border animate-in fade-in slide-in-from-left duration-300 ${
-                      concepto.categoria === 'bono' 
-                        ? 'bg-amber-50 border-amber-200' 
-                        : 'bg-status-success/5 border-status-success/20'
+                      concepto.categoria === "bono"
+                        ? "bg-amber-50 border-amber-200"
+                        : "bg-status-success/5 border-status-success/20"
                     }`}
                     style={{ animationDelay: `${index * 100}ms` }}
                   >
                     <div>
                       <p className="font-medium flex items-center gap-2">
-                        {concepto.categoria === 'bono' && <Award className="h-4 w-4 text-amber-600" />}
+                        {concepto.categoria === "bono" && (
+                          <Award className="h-4 w-4 text-amber-600" />
+                        )}
                         {concepto.descripcion}
                       </p>
                       {concepto.referencia && (
-                        <p className="text-xs text-muted-foreground">{concepto.referencia}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {concepto.referencia}
+                        </p>
                       )}
                       {concepto.esAutomatico && (
                         <Badge variant="outline" className="mt-1 text-xs">
@@ -437,9 +479,13 @@ export default function CierreViaje() {
                         </Badge>
                       )}
                     </div>
-                    <span className={`font-bold font-mono ${
-                      concepto.categoria === 'bono' ? 'text-amber-600' : 'text-status-success'
-                    }`}>
+                    <span
+                      className={`font-bold font-mono ${
+                        concepto.categoria === "bono"
+                          ? "text-amber-600"
+                          : "text-status-success"
+                      }`}
+                    >
                       +{formatCurrency(concepto.monto)}
                     </span>
                   </div>
@@ -461,34 +507,43 @@ export default function CierreViaje() {
               </div>
               <div className="space-y-2">
                 {deducciones.map((concepto, index) => (
-                  <div 
-                    key={concepto.id} 
+                  <div
+                    key={concepto.id}
                     className={`flex justify-between items-center p-3 rounded-lg border animate-in fade-in slide-in-from-right duration-300 ${
-                      concepto.categoria === 'combustible' 
-                        ? 'bg-status-danger/10 border-status-danger' 
-                        : concepto.categoria === 'anticipo'
-                        ? 'bg-blue-50 border-blue-200'
-                        : 'bg-status-danger/5 border-status-danger/20'
+                      concepto.categoria === "combustible"
+                        ? "bg-status-danger/10 border-status-danger"
+                        : concepto.categoria === "anticipo"
+                          ? "bg-blue-50 border-blue-200"
+                          : "bg-status-danger/5 border-status-danger/20"
                     }`}
                     style={{ animationDelay: `${index * 100}ms` }}
                   >
                     <div>
-                      <p className={`font-medium ${concepto.categoria === 'combustible' ? 'text-status-danger' : ''}`}>
+                      <p
+                        className={`font-medium ${concepto.categoria === "combustible" ? "text-status-danger" : ""}`}
+                      >
                         {concepto.descripcion}
                       </p>
                       {concepto.referencia && (
-                        <p className="text-xs text-muted-foreground">{concepto.referencia}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {concepto.referencia}
+                        </p>
                       )}
                       {concepto.esAutomatico && (
-                        <Badge 
-                          variant="outline" 
-                          className={`mt-1 text-xs ${concepto.categoria === 'combustible' ? 'border-status-danger text-status-danger' : ''}`}
+                        <Badge
+                          variant="outline"
+                          className={`mt-1 text-xs ${concepto.categoria === "combustible" ? "border-status-danger text-status-danger" : ""}`}
                         >
-                          {concepto.categoria === 'combustible' ? '⚠️ Desde Módulo Combustible' : 'Automático'}
+                          {concepto.categoria === "combustible"
+                            ? "⚠️ Desde Módulo Combustible"
+                            : "Automático"}
                         </Badge>
                       )}
-                      {concepto.categoria === 'anticipo' && (
-                        <Badge variant="outline" className="mt-1 text-xs border-blue-300 text-blue-600">
+                      {concepto.categoria === "anticipo" && (
+                        <Badge
+                          variant="outline"
+                          className="mt-1 text-xs border-blue-300 text-blue-600"
+                        >
                           Anticipo de Liquidación
                         </Badge>
                       )}
@@ -510,10 +565,12 @@ export default function CierreViaje() {
 
           {/* Grand Total */}
           <Separator className="my-6" />
-          
+
           <div className="grid gap-4 md:grid-cols-5 mb-6">
             <div className="p-4 bg-muted/30 rounded-lg text-center">
-              <p className="text-sm text-muted-foreground mb-1">Total Ingresos</p>
+              <p className="text-sm text-muted-foreground mb-1">
+                Total Ingresos
+              </p>
               <p className="text-xl font-bold text-status-success font-mono">
                 {formatCurrency(settlement.totalIngresos)}
               </p>
@@ -527,7 +584,9 @@ export default function CierreViaje() {
               </p>
             </div>
             <div className="p-4 bg-muted/30 rounded-lg text-center">
-              <p className="text-sm text-muted-foreground mb-1">Total Deducciones</p>
+              <p className="text-sm text-muted-foreground mb-1">
+                Total Deducciones
+              </p>
               <p className="text-xl font-bold text-status-danger font-mono">
                 -{formatCurrency(settlement.totalDeducciones)}
               </p>
@@ -543,7 +602,9 @@ export default function CierreViaje() {
               </div>
             )}
             <div className="p-4 bg-primary/10 rounded-lg text-center border-2 border-primary">
-              <p className="text-sm text-primary mb-1 font-medium">NETO A PAGAR</p>
+              <p className="text-sm text-primary mb-1 font-medium">
+                NETO A PAGAR
+              </p>
               <p className="text-2xl font-bold text-primary font-mono">
                 {formatCurrency(settlement.netoAPagar)}
               </p>
@@ -551,7 +612,13 @@ export default function CierreViaje() {
           </div>
 
           {/* Status & Action */}
-          <Card className={allCheckpointsOk ? 'border-status-success border-2' : 'border-status-warning border-2'}>
+          <Card
+            className={
+              allCheckpointsOk
+                ? "border-status-success border-2"
+                : "border-status-warning border-2"
+            }
+          >
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
@@ -566,25 +633,30 @@ export default function CierreViaje() {
                   )}
                   <div>
                     <h3 className="font-bold text-lg">
-                      {allCheckpointsOk 
-                        ? 'Listo para Autorizar y Cerrar' 
-                        : 'Checkpoints pendientes de validación'}
+                      {allCheckpointsOk
+                        ? "Listo para Autorizar y Cerrar"
+                        : "Checkpoints pendientes de validación"}
                     </h3>
                     <p className="text-sm text-muted-foreground">
-                      {allCheckpointsOk 
-                        ? `El operador recibirá ${formatCurrency(settlement.netoAPagar)}` 
-                        : `${checkpoints.filter(c => c.status !== 'ok').length} checkpoint(s) requieren atención`}
+                      {allCheckpointsOk
+                        ? `El operador recibirá ${formatCurrency(settlement.netoAPagar)}`
+                        : `${checkpoints.filter((c) => c.status !== "ok").length} checkpoint(s) requieren atención`}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <Badge variant="outline" className="text-lg py-1 px-3">
-                    {checkpoints.filter(c => c.status === 'ok').length} / {checkpoints.length} OK
+                    {checkpoints.filter((c) => c.status === "ok").length} /{" "}
+                    {checkpoints.length} OK
                   </Badge>
-                  <Button 
-                    size="lg" 
+                  <Button
+                    size="lg"
                     className="gap-2"
-                    disabled={!allCheckpointsOk || isAnimating || settlement.estatus === 'liquidado'}
+                    disabled={
+                      !allCheckpointsOk ||
+                      isAnimating ||
+                      settlement.estatus === "liquidado"
+                    }
                     onClick={handleAuthorizeAndClose}
                   >
                     {isAnimating ? (
@@ -592,7 +664,7 @@ export default function CierreViaje() {
                         <span className="animate-spin">⏳</span>
                         Procesando...
                       </>
-                    ) : settlement.estatus === 'liquidado' ? (
+                    ) : settlement.estatus === "liquidado" ? (
                       <>
                         <CheckCircle className="h-5 w-5" />
                         Liquidado
@@ -644,7 +716,10 @@ export default function CierreViaje() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddBonoDialog(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setShowAddBonoDialog(false)}
+            >
               Cancelar
             </Button>
             <Button onClick={handleAddBono} disabled={!bonoAmount}>
@@ -660,7 +735,7 @@ export default function CierreViaje() {
         open={showReceipt}
         onClose={() => setShowReceipt(false)}
         settlement={settlement}
-        authorizationDate={new Date().toLocaleDateString('es-MX')}
+        authorizationDate={new Date().toLocaleDateString("es-MX")}
         authorizationUser="Admin TMS"
       />
     </div>
