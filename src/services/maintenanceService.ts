@@ -1,6 +1,7 @@
 import axiosClient from "@/api/axiosClient";
 
 // --- TIPOS (Snake Case) ---
+export type UpdateInventoryPayload = Partial<CreateInventoryPayload>;
 
 export interface InventoryItem {
   id: number;
@@ -95,6 +96,14 @@ export const maintenanceService = {
   updateWorkOrderStatus: async (id: number, status: string) => {
     const { data } = await axiosClient.patch(
       `/maintenance/work-orders/${id}/status?status=${status}`,
+    );
+    return data;
+  },
+  updateInventoryItem: async (id: number, item: UpdateInventoryPayload) => {
+    // Nota: enviamos item tal cual (snake_case)
+    const { data } = await axiosClient.put(
+      `/maintenance/inventory/${id}`,
+      item,
     );
     return data;
   },

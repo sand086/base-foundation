@@ -4,6 +4,7 @@ from datetime import date, datetime
 
 # --- SCHEMAS PARA UNIDADES ---
 
+
 class UnitBase(BaseModel):
     # Campos obligatorios y básicos
     numero_economico: str = Field(..., min_length=1, max_length=20)
@@ -12,34 +13,35 @@ class UnitBase(BaseModel):
     marca: str
     modelo: str
     year: Optional[int] = None
-    
+
     # Usamos str para evitar conflictos de validación con los Enums de SQLAlchemy
     tipo: str = "full"
     status: str = "disponible"
-    
+    razon_bloqueo: Optional[str] = None
+
     # Campos técnicos
     tipo_1: Optional[str] = None
     tipo_carga: Optional[str] = None
     numero_serie_motor: Optional[str] = None
     marca_motor: Optional[str] = None
     capacidad_carga: Optional[float] = None
-    
+
     # Alertas
     documentos_vencidos: int = 0
     llantas_criticas: int = 0
-    
+
     # Documentación técnica y legal
-    permiso_sct_folio: Optional[str] = None # Nuevo: Folio en lugar de fecha
-    caat_folio: Optional[str] = None        # Nuevo
-    caat_vence: Optional[date] = None       # Nuevo
-    
+    permiso_sct_folio: Optional[str] = None  # Nuevo: Folio en lugar de fecha
+    caat_folio: Optional[str] = None  # Nuevo
+    caat_vence: Optional[date] = None  # Nuevo
+
     # Fechas (Opcionales)
     seguro_vence: Optional[date] = None
     verificacion_humo_vence: Optional[date] = None
     verificacion_fisico_mecanica_vence: Optional[date] = None
-    verificacion_vence: Optional[date] = None 
+    verificacion_vence: Optional[date] = None
     permiso_sct_vence: Optional[date] = None
-    
+
     # URLs de documentos
     tarjeta_circulacion_url: Optional[str] = None
     poliza_seguro_url: Optional[str] = None
@@ -50,11 +52,10 @@ class UnitBase(BaseModel):
     caat_url: Optional[str] = None
     tarjeta_circulacion_folio: Optional[str] = None
 
-    
-    
-    
+
 class UnitCreate(UnitBase):
     pass
+
 
 class UnitUpdate(BaseModel):
     # Todos opcionales para PATCH
@@ -64,27 +65,30 @@ class UnitUpdate(BaseModel):
     modelo: Optional[str] = None
     year: Optional[int] = None
     status: Optional[str] = None
+    razon_bloqueo: Optional[str] = None
+    ignore_blocking: Optional[bool] = None
     tipo: Optional[str] = None
-    
+
     tipo_1: Optional[str] = None
     vin: Optional[str] = None
     tipo_carga: Optional[str] = None
     numero_serie_motor: Optional[str] = None
     marca_motor: Optional[str] = None
     capacidad_carga: Optional[float] = None
-    
+
     # Fechas
     seguro_vence: Optional[date] = None
     verificacion_humo_vence: Optional[date] = None
     verificacion_fisico_mecanica_vence: Optional[date] = None
     verificacion_vence: Optional[date] = None
-    permiso_sct_vence: Optional[date] = None    
+    permiso_sct_vence: Optional[date] = None
     caat_vence: Optional[date] = None
     caat_folio: Optional[str] = None
     permiso_sct_folio: Optional[str] = None
-    
+
     tarjeta_circulacion_folio: Optional[str] = None
     
+
 
 
 class UnitResponse(UnitBase):
@@ -96,7 +100,9 @@ class UnitResponse(UnitBase):
     # Esto permite leer directamente desde el objeto ORM de SQLAlchemy
     model_config = ConfigDict(from_attributes=True)
 
+
 # --- SCHEMAS PARA LLANTAS ---
+
 
 class TireBase(BaseModel):
     position: str
@@ -106,12 +112,12 @@ class TireBase(BaseModel):
     estado: str = "bueno"
     renovado: int = 0
 
+
 class TireCreate(TireBase):
     pass
+
 
 class TireResponse(TireBase):
     id: int
     updated_at: Optional[datetime] = None
     model_config = ConfigDict(from_attributes=True)
-
-

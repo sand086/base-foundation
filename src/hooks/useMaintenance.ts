@@ -3,7 +3,6 @@ import { toast } from "sonner";
 import {
   maintenanceService,
   InventoryItem,
-  Mechanic,
   WorkOrder,
   CreateInventoryPayload,
   CreateWorkOrderPayload,
@@ -11,26 +10,29 @@ import {
 
 export const useMaintenance = () => {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
-  const [mechanics, setMechanics] = useState<Mechanic[]>([]);
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
+  const [mechanics, setMechanics] = useState<any[]>([]); // Tipar según tu interfaz Mechanic
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // --- FETCH DATA ---
+  // Cargar datos iniciales
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [invData, mechData, woData] = await Promise.all([
+      const [invData, woData, mechData] = await Promise.all([
         maintenanceService.getInventory(),
-        maintenanceService.getMechanics(),
         maintenanceService.getWorkOrders(),
+        maintenanceService.getMechanics(),
       ]);
-
       setInventory(invData);
-      setMechanics(mechData);
       setWorkOrders(woData);
-    } catch (error) {
-      console.error(error);
-      toast.error("Error al cargar datos de mantenimiento");
+      setMechanics(mechData);
+    } catch (err) {
+      console.error("Error fetching maintenance data", err);
+      setError("Error al cargar datos de mantenimiento");
+      toast.error("Error de conexión", {
+        description: "No se pudo cargar el inventario.",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -40,15 +42,40 @@ export const useMaintenance = () => {
     fetchData();
   }, [fetchData]);
 
-  // --- ACTIONS: INVENTARIO ---
+  // --- ACCIONES DE INVENTARIO ---
+
   const createItem = async (item: CreateInventoryPayload) => {
     try {
-      await maintenanceService.createInventoryItem(item);
-      toast.success("Refacción agregada");
-      fetchData(); // Recargar
+      const newItem = await maintenanceService.createInventoryItem(item);
+      setInventory((prev) => [newItem, ...prev]);
       return true;
-    } catch (error) {
-      toast.error("Error al crear refacción");
+    } catch (err) {
+      toast.error("Error al crear", {
+        description: "Verifica que el SKU no exista.",
+      });
+      return false;
+    }
+  };
+
+  const updateItem = async (id: number, item: any) => {
+    try {
+      const updatedItem = await maintenanceService.updateInventoryItem(
+        id,
+        item,
+      );
+
+      // Actualizamos el estado local reemplazando el item viejo por el nuevo
+      setInventory((prev) => prev.map((i) => (i.id === id ? updatedItem : i)));
+
+      toast.success("Refacción actualizada", {
+        description: `${updatedItem.sku} - ${updatedItem.descripcion}`,
+      });
+      return true;
+    } catch (err) {
+      console.error(err);
+      toast.error("Error al actualizar", {
+        description: "No se pudieron guardar los cambios.",
+      });
       return false;
     }
   };
@@ -56,33 +83,48 @@ export const useMaintenance = () => {
   const deleteItem = async (id: number) => {
     try {
       await maintenanceService.deleteInventoryItem(id);
-      toast.success("Refacción eliminada");
-      fetchData();
-    } catch (error) {
-      toast.error("Error al eliminar");
+      setInventory((prev) => prev.filter((item) => item.id !== id));
+      toast.success("Eliminado", {
+        description: "Refacción eliminada correctamente.",
+      });
+    } catch (err) {
+      toast.error("Error", { description: "No se pudo eliminar el item." });
     }
   };
 
-  // --- ACTIONS: ORDENES ---
+  // --- ACCIONES DE ÓRDENES DE TRABAJO ---
+
   const createWorkOrder = async (order: CreateWorkOrderPayload) => {
     try {
-      await maintenanceService.createWorkOrder(order);
-      toast.success("Orden de trabajo creada");
-      fetchData(); // Actualiza inventario y lista de ordenes
+      const newOrder = await maintenanceService.createWorkOrder(order);
+      // Al crear una orden, el inventario cambia en el backend, hay que recargar o actualizar localmente
+      setWorkOrders((prev) => [newOrder, ...prev]);
+
+      // Opción A: Recargar todo el inventario (Más seguro)
+      const updatedInventory = await maintenanceService.getInventory();
+      setInventory(updatedInventory);
+
+      toast.success("Orden Creada", {
+        description: `Folio: ${newOrder.folio}`,
+      });
       return true;
-    } catch (error) {
-      toast.error("Error al crear orden");
+    } catch (err) {
+      toast.error("Error", {
+        description: "No se pudo crear la orden de trabajo.",
+      });
       return false;
     }
   };
 
   return {
     inventory,
-    mechanics,
     workOrders,
+    mechanics,
     isLoading,
+    error,
     refresh: fetchData,
     createItem,
+    updateItem,
     deleteItem,
     createWorkOrder,
   };

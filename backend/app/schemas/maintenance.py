@@ -2,6 +2,7 @@ from typing import List, Optional
 from pydantic import BaseModel, ConfigDict
 from datetime import datetime
 
+
 # --- INVENTARIO ---
 class InventoryItemBase(BaseModel):
     sku: str
@@ -12,8 +13,10 @@ class InventoryItemBase(BaseModel):
     ubicacion: Optional[str] = None
     precio_unitario: float
 
+
 class InventoryItemCreate(InventoryItemBase):
     pass
+
 
 class InventoryItemUpdate(BaseModel):
     descripcion: Optional[str] = None
@@ -23,9 +26,11 @@ class InventoryItemUpdate(BaseModel):
     ubicacion: Optional[str] = None
     precio_unitario: Optional[float] = None
 
+
 class InventoryItemResponse(InventoryItemBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
+
 
 # --- MECANICOS ---
 class MechanicBase(BaseModel):
@@ -33,24 +38,29 @@ class MechanicBase(BaseModel):
     especialidad: Optional[str] = None
     activo: bool = True
 
+
 class MechanicResponse(MechanicBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
 
+
 # --- ORDENES DE TRABAJO ---
+
 
 class WorkOrderPartCreate(BaseModel):
     inventory_item_id: int
     cantidad: int
+
 
 class WorkOrderPartResponse(BaseModel):
     id: int
     inventory_item_id: int
     cantidad: int
     costo_unitario_snapshot: float
-    item_sku: Optional[str] = None # Para mostrar en tabla
-    
+    item_sku: Optional[str] = None
+
     model_config = ConfigDict(from_attributes=True)
+
 
 class WorkOrderCreate(BaseModel):
     unit_id: int
@@ -58,11 +68,13 @@ class WorkOrderCreate(BaseModel):
     descripcion_problema: str
     parts: List[WorkOrderPartCreate] = []
 
+
 class WorkOrderUpdate(BaseModel):
     status: Optional[str] = None
     mechanic_id: Optional[int] = None
     descripcion_problema: Optional[str] = None
     fecha_cierre: Optional[datetime] = None
+
 
 class WorkOrderResponse(BaseModel):
     id: int

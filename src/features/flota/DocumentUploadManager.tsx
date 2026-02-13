@@ -19,13 +19,12 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "/";
 
 interface Props {
   unitId: number;
-  unitEconomico: string;
+  unitEconomico?: string; // Lo hice opcional, ya no es estrictamente necesario para la lógica
   docType: string;
   docLabel: string;
   currentUrl?: string | null;
   onUploadSuccess: (newUrl: string) => void;
   statusBadge?: React.ReactNode;
-  //  NUEVO: Recibe el input de fecha para renderizarlo dentro
   dateInput?: React.ReactNode;
 }
 
@@ -43,20 +42,21 @@ export function DocumentUploadManager({
   const [history, setHistory] = useState<any[]>([]);
   const [showHistory, setShowHistory] = useState(false);
 
+  // Generamos un ID único para el input, combinando ID de unidad y tipo de doc
+  const inputId = `file-${unitId}-${docType}`;
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setIsUploading(true);
     try {
-      const result = await unitService.uploadDocument(
-        unitEconomico,
-        docType,
-        file,
-      );
+      // CORRECCIÓN: Usamos unitId (number) en lugar de unitEconomico
+      const result = await unitService.uploadDocument(unitId, docType, file);
       toast.success("Documento actualizado y versionado");
       onUploadSuccess(result.url);
     } catch (error) {
+      console.error(error); // Bueno para depurar
       toast.error("Error al subir documento");
     } finally {
       setIsUploading(false);
@@ -65,6 +65,7 @@ export function DocumentUploadManager({
 
   const loadHistory = async () => {
     try {
+      // Esto ya estaba correcto (usaba unitId)
       const res = await axiosClient.get(
         `/units/${unitId}/documents/${docType}/history`,
       );
@@ -82,19 +83,18 @@ export function DocumentUploadManager({
 
   return (
     <div className="flex flex-col gap-3 p-4 border rounded-xl bg-white/5 border-black/10 shadow-sm hover:border-red-500/20 transition-all">
-      {/* Encabezado: Título, Badge y Botón Historial */}
+      {/* Encabezado */}
       <div className="flex justify-between items-start">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
             <Label className="font-bold text-sm text-foreground/90">
               {docLabel}
             </Label>
-            {/*  ESTATUS AQUÍ: Muy visible al lado del nombre */}
             {statusBadge}
           </div>
         </div>
 
-        {/*  BOTÓN HISTORIAL (Color Azul Claro) */}
+        {/* Historial */}
         <Dialog
           open={showHistory}
           onOpenChange={(open) => {
@@ -170,13 +170,13 @@ export function DocumentUploadManager({
           <Input
             type="file"
             className="hidden"
-            id={`file-${docType}`}
+            id={inputId} // CORRECCIÓN: ID Único
             onChange={handleFileChange}
             accept=".pdf,.jpg,.png"
             disabled={isUploading}
           />
           <Label
-            htmlFor={`file-${docType}`}
+            htmlFor={inputId} // CORRECCIÓN: Coincide con el ID único
             className={`flex items-center justify-center w-full h-9 px-3 text-xs font-medium transition-all border border-dashed rounded-lg cursor-pointer bg-background/50 hover:bg-accent hover:text-accent-foreground hover:border-primary/50 ${isUploading ? "opacity-50 cursor-not-allowed" : ""}`}
           >
             {isUploading ? (
@@ -193,10 +193,8 @@ export function DocumentUploadManager({
           </Label>
         </div>
 
-        {/*  CAMPO DE FECHA (Integrado aquí para que se vea junto) */}
         {dateInput && <div className="flex-1 min-w-[130px]">{dateInput}</div>}
 
-        {/*  BOTÓN VER ACTUAL (Color Verde/Esmeralda) */}
         {currentUrl && (
           <Button
             variant="default"
