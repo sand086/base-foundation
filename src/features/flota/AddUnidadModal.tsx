@@ -17,9 +17,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+
+import { Lock, Unlock, Truck, Loader2, Info, Settings } from "lucide-react";
+
 import { useToast } from "@/hooks/use-toast";
 import { useTiposUnidad } from "@/hooks/useTiposUnidad";
-import { Truck, Loader2, Info } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Unidad } from "@/types/api.types";
@@ -209,6 +211,9 @@ export function AddUnidadModal({
     normalizeTipoToSave(formData.tipo),
   );
 
+  const [masterPassword, setMasterPassword] = useState("");
+  const [showOverride, setShowOverride] = useState(false);
+
   // =====================
   // Load edit data
   // =====================
@@ -314,6 +319,18 @@ export function AddUnidadModal({
     const cleanNumber = (numStr: string) =>
       numStr && !isNaN(parseFloat(numStr)) ? parseFloat(numStr) : null;
 
+    let ignoreBlocking = false;
+
+    if (showOverride) {
+      if (masterPassword === "ADMIN123") {
+        // <--- TU CONTRASEÑA MAESTRA
+        ignoreBlocking = true;
+      } else {
+        toast({ title: "Contraseña incorrecta", variant: "destructive" });
+        return;
+      }
+    }
+
     const tipo1Backend = mapCategoriaToBackend(formData.categoriaActivo);
 
     // tipo = "configuración" -> SIEMPRE normalizada para guardar
@@ -331,6 +348,8 @@ export function AddUnidadModal({
       marca: formData.marca,
       modelo: formData.modelo,
       year: parseInt(formData.year) || new Date().getFullYear(),
+
+      ignore_blocking: ignoreBlocking,
 
       tipo: tipoPayload as any,
       tipo_1: tipo1Backend,
@@ -462,6 +481,76 @@ export function AddUnidadModal({
                 </p>
               )}
             </div>
+          </div>
+
+          <div className="p-4 border rounded-lg bg-slate-50 space-y-4 mt-4">
+            <h3 className="font-medium text-sm flex items-center gap-2">
+              <Settings className="h-4 w-4" /> Control de Estatus
+            </h3>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Estatus Operativo</Label>
+                <Select
+                  value={formData.status || "disponible"}
+                  onValueChange={(v) =>
+                    setFormData((p) => ({ ...p, status: v }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="disponible">🟢 Disponible</SelectItem>
+                    <SelectItem value="mantenimiento">
+                      🟡 Mantenimiento
+                    </SelectItem>
+                    <SelectItem value="bloqueado" disabled>
+                      🔴 Bloqueado (Automático)
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* BOTÓN DE DESBLOQUEO DE EMERGENCIA */}
+              <div className="flex items-end">
+                <Button
+                  type="button"
+                  variant={showOverride ? "destructive" : "outline"}
+                  className="w-full"
+                  onClick={() => setShowOverride(!showOverride)}
+                >
+                  {showOverride ? "Cancelar Desbloqueo" : "Forzar Habilitación"}
+                </Button>
+              </div>
+            </div>
+
+            {/* INPUT DE CONTRASEÑA MAESTRA (Solo si se activa override) */}
+            {showOverride && (
+              <div className="animate-in fade-in slide-in-from-top-2 p-3 bg-red-50 border border-red-200 rounded text-red-800">
+                <div className="flex items-start gap-2">
+                  <Lock className="h-4 w-4 mt-1" />
+                  <div className="flex-1 space-y-2">
+                    <p className="text-xs font-bold">ZONA DE PELIGRO</p>
+                    <p className="text-xs">
+                      Estás a punto de habilitar una unidad que el sistema ha
+                      marcado como insegura. La data quedará incompleta pero la
+                      unidad podrá asignarse.
+                    </p>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Contraseña Maestra</Label>
+                      <Input
+                        type="password"
+                        value={masterPassword}
+                        onChange={(e) => setMasterPassword(e.target.value)}
+                        placeholder="Ingrese contraseña de admin..."
+                        className="bg-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <Tabs defaultValue="general" className="w-full">

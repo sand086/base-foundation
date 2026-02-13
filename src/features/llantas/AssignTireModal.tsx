@@ -20,7 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { ArrowRightLeft, Truck, MapPin, Loader2 } from "lucide-react";
 
-import { GlobalTire, TIRE_POSITIONS } from "./types";
+import { GlobalTire, TIRE_POSITIONS } from "@/services/tireService";
 import { useUnits } from "@/hooks/useUnits"; // <--- TU HOOK REAL
 
 interface AssignTireModalProps {

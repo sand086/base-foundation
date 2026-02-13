@@ -53,8 +53,8 @@ const categories = [
 
 export const InventarioTable = () => {
   // 1. Usar Hook Real
-  const { inventory, isLoading, createItem, deleteItem } = useMaintenance();
-
+  const { inventory, isLoading, createItem, deleteItem, updateItem } =
+    useMaintenance();
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
@@ -102,13 +102,21 @@ export const InventarioTable = () => {
 
   // Handlers conectados al hook
   const handleSave = async (itemData: any) => {
-    // Nota: El modal debe enviar datos compatibles.
-    // Si es edición (no implementado en backend aun), o creación:
-    if (!itemToEdit) {
-      await createItem(itemData);
+    let success = false;
+
+    if (itemToEdit) {
+      // MODO EDICIÓN
+      // itemToEdit.id viene del estado cuando hiciste click en el lápiz
+      success = await updateItem(itemToEdit.id, itemData);
+    } else {
+      // MODO CREACIÓN
+      success = await createItem(itemData);
     }
-    setIsAddModalOpen(false);
-    setItemToEdit(null);
+
+    if (success) {
+      setIsAddModalOpen(false);
+      setItemToEdit(null);
+    }
   };
 
   const handleDelete = async () => {
@@ -234,11 +242,10 @@ export const InventarioTable = () => {
                 <DropdownMenuItem onClick={() => handleView(item)}>
                   <Eye className="h-4 w-4 mr-2" /> Ver detalles
                 </DropdownMenuItem>
-                {/* Edición pendiente de conectar
-              <DropdownMenuItem onClick={() => handleEdit(item)}>
-                <Edit className="h-4 w-4 mr-2" /> Editar
-              </DropdownMenuItem>
-              */}
+                <DropdownMenuItem onClick={() => handleEdit(item)}>
+                  <Edit className="h-4 w-4 mr-2" /> Editar
+                </DropdownMenuItem>
+
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   className="text-destructive focus:text-destructive"

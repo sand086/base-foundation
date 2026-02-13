@@ -45,9 +45,8 @@ import {
   getTireLifePercentage,
   getTireSemaphoreStatus,
   getEstadoBadge,
-} from "@/features/llantas/types";
+} from "@/services/tireService";
 import { useTires } from "@/hooks/useTires";
-import { tireBrands } from "@/features/llantas/data";
 
 // Componentes Modales
 import { TireHistorySheet } from "@/features/llantas/TireHistorySheet";
@@ -169,6 +168,11 @@ export default function FlotaLlantas() {
       return await createTire(data);
     }
   };
+  const tireBrands = useMemo(() => {
+    const brands = new Set<string>();
+    tires.forEach((t) => brands.add(t.marca));
+    return Array.from(brands);
+  }, [tires]);
 
   // Eliminar
   const handleOpenDelete = (tire: GlobalTire) => {

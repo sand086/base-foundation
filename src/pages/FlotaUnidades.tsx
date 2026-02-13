@@ -9,7 +9,9 @@ import {
   Package,
   Loader2,
   MoreHorizontal,
+  AlertCircle,
 } from "lucide-react";
+
 import { useNavigate } from "react-router-dom";
 
 // Componentes UI
@@ -17,6 +19,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -225,7 +234,26 @@ export default function FlotaUnidades() {
       {
         key: "status",
         header: "Estatus",
-        render: (value) => getStatusBadge(value),
+        render: (_, row) => (
+          <div className="flex items-center gap-2">
+            {getStatusBadge(row.status)}
+
+            {/* MOSTRAR MOTIVO SI ESTÁ BLOQUEADO */}
+            {row.status === "bloqueado" && row.razon_bloqueo && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger>
+                    <AlertCircle className="h-4 w-4 text-red-500 cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent className="bg-red-50 text-red-900 border-red-200">
+                    <p className="font-semibold">Motivo de Bloqueo:</p>
+                    <p>{row.razon_bloqueo}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
+        ),
       },
       {
         key: "id", // Usamos 'id' para la key, pero renderizamos acciones

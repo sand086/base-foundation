@@ -35,6 +35,8 @@ export interface Unidad {
 
   tipo: UnitTipo;
   status: UnitStatus;
+  razon_bloqueo?: string | null;
+  ignore_blocking?: boolean | null;
 
   permiso_sct_folio?: string;
   permiso_sct_url?: string | null;

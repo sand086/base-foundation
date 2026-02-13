@@ -7,7 +7,6 @@ from datetime import datetime
 
 
 def get_tires(db: Session, skip: int = 0, limit: int = 100):
-    # Eager load 'unit' y 'history' para optimizar
     tires = (
         db.query(models.Tire)
         .options(joinedload(models.Tire.unit), joinedload(models.Tire.history))
@@ -16,8 +15,6 @@ def get_tires(db: Session, skip: int = 0, limit: int = 100):
         .limit(limit)
         .all()
     )
-
-    # Enriquecer datos para el frontend
     for tire in tires:
         _enrich_tire_data(tire)
     return tires
@@ -30,19 +27,16 @@ def get_tire(db: Session, tire_id: int):
         .filter(models.Tire.id == tire_id)
         .first()
     )
-
     if tire:
         _enrich_tire_data(tire)
     return tire
 
 
 def get_tire_by_code(db: Session, codigo: str):
-    """Helper para validar duplicados"""
     return db.query(models.Tire).filter(models.Tire.codigo_interno == codigo).first()
 
 
 def _enrich_tire_data(tire):
-    """Helper para aplanar datos relacionales que espera el frontend"""
     if tire.unit:
         tire.unidad_actual_economico = tire.unit.numero_economico
         tire.unidad_actual_id = tire.unit.id
@@ -50,7 +44,6 @@ def _enrich_tire_data(tire):
         tire.unidad_actual_economico = None
         tire.unidad_actual_id = None
 
-    # Ordenar historial por fecha descendente si existe
     if tire.history:
         tire.history.sort(key=lambda x: x.fecha, reverse=True)
 
@@ -59,7 +52,6 @@ def _enrich_tire_data(tire):
 
 
 def create_tire(db: Session, tire_in: schemas.TireCreate):
-    # 1. Crear Objeto Llanta
     db_tire = models.Tire(
         codigo_interno=tire_in.codigo_interno,
         marca=tire_in.marca,
@@ -74,13 +66,12 @@ def create_tire(db: Session, tire_in: schemas.TireCreate):
         proveedor=tire_in.proveedor,
         estado=tire_in.estado,
         km_recorridos=0,
-        unit_id=None,  # Nace en Stock
+        unit_id=None,
         posicion=None,
     )
     db.add(db_tire)
-    db.flush()  # Para obtener el ID
+    db.flush()
 
-    # 2. Registrar Historial de Compra
     history = models.TireHistory(
         tire_id=db_tire.id,
         fecha=datetime.utcnow(),
@@ -96,7 +87,7 @@ def create_tire(db: Session, tire_in: schemas.TireCreate):
     return db_tire
 
 
-# --- OPERACIONES (Asignar / Mantenimiento) ---
+# --- MANTENIMIENTO Y ASIGNACIÓN ---
 
 
 def assign_tire(db: Session, tire_id: int, payload: schemas.AssignTirePayload):
@@ -104,19 +95,15 @@ def assign_tire(db: Session, tire_id: int, payload: schemas.AssignTirePayload):
     if not tire:
         return None
 
-    # Determinar si es Montaje o Desmontaje
     is_mounting = payload.unidad_id is not None
-
     unit_economico_str = None
 
     if is_mounting:
-        # Verificar unidad
         unit = db.query(models.Unit).filter(models.Unit.id == payload.unidad_id).first()
         if not unit:
-            raise ValueError("La unidad especificada no existe")
+            raise ValueError("Unidad no encontrada")
         unit_economico_str = unit.numero_economico
 
-        # LOGICA DE DESMONTAJE AUTOMÁTICO (Ocupante previo)
         if payload.posicion:
             occupant = (
                 db.query(models.Tire)
@@ -131,16 +118,12 @@ def assign_tire(db: Session, tire_id: int, payload: schemas.AssignTirePayload):
             if occupant:
                 occupant.unit_id = None
                 occupant.posicion = None
-
-                # CORRECCIÓN AQUÍ: unidad_economico
                 occ_history = models.TireHistory(
                     tire_id=occupant.id,
                     fecha=datetime.utcnow(),
                     tipo="desmontaje",
-                    descripcion=f"Desmontaje automático por reemplazo (Entra llanta {tire.codigo_interno})",
-                    unidad_economico=unit_economico_str,  # <--- CORREGIDO (antes decía unidad)
-                    unidad_id=payload.unidad_id,  # Opcional: guardamos también el ID si el modelo lo tiene
-                    posicion=payload.posicion,
+                    descripcion=f"Desmontaje por reemplazo (Entra {tire.codigo_interno})",
+                    unidad_economico=unit_economico_str,
                     km=occupant.km_recorridos,
                     responsable="Sistema",
                 )
@@ -148,9 +131,9 @@ def assign_tire(db: Session, tire_id: int, payload: schemas.AssignTirePayload):
                 db.add(occupant)
 
         tipo_evento = "montaje"
-        desc = f"Montaje en unidad {unit.numero_economico}"
+        desc = f"Montaje en {unit.numero_economico}"
         if payload.posicion:
-            desc += f" - Pos {payload.posicion}"
+            desc += f" - {payload.posicion}"
     else:
         tipo_evento = "desmontaje"
         desc = "Desmontaje - Enviada a Almacén"
@@ -158,21 +141,19 @@ def assign_tire(db: Session, tire_id: int, payload: schemas.AssignTirePayload):
     if payload.notas:
         desc += f". Notas: {payload.notas}"
 
-    # Actualizar Llanta
     tire.unit_id = payload.unidad_id
     tire.posicion = payload.posicion
 
     if tire.estado == "nuevo" and is_mounting:
         tire.estado = "usado"
 
-    # CORRECCIÓN AQUÍ: unidad_economico
     history = models.TireHistory(
         tire_id=tire.id,
         fecha=datetime.utcnow(),
         tipo=tipo_evento,
         descripcion=desc,
-        unidad_economico=unit_economico_str,  # <--- CORREGIDO (antes decía unidad)
-        unidad_id=payload.unidad_id,  # Opcional: guardamos también el ID si el modelo lo tiene
+        unidad_economico=unit_economico_str,
+        unidad_id=payload.unidad_id,
         posicion=payload.posicion,
         km=tire.km_recorridos,
         responsable="Operaciones",
@@ -192,10 +173,8 @@ def register_maintenance(
     if not tire:
         return None
 
-    # Actualizar acumulados
     tire.costo_acumulado += payload.costo
 
-    # Lógica por tipo
     if payload.tipo == "desecho":
         tire.estado = "desecho"
         tire.estado_fisico = "mala"
@@ -203,12 +182,10 @@ def register_maintenance(
         tire.posicion = None
     elif payload.tipo == "renovado":
         tire.estado = "renovado"
-        # Recupera vida útil aprox (ej. 95% de original)
         tire.profundidad_actual = tire.profundidad_original * 0.95
         tire.unit_id = None
         tire.posicion = None
 
-    # Historial
     history = models.TireHistory(
         tire_id=tire.id,
         fecha=datetime.utcnow(),
@@ -226,20 +203,60 @@ def register_maintenance(
     return tire
 
 
-# --- EDICIÓN Y ELIMINACIÓN (LO QUE TE FALTABA) ---
+# --- EDICIÓN (LÓGICA CORREGIDA: SOLO CAMBIOS REALES) ---
 
 
 def update_tire(db: Session, tire_id: int, tire_in: schemas.TireUpdate):
-    """Actualiza datos básicos de la llanta"""
     tire = db.query(models.Tire).filter(models.Tire.id == tire_id).first()
     if not tire:
         return None
 
-    # Usamos model_dump con exclude_unset para actualizar solo lo enviado
-    update_data = tire_in.model_dump(exclude_unset=True)
+    # 1. Obtener todos los datos que envía el frontend
+    incoming_data = tire_in.model_dump(exclude_unset=True)
 
-    for field, value in update_data.items():
+    # 2. Filtrar: ¿Qué dato es diferente al que ya está en la DB?
+    changes_map = {}
+    for field, new_value in incoming_data.items():
+        current_value = getattr(tire, field)
+        # Comparamos valor actual vs nuevo valor
+        if current_value != new_value:
+            changes_map[field] = new_value
+
+    # Si después de filtrar no queda nada, no hacemos nada (ahorramos log basura)
+    if not changes_map:
+        return tire
+
+    # 3. Actualizar la Llanta
+    for field, value in changes_map.items():
         setattr(tire, field, value)
+
+        # Ajuste de costo acumulado si cambia el precio base
+        if field == "precio_compra":
+            old_price = tire.precio_compra or 0
+            diff = value - old_price
+            tire.costo_acumulado = (tire.costo_acumulado or 0) + diff
+
+    # 4. Crear Historial con SOLO los campos cambiados
+    unit_eco = None
+    if tire.unit:
+        unit_eco = tire.unit.numero_economico
+
+    # Generamos la lista bonita: "Datos editados: marca, modelo"
+    campos_editados = ", ".join(changes_map.keys())
+
+    history_entry = models.TireHistory(
+        tire_id=tire.id,
+        fecha=datetime.utcnow(),
+        tipo="edicion",
+        descripcion=f"Datos editados: {campos_editados}",
+        unidad_economico=unit_eco,
+        unidad_id=tire.unit_id,
+        posicion=tire.posicion,
+        km=tire.km_recorridos,
+        costo=0,
+        responsable="Admin",
+    )
+    db.add(history_entry)
 
     db.add(tire)
     db.commit()
@@ -249,11 +266,9 @@ def update_tire(db: Session, tire_id: int, tire_in: schemas.TireUpdate):
 
 
 def delete_tire(db: Session, tire_id: int):
-    """Elimina la llanta física y lógicamente"""
     tire = db.query(models.Tire).filter(models.Tire.id == tire_id).first()
     if not tire:
         return False
-
     db.delete(tire)
     db.commit()
     return True

@@ -1,14 +1,27 @@
 """
 SQLAlchemy ORM Models for TMS - REFACTORED FOR AUTO-INCREMENT
 """
+
 from datetime import date, datetime
 from enum import Enum as PyEnum
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Date, Text, Boolean, Float, Enum
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    DateTime,
+    ForeignKey,
+    Date,
+    Text,
+    Boolean,
+    Float,
+    Enum,
+)
 from sqlalchemy.orm import relationship
 from app.db.database import Base
 from sqlalchemy.dialects.postgresql import JSONB
 
 # ============= ENUMS =============
+
 
 class UnitType(str, PyEnum):
     SENCILLO = "sencillo"
@@ -20,9 +33,11 @@ class UnitType(str, PyEnum):
     CAMION = "camion"
     OTRO = "otro"
 
+
 class Currency(str, PyEnum):
     MXN = "MXN"
     USD = "USD"
+
 
 class UnitStatus(str, PyEnum):
     DISPONIBLE = "disponible"
@@ -30,11 +45,13 @@ class UnitStatus(str, PyEnum):
     MANTENIMIENTO = "mantenimiento"
     BLOQUEADO = "bloqueado"
 
+
 class OperatorStatus(str, PyEnum):
     ACTIVO = "activo"
     INACTIVO = "inactivo"
     VACACIONES = "vacaciones"
     INCAPACIDAD = "incapacidad"
+
 
 class TripStatus(str, PyEnum):
     CREADO = "creado"
@@ -45,20 +62,24 @@ class TripStatus(str, PyEnum):
     CERRADO = "cerrado"
     ACCIDENTE = "accidente"
 
+
 class ClientStatus(str, PyEnum):
     ACTIVO = "activo"
     PENDIENTE = "pendiente"
     INCOMPLETO = "incompleto"
+
 
 class TariffStatus(str, PyEnum):
     ACTIVA = "activa"
     VENCIDA = "vencida"
     POR_VENCER = "por_vencer"
 
+
 class OperationType(str, PyEnum):
     IMPORTACION = "importación"
     EXPORTACION = "exportación"
     NACIONAL = "nacional"
+
 
 # --- ENUMS PARA LLANTAS ---
 class TireStatus(str, PyEnum):
@@ -67,10 +88,12 @@ class TireStatus(str, PyEnum):
     RENOVADO = "renovado"
     DESECHO = "desecho"
 
+
 class TireCondition(str, PyEnum):
     BUENA = "buena"
     REGULAR = "regular"
     MALA = "mala"
+
 
 class TireEventType(str, PyEnum):
     COMPRA = "compra"
@@ -81,13 +104,15 @@ class TireEventType(str, PyEnum):
     ROTACION = "rotacion"
     INSPECCION = "inspeccion"
     DESECHO = "desecho"
-    
+
+
 # --- ENUMS PARA MANTENIMIENTO ---
 class WorkOrderStatus(str, PyEnum):
     ABIERTA = "abierta"
     EN_PROGRESO = "en_progreso"
     CERRADA = "cerrada"
     CANCELADA = "cancelada"
+
 
 class InventoryCategory(str, PyEnum):
     MOTOR = "Motor"
@@ -96,10 +121,13 @@ class InventoryCategory(str, PyEnum):
     SUSPENSION = "Suspensión"
     TRANSMISION = "Transmisión"
     GENERAL = "General"
+
+
 class SupplierStatus(str, PyEnum):
     ACTIVO = "activo"
     INACTIVO = "inactivo"
     SUSPENDIDO = "suspendido"
+
 
 class InvoiceStatus(str, PyEnum):
     PENDIENTE = "pendiente"
@@ -110,11 +138,12 @@ class InvoiceStatus(str, PyEnum):
 
 # ============= MODELS =============
 
+
 class Client(Base):
     __tablename__ = "clients"
 
     id = Column(Integer, primary_key=True, index=True)
-    public_id = Column(String(50), unique=True, nullable=True) 
+    public_id = Column(String(50), unique=True, nullable=True)
 
     razon_social = Column(String(200), nullable=False)
     rfc = Column(String(13), unique=True, nullable=False)
@@ -132,7 +161,9 @@ class Client(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    sub_clients = relationship("SubClient", back_populates="client", cascade="all, delete-orphan")
+    sub_clients = relationship(
+        "SubClient", back_populates="client", cascade="all, delete-orphan"
+    )
     trips = relationship("Trip", back_populates="client")
 
 
@@ -141,7 +172,7 @@ class SubClient(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
-    
+
     nombre = Column(String(200), nullable=False)
     alias = Column(String(100))
     direccion = Column(Text, nullable=False)
@@ -161,7 +192,9 @@ class SubClient(Base):
 
     # Relationships
     client = relationship("Client", back_populates="sub_clients")
-    tariffs = relationship("Tariff", back_populates="sub_client", cascade="all, delete-orphan")
+    tariffs = relationship(
+        "Tariff", back_populates="sub_client", cascade="all, delete-orphan"
+    )
     trips = relationship("Trip", back_populates="sub_client")
 
 
@@ -170,7 +203,7 @@ class Tariff(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     sub_client_id = Column(Integer, ForeignKey("sub_clients.id"), nullable=False)
-    
+
     nombre_ruta = Column(String(200), nullable=False)
     tipo_unidad = Column(Enum(UnitType), nullable=False)
     tarifa_base = Column(Float, nullable=False)
@@ -198,13 +231,16 @@ class Unit(Base):
     modelo = Column(String(50), nullable=False)
     year = Column(Integer)
     tipo = Column(String(50), nullable=True)
-    
+
     tipo_1 = Column(String(50))
     tipo_carga = Column(String(50))
     numero_serie_motor = Column(String, nullable=True)
     marca_motor = Column(String, nullable=True)
     capacidad_carga = Column(Float, nullable=True)
     status = Column(Enum(UnitStatus), default=UnitStatus.DISPONIBLE)
+    razon_bloqueo = Column(String(255), nullable=True)
+    ignore_blocking = Column(Boolean, default=False)
+
     documentos_vencidos = Column(Integer, default=0)
     llantas_criticas = Column(Integer, default=0)
 
@@ -233,7 +269,6 @@ class Unit(Base):
     caat_url = Column(String(500), nullable=True)
     tarjeta_circulacion_folio = Column(String(50), nullable=True)
 
-
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -241,32 +276,37 @@ class Unit(Base):
     operators = relationship("Operator", back_populates="assigned_unit")
     tires = relationship("Tire", back_populates="unit")
     work_orders = relationship("WorkOrder", back_populates="unit")
-    
-    
+
+
 # backend/app/models/models.py
+
 
 class UnitDocumentHistory(Base):
     __tablename__ = "unit_document_history"
 
     id = Column(Integer, primary_key=True, index=True)
     unit_id = Column(Integer, ForeignKey("units.id"), nullable=False)
-    
-    document_type = Column(String(50), nullable=False) # ej: 'poliza_seguro', 'caat'
-    filename = Column(String(255), nullable=False)     # Nombre original del archivo
-    file_url = Column(String(500), nullable=False)     # Ruta donde se guardó
-    file_size = Column(Integer, nullable=True)         # Peso en bytes
-    
+
+    document_type = Column(String(50), nullable=False)  # ej: 'poliza_seguro', 'caat'
+    filename = Column(String(255), nullable=False)  # Nombre original del archivo
+    file_url = Column(String(500), nullable=False)  # Ruta donde se guardó
+    file_size = Column(Integer, nullable=True)  # Peso en bytes
+
     uploaded_at = Column(DateTime, default=datetime.utcnow)
-    uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=True) # Si tienes auth
+    uploaded_by = Column(
+        Integer, ForeignKey("users.id"), nullable=True
+    )  # Si tienes auth
 
     # Relación
     unit = relationship("Unit")
-    user = relationship("User") #
+    user = relationship("User")  #
+
+
 class Tire(Base):
     __tablename__ = "tires"
 
     id = Column(Integer, primary_key=True, index=True)
-    
+
     # Identificación
     codigo_interno = Column(String(50), unique=True, nullable=False, index=True)
     marca = Column(String(50), nullable=False)
@@ -277,12 +317,12 @@ class Tire(Base):
     # Ubicación (Relación con Unit)
     # Si unit_id es NULL, la llanta está en Almacén/Stock
     unit_id = Column(Integer, ForeignKey("units.id"), nullable=True)
-    posicion = Column(String(50), nullable=True) # Ej: "Eje 1 Izq"
+    posicion = Column(String(50), nullable=True)  # Ej: "Eje 1 Izq"
 
     # Estado
-    estado = Column(Enum(TireStatus), default=TireStatus.NUEVO)
-    estado_fisico = Column(Enum(TireCondition), default=TireCondition.BUENA)
-    
+    estado = Column(String(50), default="nuevo")
+    estado_fisico = Column(String(50), default="buena")
+
     profundidad_actual = Column(Float, default=0.0)
     profundidad_original = Column(Float, default=0.0)
     km_recorridos = Column(Float, default=0.0)
@@ -298,7 +338,9 @@ class Tire(Base):
 
     # Relationships
     unit = relationship("Unit", back_populates="tires")
-    history = relationship("TireHistory", back_populates="tire", cascade="all, delete-orphan")
+    history = relationship(
+        "TireHistory", back_populates="tire", cascade="all, delete-orphan"
+    )
 
 
 class TireHistory(Base):
@@ -306,16 +348,18 @@ class TireHistory(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     tire_id = Column(Integer, ForeignKey("tires.id"), nullable=False)
-    
+
     fecha = Column(DateTime, default=datetime.utcnow)
-    tipo = Column(Enum(TireEventType), nullable=False)
+    tipo = Column(String(50), nullable=False)
     descripcion = Column(String(255))
-    
+
     # Snapshot de ubicación
-    unidad_id = Column(Integer, ForeignKey("units.id"), nullable=True) 
-    unidad_economico = Column(String(50), nullable=True) # Guardamos texto por histórico
+    unidad_id = Column(Integer, ForeignKey("units.id"), nullable=True)
+    unidad_economico = Column(
+        String(50), nullable=True
+    )  # Guardamos texto por histórico
     posicion = Column(String(50))
-    
+
     km = Column(Float, default=0.0)
     costo = Column(Float, default=0.0)
     responsable = Column(String(100))
@@ -384,7 +428,9 @@ class Trip(Base):
     unit = relationship("Unit", back_populates="trips")
     operator = relationship("Operator", back_populates="trips")
     tariff = relationship("Tariff", back_populates="trips")
-    timeline_events = relationship("TripTimelineEvent", back_populates="trip", cascade="all, delete-orphan")
+    timeline_events = relationship(
+        "TripTimelineEvent", back_populates="trip", cascade="all, delete-orphan"
+    )
 
 
 class TripTimelineEvent(Base):
@@ -404,7 +450,7 @@ class Role(Base):
     __tablename__ = "roles"
 
     id = Column(Integer, primary_key=True, index=True)
-    name_key = Column(String(50), unique=True, nullable=False) # admin, operative
+    name_key = Column(String(50), unique=True, nullable=False)  # admin, operative
     nombre = Column(String(50), nullable=False)
     descripcion = Column(String(200))
     permisos = Column(JSONB, default=dict)
@@ -417,7 +463,7 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    
+
     email = Column(String(100), unique=True, nullable=False, index=True)
     password_hash = Column(String(200), nullable=False)
     nombre = Column(String(100), nullable=False)
@@ -425,11 +471,13 @@ class User(Base):
     telefono = Column(String(20))
     puesto = Column(String(100))
     avatar_url = Column(String(500))
-    
+
     role_id = Column(Integer, ForeignKey("roles.id"))
-    
+
     activo = Column(Boolean, default=True)
-    preferencias = Column(JSONB, default=lambda: {"theme": "system", "notifications": True})
+    preferencias = Column(
+        JSONB, default=lambda: {"theme": "system", "notifications": True}
+    )
     two_factor_secret = Column(String(32), nullable=True)
     is_2fa_enabled = Column(Boolean, default=False)
     last_login = Column(DateTime)
@@ -463,7 +511,7 @@ class Provider(Base):
 
 class BulkUploadHistory(Base):
     __tablename__ = "bulk_upload_history"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     filename = Column(String(255))
     stored_filename = Column(String(255))
@@ -471,14 +519,14 @@ class BulkUploadHistory(Base):
     upload_type = Column(String(50))
     status = Column(String(20))
     record_count = Column(Integer, default=0)
-    
+
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
     user_id = Column(Integer, ForeignKey("users.id"))
-    
+
     user = relationship("User")
-    
-    
+
+
 class InventoryItem(Base):
     __tablename__ = "inventory_items"
 
@@ -486,12 +534,12 @@ class InventoryItem(Base):
     sku = Column(String(50), unique=True, nullable=False, index=True)
     descripcion = Column(String(200), nullable=False)
     categoria = Column(Enum(InventoryCategory), default=InventoryCategory.GENERAL)
-    
+
     stock_actual = Column(Integer, default=0)
     stock_minimo = Column(Integer, default=5)
     ubicacion = Column(String(100))
     precio_unitario = Column(Float, default=0.0)
-    
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -506,7 +554,7 @@ class Mechanic(Base):
     nombre = Column(String(100), nullable=False)
     especialidad = Column(String(100))
     activo = Column(Boolean, default=True)
-    
+
     work_orders = relationship("WorkOrder", back_populates="mechanic")
 
 
@@ -514,24 +562,28 @@ class WorkOrder(Base):
     __tablename__ = "work_orders"
 
     id = Column(Integer, primary_key=True, index=True)
-    folio = Column(String(20), unique=True, nullable=False) # Ej: OT-2024-001
-    
+    folio = Column(String(20), unique=True, nullable=False)  # Ej: OT-2024-001
+
     unit_id = Column(Integer, ForeignKey("units.id"), nullable=False)
     mechanic_id = Column(Integer, ForeignKey("mechanics.id"), nullable=True)
-    
+
     descripcion_problema = Column(Text, nullable=False)
     status = Column(Enum(WorkOrderStatus), default=WorkOrderStatus.ABIERTA)
-    
+
     fecha_apertura = Column(DateTime, default=datetime.utcnow)
     fecha_cierre = Column(DateTime, nullable=True)
-    
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relaciones
-    unit = relationship("Unit", back_populates="work_orders") # Necesitas agregar backref en Unit si no existe
+    unit = relationship(
+        "Unit", back_populates="work_orders"
+    )  # Necesitas agregar backref en Unit si no existe
     mechanic = relationship("Mechanic", back_populates="work_orders")
-    parts = relationship("WorkOrderPart", back_populates="work_order", cascade="all, delete-orphan")
+    parts = relationship(
+        "WorkOrderPart", back_populates="work_order", cascade="all, delete-orphan"
+    )
 
 
 class WorkOrderPart(Base):
@@ -539,16 +591,21 @@ class WorkOrderPart(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     work_order_id = Column(Integer, ForeignKey("work_orders.id"), nullable=False)
-    inventory_item_id = Column(Integer, ForeignKey("inventory_items.id"), nullable=False)
-    
+    inventory_item_id = Column(
+        Integer, ForeignKey("inventory_items.id"), nullable=False
+    )
+
     cantidad = Column(Integer, nullable=False)
-    costo_unitario_snapshot = Column(Float, nullable=False) # Guardar precio al momento de uso
+    costo_unitario_snapshot = Column(
+        Float, nullable=False
+    )  # Guardar precio al momento de uso
 
     work_order = relationship("WorkOrder", back_populates="parts")
     item = relationship("InventoryItem", back_populates="work_order_parts")
-    
+
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
+
 class Supplier(Base):
     __tablename__ = "suppliers"
 
@@ -559,15 +616,15 @@ class Supplier(Base):
     telefono = Column(String(20))
     direccion = Column(Text)
     codigo_postal = Column(String(10))
-    
+
     # Datos de crédito
     dias_credito = Column(Integer, default=0)
     limite_credito = Column(Float, default=0.0)
-    
+
     contacto_principal = Column(String(100))
-    categoria = Column(String(50)) # Combustible, Refacciones, etc.
+    categoria = Column(String(50))  # Combustible, Refacciones, etc.
     estatus = Column(Enum(SupplierStatus), default=SupplierStatus.ACTIVO)
-    
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -579,32 +636,34 @@ class PayableInvoice(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     supplier_id = Column(Integer, ForeignKey("suppliers.id"), nullable=False)
-    
-    uuid = Column(String(36), unique=True, nullable=False) # Folio Fiscal
+
+    uuid = Column(String(36), unique=True, nullable=False)  # Folio Fiscal
     folio_interno = Column(String(50))
-    
+
     monto_total = Column(Float, nullable=False)
     saldo_pendiente = Column(Float, nullable=False)
     moneda = Column(String(3), default="MXN")
-    
+
     fecha_emision = Column(Date, nullable=False)
     fecha_vencimiento = Column(Date, nullable=False)
-    
+
     concepto = Column(String(200))
-    clasificacion = Column(String(50)) # Gasto Op, Administrativo, etc.
-    
+    clasificacion = Column(String(50))  # Gasto Op, Administrativo, etc.
+
     estatus = Column(Enum(InvoiceStatus), default=InvoiceStatus.PENDIENTE)
-    
+
     pdf_url = Column(String(500))
     xml_url = Column(String(500))
-    
+
     # Relación opcional con orden de compra (si existiera el módulo)
-    orden_compra_id = Column(String(50), nullable=True) 
+    orden_compra_id = Column(String(50), nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
     supplier = relationship("Supplier", back_populates="invoices")
-    payments = relationship("InvoicePayment", back_populates="invoice", cascade="all, delete-orphan")
+    payments = relationship(
+        "InvoicePayment", back_populates="invoice", cascade="all, delete-orphan"
+    )
 
 
 class InvoicePayment(Base):
@@ -612,15 +671,15 @@ class InvoicePayment(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     invoice_id = Column(Integer, ForeignKey("payable_invoices.id"), nullable=False)
-    
+
     fecha_pago = Column(Date, default=date.today)
     monto = Column(Float, nullable=False)
-    metodo_pago = Column(String(50)) # Transferencia, Cheque
+    metodo_pago = Column(String(50))  # Transferencia, Cheque
     referencia = Column(String(100))
     cuenta_retiro = Column(String(50))
-    
+
     complemento_uuid = Column(String(36))
-    
+
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
     invoice = relationship("PayableInvoice", back_populates="payments")
