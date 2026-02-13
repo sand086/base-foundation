@@ -1,6 +1,6 @@
 from typing import List, Optional
 from pydantic import BaseModel, ConfigDict
-from datetime import datetime
+from datetime import date, datetime
 
 
 # --- INVENTARIO ---
@@ -32,15 +32,63 @@ class InventoryItemResponse(InventoryItemBase):
     model_config = ConfigDict(from_attributes=True)
 
 
-# --- MECANICOS ---
+# --- DOCUMENTOS MECÁNICO ---
+class MechanicDocumentBase(BaseModel):
+    tipo_documento: str
+    nombre_archivo: str
+    url_archivo: str
+    fecha_vencimiento: Optional[date] = None
+
+
+class MechanicDocumentResponse(MechanicDocumentBase):
+    id: int
+    subido_en: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+# --- MECÁNICOS ---
 class MechanicBase(BaseModel):
     nombre: str
+    apellido: Optional[str] = None
     especialidad: Optional[str] = None
+    telefono: Optional[str] = None
+    email: Optional[str] = None
+    direccion: Optional[str] = None
+    fecha_nacimiento: Optional[date] = None
+    fecha_contratacion: Optional[date] = None
+    nss: Optional[str] = None
+    rfc: Optional[str] = None
+    salario_base: Optional[float] = 0.0
+    contacto_emergencia_nombre: Optional[str] = None
+    contacto_emergencia_telefono: Optional[str] = None
     activo: bool = True
+
+
+class MechanicCreate(MechanicBase):
+    pass
+
+
+class MechanicUpdate(BaseModel):
+    nombre: Optional[str] = None
+    apellido: Optional[str] = None
+    especialidad: Optional[str] = None
+    telefono: Optional[str] = None
+    email: Optional[str] = None
+    direccion: Optional[str] = None
+    activo: Optional[bool] = None
+    foto_url: Optional[str] = None
+    fecha_nacimiento: Optional[date] = None
+    fecha_contratacion: Optional[date] = None
+    nss: Optional[str] = None
+    rfc: Optional[str] = None
+    salario_base: Optional[float] = 0.0
 
 
 class MechanicResponse(MechanicBase):
     id: int
+    foto_url: Optional[str] = None
+    documents: List[MechanicDocumentResponse] = []  # Incluimos sus documentos
+
     model_config = ConfigDict(from_attributes=True)
 
 

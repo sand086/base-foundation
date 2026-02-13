@@ -551,11 +551,62 @@ class Mechanic(Base):
     __tablename__ = "mechanics"
 
     id = Column(Integer, primary_key=True, index=True)
-    nombre = Column(String(100), nullable=False)
-    especialidad = Column(String(100))
-    activo = Column(Boolean, default=True)
 
+    # Datos Principales
+    nombre = Column(String(100), nullable=False)
+    apellido = Column(String(100))  # Nuevo
+    especialidad = Column(String(100))
+
+    # Datos de Contacto y Personales
+    telefono = Column(String(20))  # Nuevo
+    email = Column(String(100))  # Nuevo
+    direccion = Column(Text)  # Nuevo
+    fecha_nacimiento = Column(Date)  # Nuevo
+
+    # Datos Laborales
+    fecha_contratacion = Column(Date)  # Nuevo
+    nss = Column(String(20))  # Número de Seguridad Social
+    rfc = Column(String(13))  # RFC
+    salario_base = Column(Float, default=0.0)  # Nuevo
+
+    # Emergencia
+    contacto_emergencia_nombre = Column(String(100))  # Nuevo
+    contacto_emergencia_telefono = Column(String(20))  # Nuevo
+
+    # Estatus y Meta
+    activo = Column(Boolean, default=True)
+    foto_url = Column(String(500))  # Para la foto de perfil
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relaciones
     work_orders = relationship("WorkOrder", back_populates="mechanic")
+    documents = relationship(
+        "MechanicDocument", back_populates="mechanic", cascade="all, delete-orphan"
+    )
+
+
+class MechanicDocument(Base):
+    """Tabla para guardar archivos del mecánico (INE, Contrato, Certificaciones)"""
+
+    __tablename__ = "mechanic_documents"
+
+    id = Column(Integer, primary_key=True, index=True)
+    mechanic_id = Column(Integer, ForeignKey("mechanics.id"), nullable=False)
+
+    tipo_documento = Column(
+        String(50), nullable=False
+    )  # Ej: 'ine', 'contrato', 'certificacion'
+    nombre_archivo = Column(String(255), nullable=False)
+    url_archivo = Column(String(500), nullable=False)
+    fecha_vencimiento = Column(
+        Date, nullable=True
+    )  # Útil para licencias o certificaciones
+
+    subido_en = Column(DateTime, default=datetime.utcnow)
+
+    mechanic = relationship("Mechanic", back_populates="documents")
 
 
 class WorkOrder(Base):
