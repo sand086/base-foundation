@@ -56,6 +56,8 @@ interface EnhancedDataTableProps<T> {
   className?: string;
   onRowClick?: (row: T) => void;
   exportFileName?: string;
+  searchPlaceholder?: string;
+  isLoading?: boolean;
 }
 
 type SortDirection = "asc" | "desc" | null;
@@ -83,6 +85,8 @@ export function EnhancedDataTable<T extends Record<string, any>>({
   className,
   onRowClick,
   exportFileName = "export",
+  searchPlaceholder = "Buscar en todas las columnas...",
+  isLoading = false,
 }: EnhancedDataTableProps<T>) {
   // State
   const [globalSearch, setGlobalSearch] = useState("");
@@ -108,7 +112,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
         columns.some((col) => {
           const value = getValue(row, col.key as string);
           return String(value).toLowerCase().includes(searchLower);
-        })
+        }),
       );
     }
 
@@ -116,11 +120,21 @@ export function EnhancedDataTable<T extends Record<string, any>>({
     Object.entries(columnFilters).forEach(([key, filter]) => {
       if (!filter.value) return;
 
-      if (filter.type === "text" && typeof filter.value === "string" && filter.value) {
+      if (
+        filter.type === "text" &&
+        typeof filter.value === "string" &&
+        filter.value
+      ) {
         result = result.filter((row) =>
-          String(getValue(row, key)).toLowerCase().includes(filter.value.toString().toLowerCase())
+          String(getValue(row, key))
+            .toLowerCase()
+            .includes(filter.value.toString().toLowerCase()),
         );
-      } else if (filter.type === "date" && typeof filter.value === "object" && "from" in filter.value) {
+      } else if (
+        filter.type === "date" &&
+        typeof filter.value === "object" &&
+        "from" in filter.value
+      ) {
         const range = filter.value as DateRange;
         if (range.from || range.to) {
           result = result.filter((row) => {
@@ -130,10 +144,14 @@ export function EnhancedDataTable<T extends Record<string, any>>({
             return true;
           });
         }
-      } else if (filter.type === "status" && Array.isArray(filter.value) && filter.value.length > 0) {
+      } else if (
+        filter.type === "status" &&
+        Array.isArray(filter.value) &&
+        filter.value.length > 0
+      ) {
         const statusValues = filter.value as string[];
         result = result.filter((row) =>
-          statusValues.includes(getValue(row, key))
+          statusValues.includes(getValue(row, key)),
         );
       }
     });
@@ -165,7 +183,8 @@ export function EnhancedDataTable<T extends Record<string, any>>({
     return sortedData.slice(start, start + pageSize);
   }, [sortedData, currentPage, pageSize]);
 
-  const totalPages = pageSize === -1 ? 1 : Math.ceil(sortedData.length / pageSize);
+  const totalPages =
+    pageSize === -1 ? 1 : Math.ceil(sortedData.length / pageSize);
 
   // Handlers
   const handleSort = (key: string) => {
@@ -181,20 +200,23 @@ export function EnhancedDataTable<T extends Record<string, any>>({
     const headers = columns.map((c) => c.header).join("\t");
     const rows = sortedData
       .map((row) =>
-        columns.map((col) => getValue(row, col.key as string)).join("\t")
+        columns.map((col) => getValue(row, col.key as string)).join("\t"),
       )
       .join("\n");
-    
+
     await navigator.clipboard.writeText(`${headers}\n${rows}`);
     toast.success("Datos copiados al portapapeles");
   };
 
   const handleExportExcel = () => {
     const exportData = sortedData.map((row) =>
-      columns.reduce((acc, col) => {
-        acc[col.header] = getValue(row, col.key as string);
-        return acc;
-      }, {} as Record<string, any>)
+      columns.reduce(
+        (acc, col) => {
+          acc[col.header] = getValue(row, col.key as string);
+          return acc;
+        },
+        {} as Record<string, any>,
+      ),
     );
 
     const ws = XLSX.utils.json_to_sheet(exportData);
@@ -209,11 +231,14 @@ export function EnhancedDataTable<T extends Record<string, any>>({
     setGlobalSearch("");
   };
 
-  const hasActiveFilters = Object.keys(columnFilters).length > 0 || globalSearch;
+  const hasActiveFilters =
+    Object.keys(columnFilters).length > 0 || globalSearch;
 
   const getSortIcon = (key: string) => {
-    if (sortConfig?.key !== key) return <ChevronsUpDown className="h-3.5 w-3.5" />;
-    if (sortConfig.direction === "asc") return <ChevronUp className="h-3.5 w-3.5" />;
+    if (sortConfig?.key !== key)
+      return <ChevronsUpDown className="h-3.5 w-3.5" />;
+    if (sortConfig.direction === "asc")
+      return <ChevronUp className="h-3.5 w-3.5" />;
     return <ChevronDown className="h-3.5 w-3.5" />;
   };
 
@@ -225,7 +250,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Buscar en todas las columnas..."
+            placeholder={searchPlaceholder}
             value={globalSearch}
             onChange={(e) => {
               setGlobalSearch(e.target.value);
@@ -253,13 +278,18 @@ export function EnhancedDataTable<T extends Record<string, any>>({
               <div className="flex items-center justify-between">
                 <h4 className="font-medium text-sm">Filtros Avanzados</h4>
                 {hasActiveFilters && (
-                  <Button variant="ghost" size="sm" onClick={clearFilters} className="h-7 text-xs">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearFilters}
+                    className="h-7 text-xs"
+                  >
                     <X className="h-3 w-3 mr-1" />
                     Limpiar
                   </Button>
                 )}
               </div>
-              
+
               <ScrollArea className="max-h-[300px]">
                 <div className="space-y-3">
                   {columns.map((col) => {
@@ -267,19 +297,34 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                     const colType = col.type || "text";
 
                     if (colType === "date") {
-                      const dateFilter = (columnFilters[key]?.value as DateRange) || { from: undefined, to: undefined };
+                      const dateFilter = (columnFilters[key]
+                        ?.value as DateRange) || {
+                        from: undefined,
+                        to: undefined,
+                      };
                       return (
                         <div key={key} className="space-y-2">
-                          <label className="text-xs font-medium text-muted-foreground">{col.header}</label>
+                          <label className="text-xs font-medium text-muted-foreground">
+                            {col.header}
+                          </label>
                           <div className="grid grid-cols-2 gap-2">
                             <Popover>
                               <PopoverTrigger asChild>
-                                <Button variant="outline" size="sm" className="h-8 text-xs justify-start">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 text-xs justify-start"
+                                >
                                   <CalendarIcon className="h-3 w-3 mr-1" />
-                                  {dateFilter.from ? format(dateFilter.from, "dd/MM/yy") : "Desde"}
+                                  {dateFilter.from
+                                    ? format(dateFilter.from, "dd/MM/yy")
+                                    : "Desde"}
                                 </Button>
                               </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0" align="start">
+                              <PopoverContent
+                                className="w-auto p-0"
+                                align="start"
+                              >
                                 <Calendar
                                   mode="single"
                                   selected={dateFilter.from}
@@ -299,12 +344,21 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                             </Popover>
                             <Popover>
                               <PopoverTrigger asChild>
-                                <Button variant="outline" size="sm" className="h-8 text-xs justify-start">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 text-xs justify-start"
+                                >
                                   <CalendarIcon className="h-3 w-3 mr-1" />
-                                  {dateFilter.to ? format(dateFilter.to, "dd/MM/yy") : "Hasta"}
+                                  {dateFilter.to
+                                    ? format(dateFilter.to, "dd/MM/yy")
+                                    : "Hasta"}
                                 </Button>
                               </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0" align="start">
+                              <PopoverContent
+                                className="w-auto p-0"
+                                align="start"
+                              >
                                 <Calendar
                                   mode="single"
                                   selected={dateFilter.to}
@@ -328,10 +382,13 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                     }
 
                     if (colType === "status" && col.statusOptions) {
-                      const selectedStatuses = (columnFilters[key]?.value as string[]) || [];
+                      const selectedStatuses =
+                        (columnFilters[key]?.value as string[]) || [];
                       return (
                         <div key={key} className="space-y-2">
-                          <label className="text-xs font-medium text-muted-foreground">{col.header}</label>
+                          <label className="text-xs font-medium text-muted-foreground">
+                            {col.header}
+                          </label>
                           <div className="flex flex-wrap gap-1.5">
                             {col.statusOptions.map((status) => (
                               <div
@@ -340,20 +397,27 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                                   "flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs cursor-pointer transition-colors",
                                   selectedStatuses.includes(status)
                                     ? "bg-primary text-primary-foreground border-primary"
-                                    : "hover:bg-muted"
+                                    : "hover:bg-muted",
                                 )}
                                 onClick={() => {
-                                  const newSelected = selectedStatuses.includes(status)
-                                    ? selectedStatuses.filter((s) => s !== status)
+                                  const newSelected = selectedStatuses.includes(
+                                    status,
+                                  )
+                                    ? selectedStatuses.filter(
+                                        (s) => s !== status,
+                                      )
                                     : [...selectedStatuses, status];
-                                  
+
                                   if (newSelected.length === 0) {
                                     const { [key]: _, ...rest } = columnFilters;
                                     setColumnFilters(rest);
                                   } else {
                                     setColumnFilters((prev) => ({
                                       ...prev,
-                                      [key]: { type: "status", value: newSelected },
+                                      [key]: {
+                                        type: "status",
+                                        value: newSelected,
+                                      },
                                     }));
                                   }
                                   setCurrentPage(1);
@@ -381,11 +445,21 @@ export function EnhancedDataTable<T extends Record<string, any>>({
 
         {/* Export Buttons */}
         <div className="flex items-center gap-2 ml-auto">
-          <Button variant="outline" size="sm" className="h-9 gap-2" onClick={handleCopyToClipboard}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 gap-2"
+            onClick={handleCopyToClipboard}
+          >
             <Copy className="h-4 w-4" />
             Copiar
           </Button>
-          <Button variant="outline" size="sm" className="h-9 gap-2" onClick={handleExportExcel}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 gap-2"
+            onClick={handleExportExcel}
+          >
             <Download className="h-4 w-4" />
             Excel
           </Button>
@@ -405,10 +479,13 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                       "h-12 p-4 text-left align-middle",
                       "font-semibold text-muted-foreground",
                       "uppercase text-xs tracking-wider",
-                      col.sortable !== false && "cursor-pointer select-none hover:text-foreground transition-colors",
-                      col.width
+                      col.sortable !== false &&
+                        "cursor-pointer select-none hover:text-foreground transition-colors",
+                      col.width,
                     )}
-                    onClick={() => col.sortable !== false && handleSort(col.key as string)}
+                    onClick={() =>
+                      col.sortable !== false && handleSort(col.key as string)
+                    }
                   >
                     <div className="flex items-center gap-1.5">
                       {col.header}
@@ -421,7 +498,10 @@ export function EnhancedDataTable<T extends Record<string, any>>({
             <tbody className="[&_tr:last-child]:border-0 table-staggered">
               {paginatedData.length === 0 ? (
                 <tr>
-                  <td colSpan={columns.length} className="p-4 py-8 text-center text-muted-foreground">
+                  <td
+                    colSpan={columns.length}
+                    className="p-4 py-8 text-center text-muted-foreground"
+                  >
                     No se encontraron registros
                   </td>
                 </tr>
@@ -433,7 +513,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                       "border-b border-muted/30 dark:border-white/5",
                       "transition-colors duration-200",
                       "hover:bg-muted/40 dark:hover:bg-white/5",
-                      onRowClick && "cursor-pointer"
+                      onRowClick && "cursor-pointer",
                     )}
                     onClick={() => onRowClick?.(row)}
                   >
@@ -477,7 +557,9 @@ export function EnhancedDataTable<T extends Record<string, any>>({
               <SelectItem value="all">Todos</SelectItem>
             </SelectContent>
           </Select>
-          <span className="text-muted-foreground">de {sortedData.length} registros</span>
+          <span className="text-muted-foreground">
+            de {sortedData.length} registros
+          </span>
         </div>
 
         <div className="flex items-center gap-1">

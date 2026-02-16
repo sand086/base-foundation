@@ -189,3 +189,32 @@ export interface TwoFactorVerifyResponse {
 
   user?: User;
 }
+
+export interface Mechanic {
+  id: number;
+  nombre: string;
+  apellido?: string;
+  especialidad?: string;
+  telefono?: string;
+  email?: string;
+  direccion?: string;
+  fecha_nacimiento?: string;
+  fecha_contratacion?: string;
+  nss?: string;
+  rfc?: string;
+  salario_base?: number;
+  contacto_emergencia_nombre?: string;
+  contacto_emergencia_telefono?: string;
+  activo: boolean;
+  foto_url?: string;
+}
+
+export interface MechanicDocument {
+  id: number;
+  mechanic_id: number;
+  tipo_documento: string;
+  nombre_archivo: string;
+  url_archivo: string;
+  fecha_vencimiento?: string;
+  subido_en: string;
+}
