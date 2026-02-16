@@ -13,6 +13,7 @@ import FlotaUnidades from "./pages/FlotaUnidades";
 import FlotaUnidadDetalle from "./pages/FlotaUnidadDetalle";
 import FlotaOperadores from "./pages/FlotaOperadores";
 import FlotaLlantas from "./pages/FlotaLlantas";
+import Mecanicos from "./pages/Mecanicos";
 import Mantenimiento from "./pages/Mantenimiento";
 import CombustibleConciliacion from "./pages/CombustibleConciliacion";
 import CombustibleCargas from "./pages/CombustibleCargas";
@@ -65,6 +66,7 @@ const App = () => (
                 <Route path="flota/operadores" element={<FlotaOperadores />} />
                 <Route path="flota/llantas" element={<FlotaLlantas />} />
                 <Route path="flota/mantenimiento" element={<Mantenimiento />} />
+                <Route path="flota/mecanicos" element={<Mecanicos />} />
                 <Route path="combustible" element={<CombustibleCargas />} />
                 <Route
                   path="combustible/cargas"

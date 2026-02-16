@@ -2,11 +2,10 @@ import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Plus, Edit, Phone, Mail, FileText, Wrench } from "lucide-react";
-// IMPORTANTE: Ajustar rutas a donde guardaste los componentes
+
 import { MechanicFormModal } from "@/features/mechanics/MechanicFormModal";
 import { MechanicExpedienteModal } from "@/features/mechanics/MechanicExpedienteModal";
 import { mechanicService } from "@/services/mechanicService";
-// IMPORTANTE: Usar el archivo de tipos que creamos para mecánicos
 import { Mechanic } from "@/types/api.types";
 
 import { EnhancedDataTable } from "@/components/ui/enhanced-data-table";
@@ -19,7 +18,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-export default function MechanicsPage() {
+export default function Mecanicos() {
   const [mechanics, setMechanics] = useState<Mechanic[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
