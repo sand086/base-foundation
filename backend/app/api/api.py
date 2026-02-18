@@ -1,7 +1,18 @@
 from fastapi import APIRouter
 
 # Importamos los módulos nuevos y eliminamos los viejos (fleet, operations)
-from app.api.endpoints import auth, users, clients, units, operators, trips, finance, tires, maintenance, suppliers
+from app.api.endpoints import (
+    auth,
+    users,
+    clients,
+    units,
+    operators,
+    trips,
+    finance,
+    tires,
+    maintenance,
+    suppliers,
+)
 
 api_router = APIRouter()
 
@@ -19,6 +30,9 @@ api_router.include_router(trips.router, tags=["Viajes"])
 # Finanzas
 api_router.include_router(finance.router, tags=["Finanzas"])
 api_router.include_router(tires.router, tags=["Llantas"])
-api_router.include_router(maintenance.router, prefix="/maintenance", tags=["Mantenimiento"])
-api_router.include_router(suppliers.router, prefix="/api/finance", tags=["Finance & Suppliers"])
-
+api_router.include_router(
+    maintenance.router, prefix="/maintenance", tags=["Mantenimiento"]
+)
+api_router.include_router(
+    suppliers.router, prefix="/api/finance", tags=["Finance & Suppliers"]
+)
