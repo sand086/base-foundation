@@ -1,9 +1,11 @@
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import select  # Opcional, pero moderno
-from fastapi import HTTPException  # <--- IMPORTANTE: Faltaba esto
+from sqlalchemy import select
+from fastapi import HTTPException, UploadFile
 from app.models import models
 from app.schemas import maintenance as schemas
-from datetime import datetime, timezone  # <--- Para fechas con zona horaria
+from datetime import datetime, timezone
+import shutil
+import os
 
 # --- helpers ---
 
@@ -66,6 +68,103 @@ def delete_inventory_item(db: Session, item_id: int):
 def get_mechanics(db: Session):
     # Uso de is_(True) es más "SQLAlchemy-way", aunque == True funciona
     return db.query(models.Mechanic).filter(models.Mechanic.activo.is_(True)).all()
+
+
+def create_mechanic(db: Session, mechanic: schemas.MechanicCreate):
+    db_mechanic = models.Mechanic(**mechanic.model_dump())
+    db.add(db_mechanic)
+    db.commit()
+    db.refresh(db_mechanic)
+    return db_mechanic
+
+
+def update_mechanic(
+    db: Session, mechanic_id: int, mechanic_update: schemas.MechanicUpdate
+):
+    db_mechanic = (
+        db.query(models.Mechanic).filter(models.Mechanic.id == mechanic_id).first()
+    )
+    if not db_mechanic:
+        return None
+
+    update_data = mechanic_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_mechanic, key, value)
+
+    db.commit()
+    db.refresh(db_mechanic)
+    return db_mechanic
+
+
+def upload_mechanic_document(
+    db: Session, mechanic_id: int, doc_type: str, file: UploadFile
+):
+    # 1. Verificar si existe el mecánico
+    mechanic = (
+        db.query(models.Mechanic).filter(models.Mechanic.id == mechanic_id).first()
+    )
+    if not mechanic:
+        raise HTTPException(status_code=404, detail="Mecánico no encontrado")
+
+    # 2. Guardar archivo físicamente
+    upload_dir = "app/uploads/mechanics"
+    os.makedirs(upload_dir, exist_ok=True)
+
+    # Limpiamos el nombre del archivo para evitar problemas
+    clean_filename = f"{mechanic_id}_{doc_type}_{file.filename}".replace(" ", "_")
+    file_location = f"{upload_dir}/{clean_filename}"
+
+    with open(file_location, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    # 3. Guardar registro en Base de Datos
+    url_publica = f"/static/mechanics/{clean_filename}"
+
+    db_doc = models.MechanicDocument(
+        mechanic_id=mechanic_id,
+        tipo_documento=doc_type,
+        nombre_archivo=file.filename,
+        url_archivo=url_publica,
+    )
+    db.add(db_doc)
+    db.commit()
+    db.refresh(db_doc)
+
+    return {"message": "Documento subido", "url": url_publica, "id": db_doc.id}
+
+
+def get_mechanic_documents(db: Session, mechanic_id: int):
+    return (
+        db.query(models.MechanicDocument)
+        .filter(models.MechanicDocument.mechanic_id == mechanic_id)
+        .all()
+    )
+
+
+def delete_mechanic_document(db: Session, document_id: int):
+    doc = (
+        db.query(models.MechanicDocument)
+        .filter(models.MechanicDocument.id == document_id)
+        .first()
+    )
+    if not doc:
+        return False
+
+    # 1. Intentar borrar el archivo físico
+    try:
+        # Reconstruir la ruta absoluta (ajusta "app/uploads" si tu main.py apunta a otro lado)
+        # La url guardada es tipo "/static/mechanics/archivo.pdf"
+        # Debemos convertirla a "app/uploads/mechanics/archivo.pdf"
+        relative_path = doc.url_archivo.replace("/static/", "app/uploads/")
+        if os.path.exists(relative_path):
+            os.remove(relative_path)
+    except Exception as e:
+        print(f"Error borrando archivo físico: {e}")
+
+    # 2. Borrar de la BD
+    db.delete(doc)
+    db.commit()
+    return True
 
 
 # --- ORDENES ---

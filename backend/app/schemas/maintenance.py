@@ -40,9 +40,14 @@ class MechanicDocumentBase(BaseModel):
     fecha_vencimiento: Optional[date] = None
 
 
-class MechanicDocumentResponse(MechanicDocumentBase):
+class MechanicDocumentResponse(BaseModel):
     id: int
+    mechanic_id: int
+    tipo_documento: str
+    nombre_archivo: str
+    url_archivo: str
     subido_en: datetime
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -62,6 +67,7 @@ class MechanicBase(BaseModel):
     contacto_emergencia_nombre: Optional[str] = None
     contacto_emergencia_telefono: Optional[str] = None
     activo: bool = True
+    documents: List[MechanicDocumentResponse] = []  # Incluimos sus documentos
 
 
 class MechanicCreate(MechanicBase):
