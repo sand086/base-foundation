@@ -1,123 +1,233 @@
-from typing import List, Optional, Literal, Union
-from pydantic import BaseModel, ConfigDict, Field, field_validator
-from datetime import datetime, date
+from __future__ import annotations
 
-# --- TIPOS ---
-EstadoLlanta = Literal["nuevo", "usado", "renovado", "desecho"]
-EstadoFisico = Literal["buena", "regular", "mala"]
-TipoEvento = Union[
-    Literal[
-        "compra",
-        "montaje",
-        "desmontaje",
-        "reparacion",
-        "renovado",
-        "rotacion",
-        "inspeccion",
-        "desecho",
-    ],
-    str,
-]
+from datetime import date, datetime
+from typing import List, Optional
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.models.models import (
+    TireStatus,
+    TireCondition,
+    TireEventType,
+    RecordStatus,
+)  # ajusta ruta real
 
 
-# --- HISTORIAL ---
-class TireHistoryResponse(BaseModel):
-    id: int
-    fecha: datetime
-    tipo: TipoEvento
-    descripcion: str
-    unidad: Optional[str] = Field(
-        None,
-        validation_alias="unidad_economico",
-        serialization_alias="unidad_economico",
-    )
-    posicion: Optional[str] = None
-    km: Optional[float] = 0
-    costo: Optional[float] = 0
-    responsable: Optional[str] = "Sistema"
-
-    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
-
-    @field_validator("tipo", mode="before")
-    @classmethod
-    def normalize_tipo(cls, v):
-        return str(v).lower()
+class ORMBase(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
 
 
-# --- PAYLOADS ---
 class AssignTirePayload(BaseModel):
-    unidad_id: Optional[int] = None
-    posicion: Optional[str] = None
-    notas: Optional[str] = ""
+    """
+    Payload para asignar/desasignar una llanta a una unidad.
+    Nota: en ORM el campo real es unit_id (FK a units.id)
+    """
+
+    unit_id: Optional[int] = Field(default=None, description="FK a units.id")
+    posicion: Optional[str] = Field(default=None, max_length=50)
+    notas: Optional[str] = ""  # si lo usas para history.descripcion
+
+    model_config = ConfigDict(extra="ignore")
 
 
 class MaintenanceTirePayload(BaseModel):
-    tipo: str
-    costo: float
+    """
+    Payload para registrar un evento/mantenimiento en historial.
+    """
+
+    tipo: TireEventType
+    costo: float = 0.0
     descripcion: str
+    km: float = 0.0
+    responsable: Optional[str] = Field(default=None, max_length=100)
+    posicion: Optional[str] = Field(default=None, max_length=50)
+    unit_id: Optional[int] = None
 
 
-class TireCreate(BaseModel):
-    codigo_interno: str
-    marca: str
-    modelo: str
-    medida: str
-    dot: Optional[str] = None
-    profundidad_original: float
-    profundidad_actual: float
-    precio_compra: float
-    fecha_compra: date
-    proveedor: str
-    estado: str = "nuevo"
+# =========================================================
+# TIRE HISTORY (tire_history)
+# =========================================================
 
 
-# --- EDICIÓN (AQUÍ ESTABA EL FALTANTE) ---
-class TireUpdate(BaseModel):
-    marca: Optional[str] = None
-    modelo: Optional[str] = None
-    medida: Optional[str] = None
-    dot: Optional[str] = None
-    proveedor: Optional[str] = None
-    precio_compra: Optional[float] = None
-    fecha_compra: Optional[date] = None  # <--- Agregado
-    profundidad_original: Optional[float] = None  # <--- Agregado
+class TireHistoryBase(ORMBase):
+    # fecha = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    fecha: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    # tipo = Column(Enum(TireEventType, name="tire_event_type_enum"), nullable=False)
+    tipo: TireEventType
+
+    # descripcion = Column(String(255))  (nullable por default)
+    descripcion: Optional[str] = Field(default=None, max_length=255)
+
+    # unidad_id = FK units.id nullable
+    unidad_id: Optional[int] = None
+
+    # unidad_economico = Column(String(50), nullable=True)
+    unidad_economico: Optional[str] = Field(default=None, max_length=50)
+
+    # posicion = Column(String(50))
+    posicion: Optional[str] = Field(default=None, max_length=50)
+
+    # km/costo = Float default 0.0
+    km: float = 0.0
+    costo: float = 0.0
+
+    # responsable = Column(String(100))
+    responsable: Optional[str] = Field(default=None, max_length=100)
 
 
-# --- RESPUESTA ---
-class TireResponse(BaseModel):
+class TireHistoryCreate(ORMBase):
+    # cuando creas un evento (si lo soportas vía API)
+    tipo: TireEventType
+    descripcion: Optional[str] = Field(default=None, max_length=255)
+    unidad_id: Optional[int] = None
+    unidad_economico: Optional[str] = Field(default=None, max_length=50)
+    posicion: Optional[str] = Field(default=None, max_length=50)
+    km: float = 0.0
+    costo: float = 0.0
+    responsable: Optional[str] = Field(default=None, max_length=100)
+
+
+class TireHistoryResponse(TireHistoryBase):
     id: int
-    codigo_interno: str
-    marca: str
-    modelo: str
-    medida: str
-    dot: Optional[str] = None
+    tire_id: int
 
+    # AuditMixin
+    record_status: RecordStatus
+    created_at: datetime
+    updated_at: datetime
+    created_by_id: Optional[int] = None
+    updated_by_id: Optional[int] = None
+
+
+# =========================================================
+# TIRE (tires)
+# =========================================================
+
+
+class TireBase(ORMBase):
+    # codigo_interno = Column(String(50), unique=True, nullable=False)
+    codigo_interno: str = Field(..., max_length=50)
+
+    # marca = Column(String(50), nullable=False)
+    marca: str = Field(..., max_length=50)
+
+    # modelo = Column(String(50))
+    modelo: Optional[str] = Field(default=None, max_length=50)
+
+    # medida = Column(String(20))
+    medida: Optional[str] = Field(default=None, max_length=20)
+
+    # dot = Column(String(10))
+    dot: Optional[str] = Field(default=None, max_length=10)
+
+    # unit_id = FK units.id nullable=True
+    unit_id: Optional[int] = None
+
+    # posicion = Column(String(50), nullable=True)
+    posicion: Optional[str] = Field(default=None, max_length=50)
+
+    # estado/estado_fisico enums
+    estado: TireStatus = TireStatus.NUEVO
+    estado_fisico: TireCondition = TireCondition.BUENA
+
+    # profundidades/km
+    profundidad_actual: float = 0.0
+    profundidad_original: float = 0.0
+    km_recorridos: float = 0.0
+
+    # compra
+    fecha_compra: Optional[date] = None
+    precio_compra: float = 0.0
+    costo_acumulado: float = 0.0
+
+    # proveedor = Column(String(100))
+    proveedor: Optional[str] = Field(default=None, max_length=100)
+
+
+class TireCreate(ORMBase):
+    # En tu modelo SOLO esto es realmente obligatorio:
+    # codigo_interno, marca
+    codigo_interno: str = Field(..., max_length=50)
+    marca: str = Field(..., max_length=50)
+
+    modelo: Optional[str] = Field(default=None, max_length=50)
+    medida: Optional[str] = Field(default=None, max_length=20)
+    dot: Optional[str] = Field(default=None, max_length=10)
+
+    unidad_id: Optional[int] = Field(default=None, description="alias UI", exclude=True)
+    unit_id: Optional[int] = None
+    posicion: Optional[str] = Field(default=None, max_length=50)
+
+    estado: TireStatus = TireStatus.NUEVO
+    estado_fisico: TireCondition = TireCondition.BUENA
+
+    profundidad_original: float = 0.0
+    profundidad_actual: float = 0.0
+
+    km_recorridos: float = 0.0
+
+    fecha_compra: Optional[date] = None
+    precio_compra: float = 0.0
+    costo_acumulado: float = 0.0
+
+    proveedor: Optional[str] = Field(default=None, max_length=100)
+
+    model_config = ConfigDict(extra="ignore")
+
+    def model_post_init(self, __context):
+        # Si el front manda unidad_id (tu naming previo), lo mapeamos a unit_id sin romper
+        if self.unit_id is None and getattr(self, "unidad_id", None) is not None:
+            self.unit_id = getattr(self, "unidad_id")
+
+
+class TireUpdate(ORMBase):
+    # parcial
+    codigo_interno: Optional[str] = Field(default=None, max_length=50)
+    marca: Optional[str] = Field(default=None, max_length=50)
+    modelo: Optional[str] = Field(default=None, max_length=50)
+    medida: Optional[str] = Field(default=None, max_length=20)
+    dot: Optional[str] = Field(default=None, max_length=10)
+
+    unit_id: Optional[int] = None
+    posicion: Optional[str] = Field(default=None, max_length=50)
+
+    estado: Optional[TireStatus] = None
+    estado_fisico: Optional[TireCondition] = None
+
+    profundidad_actual: Optional[float] = None
+    profundidad_original: Optional[float] = None
+    km_recorridos: Optional[float] = None
+
+    fecha_compra: Optional[date] = None
+    precio_compra: Optional[float] = None
+    costo_acumulado: Optional[float] = None
+
+    proveedor: Optional[str] = Field(default=None, max_length=100)
+
+
+class TireResponse(TireBase):
+    id: int
+
+    # alias “UI” (sin inventar columnas)
     unidad_actual_id: Optional[int] = Field(
         default=None, serialization_alias="unidad_actual_id"
     )
-    unidad_actual_economico: Optional[str] = None
-    posicion: Optional[str] = None
-
-    estado: EstadoLlanta
-    estado_fisico: EstadoFisico
-    profundidad_actual: float
-    profundidad_original: float
-    km_recorridos: float
-
-    fecha_compra: date
-    precio_compra: float
-    costo_acumulado: float
-    proveedor: Optional[str] = None
+    unidad_actual_economico: Optional[str] = Field(default=None)
 
     history: List[TireHistoryResponse] = Field(
-        default=[], serialization_alias="historial"
+        default_factory=list, serialization_alias="historial"
     )
 
-    model_config = ConfigDict(from_attributes=True)
+    # AuditMixin
+    record_status: RecordStatus
+    created_at: datetime
+    updated_at: datetime
+    created_by_id: Optional[int] = None
+    updated_by_id: Optional[int] = None
 
-    @field_validator("estado", "estado_fisico", mode="before")
-    @classmethod
-    def normalize_status(cls, v):
-        return str(v).lower()
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    def model_post_init(self, __context):
+        # rellena alias UI con base en unit_id
+        self.unidad_actual_id = self.unit_id

@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.schemas import maintenance as schemas
+
 from app.crud import maintenance as crud
 
 router = APIRouter()
@@ -99,9 +100,15 @@ def create_work_order(order: schemas.WorkOrderCreate, db: Session = Depends(get_
     return crud.create_work_order(db, order)
 
 
-@router.patch("/work-orders/{order_id}/status")
-def update_order_status(order_id: int, status: str, db: Session = Depends(get_db)):
-    order = crud.update_work_order_status(db, order_id, status)
+@router.patch(
+    "/work-orders/{order_id}/status", response_model=schemas.WorkOrderResponse
+)
+def update_order_status(
+    order_id: int,
+    payload: schemas.WorkOrderStatusUpdate,
+    db: Session = Depends(get_db),
+):
+    order = crud.update_work_order_status(db, order_id, payload.status)
     if not order:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
     return order
