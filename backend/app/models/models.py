@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from datetime import date
 from enum import Enum as PyEnum
+from sqlalchemy import Enum as SAEnum
 
 from sqlalchemy import (
     Column,
@@ -29,7 +30,7 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.orm import relationship, declarative_mixin, declared_attr
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, DOUBLE_PRECISION
 
 from app.db.database import Base
 
@@ -172,7 +173,13 @@ class AuditMixin:
     """
 
     record_status = Column(
-        Enum(RecordStatus, name="record_status_enum"),
+        SAEnum(
+            RecordStatus,
+            name="record_status_enum",
+            values_callable=lambda enum: [e.value for e in enum],  # ✅ A/I/E
+            native_enum=True,
+            create_type=False,  # ✅ NO intentes recrear el enum en Postgres
+        ),
         nullable=False,
         server_default=RecordStatus.ACTIVO.value,
     )
@@ -563,7 +570,11 @@ class Role(AuditMixin, Base):
     descripcion = Column(String(200))
     permisos = Column(JSONB, default=dict)
 
-    users = relationship("User", back_populates="role")
+    users = relationship(
+        "User",
+        back_populates="role",
+        foreign_keys="User.role_id",
+    )
 
 
 class User(AuditMixin, Base):
@@ -589,7 +600,11 @@ class User(AuditMixin, Base):
     is_2fa_enabled = Column(Boolean, default=False)
     last_login = Column(DateTime(timezone=True))
 
-    role = relationship("Role", back_populates="users")
+    role = relationship(
+        "Role",
+        back_populates="users",
+        foreign_keys=[role_id],
+    )
 
 
 class SystemConfig(Base):
@@ -699,7 +714,7 @@ class MechanicDocument(AuditMixin, Base):
     nombre_archivo = Column(String(255), nullable=False)
     url_archivo = Column(String(500), nullable=False)
     fecha_vencimiento = Column(Date, nullable=True)
-
+    file_size = Column(Integer, nullable=True)
     subido_en = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

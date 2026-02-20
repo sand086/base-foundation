@@ -205,7 +205,7 @@ export function MechanicDocuments({ mechanic }: Props) {
 
       {/* AREA DE SUBIDA */}
       <div className="bg-white p-4 rounded-lg border shadow-sm mb-6">
-        <h3 className="font-medium text-sm mb-3">Subir Nuevo Documento</h3>
+        <h3 className="font-semibold text-sm mb-3">Subir Nuevo Documento</h3>
         <div className="flex flex-col md:flex-row gap-3 items-end">
           <div className="w-full md:w-1/3 space-y-1">
             <Label className="text-xs">Tipo de Documento</Label>
@@ -252,9 +252,9 @@ export function MechanicDocuments({ mechanic }: Props) {
 
       {/* LISTA DE DOCUMENTOS */}
       <div className="space-y-4">
-        <h3 className="font-medium text-sm flex items-center justify-between">
+        <h3 className="font-semibold text-sm flex items-center justify-between">
           Expediente Digital
-          <span className="text-xs font-normal text-muted-foreground">
+          <span className="text-xs font-semibold text-muted-foreground">
             {documents.length} archivos
           </span>
         </h3>

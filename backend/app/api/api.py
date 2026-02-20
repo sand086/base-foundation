@@ -36,5 +36,5 @@ api_router.include_router(
 
 
 api_router.include_router(
-    suppliers.router, prefix="/finance", tags=["Finance & Suppliers"]
+    suppliers.router, prefix="/finance", tags=["Proveedores y CXP"]
 )

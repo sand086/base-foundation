@@ -44,7 +44,7 @@ def delete_inventory_item(item_id: int, db: Session = Depends(get_db)):
 
 @router.get("/mechanics", response_model=List[schemas.MechanicResponse])
 def read_mechanics(db: Session = Depends(get_db)):
-    return crud.get_mechanics(db)
+    return crud.list_mechanics(db)
 
 
 @router.post("/mechanics", response_model=schemas.MechanicResponse)
@@ -77,7 +77,7 @@ def upload_mechanic_document(
     response_model=List[schemas.MechanicDocumentResponse],
 )
 def get_mechanic_documents(mechanic_id: int, db: Session = Depends(get_db)):
-    return crud.get_mechanic_documents(db, mechanic_id)
+    return crud.list_mechanic_documents(db, mechanic_id)
 
 
 @router.delete("/mechanics/documents/{document_id}")

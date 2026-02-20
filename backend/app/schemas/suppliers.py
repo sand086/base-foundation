@@ -151,7 +151,7 @@ class PayableInvoiceResponse(ORMBase):
 
     uuid: str
     folio_interno: Optional[str] = None
-
+    supplier_razon_social: Optional[str] = None
     monto_total: float
     saldo_pendiente: float
     moneda: str

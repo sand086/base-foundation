@@ -9,7 +9,12 @@ from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session, joinedload
 
 from app.models import models
-from app.models.models import RecordStatus
+
+print("RecordStatus ELIMINADO value =>", models.RecordStatus.ELIMINADO.value)
+print("RecordStatus members =>", [e.value for e in models.RecordStatus])
+print("models loaded from =>", getattr(models, "__file__", None))
+
+
 from app.schemas import maintenance as schemas
 
 
@@ -41,7 +46,7 @@ def list_inventory(
     db: Session, skip: int = 0, limit: int = 100, q: Optional[str] = None
 ):
     query = db.query(models.InventoryItem).filter(
-        models.InventoryItem.record_status != RecordStatus.ELIMINADO
+        models.InventoryItem.record_status != models.RecordStatus.ELIMINADO.value
     )
 
     if q:
@@ -61,7 +66,7 @@ def get_inventory_item(db: Session, item_id: int):
         db.query(models.InventoryItem)
         .filter(
             models.InventoryItem.id == item_id,
-            models.InventoryItem.record_status != RecordStatus.ELIMINADO,
+            models.InventoryItem.record_status != models.RecordStatus.ELIMINADO.value,
         )
         .first()
     )
@@ -92,7 +97,7 @@ def update_inventory_item(
 def delete_inventory_item(db: Session, item_id: int):
     # Soft delete: record_status = E
     item = get_inventory_item(db, item_id)
-    item.record_status = models.RecordStatus.ELIMINADO
+    item.record_status = models.RecordStatus.ELIMINADO.value
     db.commit()
     return True
 
@@ -108,7 +113,7 @@ def list_mechanics(
     query = (
         db.query(models.Mechanic)
         .options(joinedload(models.Mechanic.documents))
-        .filter(models.Mechanic.record_status != RecordStatus.ELIMINADO)
+        .filter(models.Mechanic.record_status != models.RecordStatus.ELIMINADO.value)
     )
 
     if only_active:
@@ -123,7 +128,7 @@ def get_mechanic(db: Session, mechanic_id: int):
         .options(joinedload(models.Mechanic.documents))
         .filter(
             models.Mechanic.id == mechanic_id,
-            models.Mechanic.record_status != RecordStatus.ELIMINADO,
+            models.Mechanic.record_status != models.RecordStatus.ELIMINADO.value,
         )
         .first()
     )
@@ -153,7 +158,7 @@ def delete_mechanic(db: Session, mechanic_id: int):
     # soft: lo marcamos inactivo + record_status
     db_mech = get_mechanic(db, mechanic_id)
     db_mech.activo = False
-    db_mech.record_status = models.RecordStatus.ELIMINADO
+    db_mech.record_status = models.RecordStatus.ELIMINADO.value
     db.commit()
     return True
 
@@ -199,7 +204,8 @@ def list_mechanic_documents(db: Session, mechanic_id: int):
         db.query(models.MechanicDocument)
         .filter(
             models.MechanicDocument.mechanic_id == mechanic_id,
-            models.MechanicDocument.record_status != RecordStatus.ELIMINADO,
+            models.MechanicDocument.record_status
+            != models.RecordStatus.ELIMINADO.value,
         )
         .order_by(models.MechanicDocument.id.desc())
         .all()
@@ -207,11 +213,14 @@ def list_mechanic_documents(db: Session, mechanic_id: int):
 
 
 def delete_mechanic_document(db: Session, document_id: int):
+
+    print(models.RecordStatus.ELIMINADO.value)
+
     doc = (
         db.query(models.MechanicDocument)
         .filter(
             models.MechanicDocument.id == document_id,
-            models.MechanicDocument.record_status != RecordStatus.ELIMINADO,
+            models.MechanicDocument.record_status != "E",
         )
         .first()
     )
@@ -226,7 +235,7 @@ def delete_mechanic_document(db: Session, document_id: int):
     except Exception:
         pass
 
-    doc.record_status = RecordStatus.ELIMINADO
+    doc.record_status = models.RecordStatus.ELIMINADO.value
     db.commit()
     return True
 
@@ -249,7 +258,7 @@ def list_work_orders(
             joinedload(models.WorkOrder.mechanic),
             joinedload(models.WorkOrder.parts).joinedload(models.WorkOrderPart.item),
         )
-        .filter(models.WorkOrder.record_status != RecordStatus.ELIMINADO)
+        .filter(models.WorkOrder.record_status != models.RecordStatus.ELIMINADO.value)
     )
 
     if status:
@@ -282,7 +291,7 @@ def get_work_order(db: Session, order_id: int):
         )
         .filter(
             models.WorkOrder.id == order_id,
-            models.WorkOrder.record_status != RecordStatus.ELIMINADO,
+            models.WorkOrder.record_status != models.RecordStatus.ELIMINADO.value,
         )
         .first()
     )
@@ -329,7 +338,7 @@ def create_work_order(db: Session, order_in: schemas.WorkOrderCreate):
                     status_code=404,
                     detail=f"Refacción con ID {part.inventory_item_id} no encontrada",
                 )
-            if item.record_status == models.RecordStatus.ELIMINADO:
+            if item.record_status == models.RecordStatus.ELIMINADO.value:
                 raise HTTPException(
                     status_code=400,
                     detail=f"Refacción {item.sku} está eliminada",
@@ -380,6 +389,6 @@ def delete_work_order(db: Session, order_id: int):
     order = db.query(models.WorkOrder).filter(models.WorkOrder.id == order_id).first()
     if not order:
         _not_found("Orden de trabajo")
-    order.record_status = models.RecordStatus.ELIMINADO
+    order.record_status = models.RecordStatus.ELIMINADO.value
     db.commit()
     return True
