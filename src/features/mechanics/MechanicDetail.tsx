@@ -78,23 +78,50 @@ export function MechanicDetail({ mechanic }: Props) {
       </div>
 
       {/* Tarjeta Emergencia */}
-      <div className="col-span-1 md:col-span-2 space-y-4">
-        <h3 className="font-semibold text-sm flex items-center gap-2 text-slate-700">
-          <AlertCircle className="h-4 w-4" /> Contacto de Emergencia
+      <div className="col-span-2 md:col-span-2 space-y-3">
+        {/* Encabezado */}
+        <h3 className="font-semibold text-sm flex items-center gap-2 text-slate-800">
+          <AlertCircle className="h-4.5 w-4.5 text-red-500" />
+          Contacto de Emergencia
         </h3>
-        <div className="bg-red-50 p-4 rounded-lg border border-red-100 flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-red-900">
-              {mechanic.contacto_emergencia_nombre || "No configurado"}
-            </p>
-            <p className="text-xs text-red-700">Nombre de contacto</p>
+
+        {/* Tarjeta de Información */}
+        <div className="bg-red-50/50 p-4 rounded-xl border border-red-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all hover:bg-red-50 hover:shadow-sm">
+          {/* Bloque: Nombre del Contacto */}
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-red-100 rounded-lg shrink-0 text-red-600">
+              <User className="h-4 w-4" />
+            </div>
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-red-800/70 mb-0.5">
+                Nombre
+              </p>
+              <p
+                className={`text-sm font-medium ${mechanic.contacto_emergencia_nombre ? "text-red-950" : "text-red-800/50 italic"}`}
+              >
+                {mechanic.contacto_emergencia_nombre || "No configurado"}
+              </p>
+            </div>
           </div>
-          <div className="text-right">
-            <p className="text-sm font-bold text-red-900 flex items-center gap-1 justify-end">
-              <Phone className="h-3 w-3" />
-              {mechanic.contacto_emergencia_telefono || "--"}
-            </p>
-            <p className="text-xs text-red-700">Teléfono</p>
+
+          {/* Separador sutil solo visible en pantallas medianas o grandes */}
+          <div className="hidden sm:block w-px h-8 bg-red-200/50 mx-2"></div>
+
+          {/* Bloque: Teléfono de Contacto */}
+          <div className="flex items-center gap-3 sm:justify-end">
+            <div className="p-2 bg-red-100 rounded-lg shrink-0 text-red-600">
+              <Phone className="h-4 w-4" />
+            </div>
+            <div className="sm:text-right">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-red-800/70 mb-0.5">
+                Teléfono
+              </p>
+              <p
+                className={`text-sm font-bold ${mechanic.contacto_emergencia_telefono ? "text-red-950" : "text-red-800/50 italic"}`}
+              >
+                {mechanic.contacto_emergencia_telefono || "Sin registrar"}
+              </p>
+            </div>
           </div>
         </div>
       </div>

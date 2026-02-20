@@ -66,8 +66,8 @@ export function MechanicsTable({
       header: "Datos",
       render: (_: any, row: Mechanic) => (
         <div className="flex flex-col text-xs text-muted-foreground">
-          {row.nss && <span>NSS: {row.nss}</span>}
-          {row.rfc && <span>RFC: {row.rfc}</span>}
+          <span>NSS: {row.nss || "---"}</span>
+          <span>RFC: {row.rfc || "---"}</span>
         </div>
       ),
     },
@@ -76,7 +76,7 @@ export function MechanicsTable({
       header: "Estado",
       render: (val: boolean) => (
         <Badge
-          variant={val ? "default" : "secondary"}
+          variant={val ? "success" : "destructive"}
           className={
             val ? "bg-emerald-100 text-emerald-800 border-emerald-200" : ""
           }

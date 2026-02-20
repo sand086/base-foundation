@@ -32,30 +32,31 @@ export function MechanicExpedienteModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
         {/* HEADER OSCURO (Estático) */}
-        <div className="bg-slate-950 text-white p-6">
+        <div className="bg-slate-400 text-white p-6">
           <DialogHeader className="space-y-0">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-4">
                 <div className="h-16 w-16 rounded-full bg-slate-800 flex items-center justify-center border-2 border-slate-700">
-                  <HardHat className="h-8 w-8 text-slate-400" />
+                  <HardHat className="h-8 w-8 text-white" />
                 </div>
                 <div>
-                  <DialogTitle className="text-xl font-bold flex items-center gap-2">
+                  <DialogTitle className="text-xl font-bold flex items-center uppercase gap-2">
                     {mechanic.nombre} {mechanic.apellido}
                     <Badge
-                      variant={mechanic.activo ? "default" : "destructive"}
+                      variant={
+                        mechanic.activo ? "successSoft" : "destructiveSoft"
+                      }
                       className="text-xs"
                     >
                       {mechanic.activo ? "Activo" : "Inactivo"}
                     </Badge>
                   </DialogTitle>
-                  <DialogDescription className="text-slate-400 mt-1">
-                    {mechanic.especialidad || "Mecánico General"} • ID:{" "}
-                    {mechanic.id}
+                  <DialogDescription className="text-slate-900 uppercase mt-1">
+                    {mechanic.especialidad || "Mecánico General"}
                   </DialogDescription>
                 </div>
               </div>
-              <div className="text-right text-xs text-slate-400">
+              <div className="text-right mr-10 text-slate-900">
                 <p>Fecha Ingreso</p>
                 <p className="font-mono text-white">
                   {mechanic.fecha_contratacion

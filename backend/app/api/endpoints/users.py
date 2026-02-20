@@ -1,150 +1,160 @@
+from __future__ import annotations
+
+import json
 from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+
 from app.db.database import get_db
+from app.crud import users as crud
 from app.models import models
 from app.schemas import users as schemas
-import uuid
-import json
 
 router = APIRouter()
 
-# ==========================================
-# 1. GESTIÓN DE USUARIOS (CRUD Básico)
-# ==========================================
+
+# =========================================================
+# USERS
+# =========================================================
 
 
 @router.get("/usuarios", response_model=List[schemas.UserResponse])
-def get_users(db: Session = Depends(get_db)):
-    return db.query(models.User).order_by(models.User.created_at.desc()).all()
+def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    return crud.get_users(db, skip=skip, limit=limit)
+
+
+@router.get("/usuarios/{user_id}", response_model=schemas.UserResponse)
+def read_user(user_id: int, db: Session = Depends(get_db)):
+    user = crud.get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    return user
 
 
 @router.post("/usuarios", response_model=schemas.UserResponse)
-def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    if db.query(models.User).filter(models.User.email == user.email).first():
+def create_user(payload: schemas.UserCreate, db: Session = Depends(get_db)):
+    # email unique (aunque tu db también lo impone)
+    if crud.get_user_by_email(db, payload.email):
         raise HTTPException(status_code=400, detail="El correo ya existe")
 
-    # Generar ID único
-    db_user = models.User(
-        id=f"USR-{uuid.uuid4().hex[:8].upper()}",
-        email=user.email,
-        password_hash=user.password,  # En prod usar hashing
-        nombre=user.nombre,
-        apellido=user.apellido,
-        telefono=user.telefono,
-        puesto=user.puesto,
-        role_id=user.role_id,
-        activo=user.activo,
-    )
-    db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
-    return db_user
+    # validar role_id si viene
+    if payload.role_id is not None:
+        role = crud.get_role(db, payload.role_id)
+        if not role:
+            raise HTTPException(status_code=404, detail="Rol no encontrado")
+
+    return crud.create_user(db, payload)
 
 
 @router.put("/usuarios/{user_id}", response_model=schemas.UserResponse)
 def update_user(
-    user_id: str, user_update: schemas.UserUpdate, db: Session = Depends(get_db)
+    user_id: int, payload: schemas.UserUpdate, db: Session = Depends(get_db)
 ):
-    db_user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not db_user:
+    # si cambia email, validar duplicado
+    if payload.email:
+        existing = crud.get_user_by_email(db, payload.email)
+        if existing and existing.id != user_id:
+            raise HTTPException(status_code=400, detail="El correo ya existe")
+
+    # validar role_id si viene
+    if payload.role_id is not None:
+        role = crud.get_role(db, payload.role_id)
+        if not role:
+            raise HTTPException(status_code=404, detail="Rol no encontrado")
+
+    user = crud.update_user(db, user_id, payload)
+    if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
-
-    for key, value in user_update.model_dump(exclude_unset=True).items():
-        setattr(db_user, key, value)
-
-    db.commit()
-    db.refresh(db_user)
-    return db_user
+    return user
 
 
 @router.patch("/usuarios/{user_id}/status")
-def toggle_status(user_id: str, db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404)
-    user.activo = not user.activo
-    db.commit()
-    return {"status": user.activo}
+def toggle_status(user_id: int, db: Session = Depends(get_db)):
+    status_value = crud.toggle_user_status(db, user_id)
+    if status_value is None:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    return {"activo": status_value}
 
 
 @router.post("/usuarios/{user_id}/reset-password")
 def reset_password(
-    user_id: str, payload: schemas.PasswordReset, db: Session = Depends(get_db)
+    user_id: int, payload: schemas.PasswordReset, db: Session = Depends(get_db)
 ):
-    user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404)
-    user.password_hash = payload.new_password
-    db.commit()
+    ok = crud.reset_password(db, user_id, payload.new_password)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
     return {"message": "Contraseña actualizada"}
 
 
-# ==========================================
-# 2. GESTIÓN DE ROLES (CRUD)
-# ==========================================
+@router.delete("/usuarios/{user_id}")
+def delete_user(user_id: int, db: Session = Depends(get_db)):
+    ok = crud.delete_user(db, user_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    return {"message": "Usuario eliminado"}
+
+
+# =========================================================
+# ROLES
+# =========================================================
 
 
 @router.get("/roles", response_model=List[schemas.RoleResponse])
-def get_roles(db: Session = Depends(get_db)):
-    return db.query(models.Role).all()
+def read_roles(db: Session = Depends(get_db)):
+    return crud.get_roles(db)
+
+
+@router.get("/roles/{role_id}", response_model=schemas.RoleResponse)
+def read_role(role_id: int, db: Session = Depends(get_db)):
+    role = crud.get_role(db, role_id)
+    if not role:
+        raise HTTPException(status_code=404, detail="Rol no encontrado")
+    return role
 
 
 @router.post("/roles", response_model=schemas.RoleResponse)
-def create_role(role: schemas.RoleCreate, db: Session = Depends(get_db)):
-    # Validar duplicados
-    if db.query(models.Role).filter(models.Role.id == role.id).first():
-        raise HTTPException(status_code=400, detail="El ID del rol ya existe")
-
-    db_role = models.Role(
-        id=role.id,
-        nombre=role.nombre,
-        descripcion=role.descripcion,
-        permisos=role.permisos,
-    )
-    db.add(db_role)
-    db.commit()
-    db.refresh(db_role)
-    return db_role
+def create_role(payload: schemas.RoleCreate, db: Session = Depends(get_db)):
+    # name_key es unique en tu modelo
+    if crud.get_role_by_key(db, payload.name_key):
+        raise HTTPException(status_code=400, detail="Ya existe un rol con ese name_key")
+    return crud.create_role(db, payload)
 
 
-@router.put("/roles/{role_id}")
-def update_role_permissions(
-    role_id: str, payload: schemas.RoleUpdate, db: Session = Depends(get_db)
+@router.put("/roles/{role_id}", response_model=schemas.RoleResponse)
+def update_role(
+    role_id: int, payload: schemas.RoleUpdate, db: Session = Depends(get_db)
 ):
-    role = db.query(models.Role).filter(models.Role.id == role_id).first()
+    # si cambia name_key validar unique
+    if payload.name_key:
+        exists = crud.get_role_by_key(db, payload.name_key)
+        if exists and exists.id != role_id:
+            raise HTTPException(
+                status_code=400, detail="Ya existe un rol con ese name_key"
+            )
+
+    role = crud.update_role(db, role_id, payload)
     if not role:
         raise HTTPException(status_code=404, detail="Rol no encontrado")
-
-    # Actualizar solo permisos
-    role.permisos = payload.permisos
-    db.commit()
-    db.refresh(role)
     return role
 
 
 @router.delete("/roles/{role_id}")
-def delete_role(role_id: str, db: Session = Depends(get_db)):
-    role = db.query(models.Role).filter(models.Role.id == role_id).first()
-    if not role:
+def delete_role(role_id: int, db: Session = Depends(get_db)):
+    result = crud.delete_role(db, role_id)
+    if result is False:
         raise HTTPException(status_code=404, detail="Rol no encontrado")
-
-    # Verificar si tiene usuarios asignados
-    if db.query(models.User).filter(models.User.role_id == role_id).first():
+    if result is None:
         raise HTTPException(
-            status_code=400, detail="No se puede eliminar: Hay usuarios usando este rol"
+            status_code=400, detail="No se puede eliminar: hay usuarios usando este rol"
         )
-
-    db.delete(role)
-    db.commit()
     return {"message": "Rol eliminado"}
 
 
-# ==========================================
-# 3. GESTIÓN DE CATÁLOGO DE MÓDULOS (Permisos Dinámicos)
-# ==========================================
+# =========================================================
+# MODULES (SystemConfig) - lo dejo igual que tú, solo alineado
+# =========================================================
 
-# Lista por defecto para cuando el sistema inicia de cero
 DEFAULT_MODULES = [
     {"id": "dashboard", "nombre": "Dashboard", "icono": "LayoutDashboard"},
     {"id": "monitoreo", "nombre": "Centro de Monitoreo", "icono": "Radio"},
@@ -162,8 +172,6 @@ DEFAULT_MODULES = [
 
 @router.get("/config/modules", response_model=List[schemas.ModuleSchema])
 def get_modules(db: Session = Depends(get_db)):
-    """Obtiene la lista de módulos/permisos disponibles"""
-    # Buscamos en la tabla de configuración
     config = (
         db.query(models.SystemConfig)
         .filter(models.SystemConfig.key == "modules_list")
@@ -171,7 +179,6 @@ def get_modules(db: Session = Depends(get_db)):
     )
 
     if not config:
-        # Si no existe, guardamos los default y los retornamos
         config = models.SystemConfig(
             key="modules_list",
             value=json.dumps(DEFAULT_MODULES),
@@ -188,34 +195,28 @@ def get_modules(db: Session = Depends(get_db)):
 
 @router.post("/config/modules", response_model=List[schemas.ModuleSchema])
 def add_module(modulo: schemas.ModuleSchema, db: Session = Depends(get_db)):
-    """Agrega un nuevo módulo al catálogo"""
     config = (
         db.query(models.SystemConfig)
         .filter(models.SystemConfig.key == "modules_list")
         .first()
     )
 
-    current_modules = []
-    if config:
-        current_modules = json.loads(config.value)
-    else:
-        current_modules = DEFAULT_MODULES
+    current_modules = json.loads(config.value) if config else list(DEFAULT_MODULES)
 
-    # Validar que no exista el ID
-    for m in current_modules:
-        if m["id"] == modulo.id:
-            raise HTTPException(
-                status_code=400, detail="Ya existe un módulo con este ID"
-            )
+    if any(m["id"] == modulo.id for m in current_modules):
+        raise HTTPException(status_code=400, detail="Ya existe un módulo con este ID")
 
-    # Agregar y guardar
     current_modules.append(modulo.model_dump())
 
     if config:
         config.value = json.dumps(current_modules)
     else:
         config = models.SystemConfig(
-            key="modules_list", value=json.dumps(current_modules)
+            key="modules_list",
+            value=json.dumps(current_modules),
+            grupo="system",
+            tipo="json",
+            is_public=False,
         )
         db.add(config)
 

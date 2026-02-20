@@ -33,6 +33,8 @@ api_router.include_router(tires.router, tags=["Llantas"])
 api_router.include_router(
     maintenance.router, prefix="/maintenance", tags=["Mantenimiento"]
 )
+
+
 api_router.include_router(
-    suppliers.router, prefix="/api/finance", tags=["Finance & Suppliers"]
+    suppliers.router, prefix="/finance", tags=["Proveedores y CXP"]
 )

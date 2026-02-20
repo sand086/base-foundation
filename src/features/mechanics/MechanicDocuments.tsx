@@ -15,7 +15,16 @@ import { toast } from "sonner";
 import { Mechanic } from "@/types/api.types";
 import { mechanicService } from "@/services/mechanicService";
 
-// Definir interfaz local si no la tienes en api.types
+//  Dialog shadcn/ui
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
 interface MechanicDocument {
   id: number;
   tipo_documento: string;
@@ -47,15 +56,19 @@ export function MechanicDocuments({ mechanic }: Props) {
   const [selectedDocType, setSelectedDocType] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
-  // Cargar documentos al abrir
+  //  Estado modal de eliminar
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [docToDelete, setDocToDelete] = useState<MechanicDocument | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   useEffect(() => {
     loadDocuments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mechanic.id]);
 
   const loadDocuments = async () => {
     setIsLoadingDocs(true);
     try {
-      // LLAMADA REAL AL BACKEND
       const docs = await mechanicService.getDocuments(mechanic.id);
       setDocuments(docs);
     } catch (error) {
@@ -88,7 +101,6 @@ export function MechanicDocuments({ mechanic }: Props) {
       ) as HTMLInputElement;
       if (fileInput) fileInput.value = "";
 
-      // Recargar lista
       loadDocuments();
     } catch (error) {
       console.error(error);
@@ -98,31 +110,102 @@ export function MechanicDocuments({ mechanic }: Props) {
     }
   };
 
-  const handleDelete = async (docId: number) => {
-    if (!confirm("¿Estás seguro de eliminar este documento?")) return;
+  //  Abrir modal y guardar doc a eliminar
+  const requestDelete = (doc: MechanicDocument) => {
+    setDocToDelete(doc);
+    setIsDeleteOpen(true);
+  };
 
+  //  Confirmar eliminación
+  const confirmDelete = async () => {
+    if (!docToDelete) return;
+
+    setIsDeleting(true);
     try {
-      await mechanicService.deleteDocument(docId);
+      await mechanicService.deleteDocument(docToDelete.id);
       toast.success("Documento eliminado");
-      // Filtrar localmente para que sea más rápido
-      setDocuments(documents.filter((d) => d.id !== docId));
+
+      // Actualización optimista
+      setDocuments((prev) => prev.filter((d) => d.id !== docToDelete.id));
+
+      // Cerrar modal
+      setIsDeleteOpen(false);
+      setDocToDelete(null);
     } catch (error) {
+      console.error(error);
       toast.error("Error al eliminar");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
-  // Función para abrir el archivo
+  const BACKEND_URL =
+    (import.meta.env.VITE_BACKEND_URL as string) || window.location.origin;
+
   const handleView = (url: string) => {
-    // Asumiendo que tu backend sirve estáticos en la URL base
-    const fullUrl = `http://localhost:8000${url}`;
-    window.open(fullUrl, "_blank");
+    const fullUrl = new URL(url, BACKEND_URL).toString();
+    window.open(fullUrl, "_blank", "noopener,noreferrer");
   };
 
   return (
     <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
+      {/*  MODAL ELIMINAR */}
+      <Dialog
+        open={isDeleteOpen}
+        onOpenChange={(open) => {
+          setIsDeleteOpen(open);
+          if (!open) setDocToDelete(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>Eliminar documento</DialogTitle>
+            <DialogDescription>
+              Esta acción no se puede deshacer. Se eliminará el archivo del
+              expediente del mecánico.
+            </DialogDescription>
+          </DialogHeader>
+
+          {docToDelete && (
+            <div className="rounded-lg border bg-slate-50 p-3 text-sm">
+              <div className="font-medium truncate">
+                {docToDelete.tipo_documento.replace("_", " ")}
+              </div>
+              <div className="text-muted-foreground truncate">
+                {docToDelete.nombre_archivo}
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setIsDeleteOpen(false)}
+              disabled={isDeleting}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Eliminando...
+                </>
+              ) : (
+                "Eliminar"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* AREA DE SUBIDA */}
       <div className="bg-white p-4 rounded-lg border shadow-sm mb-6">
-        <h3 className="font-medium text-sm mb-3">Subir Nuevo Documento</h3>
+        <h3 className="font-semibold text-sm mb-3">Subir Nuevo Documento</h3>
         <div className="flex flex-col md:flex-row gap-3 items-end">
           <div className="w-full md:w-1/3 space-y-1">
             <Label className="text-xs">Tipo de Documento</Label>
@@ -139,6 +222,7 @@ export function MechanicDocuments({ mechanic }: Props) {
               </SelectContent>
             </Select>
           </div>
+
           <div className="w-full md:w-1/2 space-y-1">
             <Label className="text-xs">Archivo (PDF, Imagen)</Label>
             <Input
@@ -148,6 +232,7 @@ export function MechanicDocuments({ mechanic }: Props) {
               onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
             />
           </div>
+
           <Button
             onClick={handleUpload}
             disabled={uploading || !selectedFile}
@@ -167,9 +252,9 @@ export function MechanicDocuments({ mechanic }: Props) {
 
       {/* LISTA DE DOCUMENTOS */}
       <div className="space-y-4">
-        <h3 className="font-medium text-sm flex items-center justify-between">
+        <h3 className="font-semibold text-sm flex items-center justify-between">
           Expediente Digital
-          <span className="text-xs font-normal text-muted-foreground">
+          <span className="text-xs font-semibold text-muted-foreground">
             {documents.length} archivos
           </span>
         </h3>
@@ -208,8 +293,8 @@ export function MechanicDocuments({ mechanic }: Props) {
                     </p>
                   </div>
                 </div>
+
                 <div className="flex items-center gap-1">
-                  {/* BOTONES REALES */}
                   <Button
                     variant="ghost"
                     size="sm"
@@ -223,7 +308,7 @@ export function MechanicDocuments({ mechanic }: Props) {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => handleDelete(doc.id)}
+                    onClick={() => requestDelete(doc)} //  ya no confirm()
                     className="h-8 w-8 p-0 text-slate-500 hover:text-red-600"
                     title="Eliminar"
                   >

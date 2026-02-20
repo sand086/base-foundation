@@ -1,18 +1,30 @@
-from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import select
-from fastapi import HTTPException, UploadFile
-from app.models import models
-from app.schemas import maintenance as schemas
-from datetime import datetime, timezone
-import shutil
+from __future__ import annotations
+
 import os
+import shutil
+from datetime import datetime, timezone
+from typing import Optional
 
-# --- helpers ---
+from fastapi import HTTPException, UploadFile
+from sqlalchemy.orm import Session, joinedload
+
+from app.models import models
+
+print("RecordStatus ELIMINADO value =>", models.RecordStatus.ELIMINADO.value)
+print("RecordStatus members =>", [e.value for e in models.RecordStatus])
+print("models loaded from =>", getattr(models, "__file__", None))
 
 
-def generate_work_order_folio(db: Session):
+from app.schemas import maintenance as schemas
+
+
+# -----------------------------
+# Helpers
+# -----------------------------
+
+
+def generate_work_order_folio(db: Session) -> str:
     year = datetime.now().year
-    # Contar órdenes del año actual para el consecutivo
     count = (
         db.query(models.WorkOrder)
         .filter(models.WorkOrder.folio.like(f"OT-{year}-%"))
@@ -21,13 +33,50 @@ def generate_work_order_folio(db: Session):
     return f"OT-{year}-{(count + 1):03d}"
 
 
-# --- INVENTARIO ---
-def get_inventory(db: Session, skip: int = 0, limit: int = 100):
-    return db.query(models.InventoryItem).offset(skip).limit(limit).all()
+def _not_found(entity: str = "Registro"):
+    raise HTTPException(status_code=404, detail=f"{entity} no encontrado")
 
 
-def create_inventory_item(db: Session, item: schemas.InventoryItemCreate):
-    db_item = models.InventoryItem(**item.model_dump())
+# -----------------------------
+# INVENTORY
+# -----------------------------
+
+
+def list_inventory(
+    db: Session, skip: int = 0, limit: int = 100, q: Optional[str] = None
+):
+    query = db.query(models.InventoryItem).filter(
+        models.InventoryItem.record_status != models.RecordStatus.ELIMINADO.value
+    )
+
+    if q:
+        like = f"%{q.strip()}%"
+        query = query.filter(
+            (models.InventoryItem.sku.ilike(like))
+            | (models.InventoryItem.descripcion.ilike(like))
+        )
+
+    return (
+        query.order_by(models.InventoryItem.id.desc()).offset(skip).limit(limit).all()
+    )
+
+
+def get_inventory_item(db: Session, item_id: int):
+    item = (
+        db.query(models.InventoryItem)
+        .filter(
+            models.InventoryItem.id == item_id,
+            models.InventoryItem.record_status != models.RecordStatus.ELIMINADO.value,
+        )
+        .first()
+    )
+    if not item:
+        _not_found("Item de inventario")
+    return item
+
+
+def create_inventory_item(db: Session, item_in: schemas.InventoryItemCreate):
+    db_item = models.InventoryItem(**item_in.model_dump())
     db.add(db_item)
     db.commit()
     db.refresh(db_item)
@@ -35,93 +84,110 @@ def create_inventory_item(db: Session, item: schemas.InventoryItemCreate):
 
 
 def update_inventory_item(
-    db: Session, item_id: int, item_update: schemas.InventoryItemUpdate
+    db: Session, item_id: int, item_in: schemas.InventoryItemUpdate
 ):
-    db_item = (
-        db.query(models.InventoryItem)
-        .filter(models.InventoryItem.id == item_id)
-        .first()
-    )
-    if not db_item:
-        return None
-    for key, value in item_update.model_dump(exclude_unset=True).items():
-        setattr(db_item, key, value)
+    db_item = get_inventory_item(db, item_id)
+    for k, v in item_in.model_dump(exclude_unset=True).items():
+        setattr(db_item, k, v)
     db.commit()
     db.refresh(db_item)
     return db_item
 
 
 def delete_inventory_item(db: Session, item_id: int):
-    item = (
-        db.query(models.InventoryItem)
-        .filter(models.InventoryItem.id == item_id)
+    # Soft delete: record_status = E
+    item = get_inventory_item(db, item_id)
+    item.record_status = models.RecordStatus.ELIMINADO.value
+    db.commit()
+    return True
+
+
+# -----------------------------
+# MECHANICS
+# -----------------------------
+
+
+def list_mechanics(
+    db: Session, skip: int = 0, limit: int = 100, only_active: bool = True
+):
+    query = (
+        db.query(models.Mechanic)
+        .options(joinedload(models.Mechanic.documents))
+        .filter(models.Mechanic.record_status != models.RecordStatus.ELIMINADO.value)
+    )
+
+    if only_active:
+        query = query.filter(models.Mechanic.activo.is_(True))
+
+    return query.order_by(models.Mechanic.id.desc()).offset(skip).limit(limit).all()
+
+
+def get_mechanic(db: Session, mechanic_id: int):
+    mech = (
+        db.query(models.Mechanic)
+        .options(joinedload(models.Mechanic.documents))
+        .filter(
+            models.Mechanic.id == mechanic_id,
+            models.Mechanic.record_status != models.RecordStatus.ELIMINADO.value,
+        )
         .first()
     )
-    if item:
-        db.delete(item)
-        db.commit()
-        return True
-    return False
+    if not mech:
+        _not_found("Mecánico")
+    return mech
 
 
-# --- MECANICOS ---
-def get_mechanics(db: Session):
-    # Uso de is_(True) es más "SQLAlchemy-way", aunque == True funciona
-    return db.query(models.Mechanic).filter(models.Mechanic.activo.is_(True)).all()
-
-
-def create_mechanic(db: Session, mechanic: schemas.MechanicCreate):
-    db_mechanic = models.Mechanic(**mechanic.model_dump())
-    db.add(db_mechanic)
+def create_mechanic(db: Session, mechanic_in: schemas.MechanicCreate):
+    db_mech = models.Mechanic(**mechanic_in.model_dump())
+    db.add(db_mech)
     db.commit()
-    db.refresh(db_mechanic)
-    return db_mechanic
+    db.refresh(db_mech)
+    return db_mech
 
 
-def update_mechanic(
-    db: Session, mechanic_id: int, mechanic_update: schemas.MechanicUpdate
-):
-    db_mechanic = (
-        db.query(models.Mechanic).filter(models.Mechanic.id == mechanic_id).first()
-    )
-    if not db_mechanic:
-        return None
-
-    update_data = mechanic_update.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(db_mechanic, key, value)
-
+def update_mechanic(db: Session, mechanic_id: int, mechanic_in: schemas.MechanicUpdate):
+    db_mech = get_mechanic(db, mechanic_id)
+    for k, v in mechanic_in.model_dump(exclude_unset=True).items():
+        setattr(db_mech, k, v)
     db.commit()
-    db.refresh(db_mechanic)
-    return db_mechanic
+    db.refresh(db_mech)
+    return db_mech
+
+
+def delete_mechanic(db: Session, mechanic_id: int):
+    # soft: lo marcamos inactivo + record_status
+    db_mech = get_mechanic(db, mechanic_id)
+    db_mech.activo = False
+    db_mech.record_status = models.RecordStatus.ELIMINADO.value
+    db.commit()
+    return True
+
+
+# ---- mechanic documents ----
 
 
 def upload_mechanic_document(
-    db: Session, mechanic_id: int, doc_type: str, file: UploadFile
+    db: Session,
+    mechanic_id: int,
+    doc_type: str,
+    file: UploadFile,
+    upload_dir: str = "app/uploads/mechanics",
+    static_prefix: str = "/static/mechanics",
 ):
-    # 1. Verificar si existe el mecánico
-    mechanic = (
-        db.query(models.Mechanic).filter(models.Mechanic.id == mechanic_id).first()
-    )
-    if not mechanic:
-        raise HTTPException(status_code=404, detail="Mecánico no encontrado")
+    mechanic = get_mechanic(db, mechanic_id)
 
-    # 2. Guardar archivo físicamente
-    upload_dir = "app/uploads/mechanics"
     os.makedirs(upload_dir, exist_ok=True)
 
-    # Limpiamos el nombre del archivo para evitar problemas
     clean_filename = f"{mechanic_id}_{doc_type}_{file.filename}".replace(" ", "_")
-    file_location = f"{upload_dir}/{clean_filename}"
+    file_location = os.path.join(upload_dir, clean_filename)
 
     with open(file_location, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # 3. Guardar registro en Base de Datos
-    url_publica = f"/static/mechanics/{clean_filename}"
+    url_publica = f"{static_prefix}/{clean_filename}"
 
     db_doc = models.MechanicDocument(
-        mechanic_id=mechanic_id,
+        mechanic_id=mechanic.id,
         tipo_documento=doc_type,
         nombre_archivo=file.filename,
         url_archivo=url_publica,
@@ -129,147 +195,200 @@ def upload_mechanic_document(
     db.add(db_doc)
     db.commit()
     db.refresh(db_doc)
+    return db_doc
 
-    return {"message": "Documento subido", "url": url_publica, "id": db_doc.id}
 
-
-def get_mechanic_documents(db: Session, mechanic_id: int):
+def list_mechanic_documents(db: Session, mechanic_id: int):
+    get_mechanic(db, mechanic_id)
     return (
         db.query(models.MechanicDocument)
-        .filter(models.MechanicDocument.mechanic_id == mechanic_id)
+        .filter(
+            models.MechanicDocument.mechanic_id == mechanic_id,
+            models.MechanicDocument.record_status
+            != models.RecordStatus.ELIMINADO.value,
+        )
+        .order_by(models.MechanicDocument.id.desc())
         .all()
     )
 
 
 def delete_mechanic_document(db: Session, document_id: int):
+
+    print(models.RecordStatus.ELIMINADO.value)
+
     doc = (
         db.query(models.MechanicDocument)
-        .filter(models.MechanicDocument.id == document_id)
+        .filter(
+            models.MechanicDocument.id == document_id,
+            models.MechanicDocument.record_status != "E",
+        )
         .first()
     )
     if not doc:
-        return False
+        _not_found("Documento")
 
-    # 1. Intentar borrar el archivo físico
+    # best effort borrar archivo físico
     try:
-        # Reconstruir la ruta absoluta (ajusta "app/uploads" si tu main.py apunta a otro lado)
-        # La url guardada es tipo "/static/mechanics/archivo.pdf"
-        # Debemos convertirla a "app/uploads/mechanics/archivo.pdf"
         relative_path = doc.url_archivo.replace("/static/", "app/uploads/")
         if os.path.exists(relative_path):
             os.remove(relative_path)
-    except Exception as e:
-        print(f"Error borrando archivo físico: {e}")
+    except Exception:
+        pass
 
-    # 2. Borrar de la BD
-    db.delete(doc)
+    doc.record_status = models.RecordStatus.ELIMINADO.value
     db.commit()
     return True
 
 
-# --- ORDENES ---
-def get_work_orders(db: Session, skip: int = 0, limit: int = 100):
-    orders = (
+# -----------------------------
+# WORK ORDERS
+# -----------------------------
+
+
+def list_work_orders(
+    db: Session,
+    skip: int = 0,
+    limit: int = 100,
+    status: Optional[models.WorkOrderStatus] = None,
+):
+    query = (
         db.query(models.WorkOrder)
         .options(
             joinedload(models.WorkOrder.unit),
             joinedload(models.WorkOrder.mechanic),
             joinedload(models.WorkOrder.parts).joinedload(models.WorkOrderPart.item),
         )
-        .order_by(models.WorkOrder.id.desc())
-        .offset(skip)
-        .limit(limit)
-        .all()
+        .filter(models.WorkOrder.record_status != models.RecordStatus.ELIMINADO.value)
     )
 
-    if not orders:
-        return []
+    if status:
+        query = query.filter(models.WorkOrder.status == status)
 
-    # Mapeo manual para respuesta plana (Correcto para Pydantic from_attributes)
+    orders = query.order_by(models.WorkOrder.id.desc()).offset(skip).limit(limit).all()
+
+    # campos planos para UI
     for o in orders:
-        o.unit_numero = o.unit.numero_economico if o.unit else "N/A"
-        o.mechanic_nombre = o.mechanic.nombre if o.mechanic else "Sin Asignar"
+        o.unit_numero = o.unit.numero_economico if o.unit else None
+        o.mechanic_nombre = o.mechanic.nombre if o.mechanic else None
         for p in o.parts:
-            # Validación extra por si se borró el item físico pero quedó el registro
-            p.item_sku = p.item.sku if p.item else "ELIMINADO"
+            if p.item:
+                p.item_sku = p.item.sku
+                p.item_descripcion = p.item.descripcion
+            else:
+                p.item_sku = "ELIMINADO"
+                p.item_descripcion = None
 
     return orders
 
 
+def get_work_order(db: Session, order_id: int):
+    order = (
+        db.query(models.WorkOrder)
+        .options(
+            joinedload(models.WorkOrder.unit),
+            joinedload(models.WorkOrder.mechanic),
+            joinedload(models.WorkOrder.parts).joinedload(models.WorkOrderPart.item),
+        )
+        .filter(
+            models.WorkOrder.id == order_id,
+            models.WorkOrder.record_status != models.RecordStatus.ELIMINADO.value,
+        )
+        .first()
+    )
+    if not order:
+        _not_found("Orden de trabajo")
+
+    order.unit_numero = order.unit.numero_economico if order.unit else None
+    order.mechanic_nombre = order.mechanic.nombre if order.mechanic else None
+    for p in order.parts:
+        if p.item:
+            p.item_sku = p.item.sku
+            p.item_descripcion = p.item.descripcion
+        else:
+            p.item_sku = "ELIMINADO"
+            p.item_descripcion = None
+
+    return order
+
+
 def create_work_order(db: Session, order_in: schemas.WorkOrderCreate):
     try:
-        # 1. Generar Folio
-        new_folio = generate_work_order_folio(db)
+        folio = generate_work_order_folio(db)
 
-        # 2. Crear cabecera de la Orden
         db_order = models.WorkOrder(
-            folio=new_folio,
+            folio=folio,
             unit_id=order_in.unit_id,
             mechanic_id=order_in.mechanic_id,
             descripcion_problema=order_in.descripcion_problema,
             status=models.WorkOrderStatus.ABIERTA,
         )
         db.add(db_order)
-        db.flush()  # Para obtener el ID de db_order sin confirmar transacción global
+        db.flush()  # obtiene id sin commit
 
-        # 3. Procesar Partes e Inventario
+        # Partes: bloquear inventario, validar stock, snapshot costo
         for part in order_in.parts:
-            # Bloquear fila para update (with_for_update) evita condiciones de carrera
             item = (
                 db.query(models.InventoryItem)
                 .filter(models.InventoryItem.id == part.inventory_item_id)
-                .with_for_update()  # <--- RECOMENDADO: Bloquea la fila mientras restamos
+                .with_for_update()
                 .first()
             )
-
-            # --- CORRECCIÓN CRÍTICA: Validar si el item existe ---
             if not item:
                 raise HTTPException(
                     status_code=404,
                     detail=f"Refacción con ID {part.inventory_item_id} no encontrada",
                 )
-
-            # Validar Stock
+            if item.record_status == models.RecordStatus.ELIMINADO.value:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Refacción {item.sku} está eliminada",
+                )
             if item.stock_actual < part.cantidad:
                 raise HTTPException(
                     status_code=400,
                     detail=f"Stock insuficiente para {item.sku}. Disponible: {item.stock_actual}",
                 )
 
-            # Crear registro de parte usada
             db_part = models.WorkOrderPart(
                 work_order_id=db_order.id,
-                inventory_item_id=part.inventory_item_id,
+                inventory_item_id=item.id,
                 cantidad=part.cantidad,
                 costo_unitario_snapshot=item.precio_unitario,
             )
-
-            # Descontar del inventario
             item.stock_actual -= part.cantidad
             db.add(db_part)
 
         db.commit()
-        db.refresh(db_order)
-        return db_order
+        return get_work_order(db, db_order.id)
 
-    except HTTPException as he:
-        # Si es un error nuestro (400/404), hacemos rollback y lo relanzamos
+    except HTTPException:
         db.rollback()
-        raise he
+        raise
     except Exception as e:
-        # Cualquier otro error de base de datos
         db.rollback()
-        # Opcional: Loggear el error real aquí
         raise HTTPException(status_code=500, detail=f"Error al crear orden: {str(e)}")
 
 
-def update_work_order_status(db: Session, order_id: int, status: str):
+def update_work_order_status(
+    db: Session, order_id: int, status: models.WorkOrderStatus
+):
     order = db.query(models.WorkOrder).filter(models.WorkOrder.id == order_id).first()
-    if order:
-        order.status = status
-        if status == "cerrada":
-            # Usar timezone aware datetime
-            order.fecha_cierre = datetime.now(timezone.utc)
-        db.commit()
-        db.refresh(order)
-    return order
+    if not order:
+        _not_found("Orden de trabajo")
+
+    order.status = status
+    if status == models.WorkOrderStatus.CERRADA:
+        order.fecha_cierre = datetime.now(timezone.utc)
+
+    db.commit()
+    return get_work_order(db, order_id)
+
+
+def delete_work_order(db: Session, order_id: int):
+    # Soft delete: record_status
+    order = db.query(models.WorkOrder).filter(models.WorkOrder.id == order_id).first()
+    if not order:
+        _not_found("Orden de trabajo")
+    order.record_status = models.RecordStatus.ELIMINADO.value
+    db.commit()
+    return True
