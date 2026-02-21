@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Card,
   CardContent,
@@ -40,14 +40,15 @@ import {
   LogOut,
   Shield,
   RefreshCw,
+  Laptop,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuditLogs } from "@/hooks/useAuditLogs";
 
-// Mock audit log data
+/** UI shape (camelCase) */
 export interface AuditLogEntry {
   id: string;
   usuario: string;
-  usuarioAvatar?: string;
   accion: string;
   tipoAccion:
     | "crear"
@@ -65,96 +66,47 @@ export interface AuditLogEntry {
   dispositivo?: string;
 }
 
-const mockAuditLogs: AuditLogEntry[] = [
-  {
-    id: "LOG-001",
-    usuario: "Carlos Mendoza",
-    accion: "Editó Ticket #CRG-2026-0015",
-    tipoAccion: "editar",
-    modulo: "Combustible",
-    detalles: "Modificó litros de 350L a 380L",
-    ip: "192.168.1.45",
-    fechaHora: "2026-01-17 14:32:15",
-    dispositivo: "Windows 11 - Chrome",
-  },
-  {
-    id: "LOG-002",
-    usuario: "María Rodríguez",
-    accion: "Exportó reporte de facturación",
-    tipoAccion: "exportar",
-    modulo: "Tesorería",
-    detalles: "Exportó 156 registros a Excel",
-    ip: "192.168.1.22",
-    fechaHora: "2026-01-17 13:45:00",
-    dispositivo: "macOS - Safari",
-  },
-  {
-    id: "LOG-003",
-    usuario: "Roberto Sánchez",
-    accion: "Creó nuevo viaje #VJ-2026-0089",
-    tipoAccion: "crear",
-    modulo: "Despacho",
-    detalles: "Ruta CDMX - Monterrey, Client: Sabino del Bene",
-    ip: "192.168.1.67",
-    fechaHora: "2026-01-17 12:20:30",
-    dispositivo: "Windows 10 - Edge",
-  },
-  {
-    id: "LOG-004",
-    usuario: "Ana Flores",
-    accion: "Eliminó documento de unidad",
-    tipoAccion: "eliminar",
-    modulo: "Flota",
-    detalles: "Eliminó póliza vencida de unidad T-001",
-    ip: "192.168.1.33",
-    fechaHora: "2026-01-17 11:15:22",
-    dispositivo: "Android - Chrome Mobile",
-  },
-  {
-    id: "LOG-005",
-    usuario: "Carlos Mendoza",
-    accion: "Inicio de sesión exitoso",
-    tipoAccion: "login",
-    modulo: "Sistema",
-    detalles: "Autenticación con 2FA",
-    ip: "192.168.1.45",
-    fechaHora: "2026-01-17 08:00:05",
-    dispositivo: "Windows 11 - Chrome",
-  },
-  {
-    id: "LOG-006",
-    usuario: "Fernando Torres",
-    accion: "Modificó permisos del rol Operativo",
-    tipoAccion: "seguridad",
-    modulo: "Usuarios",
-    detalles: "Habilitó permiso: exportar_reportes",
-    ip: "192.168.1.89",
-    fechaHora: "2026-01-16 17:45:10",
-    dispositivo: "Windows 10 - Firefox",
-  },
-  {
-    id: "LOG-007",
-    usuario: "Lucía Hernández",
-    accion: "Visualizó estado de cuenta",
-    tipoAccion: "ver",
-    modulo: "CxC",
-    detalles: "Client: Transportes del Norte",
-    ip: "192.168.1.55",
-    fechaHora: "2026-01-16 16:30:00",
-    dispositivo: "macOS - Chrome",
-  },
-  {
-    id: "LOG-008",
-    usuario: "Carlos Mendoza",
-    accion: "Cierre de sesión",
-    tipoAccion: "logout",
-    modulo: "Sistema",
-    detalles: "Sesión cerrada manualmente",
-    ip: "192.168.1.45",
-    fechaHora: "2026-01-16 18:00:00",
-    dispositivo: "Windows 11 - Chrome",
-  },
-];
+/** API shape (snake_case) típico del backend */
+type AuditLogApi = {
+  id: string | number;
+  usuario?: string; // si tu API ya lo manda
+  user?: { nombre?: string; apellido?: string; email?: string } | null; // si mandas relación
+  accion: string;
+  tipo_accion: string;
+  modulo: string;
+  detalles?: string | null;
+  ip?: string | null;
+  dispositivo?: string | null;
+  created_at: string; // ISO
+};
+
+const coerceTipoAccion = (v: string): AuditLogEntry["tipoAccion"] => {
+  const x = (v || "").toLowerCase();
+  if (
+    x === "crear" ||
+    x === "editar" ||
+    x === "eliminar" ||
+    x === "ver" ||
+    x === "exportar" ||
+    x === "login" ||
+    x === "logout" ||
+    x === "seguridad"
+  )
+    return x;
+  return "seguridad";
+};
+
+const formatFechaHora = (iso: string) => {
+  // si ya viene "2026-01-17 14:32:15" déjalo igual
+  if (!iso) return "";
+  if (iso.includes(" ") && iso.length >= 16) return iso;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(
+    d.getHours(),
+  )}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+};
 
 const getActionIcon = (tipo: AuditLogEntry["tipoAccion"]) => {
   switch (tipo) {
@@ -212,31 +164,60 @@ export function AuditLogPanel({ open, onOpenChange }: AuditLogPanelProps) {
   const [moduleFilter, setModuleFilter] = useState("all");
   const [actionFilter, setActionFilter] = useState("all");
 
-  const modules = ["all", ...new Set(mockAuditLogs.map((log) => log.modulo))];
-  const actionTypes = [
-    "all",
-    "crear",
-    "editar",
-    "eliminar",
-    "ver",
-    "exportar",
-    "login",
-    "logout",
-    "seguridad",
-  ];
+  const { logs, isLoading, fetchLogs } = useAuditLogs();
 
-  const filteredLogs = mockAuditLogs.filter((log) => {
-    const matchesSearch =
-      log.usuario.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.accion.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.detalles.toLowerCase().includes(searchTerm.toLowerCase());
+  // ✅ al abrir modal -> fetch real
+  useEffect(() => {
+    if (open) fetchLogs();
+  }, [open, fetchLogs]);
 
-    const matchesModule = moduleFilter === "all" || log.modulo === moduleFilter;
-    const matchesAction =
-      actionFilter === "all" || log.tipoAccion === actionFilter;
+  // ✅ normaliza data API -> UI
+  const uiLogs: AuditLogEntry[] = useMemo(() => {
+    return (logs as unknown as AuditLogApi[]).map((l) => {
+      const userName =
+        l.usuario ||
+        [l.user?.nombre, l.user?.apellido].filter(Boolean).join(" ") ||
+        l.user?.email ||
+        "Sistema";
 
-    return matchesSearch && matchesModule && matchesAction;
-  });
+      return {
+        id: String(l.id),
+        usuario: userName,
+        accion: l.accion,
+        tipoAccion: coerceTipoAccion(l.tipo_accion),
+        modulo: l.modulo,
+        detalles: l.detalles ?? "",
+        ip: l.ip ?? "-",
+        fechaHora: formatFechaHora(l.created_at),
+        dispositivo: l.dispositivo ?? undefined,
+      };
+    });
+  }, [logs]);
+
+  const modules = useMemo(
+    () => ["all", ...Array.from(new Set(uiLogs.map((log) => log.modulo)))],
+    [uiLogs],
+  );
+
+  const filteredLogs = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+
+    return uiLogs.filter((log) => {
+      const matchesSearch =
+        !term ||
+        log.usuario.toLowerCase().includes(term) ||
+        log.accion.toLowerCase().includes(term) ||
+        log.detalles.toLowerCase().includes(term);
+
+      const matchesModule =
+        moduleFilter === "all" || log.modulo === moduleFilter;
+
+      const matchesAction =
+        actionFilter === "all" || log.tipoAccion === actionFilter;
+
+      return matchesSearch && matchesModule && matchesAction;
+    });
+  }, [uiLogs, searchTerm, moduleFilter, actionFilter]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -296,8 +277,14 @@ export function AuditLogPanel({ open, onOpenChange }: AuditLogPanelProps) {
             </SelectContent>
           </Select>
 
-          <Button variant="outline" size="sm" className="h-9 gap-2">
-            <RefreshCw className="h-4 w-4" />
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 gap-2"
+            onClick={fetchLogs}
+            disabled={isLoading}
+          >
+            <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
             Actualizar
           </Button>
         </div>
@@ -305,7 +292,11 @@ export function AuditLogPanel({ open, onOpenChange }: AuditLogPanelProps) {
         {/* Log Entries */}
         <ScrollArea className="flex-1 pr-4">
           <div className="space-y-3 py-4">
-            {filteredLogs.length === 0 ? (
+            {isLoading ? (
+              <div className="text-center py-8 text-muted-foreground">
+                Cargando auditoría...
+              </div>
+            ) : filteredLogs.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 No se encontraron registros con los filtros aplicados.
               </div>
@@ -341,7 +332,7 @@ export function AuditLogPanel({ open, onOpenChange }: AuditLogPanelProps) {
                         {log.detalles}
                       </p>
 
-                      <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground flex-wrap">
                         <span className="flex items-center gap-1">
                           <User className="h-3 w-3" />
                           {log.usuario}
@@ -354,6 +345,12 @@ export function AuditLogPanel({ open, onOpenChange }: AuditLogPanelProps) {
                           <Globe className="h-3 w-3" />
                           {log.ip}
                         </span>
+                        {log.dispositivo && (
+                          <span className="flex items-center gap-1">
+                            <Laptop className="h-3 w-3" />
+                            {log.dispositivo}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -366,9 +363,9 @@ export function AuditLogPanel({ open, onOpenChange }: AuditLogPanelProps) {
         {/* Footer */}
         <div className="pt-4 border-t flex items-center justify-between text-xs text-muted-foreground flex-shrink-0">
           <span>
-            Mostrando {filteredLogs.length} de {mockAuditLogs.length} registros
+            Mostrando {filteredLogs.length} de {uiLogs.length} registros
           </span>
-          <span>Datos en tiempo real (simulado)</span>
+          <span>Datos en tiempo real</span>
         </div>
       </DialogContent>
     </Dialog>
@@ -377,7 +374,31 @@ export function AuditLogPanel({ open, onOpenChange }: AuditLogPanelProps) {
 
 // Compact version for embedding in pages
 export function AuditLogCard() {
-  const recentLogs = mockAuditLogs.slice(0, 5);
+  const { logs, isLoading, fetchLogs } = useAuditLogs();
+
+  useEffect(() => {
+    fetchLogs();
+  }, [fetchLogs]);
+
+  const uiLogs: AuditLogEntry[] = useMemo(() => {
+    return (logs as unknown as AuditLogApi[]).map((l) => ({
+      id: String(l.id),
+      usuario:
+        l.usuario ||
+        [l.user?.nombre, l.user?.apellido].filter(Boolean).join(" ") ||
+        l.user?.email ||
+        "Sistema",
+      accion: l.accion,
+      tipoAccion: coerceTipoAccion(l.tipo_accion),
+      modulo: l.modulo,
+      detalles: l.detalles ?? "",
+      ip: l.ip ?? "-",
+      fechaHora: formatFechaHora(l.created_at),
+      dispositivo: l.dispositivo ?? undefined,
+    }));
+  }, [logs]);
+
+  const recentLogs = uiLogs.slice(0, 5);
 
   return (
     <Card>
@@ -394,32 +415,37 @@ export function AuditLogCard() {
           </div>
         </div>
       </CardHeader>
+
       <CardContent>
-        <div className="space-y-3">
-          {recentLogs.map((log) => (
-            <div
-              key={log.id}
-              className="flex items-start gap-3 pb-3 border-b last:border-0 last:pb-0"
-            >
+        {isLoading ? (
+          <div className="text-xs text-muted-foreground py-2">Cargando...</div>
+        ) : (
+          <div className="space-y-3">
+            {recentLogs.map((log) => (
               <div
-                className={cn(
-                  "w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 border",
-                  getActionColor(log.tipoAccion),
-                )}
+                key={log.id}
+                className="flex items-start gap-3 pb-3 border-b last:border-0 last:pb-0"
               >
-                {getActionIcon(log.tipoAccion)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium truncate">{log.accion}</p>
-                <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
-                  <span>{log.usuario}</span>
-                  <span>•</span>
-                  <span>{log.fechaHora.split(" ")[1]}</span>
+                <div
+                  className={cn(
+                    "w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 border",
+                    getActionColor(log.tipoAccion),
+                  )}
+                >
+                  {getActionIcon(log.tipoAccion)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium truncate">{log.accion}</p>
+                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
+                    <span>{log.usuario}</span>
+                    <span>•</span>
+                    <span>{log.fechaHora.split(" ")[1] ?? ""}</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
