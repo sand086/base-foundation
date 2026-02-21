@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from app.models.models import RecordStatus  # ajusta ruta real
+from app.models.models import RecordStatus
 
 
 class ORMBase(BaseModel):

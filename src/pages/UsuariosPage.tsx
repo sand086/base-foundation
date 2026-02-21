@@ -31,7 +31,7 @@ import {
   EnhancedDataTable,
   ColumnDef,
 } from "@/components/ui/enhanced-data-table";
-import { useUsers, UserDisplay } from "@/hooks/useUsers"; // <--- IMPORTANTE: Hook nuevo
+import { useUsers, UserDisplay } from "@/hooks/useUsers";
 import { cn } from "@/lib/utils";
 import {
   Users,
@@ -41,8 +41,6 @@ import {
   Key,
   UserX,
   UserCheck,
-  ShieldCheck,
-  ShieldOff,
   Clock,
   Mail,
   Phone,
@@ -50,15 +48,8 @@ import {
 import { AddUserModal, UserFormData } from "@/features/usuarios/AddUserModal";
 import { EditUserModal } from "@/features/usuarios/EditUserModal";
 
-// Opciones de rol para filtros (si vienen del backend mejor, pero hardcoded por ahora está bien)
-const roles = [
-  { id: "admin", label: "Admin" },
-  { id: "operativo", label: "Operativo" },
-  { id: "finanzas", label: "Finanzas" },
-];
-
 const UsuariosPage = () => {
-  // Usamos el hook real
+  // Hook 100% real conectado al backend
   const {
     users,
     isLoading,
@@ -70,12 +61,9 @@ const UsuariosPage = () => {
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-
-  // Para editar, necesitamos transformar el UserDisplay a UserData si es necesario
   const [selectedUserForEdit, setSelectedUserForEdit] = useState<any | null>(
     null,
   );
-
   const [showResetPasswordDialog, setShowResetPasswordDialog] = useState(false);
   const [showToggleStatusDialog, setShowToggleStatusDialog] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -84,16 +72,14 @@ const UsuariosPage = () => {
 
   // --- Helpers de UI ---
   const getRoleBadgeColor = (rol: string) => {
-    switch (rol) {
-      case "admin":
-        return "bg-red-100 text-red-700 border-red-200";
-      case "operativo":
-        return "bg-blue-100 text-blue-700 border-blue-200";
-      case "finanzas":
-        return "bg-green-100 text-green-700 border-green-200";
-      default:
-        return "bg-gray-100 text-gray-700";
-    }
+    const rolLower = rol?.toLowerCase() || "";
+    if (rolLower.includes("admin"))
+      return "bg-red-100 text-red-700 border-red-200";
+    if (rolLower.includes("operativo"))
+      return "bg-blue-100 text-blue-700 border-blue-200";
+    if (rolLower.includes("finanzas"))
+      return "bg-green-100 text-green-700 border-green-200";
+    return "bg-gray-100 text-gray-700";
   };
 
   const getStatusBadgeColor = (estado: string) => {
@@ -104,15 +90,14 @@ const UsuariosPage = () => {
 
   // --- Handlers ---
   const handleAddUser = async (data: UserFormData) => {
-    // Mapeo del formulario al formato de API
     const apiData = {
       nombre: data.nombre,
-      apellido: data.apellido,
-      email: data.email,
-      telefono: data.telefono,
-      puesto: data.puesto,
-      role_id: data.rol,
-      password: "temporal123", // Password por defecto o agregar campo en modal
+      apellido: data.apellidos || "",
+      email: data.email || data.nombre + ".test@transportes3t.com",
+      telefono: data.telefono || "5555555555",
+      puesto: data.puesto || "Prueba",
+      role_id: Number(data.rol),
+      password: data.password,
       activo: true,
     };
     const success = await createUser(apiData);
@@ -128,8 +113,13 @@ const UsuariosPage = () => {
       telefono: data.telefono,
       puesto: data.puesto,
       role_id: data.rol,
+      activo: data.estado === "activo",
     };
+
     const success = await updateUser(selectedUserForEdit.id, apiData);
+    if (success && data.password) {
+      await resetPassword(selectedUserForEdit.id, data.password);
+    }
     if (success) setIsEditModalOpen(false);
   };
 
@@ -149,7 +139,7 @@ const UsuariosPage = () => {
     }
   };
 
-  // --- Columnas ---
+  // --- Columnas del EnhancedDataTable ---
   const columns: ColumnDef<UserDisplay>[] = [
     {
       key: "nombre",
@@ -189,14 +179,17 @@ const UsuariosPage = () => {
       ),
     },
     {
-      key: "rol",
+      key: "rolNombre", // Se usa el nombre del rol real
       header: "Rol",
-      render: (rol) => (
+      render: (rolNombre) => (
         <Badge
           variant="outline"
-          className={cn("text-xs capitalize", getRoleBadgeColor(rol))}
+          className={cn(
+            "text-xs capitalize",
+            getRoleBadgeColor(rolNombre as string),
+          )}
         >
-          {rol}
+          {rolNombre || "Sin Rol"}
         </Badge>
       ),
     },
@@ -206,7 +199,10 @@ const UsuariosPage = () => {
       render: (estado) => (
         <Badge
           variant="outline"
-          className={cn("text-xs capitalize", getStatusBadgeColor(estado))}
+          className={cn(
+            "text-xs capitalize",
+            getStatusBadgeColor(estado as string),
+          )}
         >
           {estado}
         </Badge>
@@ -223,7 +219,7 @@ const UsuariosPage = () => {
       ),
     },
     {
-      key: "id", // Usamos ID como key para acciones
+      key: "id",
       header: "Acciones",
       sortable: false,
       render: (_, user) => (
@@ -243,7 +239,7 @@ const UsuariosPage = () => {
                   email: user.email,
                   telefono: user.telefono,
                   puesto: user.puesto,
-                  rol: user.rol,
+                  rol: user.rol, // ID del rol para el Select del modal
                   estado: user.estado,
                 });
                 setIsEditModalOpen(true);
@@ -290,7 +286,11 @@ const UsuariosPage = () => {
   ];
 
   if (isLoading)
-    return <div className="p-8 text-center">Cargando usuarios...</div>;
+    return (
+      <div className="p-8 text-center text-muted-foreground">
+        Cargando usuarios...
+      </div>
+    );
 
   return (
     <div className="p-6 space-y-6">
@@ -375,7 +375,7 @@ const UsuariosPage = () => {
               className={
                 selectedUser?.estado === "activo"
                   ? "bg-destructive"
-                  : "bg-green-600"
+                  : "bg-green-600 hover:bg-green-700"
               }
             >
               Confirmar

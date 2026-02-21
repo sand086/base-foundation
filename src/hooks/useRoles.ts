@@ -1,59 +1,24 @@
 import { useState, useEffect, useCallback } from "react";
-import { roleService, Rol, ModuloDef } from "@/services/roleService";
+import { roleService, RoleData, ModuleData } from "@/services/roleService";
 import { toast } from "sonner";
 
-export interface PermisoUI {
-  moduloId: string;
-  ver: boolean;
-  editar: boolean;
-  eliminar: boolean;
-  exportar: boolean;
-}
-
-export interface RolPermisosUI {
-  rolId: string;
-  permisos: PermisoUI[];
-}
-
 export const useRoles = () => {
-  const [roles, setRoles] = useState<Rol[]>([]);
-  const [availableModules, setAvailableModules] = useState<ModuloDef[]>([]);
-  const [permisosMatrix, setPermisosMatrix] = useState<RolPermisosUI[]>([]);
+  const [roles, setRoles] = useState<RoleData[]>([]);
+  const [modules, setModules] = useState<ModuleData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Carga inicial
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      // 1. Cargamos Roles y Módulos al mismo tiempo
-      const [rolesData, modulesData] = await Promise.all([
+      const [rolesRes, modulesRes] = await Promise.all([
         roleService.getAll(),
         roleService.getModules(),
       ]);
-
-      setRoles(rolesData);
-      setAvailableModules(modulesData);
-
-      // 2. Construimos la matriz visual cruzando Roles vs Módulos
-      const matrix = rolesData.map((rol) => {
-        const permisosDelRol = rol.permisos || {};
-
-        // Para cada módulo disponible, verificamos qué permisos tiene este rol
-        const permisosUI = modulesData.map((mod) => ({
-          moduloId: mod.id,
-          ver: permisosDelRol[mod.id]?.ver || false,
-          editar: permisosDelRol[mod.id]?.editar || false,
-          eliminar: permisosDelRol[mod.id]?.eliminar || false,
-          exportar: permisosDelRol[mod.id]?.exportar || false,
-        }));
-
-        return { rolId: rol.id, permisos: permisosUI };
-      });
-
-      setPermisosMatrix(matrix);
+      setRoles(rolesRes);
+      setModules(modulesRes);
     } catch (error) {
+      toast.error("Error al cargar roles y módulos");
       console.error(error);
-      toast.error("Error al cargar datos de seguridad");
     } finally {
       setIsLoading(false);
     }
@@ -63,88 +28,107 @@ export const useRoles = () => {
     fetchData();
   }, [fetchData]);
 
-  // --- ACCIONES ---
-
-  const createRole = async (nombre: string, descripcion: string) => {
+  // Actualizar un rol (ej. sus permisos o detalles)
+  const updateRole = async (id: number, data: Partial<RoleData>) => {
     try {
-      const id = nombre.toLowerCase().replace(/\s+/g, "_");
-      await roleService.create({ id, nombre, descripcion, permisos: {} });
-      toast.success("Rol creado");
-      fetchData(); // Recargar
+      await roleService.update(id, data);
+      toast.success("Rol actualizado correctamente");
+      fetchData();
       return true;
     } catch (error: any) {
-      toast.error("Error al crear rol");
+      toast.error("Error al actualizar el rol");
       return false;
     }
   };
 
-  const deleteRole = async (id: string) => {
+  // Crear un nuevo rol
+  const createRole = async (nombre: string, descripcion: string) => {
+    try {
+      const name_key = nombre.toLowerCase().replace(/\s+/g, "_");
+      await roleService.create({ name_key, nombre, descripcion, permisos: {} });
+      toast.success("Rol creado exitosamente");
+      fetchData();
+      return true;
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || "Error al crear rol");
+      return false;
+    }
+  };
+
+  // Eliminar un rol
+  const deleteRole = async (id: number) => {
     try {
       await roleService.delete(id);
       toast.success("Rol eliminado");
       fetchData();
       return true;
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || "Error al eliminar");
+      toast.error(
+        error.response?.data?.detail || "No se puede eliminar un rol en uso",
+      );
       return false;
     }
   };
 
-  const savePermissions = async (roleId: string) => {
-    const roleMatrix = permisosMatrix.find((m) => m.rolId === roleId);
-    if (!roleMatrix) return;
-
-    // Convertir array UI -> Objeto JSON para la BD
-    const jsonPermisos: Record<string, any> = {};
-    roleMatrix.permisos.forEach((p) => {
-      jsonPermisos[p.moduloId] = {
-        ver: p.ver,
-        editar: p.editar,
-        eliminar: p.eliminar,
-        exportar: p.exportar,
-      };
-    });
-
-    try {
-      await roleService.updatePermissions(roleId, jsonPermisos);
-      toast.success("Permisos guardados");
-      fetchData(); // Sincronizar
-    } catch (error) {
-      toast.error("Error al guardar permisos");
-    }
-  };
-
+  // Agregar un nuevo módulo a la configuración del sistema
   const addModule = async (nombre: string, id: string, descripcion: string) => {
     try {
-      await roleService.addModule({
-        id,
-        nombre,
-        descripcion,
-        icono: "Shield",
-      });
+      await roleService.addModule({ id, nombre, descripcion, icono: "Shield" });
       toast.success("Nuevo permiso registrado");
-      fetchData(); // ¡Importante! Esto hará que aparezca la nueva fila
+      fetchData();
       return true;
     } catch (error: any) {
-      toast.error("Error al crear permiso");
+      toast.error("Error al registrar el módulo");
       return false;
     }
   };
 
-  // Actualizador local (para que los checkbox se muevan rápido)
-  const updateLocalMatrix = (newMatrix: RolPermisosUI[]) => {
-    setPermisosMatrix(newMatrix);
+  const getRolePermissions = async (id: number) => {
+    try {
+      return await roleService.getPermissions(id);
+    } catch (error) {
+      console.error("Error al obtener permisos", error);
+      return {};
+    }
   };
 
+  const updateSystemModule = async (id: string, modulo: ModuleData) => {
+    try {
+      await roleService.updateModule(id, modulo);
+      toast.success("Módulo actualizado");
+      fetchData(); // Recarga la lista
+      return true;
+    } catch (error: any) {
+      toast.error("Error al actualizar módulo");
+      return false;
+    }
+  };
+
+  const deleteSystemModule = async (id: string) => {
+    try {
+      await roleService.deleteModule(id);
+      toast.success("Módulo eliminado");
+      fetchData(); // Recarga la lista
+      return true;
+    } catch (error: any) {
+      toast.error("Error al eliminar módulo");
+      return false;
+    }
+  };
+
+  // Exportamos todas las variables y funciones
   return {
     roles,
-    availableModules,
-    permisosMatrix,
+    setRoles,
+    modules,
     isLoading,
+    updateRole,
     createRole,
     deleteRole,
-    savePermissions,
     addModule,
-    updateLocalMatrix,
+    fetchData,
+    getRolePermissions,
+    updateSystemModule,
+    deleteSystemModule,
   };
 };

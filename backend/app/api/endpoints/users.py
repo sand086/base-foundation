@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
-from typing import List
+from typing import List, Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import joinedload, Session
+
 
 from app.db.database import get_db
 from app.crud import users as crud
@@ -151,6 +152,24 @@ def delete_role(role_id: int, db: Session = Depends(get_db)):
     return {"message": "Rol eliminado"}
 
 
+# @router.put("/config/modules/{module_id}")
+# def update_module(module_id: str, modulo_actualizado: schemas.ModuleSchema, db: Session = Depends(get_db)):
+# Lógica para buscar en el JSON de SystemConfig y actualizar el nombre o descripción del permiso
+
+# @router.delete("/config/modules/{module_id}")
+# def delete_module(module_id: str, db: Session = Depends(get_db)):
+
+
+@router.get("/roles/{role_id}/permisos", response_model=Dict[str, Any])
+def read_role_permissions(role_id: int, db: Session = Depends(get_db)):
+    role = crud.get_role(db, role_id)
+    if not role:
+        raise HTTPException(status_code=404, detail="Rol no encontrado")
+
+    # Devuelve solo el JSON de permisos (si es null, devuelve un dict vacío)
+    return role.permisos or {}
+
+
 # =========================================================
 # MODULES (SystemConfig) - lo dejo igual que tú, solo alineado
 # =========================================================
@@ -222,3 +241,90 @@ def add_module(modulo: schemas.ModuleSchema, db: Session = Depends(get_db)):
 
     db.commit()
     return current_modules
+
+
+@router.put("/config/modules/{module_id}", response_model=List[schemas.ModuleSchema])
+def update_module(
+    module_id: str,
+    modulo_actualizado: schemas.ModuleSchema,
+    db: Session = Depends(get_db),
+):
+    config = (
+        db.query(models.SystemConfig)
+        .filter(models.SystemConfig.key == "modules_list")
+        .first()
+    )
+    if not config:
+        raise HTTPException(status_code=404, detail="Configuración no encontrada")
+
+    current_modules = json.loads(config.value)
+    updated = False
+
+    for i, m in enumerate(current_modules):
+        if m["id"] == module_id:
+            current_modules[i] = modulo_actualizado.model_dump()
+            updated = True
+            break
+
+    if not updated:
+        raise HTTPException(status_code=404, detail="Módulo no encontrado")
+
+    config.value = json.dumps(current_modules)
+    db.commit()
+    return current_modules
+
+
+@router.delete("/config/modules/{module_id}", response_model=List[schemas.ModuleSchema])
+def delete_module(module_id: str, db: Session = Depends(get_db)):
+    config = (
+        db.query(models.SystemConfig)
+        .filter(models.SystemConfig.key == "modules_list")
+        .first()
+    )
+    if not config:
+        raise HTTPException(status_code=404, detail="Configuración no encontrada")
+
+    current_modules = json.loads(config.value)
+    filtered_modules = [m for m in current_modules if m["id"] != module_id]
+
+    if len(current_modules) == len(filtered_modules):
+        raise HTTPException(status_code=404, detail="Módulo no encontrado")
+
+    config.value = json.dumps(filtered_modules)
+    db.commit()
+    return filtered_modules
+
+
+@router.get("/audit-logs")
+def get_audit_logs(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    # Traemos los logs y hacemos un JOIN con la tabla users para tener sus nombres
+    logs = (
+        db.query(models.AuditLog)
+        .options(joinedload(models.AuditLog.user))
+        .order_by(models.AuditLog.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+    result = []
+    for log in logs:
+        usuario_nombre = "Sistema"
+        if log.user:
+            usuario_nombre = f"{log.user.nombre} {log.user.apellido or ''}".strip()
+
+        result.append(
+            {
+                "id": str(log.id),
+                "usuario": usuario_nombre,
+                "accion": log.accion,
+                "tipoAccion": log.tipo_accion,
+                "modulo": log.modulo,
+                "detalles": log.detalles or "",
+                "ip": log.ip or "N/A",
+                "fechaHora": log.created_at.isoformat(),
+                "dispositivo": log.dispositivo or "N/A",
+            }
+        )
+
+    return result
