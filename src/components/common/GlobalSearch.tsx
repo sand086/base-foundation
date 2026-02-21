@@ -106,6 +106,13 @@ const searchItems: SearchItem[] = [
     category: "Flota",
     keywords: ["servicio", "reparacion"],
   },
+  {
+    title: "Mecánicos",
+    path: "/flota/mecanicos",
+    icon: Settings,
+    category: "Mecanicos",
+    keywords: ["mecanicos", "reparacion", "servicio"],
+  },
 
   // Combustible
   {

@@ -67,6 +67,7 @@ const menuItems: MenuItem[] = [
       { title: "Operadores", path: "/flota/operadores" },
       { title: "Llantas", path: "/flota/llantas" },
       { title: "Mantenimiento", path: "/flota/mantenimiento" },
+      { title: "Mecánicos", path: "/flota/mecanicos" },
     ],
   },
   {

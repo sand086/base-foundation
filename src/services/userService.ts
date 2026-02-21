@@ -1,16 +1,17 @@
 import axiosClient from "@/api/axiosClient";
 
-// Tipos basados en lo que espera el Backend
 export interface UserData {
-  id?: string;
+  id?: number;
   nombre: string;
   apellido: string;
   email: string;
   telefono: string;
   puesto: string;
-  role_id: string;
+  role_id: number;
   activo?: boolean;
-  password?: string; // Solo para crear
+  password?: string;
+  avatar_url?: string;
+  is_2fa_enabled?: boolean;
 }
 
 export const userService = {
@@ -20,7 +21,6 @@ export const userService = {
   },
 
   create: async (user: UserData) => {
-    // Transformar datos si es necesario para que coincida con UserCreate del backend
     const { data } = await axiosClient.post("/usuarios", user);
     return data;
   },
@@ -39,6 +39,11 @@ export const userService = {
     const { data } = await axiosClient.post(`/usuarios/${id}/reset-password`, {
       new_password: newPassword,
     });
+    return data;
+  },
+
+  delete: async (id: string) => {
+    const { data } = await axiosClient.delete(`/usuarios/${id}`);
     return data;
   },
 };

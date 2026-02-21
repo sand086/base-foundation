@@ -38,42 +38,24 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 
-// Importing from centralized data sources
-import {
-  mockClients,
-  TarifaAutorizada,
-  SubClienteDetalle,
-} from "@/data/mockData";
-import {
-  mockOperadores,
-  getExpiryStatus,
-  getExpiryLabel,
-} from "@/data/flotaData";
-import {
-  mockFleetUnits,
-  getAvailableUnitsByType,
-  getUnitTypeLabel,
-  getUnitTypeEmoji,
-} from "@/data/flotaUnidadesData";
+// IMPORTAR TUS HOOKS REALES
+import { useUnits } from "@/hooks/useUnits";
+import { useClients } from "@/hooks/useClients";
+import { useOperators } from "@/hooks/useOperators";
 
 type WizardStep = 1 | 2 | 3;
 
 interface DispatchData {
-  // Step 1 - Route Selection
-  clienteId: string;
+  clienteId: number | "";
   clienteNombre: string;
-  subClienteId: string;
+  subClienteId: number | "";
   subClienteNombre: string;
-  tarifaId: string;
-  tarifaSeleccionada: TarifaAutorizada | null;
-
-  // Step 2 - Resource Assignment
-  unidadId: string;
+  tarifaId: number | "";
+  tarifaSeleccionada: any | null;
+  unidadId: number | "";
   unidadNumero: string;
-  operadorId: string;
+  operadorId: number | "";
   operadorNombre: string;
-
-  // Step 3 - Financial
   anticipoCasetas: number;
   anticipoViaticos: number;
   anticipoCombustible: number;
@@ -97,8 +79,8 @@ const initialData: DispatchData = {
   observaciones: "",
 };
 
-// Helper to format currency
-const formatCurrency = (amount: number, currency: "MXN" | "USD" = "MXN") => {
+// --- HELPERS TRASLADADOS (Para evitar dependencias muertas) ---
+const formatCurrency = (amount: number, currency: string = "MXN") => {
   return new Intl.NumberFormat("es-MX", {
     style: "currency",
     currency,
@@ -106,58 +88,98 @@ const formatCurrency = (amount: number, currency: "MXN" | "USD" = "MXN") => {
   }).format(amount);
 };
 
+const getUnitTypeEmoji = (type: string) => {
+  const map: Record<string, string> = {
+    sencillo: "🚛",
+    full: "🚚",
+    rabon: "🚐",
+    tractocamion: "🚜",
+  };
+  return map[type?.toLowerCase()] || "🚛";
+};
+
+const getUnitTypeLabel = (type: string) => {
+  if (!type) return "Desconocido";
+  return type.charAt(0).toUpperCase() + type.slice(1);
+};
+
+const getExpiryStatus = (dateStr?: string) => {
+  if (!dateStr) return "danger";
+  const days = Math.floor(
+    (new Date(dateStr).getTime() - new Date().getTime()) / (1000 * 3600 * 24),
+  );
+  if (days < 0) return "danger";
+  if (days <= 30) return "warning";
+  return "success";
+};
+
+const getExpiryLabel = (dateStr?: string) => {
+  if (!dateStr) return "Sin fecha";
+  return new Date(dateStr).toLocaleDateString("es-MX", { timeZone: "UTC" });
+};
+// ----------------------------------------------------------------
+
 export default function DespachoNuevo() {
   const { toast } = useToast();
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
   const [data, setData] = useState<DispatchData>(initialData);
 
-  // ============= STEP 1: Derived Data from Clients =============
+  // === CONSUMO DE DATOS REALES ===
+  const { unidades } = useUnits();
+  const { clients } = useClients();
+  const { operadores } = useOperators(); // <-- Coincide con tu export const useOperators = () => { operadores, ... }
 
-  // Get selected client's subclientes
+  // ============= STEP 1: Derived Data from Clients =============
   const subClientesDisponibles = useMemo(() => {
     if (!data.clienteId) return [];
-    const cliente = mockClients.find((c) => c.id === data.clienteId);
+    const cliente = clients.find((c: any) => c.id === data.clienteId);
     return (
-      cliente?.subClientesDetalle?.filter((sc) => sc.estatus === "activo") || []
+      cliente?.sub_clients?.filter((sc: any) => sc.estatus === "activo") || []
     );
-  }, [data.clienteId]);
+  }, [data.clienteId, clients]);
 
-  // Get selected subcliente's tarifas
   const tarifasDisponibles = useMemo(() => {
     if (!data.subClienteId) return [];
     const subCliente = subClientesDisponibles.find(
-      (sc) => sc.id === data.subClienteId,
+      (sc: any) => sc.id === data.subClienteId,
     );
-    return subCliente?.tarifas?.filter((t) => t.estatus === "activa") || [];
+    return (
+      subCliente?.tariffs?.filter(
+        (t: any) => t.estatus === "activa" || t.estatus === "ACTIVA",
+      ) || []
+    );
   }, [data.subClienteId, subClientesDisponibles]);
 
-  // Get current subcliente for commercial conditions display
   const subClienteActual = useMemo(() => {
-    return subClientesDisponibles.find((sc) => sc.id === data.subClienteId);
+    return subClientesDisponibles.find(
+      (sc: any) => sc.id === data.subClienteId,
+    );
   }, [data.subClienteId, subClientesDisponibles]);
 
   // ============= STEP 2: Derived Data from Fleet =============
-
-  // Get available units based on required type
   const unidadesDisponibles = useMemo(() => {
     if (!data.tarifaSeleccionada) return [];
-    return getAvailableUnitsByType(data.tarifaSeleccionada.tipoUnidad);
-  }, [data.tarifaSeleccionada]);
+    return unidades.filter(
+      (u) =>
+        (u.status === "disponible" || u.status === "DISPONIBLE") &&
+        u.tipo?.toLowerCase() ===
+          data.tarifaSeleccionada.tipo_unidad?.toLowerCase(),
+    );
+  }, [data.tarifaSeleccionada, unidades]);
 
-  // Check if there are no available units
   const noUnitsAvailable = useMemo(() => {
     return data.tarifaSeleccionada && unidadesDisponibles.length === 0;
   }, [data.tarifaSeleccionada, unidadesDisponibles]);
 
-  // Get available operators (active only)
   const operadoresDisponibles = useMemo(() => {
-    return mockOperadores.filter(
-      (op) => op.status === "activo" && !op.assigned_unit,
+    return operadores.filter(
+      (op: any) =>
+        (op.status === "activo" || op.status === "ACTIVO") &&
+        !op.assigned_unit_id, // Que no tenga unidad ya asignada
     );
-  }, []);
+  }, [operadores]);
 
   // ============= STEP 3: Financial Calculations =============
-
   const totalAnticipos = useMemo(() => {
     return (
       data.anticipoCasetas + data.anticipoViaticos + data.anticipoCombustible
@@ -166,17 +188,17 @@ export default function DespachoNuevo() {
 
   const saldoOperador = useMemo(() => {
     if (!data.tarifaSeleccionada) return 0;
-    return data.tarifaSeleccionada.tarifaBase - totalAnticipos;
+    return (data.tarifaSeleccionada.tarifa_base || 0) - totalAnticipos;
   }, [data.tarifaSeleccionada, totalAnticipos]);
 
   // ============= HANDLERS =============
-
-  const handleClienteChange = (clienteId: string) => {
-    const cliente = mockClients.find((c) => c.id === clienteId);
+  const handleClienteChange = (val: string) => {
+    const clienteId = Number(val);
+    const cliente = clients.find((c: any) => c.id === clienteId);
     setData((prev) => ({
       ...prev,
       clienteId,
-      clienteNombre: cliente?.razónSocial || "",
+      clienteNombre: cliente?.razon_social || "",
       subClienteId: "",
       subClienteNombre: "",
       tarifaId: "",
@@ -186,9 +208,10 @@ export default function DespachoNuevo() {
     }));
   };
 
-  const handleSubClienteChange = (subClienteId: string) => {
+  const handleSubClienteChange = (val: string) => {
+    const subClienteId = Number(val);
     const subCliente = subClientesDisponibles.find(
-      (sc) => sc.id === subClienteId,
+      (sc: any) => sc.id === subClienteId,
     );
     setData((prev) => ({
       ...prev,
@@ -201,20 +224,22 @@ export default function DespachoNuevo() {
     }));
   };
 
-  const handleTarifaChange = (tarifaId: string) => {
-    const tarifa = tarifasDisponibles.find((t) => t.id === tarifaId);
+  const handleTarifaChange = (val: string) => {
+    const tarifaId = Number(val);
+    const tarifa = tarifasDisponibles.find((t: any) => t.id === tarifaId);
     setData((prev) => ({
       ...prev,
       tarifaId,
       tarifaSeleccionada: tarifa || null,
       unidadId: "",
       unidadNumero: "",
-      anticipoCasetas: tarifa?.costoCasetas || 0,
+      anticipoCasetas: tarifa?.costo_casetas || 0,
     }));
   };
 
-  const handleUnidadChange = (unidadId: string) => {
-    const unidad = mockFleetUnits.find((u) => u.id === unidadId);
+  const handleUnidadChange = (val: string) => {
+    const unidadId = Number(val);
+    const unidad = unidadesDisponibles.find((u) => u.id === unidadId);
     setData((prev) => ({
       ...prev,
       unidadId,
@@ -222,34 +247,35 @@ export default function DespachoNuevo() {
     }));
   };
 
-  const handleOperadorChange = (operadorId: string) => {
-    const operador = mockOperadores.find((op) => op.id === operadorId);
+  const handleOperadorChange = (val: string) => {
+    const operadorId = Number(val);
+    const operador = operadoresDisponibles.find(
+      (op: any) => op.id === operadorId,
+    );
     setData((prev) => ({
       ...prev,
       operadorId,
-      operadorNombre: operador?.name || "",
+      operadorNombre: operador?.name || "", // o op.nombre si es que así viene en tu schema final
     }));
   };
 
   const handleConfirmDispatch = () => {
-    console.log("Dispatch Data:", data);
+    console.log("Dispatch Data Listos para BD:", data);
     toast({
-      title: " Viaje Despachado",
-      description: `Carta Porte generada para ${data.unidadNumero} - Ruta: ${data.tarifaSeleccionada?.nombreRuta}`,
+      title: "Viaje Despachado",
+      description: `Carta Porte generada para ${data.unidadNumero} - Ruta: ${data.tarifaSeleccionada?.nombre_ruta}`,
     });
-    // Reset form
     setData(initialData);
     setCurrentStep(1);
   };
 
   // ============= VALIDATION =============
-
-  const isStep1Valid = data.clienteId && data.subClienteId && data.tarifaId;
-  const isStep2Valid = data.unidadId && data.operadorId;
+  const isStep1Valid = Boolean(
+    data.clienteId && data.subClienteId && data.tarifaId,
+  );
+  const isStep2Valid = Boolean(data.unidadId && data.operadorId);
   const canProceed =
     currentStep === 1 ? isStep1Valid : currentStep === 2 ? isStep2Valid : true;
-
-  // ============= STEP NAVIGATION =============
 
   const steps = [
     { step: 1, label: "Ruta y Tarifa", icon: Route },
@@ -257,8 +283,7 @@ export default function DespachoNuevo() {
     { step: 3, label: "Financiero", icon: Wallet },
   ];
 
-  // Helper for operator license status badge
-  const getOperatorStatusBadge = (operador: (typeof mockOperadores)[0]) => {
+  const getOperatorStatusBadge = (operador: any) => {
     const licenseStatus = getExpiryStatus(operador.license_expiry);
     const medicalStatus = getExpiryStatus(operador.medical_check_expiry);
 
@@ -291,19 +316,17 @@ export default function DespachoNuevo() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <FileText className="h-6 w-6" /> Mesa de Control - Nuevo Despacho
           </h1>
           <p className="text-muted-foreground">
-            Asigna viajes integrando tarifas de clients y recursos de flota
+            Asigna viajes integrando tarifas de clientes y recursos de flota
           </p>
         </div>
       </div>
 
-      {/* Step Indicator */}
       <div className="flex items-center justify-center gap-2 py-4">
         {steps.map((s, index) => (
           <div key={s.step} className="flex items-center">
@@ -330,7 +353,6 @@ export default function DespachoNuevo() {
         ))}
       </div>
 
-      {/* Main Content Card */}
       <Card className="border-2">
         <CardHeader className="bg-muted/30">
           <CardTitle className="flex items-center gap-2">
@@ -360,30 +382,34 @@ export default function DespachoNuevo() {
         </CardHeader>
 
         <CardContent className="pt-6">
-          {/* ============= STEP 1: ROUTE SELECTION ============= */}
+          {/* ============= STEP 1 ============= */}
           {currentStep === 1 && (
             <div className="grid gap-6 md:grid-cols-2">
-              {/* Left Column - Selectors */}
               <div className="space-y-4">
-                {/* Client Selector */}
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2">
-                    <Building2 className="h-4 w-4" /> Client
+                    <Building2 className="h-4 w-4" /> Cliente
                   </Label>
                   <Select
-                    value={data.clienteId}
+                    value={data.clienteId.toString()}
                     onValueChange={handleClienteChange}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Selecciona un cliente..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {mockClients
-                        .filter((c) => c.estatus === "activo")
-                        .map((cliente) => (
-                          <SelectItem key={cliente.id} value={cliente.id}>
+                      {clients
+                        .filter(
+                          (c: any) =>
+                            c.estatus === "activo" || c.estatus === "ACTIVO",
+                        )
+                        .map((cliente: any) => (
+                          <SelectItem
+                            key={cliente.id}
+                            value={cliente.id.toString()}
+                          >
                             <div className="flex flex-col">
-                              <span>{cliente.razónSocial}</span>
+                              <span>{cliente.razon_social}</span>
                               <span className="text-xs text-muted-foreground">
                                 {cliente.rfc}
                               </span>
@@ -394,13 +420,12 @@ export default function DespachoNuevo() {
                   </Select>
                 </div>
 
-                {/* Destino (SubCliente) Selector */}
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2">
                     <MapPin className="h-4 w-4" /> Destino (SubCliente)
                   </Label>
                   <Select
-                    value={data.subClienteId}
+                    value={data.subClienteId.toString()}
                     onValueChange={handleSubClienteChange}
                     disabled={!data.clienteId}
                   >
@@ -414,8 +439,8 @@ export default function DespachoNuevo() {
                       />
                     </SelectTrigger>
                     <SelectContent>
-                      {subClientesDisponibles.map((sc) => (
-                        <SelectItem key={sc.id} value={sc.id}>
+                      {subClientesDisponibles.map((sc: any) => (
+                        <SelectItem key={sc.id} value={sc.id.toString()}>
                           <div className="flex flex-col">
                             <span>{sc.nombre}</span>
                             <span className="text-xs text-muted-foreground">
@@ -428,13 +453,12 @@ export default function DespachoNuevo() {
                   </Select>
                 </div>
 
-                {/* Tarifa/Ruta Selector */}
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2">
                     <Route className="h-4 w-4" /> Ruta y Tarifa Autorizada
                   </Label>
                   <Select
-                    value={data.tarifaId}
+                    value={data.tarifaId.toString()}
                     onValueChange={handleTarifaChange}
                     disabled={!data.subClienteId}
                   >
@@ -456,18 +480,23 @@ export default function DespachoNuevo() {
                           </p>
                         </div>
                       ) : (
-                        tarifasDisponibles.map((tarifa) => (
-                          <SelectItem key={tarifa.id} value={tarifa.id}>
+                        tarifasDisponibles.map((tarifa: any) => (
+                          <SelectItem
+                            key={tarifa.id}
+                            value={tarifa.id.toString()}
+                          >
                             <div className="flex items-center gap-3">
-                              <span>{getUnitTypeEmoji(tarifa.tipoUnidad)}</span>
+                              <span>
+                                {getUnitTypeEmoji(tarifa.tipo_unidad)}
+                              </span>
                               <div className="flex flex-col">
                                 <span className="font-medium">
-                                  {tarifa.nombreRuta}
+                                  {tarifa.nombre_ruta}
                                 </span>
                                 <span className="text-xs text-muted-foreground">
-                                  {getUnitTypeLabel(tarifa.tipoUnidad)} •{" "}
+                                  {getUnitTypeLabel(tarifa.tipo_unidad)} •{" "}
                                   {formatCurrency(
-                                    tarifa.tarifaBase,
+                                    tarifa.tarifa_base,
                                     tarifa.moneda,
                                   )}
                                 </span>
@@ -481,22 +510,20 @@ export default function DespachoNuevo() {
                 </div>
               </div>
 
-              {/* Right Column - Summary */}
               <div className="space-y-4">
-                {/* Selected Tariff Card */}
                 {data.tarifaSeleccionada && (
                   <Card className="bg-primary/5 border-primary/20">
                     <CardHeader className="pb-2">
                       <CardTitle className="text-lg flex items-center gap-2">
-                        <DollarSign className="h-5 w-5 text-primary" />
-                        Tarifa Seleccionada
+                        <DollarSign className="h-5 w-5 text-primary" /> Tarifa
+                        Seleccionada
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
                       <div className="flex justify-between items-center">
                         <span className="text-muted-foreground">Ruta:</span>
                         <span className="font-medium">
-                          {data.tarifaSeleccionada.nombreRuta}
+                          {data.tarifaSeleccionada.nombre_ruta}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
@@ -504,11 +531,12 @@ export default function DespachoNuevo() {
                           Tipo Unidad Requerido:
                         </span>
                         <Badge variant="outline" className="gap-1">
-                          {getUnitTypeEmoji(data.tarifaSeleccionada.tipoUnidad)}
-                          {data.tarifaSeleccionada.tipoUnidad
-                            .charAt(0)
-                            .toUpperCase() +
-                            data.tarifaSeleccionada.tipoUnidad.slice(1)}
+                          {getUnitTypeEmoji(
+                            data.tarifaSeleccionada.tipo_unidad,
+                          )}{" "}
+                          {getUnitTypeLabel(
+                            data.tarifaSeleccionada.tipo_unidad,
+                          )}
                         </Badge>
                       </div>
                       <Separator />
@@ -518,19 +546,19 @@ export default function DespachoNuevo() {
                         </span>
                         <span className="text-2xl font-bold text-primary">
                           {formatCurrency(
-                            data.tarifaSeleccionada.tarifaBase,
+                            data.tarifaSeleccionada.tarifa_base,
                             data.tarifaSeleccionada.moneda,
                           )}
                         </span>
                       </div>
-                      {data.tarifaSeleccionada.costoCasetas && (
+                      {data.tarifaSeleccionada.costo_casetas > 0 && (
                         <div className="flex justify-between items-center text-sm">
                           <span className="text-muted-foreground">
                             Casetas (Est.):
                           </span>
                           <span>
                             {formatCurrency(
-                              data.tarifaSeleccionada.costoCasetas,
+                              data.tarifaSeleccionada.costo_casetas,
                               data.tarifaSeleccionada.moneda,
                             )}
                           </span>
@@ -539,8 +567,6 @@ export default function DespachoNuevo() {
                     </CardContent>
                   </Card>
                 )}
-
-                {/* Commercial Conditions */}
                 {subClienteActual && (
                   <Card className="bg-muted/30">
                     <CardHeader className="pb-2">
@@ -554,10 +580,10 @@ export default function DespachoNuevo() {
                           Días de Crédito:
                         </span>
                         <Badge variant="secondary">
-                          {subClienteActual.diasCredito || 0} días
+                          {subClienteActual.dias_credito || 0} días
                         </Badge>
                       </div>
-                      {subClienteActual.convenioEspecial && (
+                      {subClienteActual.convenio_especial && (
                         <div className="flex items-center gap-2 text-status-warning">
                           <ShieldAlert className="h-4 w-4" />
                           <span>Convenio Especial Activo</span>
@@ -570,10 +596,9 @@ export default function DespachoNuevo() {
             </div>
           )}
 
-          {/* ============= STEP 2: RESOURCE ASSIGNMENT ============= */}
+          {/* ============= STEP 2 ============= */}
           {currentStep === 2 && (
             <div className="space-y-6">
-              {/* No Units Alert */}
               {noUnitsAvailable && (
                 <Alert className="border-status-warning bg-status-warning/10">
                   <AlertTriangle className="h-5 w-5 text-status-warning" />
@@ -582,27 +607,25 @@ export default function DespachoNuevo() {
                   </AlertTitle>
                   <AlertDescription>
                     No hay unidades tipo{" "}
-                    <strong>{data.tarifaSeleccionada?.tipoUnidad}</strong>{" "}
-                    disponibles. Considera usar una unidad de otra base o
-                    contactar al área de Mantenimiento.
+                    <strong>{data.tarifaSeleccionada?.tipo_unidad}</strong>{" "}
+                    disponibles.
                   </AlertDescription>
                 </Alert>
               )}
 
               <div className="grid gap-6 md:grid-cols-2">
-                {/* Unit Selection */}
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label className="flex items-center gap-2">
                       <Truck className="h-4 w-4" /> Unidad Asignada
                       {data.tarifaSeleccionada && (
                         <Badge variant="outline" className="ml-2">
-                          Requiere: {data.tarifaSeleccionada.tipoUnidad}
+                          Requiere: {data.tarifaSeleccionada.tipo_unidad}
                         </Badge>
                       )}
                     </Label>
                     <Select
-                      value={data.unidadId}
+                      value={data.unidadId.toString()}
                       onValueChange={handleUnidadChange}
                     >
                       <SelectTrigger>
@@ -618,7 +641,10 @@ export default function DespachoNuevo() {
                           </div>
                         ) : (
                           unidadesDisponibles.map((unidad) => (
-                            <SelectItem key={unidad.id} value={unidad.id}>
+                            <SelectItem
+                              key={unidad.id}
+                              value={unidad.id.toString()}
+                            >
                               <div className="flex items-center gap-3">
                                 <Truck className="h-4 w-4" />
                                 <div className="flex flex-col">
@@ -640,8 +666,6 @@ export default function DespachoNuevo() {
                       </SelectContent>
                     </Select>
                   </div>
-
-                  {/* Selected Unit Card */}
                   {data.unidadId && (
                     <Card className="bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
                       <CardContent className="pt-4">
@@ -655,14 +679,12 @@ export default function DespachoNuevo() {
                             </p>
                             <p className="text-sm text-muted-foreground">
                               {
-                                mockFleetUnits.find(
-                                  (u) => u.id === data.unidadId,
-                                )?.marca
+                                unidades.find((u) => u.id === data.unidadId)
+                                  ?.marca
                               }{" "}
                               {
-                                mockFleetUnits.find(
-                                  (u) => u.id === data.unidadId,
-                                )?.modelo
+                                unidades.find((u) => u.id === data.unidadId)
+                                  ?.modelo
                               }
                             </p>
                           </div>
@@ -672,30 +694,27 @@ export default function DespachoNuevo() {
                   )}
                 </div>
 
-                {/* Operator Selection */}
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label className="flex items-center gap-2">
                       <User className="h-4 w-4" /> Operador Asignado
                     </Label>
                     <Select
-                      value={data.operadorId}
+                      value={data.operadorId.toString()}
                       onValueChange={handleOperadorChange}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Selecciona un operador..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {operadoresDisponibles.map((operador) => {
-                          const licenseStatus = getExpiryStatus(
-                            operador.license_expiry,
-                          );
-                          const isExpired = licenseStatus === "danger";
-
+                        {operadoresDisponibles.map((operador: any) => {
+                          const isExpired =
+                            getExpiryStatus(operador.license_expiry) ===
+                            "danger";
                           return (
                             <SelectItem
                               key={operador.id}
-                              value={operador.id}
+                              value={operador.id.toString()}
                               className={
                                 isExpired ? "bg-red-50 dark:bg-red-950/20" : ""
                               }
@@ -719,8 +738,6 @@ export default function DespachoNuevo() {
                       </SelectContent>
                     </Select>
                   </div>
-
-                  {/* Selected Operator Card */}
                   {data.operadorId && (
                     <Card className="bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800">
                       <CardContent className="pt-4">
@@ -734,27 +751,25 @@ export default function DespachoNuevo() {
                             </p>
                             <p className="text-sm text-muted-foreground">
                               {
-                                mockOperadores.find(
-                                  (op) => op.id === data.operadorId,
+                                operadores.find(
+                                  (op: any) => op.id === data.operadorId,
                                 )?.phone
                               }
                             </p>
                           </div>
                           {data.operadorId &&
                             getOperatorStatusBadge(
-                              mockOperadores.find(
-                                (op) => op.id === data.operadorId,
+                              operadores.find(
+                                (op: any) => op.id === data.operadorId,
                               )!,
                             )}
                         </div>
                       </CardContent>
                     </Card>
                   )}
-
-                  {/* Warning for expired license */}
                   {data.operadorId &&
                     getExpiryStatus(
-                      mockOperadores.find((op) => op.id === data.operadorId)
+                      operadores.find((op: any) => op.id === data.operadorId)
                         ?.license_expiry || "",
                     ) === "danger" && (
                       <Alert className="border-status-danger bg-status-danger/10">
@@ -773,15 +788,13 @@ export default function DespachoNuevo() {
             </div>
           )}
 
-          {/* ============= STEP 3: FINANCIAL SUMMARY ============= */}
+          {/* ============= STEP 3 ============= */}
           {currentStep === 3 && (
             <div className="grid gap-6 md:grid-cols-2">
-              {/* Anticipos */}
               <div className="space-y-4">
                 <h3 className="font-semibold flex items-center gap-2">
                   <Wallet className="h-5 w-5" /> Anticipos al Operador
                 </h3>
-
                 <div className="space-y-3">
                   <div className="space-y-2">
                     <Label>Anticipo Casetas</Label>
@@ -802,7 +815,6 @@ export default function DespachoNuevo() {
                       />
                     </div>
                   </div>
-
                   <div className="space-y-2">
                     <Label>Anticipo Viáticos</Label>
                     <div className="relative">
@@ -822,7 +834,6 @@ export default function DespachoNuevo() {
                       />
                     </div>
                   </div>
-
                   <div className="space-y-2">
                     <Label>Anticipo Combustible</Label>
                     <div className="relative">
@@ -843,7 +854,6 @@ export default function DespachoNuevo() {
                     </div>
                   </div>
                 </div>
-
                 <div className="space-y-2">
                   <Label>Observaciones</Label>
                   <Input
@@ -858,8 +868,6 @@ export default function DespachoNuevo() {
                   />
                 </div>
               </div>
-
-              {/* Financial Summary Card */}
               <div className="space-y-4">
                 <Card className="bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
                   <CardHeader>
@@ -868,10 +876,9 @@ export default function DespachoNuevo() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {/* Route Info */}
                     <div className="space-y-2 pb-4 border-b">
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Client:</span>
+                        <span className="text-muted-foreground">Cliente:</span>
                         <span className="font-medium">
                           {data.clienteNombre}
                         </span>
@@ -885,12 +892,10 @@ export default function DespachoNuevo() {
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Ruta:</span>
                         <span className="font-medium">
-                          {data.tarifaSeleccionada?.nombreRuta}
+                          {data.tarifaSeleccionada?.nombre_ruta}
                         </span>
                       </div>
                     </div>
-
-                    {/* Resources */}
                     <div className="space-y-2 pb-4 border-b">
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Unidad:</span>
@@ -903,8 +908,6 @@ export default function DespachoNuevo() {
                         </span>
                       </div>
                     </div>
-
-                    {/* Financial Breakdown */}
                     <div className="space-y-2">
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">
@@ -912,7 +915,7 @@ export default function DespachoNuevo() {
                         </span>
                         <span className="font-bold text-lg">
                           {formatCurrency(
-                            data.tarifaSeleccionada?.tarifaBase || 0,
+                            data.tarifaSeleccionada?.tarifa_base || 0,
                             data.tarifaSeleccionada?.moneda,
                           )}
                         </span>
@@ -933,7 +936,6 @@ export default function DespachoNuevo() {
                     </div>
                   </CardContent>
                 </Card>
-
                 {saldoOperador < 0 && (
                   <Alert className="border-status-danger bg-status-danger/10">
                     <AlertTriangle className="h-5 w-5 text-status-danger" />
@@ -950,7 +952,6 @@ export default function DespachoNuevo() {
           )}
         </CardContent>
 
-        {/* Footer Navigation */}
         <CardFooter className="flex justify-between border-t pt-6 bg-muted/20">
           <Button
             variant="outline"
@@ -963,7 +964,6 @@ export default function DespachoNuevo() {
           >
             Anterior
           </Button>
-
           {currentStep < 3 ? (
             <Button
               onClick={() =>
@@ -974,16 +974,15 @@ export default function DespachoNuevo() {
               disabled={!canProceed}
               className="gap-2"
             >
-              Siguiente
-              <ChevronRight className="h-4 w-4" />
+              Siguiente <ChevronRight className="h-4 w-4" />
             </Button>
           ) : (
             <Button
               onClick={handleConfirmDispatch}
               className="gap-2 bg-status-success hover:bg-status-success/90"
             >
-              <CheckCircle className="h-4 w-4" />
-              Confirmar y Generar Carta Porte
+              <CheckCircle className="h-4 w-4" /> Confirmar y Generar Carta
+              Porte
             </Button>
           )}
         </CardFooter>

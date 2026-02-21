@@ -1,14 +1,14 @@
 import axiosClient from "@/api/axiosClient";
 
-// Tipos
-export interface Rol {
-  id: string;
+export interface RoleData {
+  id: number;
+  name_key: string;
   nombre: string;
-  descripcion: string;
+  descripcion?: string;
   permisos: Record<string, any>;
 }
 
-export interface ModuloDef {
+export interface ModuleData {
   id: string;
   nombre: string;
   icono: string;
@@ -16,35 +16,40 @@ export interface ModuloDef {
 }
 
 export const roleService = {
-  // Roles CRUD
-  getAll: async (): Promise<Rol[]> => {
+  getAll: async () => {
     const { data } = await axiosClient.get("/roles");
     return data;
   },
-
-  create: async (rol: Partial<Rol>) => {
-    const { data } = await axiosClient.post("/roles", rol);
+  create: async (role: Omit<RoleData, "id">) => {
+    const { data } = await axiosClient.post("/roles", role);
     return data;
   },
-
-  updatePermissions: async (id: string, permisos: any) => {
-    const { data } = await axiosClient.put(`/roles/${id}`, { permisos });
+  update: async (id: number, role: Partial<RoleData>) => {
+    const { data } = await axiosClient.put(`/roles/${id}`, role);
     return data;
   },
-
-  delete: async (id: string) => {
+  delete: async (id: number) => {
     const { data } = await axiosClient.delete(`/roles/${id}`);
     return data;
   },
-
-  // Módulos (Permisos) CRUD
-  getModules: async (): Promise<ModuloDef[]> => {
+  getModules: async () => {
     const { data } = await axiosClient.get("/config/modules");
     return data;
   },
-
-  addModule: async (modulo: ModuloDef) => {
+  addModule: async (modulo: ModuleData) => {
     const { data } = await axiosClient.post("/config/modules", modulo);
+    return data;
+  },
+  getPermissions: async (id: number) => {
+    const { data } = await axiosClient.get(`/roles/${id}/permisos`);
+    return data;
+  },
+  updateModule: async (id: string, modulo: ModuleData) => {
+    const { data } = await axiosClient.put(`/config/modules/${id}`, modulo);
+    return data;
+  },
+  deleteModule: async (id: string) => {
+    const { data } = await axiosClient.delete(`/config/modules/${id}`);
     return data;
   },
 };

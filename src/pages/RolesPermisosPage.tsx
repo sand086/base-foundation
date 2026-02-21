@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { PageHeader } from "@/components/ui/page-header";
 import {
   Card,
@@ -14,7 +14,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Sheet,
   SheetContent,
-  SheetDescription,
   SheetHeader,
   SheetTitle,
   SheetFooter,
@@ -29,7 +28,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-// CORRECCIÓN 1: Eliminamos la importación de 'modulos' estáticos
 import { cn } from "@/lib/utils";
 import {
   Shield,
@@ -52,15 +50,24 @@ import {
   Download,
   Lock,
   Copy,
-  CheckCircle2,
   History,
   Key,
+  Settings,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CreatePermissionModal } from "@/features/permisos/CreatePermissionModal";
+import { ManageModulesModal } from "@/features/permisos/ManageModulesModal";
 import { AuditLogPanel } from "@/features/auditoria/AuditLogPanel";
-// Importamos el Hook Real
-import { useRoles, PermisoUI } from "@/hooks/useRoles";
+import { useRoles } from "@/hooks/useRoles";
+
+type Permiso = {
+  ver: boolean;
+  editar: boolean;
+  eliminar: boolean;
+  exportar: boolean;
+};
+
+type PermisosMap = Record<string, Permiso>;
 
 const iconMap: Record<string, React.ElementType> = {
   LayoutDashboard,
@@ -76,165 +83,247 @@ const iconMap: Record<string, React.ElementType> = {
   Shield,
 };
 
-const RolesPermisosPage = () => {
-  // --- HOOK DE LÓGICA REAL ---
+const EMPTY_PERMISO: Permiso = {
+  ver: false,
+  editar: false,
+  eliminar: false,
+  exportar: false,
+};
+
+const RolesPermisosPage: React.FC = () => {
   const {
     roles,
-    availableModules, // <--- ESTA ES LA LISTA REAL QUE VIENE DE LA BD
-    permisosMatrix,
+    setRoles,
+    modules: availableModules,
     isLoading,
     createRole,
     deleteRole,
-    savePermissions,
-    addModule, // <--- FUNCIÓN PARA GUARDAR NUEVOS PERMISOS
-    updateLocalMatrix,
+    updateRole,
+    addModule,
+    updateSystemModule,
+    deleteSystemModule,
   } = useRoles();
 
-  // Estados locales de la UI
   const [showRoleEditor, setShowRoleEditor] = useState(false);
-  const [selectedRoleId, setSelectedRoleId] = useState<string>("");
+  const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null);
   const [isCreatingRole, setIsCreatingRole] = useState(false);
+
+  // Nombres y descripción editables
   const [newRoleName, setNewRoleName] = useState("");
   const [newRoleDescription, setNewRoleDescription] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
-  // Dialogs
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [roleToDelete, setRoleToDelete] = useState<string | null>(null);
+  const [roleToDelete, setRoleToDelete] = useState<number | null>(null);
+
   const [showCreatePermissionModal, setShowCreatePermissionModal] =
     useState(false);
   const [showAuditLogPanel, setShowAuditLogPanel] = useState(false);
 
-  // --- Helpers UI ---
-  const getRoleBadgeColor = (rolId: string) => {
-    const map: Record<string, string> = {
-      admin: "bg-red-100 text-red-700 border-red-200",
-      operativo: "bg-blue-100 text-blue-700 border-blue-200",
-      finanzas: "bg-green-100 text-green-700 border-green-200",
-      supervisor: "bg-yellow-100 text-yellow-700 border-yellow-200",
-    };
-    return map[rolId] || "bg-gray-100 text-gray-700";
+  // ✅ NUEVO: Administrar módulos
+  const [showManageModules, setShowManageModules] = useState(false);
+
+  const currentRole = useMemo(
+    () => roles.find((r) => r.id === selectedRoleId),
+    [roles, selectedRoleId],
+  );
+
+  // ==========================================
+  // NORMALIZADOR BLINDADO DE PERMISOS
+  // Convierte lo que sea que mande la BD a un objeto de fácil lectura
+  // ==========================================
+  const currentPermisos: PermisosMap = useMemo(() => {
+    const out: PermisosMap = {};
+    const raw = currentRole?.permisos;
+
+    if (!raw) return out;
+
+    try {
+      const permsData =
+        typeof raw === "string" ? (JSON.parse(raw) as unknown) : raw;
+
+      // Si quedó guardado como Array (legacy)
+      if (Array.isArray(permsData)) {
+        (permsData as any[]).forEach((p) => {
+          if (p?.moduloId) out[String(p.moduloId).toLowerCase()] = p as Permiso;
+        });
+      }
+      // Formato correcto nuevo: objeto mapa
+      else if (typeof permsData === "object" && permsData !== null) {
+        Object.keys(permsData as Record<string, unknown>).forEach((k) => {
+          out[String(k).toLowerCase()] = (permsData as any)[k] as Permiso;
+        });
+      }
+    } catch (error) {
+      console.error("Error al procesar permisos del rol:", error);
+    }
+
+    return out;
+  }, [currentRole?.permisos]);
+
+  const getPermiso = (moduloId: string): Permiso => {
+    const idStr = String(moduloId).toLowerCase();
+    return currentPermisos[idStr] || EMPTY_PERMISO;
   };
 
-  // Obtener permisos del rol seleccionado para mostrarlos en el editor
-  const currentRolPermisos =
-    permisosMatrix.find((p) => p.rolId === selectedRoleId)?.permisos || [];
+  const getRoleBadgeColor = (rolNameKey: string) => {
+    switch (rolNameKey?.toLowerCase()) {
+      case "admin":
+        return "bg-red-100 text-red-700 border-red-200";
+      case "operativo":
+        return "bg-blue-100 text-blue-700 border-blue-200";
+      case "finanzas":
+        return "bg-green-100 text-green-700 border-green-200";
+      case "supervisor":
+        return "bg-yellow-100 text-yellow-700 border-yellow-200";
+      default:
+        return "bg-gray-100 text-gray-700";
+    }
+  };
 
-  const getPermiso = (moduloId: string): PermisoUI => {
-    return (
-      currentRolPermisos.find((p) => p.moduloId === moduloId) || {
-        moduloId,
-        ver: false,
-        editar: false,
-        eliminar: false,
-        exportar: false,
-      }
+  // ==========================================
+  // MANEJADORES DE LA MATRIZ DE PERMISOS
+  // ==========================================
+  const handleTogglePermiso = (
+    moduloId: string,
+    field: keyof Permiso,
+  ): void => {
+    const idStr = String(moduloId).toLowerCase();
+
+    setRoles((prev) =>
+      prev.map((r) => {
+        if (r.id !== selectedRoleId) return r;
+
+        const safePerms: PermisosMap =
+          typeof r.permisos === "object" &&
+          r.permisos !== null &&
+          !Array.isArray(r.permisos)
+            ? ({ ...(r.permisos as PermisosMap) } as PermisosMap)
+            : {};
+
+        const modPerms = safePerms[idStr] || EMPTY_PERMISO;
+
+        return {
+          ...r,
+          permisos: {
+            ...safePerms,
+            [idStr]: { ...modPerms, [field]: !modPerms[field] },
+          },
+        };
+      }),
     );
   };
 
-  // --- Manejadores de Cambios en la Matriz ---
-
-  const handleTogglePermiso = (
-    moduloId: string,
-    field: keyof Omit<PermisoUI, "moduloId">,
-  ) => {
-    const newMatrix = permisosMatrix.map((rp) => {
-      if (rp.rolId !== selectedRoleId) return rp;
-      return {
-        ...rp,
-        permisos: rp.permisos.map((p) => {
-          if (p.moduloId !== moduloId) return p;
-          return { ...p, [field]: !p[field] };
-        }),
-      };
-    });
-    updateLocalMatrix(newMatrix);
-  };
-
-  const handleToggleAllModulePermisos = (moduloId: string) => {
-    const p = getPermiso(moduloId);
+  const handleToggleAllModulePermisos = (moduloId: string): void => {
+    const idStr = String(moduloId).toLowerCase();
+    const p = getPermiso(idStr);
     const allEnabled = p.ver && p.editar && p.eliminar && p.exportar;
 
-    const newMatrix = permisosMatrix.map((rp) => {
-      if (rp.rolId !== selectedRoleId) return rp;
-      return {
-        ...rp,
-        permisos: rp.permisos.map((perm) => {
-          if (perm.moduloId !== moduloId) return perm;
-          return {
-            ...perm,
-            ver: !allEnabled,
-            editar: !allEnabled,
-            eliminar: !allEnabled,
-            exportar: !allEnabled,
-          };
-        }),
-      };
-    });
-    updateLocalMatrix(newMatrix);
+    setRoles((prev) =>
+      prev.map((r) => {
+        if (r.id !== selectedRoleId) return r;
+
+        const safePerms: PermisosMap =
+          typeof r.permisos === "object" &&
+          r.permisos !== null &&
+          !Array.isArray(r.permisos)
+            ? ({ ...(r.permisos as PermisosMap) } as PermisosMap)
+            : {};
+
+        return {
+          ...r,
+          permisos: {
+            ...safePerms,
+            [idStr]: {
+              ver: !allEnabled,
+              editar: !allEnabled,
+              eliminar: !allEnabled,
+              exportar: !allEnabled,
+            },
+          },
+        };
+      }),
+    );
   };
 
-  const handleToggleColumnPermiso = (
-    field: keyof Omit<PermisoUI, "moduloId">,
-  ) => {
-    // CORRECCIÓN 2: Usamos availableModules en lugar de modulos estáticos
+  const handleToggleColumnPermiso = (field: keyof Permiso): void => {
     const allEnabled = availableModules.every((m) => getPermiso(m.id)[field]);
 
-    const newMatrix = permisosMatrix.map((rp) => {
-      if (rp.rolId !== selectedRoleId) return rp;
-      return {
-        ...rp,
-        permisos: rp.permisos.map((perm) => ({
-          ...perm,
-          [field]: !allEnabled,
-        })),
-      };
-    });
-    updateLocalMatrix(newMatrix);
+    setRoles((prev) =>
+      prev.map((r) => {
+        if (r.id !== selectedRoleId) return r;
+
+        const safePerms: PermisosMap =
+          typeof r.permisos === "object" &&
+          r.permisos !== null &&
+          !Array.isArray(r.permisos)
+            ? ({ ...(r.permisos as PermisosMap) } as PermisosMap)
+            : {};
+
+        availableModules.forEach((m) => {
+          const idStr = String(m.id).toLowerCase();
+          const modPerms = safePerms[idStr] || EMPTY_PERMISO;
+          safePerms[idStr] = { ...modPerms, [field]: !allEnabled };
+        });
+
+        return { ...r, permisos: safePerms };
+      }),
+    );
   };
 
-  // --- Acciones Principales ---
-
-  const handleSavePermisos = async () => {
+  const handleSavePermisos = async (): Promise<void> => {
     setIsSaving(true);
-    if (isCreatingRole) {
-      const success = await createRole(newRoleName, newRoleDescription);
-      if (success) setShowRoleEditor(false);
-    } else {
-      await savePermissions(selectedRoleId);
-      setShowRoleEditor(false);
+
+    try {
+      if (isCreatingRole) {
+        const success = await createRole(newRoleName, newRoleDescription);
+        if (success) setShowRoleEditor(false);
+      } else if (currentRole) {
+        const success = await updateRole(currentRole.id, {
+          nombre: newRoleName,
+          descripcion: newRoleDescription,
+          permisos: currentRole.permisos,
+        });
+        if (success) setShowRoleEditor(false);
+      }
+    } finally {
+      setIsSaving(false);
     }
-    setIsSaving(false);
   };
 
-  const openRoleEditor = (roleId: string) => {
+  const openRoleEditor = (roleId: number): void => {
+    const role = roles.find((r) => r.id === roleId);
+
     setSelectedRoleId(roleId);
     setIsCreatingRole(false);
+
+    setNewRoleName(role?.nombre || "");
+    setNewRoleDescription(role?.descripcion || "");
+
     setShowRoleEditor(true);
   };
 
-  const openNewRoleEditor = () => {
+  const openNewRoleEditor = (): void => {
     setIsCreatingRole(true);
     setNewRoleName("");
     setNewRoleDescription("");
-    setSelectedRoleId("");
+    setSelectedRoleId(null);
     setShowRoleEditor(true);
   };
 
-  const handleDeleteRole = async () => {
-    if (roleToDelete) {
-      await deleteRole(roleToDelete);
-      setShowDeleteDialog(false);
-      setRoleToDelete(null);
-    }
+  const handleDeleteRole = async (): Promise<void> => {
+    if (!roleToDelete) return;
+    await deleteRole(roleToDelete);
+    setShowDeleteDialog(false);
+    setRoleToDelete(null);
   };
 
-  const handleDuplicateRole = (roleId: string, e: React.MouseEvent) => {
+  const handleDuplicateRole = (roleId: number, e: React.MouseEvent): void => {
     e.stopPropagation();
     toast.info("Función de duplicar próximamente");
   };
 
-  if (isLoading)
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-[50vh]">
         <div className="flex flex-col items-center gap-4">
@@ -243,6 +332,7 @@ const RolesPermisosPage = () => {
         </div>
       </div>
     );
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -256,60 +346,84 @@ const RolesPermisosPage = () => {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5" />
-                Roles del Sistema
+                <Shield className="h-5 w-5" /> Roles del Sistema
               </CardTitle>
               <CardDescription>
                 Configura los permisos de cada rol para controlar el acceso
               </CardDescription>
             </div>
+
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
                 onClick={() => setShowAuditLogPanel(true)}
                 className="gap-2"
               >
-                <History className="h-4 w-4" />
-                Ver Actividad
+                <History className="h-4 w-4" /> Ver Actividad
               </Button>
+
               <Button
                 variant="outline"
                 onClick={() => setShowCreatePermissionModal(true)}
                 className="gap-2"
               >
-                <Key className="h-4 w-4" />
-                Crear Permiso
+                <Key className="h-4 w-4" /> Crear Permiso
               </Button>
+
+              {/* ✅ NUEVO: Administrar Módulos */}
+              <Button
+                variant="outline"
+                onClick={() => setShowManageModules(true)}
+                className="gap-2"
+              >
+                <Settings className="h-4 w-4" /> Administrar Módulos
+              </Button>
+
               <Button
                 onClick={openNewRoleEditor}
                 className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2"
               >
-                <Plus className="h-4 w-4" />
-                Nuevo Rol
+                <Plus className="h-4 w-4" /> Nuevo Rol
               </Button>
             </div>
           </div>
         </CardHeader>
+
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {roles.map((rol) => {
-              const rolPermisos = permisosMatrix.find(
-                (p) => p.rolId === rol.id,
+              // Conteo para la barrita de progreso
+              let localPermsRaw: unknown = rol.permisos;
+              try {
+                localPermsRaw =
+                  typeof rol.permisos === "string"
+                    ? (JSON.parse(rol.permisos) as unknown)
+                    : rol.permisos;
+              } catch {
+                localPermsRaw = {};
+              }
+
+              const localPerms: PermisosMap =
+                typeof localPermsRaw === "object" &&
+                localPermsRaw !== null &&
+                !Array.isArray(localPermsRaw)
+                  ? (localPermsRaw as PermisosMap)
+                  : {};
+
+              const totalPermisos = Object.values(localPerms).reduce(
+                (acc: number, p: Permiso) =>
+                  acc +
+                  (p?.ver ? 1 : 0) +
+                  (p?.editar ? 1 : 0) +
+                  (p?.eliminar ? 1 : 0) +
+                  (p?.exportar ? 1 : 0),
+                0,
               );
-              const totalPermisos =
-                rolPermisos?.permisos.reduce(
-                  (acc, p) =>
-                    acc +
-                    (p.ver ? 1 : 0) +
-                    (p.editar ? 1 : 0) +
-                    (p.eliminar ? 1 : 0) +
-                    (p.exportar ? 1 : 0),
-                  0,
-                ) || 0;
-              // CORRECCIÓN 3: Usamos availableModules para el cálculo
+
               const maxPermisos = availableModules.length * 4;
+
               const isSystemRole = ["admin", "operativo", "finanzas"].includes(
-                rol.id,
+                rol.name_key?.toLowerCase(),
               );
 
               return (
@@ -323,23 +437,28 @@ const RolesPermisosPage = () => {
                       <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
                         <Shield className="h-6 w-6 text-primary" />
                       </div>
+
                       <div className="flex items-center gap-2">
                         {isSystemRole && (
                           <Badge variant="outline" className="text-xs bg-muted">
-                            <Lock className="h-3 w-3 mr-1" />
-                            Sistema
+                            <Lock className="h-3 w-3 mr-1" /> Sistema
                           </Badge>
                         )}
+
                         <Badge
                           variant="outline"
-                          className={cn("text-xs", getRoleBadgeColor(rol.id))}
+                          className={cn(
+                            "text-xs",
+                            getRoleBadgeColor(rol.name_key),
+                          )}
                         >
-                          {rol.id.toUpperCase()}
+                          {rol.name_key?.toUpperCase()}
                         </Badge>
                       </div>
                     </div>
 
                     <h3 className="font-semibold text-lg mb-1">{rol.nombre}</h3>
+
                     <p className="text-sm text-muted-foreground mb-4 line-clamp-2 min-h-[40px]">
                       {rol.descripcion || "Sin descripción"}
                     </p>
@@ -368,6 +487,7 @@ const RolesPermisosPage = () => {
                         >
                           <Copy className="h-4 w-4" />
                         </Button>
+
                         {!isSystemRole && (
                           <Button
                             variant="ghost"
@@ -414,7 +534,7 @@ const RolesPermisosPage = () => {
         </CardContent>
       </Card>
 
-      {/* Editor de Roles (Sheet) */}
+      {/* Sheet para crear/editar rol */}
       <Sheet open={showRoleEditor} onOpenChange={setShowRoleEditor}>
         <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
           <SheetHeader className="space-y-3">
@@ -422,44 +542,35 @@ const RolesPermisosPage = () => {
               <Shield className="h-5 w-5" />
               {isCreatingRole
                 ? "Crear Nuevo Rol"
-                : `Editar Permisos: ${roles.find((r) => r.id === selectedRoleId)?.nombre}`}
+                : `Editar Rol: ${currentRole?.nombre ?? ""}`}
             </SheetTitle>
-            <SheetDescription>
-              {isCreatingRole
-                ? "Define el nombre y los permisos para el nuevo rol"
-                : "Configura los permisos de este rol para cada módulo del sistema"}
-            </SheetDescription>
           </SheetHeader>
 
           <div className="mt-6 space-y-6">
-            {isCreatingRole && (
-              <div className="space-y-4 p-4 bg-muted/50 rounded-lg">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Nombre del Rol</label>
-                  <Input
-                    value={newRoleName}
-                    onChange={(e) => setNewRoleName(e.target.value)}
-                    placeholder="Ej: Auditor"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Descripción</label>
-                  <Input
-                    value={newRoleDescription}
-                    onChange={(e) => setNewRoleDescription(e.target.value)}
-                    placeholder="Describe las responsabilidades..."
-                  />
-                </div>
+            <div className="space-y-4 p-4 bg-muted/50 rounded-lg">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Nombre del Rol</label>
+                <Input
+                  value={newRoleName}
+                  onChange={(e) => setNewRoleName(e.target.value)}
+                  placeholder="Ej: Auditor"
+                />
               </div>
-            )}
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Descripción</label>
+                <Input
+                  value={newRoleDescription}
+                  onChange={(e) => setNewRoleDescription(e.target.value)}
+                  placeholder="Describe las responsabilidades..."
+                />
+              </div>
+            </div>
 
             {(!isCreatingRole || newRoleName) && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h4 className="font-semibold">Matriz de Permisos</h4>
-                  <p className="text-xs text-muted-foreground">
-                    Click en la fila para toggle todos
-                  </p>
                 </div>
 
                 <div className="border rounded-lg overflow-hidden">
@@ -469,50 +580,59 @@ const RolesPermisosPage = () => {
                         <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                           Módulo
                         </th>
+
                         <th className="text-center px-3 py-3">
                           <button
+                            type="button"
                             onClick={() => handleToggleColumnPermiso("ver")}
-                            className="hover:text-primary transition-colors"
+                            className="hover:text-primary"
                           >
                             <Eye className="h-4 w-4 text-blue-500 mx-auto" />
                           </button>
                         </th>
+
                         <th className="text-center px-3 py-3">
                           <button
+                            type="button"
                             onClick={() => handleToggleColumnPermiso("editar")}
-                            className="hover:text-primary transition-colors"
+                            className="hover:text-primary"
                           >
                             <Pencil className="h-4 w-4 text-amber-500 mx-auto" />
                           </button>
                         </th>
+
                         <th className="text-center px-3 py-3">
                           <button
+                            type="button"
                             onClick={() =>
                               handleToggleColumnPermiso("eliminar")
                             }
-                            className="hover:text-primary transition-colors"
+                            className="hover:text-primary"
                           >
                             <Trash2 className="h-4 w-4 text-red-500 mx-auto" />
                           </button>
                         </th>
+
                         <th className="text-center px-3 py-3">
                           <button
+                            type="button"
                             onClick={() =>
                               handleToggleColumnPermiso("exportar")
                             }
-                            className="hover:text-primary transition-colors"
+                            className="hover:text-primary"
                           >
                             <Download className="h-4 w-4 text-green-500 mx-auto" />
                           </button>
                         </th>
                       </tr>
                     </thead>
+
                     <tbody className="divide-y">
-                      {/* CORRECCIÓN 4: Iteramos sobre availableModules */}
                       {availableModules.map((modulo) => {
                         const permiso = getPermiso(modulo.id);
                         const IconComponent =
                           iconMap[modulo.icono] || LayoutDashboard;
+
                         const allEnabled =
                           permiso.ver &&
                           permiso.editar &&
@@ -537,12 +657,14 @@ const RolesPermisosPage = () => {
                                   {modulo.nombre}
                                 </span>
                               </div>
+
                               {modulo.descripcion && (
                                 <p className="text-[10px] text-muted-foreground pl-7">
                                   {modulo.descripcion}
                                 </p>
                               )}
                             </td>
+
                             <td
                               className="text-center px-3 py-3"
                               onClick={(e) => e.stopPropagation()}
@@ -552,9 +674,10 @@ const RolesPermisosPage = () => {
                                 onCheckedChange={() =>
                                   handleTogglePermiso(modulo.id, "ver")
                                 }
-                                className="data-[state=checked]:bg-blue-500 data-[state=checked]:border-blue-500"
+                                className="data-[state=checked]:bg-blue-500"
                               />
                             </td>
+
                             <td
                               className="text-center px-3 py-3"
                               onClick={(e) => e.stopPropagation()}
@@ -564,9 +687,10 @@ const RolesPermisosPage = () => {
                                 onCheckedChange={() =>
                                   handleTogglePermiso(modulo.id, "editar")
                                 }
-                                className="data-[state=checked]:bg-amber-500 data-[state=checked]:border-amber-500"
+                                className="data-[state=checked]:bg-amber-500"
                               />
                             </td>
+
                             <td
                               className="text-center px-3 py-3"
                               onClick={(e) => e.stopPropagation()}
@@ -576,9 +700,10 @@ const RolesPermisosPage = () => {
                                 onCheckedChange={() =>
                                   handleTogglePermiso(modulo.id, "eliminar")
                                 }
-                                className="data-[state=checked]:bg-red-500 data-[state=checked]:border-red-500"
+                                className="data-[state=checked]:bg-red-500"
                               />
                             </td>
+
                             <td
                               className="text-center px-3 py-3"
                               onClick={(e) => e.stopPropagation()}
@@ -588,7 +713,7 @@ const RolesPermisosPage = () => {
                                 onCheckedChange={() =>
                                   handleTogglePermiso(modulo.id, "exportar")
                                 }
-                                className="data-[state=checked]:bg-green-500 data-[state=checked]:border-green-500"
+                                className="data-[state=checked]:bg-green-500"
                               />
                             </td>
                           </tr>
@@ -607,14 +732,14 @@ const RolesPermisosPage = () => {
             </Button>
             <Button
               onClick={handleSavePermisos}
-              disabled={isSaving || (isCreatingRole && !newRoleName.trim())}
+              disabled={isSaving || !newRoleName.trim()}
               className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
             >
               {isSaving ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <Save className="h-4 w-4" />
-              )}
+              )}{" "}
               Guardar Cambios
             </Button>
           </SheetFooter>
@@ -630,6 +755,7 @@ const RolesPermisosPage = () => {
               puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>
+
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
@@ -647,12 +773,10 @@ const RolesPermisosPage = () => {
         onOpenChange={setShowAuditLogPanel}
       />
 
-      {/* CORRECCIÓN 5: Conectamos el Modal con addModule del Hook */}
       <CreatePermissionModal
         open={showCreatePermissionModal}
         onOpenChange={setShowCreatePermissionModal}
         onSubmit={async (data) => {
-          // Usamos la key generada como ID del módulo
           const success = await addModule(
             data.descripcion || `Permiso ${data.key}`,
             data.key.toLowerCase(),
@@ -660,6 +784,15 @@ const RolesPermisosPage = () => {
           );
           if (success) setShowCreatePermissionModal(false);
         }}
+      />
+
+      {/* ✅ NUEVO: modal administrar módulos */}
+      <ManageModulesModal
+        open={showManageModules}
+        onOpenChange={setShowManageModules}
+        modules={availableModules}
+        onUpdate={updateSystemModule}
+        onDelete={deleteSystemModule}
       />
     </div>
   );

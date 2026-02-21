@@ -1,77 +1,171 @@
-from typing import Optional, List
-from pydantic import BaseModel, Field, ConfigDict
+from __future__ import annotations
+
 from datetime import datetime
-from enum import Enum
+from typing import List, Optional
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.models.models import TripStatus, RecordStatus  # ajusta ruta real
 
 
-class TripStatusEnum(str, Enum):
-    CREADO = "creado"
-    EN_TRANSITO = "en_transito"
-    DETENIDO = "detenido"
-    RETRASO = "retraso"
-    ENTREGADO = "entregado"
-    CERRADO = "cerrado"
-    ACCIDENTE = "accidente"
+class ORMBase(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
 
 
-class TripTimelineEventBase(BaseModel):
+# =========================================================
+# TRIP TIMELINE EVENTS
+# =========================================================
+
+
+class TripTimelineEventBase(ORMBase):
+    # time = Column(DateTime(timezone=True), nullable=False)
     time: datetime
-    event: str
-    event_type: str = "info"
+
+    # event = Column(String(500), nullable=False)
+    event: str = Field(..., max_length=500)
+
+    # event_type = Column(String(20), default="info")
+    event_type: str = Field(default="info", max_length=20)
+
+
+class TripTimelineEventCreate(TripTimelineEventBase):
+    # trip_id viene por path normalmente, pero lo dejo opcional por si lo mandas
+    trip_id: Optional[int] = None
+
+
+class TripTimelineEventUpdate(ORMBase):
+    time: Optional[datetime] = None
+    event: Optional[str] = Field(default=None, max_length=500)
+    event_type: Optional[str] = Field(default=None, max_length=20)
 
 
 class TripTimelineEventResponse(TripTimelineEventBase):
-    model_config = ConfigDict(from_attributes=True)
     id: int
-    trip_id: str
+    trip_id: int
+
+    # AuditMixin
+    record_status: RecordStatus
+    created_at: datetime
+    updated_at: datetime
+    created_by_id: Optional[int] = None
+    updated_by_id: Optional[int] = None
 
 
-class TripBase(BaseModel):
-    origin: str
-    destination: str
-    route_name: Optional[str] = None
-    status: TripStatusEnum = TripStatusEnum.CREADO
+# =========================================================
+# TRIPS
+# =========================================================
+
+
+class TripBase(ORMBase):
+    # origin/destination/route_name
+    origin: str = Field(..., max_length=200)
+    destination: str = Field(..., max_length=200)
+    route_name: Optional[str] = Field(default=None, max_length=200)
+
+    # status = Enum(TripStatus, name="tripstatus")
+    status: TripStatus = TripStatus.CREADO
+
+    # costos
     tarifa_base: float = Field(..., gt=0)
-    costo_casetas: float = 0
-    anticipo_casetas: float = 0
-    anticipo_viaticos: float = 0
-    anticipo_combustible: float = 0
-    otros_anticipos: float = 0
+    costo_casetas: float = 0.0
+    anticipo_casetas: float = 0.0
+    anticipo_viaticos: float = 0.0
+    anticipo_combustible: float = 0.0
+    otros_anticipos: float = 0.0
+    saldo_operador: float = 0.0
+
+    # fechas
     start_date: datetime
     estimated_arrival: Optional[datetime] = None
-
-
-class TripCreate(TripBase):
-    id: str
-    client_id: str
-    sub_client_id: str
-    unit_id: str
-    operator_id: str
-    tariff_id: Optional[str] = None
-
-
-class TripUpdate(BaseModel):
-    status: Optional[TripStatusEnum] = None
-    last_location: Optional[str] = None
     actual_arrival: Optional[datetime] = None
-    # Otros campos editables
+    closed_at: Optional[datetime] = None
+
+    # tracking
+    last_update: Optional[datetime] = None
+    last_location: Optional[str] = Field(default=None, max_length=200)
+
+
+class TripCreate(ORMBase):
+    # public_id existe pero es opcional
+    public_id: Optional[str] = Field(default=None, max_length=50)
+
+    client_id: int
+    sub_client_id: int
+    unit_id: int
+    operator_id: int
+    tariff_id: Optional[int] = None
+
+    origin: str = Field(..., max_length=200)
+    destination: str = Field(..., max_length=200)
+    route_name: Optional[str] = Field(default=None, max_length=200)
+
+    status: TripStatus = TripStatus.CREADO
+
+    tarifa_base: float = Field(..., gt=0)
+    costo_casetas: float = 0.0
+    anticipo_casetas: float = 0.0
+    anticipo_viaticos: float = 0.0
+    anticipo_combustible: float = 0.0
+    otros_anticipos: float = 0.0
+    saldo_operador: float = 0.0
+
+    start_date: datetime
+    estimated_arrival: Optional[datetime] = None
+    actual_arrival: Optional[datetime] = None
+    closed_at: Optional[datetime] = None
+
+    last_location: Optional[str] = Field(default=None, max_length=200)
+
+
+class TripUpdate(ORMBase):
+    # Parcial (exclude_unset=True en service)
+
+    public_id: Optional[str] = Field(default=None, max_length=50)
+
+    client_id: Optional[int] = None
+    sub_client_id: Optional[int] = None
+    unit_id: Optional[int] = None
+    operator_id: Optional[int] = None
+    tariff_id: Optional[int] = None
+
+    origin: Optional[str] = Field(default=None, max_length=200)
+    destination: Optional[str] = Field(default=None, max_length=200)
+    route_name: Optional[str] = Field(default=None, max_length=200)
+
+    status: Optional[TripStatus] = None
+
+    tarifa_base: Optional[float] = Field(default=None, gt=0)
+    costo_casetas: Optional[float] = None
+    anticipo_casetas: Optional[float] = None
+    anticipo_viaticos: Optional[float] = None
+    anticipo_combustible: Optional[float] = None
+    otros_anticipos: Optional[float] = None
+    saldo_operador: Optional[float] = None
+
+    start_date: Optional[datetime] = None
+    estimated_arrival: Optional[datetime] = None
+    actual_arrival: Optional[datetime] = None
+    closed_at: Optional[datetime] = None
+
+    last_update: Optional[datetime] = None
+    last_location: Optional[str] = Field(default=None, max_length=200)
 
 
 class TripResponse(TripBase):
-    model_config = ConfigDict(from_attributes=True)
-    id: str
-    client_id: str
-    sub_client_id: str
-    unit_id: str
-    operator_id: str
-    tariff_id: Optional[str] = None
-    saldo_operador: float
-    last_update: Optional[datetime] = None
-    last_location: Optional[str] = None
-    actual_arrival: Optional[datetime] = None
-    closed_at: Optional[datetime] = None
-    created_at: Optional[datetime] = None
+    id: int
+    public_id: Optional[str] = None
 
-    # Nested Info (para que el frontend no tenga que hacer N requests)
-    # Nota: Requiere que en el CRUD uses joinedload
+    client_id: int
+    sub_client_id: int
+    unit_id: int
+    operator_id: int
+    tariff_id: Optional[int] = None
+
     timeline_events: List[TripTimelineEventResponse] = []
+
+    # AuditMixin
+    record_status: RecordStatus
+    created_at: datetime
+    updated_at: datetime
+    created_by_id: Optional[int] = None
+    updated_by_id: Optional[int] = None
