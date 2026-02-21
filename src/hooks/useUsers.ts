@@ -10,6 +10,7 @@ export interface UserDisplay {
   telefono: string;
   puesto: string;
   rol: string;
+  rolNombre?: string;
   estado: string;
   avatar?: string;
   twoFactorEnabled: boolean;
@@ -20,18 +21,18 @@ export const useUsers = () => {
   const [users, setUsers] = useState<UserDisplay[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Mapear datos del Backend al formato visual del Frontend
   const mapUserToDisplay = (user: any): UserDisplay => ({
-    id: user.id,
+    id: user.id.toString(),
     nombre: user.nombre,
     apellidos: user.apellido || "",
     email: user.email,
     telefono: user.telefono || "Sin teléfono",
     puesto: user.puesto || "Sin asignar",
-    rol: user.role_id,
+    rol: user.role_id?.toString() || "",
+    rolNombre: user.role?.nombre || "Sin Rol",
     estado: user.activo ? "activo" : "inactivo",
     avatar: user.avatar_url,
-    twoFactorEnabled: user.is_2fa_enabled,
+    twoFactorEnabled: user.is_2fa_enabled || false,
     ultimoAcceso: user.last_login
       ? new Date(user.last_login).toLocaleDateString()
       : "Nunca",
@@ -54,12 +55,11 @@ export const useUsers = () => {
     fetchUsers();
   }, [fetchUsers]);
 
-  // Acciones
   const createUser = async (data: UserData) => {
     try {
       await userService.create(data);
       toast.success("Usuario creado correctamente");
-      fetchUsers(); // Recargar lista
+      fetchUsers();
       return true;
     } catch (error: any) {
       toast.error(error.response?.data?.detail || "Error al crear usuario");
@@ -89,14 +89,25 @@ export const useUsers = () => {
     }
   };
 
-  const resetPassword = async (id: string) => {
+  const resetPassword = async (id: string, customPass?: string) => {
     try {
-      // Generamos una pass temporal (o podrías pedirla en un modal)
-      const tempPass = "Temporal123!";
+      const tempPass = customPass || "Temporal123!";
       await userService.resetPassword(id, tempPass);
-      toast.success(`Contraseña reseteada a: ${tempPass}`);
+      toast.success(`Contraseña actualizada con éxito`);
     } catch (error) {
-      toast.error("Error al resetear contraseña");
+      toast.error("Error al actualizar contraseña");
+    }
+  };
+
+  const deleteUser = async (id: string) => {
+    try {
+      await userService.delete(id);
+      toast.success("Usuario eliminado");
+      fetchUsers();
+      return true;
+    } catch (error) {
+      toast.error("Error al eliminar usuario");
+      return false;
     }
   };
 
@@ -108,5 +119,6 @@ export const useUsers = () => {
     updateUser,
     toggleStatus,
     resetPassword,
+    deleteUser,
   };
 };

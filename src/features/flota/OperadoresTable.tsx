@@ -28,7 +28,6 @@ import {
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { OperatorDetailSheet } from "./OperatorDetailSheet";
-import { getExpiryStatus, getExpiryLabel } from "@/data/flotaData";
 import { Operador } from "@/services/operatorService";
 
 interface OperadoresTableProps {
@@ -37,8 +36,25 @@ interface OperadoresTableProps {
   onDelete?: (id: number) => void;
 }
 
+// --- HELPERS TRASLADADOS DE FLOTADATA ---
+const getExpiryStatus = (dateStr?: string) => {
+  if (!dateStr) return "danger";
+  const days = Math.floor(
+    (new Date(dateStr).getTime() - new Date().getTime()) / (1000 * 3600 * 24),
+  );
+  if (days < 0) return "danger";
+  if (days <= 30) return "warning";
+  return "success";
+};
+
+const getExpiryLabel = (dateStr?: string) => {
+  if (!dateStr) return "Sin fecha";
+  return new Date(dateStr).toLocaleDateString("es-MX", { timeZone: "UTC" });
+};
+// ----------------------------------------
+
 const getStatusBadge = (status: string) => {
-  switch (status) {
+  switch (status?.toLowerCase()) {
     case "activo":
       return (
         <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100/80 border-emerald-200">
@@ -64,19 +80,24 @@ const getStatusBadge = (status: string) => {
         </Badge>
       );
     default:
-      return <Badge variant="secondary">{status}</Badge>;
+      return (
+        <Badge variant="secondary" className="capitalize">
+          {status || "Desconocido"}
+        </Badge>
+      );
   }
 };
 
 const ExpiryBadge = ({ date, label }: { date: string; label: string }) => {
   const status = getExpiryStatus(date);
   const expiryLabel = getExpiryLabel(date);
-  // Mapeo seguro de tipos
+
   const statusMap: Record<string, StatusType> = {
     danger: "danger",
     warning: "warning",
     success: "success",
   };
+
   const iconMap: Record<string, React.ReactNode> = {
     danger: <AlertTriangle className="h-3 w-3 mr-1" />,
     warning: <Clock className="h-3 w-3 mr-1" />,
@@ -181,12 +202,12 @@ export function OperadoresTable({
         ),
       },
       {
-        key: "assigned_unit", // Nota: assigned_unit puede venir undefined del backend si no hacemos join
+        key: "assigned_unit", // Puede requerir join desde el backend o venir como unit_id
         header: "Unidad",
-        render: (value) =>
-          value ? (
+        render: (value, operador) =>
+          value || operador.assigned_unit_id ? (
             <Badge variant="outline" className="font-mono">
-              {value}
+              {value || `Unidad ID: ${operador.assigned_unit_id}`}
             </Badge>
           ) : (
             <span className="text-muted-foreground text-xs">Sin asignar</span>
@@ -249,7 +270,7 @@ export function OperadoresTable({
       </CardContent>
 
       <OperatorDetailSheet
-        operator={selectedOperator as any} // Cast temporal si el sheet usa tipos viejos
+        operator={selectedOperator as any}
         open={isDetailOpen}
         onOpenChange={setIsDetailOpen}
       />

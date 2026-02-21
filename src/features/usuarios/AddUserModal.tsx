@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { roles } from "@/data/usuariosData";
+import { useRoles } from "@/hooks/useRoles";
 import { UserPlus } from "lucide-react";
 
 interface AddUserModalProps {
@@ -24,15 +24,15 @@ interface AddUserModalProps {
   onSubmit: (data: UserFormData) => void;
 }
 
+// Interfaz actualizada para que coincida exactamente con la edición
 export interface UserFormData {
   nombre: string;
+  apellidos: string;
   email: string;
-  apellido?: string;
-  password: string;
-  telefono?: string;
-  puesto?: string;
+  telefono: string;
+  puesto: string;
   rol: string;
-  empresa: string;
+  password: string;
 }
 
 export function AddUserModal({
@@ -40,30 +40,37 @@ export function AddUserModal({
   onOpenChange,
   onSubmit,
 }: AddUserModalProps) {
+  const { roles } = useRoles();
+
   const [formData, setFormData] = useState<UserFormData>({
     nombre: "",
+    apellidos: "",
     email: "",
-    password: "",
+    telefono: "",
+    puesto: "",
     rol: "",
-    empresa: "Rápidos 3T",
+    password: "",
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit(formData);
+    // Limpiar formulario
     setFormData({
       nombre: "",
+      apellidos: "",
       email: "",
-      password: "",
+      telefono: "",
+      puesto: "",
       rol: "",
-      empresa: "Rápidos 3T",
+      password: "",
     });
     onOpenChange(false);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[480px]">
+      <DialogContent className="sm:max-w-[550px]">
         <DialogHeader className="pb-4 border-b">
           <DialogTitle className="flex items-center gap-2 text-foreground">
             <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center">
@@ -74,23 +81,43 @@ export function AddUserModal({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 pt-4">
-          <div className="space-y-2">
-            <Label
-              htmlFor="nombre"
-              className="text-xs font-medium text-muted-foreground uppercase tracking-wide"
-            >
-              Nombre Completo
-            </Label>
-            <Input
-              id="nombre"
-              placeholder="Ej: Carlos Mendoza García"
-              value={formData.nombre}
-              onChange={(e) =>
-                setFormData({ ...formData, nombre: e.target.value })
-              }
-              required
-              className="h-9 text-sm"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label
+                htmlFor="nombre"
+                className="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+              >
+                Nombre
+              </Label>
+              <Input
+                id="nombre"
+                placeholder="Ej: Carlos"
+                value={formData.nombre}
+                onChange={(e) =>
+                  setFormData({ ...formData, nombre: e.target.value })
+                }
+                required
+                className="h-9 text-sm"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label
+                htmlFor="apellidos"
+                className="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+              >
+                Apellidos
+              </Label>
+              <Input
+                id="apellidos"
+                placeholder="Ej: Mendoza García"
+                value={formData.apellidos}
+                onChange={(e) =>
+                  setFormData({ ...formData, apellidos: e.target.value })
+                }
+                required
+                className="h-9 text-sm"
+              />
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -113,24 +140,41 @@ export function AddUserModal({
             />
           </div>
 
-          <div className="space-y-2">
-            <Label
-              htmlFor="password"
-              className="text-xs font-medium text-muted-foreground uppercase tracking-wide"
-            >
-              Contraseña
-            </Label>
-            <Input
-              id="password"
-              type="password"
-              placeholder="••••••••"
-              value={formData.password}
-              onChange={(e) =>
-                setFormData({ ...formData, password: e.target.value })
-              }
-              required
-              className="h-9 text-sm"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label
+                htmlFor="telefono"
+                className="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+              >
+                Teléfono
+              </Label>
+              <Input
+                id="telefono"
+                placeholder="Ej: 55 1234 5678"
+                value={formData.telefono}
+                onChange={(e) =>
+                  setFormData({ ...formData, telefono: e.target.value })
+                }
+                className="h-9 text-sm"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label
+                htmlFor="puesto"
+                className="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+              >
+                Puesto
+              </Label>
+              <Input
+                id="puesto"
+                placeholder="Ej: Despachador"
+                value={formData.puesto}
+                onChange={(e) =>
+                  setFormData({ ...formData, puesto: e.target.value })
+                }
+                className="h-9 text-sm"
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -153,28 +197,34 @@ export function AddUserModal({
                 </SelectTrigger>
                 <SelectContent>
                   {roles.map((rol) => (
-                    <SelectItem key={rol.id} value={rol.id} className="text-sm">
+                    <SelectItem
+                      key={rol.id}
+                      value={rol.id.toString()}
+                      className="text-sm"
+                    >
                       {rol.nombre}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-
             <div className="space-y-2">
               <Label
-                htmlFor="empresa"
+                htmlFor="password"
                 className="text-xs font-medium text-muted-foreground uppercase tracking-wide"
               >
-                Empresa
+                Contraseña
               </Label>
               <Input
-                id="empresa"
-                value={formData.empresa}
+                id="password"
+                type="password"
+                placeholder="Mínimo 8 caracteres"
+                value={formData.password}
                 onChange={(e) =>
-                  setFormData({ ...formData, empresa: e.target.value })
+                  setFormData({ ...formData, password: e.target.value })
                 }
                 required
+                minLength={8}
                 className="h-9 text-sm"
               />
             </div>

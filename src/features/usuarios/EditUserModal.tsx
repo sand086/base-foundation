@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,24 +15,33 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Switch } from '@/components/ui/switch';
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { roles } from '@/data/usuariosData';
-import { PasswordInput } from '@/components/usuarios/PasswordInput';
-import { ImageUpload } from '@/components/usuarios/ImageUpload';
-import { Edit, User, Lock, Image as ImageIcon, Loader2, ShieldOff } from 'lucide-react';
-import { toast } from 'sonner';
+} from "@/components/ui/select";
+import { PasswordInput } from "@/components/usuarios/PasswordInput";
+import { ImageUpload } from "@/components/usuarios/ImageUpload";
+import {
+  Edit,
+  User,
+  Lock,
+  Image as ImageIcon,
+  Loader2,
+  ShieldOff,
+} from "lucide-react";
+import { toast } from "sonner";
+
+// Reemplazamos la importación del mock data por el hook real
+import { useRoles } from "@/hooks/useRoles";
 
 export interface UserData {
   id: string;
@@ -54,22 +63,30 @@ interface EditUserModalProps {
   onSave: (data: UserData & { password?: string }) => void;
 }
 
-export function EditUserModal({ open, onOpenChange, user, onSave }: EditUserModalProps) {
-  const [activeTab, setActiveTab] = useState('general');
+export function EditUserModal({
+  open,
+  onOpenChange,
+  user,
+  onSave,
+}: EditUserModalProps) {
+  // Inicializamos el hook para traer los roles reales
+  const { roles } = useRoles();
+
+  const [activeTab, setActiveTab] = useState("general");
   const [isSaving, setIsSaving] = useState(false);
   const [showReset2FADialog, setShowReset2FADialog] = useState(false);
   const [formData, setFormData] = useState<UserData & { password: string }>({
-    id: '',
-    nombre: '',
-    apellidos: '',
-    email: '',
-    telefono: '',
-    puesto: '',
-    rol: '',
-    estado: 'activo',
+    id: "",
+    nombre: "",
+    apellidos: "",
+    email: "",
+    telefono: "",
+    puesto: "",
+    rol: "",
+    estado: "activo",
     avatar: undefined,
     twoFactorEnabled: false,
-    password: '',
+    password: "",
   });
 
   // Load user data when modal opens
@@ -77,9 +94,9 @@ export function EditUserModal({ open, onOpenChange, user, onSave }: EditUserModa
     if (user && open) {
       setFormData({
         ...user,
-        password: '',
+        password: "",
       });
-      setActiveTab('general');
+      setActiveTab("general");
       setShowReset2FADialog(false);
     }
   }, [user, open]);
@@ -87,7 +104,7 @@ export function EditUserModal({ open, onOpenChange, user, onSave }: EditUserModa
   const handleReset2FA = () => {
     setFormData({ ...formData, twoFactorEnabled: false });
     setShowReset2FADialog(false);
-    toast.success('2FA reseteado', {
+    toast.success("2FA reseteado", {
       description: `La autenticación de dos factores de ${formData.nombre} ha sido desactivada.`,
     });
   };
@@ -95,17 +112,14 @@ export function EditUserModal({ open, onOpenChange, user, onSave }: EditUserModa
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
-    
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    
+
+    // Simulate API call (aquí después se conecta con onSave que ya hace el await real)
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
     const { password, ...userData } = formData;
-    onSave({ ...userData, password: password || undefined });
-    
+    await onSave({ ...userData, password: password || undefined });
+
     setIsSaving(false);
-    toast.success('Usuario actualizado', {
-      description: `Los datos de ${formData.nombre} han sido guardados.`,
-    });
     onOpenChange(false);
   };
 
@@ -145,25 +159,35 @@ export function EditUserModal({ open, onOpenChange, user, onSave }: EditUserModa
             <TabsContent value="general" className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="nombre" className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  <Label
+                    htmlFor="nombre"
+                    className="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+                  >
                     Nombre
                   </Label>
                   <Input
                     id="nombre"
                     value={formData.nombre}
-                    onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, nombre: e.target.value })
+                    }
                     required
                     className="h-9 text-sm"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="apellidos" className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  <Label
+                    htmlFor="apellidos"
+                    className="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+                  >
                     Apellidos
                   </Label>
                   <Input
                     id="apellidos"
                     value={formData.apellidos}
-                    onChange={(e) => setFormData({ ...formData, apellidos: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, apellidos: e.target.value })
+                    }
                     required
                     className="h-9 text-sm"
                   />
@@ -171,14 +195,19 @@ export function EditUserModal({ open, onOpenChange, user, onSave }: EditUserModa
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                <Label
+                  htmlFor="email"
+                  className="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+                >
                   Correo Electrónico
                 </Label>
                 <Input
                   id="email"
                   type="email"
                   value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, email: e.target.value })
+                  }
                   required
                   className="h-9 text-sm"
                 />
@@ -186,24 +215,34 @@ export function EditUserModal({ open, onOpenChange, user, onSave }: EditUserModa
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="telefono" className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  <Label
+                    htmlFor="telefono"
+                    className="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+                  >
                     Teléfono
                   </Label>
                   <Input
                     id="telefono"
                     value={formData.telefono}
-                    onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, telefono: e.target.value })
+                    }
                     className="h-9 text-sm"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="puesto" className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  <Label
+                    htmlFor="puesto"
+                    className="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+                  >
                     Puesto
                   </Label>
                   <Input
                     id="puesto"
                     value={formData.puesto}
-                    onChange={(e) => setFormData({ ...formData, puesto: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, puesto: e.target.value })
+                    }
                     className="h-9 text-sm"
                   />
                 </div>
@@ -211,19 +250,29 @@ export function EditUserModal({ open, onOpenChange, user, onSave }: EditUserModa
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="rol" className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  <Label
+                    htmlFor="rol"
+                    className="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+                  >
                     Rol
                   </Label>
                   <Select
                     value={formData.rol}
-                    onValueChange={(value) => setFormData({ ...formData, rol: value })}
+                    onValueChange={(value) =>
+                      setFormData({ ...formData, rol: value })
+                    }
                   >
                     <SelectTrigger className="h-9 text-sm">
                       <SelectValue placeholder="Seleccionar rol" />
                     </SelectTrigger>
                     <SelectContent>
+                      {/* Generamos las opciones desde los roles reales */}
                       {roles.map((rol) => (
-                        <SelectItem key={rol.id} value={rol.id} className="text-sm">
+                        <SelectItem
+                          key={rol.id}
+                          value={rol.id.toString()}
+                          className="text-sm"
+                        >
                           {rol.nombre}
                         </SelectItem>
                       ))}
@@ -231,20 +280,31 @@ export function EditUserModal({ open, onOpenChange, user, onSave }: EditUserModa
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="estado" className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  <Label
+                    htmlFor="estado"
+                    className="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+                  >
                     Estado
                   </Label>
                   <Select
                     value={formData.estado}
-                    onValueChange={(value) => setFormData({ ...formData, estado: value })}
+                    onValueChange={(value) =>
+                      setFormData({ ...formData, estado: value })
+                    }
                   >
                     <SelectTrigger className="h-9 text-sm">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="activo" className="text-sm">Activo</SelectItem>
-                      <SelectItem value="inactivo" className="text-sm">Inactivo</SelectItem>
-                      <SelectItem value="bloqueado" className="text-sm">Bloqueado</SelectItem>
+                      <SelectItem value="activo" className="text-sm">
+                        Activo
+                      </SelectItem>
+                      <SelectItem value="inactivo" className="text-sm">
+                        Inactivo
+                      </SelectItem>
+                      <SelectItem value="bloqueado" className="text-sm">
+                        Bloqueado
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -261,7 +321,9 @@ export function EditUserModal({ open, onOpenChange, user, onSave }: EditUserModa
                 </p>
                 <PasswordInput
                   value={formData.password}
-                  onChange={(value) => setFormData({ ...formData, password: value })}
+                  onChange={(value) =>
+                    setFormData({ ...formData, password: value })
+                  }
                   placeholder="Nueva contraseña"
                   showGenerator
                   showStrength
@@ -270,7 +332,9 @@ export function EditUserModal({ open, onOpenChange, user, onSave }: EditUserModa
 
               <div className="flex items-center justify-between p-4 rounded-lg border">
                 <div>
-                  <Label className="text-sm font-medium">Autenticación de dos factores</Label>
+                  <Label className="text-sm font-medium">
+                    Autenticación de dos factores
+                  </Label>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Requiere un código adicional al iniciar sesión
                   </p>
@@ -291,16 +355,22 @@ export function EditUserModal({ open, onOpenChange, user, onSave }: EditUserModa
                       <ShieldOff className="h-5 w-5 text-destructive" />
                     </div>
                     <div className="flex-1">
-                      <Label className="text-sm font-medium text-destructive">Resetear 2FA</Label>
+                      <Label className="text-sm font-medium text-destructive">
+                        Resetear 2FA
+                      </Label>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        Desconectará la autenticación de dos factores. El usuario deberá configurarla nuevamente.
+                        Desconectará la autenticación de dos factores. El
+                        usuario deberá configurarla nuevamente.
                       </p>
-                      <AlertDialog open={showReset2FADialog} onOpenChange={setShowReset2FADialog}>
+                      <AlertDialog
+                        open={showReset2FADialog}
+                        onOpenChange={setShowReset2FADialog}
+                      >
                         <AlertDialogTrigger asChild>
-                          <Button 
+                          <Button
                             type="button"
-                            variant="destructive" 
-                            size="sm" 
+                            variant="destructive"
+                            size="sm"
                             className="mt-3 gap-2"
                           >
                             <ShieldOff className="h-4 w-4" />
@@ -311,14 +381,18 @@ export function EditUserModal({ open, onOpenChange, user, onSave }: EditUserModa
                           <AlertDialogHeader>
                             <AlertDialogTitle>¿Resetear 2FA?</AlertDialogTitle>
                             <AlertDialogDescription>
-                              Esta acción desconectará la autenticación de dos factores de{' '}
-                              <strong>{formData.nombre} {formData.apellidos}</strong>.
-                              El usuario deberá configurar 2FA nuevamente en su próximo inicio de sesión.
+                              Esta acción desconectará la autenticación de dos
+                              factores de{" "}
+                              <strong>
+                                {formData.nombre} {formData.apellidos}
+                              </strong>
+                              . El usuario deberá configurar 2FA nuevamente en
+                              su próximo inicio de sesión.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction 
+                            <AlertDialogAction
                               onClick={handleReset2FA}
                               className="bg-destructive hover:bg-destructive/90"
                             >
@@ -336,7 +410,9 @@ export function EditUserModal({ open, onOpenChange, user, onSave }: EditUserModa
             <TabsContent value="imagen" className="py-4">
               <ImageUpload
                 value={formData.avatar}
-                onChange={(value) => setFormData({ ...formData, avatar: value })}
+                onChange={(value) =>
+                  setFormData({ ...formData, avatar: value })
+                }
                 fallback={initials}
               />
             </TabsContent>
@@ -362,7 +438,7 @@ export function EditUserModal({ open, onOpenChange, user, onSave }: EditUserModa
                   Guardando...
                 </>
               ) : (
-                'Guardar Cambios'
+                "Guardar Cambios"
               )}
             </Button>
           </div>

@@ -851,3 +851,28 @@ class InvoicePayment(AuditMixin, Base):
     complemento_uuid = Column(String(36))
 
     invoice = relationship("PayableInvoice", back_populates="payments")
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+    accion = Column(String(255), nullable=False)
+    # tipo_accion: crear, editar, eliminar, ver, exportar, login, logout, seguridad
+    tipo_accion = Column(String(50), nullable=False)
+    modulo = Column(String(100), nullable=False)
+    detalles = Column(Text, nullable=True)
+
+    ip = Column(String(50), nullable=True)
+    dispositivo = Column(String(255), nullable=True)
+
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # Relación para poder traer el nombre del usuario fácilmente
+    user = relationship("User")
