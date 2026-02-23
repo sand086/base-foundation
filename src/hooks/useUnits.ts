@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 // Asegúrate de importar AxiosError si usas axios, o usa 'any' controladamente
 import { AxiosError } from "axios";
-import { unitService, Unidad } from "@/services/unitService";
+import { unitService } from "@/services/unitService";
+import { Unit } from "@/types/api.types";
 import { toast } from "sonner";
 
 export const useUnits = () => {
-  const [unidades, setUnidades] = useState<Unidad[]>([]);
+  const [unidades, setUnidades] = useState<Unit[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -30,7 +31,7 @@ export const useUnits = () => {
 
   // --- CRUD OPERATIONS ---
 
-  const createUnit = async (unidad: Omit<Unidad, "id">) => {
+  const createUnit = async (unidad: Omit<Unit, "id">) => {
     try {
       await unitService.create(unidad);
       toast.success("Unidad creada exitosamente");
@@ -46,7 +47,7 @@ export const useUnits = () => {
   };
 
   // NOTA: Cambiado 'id: string' a 'id: number'
-  const updateUnit = async (id: number, unidad: Partial<Unidad>) => {
+  const updateUnit = async (id: number, unidad: Partial<Unit>) => {
     try {
       await unitService.update(id, unidad);
       toast.success("Unidad actualizada");
@@ -84,7 +85,7 @@ export const useUnits = () => {
       const response = await unitService.importBulk(file);
 
       // Ajuste para manejar diferentes formatos de respuesta del backend
-      const count = response.records || response.inserted || 0;
+      const count = response.records || 0;
       toast.success(`Carga exitosa: ${count} unidades procesadas`);
 
       await fetchUnits();
