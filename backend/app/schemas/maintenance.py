@@ -185,8 +185,8 @@ class WorkOrderPartResponse(ORMBase):
 
     # AuditMixin
     record_status: RecordStatus
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     created_by_id: Optional[int] = None
     updated_by_id: Optional[int] = None
 
@@ -221,6 +221,8 @@ class WorkOrderResponse(ORMBase):
 
     # AuditMixin
     record_status: RecordStatus
+    fecha_apertura: Optional[datetime] = None
+    fecha_cierre: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
     created_by_id: Optional[int] = None

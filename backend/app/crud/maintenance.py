@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import HTTPException, UploadFile
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, lazyload
 
 from app.models import models
 
@@ -314,6 +314,7 @@ def get_work_order(db: Session, order_id: int):
 def create_work_order(db: Session, order_in: schemas.WorkOrderCreate):
     try:
         folio = generate_work_order_folio(db)
+        now = datetime.now(timezone.utc)  # Generamos la hora en Python
 
         db_order = models.WorkOrder(
             folio=folio,
@@ -321,6 +322,7 @@ def create_work_order(db: Session, order_in: schemas.WorkOrderCreate):
             mechanic_id=order_in.mechanic_id,
             descripcion_problema=order_in.descripcion_problema,
             status=models.WorkOrderStatus.ABIERTA,
+            fecha_apertura=now,
         )
         db.add(db_order)
         db.flush()  # obtiene id sin commit
@@ -330,7 +332,10 @@ def create_work_order(db: Session, order_in: schemas.WorkOrderCreate):
             item = (
                 db.query(models.InventoryItem)
                 .filter(models.InventoryItem.id == part.inventory_item_id)
-                .with_for_update()
+                .options(lazyload("*"))
+                .with_for_update(
+                    of=models.InventoryItem
+                )  # Especificamos bloquear solo esta tabla
                 .first()
             )
             if not item:
@@ -354,6 +359,7 @@ def create_work_order(db: Session, order_in: schemas.WorkOrderCreate):
                 inventory_item_id=item.id,
                 cantidad=part.cantidad,
                 costo_unitario_snapshot=item.precio_unitario,
+                created_at=now,
             )
             item.stock_actual -= part.cantidad
             db.add(db_part)
