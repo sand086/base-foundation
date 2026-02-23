@@ -12,7 +12,7 @@ router = APIRouter()
 # --- INVENTARIO ---
 @router.get("/inventory", response_model=List[schemas.InventoryItemResponse])
 def read_inventory(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return crud.get_inventory(db, skip, limit)
+    return crud.list_inventory(db, skip=skip, limit=limit)
 
 
 @router.post("/inventory", response_model=schemas.InventoryItemResponse)
@@ -92,7 +92,7 @@ def delete_mechanic_document(document_id: int, db: Session = Depends(get_db)):
 
 @router.get("/work-orders", response_model=List[schemas.WorkOrderResponse])
 def read_work_orders(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return crud.get_work_orders(db, skip, limit)
+    return crud.list_work_orders(db, skip=skip, limit=limit)
 
 
 @router.post("/work-orders", response_model=schemas.WorkOrderResponse)
