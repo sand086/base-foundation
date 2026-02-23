@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+// src/features/flota/DocumentUploadManager.tsx
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,7 +9,6 @@ import {
   Eye,
   Loader2,
   Trash2,
-  AlertCircle,
   FileText,
   FileSpreadsheet,
   FileArchive,
@@ -17,6 +17,7 @@ import {
 import { unitService } from "@/services/unitService";
 import { clientService } from "@/services/clientService";
 import { operatorService } from "@/services/operatorService";
+import { fuelService } from "@/services/fuelService"; // ✅ IMPORTANTE
 import { toast } from "sonner";
 import {
   Dialog,
@@ -31,9 +32,10 @@ import axiosClient from "@/api/axiosClient";
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "/";
 
-type EntityType = "unit" | "client" | "operator";
+// ✅ Extendemos los tipos soportados
+export type EntityType = "unit" | "client" | "operator" | "fuel";
 
-type DocHistoryItem = {
+export type DocHistoryItem = {
   id: number;
   filename: string;
   file_url: string;
@@ -44,23 +46,18 @@ type DocHistoryItem = {
   size_bytes?: number | null;
 };
 
-interface Props {
-  // ✅ NUEVO: firma principal (entityId requerido)
-  entityId: number;
+export interface DocumentUploadManagerProps {
+  entityId: number | string;
   entityType: EntityType;
-
   docType: string;
   docLabel: string;
   currentUrl?: string | null;
   onUploadSuccess: (newUrl: string) => void;
-
   statusBadge?: React.ReactNode;
   dateInput?: React.ReactNode;
-
-  // ✅ NUEVO: accept configurable (con default extendido)
   accept?: string;
 
-  // ✅ COMPATIBILIDAD con flotas (si todavía lo usas en otras pantallas)
+  // unitId permite que el documento “pertenezca” a unit aunque entityId sea otra cosa
   unitId?: number;
   unitEconomico?: string;
 }
@@ -70,7 +67,6 @@ const DEFAULT_ACCEPT = ".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.csv,.txt";
 const getFullUrl = (path: string) => {
   if (!path) return "";
   if (path.startsWith("http")) return path;
-  // tu backend parece servir en /api + path (según tu snippet nuevo)
   return `${BACKEND_URL}${path.startsWith("/") ? "" : "/"}${path}`;
 };
 
@@ -85,21 +81,47 @@ const formatDate = (dateStr: string) =>
 
 const getFileIcon = (filename: string) => {
   const ext = (filename.split(".").pop() || "").toLowerCase();
-
-  if (["xlsx", "xls", "csv"].includes(ext))
+  if (["xlsx", "xls", "csv"].includes(ext)) {
     return <FileSpreadsheet className="w-4 h-4 text-emerald-600" />;
-
-  if (["zip", "rar", "7z", "tar", "gz"].includes(ext))
+  }
+  if (["zip", "rar", "7z", "tar", "gz"].includes(ext)) {
     return <FileArchive className="w-4 h-4 text-indigo-600" />;
-
-  if (["pdf"].includes(ext))
+  }
+  if (["pdf"].includes(ext)) {
     return <FileText className="w-4 h-4 text-rose-600" />;
-
-  if (["png", "jpg", "jpeg", "webp"].includes(ext))
-    return <FileIcon className="w-4 h-4 text-blue-600" />;
-
-  return <FileIcon className="w-4 h-4 text-muted-foreground" />;
+  }
+  return <FileIcon className="w-4 h-4 text-blue-600" />;
 };
+
+function buildHistoryEndpoint(
+  entityType: EntityType,
+  activeId: number,
+  docType: string,
+) {
+  switch (entityType) {
+    case "unit":
+      return `/units/${activeId}/documents/${docType}/history`;
+    case "client":
+      return `/clients/${activeId}/documents/${docType}/history`;
+    case "operator":
+      return `/operators/${activeId}/documents/${docType}/history`;
+    case "fuel":
+      return `/fuel-logs/${activeId}/documents/${docType}/history`;
+  }
+}
+
+function buildDeleteEndpoint(entityType: EntityType, docId: number) {
+  switch (entityType) {
+    case "client":
+      return `/clients/documents/${docId}`;
+    case "unit":
+      return `/units/documents/${docId}`;
+    case "operator":
+      return `/operators/documents/${docId}`;
+    case "fuel":
+      return `/fuel-logs/documents/${docId}`;
+  }
+}
 
 export function DocumentUploadManager({
   entityId,
@@ -112,14 +134,11 @@ export function DocumentUploadManager({
   statusBadge,
   dateInput,
   accept = DEFAULT_ACCEPT,
-  unitEconomico,
-}: Props) {
+}: DocumentUploadManagerProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [history, setHistory] = useState<DocHistoryItem[]>([]);
   const [lastUploadDate, setLastUploadDate] = useState<string | null>(null);
 
-  // ✅ Mantén compatibilidad: si por alguna razón te siguen pasando unitId, úsalo.
-  // Preferencia: entityId (nuevo)
   const activeId = useMemo(() => {
     if (entityType === "unit") return (unitId ?? entityId) as number;
     return entityId as number;
@@ -127,56 +146,54 @@ export function DocumentUploadManager({
 
   const inputId = `file-${entityType}-${activeId}-${docType}`;
 
+  // ✅ useCallback (update)
+  const loadHistory = useCallback(
+    async (showToast = true) => {
+      if (!activeId) return;
+
+      try {
+        const endpoint = buildHistoryEndpoint(entityType, activeId, docType);
+        const res = await axiosClient.get(endpoint);
+
+        const items = (res.data || []) as DocHistoryItem[];
+        setHistory(items);
+
+        const activeDoc = items.find((d) => d.is_active) ?? items[0];
+        if (activeDoc?.created_at) setLastUploadDate(activeDoc.created_at);
+        else setLastUploadDate(null);
+      } catch (error) {
+        console.error("Error al cargar historial:", error);
+        if (showToast) toast.error("Error al cargar historial");
+      }
+    },
+    [activeId, entityType, docType],
+  );
+
+  // ✅ useEffect con loadHistory estable
   useEffect(() => {
     if (activeId) void loadHistory(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeId, currentUrl, docType, entityType]);
+  }, [activeId, currentUrl, loadHistory]);
 
-  const loadHistory = async (showToast = true) => {
-    if (!activeId) return;
-
-    try {
-      let endpoint = "";
-      if (entityType === "unit") {
-        endpoint = `/units/${activeId}/documents/${docType}/history`;
-      } else if (entityType === "client") {
-        endpoint = `/clients/${activeId}/documents/${docType}/history`;
-      } else if (entityType === "operator") {
-        endpoint = `/operators/${activeId}/documents/${docType}/history`;
-      }
-
-      const res = await axiosClient.get(endpoint);
-      const items = (res.data || []) as DocHistoryItem[];
-
-      setHistory(items);
-
-      const activeDoc = items.find((d) => d.is_active) ?? items[0]; // fallback por si tu API no manda is_active
-
-      if (activeDoc?.created_at) setLastUploadDate(activeDoc.created_at);
-      else setLastUploadDate(null);
-    } catch (error) {
-      console.error("Error al cargar historial:", error);
-      if (showToast) toast.error("Error al cargar historial");
-    }
-  };
-
+  // ✅ Lógica de servicio dinámica para subida
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !activeId) return;
-
     setIsUploading(true);
 
     try {
-      let result;
+      let result: { url: string } | undefined;
+
       if (entityType === "unit") {
         result = await unitService.uploadDocument(activeId, docType, file);
       } else if (entityType === "client") {
         result = await clientService.uploadDocument(activeId, docType, file);
       } else if (entityType === "operator") {
         result = await operatorService.uploadDocument(activeId, docType, file);
+      } else if (entityType === "fuel") {
+        result = await fuelService.uploadDocument(activeId, docType, file);
       }
 
-      if (result) {
+      if (result?.url) {
         toast.success("Archivo cargado con éxito");
         onUploadSuccess(result.url);
         await loadHistory(false);
@@ -186,29 +203,23 @@ export function DocumentUploadManager({
       toast.error("Error al subir documento");
     } finally {
       setIsUploading(false);
-
-      // importante: reset input para permitir subir el mismo archivo otra vez
       e.target.value = "";
     }
   };
 
+  // ✅ Lógica de eliminación dinámica
   const handleDelete = async (docId: number) => {
-    const ok = confirm(
-      "¿Estás seguro de eliminar esta versión? Esta acción quedará registrada en el log de auditoría.",
-    );
+    const ok = confirm("¿Estás seguro de eliminar esta versión?");
     if (!ok) return;
 
     try {
-      // Nota: tu código original siempre borra en /clients/documents/:id
-      // Si tu backend distingue por entity, ajusta aquí.
-      // Yo lo dejo como tu endpoint actual.
-      await axiosClient.delete(`/clients/documents/${docId}`);
+      const endpoint = buildDeleteEndpoint(entityType, docId);
+      await axiosClient.delete(endpoint);
 
-      toast.success("Documento eliminado correctamente");
+      toast.success("Documento eliminado");
       await loadHistory(false);
-      // Opcional: si borraste el activo, podrías querer avisar al padre para limpiar currentUrl
     } catch (error) {
-      console.error("Error eliminando documento:", error);
+      console.error("Error al eliminar documento:", error);
       toast.error("No se pudo eliminar el documento");
     }
   };
@@ -223,7 +234,6 @@ export function DocumentUploadManager({
             </Label>
             {statusBadge}
           </div>
-
           {lastUploadDate && (
             <p className="text-[10px] text-muted-foreground font-mono">
               Ult: {formatDate(lastUploadDate)}
@@ -231,11 +241,7 @@ export function DocumentUploadManager({
           )}
         </div>
 
-        <Dialog
-          onOpenChange={(open) => {
-            if (open) void loadHistory(false);
-          }}
-        >
+        <Dialog onOpenChange={(o) => o && void loadHistory(false)}>
           <DialogTrigger asChild>
             <Button
               variant="outline"
@@ -261,11 +267,14 @@ export function DocumentUploadManager({
                   {history.map((item) => (
                     <div
                       key={item.id}
-                      className={`flex items-center justify-between p-3 rounded-lg border ${
-                        item.is_active
-                          ? "bg-emerald-50 border-emerald-200"
-                          : "bg-card"
-                      }`}
+                      className={`
+                        flex items-center justify-between p-3 rounded-lg border
+                        ${
+                          item.is_active
+                            ? "bg-emerald-50 border-emerald-200"
+                            : "bg-card"
+                        }
+                      `}
                     >
                       <div className="space-y-1 overflow-hidden min-w-0">
                         <div className="flex items-center gap-2 min-w-0">
@@ -285,7 +294,7 @@ export function DocumentUploadManager({
                           <span className="text-[10px] text-muted-foreground">
                             {item.created_at
                               ? formatDate(item.created_at)
-                              : "Fecha no disponible"}
+                              : "N/A"}
                           </span>
                         </div>
                       </div>
@@ -296,7 +305,6 @@ export function DocumentUploadManager({
                           variant="ghost"
                           className="h-8 w-8"
                           asChild
-                          title="Ver"
                         >
                           <a
                             href={getFullUrl(item.file_url)}
@@ -312,21 +320,12 @@ export function DocumentUploadManager({
                           variant="ghost"
                           className="h-8 w-8 text-destructive"
                           onClick={() => void handleDelete(item.id)}
-                          title="Eliminar versión (Se guardará en auditoría)"
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
                     </div>
                   ))}
-
-                  <div className="mt-4 p-2 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded flex gap-2 items-center">
-                    <AlertCircle className="w-4 h-4 text-amber-600" />
-                    <p className="text-[10px] text-amber-700 dark:text-amber-400 font-medium">
-                      Cualquier eliminación o reemplazo será registrado en el
-                      sistema de auditoría.
-                    </p>
-                  </div>
                 </div>
               )}
             </ScrollArea>
@@ -347,16 +346,15 @@ export function DocumentUploadManager({
 
           <Label
             htmlFor={inputId}
-            className={`flex items-center justify-center w-full h-9 px-3 text-[11px] font-bold uppercase transition-all border border-dashed rounded-lg cursor-pointer bg-background/50 hover:bg-accent ${
-              isUploading ? "opacity-50 cursor-not-allowed" : ""
-            }`}
-            title={
-              unitEconomico ? `Unidad: ${unitEconomico}` : "Seleccionar archivo"
-            }
+            className={[
+              "flex items-center justify-center w-full h-9 px-3 text-[11px] font-bold uppercase transition-all",
+              "border border-dashed rounded-lg cursor-pointer bg-background/50 hover:bg-accent",
+              isUploading ? "opacity-50 cursor-not-allowed" : "",
+            ].join(" ")}
           >
             {isUploading ? (
               <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" />{" "}
+                <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" />
                 Subiendo...
               </>
             ) : (
@@ -376,7 +374,6 @@ export function DocumentUploadManager({
             size="sm"
             className="h-9 px-3 bg-emerald-600 hover:bg-emerald-700 text-white"
             asChild
-            title="Ver documento más reciente"
           >
             <a
               href={getFullUrl(currentUrl)}

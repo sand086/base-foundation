@@ -1,5 +1,6 @@
 // src/features/combustible/CombustibleCargas.tsx
-import { useState, useEffect, useMemo } from "react";
+import * as React from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,8 +9,6 @@ import {
   Fuel,
   Plus,
   AlertTriangle,
-  Image,
-  ImageOff,
   FileText,
   TrendingUp,
   Gauge,
@@ -22,7 +21,6 @@ import {
 } from "lucide-react";
 
 import type { CargaCombustible, TipoCombustible } from "@/data/combustibleData";
-import { unidadesCombustible } from "@/data/combustibleData";
 
 import {
   AddTicketModal,
@@ -33,17 +31,18 @@ import { EditCargaModal } from "@/features/combustible/EditCargaModal";
 
 import {
   EnhancedDataTable,
-  ColumnDef,
+  type ColumnDef,
 } from "@/components/ui/enhanced-data-table";
 import { cn } from "@/lib/utils";
 
 import { toast } from "sonner";
 import { fuelService } from "@/services/fuelService";
 
-// ✅ Alert UI
+import { unitService } from "@/services/unitService";
+import { operatorService } from "@/services/operatorService";
+
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
-// ✅ Dropdown actions
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -52,15 +51,70 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 
-/**
- * ✅ Nota importante:
- * En tu último update agregaste `checkRouteGap` usando `segments`, pero este módulo
- * NO maneja segmentos (eso es de Tarifas). Aquí lo correcto es mostrar "Estado" con
- * base en `excedeTanque` (y si quieres, `capacidadTanque`).
- * Por eso: eliminé `checkRouteGap` y la columna "Estado" ahora se basa en `excedeTanque`.
- */
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
+/** =========================
+ * Tipos mínimos (ajusta si ya los tienes tipados en otro archivo)
+ * ========================= */
+type ID = string | number;
+
+type Unit = {
+  id: ID;
+  numero_economico?: string | null;
+  placas?: string | null;
+  capacidad_tanque_diesel?: number | null;
+  capacidad_tanque_urea?: number | null;
+
+  // compat opcional
+  capacidadTanqueDiesel?: number | null;
+  capacidadTanqueUrea?: number | null;
+};
+
+type Operator = {
+  id: ID;
+  name?: string | null;
+  // compat opcional
+  nombre?: string | null;
+};
+
+function unitLabel(u: Unit) {
+  const ne = (u.numero_economico ?? "").trim();
+  const pl = (u.placas ?? "").trim();
+  if (ne && pl) return `${ne} (${pl})`;
+  if (ne) return ne;
+  if (pl) return pl;
+  return `Unidad ${String(u.id)}`;
+}
+
+function operatorLabel(o: Operator) {
+  const n = (o.name ?? o.nombre ?? "").trim();
+  return n || `Operador ${String(o.id)}`;
+}
+
+function getDieselCapacity(u: Unit): number | null {
+  return (u.capacidad_tanque_diesel ?? u.capacidadTanqueDiesel ?? null) as
+    | number
+    | null;
+}
+function getUreaCapacity(u: Unit): number | null {
+  return (u.capacidad_tanque_urea ?? u.capacidadTanqueUrea ?? null) as
+    | number
+    | null;
+}
 
 const CombustibleCargas = () => {
+  const [units, setUnits] = useState<any[]>([]);
+  const [idParaEliminar, setIdParaEliminar] = useState<string | null>(null);
+  const [operators, setOperators] = useState<any[]>([]);
   const [cargas, setCargas] = useState<CargaCombustible[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -68,24 +122,46 @@ const CombustibleCargas = () => {
   const [cargaToView, setCargaToView] = useState<CargaCombustible | null>(null);
   const [cargaToEdit, setCargaToEdit] = useState<CargaCombustible | null>(null);
 
-  // 1) Cargar datos del API al montar
+  /** =========================
+   * 1) Carga masiva de catálogos (fuel + unidades + operadores)
+   * ========================= */
   useEffect(() => {
-    const loadCargas = async () => {
+    const loadData = async () => {
       try {
-        const data = await fuelService.getAll();
-        setCargas(data);
+        const [uData, oData, fData] = await Promise.all([
+          unitService.getAll(),
+          operatorService.getAll(),
+          fuelService.getAll(),
+        ]);
+
+        setUnits(uData || []);
+        setOperators(oData || []);
+
+        // ✅ NORMALIZACIÓN: Convertimos snake_case a camelCase para que React lo entienda
+        const normalizedFuel = (fData || []).map((item: any) => ({
+          ...item,
+          // Si el backend manda snake_case, lo mapeamos a lo que el Front usa
+          tipoCombustible: item.tipo_combustible || item.tipoCombustible,
+          fechaHora: item.fecha_hora || item.fechaHora,
+          precioPorLitro: item.precio_por_litro || item.precioPorLitro,
+          excedeTanque: item.excede_tanque ?? item.excedeTanque,
+          evidenciaUrl: item.evidencia_url || item.evidenciaUrl,
+        }));
+
+        setCargas(normalizedFuel);
       } catch (error) {
-        console.error(error);
-        toast.error("Error al obtener la bitácora");
+        console.error("Error cargando catálogos:", error);
+        toast.error("Error al sincronizar con el servidor");
       } finally {
         setIsLoading(false);
       }
     };
-
-    void loadCargas();
+    loadData();
   }, []);
 
-  // --- Totales ---
+  /** =========================
+   * Totales
+   * ========================= */
   const dieselCargas = useMemo(
     () => cargas.filter((c) => c.tipoCombustible === "diesel"),
     [cargas],
@@ -135,38 +211,38 @@ const CombustibleCargas = () => {
     </Badge>
   );
 
-  // 2) Envío real al backend con snapshot/alerta y refresh completo
+  /** =========================
+   * 2) Crear ticket (real)
+   * - snapshot de capacidad desde UNITS reales (no catálogo local)
+   * - refresh completo de fuelService.getAll()
+   * ========================= */
   const handleAddTicket = async (data: TicketFormData) => {
-    const toastId = toast.loading("Registrando ticket y subiendo evidencia...");
-
+    const toastId = toast.loading("Registrando ticket...");
     try {
-      // Snapshot: capacidad por unidad (de tu catálogo local)
-      const unit = unidadesCombustible.find((u) => u.id === data.unidadId);
-      const tankCapacity =
-        data.tipoCombustible === "diesel"
-          ? unit?.capacidadTanqueDiesel
-          : unit?.capacidadTanqueUrea;
+      await fuelService.create(data);
+      const updated = await fuelService.getAll();
 
-      const payload = {
-        ...data,
-        capacidad_tanque_snapshot: tankCapacity ?? null,
-        excede_tanque: data.litros > (tankCapacity || 0),
-      };
+      const normalized = updated.map((item: any) => ({
+        ...item,
+        tipoCombustible: item.tipo_combustible || item.tipoCombustible,
+        fechaHora: item.fecha_hora || item.fechaHora,
+        precioPorLitro: item.precio_por_litro || item.precioPorLitro,
+        excedeTanque: item.excede_tanque ?? item.excedeTanque, // ✅ Faltaba este
+        evidenciaUrl: item.evidencia_url || item.evidenciaUrl, // ✅ Faltaba este
+      }));
 
-      await fuelService.create(payload);
-
-      const updatedList = await fuelService.getAll();
-      setCargas(updatedList);
-
-      toast.success("Ticket registrado correctamente", { id: toastId });
+      setCargas(normalized);
+      toast.success("Ticket registrado", { id: toastId });
       setIsModalOpen(false);
     } catch (error) {
-      console.error(error);
-      toast.error("No se pudo guardar el ticket", { id: toastId });
+      toast.error("Error al guardar", { id: toastId });
     }
   };
 
-  // Edit (placeholder si todavía no tienes endpoint)
+  /** =========================
+   * Edit (placeholder si tu endpoint aún no está)
+   * Si ya tienes fuelService.update(id, payload), reemplaza aquí.
+   * ========================= */
   const handleEditCarga = async (updatedCarga: CargaCombustible) => {
     setCargas((prev) =>
       prev.map((c) => (c.id === updatedCarga.id ? updatedCarga : c)),
@@ -174,30 +250,97 @@ const CombustibleCargas = () => {
     toast.success("Cambios aplicados");
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("¿Eliminar este registro? Esta acción no se puede deshacer."))
-      return;
+  const handleDelete = async () => {
+    if (!idParaEliminar) return;
 
+    const toastId = toast.loading("Eliminando registro...");
     try {
-      await fuelService.delete(id);
-      setCargas((prev) => prev.filter((c) => c.id !== id));
-      toast.success("Registro eliminado");
+      await fuelService.delete(idParaEliminar);
+
+      // Actualizamos la UI
+      setCargas((prev) => prev.filter((c) => String(c.id) !== idParaEliminar));
+
+      toast.success("Registro eliminado correctamente", { id: toastId });
     } catch (error) {
       console.error(error);
-      toast.error("No se pudo eliminar");
+      toast.error("No se pudo eliminar el registro", { id: toastId });
+    } finally {
+      setIdParaEliminar(null); // Cerramos el modal
     }
   };
 
-  // Columns
+  /** =========================
+   * Mappers para display en la tabla
+   * - si tu API ya trae unidadNumero/operadorNombre, se respeta
+   * - si no, se resuelve con catálogos units/operators
+   * ========================= */
+  const resolveUnidadDisplay = (row: CargaCombustible) => {
+    const direct = (row as any).unidadNumero ?? (row as any).unidad_numero;
+    if (direct) return String(direct);
+
+    const unitId = (row as any).unidadId ?? (row as any).unidad_id;
+    const u = units.find((x) => String(x.id) === String(unitId));
+    return u ? unitLabel(u) : "";
+  };
+
+  const resolveOperadorDisplay = (row: CargaCombustible) => {
+    const direct = (row as any).operadorNombre ?? (row as any).operador_nombre;
+    if (direct) return String(direct);
+
+    const opId = (row as any).operadorId ?? (row as any).operador_id;
+    const o = operators.find((x) => String(x.id) === String(opId));
+    return o ? operatorLabel(o) : "";
+  };
+
+  const resolveEvidenciaCell = (row: CargaCombustible) => {
+    // si tu API trae un booleano/URL, ajústalo
+    const has =
+      Boolean((row as any).tieneEvidencia) ||
+      Boolean((row as any).evidencia_url) ||
+      Boolean((row as any).evidencia);
+
+    return has ? (
+      <div className="flex justify-center">
+        <Badge
+          variant="outline"
+          className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200"
+        >
+          Sí
+        </Badge>
+      </div>
+    ) : (
+      <div className="flex justify-center">
+        <Badge
+          variant="outline"
+          className="text-[10px] bg-slate-50 text-slate-600 border-slate-200"
+        >
+          No
+        </Badge>
+      </div>
+    );
+  };
+
+  /** =========================
+   * Columns
+   * ========================= */
   const columns: ColumnDef<CargaCombustible>[] = useMemo(
     () => [
       {
         key: "fechaHora",
         header: "Fecha/Hora",
-        type: "date",
-        render: (value) => (
-          <span className="font-mono text-sm">{String(value ?? "")}</span>
-        ),
+        render: (value) => {
+          if (!value) return "---";
+          const date = new Date(String(value));
+          return (
+            <span className="font-mono text-xs">
+              {date.toLocaleDateString("es-MX")}{" "}
+              {date.toLocaleTimeString("es-MX", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
+          );
+        },
       },
       {
         key: "tipoCombustible",
@@ -209,18 +352,18 @@ const CombustibleCargas = () => {
       {
         key: "unidadNumero",
         header: "Unidad",
-        render: (value) => (
+        render: (_, row) => (
           <Badge variant="outline" className="font-mono">
-            {String(value ?? "")}
+            {resolveUnidadDisplay(row)}
           </Badge>
         ),
       },
       {
         key: "operadorNombre",
         header: "Operador",
-        render: (value) => (
+        render: (_, row) => (
           <span className="text-sm max-w-[150px] truncate">
-            {String(value ?? "")}
+            {resolveOperadorDisplay(row)}
           </span>
         ),
       },
@@ -290,12 +433,6 @@ const CombustibleCargas = () => {
           </div>
         ),
       },
-
-      /**
-       * ✅ Reemplazo de la columna "Estado":
-       * Antes estabas intentando usar checkRouteGap(idx) (que depende de segments)
-       * Aquí lo correcto: mostrar alerta si excede tanque, si no "OK".
-       */
       {
         key: "estado",
         header: "Estado",
@@ -320,19 +457,20 @@ const CombustibleCargas = () => {
           </div>
         ),
       },
-
       {
         key: "tieneEvidencia",
         header: "Evidencia",
-        render: (value) => <div className="flex justify-center">{value}</div>,
+        render: (_, row) => resolveEvidenciaCell(row),
       },
-
-      // ✅ Acciones (Dropdown)
       {
         key: "acciones",
         header: "Acciones",
         render: (_, row) => (
-          <div className="flex justify-end">
+          <div
+            className="flex justify-end"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {" "}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -353,7 +491,10 @@ const CombustibleCargas = () => {
 
                 <DropdownMenuItem
                   className="text-destructive"
-                  onClick={() => handleDelete(String(row.id))}
+                  onClick={(e) => {
+                    e.stopPropagation(); // Evita que se abra el modal de detalles
+                    setIdParaEliminar(String(row.id)); // 1. Guardamos el ID (esto abre el AlertDialog automáticamente)
+                  }}
                 >
                   <Trash2 className="mr-2 h-4 w-4" /> Eliminar
                 </DropdownMenuItem>
@@ -363,7 +504,8 @@ const CombustibleCargas = () => {
         ),
       },
     ],
-    [cargas],
+    // dependencias reales que afectan render
+    [cargas, units, operators],
   );
 
   const handleRowClick = (row: CargaCombustible) => setCargaToView(row);
@@ -394,6 +536,28 @@ const CombustibleCargas = () => {
           subir la foto del ticket para auditoría.
         </AlertDescription>
       </Alert>
+      <AlertDialog
+        open={!!idParaEliminar}
+        onOpenChange={(open) => !open && setIdParaEliminar(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Confirmar eliminación?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción marcará el ticket #{idParaEliminar} como eliminado.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => handleDelete()} // 2. Ahora sí ejecutamos la función real
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
@@ -509,6 +673,8 @@ const CombustibleCargas = () => {
         open={isModalOpen}
         onOpenChange={setIsModalOpen}
         onSubmit={handleAddTicket}
+        units={units}
+        operators={operators}
       />
 
       <ViewCargaModal
@@ -521,7 +687,22 @@ const CombustibleCargas = () => {
         open={!!cargaToEdit}
         onOpenChange={() => setCargaToEdit(null)}
         carga={cargaToEdit}
-        onSave={handleEditCarga}
+        units={units} //
+        operators={operators} //
+        onSave={async () => {
+          // Al guardar en el modal, refrescamos la lista entera desde el servidor
+          const updated = await fuelService.getAll();
+          // Re-normalizamos la data para los KPIs
+          const normalized = updated.map((item: any) => ({
+            ...item,
+            tipoCombustible: item.tipo_combustible || item.tipoCombustible,
+            fechaHora: item.fecha_hora || item.fechaHora,
+            precioPorLitro: item.precio_por_litro || item.precioPorLitro,
+            excedeTanque: item.excede_tanque ?? item.excedeTanque,
+            evidenciaUrl: item.evidencia_url || item.evidenciaUrl,
+          }));
+          setCargas(normalized);
+        }}
       />
     </div>
   );
