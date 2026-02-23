@@ -18,6 +18,7 @@ import {
   Calendar,
   CheckCircle2,
   Loader2,
+  AlertTriangle,
 } from "lucide-react";
 import {
   Card,
@@ -50,8 +51,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useTiposUnidad } from "@/hooks/useTiposUnidad";
+import { DocumentUploadManager } from "@/features/flota/DocumentUploadManager";
 
-// 👇 CAMBIO AQUÍ: Imports reales
 import { clientService } from "@/services/clientService";
 import { Client } from "@/types/api.types";
 
@@ -68,6 +69,23 @@ interface TarifaAutorizada {
   costoCasetas?: number; // (Opcional) Referencia del costo de casetas para esa ruta
   moneda: "MXN" | "USD";
   vigencia: string; // Fecha hasta la cual se respeta este precio
+}
+
+interface FiscalDataForm {
+  razonSocial: string;
+  rfc: string;
+  regimenFiscal: string;
+  usoCFDI: string;
+  codigoPostalFiscal: string;
+  direccionFiscal: string;
+  contactoPrincipal: string;
+  telefono: string;
+  email: string;
+  contratoUrl: string;
+  // Campos de documentos (coinciden con docType)
+  constancia_fiscal_url?: string;
+  acta_constitutiva_url?: string;
+  comprobante_domicilio_url?: string;
 }
 
 interface SubClienteForm {
@@ -223,7 +241,7 @@ export default function ClientsNew() {
   // 👇 NUEVO: estado de carga (READ)
   const [loadingData, setLoadingData] = useState(false);
 
-  const [fiscalData, setFiscalData] = useState({
+  const [fiscalData, setFiscalData] = useState<FiscalDataForm>({
     razonSocial: "",
     rfc: "",
     regimenFiscal: "",
@@ -234,6 +252,9 @@ export default function ClientsNew() {
     telefono: "",
     email: "",
     contratoUrl: "",
+    constancia_fiscal_url: "",
+    acta_constitutiva_url: "",
+    comprobante_domicilio_url: "",
   });
 
   // Documentos obligatorios
@@ -306,6 +327,11 @@ export default function ClientsNew() {
           telefono: data.telefono || "",
           email: data.email || "",
           contratoUrl: data.contrato_url || "",
+          // Mapeo de documentos desde el modelo de la BD
+          constancia_fiscal_url: (data as any).constancia_fiscal_url || "",
+          acta_constitutiva_url: (data as any).acta_constitutiva_url || "",
+          comprobante_domicilio_url:
+            (data as any).comprobante_domicilio_url || "",
         });
 
         // 3. Mapear Subclientes y Tarifas anidadas
@@ -514,7 +540,7 @@ export default function ClientsNew() {
         direccion_fiscal: fiscalData.direccionFiscal,
         contacto_principal: fiscalData.contactoPrincipal,
         telefono: fiscalData.telefono,
-        email: fiscalData.email,
+        email: fiscalData.email.trim() === "" ? null : fiscalData.email,
         contrato_url: fiscalData.contratoUrl,
         estatus: "activo",
 
@@ -574,9 +600,27 @@ export default function ClientsNew() {
 
       navigate("/clients");
     } catch (error: any) {
-      console.error(error);
-      const msg = error.response?.data?.detail || "Error al guardar cliente";
-      toast.error(msg);
+      console.error("Error completo:", error);
+
+      // 1. Extraer el detalle del error de FastAPI
+      const detail = error.response?.data?.detail;
+      let errorMessage = "Error al guardar cliente";
+
+      if (Array.isArray(detail)) {
+        // Si es un array (error de validación de Pydantic), tomamos el mensaje técnico
+        // Ejemplo: "email: value is not a valid email address"
+        errorMessage = detail
+          .map((err) => `${err.loc[err.loc.length - 1]}: ${err.msg}`)
+          .join(", ");
+      } else if (typeof detail === "string") {
+        // Si el backend mandó un mensaje simple
+        errorMessage = detail;
+      }
+
+      // 2. Mostrar el error sin romper la app
+      toast.error("Error de Validación", {
+        description: errorMessage,
+      });
     }
   };
 
@@ -857,225 +901,120 @@ export default function ClientsNew() {
             <div className="space-y-4">
               <h4 className="text-sm font-semibold text-foreground flex items-center gap-2 border-b pb-2">
                 <FileCheck className="h-4 w-4 text-primary" />
-                Documentos Obligatorios
+                Documentación del Cliente
               </h4>
 
-              <div className="grid grid-cols-3 gap-4">
-                {/* Constancia Fiscal */}
-                <div
-                  className={cn(
-                    "border-2 border-dashed rounded-lg p-4 transition-all",
-                    documentos.constanciaFiscal
-                      ? "border-emerald-400 bg-emerald-50/50"
-                      : "border-muted-foreground/30 hover:border-primary/50",
-                  )}
-                >
-                  <div className="flex items-start gap-3">
-                    <Checkbox
-                      id="constanciaFiscal"
-                      checked={documentos.constanciaFiscal}
-                      onCheckedChange={(checked) =>
-                        setDocumentos((prev) => ({
-                          ...prev,
-                          constanciaFiscal: !!checked,
-                        }))
-                      }
-                      className="mt-1"
-                    />
-                    <div className="flex-1">
-                      <Label
-                        htmlFor="constanciaFiscal"
-                        className="cursor-pointer font-medium"
-                      >
-                        Constancia Fiscal
-                      </Label>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Constancia de Situación Fiscal (SAT)
-                      </p>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="mt-2 h-7 text-xs gap-1 text-primary"
-                        onClick={() =>
-                          setDocumentos((prev) => ({
-                            ...prev,
-                            constanciaFiscal: true,
-                            constanciaFiscalFile: "constancia.pdf",
-                          }))
-                        }
-                      >
-                        <Upload className="h-3 w-3" /> Subir PDF
-                      </Button>
-                    </div>
-                    {documentos.constanciaFiscal && (
-                      <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                    )}
-                  </div>
+              {!isEditMode ? (
+                <div className="p-8 border-2 border-dashed rounded-xl bg-muted/30 text-center">
+                  <AlertTriangle className="h-8 w-8 text-amber-500 mx-auto mb-2" />
+                  <p className="text-sm font-medium">
+                    Guarda el cliente primero para habilitar la carga de
+                    documentos.
+                  </p>
                 </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* Constancia Fiscal */}
+                  <DocumentUploadManager
+                    entityId={parseInt(clientId!)}
+                    entityType="client"
+                    docType="constancia_fiscal"
+                    docLabel="Constancia de Situación Fiscal"
+                    currentUrl={fiscalData.constancia_fiscal_url} // Asegúrate de tener este campo en fiscalData
+                    onUploadSuccess={() => {
+                      setDocumentos((prev) => ({
+                        ...prev,
+                        constanciaFiscal: true,
+                      }));
+                      // Opcional: recargar datos del cliente
+                    }}
+                  />
 
-                {/* Acta Constitutiva */}
-                <div
-                  className={cn(
-                    "border-2 border-dashed rounded-lg p-4 transition-all",
-                    documentos.actaConstitutiva
-                      ? "border-emerald-400 bg-emerald-50/50"
-                      : "border-muted-foreground/30 hover:border-primary/50",
-                  )}
-                >
-                  <div className="flex items-start gap-3">
-                    <Checkbox
-                      id="actaConstitutiva"
-                      checked={documentos.actaConstitutiva}
-                      onCheckedChange={(checked) =>
-                        setDocumentos((prev) => ({
-                          ...prev,
-                          actaConstitutiva: !!checked,
-                        }))
-                      }
-                      className="mt-1"
-                    />
-                    <div className="flex-1">
-                      <Label
-                        htmlFor="actaConstitutiva"
-                        className="cursor-pointer font-medium"
-                      >
-                        Acta Constitutiva
-                      </Label>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Escritura de la empresa
-                      </p>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="mt-2 h-7 text-xs gap-1 text-primary"
-                        onClick={() =>
-                          setDocumentos((prev) => ({
-                            ...prev,
-                            actaConstitutiva: true,
-                            actaConstitutivaFile: "acta.pdf",
-                          }))
-                        }
-                      >
-                        <Upload className="h-3 w-3" /> Subir PDF
-                      </Button>
-                    </div>
-                    {documentos.actaConstitutiva && (
-                      <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                    )}
-                  </div>
-                </div>
+                  {/* Acta Constitutiva */}
+                  <DocumentUploadManager
+                    entityId={parseInt(clientId!)}
+                    entityType="client"
+                    docType="acta_constitutiva"
+                    docLabel="Acta Constitutiva"
+                    currentUrl={fiscalData.acta_constitutiva_url}
+                    onUploadSuccess={() => {
+                      setDocumentos((prev) => ({
+                        ...prev,
+                        actaConstitutiva: true,
+                      }));
+                    }}
+                  />
 
-                {/* Comprobante Domicilio */}
-                <div
-                  className={cn(
-                    "border-2 border-dashed rounded-lg p-4 transition-all",
-                    documentos.comprobanteDomicilio
-                      ? "border-emerald-400 bg-emerald-50/50"
-                      : "border-muted-foreground/30 hover:border-primary/50",
-                  )}
-                >
-                  <div className="flex items-start gap-3">
-                    <Checkbox
-                      id="comprobanteDomicilio"
-                      checked={documentos.comprobanteDomicilio}
-                      onCheckedChange={(checked) =>
-                        setDocumentos((prev) => ({
-                          ...prev,
-                          comprobanteDomicilio: !!checked,
-                        }))
-                      }
-                      className="mt-1"
-                    />
-                    <div className="flex-1">
-                      <Label
-                        htmlFor="comprobanteDomicilio"
-                        className="cursor-pointer font-medium"
-                      >
-                        Comprobante Domicilio
-                      </Label>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Luz, agua o predial
-                      </p>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="mt-2 h-7 text-xs gap-1 text-primary"
-                        onClick={() =>
-                          setDocumentos((prev) => ({
-                            ...prev,
-                            comprobanteDomicilio: true,
-                            comprobanteDomicilioFile: "domicilio.pdf",
-                          }))
-                        }
-                      >
-                        <Upload className="h-3 w-3" /> Subir PDF
-                      </Button>
-                    </div>
-                    {documentos.comprobanteDomicilio && (
-                      <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Progress indicator */}
-              <div className="flex items-center gap-2 text-sm">
-                <div
-                  className={cn(
-                    "h-2 flex-1 rounded-full bg-muted overflow-hidden",
-                  )}
-                >
-                  <div
-                    className="h-full bg-emerald-500 transition-all"
-                    style={{
-                      width: `${
-                        (((documentos.constanciaFiscal ? 1 : 0) +
-                          (documentos.actaConstitutiva ? 1 : 0) +
-                          (documentos.comprobanteDomicilio ? 1 : 0)) /
-                          3) *
-                        100
-                      }%`,
+                  {/* Comprobante de Domicilio */}
+                  <DocumentUploadManager
+                    entityId={parseInt(clientId!)}
+                    entityType="client"
+                    docType="comprobante_domicilio"
+                    docLabel="Comprobante Domicilio"
+                    currentUrl={fiscalData.comprobante_domicilio_url}
+                    onUploadSuccess={() => {
+                      setDocumentos((prev) => ({
+                        ...prev,
+                        comprobanteDomicilio: true,
+                      }));
                     }}
                   />
                 </div>
-                <span className="text-xs text-muted-foreground">
-                  {(documentos.constanciaFiscal ? 1 : 0) +
-                    (documentos.actaConstitutiva ? 1 : 0) +
-                    (documentos.comprobanteDomicilio ? 1 : 0)}
-                  /3 documentos
-                </span>
-              </div>
+              )}
             </div>
 
-            {/* Contrato General */}
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <FileText className="h-4 w-4" />
-                Contrato General (Opcional)
-              </Label>
-              <div className="border-2 border-dashed rounded-md p-4 text-center hover:border-primary/50 transition-colors cursor-pointer">
-                <Upload className="h-6 w-6 mx-auto text-muted-foreground mb-2" />
-                <p className="text-xs text-muted-foreground">
-                  {fiscalData.contratoUrl ? (
-                    <span className="text-emerald-600 font-medium">
-                      ✓ Contrato cargado
-                    </span>
-                  ) : (
-                    <>
-                      Arrastra o{" "}
-                      <span className="text-primary font-medium">
-                        selecciona
-                      </span>
-                    </>
-                  )}
-                </p>
-                <Input
-                  type="file"
-                  accept=".pdf"
-                  className="hidden"
-                  id="contract-file"
-                />
+            {/* Paso 1: Sección de Documentación Adicional */}
+            <div className="space-y-4 mt-8">
+              <div className="flex items-center justify-between border-b pb-2">
+                <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                  <Paperclip className="h-4 w-4 text-primary" />
+                  Documentos Adicionales y Soporte
+                </h4>
+                <Badge variant="outline" className="text-[10px] uppercase">
+                  Expediente Libre
+                </Badge>
               </div>
+
+              {!isEditMode ? (
+                <div className="p-6 border-2 border-dashed rounded-xl bg-muted/20 text-center">
+                  <p className="text-xs text-muted-foreground">
+                    El repositorio de documentos adicionales se activa después
+                    del primer guardado.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Usamos el Manager para "adicional" que ahora acepta todo tipo de archivos */}
+                  <DocumentUploadManager
+                    entityId={parseInt(clientId!)}
+                    entityType="client"
+                    docType="adicional" // Categoría genérica para la lista
+                    docLabel="Repositorio de Archivos"
+                    currentUrl={fiscalData.contratoUrl} // El último subido servirá como 'principal'
+                    accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.csv,.txt,.doc,.docx"
+                    onUploadSuccess={(url) => {
+                      setFiscalData((prev) => ({ ...prev, contratoUrl: url }));
+                      toast.success("Documento añadido a la lista");
+                    }}
+                  />
+
+                  <Card className="bg-primary/5 border-primary/10">
+                    <CardContent className="p-4 flex gap-3 items-start">
+                      <AlertTriangle className="h-5 w-5 text-primary mt-0.5" />
+                      <div className="space-y-1">
+                        <p className="text-xs font-bold uppercase">
+                          Formatos Soportados
+                        </p>
+                        <p className="text-[10px] text-muted-foreground leading-relaxed">
+                          Puedes cargar contratos, anexos, tablas de precios o
+                          identificaciones. Soporta: PDF, Imágenes, Excel
+                          (XLSX/CSV) y Texto plano.
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end pt-4">

@@ -1,6 +1,6 @@
 import axiosClient from "@/api/axiosClient";
 // Asegúrate de importar la interfaz base correcta
-import { Unidad } from "@/types/api.types";
+import { Unit } from "@/types/api.types";
 
 // --- Interfaces Extendidas ---
 // Definimos los tipos para las llantas y documentos aquí para reutilizarlos
@@ -36,7 +36,7 @@ export interface UnitTire {
   historial?: any[];
 }
 
-export interface UnidadDetalle extends Unidad {
+export interface UnidadDetalle extends Unit {
   documents: UnitDocument[];
   tires: UnitTire[];
 }
@@ -44,7 +44,7 @@ export interface UnidadDetalle extends Unidad {
 export const unitService = {
   // 1. Obtener todas
   getAll: async () => {
-    const response = await axiosClient.get<Unidad[]>("/units");
+    const response = await axiosClient.get<Unit[]>("/units");
     return response.data;
   },
 
@@ -57,14 +57,14 @@ export const unitService = {
   },
 
   // 3. Crear
-  create: async (unit: Omit<Unidad, "id" | "public_id">) => {
-    const response = await axiosClient.post<Unidad>("/units", unit);
+  create: async (unit: Omit<Unit, "id" | "public_id">) => {
+    const response = await axiosClient.post<Unit>("/units", unit);
     return response.data;
   },
 
   // 4. Actualizar (Usamos number para el ID)
-  update: async (id: number, unit: Partial<Unidad>) => {
-    const response = await axiosClient.put<Unidad>(`/units/${id}`, unit);
+  update: async (id: number, unit: Partial<Unit>) => {
+    const response = await axiosClient.put<Unit>(`/units/${id}`, unit);
     return response.data;
   },
 

@@ -724,7 +724,8 @@ export default function FlotaUnidadDetalle() {
               <CardContent className="grid gap-6 md:grid-cols-2">
                 {/* Póliza */}
                 <DocumentUploadManager
-                  unitId={unit.id}
+                  entityId={unit.id}
+                  entityType="unit"
                   unitEconomico={unit.numero_economico}
                   docType="poliza_seguro"
                   docLabel="Póliza de Seguro"
@@ -759,7 +760,8 @@ export default function FlotaUnidadDetalle() {
 
                 {/* Verificación Humo */}
                 <DocumentUploadManager
-                  unitId={unit.id}
+                  entityId={unit.id}
+                  entityType="unit"
                   unitEconomico={unit.numero_economico}
                   docType="verificacion_humo"
                   docLabel="Verificación de Emisiones"
@@ -794,7 +796,8 @@ export default function FlotaUnidadDetalle() {
 
                 {/* Físico Mecánica */}
                 <DocumentUploadManager
-                  unitId={unit.id}
+                  entityId={unit.id}
+                  entityType="unit"
                   unitEconomico={unit.numero_economico}
                   docType="verificacion_fisico_mecanica"
                   docLabel="Verif. Físico-Mecánica"
@@ -832,7 +835,8 @@ export default function FlotaUnidadDetalle() {
                 {/* CAAT + Folio */}
                 <div className="col-span-1">
                   <DocumentUploadManager
-                    unitId={unit.id}
+                    entityId={unit.id}
+                    entityType="unit"
                     unitEconomico={unit.numero_economico}
                     docType="caat"
                     docLabel="Registro CAAT"
@@ -884,7 +888,8 @@ export default function FlotaUnidadDetalle() {
                 {/* Tarjeta Circulación + Folio */}
                 <div className="col-span-1">
                   <DocumentUploadManager
-                    unitId={unit.id}
+                    entityId={unit.id}
+                    entityType="unit"
                     unitEconomico={unit.numero_economico}
                     docType="tarjeta_circulacion_folio"
                     docLabel="Tarjeta de Circulación"
@@ -927,7 +932,8 @@ export default function FlotaUnidadDetalle() {
                 {/* Permiso SCT + Folio */}
                 <div className="col-span-1">
                   <DocumentUploadManager
-                    unitId={unit.id}
+                    entityId={unit.id}
+                    entityType="unit"
                     unitEconomico={unit.numero_economico}
                     docType="permiso_sct"
                     docLabel="Permiso SCT"

@@ -12,6 +12,8 @@ from app.api.endpoints import (
     tires,
     maintenance,
     suppliers,
+    tolls,
+    fuel,
 )
 
 api_router = APIRouter()
@@ -30,6 +32,9 @@ api_router.include_router(trips.router, tags=["Viajes"])
 # Finanzas
 api_router.include_router(finance.router, tags=["Finanzas"])
 api_router.include_router(tires.router, tags=["Llantas"])
+api_router.include_router(tolls.router, tags=["Tarifas y Casetas"])
+api_router.include_router(fuel.router, tags=["Gasolina"])
+
 api_router.include_router(
     maintenance.router, prefix="/maintenance", tags=["Mantenimiento"]
 )

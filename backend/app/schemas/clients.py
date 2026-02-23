@@ -181,3 +181,19 @@ class ClientResponse(ClientBase):
     created_at: datetime
     updated_at: datetime
     sub_clients: List[SubClientResponse] = []
+
+
+class ClientDocumentResponse(BaseModel):
+    id: int
+    client_id: int
+    document_type: str
+    filename: str
+    file_url: str
+    file_size: Optional[int]
+    mime_type: Optional[str]
+    version: int
+    is_active: bool
+    uploaded_at: datetime
+
+    class Config:
+        from_attributes = True

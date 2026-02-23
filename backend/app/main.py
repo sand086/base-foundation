@@ -34,7 +34,7 @@ def health_check():
 
 # Rutas
 app.include_router(api_router, prefix="/api")
-app.mount("/static", StaticFiles(directory="app/uploads"), name="static")
+app.mount("/api/static", StaticFiles(directory="app/uploads"), name="static")
 
 
 @app.get("/")

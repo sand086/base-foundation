@@ -22,7 +22,7 @@ export type ClientStatus = "activo" | "pendiente" | "incompleto";
 // INTERFACES (Ids Numéricos)
 // ==========================================
 
-export interface Unidad {
+export interface Unit {
   id: number; // <--- INTEGER
   public_id: string; // ID Visual (ej. UNIT-001)
 
@@ -222,4 +222,40 @@ export interface MechanicDocument {
   url_archivo: string;
   fecha_vencimiento?: string;
   subido_en: string;
+}
+
+export interface TollBooth {
+  id: number;
+  nombre: string;
+  tramo: string;
+  costo_5_ejes_sencillo: number;
+  costo_5_ejes_full: number;
+  costo_9_ejes_sencillo: number;
+  costo_9_ejes_full: number;
+  forma_pago: "TAG" | "EFECTIVO" | "AMBOS";
+}
+export interface RateSegment {
+  id: number;
+  nombre_segmento: string;
+  estado: string;
+  carretera: string;
+  distancia_km: number;
+  tiempo_minutos: number;
+  toll_booth_id: number | null;
+  costo_momento_sencillo: number;
+  costo_momento_full: number;
+  orden: number;
+}
+export interface RateTemplate {
+  id: number;
+  client_id: number;
+  origen: string;
+  destino: string;
+  // ✅ AGREGA ESTA PROPIEDAD:
+  tipo_unidad: "5ejes" | "9ejes" | string;
+  distancia_total_km: number;
+  tiempo_total_minutos: number;
+  costo_total_full: number;
+  created_at: string;
+  segments: RateSegment[];
 }
