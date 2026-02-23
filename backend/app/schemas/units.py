@@ -20,7 +20,7 @@ class ORMBase(BaseModel):
 
 class UnitBase(ORMBase):
     # public_id = Column(String(50), unique=True, nullable=False, index=True)
-    public_id: str = Field(..., max_length=50)
+    public_id: Optional[str] = Field(default=None, max_length=50)
 
     # numero_economico = Column(String(20), unique=True, nullable=False)
     numero_economico: str = Field(..., min_length=1, max_length=20)

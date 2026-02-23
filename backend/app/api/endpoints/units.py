@@ -87,15 +87,27 @@ def create_unit(unit: schemas.UnitCreate, db: Session = Depends(get_db)):
     ):
         raise HTTPException(status_code=400, detail="El número económico ya existe")
 
-    # 2. Preparar datos (Corregir nombres de campos que no coinciden)
-    unit_data = unit.model_dump()  # O unit.dict() en versiones viejas de Pydantic
+    # 2. Convertir el schema a diccionario
+    unit_data = unit.model_dump()
 
-    # 3. Crear instancia del modelo
-    db_unit = models.Unit(**unit_data, public_id=str(uuid.uuid4()))
+    # 3. ✅ LA SOLUCIÓN DE RAÍZ:
+    # Extraemos el public_id si existe en el diccionario para que no choque
+    # y generamos uno nuevo de forma segura.
+    unit_data.pop("public_id", None)
 
+    # Creamos la instancia pasando el ID generado explícitamente
+    db_unit = models.Unit(**unit_data, public_id=f"UNT-{uuid.uuid4().hex[:8].upper()}")
+
+    # 4. Guardar y refrescar
     db.add(db_unit)
     db.commit()
     db.refresh(db_unit)
+
+    # Recalcular estatus inicial (documentos, llantas, etc.)
+    crud._update_unit_status(db, db_unit)
+    db.commit()
+    db.refresh(db_unit)
+
     return db_unit
 
 
