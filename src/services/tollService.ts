@@ -49,13 +49,16 @@ export const tollService = {
 
   // --- GESTIÓN DE TARIFAS AUTORIZADAS (ARMADOR) ---
 
-  // ✅ Obtener todas las plantillas (Incluye los segments por defecto)
-  getTemplates: async (): Promise<RateTemplate[]> => {
-    const { data } = await axiosClient.get<RateTemplate[]>("/rate-templates");
+  //  Obtener todas las plantillas (Incluye los segments por defecto)
+  getTemplates: async (search?: string): Promise<RateTemplate[]> => {
+    const params = search ? { search } : {};
+    const { data } = await axiosClient.get<RateTemplate[]>("/rate-templates", {
+      params,
+    });
     return data;
   },
 
-  // ✅ Guardar nueva ruta autorizada
+  //  Guardar nueva ruta autorizada
   saveTemplate: async (payload: RateTemplateCreate): Promise<RateTemplate> => {
     // Senior Tip: Limpiamos los strings antes de enviar
     const cleanPayload = {
@@ -70,12 +73,12 @@ export const tollService = {
     return data;
   },
 
-  // ✅ Eliminar tarifa
+  //  Eliminar tarifa
   deleteTemplate: async (id: number): Promise<void> => {
     await axiosClient.delete(`/rate-templates/${id}`);
   },
 
-  // ✅ Obtener detalle de una sola ruta (por si necesitas ver el reporte SCT individual)
+  // Obtener detalle de una sola ruta (por si necesitas ver el reporte SCT individual)
   getTemplateById: async (id: number): Promise<RateTemplate> => {
     const { data } = await axiosClient.get<RateTemplate>(
       `/rate-templates/${id}`,
