@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.models import models
 from app.models.models import RecordStatus
 from app.schemas import units as schemas
+import uuid
 
 # Configuración de llantas esperadas por tipo
 EXPECTED_TIRES = {
@@ -222,6 +223,11 @@ def create_unit(db: Session, unit: schemas.UnitCreate):
     Crea unidad (record_status default A por AuditMixin).
     """
     data = unit.model_dump()
+
+    if not data.get("public_id"):
+        # Formato: UNT-XXXXXX (ej: UNT-A1B2C3D4)
+        data["public_id"] = f"UNT-{uuid.uuid4().hex[:8].upper()}"
+
     db_unit = models.Unit(**data)
     db.add(db_unit)
     db.commit()
