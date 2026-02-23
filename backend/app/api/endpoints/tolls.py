@@ -127,10 +127,24 @@ def create_template(
 
 
 @router.get("/rate-templates", response_model=List[schemas.RateTemplateResponse])
-def list_templates(client_id: Optional[int] = None, db: Session = Depends(get_db)):
+def list_templates(
+    search: str = "",  # ✅ Recibe el texto del buscador
+    client_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+):
     query = db.query(models.RateTemplate).filter(
         models.RateTemplate.record_status == "A"
     )
+
+    # ✅ Lógica de búsqueda en SQL (Filtrar por origen o destino)
+    if search:
+        query = query.filter(
+            models.RateTemplate.origen.ilike(f"%{search}%")
+            | models.RateTemplate.destino.ilike(f"%{search}%")
+        )
+
     if client_id:
         query = query.filter_by(client_id=client_id)
-    return query.all()
+
+    # ✅ LIMITANTE: Solo trae los primeros 50 resultados para que no explote el navegador
+    return query.limit(50).all()

@@ -143,27 +143,25 @@ export interface SubClient {
 }
 
 export interface Client {
-  id: number; // <--- INTEGER
-  public_id?: string; // Opcional (ej. CLI-001)
-
+  id: number;
+  public_id?: string;
   razon_social: string;
   rfc: string;
   regimen_fiscal?: string;
   uso_cfdi?: string;
-  estatus: ClientStatus;
-
+  estatus: string;
   contacto_principal?: string;
   telefono?: string;
   email?: string;
-
   direccion_fiscal?: string;
   codigo_postal_fiscal?: string;
   contrato_url?: string;
-  dias_credito?: number;
-
-  sub_clients: SubClient[]; // Array de subclientes anidados
-
-  created_at?: string;
+  dias_credito?: number; // ✅ Campo importante
+  // Campos de documentos para evitar error ts(2353)
+  constancia_fiscal_url?: string | null;
+  acta_constitutiva_url?: string | null;
+  comprobante_domicilio_url?: string | null;
+  sub_clients: any[];
 }
 
 // ==========================================
@@ -267,7 +265,9 @@ export interface RateTemplate {
   tipo_unidad: "5ejes" | "9ejes" | string;
   distancia_total_km: number;
   tiempo_total_minutos: number;
+  costo_total_sencillo: number;
   costo_total_full: number;
+
   created_at: string;
   segments: RateSegment[];
 }

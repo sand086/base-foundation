@@ -299,6 +299,9 @@ class SubClient(AuditMixin, Base):
     trips = relationship("Trip", back_populates="sub_client")
 
 
+# app/models/models.py
+
+
 class Tariff(AuditMixin, Base):
     __tablename__ = "tariffs"
 
@@ -307,25 +310,29 @@ class Tariff(AuditMixin, Base):
         Integer, ForeignKey("sub_clients.id", ondelete="CASCADE"), nullable=False
     )
 
+    #  Vínculo con la Ruta (Para sumar casetas dinámicamente)
+    rate_template_id = Column(
+        Integer, ForeignKey("rate_templates.id", ondelete="SET NULL"), nullable=True
+    )
+
     nombre_ruta = Column(String(200), nullable=False)
-
-    # BD: unittype
     tipo_unidad = Column(Enum(UnitType, name="unittype"), nullable=False)
+    tarifa_base = Column(Float, nullable=False, default=0.0)
 
-    tarifa_base = Column(Float, nullable=False)
-    costo_casetas = Column(Float, default=0)
+    #  Configuración fiscal por tarifa
+    iva_porcentaje = Column(Float, default=16.0)
+    retencion_porcentaje = Column(Float, default=4.0)
 
-    # BD: currency
+    costo_casetas = Column(Float, default=0)  # Valor manual o snapshot
     moneda = Column(Enum(Currency, name="currency"), default=Currency.MXN)
-
     vigencia = Column(Date, nullable=False)
-
-    # BD: tariffstatus
     estatus = Column(
         Enum(TariffStatus, name="tariffstatus"), default=TariffStatus.ACTIVA
     )
 
+    # Relaciones
     sub_client = relationship("SubClient", back_populates="tariffs")
+    route_template = relationship("RateTemplate", lazy="joined")
     trips = relationship("Trip", back_populates="tariff")
 
 

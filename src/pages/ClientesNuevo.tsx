@@ -1,24 +1,25 @@
-import { useState, useEffect } from "react";
+// src/pages/clients/ClientsNew.tsx
+import * as React from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Users,
   Plus,
   Trash2,
-  Upload,
   ArrowLeft,
   Check,
   MapPin,
+  ArrowRight,
   Building2,
   Phone,
   Clock,
   DollarSign,
-  FileText,
   Paperclip,
   FileCheck,
   Route,
   Calendar,
-  CheckCircle2,
   Loader2,
   AlertTriangle,
+  Search,
 } from "lucide-react";
 import {
   Card,
@@ -40,13 +41,39 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+
+import {
+  DataTable,
+  DataTableHeader,
+  DataTableBody,
+  DataTableRow,
+  DataTableHead,
+  DataTableCell,
+} from "@/components/ui/data-table";
+
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -54,21 +81,31 @@ import { useTiposUnidad } from "@/hooks/useTiposUnidad";
 import { DocumentUploadManager } from "@/features/flota/DocumentUploadManager";
 
 import { clientService } from "@/services/clientService";
-import { Client } from "@/types/api.types";
+import type { Client, RateTemplate } from "@/types/api.types";
+import { tollService } from "@/services/tollService";
 
-// -----------------------------
-// Types / Interfaces del Form
-// -----------------------------
+/** =========================
+ * Types / Interfaces del Form
+ * ========================= */
 
-// Interface for authorized route tariff
+// ✅ Tarifa autorizada (con nuevos campos)
 interface TarifaAutorizada {
   id: string;
-  nombreRuta: string; // Ej: "Veracruz - CDMX (Vía Xalapa)"
-  tipoUnidad: string; // lo manejas dinámico desde hook, no forzamos union fija
-  tarifaBase: number; // El precio del flete pactado
-  costoCasetas?: number; // (Opcional) Referencia del costo de casetas para esa ruta
+  rate_template_id?: number | null; // ligar a la ruta real
+  nombreRuta: string;
+  tipoUnidad: string;
+  tarifaBase: number;
+  costoCasetas: number;
+
+  // ✅ ahora se aplican desde globales del paso 3 (se guardan al backend)
+  iva_porcentaje: number;
+  retencion_porcentaje: number;
+
+  // ✅ nuevo: km para rentabilidad
+  distancia_km?: number;
+
   moneda: "MXN" | "USD";
-  vigencia: string; // Fecha hasta la cual se respeta este precio
+  vigencia: string;
 }
 
 interface FiscalDataForm {
@@ -82,7 +119,8 @@ interface FiscalDataForm {
   telefono: string;
   email: string;
   contratoUrl: string;
-  // Campos de documentos (coinciden con docType)
+  dias_credito: number;
+
   constancia_fiscal_url?: string;
   acta_constitutiva_url?: string;
   comprobante_domicilio_url?: string;
@@ -100,36 +138,34 @@ interface SubClienteForm {
   contacto: string;
   telefono: string;
   horarioRecepcion: string;
-  horarioCita: string; // NEW
-  // Step 3: Commercial conditions
+  horarioCita: string;
   diasCredito: number;
   requiereContrato: boolean;
   convenioEspecial: boolean;
   contratoAdjunto?: string;
-  // Multiple tariffs per route/unit
   tarifas: TarifaAutorizada[];
 }
 
-// Documentos obligatorios del cliente
 interface DocumentosObligatorios {
   constanciaFiscal: boolean;
-  constanciaFiscalFile?: string;
   actaConstitutiva: boolean;
-  actaConstitutivaFile?: string;
   comprobanteDomicilio: boolean;
-  comprobanteDomicilioFile?: string;
 }
 
-// -----------------------------
-// Constantes
-// -----------------------------
+/** =========================
+ * Constantes
+ * ========================= */
 
 const emptyTarifa: TarifaAutorizada = {
   id: "",
+  rate_template_id: null,
   nombreRuta: "",
   tipoUnidad: "sencillo",
   tarifaBase: 0,
   costoCasetas: 0,
+  iva_porcentaje: 16,
+  retencion_porcentaje: 4,
+  distancia_km: 0,
   moneda: "MXN",
   vigencia: "",
 };
@@ -154,7 +190,6 @@ const emptySubCliente: SubClienteForm = {
   tarifas: [],
 };
 
-// Opciones estandarizadas de días de crédito
 const opcionesDiasCredito = [
   {
     value: 0,
@@ -208,21 +243,35 @@ const estadosMexico = [
   "Zacatecas",
 ];
 
-// -----------------------------
-// Helpers de conversión IDs
-// -----------------------------
-
-const isTempSubId = (id: string) => id.startsWith("SUB-");
-const isTempTarId = (id: string) => id.startsWith("TAR-");
-
 const safeToInt = (value: string): number => {
   const n = parseInt(value, 10);
   return Number.isFinite(n) ? n : 0;
 };
 
-// -----------------------------
-// Componente
-// -----------------------------
+const todayISO = () => new Date().toISOString().split("T")[0];
+
+/**
+ * ✅ Totales usando los porcentajes del objeto tarifa (que inyectamos desde globales)
+ * Nota: acá NO “hardcodeamos” 16/4: respetamos tarifa.iva_porcentaje / retencion_porcentaje
+ */
+const calcularTotalesTarifa = (tarifa: TarifaAutorizada) => {
+  const base = Number(tarifa.tarifaBase || 0);
+  const casetas = Number(tarifa.costoCasetas || 0);
+  const subtotal = base + casetas;
+
+  const ivaPct = Number(tarifa.iva_porcentaje ?? 16) / 100;
+  const retPct = Number(tarifa.retencion_porcentaje ?? 4) / 100;
+
+  const iva = subtotal * ivaPct;
+  const ret = subtotal * retPct;
+  const total = subtotal + iva - ret;
+
+  return { subtotal, iva, ret, total };
+};
+
+/** =========================
+ * Componente
+ * ========================= */
 
 export default function ClientsNew() {
   const navigate = useNavigate();
@@ -238,8 +287,12 @@ export default function ClientsNew() {
 
   const [step, setStep] = useState(1);
 
-  // 👇 NUEVO: estado de carga (READ)
+  // READ
   const [loadingData, setLoadingData] = useState(false);
+
+  // ✅ NUEVO: % globales (Paso 3)
+  const [globalIVA, setGlobalIVA] = useState<number>(16);
+  const [globalRetencion, setGlobalRetencion] = useState<number>(4);
 
   const [fiscalData, setFiscalData] = useState<FiscalDataForm>({
     razonSocial: "",
@@ -255,9 +308,9 @@ export default function ClientsNew() {
     constancia_fiscal_url: "",
     acta_constitutiva_url: "",
     comprobante_domicilio_url: "",
+    dias_credito: 0,
   });
 
-  // Documentos obligatorios
   const [documentos, setDocumentos] = useState<DocumentosObligatorios>({
     constanciaFiscal: false,
     actaConstitutiva: false,
@@ -268,28 +321,38 @@ export default function ClientsNew() {
   const [editingSubCliente, setEditingSubCliente] =
     useState<SubClienteForm | null>(null);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [rutasDisponibles, setRutasDisponibles] = useState<RateTemplate[]>([]);
+  const [isRoutePickerOpen, setIsRoutePickerOpen] = useState(false);
+  const [activePickerIndex, setActivePickerIndex] = useState<{
+    subIdx: number;
+    tarIdx: number;
+  } | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [rutasFiltradas, setRutasFiltradas] = useState<RateTemplate[]>([]);
 
-  // -----------------------------
-  // Validaciones
-  // -----------------------------
+  /** =========================
+   * Validaciones
+   * ========================= */
 
-  // RFC Validation (12-13 characters)
-  const validateRFC = (rfc: string): boolean => {
-    return rfc.length >= 12 && rfc.length <= 13;
-  };
+  const validateRFC = (rfc: string): boolean =>
+    rfc.length >= 12 && rfc.length <= 13;
 
-  // Postal code validation (5 digits)
-  const validateCodigoPostal = (cp: string): boolean => {
-    return /^\d{5}$/.test(cp);
-  };
-
-  // Validate tariff before saving
+  const validateCodigoPostal = (cp: string): boolean => /^\d{5}$/.test(cp);
   const validateTarifas = (): boolean => {
     for (const sub of subClientes) {
       for (const tarifa of sub.tarifas) {
-        if (!tarifa.nombreRuta || tarifa.tarifaBase <= 0) {
-          toast.error("Tarifa incompleta", {
-            description: `En "${sub.nombre}": Ruta y Monto son obligatorios`,
+        // 1. Validar que la ruta NO esté vacía
+        if (!tarifa.nombreRuta || tarifa.nombreRuta.trim() === "") {
+          toast.error("Ruta no seleccionada", {
+            description: `El destino "${sub.nombre}" tiene una fila sin ruta del catálogo.`,
+          });
+          return false;
+        }
+
+        // 2. Validar que el monto sea un número válido (aunque sea 0)
+        if (typeof tarifa.tarifaBase !== "number" || isNaN(tarifa.tarifaBase)) {
+          toast.error("Monto inválido", {
+            description: `La ruta ${tarifa.nombreRuta} necesita un valor numérico.`,
           });
           return false;
         }
@@ -298,24 +361,63 @@ export default function ClientsNew() {
     return true;
   };
 
-  // -----------------------------
-  // Cargar datos (READ) desde backend
-  // -----------------------------
+  const calcularInfoTarifa = (tarifa: TarifaAutorizada) => {
+    const base = Number(tarifa.tarifaBase || 0);
+    const casetas = Number(tarifa.costoCasetas || 0);
+    const subtotal = base + casetas;
+    const iva = subtotal * (globalIVA / 100);
+    const ret = subtotal * (globalRetencion / 100);
+    const total = subtotal + iva - ret;
+    const rentabilidad = tarifa.distancia_km ? base / tarifa.distancia_km : 0;
 
-  // --- CARGAR DATOS (READ) ---
+    return { subtotal, iva, ret, total, rentabilidad };
+  };
+
+  const handleSearchRoutes = async (term: string) => {
+    setSearchQuery(term);
+    try {
+      // Llamada al backend con el filtro de búsqueda
+      const data = await tollService.getTemplates(term);
+      setRutasFiltradas(data ?? []);
+    } catch (e) {
+      console.error("Error buscando rutas:", e);
+    }
+  };
+  /** =========================
+   * Cargar datos (READ)
+   * ========================= */
+
+  useEffect(() => {
+    const loadRutas = async () => {
+      try {
+        const data = await tollService.getTemplates();
+        setRutasDisponibles(data ?? []);
+      } catch (e) {
+        console.error(e);
+        toast.error("No se pudieron cargar las rutas");
+      }
+    };
+    void loadRutas();
+  }, []);
+
+  useEffect(() => {
+    if (isRoutePickerOpen) {
+      // Si el modal se abre, buscamos con vacío para traer las primeras 50 por default
+      handleSearchRoutes("");
+    }
+  }, [isRoutePickerOpen]);
+
   useEffect(() => {
     const loadClientData = async () => {
-      if (!clientId) return; // Modo crear, no hacemos nada
+      if (!clientId) return;
 
-      const id = parseInt(clientId); // Convertir ID de URL a número
+      const id = parseInt(clientId);
       if (isNaN(id)) return;
 
       setLoadingData(true);
       try {
-        // 1. Petición al Backend Real
         const data = await clientService.getClient(id);
 
-        // 2. Mapear Datos Fiscales (Snake Case del Backend -> Camel Case del Form)
         setFiscalData({
           razonSocial: data.razon_social,
           rfc: data.rfc,
@@ -327,18 +429,17 @@ export default function ClientsNew() {
           telefono: data.telefono || "",
           email: data.email || "",
           contratoUrl: data.contrato_url || "",
-          // Mapeo de documentos desde el modelo de la BD
+          dias_credito: data.dias_credito || 0,
           constancia_fiscal_url: (data as any).constancia_fiscal_url || "",
           acta_constitutiva_url: (data as any).acta_constitutiva_url || "",
           comprobante_domicilio_url:
             (data as any).comprobante_domicilio_url || "",
         });
 
-        // 3. Mapear Subclientes y Tarifas anidadas
-        // Nota: El backend devuelve `sub_clients` y `tariffs`
+        // sub_clients + tariffs
         const mappedSubClients: SubClienteForm[] = (data.sub_clients || []).map(
-          (sub) => ({
-            id: sub.id.toString(), // Convertimos a string para que el form lo maneje
+          (sub: any) => ({
+            id: sub.id.toString(),
             nombre: sub.nombre,
             alias: sub.alias || "",
             direccion: sub.direccion,
@@ -349,23 +450,36 @@ export default function ClientsNew() {
             contacto: sub.contacto || "",
             telefono: sub.telefono || "",
             horarioRecepcion: sub.horario_recepcion || "",
-            horarioCita: "", // Campo visual, quizas no en BD aun
-            diasCredito: sub.dias_credito || 0,
-            requiereContrato: sub.requiere_contrato,
-            convenioEspecial: sub.convenio_especial,
-            tarifas: (sub.tariffs || []).map((t) => ({
+            horarioCita: sub.horario_cita || "", // si existe, si no queda ""
+            diasCredito: sub.dias_credito || "0",
+            requiereContrato: Boolean(sub.requiere_contrato),
+            convenioEspecial: Boolean(sub.convenio_especial),
+            contratoAdjunto: sub.contrato_adjunto || "",
+            tarifas: (sub.tariffs || []).map((t: any) => ({
               id: t.id.toString(),
+              rate_template_id: t.rate_template_id ?? null,
               nombreRuta: t.nombre_ruta,
               tipoUnidad: t.tipo_unidad,
-              tarifaBase: t.tarifa_base,
-              costoCasetas: t.costo_casetas,
-              moneda: t.moneda as "MXN" | "USD",
-              vigencia: t.vigencia,
+              tarifaBase: Number(t.tarifa_base || 0),
+              costoCasetas: Number(t.costo_casetas || 0),
+              distancia_km: Number(t.distancia_km || 0),
+              iva_porcentaje: Number(t.iva_porcentaje ?? 16),
+              retencion_porcentaje: Number(t.retencion_porcentaje ?? 4),
+              moneda: (t.moneda as "MXN" | "USD") ?? "MXN",
+              vigencia: t.vigencia || "",
             })),
           }),
         );
 
         setSubClientes(mappedSubClients);
+
+        // ✅ Inicializamos globales tomando el primer tariff (si existe)
+        const firstTar = mappedSubClients.flatMap((s) => s.tarifas)[0];
+        if (firstTar) {
+          setGlobalIVA(Number(firstTar.iva_porcentaje ?? 16));
+          setGlobalRetencion(Number(firstTar.retencion_porcentaje ?? 4));
+        }
+
         toast.info(`Cliente cargado: ${data.razon_social}`);
       } catch (error) {
         console.error("Error cargando cliente:", error);
@@ -376,19 +490,19 @@ export default function ClientsNew() {
       }
     };
 
-    loadClientData();
+    void loadClientData();
   }, [clientId, navigate]);
 
-  // -----------------------------
-  // CRUD SubClientes (Form local)
-  // -----------------------------
+  /** =========================
+   * CRUD SubClientes (local)
+   * ========================= */
 
   const addSubCliente = () => {
     const newSub: SubClienteForm = {
       ...emptySubCliente,
-      id: `SUB-${Date.now()}`, // temporal
+      id: `SUB-${Date.now()}`,
     };
-    setSubClientes([...subClientes, newSub]);
+    setSubClientes((prev) => [...prev, newSub]);
     setEditingSubCliente(newSub);
     setEditingIndex(subClientes.length);
   };
@@ -398,16 +512,21 @@ export default function ClientsNew() {
     field: keyof SubClienteForm,
     value: any,
   ) => {
-    const updated = [...subClientes];
-    updated[index] = { ...updated[index], [field]: value };
-    setSubClientes(updated);
+    setSubClientes((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+
     if (editingIndex === index) {
-      setEditingSubCliente(updated[index]);
+      setEditingSubCliente((prev) =>
+        prev ? { ...prev, [field]: value } : prev,
+      );
     }
   };
 
   const removeSubCliente = (index: number) => {
-    setSubClientes(subClientes.filter((_, i) => i !== index));
+    setSubClientes((prev) => prev.filter((_, i) => i !== index));
     if (editingIndex === index) {
       setEditingSubCliente(null);
       setEditingIndex(null);
@@ -415,38 +534,27 @@ export default function ClientsNew() {
     toast.success("Subcliente eliminado");
   };
 
-  const saveSubCliente = () => {
-    if (editingIndex !== null && editingSubCliente) {
-      if (
-        !editingSubCliente.nombre ||
-        !editingSubCliente.direccion ||
-        !editingSubCliente.ciudad
-      ) {
-        toast.error("Complete los campos obligatorios del subcliente");
-        return;
-      }
-      toast.success("Subcliente guardado");
-      setEditingSubCliente(null);
-      setEditingIndex(null);
-    }
-  };
-
-  // -----------------------------
-  // CRUD Tarifas (Form local)
-  // -----------------------------
+  /** =========================
+   * CRUD Tarifas (local)
+   * ========================= */
 
   const addTarifa = (subClienteIndex: number) => {
-    const updated = [...subClientes];
-    const newTarifa: TarifaAutorizada = {
-      ...emptyTarifa,
-      id: `TAR-${Date.now()}`, // temporal
-      nombreRuta: "",
-    };
-    updated[subClienteIndex] = {
-      ...updated[subClienteIndex],
-      tarifas: [...updated[subClienteIndex].tarifas, newTarifa],
-    };
-    setSubClientes(updated);
+    setSubClientes((prev) => {
+      const updated = [...prev];
+      const newTarifa: TarifaAutorizada = {
+        ...emptyTarifa,
+        id: `TAR-${Date.now()}`,
+        iva_porcentaje: globalIVA,
+        retencion_porcentaje: globalRetencion,
+        vigencia: todayISO(),
+      };
+
+      updated[subClienteIndex] = {
+        ...updated[subClienteIndex],
+        tarifas: [...updated[subClienteIndex].tarifas, newTarifa],
+      };
+      return updated;
+    });
   };
 
   const updateTarifa = (
@@ -455,53 +563,34 @@ export default function ClientsNew() {
     field: keyof TarifaAutorizada,
     value: any,
   ) => {
-    const updated = [...subClientes];
-    const tarifas = [...updated[subClienteIndex].tarifas];
-    tarifas[tarifaIndex] = { ...tarifas[tarifaIndex], [field]: value };
-    updated[subClienteIndex] = { ...updated[subClienteIndex], tarifas };
-    setSubClientes(updated);
+    setSubClientes((prev) => {
+      const updated = [...prev];
+      const tarifas = [...updated[subClienteIndex].tarifas];
+      tarifas[tarifaIndex] = { ...tarifas[tarifaIndex], [field]: value };
+      updated[subClienteIndex] = { ...updated[subClienteIndex], tarifas };
+      return updated;
+    });
   };
 
   const removeTarifa = (subClienteIndex: number, tarifaIndex: number) => {
-    const updated = [...subClientes];
-    updated[subClienteIndex] = {
-      ...updated[subClienteIndex],
-      tarifas: updated[subClienteIndex].tarifas.filter(
-        (_, i) => i !== tarifaIndex,
-      ),
-    };
-    setSubClientes(updated);
+    setSubClientes((prev) => {
+      const updated = [...prev];
+      updated[subClienteIndex] = {
+        ...updated[subClienteIndex],
+        tarifas: updated[subClienteIndex].tarifas.filter(
+          (_, i) => i !== tarifaIndex,
+        ),
+      };
+      return updated;
+    });
     toast.success("Tarifa eliminada");
   };
 
-  // -----------------------------
-  // UI helpers
-  // -----------------------------
-
-  const getUnidadBadge = (tipo: string) => {
-    const icono = getTipoIcono(tipo);
-    const label = getTipoLabel(tipo).replace(icono, "").trim();
-
-    const colorMap: Record<string, string> = {
-      sencillo: "bg-blue-100 text-blue-700 border-blue-200",
-      full: "bg-purple-100 text-purple-700 border-purple-200",
-      rabon: "bg-orange-100 text-orange-700 border-orange-200",
-      rabón: "bg-orange-100 text-orange-700 border-orange-200",
-    };
-
-    const colorClass =
-      colorMap[tipo.toLowerCase()] ||
-      "bg-muted text-muted-foreground border-muted";
-
-    return (
-      <Badge className={`${colorClass} text-[10px]`}>
-        {icono} {label}
-      </Badge>
-    );
-  };
+  /** =========================
+   * UI helpers
+   * ========================= */
 
   const getOperationBadge = (tipo: string) => {
-    // Aseguramos minúsculas por si acaso
     switch (tipo?.toLowerCase()) {
       case "nacional":
         return <Badge className="bg-emerald-500 text-white">Nacional</Badge>;
@@ -514,9 +603,10 @@ export default function ClientsNew() {
     }
   };
 
-  // -----------------------------
-  // Guardar (CREATE/UPDATE) al backend
-  // -----------------------------
+  /** =========================
+   * Guardar (CREATE/UPDATE)
+   * ✅ actualizaciones: distancia_km + globalIVA/globalRetención + vigencia default
+   * ========================= */
 
   const handleSave = async () => {
     if (!fiscalData.razonSocial || !fiscalData.rfc) {
@@ -530,7 +620,6 @@ export default function ClientsNew() {
     if (!validateTarifas()) return;
 
     try {
-      // Payload para el backend (Snake Case)
       const payload: Partial<Client> = {
         razon_social: fiscalData.razonSocial,
         rfc: fiscalData.rfc,
@@ -543,90 +632,83 @@ export default function ClientsNew() {
         email: fiscalData.email.trim() === "" ? null : fiscalData.email,
         contrato_url: fiscalData.contratoUrl,
         estatus: "activo",
+        dias_credito: Number(fiscalData.dias_credito || 0),
+        // (si tu backend ya recibe URLs directas en client)
+        constancia_fiscal_url: fiscalData.constancia_fiscal_url || null,
+        acta_constitutiva_url: fiscalData.acta_constitutiva_url || null,
+        comprobante_domicilio_url: fiscalData.comprobante_domicilio_url || null,
 
-        // Mapeo inverso de subclientes y tarifas
-        sub_clients: subClientes.map((sub) => {
-          // Detectar si es un ID temporal (empieza con SUB-) o real
-          const subId = sub.id.startsWith("SUB-") ? 0 : parseInt(sub.id);
+        sub_clients: subClientes.map((sub) => ({
+          id: sub.id.startsWith("SUB-") ? 0 : safeToInt(sub.id),
+          client_id: 0,
+          nombre: sub.nombre,
+          alias: sub.alias,
+          direccion: sub.direccion,
+          ciudad: sub.ciudad,
+          estado: sub.estado,
+          codigo_postal: sub.codigoPostal,
+          tipo_operacion: sub.tipoOperacion,
+          contacto: sub.contacto,
+          telefono: sub.telefono,
+          horario_recepcion: sub.horarioRecepcion,
+          horario_cita: sub.horarioCita || null,
+          dias_credito: Number(sub.diasCredito || 0),
+          requiere_contrato: sub.requiereContrato,
+          convenio_especial: sub.convenioEspecial,
 
-          return {
-            id: subId,
-            client_id: 0, // Se ignora en create/update
-            nombre: sub.nombre,
-            alias: sub.alias,
-            direccion: sub.direccion,
-            ciudad: sub.ciudad,
-            estado: sub.estado,
-            codigo_postal: sub.codigoPostal,
-            tipo_operacion: sub.tipoOperacion,
-            contacto: sub.contacto,
-            telefono: sub.telefono,
-            horario_recepcion: sub.horarioRecepcion,
-            dias_credito: sub.diasCredito,
-            requiere_contrato: sub.requiereContrato,
-            convenio_especial: sub.convenioEspecial,
-            tariffs: sub.tarifas.map((t) => {
-              // Detectar si es tarifa temporal (TAR-) o real
-              const tarId =
-                t.id && t.id.toString().startsWith("TAR-")
-                  ? 0
-                  : parseInt(t.id?.toString() || "0");
+          tariffs: sub.tarifas.map((t) => ({
+            id: t.id.startsWith("TAR-") ? 0 : safeToInt(t.id),
+            sub_client_id: 0,
+            rate_template_id: t.rate_template_id ?? null,
+            nombre_ruta: t.nombreRuta,
+            tipo_unidad: t.tipoUnidad,
+            tarifa_base: t.tarifaBase,
+            costo_casetas: t.costoCasetas,
 
-              return {
-                id: tarId,
-                sub_client_id: 0,
-                nombre_ruta: t.nombreRuta,
-                tipo_unidad: t.tipoUnidad,
-                tarifa_base: t.tarifaBase,
-                costo_casetas: t.costoCasetas,
-                moneda: t.moneda,
-                vigencia: t.vigencia,
-                estatus: "activa",
-              };
-            }),
-          };
-        }),
+            // ✅ NUEVO: km para rentabilidad
+            distancia_km: Number(t.distancia_km || 0),
+
+            // ✅ NUEVO: % globales
+            iva_porcentaje: Number(globalIVA),
+            retencion_porcentaje: Number(globalRetencion),
+
+            moneda: t.moneda,
+            vigencia: t.vigencia?.trim() ? t.vigencia : todayISO(),
+            estatus: "activa",
+          })),
+        })),
       };
 
       if (isEditMode && clientId) {
-        // UPDATE
         await clientService.updateClient(parseInt(clientId), payload);
-        toast.success("Cliente actualizado exitosamente");
+        toast.success("Cliente y Convenio guardados correctamente");
       } else {
-        // CREATE
         await clientService.createClient(payload);
-        toast.success("Cliente creado exitosamente");
+        toast.success("Cliente creado con éxito");
       }
 
       navigate("/clients");
     } catch (error: any) {
       console.error("Error completo:", error);
 
-      // 1. Extraer el detalle del error de FastAPI
       const detail = error.response?.data?.detail;
       let errorMessage = "Error al guardar cliente";
 
       if (Array.isArray(detail)) {
-        // Si es un array (error de validación de Pydantic), tomamos el mensaje técnico
-        // Ejemplo: "email: value is not a valid email address"
         errorMessage = detail
-          .map((err) => `${err.loc[err.loc.length - 1]}: ${err.msg}`)
+          .map((err) => `${err.loc?.[err.loc.length - 1]}: ${err.msg}`)
           .join(", ");
       } else if (typeof detail === "string") {
-        // Si el backend mandó un mensaje simple
         errorMessage = detail;
       }
 
-      // 2. Mostrar el error sin romper la app
-      toast.error("Error de Validación", {
-        description: errorMessage,
-      });
+      toast.error("Error de Validación", { description: errorMessage });
     }
   };
 
-  // -----------------------------
-  // Gating por pasos
-  // -----------------------------
+  /** =========================
+   * Gating por pasos
+   * ========================= */
 
   const canProceed =
     fiscalData.razonSocial && fiscalData.rfc && validateRFC(fiscalData.rfc);
@@ -635,9 +717,9 @@ export default function ClientsNew() {
     subClientes.length > 0 &&
     subClientes.every((s) => s.nombre && s.direccion && s.ciudad);
 
-  // -----------------------------
-  // Render condicional mientras carga
-  // -----------------------------
+  /** =========================
+   * Render loading
+   * ========================= */
 
   if (loadingData) {
     return (
@@ -648,9 +730,9 @@ export default function ClientsNew() {
     );
   }
 
-  // -----------------------------
-  // JSX
-  // -----------------------------
+  /** =========================
+   * JSX
+   * ========================= */
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
@@ -663,6 +745,7 @@ export default function ClientsNew() {
         >
           <ArrowLeft className="h-5 w-5" />
         </Button>
+
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Users className="h-6 w-6" />{" "}
@@ -677,9 +760,7 @@ export default function ClientsNew() {
       {/* Step Indicator */}
       <div className="flex items-center gap-4">
         <div
-          className={`flex items-center gap-2 ${
-            step >= 1 ? "text-primary" : "text-muted-foreground"
-          }`}
+          className={`flex items-center gap-2 ${step >= 1 ? "text-primary" : "text-muted-foreground"}`}
         >
           <div
             className={`w-8 h-8 rounded-full flex items-center justify-center font-medium ${
@@ -690,11 +771,11 @@ export default function ClientsNew() {
           </div>
           <span className="font-medium hidden sm:block">Datos Fiscales</span>
         </div>
+
         <div className="flex-1 h-0.5 bg-border" />
+
         <div
-          className={`flex items-center gap-2 ${
-            step >= 2 ? "text-primary" : "text-muted-foreground"
-          }`}
+          className={`flex items-center gap-2 ${step >= 2 ? "text-primary" : "text-muted-foreground"}`}
         >
           <div
             className={`w-8 h-8 rounded-full flex items-center justify-center font-medium ${
@@ -705,11 +786,11 @@ export default function ClientsNew() {
           </div>
           <span className="font-medium hidden sm:block">Destinos</span>
         </div>
+
         <div className="flex-1 h-0.5 bg-border" />
+
         <div
-          className={`flex items-center gap-2 ${
-            step >= 3 ? "text-primary" : "text-muted-foreground"
-          }`}
+          className={`flex items-center gap-2 ${step >= 3 ? "text-primary" : "text-muted-foreground"}`}
         >
           <div
             className={`w-8 h-8 rounded-full flex items-center justify-center font-medium ${
@@ -736,6 +817,7 @@ export default function ClientsNew() {
               Información fiscal del cliente para facturación electrónica
             </CardDescription>
           </CardHeader>
+
           <CardContent className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -751,6 +833,7 @@ export default function ClientsNew() {
                   }
                 />
               </div>
+
               <div className="space-y-2">
                 <Label>RFC * (12-13 caracteres)</Label>
                 <Input
@@ -874,6 +957,7 @@ export default function ClientsNew() {
                   }
                 />
               </div>
+
               <div className="space-y-2">
                 <Label>Teléfono</Label>
                 <Input
@@ -884,6 +968,7 @@ export default function ClientsNew() {
                   }
                 />
               </div>
+
               <div className="space-y-2">
                 <Label>Email</Label>
                 <Input
@@ -914,30 +999,35 @@ export default function ClientsNew() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {/* Constancia Fiscal */}
                   <DocumentUploadManager
                     entityId={parseInt(clientId!)}
                     entityType="client"
                     docType="constancia_fiscal"
                     docLabel="Constancia de Situación Fiscal"
-                    currentUrl={fiscalData.constancia_fiscal_url} // Asegúrate de tener este campo en fiscalData
-                    onUploadSuccess={() => {
+                    currentUrl={fiscalData.constancia_fiscal_url}
+                    onUploadSuccess={(url) => {
+                      setFiscalData((prev) => ({
+                        ...prev,
+                        constancia_fiscal_url: url,
+                      }));
                       setDocumentos((prev) => ({
                         ...prev,
                         constanciaFiscal: true,
                       }));
-                      // Opcional: recargar datos del cliente
                     }}
                   />
 
-                  {/* Acta Constitutiva */}
                   <DocumentUploadManager
                     entityId={parseInt(clientId!)}
                     entityType="client"
                     docType="acta_constitutiva"
                     docLabel="Acta Constitutiva"
                     currentUrl={fiscalData.acta_constitutiva_url}
-                    onUploadSuccess={() => {
+                    onUploadSuccess={(url) => {
+                      setFiscalData((prev) => ({
+                        ...prev,
+                        acta_constitutiva_url: url,
+                      }));
                       setDocumentos((prev) => ({
                         ...prev,
                         actaConstitutiva: true,
@@ -945,14 +1035,17 @@ export default function ClientsNew() {
                     }}
                   />
 
-                  {/* Comprobante de Domicilio */}
                   <DocumentUploadManager
                     entityId={parseInt(clientId!)}
                     entityType="client"
                     docType="comprobante_domicilio"
                     docLabel="Comprobante Domicilio"
                     currentUrl={fiscalData.comprobante_domicilio_url}
-                    onUploadSuccess={() => {
+                    onUploadSuccess={(url) => {
+                      setFiscalData((prev) => ({
+                        ...prev,
+                        comprobante_domicilio_url: url,
+                      }));
                       setDocumentos((prev) => ({
                         ...prev,
                         comprobanteDomicilio: true,
@@ -963,7 +1056,7 @@ export default function ClientsNew() {
               )}
             </div>
 
-            {/* Paso 1: Sección de Documentación Adicional */}
+            {/* Documentación Adicional */}
             <div className="space-y-4 mt-8">
               <div className="flex items-center justify-between border-b pb-2">
                 <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
@@ -984,13 +1077,12 @@ export default function ClientsNew() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Usamos el Manager para "adicional" que ahora acepta todo tipo de archivos */}
                   <DocumentUploadManager
                     entityId={parseInt(clientId!)}
                     entityType="client"
-                    docType="adicional" // Categoría genérica para la lista
+                    docType="adicional"
                     docLabel="Repositorio de Archivos"
-                    currentUrl={fiscalData.contratoUrl} // El último subido servirá como 'principal'
+                    currentUrl={fiscalData.contratoUrl}
                     accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.csv,.txt,.doc,.docx"
                     onUploadSuccess={(url) => {
                       setFiscalData((prev) => ({ ...prev, contratoUrl: url }));
@@ -1050,6 +1142,7 @@ export default function ClientsNew() {
                 </Button>
               </div>
             </CardHeader>
+
             <CardContent>
               {subClientes.length === 0 ? (
                 <div className="text-center py-12 border-2 border-dashed rounded-lg bg-muted/20">
@@ -1322,7 +1415,6 @@ export default function ClientsNew() {
             </CardContent>
           </Card>
 
-          {/* Navigation */}
           <div className="flex justify-between pt-4">
             <Button variant="outline" onClick={() => setStep(1)}>
               <ArrowLeft className="h-4 w-4 mr-2" /> Anterior
@@ -1334,445 +1426,403 @@ export default function ClientsNew() {
         </div>
       )}
 
-      {/* Step 3: Tarifas y Convenios */}
       {step === 3 && (
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <DollarSign className="h-5 w-5 text-primary" />
-                Tarifas y Convenios Comerciales
-              </CardTitle>
-              <CardDescription>
-                Configura las condiciones comerciales y tarifas por ruta/unidad
-                para cada destino de "{fiscalData.razonSocial}"
-              </CardDescription>
-            </CardHeader>
-
-            <CardContent>
-              {subClientes.length === 0 ? (
-                <div className="text-center py-12 border-2 border-dashed rounded-lg bg-muted/20">
-                  <DollarSign className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
-                  <h3 className="font-semibold text-lg mb-1">
-                    Sin destinos para asignar tarifas
-                  </h3>
-                  <p className="text-muted-foreground text-sm">
-                    Regresa al paso anterior para agregar destinos
-                  </p>
+        <div className="space-y-6 animate-in fade-in duration-500">
+          {/* ✅ 1. CONFIGURACIÓN GLOBAL: IVA, RETENCIÓN Y CRÉDITO */}
+          <Card className="bg-slate-50 border-2 border-dashed border-slate-200">
+            <CardContent className="pt-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-black uppercase text-primary">
+                    IVA Trasladado (%)
+                  </Label>
+                  <Input
+                    type="number"
+                    className="h-9 bg-white font-mono"
+                    value={globalIVA}
+                    onChange={(e) => setGlobalIVA(Number(e.target.value))}
+                  />
                 </div>
-              ) : (
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                  {subClientes.map((sub, idx) => (
-                    <Card
-                      key={sub.id}
-                      className={cn(
-                        "overflow-hidden transition-all duration-200 hover:shadow-md",
-                        sub.tarifas.length > 0
-                          ? "border-emerald-300 bg-gradient-to-br from-emerald-50/50 to-white shadow-sm"
-                          : "border-border bg-card hover:border-primary/40",
-                      )}
-                    >
-                      <CardHeader className="pb-3 bg-muted/30 border-b">
-                        <div className="flex items-start gap-3">
-                          <div
-                            className={cn(
-                              "w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm shadow-sm",
-                              sub.tarifas.length > 0
-                                ? "bg-emerald-500 text-white"
-                                : "bg-primary/10 text-primary",
-                            )}
-                          >
-                            {idx + 1}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <CardTitle className="text-base truncate">
-                              {sub.nombre}
-                            </CardTitle>
-                            <CardDescription className="flex items-center gap-1 mt-0.5">
-                              <MapPin className="h-3 w-3" />
-                              {sub.ciudad}, {sub.estado}
-                            </CardDescription>
-                          </div>
-                          {sub.tarifas.length > 0 && (
-                            <Badge
-                              className="bg-emerald-100 text-emerald-700 border-emerald-200"
-                              variant="outline"
-                            >
-                              <FileCheck className="h-3 w-3 mr-1" />
-                              {sub.tarifas.length} tarifa(s)
-                            </Badge>
-                          )}
-                        </div>
-                      </CardHeader>
-
-                      <CardContent className="pt-4 space-y-5">
-                        {/* Condiciones Comerciales */}
-                        <div className="space-y-4">
-                          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                            <Building2 className="h-3.5 w-3.5" />
-                            Condiciones Comerciales
-                          </h4>
-
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1.5">
-                              <Label className="text-xs">Días de Crédito</Label>
-                              <Select
-                                value={sub.diasCredito.toString()}
-                                onValueChange={(value) =>
-                                  updateSubCliente(
-                                    idx,
-                                    "diasCredito",
-                                    parseInt(value, 10),
-                                  )
-                                }
-                              >
-                                <SelectTrigger className="h-9">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent className="bg-popover border shadow-lg z-50">
-                                  {opcionesDiasCredito.map((opcion) => (
-                                    <SelectItem
-                                      key={opcion.value}
-                                      value={opcion.value.toString()}
-                                    >
-                                      <span className="flex items-center gap-2">
-                                        {opcion.label}
-                                      </span>
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-
-                            <div className="space-y-1.5">
-                              <Label className="text-xs">
-                                Contrato/Convenio
-                              </Label>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className={cn(
-                                  "w-full h-9 text-xs gap-1.5",
-                                  sub.contratoAdjunto &&
-                                    "border-emerald-300 text-emerald-700 bg-emerald-50",
-                                )}
-                                onClick={() => {
-                                  updateSubCliente(
-                                    idx,
-                                    "contratoAdjunto",
-                                    "contrato-adjunto.pdf",
-                                  );
-                                  toast.success("Archivo adjunto", {
-                                    description: `Contrato adjuntado a ${sub.nombre}`,
-                                  });
-                                }}
-                              >
-                                <Paperclip className="h-3.5 w-3.5" />
-                                {sub.contratoAdjunto
-                                  ? "✓ PDF Adjunto"
-                                  : "Adjuntar PDF"}
-                              </Button>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-6 pt-1">
-                            <div className="flex items-center gap-2">
-                              <Switch
-                                id={`contrato-${sub.id}`}
-                                checked={sub.requiereContrato}
-                                onCheckedChange={(checked) =>
-                                  updateSubCliente(
-                                    idx,
-                                    "requiereContrato",
-                                    checked,
-                                  )
-                                }
-                              />
-                              <Label
-                                htmlFor={`contrato-${sub.id}`}
-                                className="text-xs cursor-pointer"
-                              >
-                                Requiere Contrato
-                              </Label>
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                              <Switch
-                                id={`convenio-${sub.id}`}
-                                checked={sub.convenioEspecial}
-                                onCheckedChange={(checked) =>
-                                  updateSubCliente(
-                                    idx,
-                                    "convenioEspecial",
-                                    checked,
-                                  )
-                                }
-                              />
-                              <Label
-                                htmlFor={`convenio-${sub.id}`}
-                                className="text-xs cursor-pointer"
-                              >
-                                Convenio Especial
-                              </Label>
-                            </div>
-                          </div>
-                        </div>
-
-                        <Separator />
-
-                        {/* Rutas y Tarifas */}
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                              <Route className="h-3.5 w-3.5" />
-                              Rutas y Tarifas Autorizadas
-                            </h4>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 text-xs gap-1 text-primary hover:text-primary"
-                              onClick={() => addTarifa(idx)}
-                            >
-                              <Plus className="h-3.5 w-3.5" />
-                              Agregar Ruta/Tarifa
-                            </Button>
-                          </div>
-
-                          {sub.tarifas.length === 0 ? (
-                            <div className="text-center py-6 border-2 border-dashed rounded-lg bg-muted/10">
-                              <Route className="h-8 w-8 mx-auto text-muted-foreground/50 mb-2" />
-                              <p className="text-xs text-muted-foreground">
-                                Sin tarifas configuradas
-                              </p>
-                              <Button
-                                variant="link"
-                                size="sm"
-                                className="text-xs mt-1 h-auto p-0"
-                                onClick={() => addTarifa(idx)}
-                              >
-                                + Agregar primera tarifa
-                              </Button>
-                            </div>
-                          ) : (
-                            <div className="space-y-2">
-                              <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-muted/50 rounded-t-lg text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                                <div className="col-span-3">Ruta</div>
-                                <div className="col-span-2">Unidad</div>
-                                <div className="col-span-2">Tarifa Base</div>
-                                <div className="col-span-2">Casetas (Est.)</div>
-                                <div className="col-span-2">Vigencia</div>
-                                <div className="col-span-1"></div>
-                              </div>
-
-                              {sub.tarifas.map((tarifa, tIdx) => (
-                                <div
-                                  key={tarifa.id}
-                                  className="grid grid-cols-12 gap-2 px-3 py-2 border rounded-lg bg-background/50 items-center group hover:border-primary/30 transition-colors"
-                                >
-                                  <div className="col-span-3">
-                                    <Input
-                                      placeholder="Ruta Bajío - Vía Corta"
-                                      value={tarifa.nombreRuta}
-                                      onChange={(e) =>
-                                        updateTarifa(
-                                          idx,
-                                          tIdx,
-                                          "nombreRuta",
-                                          e.target.value,
-                                        )
-                                      }
-                                      className={cn(
-                                        "h-8 text-xs",
-                                        !tarifa.nombreRuta &&
-                                          "border-amber-300 bg-amber-50/50",
-                                      )}
-                                    />
-                                  </div>
-
-                                  <div className="col-span-2">
-                                    <Select
-                                      value={tarifa.tipoUnidad}
-                                      onValueChange={(value) =>
-                                        updateTarifa(
-                                          idx,
-                                          tIdx,
-                                          "tipoUnidad",
-                                          value,
-                                        )
-                                      }
-                                      disabled={loadingTipos}
-                                    >
-                                      <SelectTrigger className="h-8 text-xs">
-                                        <SelectValue
-                                          placeholder={
-                                            loadingTipos ? "..." : "Tipo"
-                                          }
-                                        />
-                                      </SelectTrigger>
-                                      <SelectContent className="bg-popover border shadow-lg z-50">
-                                        {tiposActivos.map((tipo) => (
-                                          <SelectItem
-                                            key={tipo.id}
-                                            value={tipo.nombre.toLowerCase()}
-                                          >
-                                            <span className="flex items-center gap-1">
-                                              {tipo.icono} {tipo.nombre}
-                                            </span>
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-
-                                  <div className="col-span-2">
-                                    <div className="relative">
-                                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">
-                                        $
-                                      </span>
-                                      <Input
-                                        type="number"
-                                        min="0"
-                                        step="100"
-                                        placeholder="0"
-                                        value={tarifa.tarifaBase || ""}
-                                        onChange={(e) =>
-                                          updateTarifa(
-                                            idx,
-                                            tIdx,
-                                            "tarifaBase",
-                                            parseFloat(e.target.value) || 0,
-                                          )
-                                        }
-                                        className={cn(
-                                          "h-8 text-xs pl-5 font-mono font-semibold",
-                                          !tarifa.tarifaBase &&
-                                            "border-amber-300 bg-amber-50/50",
-                                        )}
-                                      />
-                                    </div>
-                                  </div>
-
-                                  <div className="col-span-2">
-                                    <div className="relative">
-                                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">
-                                        $
-                                      </span>
-                                      <Input
-                                        type="number"
-                                        min="0"
-                                        step="50"
-                                        placeholder="0"
-                                        value={tarifa.costoCasetas || ""}
-                                        onChange={(e) =>
-                                          updateTarifa(
-                                            idx,
-                                            tIdx,
-                                            "costoCasetas",
-                                            parseFloat(e.target.value) || 0,
-                                          )
-                                        }
-                                        className="h-8 text-xs pl-5 font-mono bg-muted/30 text-muted-foreground"
-                                      />
-                                    </div>
-                                  </div>
-
-                                  <div className="col-span-2">
-                                    <Input
-                                      type="date"
-                                      value={tarifa.vigencia}
-                                      onChange={(e) =>
-                                        updateTarifa(
-                                          idx,
-                                          tIdx,
-                                          "vigencia",
-                                          e.target.value,
-                                        )
-                                      }
-                                      className="h-8 text-xs"
-                                    />
-                                  </div>
-
-                                  <div className="col-span-1 flex justify-center">
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-7 w-7 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10 hover:text-destructive"
-                                      onClick={() => removeTarifa(idx, tIdx)}
-                                    >
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                    </Button>
-                                  </div>
-                                </div>
-                              ))}
-
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="w-full h-8 text-xs gap-1 border-dashed hover:border-primary hover:bg-primary/5"
-                                onClick={() => addTarifa(idx)}
-                              >
-                                <Plus className="h-3.5 w-3.5" />
-                                Agregar Tarifa
-                              </Button>
-
-                              {sub.tarifas.length > 0 && (
-                                <div className="pt-3 border-t mt-3">
-                                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                                    Resumen de Tarifas Configuradas
-                                  </p>
-                                  <div className="flex flex-wrap gap-2">
-                                    {sub.tarifas
-                                      .filter(
-                                        (t) => t.nombreRuta && t.tarifaBase > 0,
-                                      )
-                                      .map((tarifa) => (
-                                        <div
-                                          key={tarifa.id}
-                                          className="flex items-center gap-2 px-2 py-1 rounded-lg bg-muted/50 border"
-                                        >
-                                          <span className="text-xs truncate max-w-[120px]">
-                                            {tarifa.nombreRuta}
-                                          </span>
-                                          {getUnidadBadge(tarifa.tipoUnidad)}
-                                          <span className="font-mono font-bold text-xs text-primary">
-                                            $
-                                            {tarifa.tarifaBase.toLocaleString()}{" "}
-                                            {tarifa.moneda}
-                                          </span>
-                                          {tarifa.costoCasetas ? (
-                                            <span className="text-[10px] text-muted-foreground">
-                                              (+$
-                                              {tarifa.costoCasetas.toLocaleString()}{" "}
-                                              casetas)
-                                            </span>
-                                          ) : null}
-                                        </div>
-                                      ))}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-black uppercase text-rose-600">
+                    Retención IVA (%)
+                  </Label>
+                  <Input
+                    type="number"
+                    className="h-9 bg-white font-mono"
+                    value={globalRetencion}
+                    onChange={(e) => setGlobalRetencion(Number(e.target.value))}
+                  />
                 </div>
-              )}
+
+                {/* ✅ DÍAS DE CRÉDITO GENERAL */}
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-black uppercase text-slate-600">
+                    Días de Crédito (General)
+                  </Label>
+                  <Select
+                    // Convertimos el número a string para que el Select lo pueda pintar
+                    value={String(fiscalData.dias_credito)}
+                    onValueChange={(val) =>
+                      setFiscalData((prev) => ({
+                        ...prev,
+                        dias_credito: parseInt(val, 10) || 0, // Lo guardamos como número real
+                      }))
+                    }
+                  >
+                    <SelectTrigger className="h-9 bg-white">
+                      <SelectValue placeholder="Seleccionar crédito..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {opcionesDiasCredito.map((op) => (
+                        <SelectItem key={op.value} value={String(op.value)}>
+                          {op.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex justify-end">
+                  <Badge
+                    variant="outline"
+                    className="bg-white border-slate-300 py-2"
+                  >
+                    <Clock className="h-3 w-3 mr-2 text-primary" />
+                    <span className="text-[9px] font-bold uppercase">
+                      Configuración de Cobro
+                    </span>
+                  </Badge>
+                </div>
+              </div>
             </CardContent>
           </Card>
 
-          {/* Navigation */}
-          <div className="flex justify-between pt-4">
-            <Button variant="outline" onClick={() => setStep(2)}>
-              <ArrowLeft className="h-4 w-4 mr-2" /> Anterior
+          {/* 2. LISTADO DE SUBCLIENTES */}
+          {subClientes.map((sub, idx) => (
+            <Card
+              key={sub.id}
+              className="shadow-sm border-slate-200 overflow-hidden"
+            >
+              <CardHeader className="py-3 bg-slate-100/50 border-b flex flex-row items-center justify-between">
+                <CardTitle className="text-sm font-bold flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-slate-400" />{" "}
+                  {sub.nombre || "Destino sin nombre"}
+                </CardTitle>
+
+                {/* ✅ CRÉDITO POR SUBCLIENTE (Opcional si es diferente al general) */}
+                <div className="flex items-center gap-2">
+                  <Label className="text-[9px] uppercase font-bold text-slate-500">
+                    Crédito Destino:
+                  </Label>
+                  <Select
+                    value={String(sub.diasCredito)}
+                    onValueChange={(v) =>
+                      updateSubCliente(idx, "diasCredito", parseInt(v))
+                    }
+                  >
+                    <SelectTrigger className="h-7 w-32 text-[10px] bg-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {opcionesDiasCredito.map((op) => (
+                        <SelectItem key={op.value} value={String(op.value)}>
+                          {op.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardHeader>
+
+              <CardContent className="pt-4 space-y-3">
+                {sub.tarifas.map((tarifa, tIdx) => {
+                  const info = calcularInfoTarifa(tarifa);
+                  return (
+                    <div
+                      key={tarifa.id}
+                      className="grid grid-cols-12 gap-3 items-center border p-3 rounded-xl bg-white hover:border-primary/40 transition-all group"
+                    >
+                      {/* BUSCADOR DE RUTA SCT */}
+                      <div className="col-span-3 space-y-1">
+                        <Label className="text-[9px] font-bold uppercase text-muted-foreground">
+                          Ruta del Catálogo
+                        </Label>
+                        <Button
+                          variant="outline"
+                          className="w-full h-8 text-[10px] justify-start bg-slate-50 border-slate-200 font-bold"
+                          onClick={() => {
+                            setActivePickerIndex({ subIdx: idx, tarIdx: tIdx });
+                            setIsRoutePickerOpen(true);
+                          }}
+                        >
+                          <Search className="h-3 w-3 mr-2 text-primary" />
+                          {tarifa.nombreRuta || "SELECCIONAR RUTA..."}
+                        </Button>
+                      </div>
+
+                      {/* 2. Unidad con recálculo automático */}
+                      <div className="col-span-2 space-y-1">
+                        <Label className="text-[9px] font-bold uppercase text-muted-foreground">
+                          Unidad
+                        </Label>
+                        <Select
+                          value={tarifa.tipoUnidad}
+                          onValueChange={(nuevaUnidad) => {
+                            // 1. Primero actualizamos el tipo de unidad
+                            updateTarifa(idx, tIdx, "tipoUnidad", nuevaUnidad);
+
+                            // 2. Si hay una ruta seleccionada, buscamos su precio para la nueva unidad
+                            if (tarifa.rate_template_id) {
+                              const rutaData = rutasDisponibles.find(
+                                (r) => r.id === tarifa.rate_template_id,
+                              );
+                              if (rutaData) {
+                                const nuevoCosto =
+                                  nuevaUnidad === "full"
+                                    ? rutaData.costo_total_full
+                                    : rutaData.costo_total_sencillo;
+
+                                updateTarifa(
+                                  idx,
+                                  tIdx,
+                                  "costoCasetas",
+                                  nuevoCosto,
+                                );
+                                toast.info(
+                                  `Costo de casetas actualizado a ${nuevaUnidad}`,
+                                );
+                              }
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="h-8 text-[10px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="z-[200]">
+                            {tiposActivos.map((t) => (
+                              <SelectItem
+                                key={t.id}
+                                value={t.nombre.toLowerCase()}
+                              >
+                                {t.nombre}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="col-span-2 space-y-1">
+                        <Label className="text-[9px] font-bold uppercase text-muted-foreground">
+                          Flete Base ($)
+                        </Label>
+                        <Input
+                          type="number"
+                          value={tarifa.tarifaBase || ""}
+                          onChange={(e) =>
+                            updateTarifa(
+                              idx,
+                              tIdx,
+                              "tarifaBase",
+                              Number(e.target.value),
+                            )
+                          }
+                          className="h-8 text-xs font-bold"
+                        />
+                      </div>
+
+                      {/* INFO AUTOMÁTICA (Read-Only) */}
+                      <div className="col-span-2 border-l border-r px-3 flex flex-col gap-1">
+                        <div className="flex justify-between text-[10px]">
+                          <span className="text-muted-foreground font-medium">
+                            Casetas:
+                          </span>
+                          <span className="font-bold text-blue-600">
+                            ${tarifa.costoCasetas.toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-[10px]">
+                          <span className="text-muted-foreground font-medium">
+                            $/KM:
+                          </span>
+                          <Badge className="h-4 text-[8px] bg-blue-50 text-blue-600 border-none">
+                            ${info.rentabilidad.toFixed(2)}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      {/* TOTAL REAL */}
+                      <div className="col-span-2 bg-emerald-50 p-2 rounded-lg border border-emerald-100 text-right">
+                        <p className="text-[8px] font-bold text-emerald-600 uppercase">
+                          A Facturar
+                        </p>
+                        <p className="text-sm font-black text-emerald-800">
+                          $
+                          {info.total.toLocaleString("es-MX", {
+                            minimumFractionDigits: 2,
+                          })}
+                        </p>
+                      </div>
+
+                      <div className="col-span-1 flex justify-end">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => removeTarifa(idx, tIdx)}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full border-dashed border-2 h-9 text-[10px]"
+                  onClick={() => addTarifa(idx)}
+                >
+                  <Plus className="h-3 w-3 mr-1" /> AÑADIR OTRA RUTA
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+
+          {/* ✅ MODAL DE BÚSQUEDA CORREGIDO (CARGA INICIAL AUTOMÁTICA) */}
+          <Dialog open={isRoutePickerOpen} onOpenChange={setIsRoutePickerOpen}>
+            <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col p-0 border-none shadow-2xl">
+              <DialogHeader className="p-6 pb-2 bg-slate-900 text-white">
+                <DialogTitle className="text-xl font-bold flex items-center gap-2">
+                  <Route className="h-6 w-6 text-primary" /> Catálogo SCT
+                </DialogTitle>
+                <div className="relative mt-4">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <Input
+                    placeholder="Buscar por origen o destino..."
+                    value={searchQuery}
+                    onChange={(e) => handleSearchRoutes(e.target.value)}
+                    className="pl-10 h-11 bg-white/10 border-white/20 text-white placeholder:text-slate-400 focus:bg-white focus:text-slate-900"
+                    autoFocus
+                  />
+                </div>
+              </DialogHeader>
+
+              <div className="flex-1 overflow-y-auto px-6 py-4 bg-slate-50">
+                <div className="border rounded-xl bg-white overflow-hidden shadow-sm">
+                  <Table>
+                    <TableHeader className="bg-slate-100/80">
+                      <TableRow>
+                        <TableHead className="text-[10px] font-bold uppercase">
+                          Ruta Autorizada
+                        </TableHead>
+                        <TableHead className="text-right text-[10px] font-bold uppercase text-blue-600">
+                          Sencillo
+                        </TableHead>
+                        <TableHead className="text-right text-[10px] font-bold uppercase text-purple-600">
+                          Full
+                        </TableHead>
+                        <TableHead></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {rutasFiltradas.length === 0 ? (
+                        <TableRow>
+                          <TableCell
+                            colSpan={4}
+                            className="text-center py-20 text-slate-400 italic"
+                          >
+                            <div className="flex flex-col items-center gap-2 opacity-50">
+                              <Loader2 className="h-8 w-8 animate-spin" />
+                              <p>Cargando rutas...</p>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        rutasFiltradas.map((r) => (
+                          <TableRow
+                            key={r.id}
+                            className="cursor-pointer hover:bg-primary/5 transition-colors group"
+                          >
+                            <TableCell className="py-3">
+                              <div className="flex flex-col">
+                                <span className="font-bold text-slate-700 text-sm">
+                                  {r.origen} ➔ {r.destino}
+                                </span>
+                                <span className="text-[10px] text-muted-foreground font-mono">
+                                  {r.distancia_total_km} KM
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-xs font-bold text-blue-600">
+                              ${r.costo_total_sencillo.toLocaleString()}
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-xs font-bold text-purple-600">
+                              ${r.costo_total_full.toLocaleString()}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                size="sm"
+                                className="h-7 text-[10px] uppercase font-bold"
+                                onClick={() => {
+                                  const { subIdx, tarIdx } = activePickerIndex!;
+                                  const costo =
+                                    subClientes[subIdx].tarifas[tarIdx]
+                                      .tipoUnidad === "full"
+                                      ? r.costo_total_full
+                                      : r.costo_total_sencillo;
+
+                                  updateTarifa(
+                                    subIdx,
+                                    tarIdx,
+                                    "rate_template_id",
+                                    r.id,
+                                  );
+                                  updateTarifa(
+                                    subIdx,
+                                    tarIdx,
+                                    "nombreRuta",
+                                    `${r.origen} - ${r.destino}`,
+                                  );
+                                  updateTarifa(
+                                    subIdx,
+                                    tarIdx,
+                                    "costoCasetas",
+                                    costo,
+                                  );
+                                  updateTarifa(
+                                    subIdx,
+                                    tarIdx,
+                                    "distancia_km",
+                                    r.distancia_total_km,
+                                  );
+                                  setIsRoutePickerOpen(false);
+                                  toast.success("Ruta vinculada correctamente");
+                                }}
+                              >
+                                Seleccionar
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          <div className="flex justify-between pt-6 border-t">
+            <Button variant="outline" size="lg" onClick={() => setStep(2)}>
+              Anterior
             </Button>
             <Button
+              size="lg"
               onClick={handleSave}
-              className="bg-action hover:bg-action-hover text-action-foreground"
+              className="bg-primary hover:bg-primary/90 text-white px-12 shadow-lg shadow-primary/20"
             >
-              <Check className="h-4 w-4 mr-2" />
-              {isEditMode ? "Actualizar Client" : "Guardar Client"}
+              <Check className="h-4 w-4 mr-2" /> GUARDAR CONVENIO FINAL
             </Button>
           </div>
         </div>
