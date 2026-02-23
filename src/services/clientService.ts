@@ -30,4 +30,28 @@ export const clientService = {
   deleteClient: async (id: number): Promise<void> => {
     await axiosClient.delete(`/clients/${id}`);
   },
+  uploadDocument: async (clientId: number, docType: string, file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await axiosClient.post(
+      `/clients/${clientId}/documents/${docType}`,
+      formData,
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+      },
+    );
+    return response.data;
+  },
+  getDocumentHistory: async (clientId: number, docType: string) => {
+    const response = await axiosClient.get(
+      `/clients/${clientId}/documents/${docType}/history`,
+    );
+    return response.data;
+  },
+  deleteDocument: async (documentId: number) => {
+    const response = await axiosClient.delete(
+      `/clients/documents/${documentId}`,
+    );
+    return response.data;
+  },
 };

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Plus,
   Trash2,
@@ -8,13 +8,15 @@ import {
   ArrowRight,
   MoreHorizontal,
   Edit,
-  History,
+  Loader2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { ActionButton } from "@/components/ui/action-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
   SelectContent,
@@ -46,15 +48,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  mockTollBooths,
-  mockClientes,
-  TollBooth,
-  RouteTemplate,
-  mockRouteTemplates,
-} from "@/data/tarifasData";
+import { TollBooth, RateTemplate } from "@/types/api.types";
 import { useTiposUnidad } from "@/hooks/useTiposUnidad";
 import { useRutasAutorizadas } from "@/hooks/useRutasAutorizadas";
+import { useClients } from "@/hooks/useClients";
+import { tollService, RateTemplateCreate } from "@/services/tollService";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -65,6 +63,7 @@ import {
 export const ArmadorRutas = () => {
   const { tiposActivos } = useTiposUnidad();
   const { rutasActivas } = useRutasAutorizadas();
+  const { clients } = useClients();
 
   const [selectedCliente, setSelectedCliente] = useState("");
   const [rutaSeleccionada, setRutaSeleccionada] = useState("");
@@ -72,16 +71,31 @@ export const ArmadorRutas = () => {
   const [destino, setDestino] = useState("");
   const [tipoUnidad, setTipoUnidad] = useState("");
   const [selectedTolls, setSelectedTolls] = useState<TollBooth[]>([]);
+  const [allTolls, setAllTolls] = useState<TollBooth[]>([]);
+  const [savedRoutes, setSavedRoutes] = useState<RateTemplate[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [savedRoutes, setSavedRoutes] =
-    useState<RouteTemplate[]>(mockRouteTemplates);
-  const [editingRoute, setEditingRoute] = useState<RouteTemplate | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [routeToDelete, setRouteToDelete] = useState<RouteTemplate | null>(
-    null,
-  );
+  const [routeToDelete, setRouteToDelete] = useState<RateTemplate | null>(null);
 
-  // Handle route selection from catalog
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const [tollsData, templatesData] = await Promise.all([
+          tollService.getTolls(),
+          tollService.getTemplates(),
+        ]);
+        setAllTolls(tollsData);
+        setSavedRoutes(templatesData);
+      } catch (e) {
+        toast.error("Error al sincronizar con el servidor");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    init();
+  }, []);
+
   const handleRutaChange = (rutaId: string) => {
     setRutaSeleccionada(rutaId);
     const ruta = rutasActivas.find((r) => r.id === rutaId);
@@ -91,30 +105,29 @@ export const ArmadorRutas = () => {
     }
   };
 
-  // Calculate total cost based on selected tolls and unit type
-  const costoTotal = useMemo(() => {
+  const isFullUnit = useMemo(() => {
     const tipo = tiposActivos.find((t) => t.id === tipoUnidad);
-    const esFull =
+    return (
       tipo?.nombre.toLowerCase().includes("full") ||
-      tipo?.nombre.toLowerCase().includes("9 ejes");
+      tipo?.nombre.toLowerCase().includes("9 ejes")
+    );
+  }, [tipoUnidad, tiposActivos]);
 
-    return selectedTolls.reduce((total, toll) => {
-      const costo = esFull ? toll.costo9EjesSencillo : toll.costo5EjesSencillo;
-      return total + costo;
-    }, 0);
-  }, [selectedTolls, tipoUnidad, tiposActivos]);
-
-  const costoTotalFull = useMemo(() => {
-    const tipo = tiposActivos.find((t) => t.id === tipoUnidad);
-    const esFull =
-      tipo?.nombre.toLowerCase().includes("full") ||
-      tipo?.nombre.toLowerCase().includes("9 ejes");
-
-    return selectedTolls.reduce((total, toll) => {
-      const costo = esFull ? toll.costo9EjesFull : toll.costo5EjesFull;
-      return total + costo;
-    }, 0);
-  }, [selectedTolls, tipoUnidad, tiposActivos]);
+  const costs = useMemo(() => {
+    return selectedTolls.reduce(
+      (acc, toll) => {
+        if (isFullUnit) {
+          acc.sencillo += toll.costo_9_ejes_sencillo;
+          acc.full += toll.costo_9_ejes_full;
+        } else {
+          acc.sencillo += toll.costo_5_ejes_sencillo;
+          acc.full += toll.costo_5_ejes_full;
+        }
+        return acc;
+      },
+      { sencillo: 0, full: 0 },
+    );
+  }, [selectedTolls, isFullUnit]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("es-MX", {
@@ -123,48 +136,28 @@ export const ArmadorRutas = () => {
     }).format(amount);
   };
 
-  const handleAddToll = (toll: TollBooth) => {
-    if (!selectedTolls.find((t) => t.id === toll.id)) {
-      setSelectedTolls([...selectedTolls, toll]);
-    }
-    setDialogOpen(false);
-  };
-
-  const handleRemoveToll = (tollId: string) => {
-    setSelectedTolls(selectedTolls.filter((t) => t.id !== tollId));
-  };
-
-  const handleSaveRoute = () => {
+  const handleSaveRoute = async () => {
     if (!selectedCliente || !origen || !destino || !tipoUnidad) {
-      toast.error("Completa todos los campos obligatorios");
+      toast.error("Completa los campos obligatorios");
       return;
     }
 
-    const cliente = mockClientes.find((c) => c.id === selectedCliente);
-    const tipo = tiposActivos.find((t) => t.id === tipoUnidad);
-
-    const newRoute: RouteTemplate = {
-      id: editingRoute?.id || `ruta-${Date.now()}`,
-      clienteId: selectedCliente,
-      clienteNombre: cliente?.nombre || "",
-      origen: origen,
-      destino: destino,
-      tipoUnidad: tipo?.nombre.toLowerCase().includes("9") ? "9ejes" : "5ejes",
-      casetas: selectedTolls.map((t) => t.id),
-      costoTotal: costoTotalFull,
+    const payload: RateTemplateCreate = {
+      client_id: parseInt(selectedCliente),
+      origen,
+      destino,
+      toll_unit_type: isFullUnit ? "9ejes" : "5ejes",
+      toll_ids: selectedTolls.map((t) => t.id),
     };
 
-    if (editingRoute) {
-      setSavedRoutes(
-        savedRoutes.map((r) => (r.id === editingRoute.id ? newRoute : r)),
-      );
-      toast.success("Tarifa actualizada correctamente");
-    } else {
-      setSavedRoutes([...savedRoutes, newRoute]);
-      toast.success("Nueva tarifa guardada");
+    try {
+      const result = await tollService.saveTemplate(payload);
+      setSavedRoutes([result, ...savedRoutes]);
+      toast.success("Tarifa guardada exitosamente");
+      handleClearForm();
+    } catch (e) {
+      toast.error("Error al guardar la tarifa");
     }
-
-    handleClearForm();
   };
 
   const handleClearForm = () => {
@@ -174,451 +167,241 @@ export const ArmadorRutas = () => {
     setDestino("");
     setTipoUnidad("");
     setSelectedTolls([]);
-    setEditingRoute(null);
   };
 
-  const handleEditRoute = (route: RouteTemplate) => {
-    setEditingRoute(route);
-    setSelectedCliente(route.clienteId);
-    setOrigen(route.origen);
-    setDestino(route.destino);
-
-    // Find matching unit type
-    const tipo = tiposActivos.find(
-      (t) =>
-        (route.tipoUnidad === "9ejes" &&
-          (t.nombre.toLowerCase().includes("full") ||
-            t.nombre.toLowerCase().includes("9"))) ||
-        (route.tipoUnidad === "5ejes" &&
-          !t.nombre.toLowerCase().includes("full") &&
-          !t.nombre.toLowerCase().includes("9")),
-    );
-    setTipoUnidad(tipo?.id || "");
-
-    // Load casetas
-    const tolls = mockTollBooths.filter((t) => route.casetas.includes(t.id));
-    setSelectedTolls(tolls);
-
-    // Scroll to form
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  const handleDeleteClick = (route: RouteTemplate) => {
-    setRouteToDelete(route);
-    setDeleteDialogOpen(true);
-  };
-
-  const handleConfirmDelete = () => {
-    if (routeToDelete) {
-      setSavedRoutes(savedRoutes.filter((r) => r.id !== routeToDelete.id));
-      toast.success("Tarifa eliminada");
-      setRouteToDelete(null);
-    }
-    setDeleteDialogOpen(false);
-  };
-
-  const availableTolls = mockTollBooths.filter(
-    (toll) => !selectedTolls.find((t) => t.id === toll.id),
+  const availableTolls = allTolls.filter(
+    (t) => !selectedTolls.find((st) => st.id === t.id),
   );
 
-  // Table columns for saved routes with actions
-  const columns: ColumnDef<RouteTemplate>[] = useMemo(
+  const columns: ColumnDef<RateTemplate>[] = useMemo(
     () => [
-      {
-        key: "clienteNombre",
-        header: "Client",
-        sortable: true,
-      },
+      { key: "cliente_nombre", header: "Cliente", sortable: true },
       {
         key: "origen",
         header: "Ruta",
-        sortable: true,
         render: (_, row) => (
-          <div className="flex items-center gap-2">
-            <span className="font-medium">{row.origen}</span>
-            <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-            <span className="font-medium">{row.destino}</span>
+          <div className="flex items-center gap-2 font-medium">
+            {row.origen} <ArrowRight className="h-3 w-3 opacity-50" />{" "}
+            {row.destino}
           </div>
         ),
       },
       {
-        key: "tipoUnidad",
-        header: "Tipo Unidad",
-        type: "status",
-        statusOptions: ["5ejes", "9ejes"],
-        sortable: true,
-        render: (value) => (
-          <span
-            className={cn(
-              "px-2 py-1 rounded text-xs font-medium",
-              value === "9ejes"
-                ? "bg-amber-100 text-amber-800"
-                : "bg-blue-100 text-blue-800",
-            )}
+        key: "toll_unit_type",
+        header: "Configuración",
+        render: (val) => (
+          <Badge
+            variant="outline"
+            className={val === "9ejes" ? "bg-amber-50" : "bg-blue-50"}
           >
-            {value === "9ejes" ? "9 Ejes (Full)" : "5 Ejes"}
-          </span>
+            {val === "9ejes" ? "9 Ejes (Full)" : "5 Ejes"}
+          </Badge>
         ),
       },
       {
-        key: "casetas",
-        header: "Casetas",
-        render: (value) => (
-          <span className="text-sm">{(value as string[]).length} casetas</span>
-        ),
-      },
-      {
-        key: "costoTotal",
-        header: "Costo Total",
-        type: "number",
-        sortable: true,
-        render: (value) => (
-          <span className="font-mono font-semibold text-emerald-700">
-            {formatCurrency(value as number)}
+        key: "costo_total_full",
+        header: "Costo Total (Full)",
+        render: (val) => (
+          <span className="font-mono font-bold text-emerald-700">
+            {formatCurrency(val as number)}
           </span>
         ),
       },
       {
         key: "id",
         header: "Acciones",
-        sortable: false,
         render: (_, row) => (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => handleEditRoute(row)}>
-                <Edit className="h-4 w-4 mr-2" />
-                Editar
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => handleDeleteClick(row)}
-                className="text-destructive focus:text-destructive"
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Eliminar
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              setRouteToDelete(row);
+              setDeleteDialogOpen(true);
+            }}
+          >
+            <Trash2 className="h-4 w-4 text-destructive" />
+          </Button>
         ),
       },
     ],
     [savedRoutes],
   );
 
+  if (isLoading)
+    return (
+      <div className="flex justify-center py-20">
+        <Loader2 className="animate-spin" />
+      </div>
+    );
+
   return (
     <div className="space-y-6">
-      {/* Form Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left Side: Form */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-slate-800">
-              <Route className="h-5 w-5" />
-              {editingRoute ? "Editar Tarifa" : "Nueva Tarifa de Ruta"}
+            <CardTitle className="flex items-center gap-2">
+              <Route className="h-5 w-5" /> Armador de Ruta
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Client Selection */}
+          <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="cliente">Client *</Label>
+              <Label>Cliente *</Label>
               <Select
                 value={selectedCliente}
                 onValueChange={setSelectedCliente}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar cliente..." />
+                  <SelectValue placeholder="Seleccionar..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {mockClientes.map((cliente) => (
-                    <SelectItem key={cliente.id} value={cliente.id}>
-                      {cliente.nombre}
+                  {clients.map((c) => (
+                    <SelectItem key={c.id} value={c.id.toString()}>
+                      {c.razon_social}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-
-            {/* Route from Catalog or Manual */}
-            <div className="space-y-2">
-              <Label>Ruta del Catálogo (opcional)</Label>
-              <Select value={rutaSeleccionada} onValueChange={handleRutaChange}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar ruta autorizada..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {rutasActivas.map((ruta) => (
-                    <SelectItem key={ruta.id} value={ruta.id}>
-                      <div className="flex items-center gap-2">
-                        <span>{ruta.origen}</span>
-                        <ArrowRight className="h-3 w-3" />
-                        <span>{ruta.destino}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Origin / Destination Inputs */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="origen">Origen *</Label>
+                <Label>Origen *</Label>
                 <Input
-                  id="origen"
-                  placeholder="Ej: CDMX"
                   value={origen}
                   onChange={(e) => setOrigen(e.target.value)}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="destino">Destino *</Label>
+                <Label>Destino *</Label>
                 <Input
-                  id="destino"
-                  placeholder="Ej: Veracruz Puerto"
                   value={destino}
                   onChange={(e) => setDestino(e.target.value)}
                 />
               </div>
             </div>
-
-            {/* Preview of Route Display */}
-            {origen && destino && (
-              <div className="p-3 bg-muted rounded-lg border">
-                <p className="text-xs text-muted-foreground mb-1">
-                  Vista previa de ruta:
-                </p>
-                <div className="flex items-center gap-2 font-semibold">
-                  <span>{origen}</span>
-                  <span className="text-primary">➝</span>
-                  <span>{destino}</span>
-                </div>
-              </div>
-            )}
-
-            {/* Truck Type Selection */}
             <div className="space-y-2">
               <Label>Tipo de Unidad *</Label>
               <Select value={tipoUnidad} onValueChange={setTipoUnidad}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar tipo..." />
+                  <SelectValue placeholder="Configuración de ejes..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {tiposActivos.map((tipo) => (
-                    <SelectItem key={tipo.id} value={tipo.id}>
-                      {tipo.nombre}
+                  {tiposActivos.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.nombre}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-
-            {/* Add Toll Button */}
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline" className="w-full border-dashed">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Agregar Caseta
+                  <Plus className="h-4 w-4 mr-2" /> Agregar Caseta
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl">
+              <DialogContent className="max-w-md">
                 <DialogHeader>
-                  <DialogTitle>Seleccionar Caseta del Catálogo</DialogTitle>
+                  <DialogTitle>Casetas Disponibles</DialogTitle>
                 </DialogHeader>
-                <div className="max-h-96 overflow-y-auto">
-                  <div className="space-y-2">
-                    {availableTolls.length === 0 ? (
-                      <p className="text-center text-slate-500 py-8">
-                        Todas las casetas ya han sido agregadas
-                      </p>
-                    ) : (
-                      availableTolls.map((toll) => (
-                        <div
-                          key={toll.id}
-                          className="flex items-center justify-between p-3 border rounded-lg hover:bg-slate-50 cursor-pointer transition-colors"
-                          onClick={() => handleAddToll(toll)}
-                        >
-                          <div>
-                            <p className="font-medium text-slate-900">
-                              {toll.nombre}
-                            </p>
-                            <p className="text-sm text-slate-500">
-                              {toll.tramo}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-sm font-mono text-slate-700">
-                              {formatCurrency(toll.costo5EjesSencillo)}
-                            </p>
-                            <p className="text-xs text-slate-400">
-                              5 Ejes Sencillo
-                            </p>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
+                <ScrollArea className="h-72 pr-4">
+                  {availableTolls.map((t) => (
+                    <div
+                      key={t.id}
+                      className="flex justify-between items-center p-3 border-b hover:bg-slate-50 cursor-pointer"
+                      onClick={() => {
+                        setSelectedTolls([...selectedTolls, t]);
+                        setDialogOpen(false);
+                      }}
+                    >
+                      <div>
+                        <p className="text-sm font-bold">{t.nombre}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {t.tramo}
+                        </p>
+                      </div>
+                      <div className="text-right font-mono text-xs text-primary">
+                        {formatCurrency(t.costo_5_ejes_sencillo)}
+                      </div>
+                    </div>
+                  ))}
+                </ScrollArea>
               </DialogContent>
             </Dialog>
-
-            {/* Action Buttons */}
-            <div className="flex gap-2">
-              {editingRoute && (
-                <Button
-                  variant="outline"
-                  onClick={handleClearForm}
-                  className="flex-1"
-                >
-                  Cancelar
-                </Button>
-              )}
-              <ActionButton
+            <div className="flex gap-2 pt-4">
+              <Button
+                variant="ghost"
+                onClick={handleClearForm}
                 className="flex-1"
-                disabled={
-                  !selectedCliente || !origen || !destino || !tipoUnidad
-                }
-                onClick={handleSaveRoute}
               >
-                {editingRoute ? "Actualizar Tarifa" : "Guardar Tarifa"}
+                Limpiar
+              </Button>
+              <ActionButton onClick={handleSaveRoute} className="flex-1">
+                Guardar Tarifa
               </ActionButton>
             </div>
           </CardContent>
         </Card>
 
-        {/* Right Side: Toll List */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center justify-between text-slate-800">
-              <span className="flex items-center gap-2">
-                <Calculator className="h-5 w-5" />
-                Lista de Casetas
+            <CardTitle className="flex items-center justify-between">
+              <span>
+                <Calculator className="h-5 w-5 inline mr-2" /> Casetas en Ruta
               </span>
-              <span className="text-sm font-normal text-slate-500">
-                {selectedTolls.length} caseta
-                {selectedTolls.length !== 1 ? "s" : ""}
-              </span>
+              <Badge>{selectedTolls.length}</Badge>
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {selectedTolls.length === 0 ? (
-              <div className="text-center py-12 text-slate-400">
-                <Route className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                <p>No hay casetas agregadas</p>
-                <p className="text-sm">
-                  Usa el botón "Agregar Caseta" para comenzar
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {selectedTolls.map((toll, index) => (
-                  <div
-                    key={toll.id}
-                    className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border group"
-                  >
-                    <div className="flex items-center gap-2 text-slate-400">
-                      <GripVertical className="h-4 w-4" />
-                      <span className="text-xs font-medium w-5">
-                        {index + 1}
-                      </span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-slate-900 truncate">
-                        {toll.nombre}
-                      </p>
-                      <p className="text-xs text-slate-500">{toll.tramo}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-mono font-semibold text-slate-800">
-                        {formatCurrency(toll.costo5EjesSencillo)}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => handleRemoveToll(toll.id)}
-                      className="p-1.5 hover:bg-red-100 rounded-md transition-colors opacity-0 group-hover:opacity-100"
-                    >
-                      <Trash2 className="h-4 w-4 text-red-500" />
-                    </button>
+            <div className="space-y-2 min-h-[200px]">
+              {selectedTolls.map((t, idx) => (
+                <div
+                  key={t.id}
+                  className="flex items-center gap-3 p-2 bg-slate-50 border rounded-md group"
+                >
+                  <GripVertical className="h-4 w-4 text-slate-300" />
+                  <div className="flex-1">
+                    <p className="text-xs font-bold">{t.nombre}</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {t.tramo}
+                    </p>
                   </div>
-                ))}
-              </div>
-            )}
-
-            {/* Cost Summary */}
-            {selectedTolls.length > 0 && (
-              <div className="mt-6 pt-4 border-t space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-slate-600">
-                    Costo Sencillo (Ida)
-                  </span>
-                  <span className="text-lg font-mono font-semibold text-slate-800">
-                    {formatCurrency(costoTotal)}
-                  </span>
+                  <div className="font-mono text-xs">
+                    {formatCurrency(
+                      isFullUnit ? t.costo_9_ejes_full : t.costo_5_ejes_full,
+                    )}
+                  </div>
+                  <button
+                    onClick={() =>
+                      setSelectedTolls(
+                        selectedTolls.filter((st) => st.id !== t.id),
+                      )
+                    }
+                  >
+                    <Trash2 className="h-3 w-3 text-destructive opacity-0 group-hover:opacity-100" />
+                  </button>
                 </div>
-                <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-lg border border-emerald-200">
-                  <span className="text-sm font-medium text-emerald-800">
-                    Costo Total Estimado (Full)
-                  </span>
-                  <span className="text-xl font-mono font-bold text-emerald-700">
-                    {formatCurrency(costoTotalFull)}
-                  </span>
-                </div>
-              </div>
-            )}
+              ))}
+            </div>
+            <div className="mt-6 p-4 bg-emerald-50 rounded-xl border border-emerald-100 flex justify-between items-center">
+              <span className="text-xs font-bold text-emerald-800 uppercase">
+                Costo Total Estimado
+              </span>
+              <span className="text-xl font-mono font-bold text-emerald-700">
+                {formatCurrency(costs.full)}
+              </span>
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Saved Routes Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Tarifas Guardadas</CardTitle>
+          <CardTitle>Tarifas Vigentes</CardTitle>
         </CardHeader>
         <CardContent>
-          <EnhancedDataTable
-            data={savedRoutes}
-            columns={columns}
-            exportFileName="tarifas"
-          />
+          <EnhancedDataTable data={savedRoutes} columns={columns} />
         </CardContent>
       </Card>
-
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar esta tarifa?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {routeToDelete && (
-                <>
-                  Estás a punto de eliminar la tarifa de la ruta{" "}
-                  <strong>
-                    {routeToDelete.origen} ➝ {routeToDelete.destino}
-                  </strong>{" "}
-                  para el cliente <strong>{routeToDelete.clienteNombre}</strong>
-                  .
-                  <br />
-                  <br />
-                  Esta acción no se puede deshacer.
-                </>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleConfirmDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Eliminar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 };

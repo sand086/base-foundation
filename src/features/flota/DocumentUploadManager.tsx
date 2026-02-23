@@ -1,9 +1,21 @@
-import { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Upload, History, FileText, Eye, Loader2 } from "lucide-react";
+import {
+  Upload,
+  History,
+  Eye,
+  Loader2,
+  Trash2,
+  AlertCircle,
+  FileText,
+  FileSpreadsheet,
+  FileArchive,
+  File as FileIcon,
+} from "lucide-react";
 import { unitService } from "@/services/unitService";
+import { clientService } from "@/services/clientService";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -13,150 +25,298 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
 import axiosClient from "@/api/axiosClient";
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "/";
 
+type EntityType = "unit" | "client";
+
+type DocHistoryItem = {
+  id: number;
+  filename: string;
+  file_url: string;
+  version: number;
+  created_at: string | null;
+  is_active?: boolean;
+  mime_type?: string | null;
+  size_bytes?: number | null;
+};
+
 interface Props {
-  unitId: number;
-  unitEconomico?: string; // Lo hice opcional, ya no es estrictamente necesario para la lógica
+  // ✅ NUEVO: firma principal (entityId requerido)
+  entityId: number;
+  entityType: EntityType;
+
   docType: string;
   docLabel: string;
   currentUrl?: string | null;
   onUploadSuccess: (newUrl: string) => void;
+
   statusBadge?: React.ReactNode;
   dateInput?: React.ReactNode;
+
+  // ✅ NUEVO: accept configurable (con default extendido)
+  accept?: string;
+
+  // ✅ COMPATIBILIDAD con flotas (si todavía lo usas en otras pantallas)
+  unitId?: number;
+  unitEconomico?: string;
 }
 
+const DEFAULT_ACCEPT = ".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.csv,.txt";
+
+const getFullUrl = (path: string) => {
+  if (!path) return "";
+  if (path.startsWith("http")) return path;
+  // tu backend parece servir en /api + path (según tu snippet nuevo)
+  return `${BACKEND_URL}${path.startsWith("/") ? "" : "/"}${path}`;
+};
+
+const formatDate = (dateStr: string) =>
+  new Date(dateStr).toLocaleString("es-MX", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+const getFileIcon = (filename: string) => {
+  const ext = (filename.split(".").pop() || "").toLowerCase();
+
+  if (["xlsx", "xls", "csv"].includes(ext))
+    return <FileSpreadsheet className="w-4 h-4 text-emerald-600" />;
+
+  if (["zip", "rar", "7z", "tar", "gz"].includes(ext))
+    return <FileArchive className="w-4 h-4 text-indigo-600" />;
+
+  if (["pdf"].includes(ext))
+    return <FileText className="w-4 h-4 text-rose-600" />;
+
+  if (["png", "jpg", "jpeg", "webp"].includes(ext))
+    return <FileIcon className="w-4 h-4 text-blue-600" />;
+
+  return <FileIcon className="w-4 h-4 text-muted-foreground" />;
+};
+
 export function DocumentUploadManager({
+  entityId,
   unitId,
-  unitEconomico,
+  entityType,
   docType,
   docLabel,
   currentUrl,
   onUploadSuccess,
   statusBadge,
   dateInput,
+  accept = DEFAULT_ACCEPT,
+  unitEconomico,
 }: Props) {
   const [isUploading, setIsUploading] = useState(false);
-  const [history, setHistory] = useState<any[]>([]);
-  const [showHistory, setShowHistory] = useState(false);
+  const [history, setHistory] = useState<DocHistoryItem[]>([]);
+  const [lastUploadDate, setLastUploadDate] = useState<string | null>(null);
 
-  // Generamos un ID único para el input, combinando ID de unidad y tipo de doc
-  const inputId = `file-${unitId}-${docType}`;
+  // ✅ Mantén compatibilidad: si por alguna razón te siguen pasando unitId, úsalo.
+  // Preferencia: entityId (nuevo)
+  const activeId = useMemo(() => {
+    if (entityType === "unit") return (unitId ?? entityId) as number;
+    return entityId as number;
+  }, [entityId, unitId, entityType]);
+
+  const inputId = `file-${entityType}-${activeId}-${docType}`;
+
+  useEffect(() => {
+    if (activeId) void loadHistory(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId, currentUrl, docType, entityType]);
+
+  const loadHistory = async (showToast = true) => {
+    if (!activeId) return;
+
+    try {
+      const endpoint =
+        entityType === "unit"
+          ? `/units/${activeId}/documents/${docType}/history`
+          : `/clients/${activeId}/documents/${docType}/history`;
+
+      const res = await axiosClient.get(endpoint);
+      const items = (res.data || []) as DocHistoryItem[];
+
+      setHistory(items);
+
+      const activeDoc = items.find((d) => d.is_active) ?? items[0]; // fallback por si tu API no manda is_active
+
+      if (activeDoc?.created_at) setLastUploadDate(activeDoc.created_at);
+      else setLastUploadDate(null);
+    } catch (error) {
+      console.error("Error al cargar historial:", error);
+      if (showToast) toast.error("Error al cargar historial");
+    }
+  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !activeId) return;
 
     setIsUploading(true);
     try {
-      // CORRECCIÓN: Usamos unitId (number) en lugar de unitEconomico
-      const result = await unitService.uploadDocument(unitId, docType, file);
-      toast.success("Documento actualizado y versionado");
+      const result =
+        entityType === "unit"
+          ? await unitService.uploadDocument(activeId, docType, file)
+          : await clientService.uploadDocument(activeId, docType, file);
+
+      toast.success("Documento actualizado correctamente");
       onUploadSuccess(result.url);
+
+      // refresca historial + last date
+      await loadHistory(false);
     } catch (error) {
-      console.error(error); // Bueno para depurar
+      console.error("Error al subir documento:", error);
       toast.error("Error al subir documento");
     } finally {
       setIsUploading(false);
+
+      // importante: reset input para permitir subir el mismo archivo otra vez
+      e.target.value = "";
     }
   };
 
-  const loadHistory = async () => {
+  const handleDelete = async (docId: number) => {
+    const ok = confirm(
+      "¿Estás seguro de eliminar esta versión? Esta acción quedará registrada en el log de auditoría.",
+    );
+    if (!ok) return;
+
     try {
-      // Esto ya estaba correcto (usaba unitId)
-      const res = await axiosClient.get(
-        `/units/${unitId}/documents/${docType}/history`,
-      );
-      setHistory(res.data);
-    } catch (error) {
-      console.error("Error cargando historial", error);
-    }
-  };
+      // Nota: tu código original siempre borra en /clients/documents/:id
+      // Si tu backend distingue por entity, ajusta aquí.
+      // Yo lo dejo como tu endpoint actual.
+      await axiosClient.delete(`/clients/documents/${docId}`);
 
-  const getFullUrl = (path: string) => {
-    if (!path) return "";
-    if (path.startsWith("http")) return path;
-    return `${BACKEND_URL}${path}`;
+      toast.success("Documento eliminado correctamente");
+      await loadHistory(false);
+      // Opcional: si borraste el activo, podrías querer avisar al padre para limpiar currentUrl
+    } catch (error) {
+      console.error("Error eliminando documento:", error);
+      toast.error("No se pudo eliminar el documento");
+    }
   };
 
   return (
-    <div className="flex flex-col gap-3 p-4 border rounded-xl bg-white/5 border-black/10 shadow-sm hover:border-red-500/20 transition-all">
-      {/* Encabezado */}
-      <div className="flex justify-between items-start">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <Label className="font-bold text-sm text-foreground/90">
+    <div className="flex flex-col gap-3 p-4 border rounded-xl bg-white/5 border-black/10 shadow-sm hover:border-primary/20 transition-all">
+      <div className="flex justify-between items-start gap-3">
+        <div className="space-y-1 min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <Label className="font-bold text-sm text-foreground/90 truncate">
               {docLabel}
             </Label>
             {statusBadge}
           </div>
+
+          {lastUploadDate && (
+            <p className="text-[10px] text-muted-foreground font-mono">
+              Ult: {formatDate(lastUploadDate)}
+            </p>
+          )}
         </div>
 
-        {/* Historial */}
         <Dialog
-          open={showHistory}
           onOpenChange={(open) => {
-            setShowHistory(open);
-            if (open) loadHistory();
+            if (open) void loadHistory(false);
           }}
         >
           <DialogTrigger asChild>
             <Button
               variant="outline"
               size="sm"
-              className="h-7 text-xs gap-1.5 border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 hover:text-blue-800 dark:bg-blue-950/30 dark:border-blue-800 dark:text-blue-300"
+              className="h-7 text-[10px] font-bold uppercase gap-1.5 border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100"
             >
-              <History className="w-3.5 h-3.5" /> Historial
+              <History className="w-3.5 h-3.5" /> Lista / Historial
             </Button>
           </DialogTrigger>
-          <DialogContent>
+
+          <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>Historial: {docLabel}</DialogTitle>
+              <DialogTitle>Documentos: {docLabel}</DialogTitle>
             </DialogHeader>
-            <ScrollArea className="h-[300px] w-full rounded-md border p-4">
+
+            <ScrollArea className="h-[350px] mt-4 pr-4">
               {history.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-muted-foreground opacity-60">
-                  <History className="w-8 h-8 mb-2" />
-                  <p className="text-sm">No hay versiones anteriores.</p>
-                </div>
+                <p className="text-center text-muted-foreground py-10 text-xs">
+                  No hay documentos cargados.
+                </p>
               ) : (
                 <div className="space-y-3">
-                  {history.map((item: any) => (
+                  {history.map((item) => (
                     <div
                       key={item.id}
-                      className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                      className={`flex items-center justify-between p-3 rounded-lg border ${
+                        item.is_active
+                          ? "bg-emerald-50 border-emerald-200"
+                          : "bg-card"
+                      }`}
                     >
-                      <div className="space-y-1">
-                        <p
-                          className="text-sm font-medium truncate w-48"
-                          title={item.filename}
-                        >
-                          {item.filename}
-                        </p>
-                        <p className="text-xs text-muted-foreground flex items-center gap-1">
-                          <span className="opacity-70">
-                            {new Date(item.uploaded_at).toLocaleString()}
+                      <div className="space-y-1 overflow-hidden min-w-0">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {getFileIcon(item.filename)}
+                          <p
+                            className="text-xs font-bold truncate w-48"
+                            title={item.filename}
+                          >
+                            {item.filename}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-[9px]">
+                            v{item.version}
+                          </Badge>
+                          <span className="text-[10px] text-muted-foreground">
+                            {item.created_at
+                              ? formatDate(item.created_at)
+                              : "Fecha no disponible"}
                           </span>
-                        </p>
+                        </div>
                       </div>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        asChild
-                        className="h-8"
-                      >
-                        <a
-                          href={getFullUrl(item.file_url)}
-                          target="_blank"
-                          rel="noopener noreferrer"
+
+                      <div className="flex gap-1">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8"
+                          asChild
+                          title="Ver"
                         >
-                          <Eye className="w-3.5 h-3.5 mr-1.5" /> Ver
-                        </a>
-                      </Button>
+                          <a
+                            href={getFullUrl(item.file_url)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <Eye className="w-4 h-4 text-primary" />
+                          </a>
+                        </Button>
+
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 text-destructive"
+                          onClick={() => void handleDelete(item.id)}
+                          title="Eliminar versión (Se guardará en auditoría)"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </div>
                   ))}
+
+                  <div className="mt-4 p-2 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded flex gap-2 items-center">
+                    <AlertCircle className="w-4 h-4 text-amber-600" />
+                    <p className="text-[10px] text-amber-700 dark:text-amber-400 font-medium">
+                      Cualquier eliminación o reemplazo será registrado en el
+                      sistema de auditoría.
+                    </p>
+                  </div>
                 </div>
               )}
             </ScrollArea>
@@ -165,19 +325,24 @@ export function DocumentUploadManager({
       </div>
 
       <div className="flex items-end gap-3 mt-1">
-        {/* Input de Archivo */}
         <div className="relative flex-1">
           <Input
             type="file"
             className="hidden"
-            id={inputId} // CORRECCIÓN: ID Único
+            id={inputId}
             onChange={handleFileChange}
-            accept=".pdf,.jpg,.png"
+            accept={accept}
             disabled={isUploading}
           />
+
           <Label
-            htmlFor={inputId} // CORRECCIÓN: Coincide con el ID único
-            className={`flex items-center justify-center w-full h-9 px-3 text-xs font-medium transition-all border border-dashed rounded-lg cursor-pointer bg-background/50 hover:bg-accent hover:text-accent-foreground hover:border-primary/50 ${isUploading ? "opacity-50 cursor-not-allowed" : ""}`}
+            htmlFor={inputId}
+            className={`flex items-center justify-center w-full h-9 px-3 text-[11px] font-bold uppercase transition-all border border-dashed rounded-lg cursor-pointer bg-background/50 hover:bg-accent ${
+              isUploading ? "opacity-50 cursor-not-allowed" : ""
+            }`}
+            title={
+              unitEconomico ? `Unidad: ${unitEconomico}` : "Seleccionar archivo"
+            }
           >
             {isUploading ? (
               <>
@@ -186,8 +351,8 @@ export function DocumentUploadManager({
               </>
             ) : (
               <>
-                <Upload className="w-3.5 h-3.5 mr-2" />{" "}
-                {currentUrl ? "Reemplazar" : "Subir"}
+                <Upload className="w-3.5 h-3.5 mr-2" />
+                {currentUrl ? "Cargar Nuevo / Reemplazar" : "Subir Archivo"}
               </>
             )}
           </Label>
@@ -199,16 +364,16 @@ export function DocumentUploadManager({
           <Button
             variant="default"
             size="sm"
-            className="h-9 px-3 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+            className="h-9 px-3 bg-emerald-600 hover:bg-emerald-700 text-white"
             asChild
-            title="Ver documento actual"
+            title="Ver documento más reciente"
           >
             <a
               href={getFullUrl(currentUrl)}
               target="_blank"
               rel="noopener noreferrer"
             >
-              <FileText className="w-4 h-4 mr-1.5" /> Ver
+              <Eye className="w-4 h-4" />
             </a>
           </Button>
         )}

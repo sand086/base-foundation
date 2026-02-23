@@ -223,3 +223,25 @@ export interface MechanicDocument {
   fecha_vencimiento?: string;
   subido_en: string;
 }
+
+export interface TollBooth {
+  id: number;
+  nombre: string;
+  tramo: string;
+  costo_5_ejes_sencillo: number;
+  costo_5_ejes_full: number;
+  costo_9_ejes_sencillo: number;
+  costo_9_ejes_full: number;
+  forma_pago: "TAG" | "Efectivo" | "Ambos";
+}
+
+export interface RateTemplate {
+  id: number;
+  client_id: number;
+  origen: string;
+  destino: string;
+  toll_unit_type: "5ejes" | "9ejes";
+  costo_total_sencillo: number;
+  costo_total_full: number;
+  casetas_ordenadas: { id: number; nombre: string; position: number }[];
+}

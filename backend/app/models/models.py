@@ -157,6 +157,17 @@ class RecordStatus(str, PyEnum):
     ELIMINADO = "E"
 
 
+class PaymentMethod(str, PyEnum):
+    TAG = "TAG"
+    EFECTIVO = "Efectivo"
+    AMBOS = "Ambos"
+
+
+class TollUnitType(str, PyEnum):
+    EJES_5 = "5ejes"
+    EJES_9 = "9ejes"
+
+
 # =========================================================
 # MIXINS
 # =========================================================
@@ -247,6 +258,9 @@ class Client(AuditMixin, Base):
         "SubClient", back_populates="client", cascade="all, delete-orphan"
     )
     trips = relationship("Trip", back_populates="client")
+    document_history = relationship(
+        "ClientDocumentHistory", back_populates="client", cascade="all, delete-orphan"
+    )
 
 
 class SubClient(AuditMixin, Base):
@@ -905,3 +919,78 @@ class AuditLog(Base):
 
     # Relación para poder traer el nombre del usuario fácilmente
     user = relationship("User")
+
+
+class ClientDocumentHistory(AuditMixin, Base):
+    __tablename__ = "client_document_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(
+        Integer, ForeignKey("clients.id", ondelete="CASCADE"), nullable=False
+    )
+
+    document_type = Column(String(50), nullable=False)  # rfc, acta_constitutiva, etc.
+    filename = Column(String(255), nullable=False)
+    file_url = Column(String(500), nullable=False)
+    file_size = Column(Integer, nullable=True)
+    mime_type = Column(String(100), nullable=True)
+
+    version = Column(Integer, default=1)
+    is_active = Column(Boolean, default=True)
+
+    # Relaciones
+    client = relationship("Client", back_populates="document_history")
+
+
+class TollBooth(AuditMixin, Base):
+    __tablename__ = "toll_booths"
+    id = Column(Integer, primary_key=True, index=True)
+    nombre = Column(String(100), nullable=False)
+    tramo = Column(String(255), nullable=False)
+    costo_5_ejes_sencillo = Column(Float, default=0.0)
+    costo_5_ejes_full = Column(Float, default=0.0)
+    costo_9_ejes_sencillo = Column(Float, default=0.0)
+    costo_9_ejes_full = Column(Float, default=0.0)
+    forma_pago = Column(String(20), default="Ambos")
+
+
+class RateTemplate(AuditMixin, Base):
+    __tablename__ = "rate_templates"
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(
+        Integer, ForeignKey("clients.id", ondelete="RESTRICT"), nullable=False
+    )
+    origen = Column(String(150), nullable=False)
+    destino = Column(String(150), nullable=False)
+    tipo_unidad = Column(String(20), nullable=False)
+    costo_total_sencillo = Column(Float, default=0.0)
+    costo_total_full = Column(Float, default=0.0)
+    distancia_total_km = Column(Float, default=0.0)
+    tiempo_total_minutos = Column(Integer, default=0)
+
+    segments = relationship(
+        "RateSegment",
+        back_populates="template",
+        cascade="all, delete-orphan",
+        order_by="RateSegment.orden",
+    )
+
+
+class RateSegment(Base):
+    __tablename__ = "rate_template_segments"
+    id = Column(Integer, primary_key=True)
+    rate_template_id = Column(
+        Integer, ForeignKey("rate_templates.id", ondelete="CASCADE")
+    )
+    nombre_segmento = Column(String(255))
+    estado = Column(String(50))
+    carretera = Column(String(100))
+    distancia_km = Column(Float, default=0.0)
+    tiempo_minutos = Column(Integer, default=0)
+    toll_booth_id = Column(Integer, ForeignKey("toll_booths.id"), nullable=True)
+    orden = Column(Integer)
+    costo_momento_sencillo = Column(Float, default=0.0)
+    costo_momento_full = Column(Float, default=0.0)
+
+    template = relationship("RateTemplate", back_populates="segments")
+    toll = relationship("TollBooth")

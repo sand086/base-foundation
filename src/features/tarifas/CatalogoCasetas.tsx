@@ -1,5 +1,14 @@
-import { useState } from "react";
-import { Search, Plus, Edit, Trash2, MoreHorizontal, MapPin, DollarSign } from "lucide-react";
+import { useState, useEffect } from "react";
+import {
+  Search,
+  Plus,
+  Edit,
+  Trash2,
+  MoreHorizontal,
+  MapPin,
+  DollarSign,
+  Loader2,
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { ActionButton } from "@/components/ui/action-button";
 import { Button } from "@/components/ui/button";
@@ -44,32 +53,46 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { mockTollBooths, TollBooth } from "@/data/tarifasData";
+import { TollBooth } from "@/types/api.types";
+import { tollService } from "@/services/tollService";
 import { toast } from "sonner";
 
 export const CatalogoCasetas = () => {
   const [searchTerm, setSearchTerm] = useState("");
-  const [tollBooths, setTollBooths] = useState<TollBooth[]>(mockTollBooths);
+  const [tollBooths, setTollBooths] = useState<TollBooth[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedToll, setSelectedToll] = useState<TollBooth | null>(null);
-  
-  // Form state
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Form state alineado al backend
   const [formData, setFormData] = useState<Partial<TollBooth>>({
     nombre: "",
     tramo: "",
-    costo5EjesSencillo: 0,
-    costo5EjesFull: 0,
-    costo9EjesSencillo: 0,
-    costo9EjesFull: 0,
-    formaPago: "TAG",
+    costo_5_ejes_sencillo: 0,
+    costo_5_ejes_full: 0,
+    costo_9_ejes_sencillo: 0,
+    costo_9_ejes_full: 0,
+    forma_pago: "Ambos",
   });
 
-  const filteredTolls = tollBooths.filter(
-    (toll) =>
-      toll.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      toll.tramo.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const loadTolls = async () => {
+    setIsLoading(true);
+    try {
+      const data = await tollService.getTolls(searchTerm);
+      setTollBooths(data);
+    } catch (error) {
+      toast.error("Error al cargar el catálogo de casetas");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const timeoutId = setTimeout(loadTolls, 300);
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("es-MX", {
@@ -79,26 +102,18 @@ export const CatalogoCasetas = () => {
   };
 
   const getFormaPagoBadge = (formaPago: string) => {
-    switch (formaPago) {
-      case "TAG":
-        return (
-          <Badge className="bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100">
-            TAG
-          </Badge>
-        );
-      case "Efectivo":
-        return (
-          <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100">
-            Efectivo
-          </Badge>
-        );
-      default:
-        return (
-          <Badge className="bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-100">
-            Ambos
-          </Badge>
-        );
-    }
+    const styles = {
+      TAG: "bg-blue-100 text-blue-700 border-blue-200",
+      EFECTIVO: "bg-amber-100 text-amber-700 border-amber-200",
+      AMBOS: "bg-slate-100 text-slate-700 border-slate-200",
+    };
+    return (
+      <Badge
+        className={`${styles[formaPago as keyof typeof styles]} hover:opacity-80`}
+      >
+        {formaPago}
+      </Badge>
+    );
   };
 
   const handleOpenCreate = () => {
@@ -106,84 +121,60 @@ export const CatalogoCasetas = () => {
     setFormData({
       nombre: "",
       tramo: "",
-      costo5EjesSencillo: 0,
-      costo5EjesFull: 0,
-      costo9EjesSencillo: 0,
-      costo9EjesFull: 0,
-      formaPago: "TAG",
+      costo_5_ejes_sencillo: 0,
+      costo_5_ejes_full: 0,
+      costo_9_ejes_sencillo: 0,
+      costo_9_ejes_full: 0,
+      forma_pago: "Ambos",
     });
     setDialogOpen(true);
   };
 
   const handleOpenEdit = (toll: TollBooth) => {
     setSelectedToll(toll);
-    setFormData({
-      nombre: toll.nombre,
-      tramo: toll.tramo,
-      costo5EjesSencillo: toll.costo5EjesSencillo,
-      costo5EjesFull: toll.costo5EjesFull,
-      costo9EjesSencillo: toll.costo9EjesSencillo,
-      costo9EjesFull: toll.costo9EjesFull,
-      formaPago: toll.formaPago,
-    });
+    setFormData({ ...toll });
     setDialogOpen(true);
   };
 
-  const handleOpenDelete = (toll: TollBooth) => {
-    setSelectedToll(toll);
-    setDeleteDialogOpen(true);
-  };
-
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.nombre || !formData.tramo) {
-      toast.error("Completa todos los campos obligatorios");
+      toast.error("Nombre y tramo son obligatorios");
       return;
     }
 
-    if (selectedToll) {
-      // Edit existing
-      setTollBooths(tollBooths.map(t => 
-        t.id === selectedToll.id 
-          ? { ...t, ...formData } as TollBooth
-          : t
-      ));
-      toast.success("Caseta actualizada correctamente");
-    } else {
-      // Create new
-      const newToll: TollBooth = {
-        id: `caseta-${Date.now()}`,
-        nombre: formData.nombre!,
-        tramo: formData.tramo!,
-        costo5EjesSencillo: formData.costo5EjesSencillo || 0,
-        costo5EjesFull: formData.costo5EjesFull || 0,
-        costo9EjesSencillo: formData.costo9EjesSencillo || 0,
-        costo9EjesFull: formData.costo9EjesFull || 0,
-        formaPago: formData.formaPago || "TAG",
-      };
-      setTollBooths([...tollBooths, newToll]);
-      toast.success("Caseta agregada al catálogo");
+    setIsSubmitting(true);
+    try {
+      if (selectedToll) {
+        await tollService.updateToll(selectedToll.id, formData);
+        toast.success("Caseta actualizada correctamente");
+      } else {
+        await tollService.createToll(formData);
+        toast.success("Caseta agregada al catálogo");
+      }
+      loadTolls();
+      setDialogOpen(false);
+    } catch (error) {
+      toast.error("No se pudo guardar la caseta");
+    } finally {
+      setIsSubmitting(false);
     }
-
-    setDialogOpen(false);
-    setSelectedToll(null);
   };
 
-  const handleDelete = () => {
-    if (selectedToll) {
-      setTollBooths(tollBooths.filter(t => t.id !== selectedToll.id));
-      toast.success("Caseta eliminada del catálogo");
+  const handleDelete = async () => {
+    if (!selectedToll) return;
+    try {
+      await tollService.deleteToll(selectedToll.id);
+      toast.success("Caseta eliminada");
+      loadTolls();
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || "Error al eliminar");
+    } finally {
+      setDeleteDialogOpen(false);
     }
-    setDeleteDialogOpen(false);
-    setSelectedToll(null);
-  };
-
-  const handleInputChange = (field: keyof TollBooth, value: string | number) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
   return (
     <div className="space-y-4">
-      {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-4 justify-between">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -200,238 +191,220 @@ export const CatalogoCasetas = () => {
         </ActionButton>
       </div>
 
-      {/* Table */}
-      <DataTable>
-        <DataTableHeader>
-          <DataTableRow>
-            <DataTableHead>Nombre Caseta</DataTableHead>
-            <DataTableHead>Tramo</DataTableHead>
-            <DataTableHead className="text-center" colSpan={2}>
-              5 Ejes
-            </DataTableHead>
-            <DataTableHead className="text-center" colSpan={2}>
-              9 Ejes
-            </DataTableHead>
-            <DataTableHead>Forma de Pago</DataTableHead>
-            <DataTableHead className="text-right">Acciones</DataTableHead>
-          </DataTableRow>
-          <DataTableRow className="bg-slate-50/50">
-            <DataTableHead></DataTableHead>
-            <DataTableHead></DataTableHead>
-            <DataTableHead className="text-xs text-slate-500 font-medium">
-              Sencillo
-            </DataTableHead>
-            <DataTableHead className="text-xs text-slate-500 font-medium">
-              Full
-            </DataTableHead>
-            <DataTableHead className="text-xs text-slate-500 font-medium">
-              Sencillo
-            </DataTableHead>
-            <DataTableHead className="text-xs text-slate-500 font-medium">
-              Full
-            </DataTableHead>
-            <DataTableHead></DataTableHead>
-            <DataTableHead></DataTableHead>
-          </DataTableRow>
-        </DataTableHeader>
-        <DataTableBody>
-          {filteredTolls.map((toll) => (
-            <DataTableRow key={toll.id}>
-              <DataTableCell className="font-medium text-slate-900">
-                {toll.nombre}
-              </DataTableCell>
-              <DataTableCell className="text-slate-600">
-                {toll.tramo}
-              </DataTableCell>
-              <DataTableCell className="text-slate-700 font-mono text-xs">
-                {formatCurrency(toll.costo5EjesSencillo)}
-              </DataTableCell>
-              <DataTableCell className="text-emerald-700 font-mono text-xs font-semibold bg-emerald-50/50">
-                {formatCurrency(toll.costo5EjesFull)}
-              </DataTableCell>
-              <DataTableCell className="text-slate-700 font-mono text-xs">
-                {formatCurrency(toll.costo9EjesSencillo)}
-              </DataTableCell>
-              <DataTableCell className="text-emerald-700 font-mono text-xs font-semibold bg-emerald-50/50">
-                {formatCurrency(toll.costo9EjesFull)}
-              </DataTableCell>
-              <DataTableCell>{getFormaPagoBadge(toll.formaPago)}</DataTableCell>
-              <DataTableCell className="text-right">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => handleOpenEdit(toll)}>
-                      <Edit className="h-4 w-4 mr-2" />
-                      Editar
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem 
-                      onClick={() => handleOpenDelete(toll)}
-                      className="text-destructive focus:text-destructive"
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Eliminar
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </DataTableCell>
+      {isLoading ? (
+        <div className="flex justify-center py-20">
+          <Loader2 className="h-10 w-10 animate-spin text-primary opacity-50" />
+        </div>
+      ) : (
+        <DataTable>
+          <DataTableHeader>
+            <DataTableRow>
+              <DataTableHead>Nombre Caseta</DataTableHead>
+              <DataTableHead>Tramo</DataTableHead>
+              <DataTableHead className="text-center" colSpan={2}>
+                5 Ejes
+              </DataTableHead>
+              <DataTableHead className="text-center" colSpan={2}>
+                9 Ejes
+              </DataTableHead>
+              <DataTableHead>Forma de Pago</DataTableHead>
+              <DataTableHead className="text-right">Acciones</DataTableHead>
             </DataTableRow>
-          ))}
-        </DataTableBody>
-      </DataTable>
+            <DataTableRow className="bg-slate-50/50">
+              <DataTableHead></DataTableHead>
+              <DataTableHead></DataTableHead>
+              <DataTableHead className="text-[10px] text-center uppercase">
+                Sencillo
+              </DataTableHead>
+              <DataTableHead className="text-[10px] text-center uppercase">
+                Full
+              </DataTableHead>
+              <DataTableHead className="text-[10px] text-center uppercase">
+                Sencillo
+              </DataTableHead>
+              <DataTableHead className="text-[10px] text-center uppercase">
+                Full
+              </DataTableHead>
+              <DataTableHead></DataTableHead>
+              <DataTableHead></DataTableHead>
+            </DataTableRow>
+          </DataTableHeader>
+          <DataTableBody>
+            {tollBooths.map((toll) => (
+              <DataTableRow key={toll.id}>
+                <DataTableCell className="font-medium">
+                  {toll.nombre}
+                </DataTableCell>
+                <DataTableCell className="text-slate-600">
+                  {toll.tramo}
+                </DataTableCell>
+                <DataTableCell className="text-center font-mono text-xs">
+                  {formatCurrency(toll.costo_5_ejes_sencillo)}
+                </DataTableCell>
+                <DataTableCell className="text-center font-mono text-xs bg-emerald-50/30">
+                  {formatCurrency(toll.costo_5_ejes_full)}
+                </DataTableCell>
+                <DataTableCell className="text-center font-mono text-xs">
+                  {formatCurrency(toll.costo_9_ejes_sencillo)}
+                </DataTableCell>
+                <DataTableCell className="text-center font-mono text-xs bg-emerald-50/30">
+                  {formatCurrency(toll.costo_9_ejes_full)}
+                </DataTableCell>
+                <DataTableCell>
+                  {getFormaPagoBadge(toll.forma_pago)}
+                </DataTableCell>
+                <DataTableCell className="text-right">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => handleOpenEdit(toll)}>
+                        <Edit className="h-4 w-4 mr-2" /> Editar
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setSelectedToll(toll);
+                          setDeleteDialogOpen(true);
+                        }}
+                        className="text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" /> Eliminar
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </DataTableCell>
+              </DataTableRow>
+            ))}
+          </DataTableBody>
+        </DataTable>
+      )}
 
-      {/* Legend */}
-      <div className="flex gap-6 text-xs text-slate-500 pt-2">
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 bg-slate-100 rounded"></div>
-          <span>Sencillo = Ida</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 bg-emerald-100 rounded"></div>
-          <span>Full = Ida y Vuelta (Redondo)</span>
-        </div>
-      </div>
-
-      {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <MapPin className="h-5 w-5" />
+            <DialogTitle>
               {selectedToll ? "Editar Caseta" : "Nueva Caseta"}
             </DialogTitle>
           </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="nombre">Nombre de Caseta *</Label>
-                <Input
-                  id="nombre"
-                  placeholder="Ej: Caseta Tlalpan"
-                  value={formData.nombre}
-                  onChange={(e) => handleInputChange("nombre", e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="tramo">Tramo *</Label>
-                <Input
-                  id="tramo"
-                  placeholder="Ej: CDMX - Cuernavaca"
-                  value={formData.tramo}
-                  onChange={(e) => handleInputChange("tramo", e.target.value)}
-                />
-              </div>
-            </div>
-
+          <div className="grid grid-cols-2 gap-4 py-4">
             <div className="space-y-2">
+              <Label>Nombre *</Label>
+              <Input
+                value={formData.nombre}
+                onChange={(e) =>
+                  setFormData({ ...formData, nombre: e.target.value })
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Tramo *</Label>
+              <Input
+                value={formData.tramo}
+                onChange={(e) =>
+                  setFormData({ ...formData, tramo: e.target.value })
+                }
+              />
+            </div>
+            <div className="col-span-2 space-y-2">
               <Label>Forma de Pago</Label>
-              <Select 
-                value={formData.formaPago} 
-                onValueChange={(v) => handleInputChange("formaPago", v)}
+              <Select
+                value={formData.forma_pago}
+                onValueChange={(v) =>
+                  setFormData({ ...formData, forma_pago: v as any })
+                }
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="TAG">TAG</SelectItem>
-                  <SelectItem value="Efectivo">Efectivo</SelectItem>
-                  <SelectItem value="Ambos">Ambos</SelectItem>
+                  <SelectItem value="EFECTIVO">Efectivo</SelectItem>
+                  <SelectItem value="AMBOS">Ambos</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-
-            <div className="space-y-3">
-              <Label className="flex items-center gap-2">
-                <DollarSign className="h-4 w-4" />
-                Costos por Tipo de Unidad (MXN)
-              </Label>
-              
-              <div className="grid grid-cols-2 gap-4 p-3 bg-muted rounded-lg">
-                <div className="space-y-3">
-                  <p className="text-sm font-medium text-blue-700">5 Ejes</p>
-                  <div className="space-y-2">
-                    <Label className="text-xs">Sencillo (Ida)</Label>
-                    <Input
-                      type="number"
-                      placeholder="0.00"
-                      value={formData.costo5EjesSencillo || ""}
-                      onChange={(e) => handleInputChange("costo5EjesSencillo", parseFloat(e.target.value) || 0)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs">Full (Redondo)</Label>
-                    <Input
-                      type="number"
-                      placeholder="0.00"
-                      value={formData.costo5EjesFull || ""}
-                      onChange={(e) => handleInputChange("costo5EjesFull", parseFloat(e.target.value) || 0)}
-                    />
-                  </div>
-                </div>
-                
-                <div className="space-y-3">
-                  <p className="text-sm font-medium text-amber-700">9 Ejes</p>
-                  <div className="space-y-2">
-                    <Label className="text-xs">Sencillo (Ida)</Label>
-                    <Input
-                      type="number"
-                      placeholder="0.00"
-                      value={formData.costo9EjesSencillo || ""}
-                      onChange={(e) => handleInputChange("costo9EjesSencillo", parseFloat(e.target.value) || 0)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs">Full (Redondo)</Label>
-                    <Input
-                      type="number"
-                      placeholder="0.00"
-                      value={formData.costo9EjesFull || ""}
-                      onChange={(e) => handleInputChange("costo9EjesFull", parseFloat(e.target.value) || 0)}
-                    />
-                  </div>
-                </div>
+            <div className="col-span-2 grid grid-cols-2 gap-4 p-3 bg-muted rounded-lg">
+              <div className="space-y-2">
+                <p className="text-xs font-bold text-blue-700 uppercase">
+                  Costos 5 Ejes
+                </p>
+                <Label className="text-[10px]">Sencillo</Label>
+                <Input
+                  type="number"
+                  value={formData.costo_5_ejes_sencillo}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      costo_5_ejes_sencillo: +e.target.value,
+                    })
+                  }
+                />
+                <Label className="text-[10px]">Full</Label>
+                <Input
+                  type="number"
+                  value={formData.costo_5_ejes_full}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      costo_5_ejes_full: +e.target.value,
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs font-bold text-amber-700 uppercase">
+                  Costos 9 Ejes
+                </p>
+                <Label className="text-[10px]">Sencillo</Label>
+                <Input
+                  type="number"
+                  value={formData.costo_9_ejes_sencillo}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      costo_9_ejes_sencillo: +e.target.value,
+                    })
+                  }
+                />
+                <Label className="text-[10px]">Full</Label>
+                <Input
+                  type="number"
+                  value={formData.costo_9_ejes_full}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      costo_9_ejes_full: +e.target.value,
+                    })
+                  }
+                />
               </div>
             </div>
           </div>
-
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
               Cancelar
             </Button>
-            <ActionButton onClick={handleSave}>
-              {selectedToll ? "Actualizar" : "Guardar"}
+            <ActionButton onClick={handleSave} disabled={isSubmitting}>
+              {isSubmitting ? "Guardando..." : "Guardar"}
             </ActionButton>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar esta caseta?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {selectedToll && (
-                <>
-                  Estás a punto de eliminar la caseta{" "}
-                  <strong>{selectedToll.nombre}</strong> del tramo{" "}
-                  <strong>{selectedToll.tramo}</strong>.
-                  <br /><br />
-                  Esta acción no se puede deshacer y puede afectar tarifas existentes.
-                </>
-              )}
-            </AlertDialogDescription>
+            <AlertDialogTitle>¿Confirmar eliminación?</AlertDialogTitle>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-destructive"
             >
               Eliminar
             </AlertDialogAction>
