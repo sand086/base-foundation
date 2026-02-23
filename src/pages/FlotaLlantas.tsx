@@ -120,7 +120,7 @@ export default function FlotaLlantas() {
     const idNum = parseInt(tireId);
     const unidadIdNum = unidad ? parseInt(unidad) : null;
     await assignTire(idNum, {
-      unidad_id: unidadIdNum,
+      unit_id: unidadIdNum,
       posicion: posicion,
       notas: notas,
     });

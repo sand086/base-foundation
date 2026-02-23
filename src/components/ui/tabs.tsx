@@ -12,7 +12,8 @@ const TabsList = React.forwardRef<
   <TabsPrimitive.List
     ref={ref}
     className={cn(
-      "inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground",
+      // BASE: Fondo un poco más notorio y un borde sutil para que resalte en fondos blancos
+      "inline-flex h-10 items-center justify-center rounded-md bg-muted/80 border border-border/40 p-1 text-muted-foreground",
       className,
     )}
     {...props}
@@ -27,7 +28,19 @@ const TabsTrigger = React.forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+      // BASE ORIGINAL
+      "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all",
+
+      // NUEVO: Hover (si pasas el mouse y no está activo, se ve que es clickeable)
+      "hover:bg-background/50 hover:text-foreground",
+
+      // NUEVO: Estado activo mejorado (sombra un poco más fuerte y texto en negrita)
+      "data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-md data-[state=active]:font-semibold",
+
+      // ACCESIBILIDAD
+      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+
+      // Las clases que envíes desde otros componentes (className) mandan sobre las de arriba
       className,
     )}
     {...props}

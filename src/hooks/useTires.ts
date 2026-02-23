@@ -37,7 +37,7 @@ export const useTires = () => {
   const assignTire = async (tireId: number, payload: AssignTirePayload) => {
     try {
       await tireService.assign(tireId, payload);
-      const accion = payload.unidad_id ? "asignada" : "enviada a almacén";
+      const accion = payload.unit_id ? "asignada" : "enviada a almacén";
       toast.success(`Llanta ${accion} correctamente`);
       fetchTires();
       return true;

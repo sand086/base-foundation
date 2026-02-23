@@ -1,108 +1,80 @@
+// src/context/AuthContext.tsx
 import React, {
   createContext,
   useContext,
   useState,
-  useCallback,
-  ReactNode,
   useEffect,
+  ReactNode,
 } from "react";
+// Importamos la interfaz User exacta que me mostraste de tus tipos
+import { User } from "@/types/api.types";
 import { authService } from "@/services/authService";
-import { User, LoginResponse } from "@/types/api.types";
-import { useToast } from "@/hooks/use-toast";
 
 interface AuthContextType {
-  isAuthenticated: boolean;
   user: User | null;
-  login: (email: string, password: string) => Promise<LoginResponse>;
-  verifyOtp: (tempToken: string, code: string) => Promise<void>; // Nueva función
+  isAuthenticated: boolean;
+  login: (userData: User, token: string) => void;
   logout: () => void;
+  isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const { toast } = useToast();
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Inicializar sesión desde localStorage
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    const savedUser = localStorage.getItem("user");
-    if (token && savedUser) {
-      try {
-        setIsAuthenticated(true);
-        setUser(JSON.parse(savedUser));
-      } catch (e) {
-        console.error("Error parsing user from storage", e);
-        localStorage.clear();
-      }
+    // Al cargar la app (F5), intentamos recuperar la sesión
+    const storedUser = authService.getCurrentUser();
+
+    // Validamos que exista tanto el usuario como el token válido
+    if (storedUser && authService.isAuthenticated()) {
+      setUser(storedUser);
     }
+
+    // Una vez que terminó de comprobar, quitamos el loading
+    setIsLoading(false);
   }, []);
 
-  const handleSessionSuccess = (data: LoginResponse) => {
-    if (data.access_token && data.user) {
-      localStorage.setItem("token", data.access_token);
-      localStorage.setItem("user", JSON.stringify(data.user));
-      setIsAuthenticated(true);
-      setUser(data.user);
-    }
+  const login = (userData: User, token: string) => {
+    // Guardamos en localStorage para que resista el F5
+    localStorage.setItem("access_token", token);
+    localStorage.setItem("user_data", JSON.stringify(userData));
+
+    // Guardamos en el estado de React
+    setUser(userData);
   };
 
-  const login = useCallback(async (email: string, password: string) => {
-    try {
-      const data = await authService.login(email, password);
-
-      // Si el backend pide 2FA, retornamos la data para que el UI redirija
-      if (data.require_2fa) {
-        return data;
-      }
-
-      // Si es login directo, guardamos sesión
-      handleSessionSuccess(data);
-      return data;
-    } catch (error: any) {
-      throw error;
-    }
-  }, []);
-
-  // Función para el paso 2 del login
-  const verifyOtp = useCallback(
-    async (tempToken: string, code: string) => {
-      try {
-        const data = await authService.verify2FA(tempToken, code);
-        handleSessionSuccess(data);
-        toast({
-          title: "Acceso concedido",
-          description: "Identidad verificada correctamente.",
-        });
-      } catch (error: any) {
-        throw error;
-      }
-    },
-    [toast],
-  );
-
-  const logout = useCallback(() => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    setIsAuthenticated(false);
+  const logout = () => {
+    // Limpiamos todo mediante el servicio
+    authService.logout();
     setUser(null);
-    toast({ title: "Sesión cerrada" });
-  }, [toast]);
+
+    // Redirigimos al login forzando la recarga para limpiar cualquier estado residual en memoria
+    window.location.href = "/login";
+  };
 
   return (
     <AuthContext.Provider
-      value={{ isAuthenticated, user, login, verifyOtp, logout }}
+      value={{
+        user,
+        isAuthenticated: !!user,
+        login,
+        logout,
+        isLoading,
+      }}
     >
       {children}
     </AuthContext.Provider>
   );
-}
+};
 
-export function useAuth() {
+// Hook personalizado para usar el contexto en cualquier parte de la app
+export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (context === undefined)
-    throw new Error("useAuth must be used within an AuthProvider");
+  if (context === undefined) {
+    throw new Error("useAuth debe ser usado dentro de un AuthProvider");
+  }
   return context;
-}
+};

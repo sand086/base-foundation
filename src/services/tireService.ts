@@ -127,7 +127,7 @@ export interface GlobalTire {
 }
 
 export interface AssignTirePayload {
-  unidad_id: number | null;
+  unit_id: number | null;
   posicion: string | null;
   notas?: string;
 }

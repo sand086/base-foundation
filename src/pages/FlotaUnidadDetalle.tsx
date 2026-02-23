@@ -9,7 +9,13 @@ import {
   X,
   Save,
   Loader2,
+  MoreHorizontal,
+  History,
+  ArrowRightLeft,
+  Settings,
+  Pencil,
 } from "lucide-react";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,11 +23,27 @@ import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
 import { useNavigate, useParams } from "react-router-dom";
 import { TruckChassisSVG } from "@/features/flota/TruckChassisSVG";
 import { toast } from "@/hooks/use-toast";
-import { unitService, UnidadDetalle } from "@/services/unitService";
+import { unitService, UnidadDetalle, UnitTire } from "@/services/unitService";
 import { DocumentUploadManager } from "@/features/flota/DocumentUploadManager";
+
+// MODALES / SHEETS DE LLANTAS (ajusta rutas si aplica)
+import { AssignTireModal } from "@/features/llantas/AssignTireModal";
+import { MaintenanceTireModal } from "@/features/llantas/MaintenanceTireModal";
+import { TireHistorySheet } from "@/features/llantas/TireHistorySheet";
+import { CreateTireModal } from "@/features/llantas/CreateTireModal";
+import { tireService } from "@/services/tireService";
 
 /**
  * Helper para badges de fecha
@@ -140,112 +162,223 @@ export default function FlotaUnidadDetalle() {
 
   const [formData, setFormData] = useState<FormState>(emptyForm);
 
+  // ✅ ESTADOS PARA MODALES DE LLANTAS
+  const [selectedTire, setSelectedTire] = useState<UnitTire | null>(null);
+  const [modals, setModals] = useState({
+    history: false,
+    edit: false,
+    assign: false,
+    maintenance: false,
+  });
+
+  const openModal = (tire: UnitTire, modalName: keyof typeof modals) => {
+    setSelectedTire(tire);
+    setModals((prev) => ({ ...prev, [modalName]: true }));
+  };
+
+  const closeModals = () => {
+    setModals({
+      history: false,
+      edit: false,
+      assign: false,
+      maintenance: false,
+    });
+    // setTimeout(() => setSelectedTire(null), 250); // opcional si quieres limpiar después de cerrar animación
+  };
+
   /**
    * Carga de datos
    */
+  const loadUnit = async () => {
+    if (!id) return;
+
+    setIsLoading(true);
+    try {
+      const apiData: any = await unitService.getById(id as string);
+
+      const constructedDocuments = [
+        {
+          name: "Póliza de Seguro",
+          key: "poliza_seguro",
+          url: apiData.poliza_seguro_url,
+          estatus: getEstatusFecha(apiData.seguro_vence),
+          vencimiento: apiData.seguro_vence || "",
+          obligatorio: true,
+        },
+        {
+          name: "Verificación de Humo",
+          key: "verificacion_humo",
+          url: apiData.verificacion_humo_url,
+          estatus: getEstatusFecha(apiData.verificacion_humo_vence),
+          vencimiento: apiData.verificacion_humo_vence || "",
+          obligatorio: true,
+        },
+        {
+          name: "Verificación Físico-Mecánica",
+          key: "verificacion_fisico_mecanica",
+          url: apiData.verificacion_fisico_mecanica_url,
+          estatus: getEstatusFecha(apiData.verificacion_fisico_mecanica_vence),
+          vencimiento: apiData.verificacion_fisico_mecanica_vence || "",
+          obligatorio: true,
+        },
+        {
+          name: "Tarjeta de Circulación",
+          key: "tarjeta_circulacion_folio",
+          url: apiData.tarjeta_circulacion_url,
+          estatus: "vigente" as const,
+          vencimiento: "",
+          obligatorio: true,
+        },
+        {
+          name: "Registro CAAT",
+          key: "caat",
+          url: apiData.caat_url,
+          estatus: getEstatusFecha(apiData.caat_vence),
+          vencimiento: apiData.caat_vence || "",
+          obligatorio: false,
+        },
+        {
+          name: "Permiso SCT",
+          key: "permiso_sct",
+          url: apiData.permiso_sct_url,
+          estatus: "vigente" as const,
+          vencimiento: "",
+          obligatorio: false,
+        },
+      ];
+
+      const enrichedUnit: UnidadDetalle = {
+        ...apiData,
+        documents: constructedDocuments,
+        tires: apiData.tires || [],
+      };
+
+      setUnit(enrichedUnit);
+
+      // ✅ inicializa TODO el formulario (incluye folios)
+      setFormData({
+        numero_economico: apiData.numero_economico || "",
+        placas: apiData.placas || "",
+        vin: apiData.vin || "",
+        marca: apiData.marca || "",
+        modelo: apiData.modelo || "",
+        year: apiData.year?.toString?.() || "",
+
+        seguro_vence: toInputDate(apiData.seguro_vence),
+        verificacion_humo_vence: toInputDate(apiData.verificacion_humo_vence),
+        verificacion_fisico_mecanica_vence: toInputDate(
+          apiData.verificacion_fisico_mecanica_vence,
+        ),
+        caat_vence: toInputDate(apiData.caat_vence),
+
+        permiso_sct_folio: apiData.permiso_sct_folio || "",
+        caat_folio: apiData.caat_folio || "",
+        tarjeta_circulacion_folio: apiData.tarjeta_circulacion_folio || "",
+      });
+    } catch (error) {
+      console.error("Error cargando unidad:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo cargar la información de la unidad",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const loadUnit = async () => {
-      if (!id) return;
-
-      setIsLoading(true);
-      try {
-        const apiData: any = await unitService.getBynumero_economico(id);
-
-        const constructedDocuments = [
-          {
-            name: "Póliza de Seguro",
-            key: "poliza_seguro",
-            url: apiData.poliza_seguro_url,
-            estatus: getEstatusFecha(apiData.seguro_vence),
-            vencimiento: apiData.seguro_vence || "",
-            obligatorio: true,
-          },
-          {
-            name: "Verificación de Humo",
-            key: "verificacion_humo",
-            url: apiData.verificacion_humo_url,
-            estatus: getEstatusFecha(apiData.verificacion_humo_vence),
-            vencimiento: apiData.verificacion_humo_vence || "",
-            obligatorio: true,
-          },
-          {
-            name: "Verificación Físico-Mecánica",
-            key: "verificacion_fisico_mecanica",
-            url: apiData.verificacion_fisico_mecanica_url,
-            estatus: getEstatusFecha(
-              apiData.verificacion_fisico_mecanica_vence,
-            ),
-            vencimiento: apiData.verificacion_fisico_mecanica_vence || "",
-            obligatorio: true,
-          },
-          {
-            name: "Tarjeta de Circulación",
-            key: "tarjeta_circulacion_folio",
-            url: apiData.tarjeta_circulacion_url,
-            estatus: "vigente" as const,
-            vencimiento: "",
-            obligatorio: true,
-          },
-          {
-            name: "Registro CAAT",
-            key: "caat",
-            url: apiData.caat_url,
-            estatus: getEstatusFecha(apiData.caat_vence),
-            vencimiento: apiData.caat_vence || "",
-            obligatorio: false,
-          },
-          {
-            name: "Permiso SCT",
-            key: "permiso_sct",
-            url: apiData.permiso_sct_url,
-            estatus: "vigente" as const,
-            vencimiento: "",
-            obligatorio: false,
-          },
-        ];
-
-        const enrichedUnit: UnidadDetalle = {
-          ...apiData,
-          documents: constructedDocuments,
-          tires: apiData.tires || [],
-        };
-
-        setUnit(enrichedUnit);
-
-        // ✅ CORRECCIÓN: inicializar TODO el formulario (incluye folios)
-        setFormData({
-          numero_economico: apiData.numero_economico || "",
-          placas: apiData.placas || "",
-          vin: apiData.vin || "",
-          marca: apiData.marca || "",
-          modelo: apiData.modelo || "",
-          year: apiData.year?.toString?.() || "",
-
-          seguro_vence: toInputDate(apiData.seguro_vence),
-          verificacion_humo_vence: toInputDate(apiData.verificacion_humo_vence),
-          verificacion_fisico_mecanica_vence: toInputDate(
-            apiData.verificacion_fisico_mecanica_vence,
-          ),
-          caat_vence: toInputDate(apiData.caat_vence),
-
-          permiso_sct_folio: apiData.permiso_sct_folio || "",
-          caat_folio: apiData.caat_folio || "",
-          tarjeta_circulacion_folio: apiData.tarjeta_circulacion_folio || "",
-        });
-      } catch (error) {
-        console.error("Error cargando unidad:", error);
-        toast({
-          title: "Error",
-          description: "No se pudo cargar la información de la unidad",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     loadUnit();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  /**
+   * Handlers de acciones de llantas (hooks para tus servicios reales)
+   */
+  const handleEditTireSubmit = async (data: any) => {
+    if (!selectedTire) return false;
+    try {
+      // 1. Llamada a la API real
+      await tireService.update(selectedTire.id, data);
+      toast({ title: "Éxito", description: "Llanta editada correctamente." });
+
+      // 2. Recargar datos de la unidad para reflejar cambios
+      await loadUnit();
+      return true;
+    } catch (error) {
+      console.error("Error editando llanta:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo editar la llanta. Verifica la consola.",
+        variant: "destructive",
+      });
+      return false;
+    }
+  };
+
+  const handleAssignTireSubmit = async (
+    tireId: string,
+    unidadId: string | null,
+    posicion: string | null,
+    notas: string,
+  ) => {
+    try {
+      // 1. Llamada a la API real
+      await tireService.assign(Number(tireId), {
+        unit_id: unidadId ? Number(unidadId) : null,
+        posicion: posicion,
+        notas: notas,
+      });
+
+      toast({
+        title: "Éxito",
+        description: "Movimiento registrado correctamente.",
+      });
+
+      // 2. Recargar datos y cerrar modales
+      await loadUnit();
+      closeModals();
+    } catch (error) {
+      console.error("Error asignando/rotando llanta:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo realizar el movimiento.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleMaintenanceTireSubmit = async (
+    tireId: string,
+    tipo: string,
+    costo: number,
+    descripcion: string,
+  ) => {
+    try {
+      // 1. Llamada a la API real
+      await tireService.maintenance(Number(tireId), {
+        tipo: tipo,
+        costo: costo,
+        descripcion: descripcion,
+      });
+
+      toast({
+        title: "Éxito",
+        description: `Mantenimiento (${tipo}) registrado.`,
+      });
+
+      // 2. Recargar datos y cerrar modales
+      await loadUnit();
+      closeModals();
+    } catch (error) {
+      console.error("Error registrando mantenimiento:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo registrar el mantenimiento.",
+        variant: "destructive",
+      });
+    }
+  };
 
   /**
    * Helper: sincroniza en UI los estatus/vencimientos de unit.documents con el form
@@ -293,7 +426,6 @@ export default function FlotaUnidadDetalle() {
     }
 
     try {
-      // ✅ Payload limpio al backend
       const payload: any = {
         numero_economico: formData.numero_economico,
         placas: formData.placas,
@@ -313,7 +445,7 @@ export default function FlotaUnidadDetalle() {
             : null,
         caat_vence: formData.caat_vence ? formData.caat_vence : null,
 
-        // ✅ folios (si quieres null cuando venga vacío)
+        // folios (vacío -> null)
         permiso_sct_folio: formData.permiso_sct_folio
           ? formData.permiso_sct_folio
           : null,
@@ -330,13 +462,7 @@ export default function FlotaUnidadDetalle() {
         description: "Datos actualizados correctamente.",
       });
 
-      // ✅ refresca vista local (y badges)
-      const updatedUnit: any = {
-        ...unit,
-        ...payload,
-        year: yearInt,
-      };
-
+      const updatedUnit: any = { ...unit, ...payload, year: yearInt };
       setUnit(syncUnitDocumentsWithFormDates(updatedUnit, formData));
       setIsEditing(false);
     } catch (error) {
@@ -368,7 +494,6 @@ export default function FlotaUnidadDetalle() {
       ),
       caat_vence: toInputDate(u.caat_vence),
 
-      // ✅ CORRECCIÓN: también revierte folios
       permiso_sct_folio: u.permiso_sct_folio || "",
       caat_folio: u.caat_folio || "",
       tarjeta_circulacion_folio: u.tarjeta_circulacion_folio || "",
@@ -441,7 +566,7 @@ export default function FlotaUnidadDetalle() {
             value="llantas"
             className="data-[state=active]:bg-white/20 rounded-lg px-6"
           >
-            <AlertTriangle className="h-4 w-4 mr-2" /> Estado de Llantas (3D)
+            <AlertTriangle className="h-4 w-4 mr-2" /> Esquema de Llantas
           </TabsTrigger>
         </TabsList>
 
@@ -780,7 +905,6 @@ export default function FlotaUnidadDetalle() {
                     }
                   />
 
-                  {/* ✅ NUEVO: Folio Tarjeta */}
                   <div className="mt-2 flex items-center gap-2 px-1">
                     <Label className="text-xs w-auto whitespace-nowrap text-muted-foreground">
                       Folio Tarjeta:
@@ -846,39 +970,166 @@ export default function FlotaUnidadDetalle() {
             </Card>
           </div>
 
-          {/* Tabla de Llantas */}
+          {/* Tabla de Llantas (actualizada con Acciones) */}
           <Card className="backdrop-blur-xl bg-white/10 dark:bg-black/40 border-white/20 shadow-2xl">
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between gap-3">
               <CardTitle>Detalle de Llantas</CardTitle>
+
+              {/* opcional: botón crear llanta (si tu modal CreateTireModal soporta modo "crear") */}
+              {/* <Button size="sm" variant="outline" onClick={() => setModals(p => ({...p, edit: true}))} className="gap-2">
+                <Pencil className="h-4 w-4" /> Nueva Llanta
+              </Button> */}
             </CardHeader>
+
             <CardContent>
               <div className="overflow-x-auto rounded-xl">
                 <table className="w-full text-sm">
                   <thead className="bg-white/10">
                     <tr className="text-left">
-                      <th className="p-3">Posición</th>
-                      <th className="p-3">Marca</th>
-                      <th className="p-3">Profundidad</th>
-                      <th className="p-3">Estado</th>
+                      <th className="p-3 font-semibold text-muted-foreground">
+                        Posición
+                      </th>
+                      <th className="p-3 font-semibold text-muted-foreground">
+                        Marca
+                      </th>
+                      <th className="p-3 font-semibold text-muted-foreground">
+                        Medida
+                      </th>
+                      <th className="p-3 font-semibold text-muted-foreground">
+                        Profundidad
+                      </th>
+                      <th className="p-3 font-semibold text-muted-foreground">
+                        Estado
+                      </th>
+                      <th className="p-3 font-semibold text-muted-foreground text-center">
+                        Acciones
+                      </th>
                     </tr>
                   </thead>
+
                   <tbody>
-                    {unit.tires?.length > 0 ? (
-                      unit.tires.map((tire: any, i: number) => (
-                        <tr key={i} className="border-b border-white/5">
-                          <td className="p-3">{tire.position}</td>
-                          <td className="p-3">{tire.marca || "-"}</td>
-                          <td className="p-3">{tire.profundidad} mm</td>
-                          <td className="p-3 capitalize">{tire.estado}</td>
+                    {unit.tires && unit.tires.length > 0 ? (
+                      unit.tires.map((tire: UnitTire, i: number) => (
+                        <tr
+                          key={tire.id ?? i}
+                          className="border-b border-white/5 hover:bg-white/5 transition-colors"
+                        >
+                          <td className="p-3 font-medium">
+                            {tire.posicion || "Sin asignar"}
+                          </td>
+
+                          <td className="p-3">
+                            {tire.marca || "Desconocida"}
+                            {tire.modelo && (
+                              <span className="block text-[10px] text-muted-foreground">
+                                {tire.modelo}
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="p-3 text-muted-foreground">
+                            {tire.medida || "---"}
+                          </td>
+
+                          <td className="p-3">
+                            <div className="flex items-center gap-2">
+                              <div className="w-full max-w-[60px] bg-muted rounded-full h-1.5 overflow-hidden">
+                                <div
+                                  className={`h-full ${
+                                    (tire.profundidad_actual ?? 0) < 5
+                                      ? "bg-red-500"
+                                      : "bg-green-500"
+                                  }`}
+                                  style={{
+                                    width: `${Math.min(
+                                      (((tire.profundidad_actual ?? 0) /
+                                        (tire.profundidad_original || 20)) *
+                                        100) as number,
+                                      100,
+                                    )}%`,
+                                  }}
+                                />
+                              </div>
+                              <span className="font-mono text-xs">
+                                {tire.profundidad_actual?.toFixed?.(1) ?? "0.0"}{" "}
+                                mm
+                              </span>
+                            </div>
+                          </td>
+
+                          <td className="p-3">
+                            <Badge
+                              variant="outline"
+                              className={
+                                tire.estado_fisico === "buena"
+                                  ? "bg-green-500/10 text-green-500 border-green-500/20"
+                                  : tire.estado_fisico === "regular"
+                                    ? "bg-yellow-500/10 text-yellow-500 border-yellow-500/20"
+                                    : "bg-red-500/10 text-red-500 border-red-500/20"
+                              }
+                            >
+                              <span className="capitalize">
+                                {tire.estado_fisico ||
+                                  tire.estado ||
+                                  "Desconocido"}
+                              </span>
+                            </Badge>
+                          </td>
+
+                          <td className="p-3 text-center">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" className="h-8 w-8 p-0">
+                                  <span className="sr-only">Abrir menú</span>
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+
+                              <DropdownMenuContent
+                                align="end"
+                                className="w-[180px]"
+                              >
+                                <DropdownMenuItem
+                                  onClick={() => openModal(tire, "history")}
+                                >
+                                  <History className="mr-2 h-4 w-4 text-blue-500" />{" "}
+                                  Historial
+                                </DropdownMenuItem>
+
+                                <DropdownMenuItem
+                                  onClick={() => openModal(tire, "edit")}
+                                >
+                                  <Pencil className="mr-2 h-4 w-4 text-amber-500" />{" "}
+                                  Editar Datos
+                                </DropdownMenuItem>
+
+                                <DropdownMenuSeparator />
+
+                                <DropdownMenuItem
+                                  onClick={() => openModal(tire, "assign")}
+                                >
+                                  <ArrowRightLeft className="mr-2 h-4 w-4 text-cyan-500" />{" "}
+                                  Rotar / Desmontar
+                                </DropdownMenuItem>
+
+                                <DropdownMenuItem
+                                  onClick={() => openModal(tire, "maintenance")}
+                                >
+                                  <Settings className="mr-2 h-4 w-4 text-rose-500" />{" "}
+                                  Mantenimiento / Baja
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </td>
                         </tr>
                       ))
                     ) : (
                       <tr>
                         <td
-                          colSpan={4}
-                          className="p-4 text-center text-muted-foreground"
+                          colSpan={6}
+                          className="p-8 text-center text-muted-foreground bg-black/20"
                         >
-                          Sin información de llantas
+                          No hay llantas registradas en esta unidad.
                         </td>
                       </tr>
                     )}
@@ -893,11 +1144,12 @@ export default function FlotaUnidadDetalle() {
           <Card className="backdrop-blur-xl bg-white/10 dark:bg-black/40 border-white/20 shadow-2xl">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5" /> Visualización 3D
+                <AlertTriangle className="h-5 w-5" /> Esquema de Llantas (mapa
+                de ejes)
               </CardTitle>
             </CardHeader>
             <CardContent className="py-8">
-              <TruckChassisSVG tires={unit.tires} unitType="sencillo" />
+              <TruckChassisSVG tires={unit.tires as any} unitType="sencillo" />
             </CardContent>
           </Card>
         </TabsContent>
@@ -922,6 +1174,34 @@ export default function FlotaUnidadDetalle() {
           </div>
         </div>
       )}
+
+      {/* --- MODALES / SHEETS DE LLANTAS --- */}
+      <TireHistorySheet
+        tire={selectedTire as any}
+        open={modals.history}
+        onOpenChange={(val) => setModals((p) => ({ ...p, history: val }))}
+      />
+
+      <CreateTireModal
+        tireToEdit={selectedTire as any}
+        open={modals.edit}
+        onOpenChange={(val) => setModals((p) => ({ ...p, edit: val }))}
+        onSubmit={handleEditTireSubmit}
+      />
+
+      <AssignTireModal
+        tire={selectedTire as any}
+        open={modals.assign}
+        onOpenChange={(val) => setModals((p) => ({ ...p, assign: val }))}
+        onAssign={handleAssignTireSubmit}
+      />
+
+      <MaintenanceTireModal
+        tire={selectedTire as any}
+        open={modals.maintenance}
+        onOpenChange={(val) => setModals((p) => ({ ...p, maintenance: val }))}
+        onSubmit={handleMaintenanceTireSubmit as any}
+      />
     </div>
   );
 }
