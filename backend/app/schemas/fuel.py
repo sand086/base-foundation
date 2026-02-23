@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, computed_field
 
 
 # --- SCHEMAS ANIDADOS (Para mostrar info en la tabla sin queries extra) ---
@@ -53,12 +53,24 @@ class FuelLogResponse(FuelLogBase):
     excede_tanque: bool
     capacidad_tanque_snapshot: Optional[float]
 
-    # Audit fields
-    record_status: str
-    created_at: datetime
+    #  Ocultamos los originales del JSON final pero los usamos para computar
+    unit: Optional[UnitFuelInfo] = Field(None, exclude=True)
+    operator: Optional[OperatorFuelInfo] = Field(None, exclude=True)
 
-    # Info de relaciones (OP para evitar buscar IDs a mano en el Front)
-    unit: Optional[UnitFuelInfo] = None
-    operator: Optional[OperatorFuelInfo] = None
+    # MAPEOS PARA EL FRONTEND (Mismo nombre que en AddTicketModal)
+    @computed_field
+    @property
+    def precioPorLitro(self) -> float:
+        return self.precio_por_litro
+
+    @computed_field
+    @property
+    def unidadNumero(self) -> str:
+        return self.unit.numero_economico if self.unit else "N/A"
+
+    @computed_field
+    @property
+    def operadorNombre(self) -> str:
+        return self.operator.name if self.operator else "N/A"
 
     model_config = ConfigDict(from_attributes=True)

@@ -851,6 +851,19 @@ class Supplier(AuditMixin, Base):
     invoices = relationship("PayableInvoice", back_populates="supplier")
 
 
+# =========================================================
+# NUEVO: Categorías de Gasto Indirecto
+# =========================================================
+class IndirectExpenseCategory(AuditMixin, Base):
+    __tablename__ = "indirect_expense_categories"
+    id = Column(Integer, primary_key=True)
+    nombre = Column(String(100), nullable=False)
+    tipo = Column(String(20))  # 'fijo' | 'variable'
+
+
+# =========================================================
+# ACTUALIZACIÓN: PayableInvoice (Con Atribución de Costos)
+# =========================================================
 class PayableInvoice(AuditMixin, Base):
     __tablename__ = "payable_invoices"
 
@@ -859,33 +872,61 @@ class PayableInvoice(AuditMixin, Base):
         Integer, ForeignKey("suppliers.id", ondelete="RESTRICT"), nullable=False
     )
 
+    # Atribución (Cruce Operativo-Financiero)
+    viaje_id = Column(
+        Integer, ForeignKey("trips.id", ondelete="SET NULL"), nullable=True
+    )
+    unit_id = Column(
+        Integer, ForeignKey("units.id", ondelete="SET NULL"), nullable=True
+    )
+    categoria_indirecto_id = Column(
+        Integer, ForeignKey("indirect_expense_categories.id"), nullable=True
+    )
+
     uuid = Column(String(36), unique=True, nullable=False)
     folio_interno = Column(String(50))
 
+    # Desglose Financiero
+    subtotal = Column(Float, default=0.0)
+    iva = Column(Float, default=0.0)
+    retenciones = Column(Float, default=0.0)
     monto_total = Column(Float, nullable=False)
     saldo_pendiente = Column(Float, nullable=False)
-    moneda = Column(String(3), default="MXN")
 
+    moneda = Column(Enum(Currency, name="currency"), default=Currency.MXN)
     fecha_emision = Column(Date, nullable=False)
     fecha_vencimiento = Column(Date, nullable=False)
-
     concepto = Column(String(200))
-    clasificacion = Column(String(50))
+    clasificacion = Column(String(50))  # 'costo_directo', 'mantenimiento', 'indirecto'
 
-    # BD: invoicestatus
     estatus = Column(
         Enum(InvoiceStatus, name="invoicestatus"), default=InvoiceStatus.PENDIENTE
     )
 
+    # Archivos
     pdf_url = Column(String(500))
     xml_url = Column(String(500))
 
-    orden_compra_id = Column(String(50), nullable=True)
-
+    # Relaciones
     supplier = relationship("Supplier", back_populates="invoices")
     payments = relationship(
         "InvoicePayment", back_populates="invoice", cascade="all, delete-orphan"
     )
+    document_history = relationship("InvoiceDocumentHistory", back_populates="invoice")
+
+
+# =========================================================
+# NUEVO: Historial de Documentos de Factura (PDF/XML)
+# =========================================================
+class InvoiceDocumentHistory(AuditMixin, Base):
+    __tablename__ = "invoice_document_history"
+    id = Column(Integer, primary_key=True)
+    invoice_id = Column(Integer, ForeignKey("payable_invoices.id", ondelete="CASCADE"))
+    document_type = Column(String(20))  # 'pdf', 'xml', 'complemento'
+    file_url = Column(String(500))
+    version = Column(Integer, default=1)
+    is_active = Column(Boolean, default=True)
+    invoice = relationship("PayableInvoice", back_populates="document_history")
 
 
 class InvoicePayment(AuditMixin, Base):
@@ -1012,44 +1053,6 @@ class RateSegment(Base):
     toll = relationship("TollBooth", back_populates="route_segments")
 
 
-class FuelLog(AuditMixin, Base):
-    __tablename__ = "fuel_logs"
-
-    id = Column(Integer, primary_key=True, index=True)
-
-    # Relaciones (Foreign Keys)
-    unit_id = Column(
-        Integer, ForeignKey("units.id", ondelete="RESTRICT"), nullable=False
-    )
-    operator_id = Column(
-        Integer, ForeignKey("operators.id", ondelete="RESTRICT"), nullable=False
-    )
-
-    # Datos de carga
-    fecha_hora = Column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-    estacion = Column(String(200), nullable=False)
-    tipo_combustible = Column(String(20), nullable=False)  # 'diesel' | 'urea'
-
-    # Métricas
-    litros = Column(Float, default=0.0, nullable=False)
-    precio_por_litro = Column(Float, default=0.0, nullable=False)
-    total = Column(Float, default=0.0, nullable=False)
-    odometro = Column(Integer, nullable=False)
-
-    # Gestión de Alertas y Archivos
-    evidencia_url = Column(String(500), nullable=True)
-    excede_tanque = Column(Boolean, default=False)
-    capacidad_tanque_snapshot = Column(Float, nullable=True)
-
-    # Relaciones ORM
-    unit = relationship(
-        "Unit", back_populates="fuel_logs"
-    )  # Agregaremos back_populates en Unit
-    operator = relationship("Operator")
-
-
 class OperatorDocumentHistory(AuditMixin, Base):
     __tablename__ = "operator_document_history"
 
@@ -1068,3 +1071,68 @@ class OperatorDocumentHistory(AuditMixin, Base):
     is_active = Column(Boolean, default=True)
 
     operator = relationship("Operator", back_populates="document_history")
+
+
+# =========================================================
+# NUEVO MODELO: Historial de Documentos de Combustible
+# =========================================================
+
+
+class FuelDocumentHistory(AuditMixin, Base):
+    __tablename__ = "fuel_document_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    fuel_log_id = Column(
+        Integer, ForeignKey("fuel_logs.id", ondelete="CASCADE"), nullable=False
+    )
+
+    # tipo: 'ticket', 'recibo_pago', etc.
+    document_type = Column(String(50), nullable=False, server_default="ticket")
+    filename = Column(String(255), nullable=False)
+    file_url = Column(String(500), nullable=False)
+    file_size = Column(Integer, nullable=True)
+    mime_type = Column(String(100), nullable=True)
+
+    version = Column(Integer, default=1)
+    is_active = Column(Boolean, default=True)
+
+    # Relación con el registro de carga
+    fuel_log = relationship("FuelLog", back_populates="document_history")
+
+
+class FuelLog(AuditMixin, Base):
+    __tablename__ = "fuel_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    unit_id = Column(
+        Integer, ForeignKey("units.id", ondelete="RESTRICT"), nullable=False
+    )
+    operator_id = Column(
+        Integer, ForeignKey("operators.id", ondelete="RESTRICT"), nullable=False
+    )
+
+    fecha_hora = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    estacion = Column(String(200), nullable=False)
+    tipo_combustible = Column(String(20), nullable=False)  # 'diesel' | 'urea'
+
+    litros = Column(Float, default=0.0, nullable=False)
+    precio_por_litro = Column(Float, default=0.0, nullable=False)
+    total = Column(Float, default=0.0, nullable=False)
+    odometro = Column(Integer, nullable=False)
+
+    # La URL de la evidencia activa (puntero rápido)
+    evidencia_url = Column(String(500), nullable=True)
+    excede_tanque = Column(Boolean, default=False)
+    capacidad_tanque_snapshot = Column(Float, nullable=True)
+
+    # Relaciones ORM
+    unit = relationship("Unit", back_populates="fuel_logs")
+    operator = relationship("Operator")
+
+    # Historial de documentos
+    document_history = relationship(
+        "FuelDocumentHistory", back_populates="fuel_log", cascade="all, delete-orphan"
+    )
