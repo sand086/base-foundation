@@ -3,9 +3,14 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+
+// Asegúrate de que la ruta a AuthContext sea correcta
 import { AuthProvider } from "./context/AuthContext";
-import { ProtectedRoute } from "./components/ProtectedRoute";
+
+// Si guardaste ProtectedRoute en components/auth/, ajusta la ruta aquí:
+import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { AppLayout } from "./components/layout/AppLayout";
+
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import CentroMonitoreo from "./pages/CentroMonitoreo";
@@ -26,7 +31,6 @@ import GestionTarifas from "./pages/GestionTarifas";
 import Compras from "./pages/Compras";
 import Despacho from "./pages/Despacho";
 import DespachoNuevo from "./pages/DespachoNuevo";
-import UsuariosSeguridad from "./pages/UsuariosSeguridad";
 import UsuariosPage from "./pages/UsuariosPage";
 import RolesPermisosPage from "./pages/RolesPermisosPage";
 import Tesoreria from "./pages/Tesoreria";
@@ -45,15 +49,16 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
+      {/* BrowserRouter debe ser el padre de AuthProvider para poder usar hooks de navegación */}
       <BrowserRouter>
         <AuthProvider>
           <Routes>
-            {/* Public Routes */}
+            {/* Rutas Públicas */}
             <Route path="/login" element={<Login />} />
             <Route path="/verify-2fa" element={<TwoFactorAuth />} />
             <Route path="/2fa-setup" element={<TwoFactorAuth />} />
 
-            {/* Protected Routes */}
+            {/* Rutas Protegidas */}
             <Route element={<ProtectedRoute />}>
               <Route path="/" element={<AppLayout />}>
                 <Route index element={<Dashboard />} />
@@ -67,6 +72,7 @@ const App = () => (
                 <Route path="flota/llantas" element={<FlotaLlantas />} />
                 <Route path="flota/mantenimiento" element={<Mantenimiento />} />
                 <Route path="flota/mecanicos" element={<Mecanicos />} />
+
                 <Route path="combustible" element={<CombustibleCargas />} />
                 <Route
                   path="combustible/cargas"
@@ -76,9 +82,11 @@ const App = () => (
                   path="combustible/conciliacion"
                   element={<CombustibleConciliacion />}
                 />
+
                 <Route path="clients" element={<ClientesCatalogo />} />
                 <Route path="clients/nuevo" element={<ClientesNuevo />} />
                 <Route path="clients/:clientId" element={<ClientesNuevo />} />
+
                 <Route path="cierre" element={<CierreViaje />} />
                 <Route
                   path="cuentas-por-cobrar"
@@ -87,10 +95,13 @@ const App = () => (
                 <Route path="proveedores" element={<ProveedoresCxP />} />
                 <Route path="compras" element={<Compras />} />
                 <Route path="tarifas" element={<GestionTarifas />} />
+
                 <Route path="despacho" element={<Despacho />} />
                 <Route path="despacho/nuevo" element={<DespachoNuevo />} />
+
                 <Route path="usuarios" element={<UsuariosPage />} />
                 <Route path="roles-permisos" element={<RolesPermisosPage />} />
+
                 <Route path="tesoreria" element={<Tesoreria />} />
                 <Route
                   path="finanzas-direccion"
@@ -106,6 +117,7 @@ const App = () => (
               </Route>
             </Route>
 
+            {/* Catch-all */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>

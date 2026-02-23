@@ -11,6 +11,7 @@ from app.db.database import get_db
 from app.crud import users as crud
 from app.models import models
 from app.schemas import users as schemas
+from app.api.endpoints.auth import get_current_active_user
 
 router = APIRouter()
 
@@ -23,6 +24,14 @@ router = APIRouter()
 @router.get("/usuarios", response_model=List[schemas.UserResponse])
 def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return crud.get_users(db, skip=skip, limit=limit)
+
+
+@router.get("/usuarios/me", response_model=schemas.UserResponse)
+def read_user_me(current_user: models.User = Depends(get_current_active_user)):
+    """
+    Devuelve toda la información detallada del usuario que está logueado actualmente.
+    """
+    return current_user
 
 
 @router.get("/usuarios/{user_id}", response_model=schemas.UserResponse)

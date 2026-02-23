@@ -411,9 +411,27 @@ class Tire(AuditMixin, Base):
     )
     posicion = Column(String(50), nullable=True)
 
-    estado = Column(Enum(TireStatus, name="tire_status_enum"), default=TireStatus.NUEVO)
+    estado = Column(
+        Enum(
+            TireStatus,
+            name="tire_status_enum",
+            native_enum=False,  # <--- CLAVE 1: No dependemos del enum de postgres
+            validate_strings=False,  # <--- CLAVE 2: Acepta mayúsculas o minúsculas sin explotar
+        ),
+        default=TireStatus.NUEVO,
+    )
+
     estado_fisico = Column(
-        Enum(TireCondition, name="tire_condition_enum"), default=TireCondition.BUENA
+        Enum(
+            TireCondition,
+            name="tire_condition_enum",
+            native_enum=False,
+            validate_strings=False,
+            values_callable=lambda obj: [
+                e.value for e in obj
+            ],  # <--- ¡ESTA ES LA LÍNEA QUE FALTÓ!
+        ),
+        default=TireCondition.BUENA,
     )
 
     profundidad_actual = Column(Float, default=0.0)
@@ -440,10 +458,21 @@ class TireHistory(AuditMixin, Base):
     )
 
     fecha = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    tipo = Column(Enum(TireEventType, name="tire_event_type_enum"), nullable=False)
+    tipo = Column(
+        Enum(
+            TireEventType,
+            name="tire_event_type_enum",
+            native_enum=False,
+            validate_strings=False,
+            values_callable=lambda obj: [
+                e.value for e in obj
+            ],  # <--- PONLA AQUÍ TAMBIÉN
+        ),
+        nullable=False,
+    )
     descripcion = Column(String(255))
 
-    unidad_id = Column(
+    unit_id = Column(
         Integer, ForeignKey("units.id", ondelete="SET NULL"), nullable=True
     )
     unidad_economico = Column(String(50), nullable=True)
@@ -454,7 +483,7 @@ class TireHistory(AuditMixin, Base):
     responsable = Column(String(100))
 
     tire = relationship("Tire", back_populates="history")
-    unidad = relationship("Unit", foreign_keys=[unidad_id])
+    unidad = relationship("Unit", foreign_keys=[unit_id])
 
 
 class Operator(AuditMixin, Base):

@@ -14,14 +14,26 @@ export interface UnitDocument {
 }
 
 export interface UnitTire {
-  id?: number;
-  position: string;
+  id: number;
+  codigo_interno: string;
   marca?: string;
-  profundidad: number;
-  estado: string; // 'nuevo', 'usado', etc.
-  renovado: number;
-  tire_id?: number; // Corregido a number si el ID de llanta es int
-  marcajeInterno?: string;
+  modelo?: string;
+  medida?: string;
+  dot?: string;
+  unit_id?: number | null;
+  posicion?: string;
+  estado: string;
+  estado_fisico: string;
+  profundidad_actual: number;
+  profundidad_original: number;
+  km_recorridos: number;
+  fecha_compra?: string;
+  precio_compra?: number;
+  costo_acumulado?: number;
+  proveedor?: string;
+  unidad_actual_id?: number | null;
+  unidad_actual_economico?: string | null;
+  historial?: any[];
 }
 
 export interface UnidadDetalle extends Unidad {
@@ -39,7 +51,7 @@ export const unitService = {
   // 2. Obtener una por ID (Standard REST)
   // NOTA: Si tu backend soporta buscar por "ECO-001" en la URL, cambia esto a string.
   // Pero lo estándar es buscar por ID numérico.
-  getById: async (id: number) => {
+  getById: async (id: string | number) => {
     const response = await axiosClient.get<UnidadDetalle>(`/units/${id}`);
     return response.data;
   },

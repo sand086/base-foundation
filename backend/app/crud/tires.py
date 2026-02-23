@@ -148,11 +148,11 @@ def assign_tire(db: Session, tire_id: int, payload: schemas.AssignTirePayload):
     if not tire:
         return None
 
-    is_mounting = payload.unidad_id is not None
+    is_mounting = payload.unit_id is not None
     unit_economico_str = None
 
     if is_mounting:
-        unit = _visible_unit(db, payload.unidad_id)
+        unit = _visible_unit(db, payload.unit_id)
         if not unit:
             raise ValueError("Unidad no encontrada")
 
@@ -163,7 +163,7 @@ def assign_tire(db: Session, tire_id: int, payload: schemas.AssignTirePayload):
             occupant = (
                 db.query(models.Tire)
                 .filter(
-                    models.Tire.unit_id == payload.unidad_id,
+                    models.Tire.unit_id == payload.unit_id,
                     models.Tire.posicion == payload.posicion,
                     models.Tire.id != tire_id,
                     models.Tire.record_status != RecordStatus.ELIMINADO,
@@ -181,7 +181,7 @@ def assign_tire(db: Session, tire_id: int, payload: schemas.AssignTirePayload):
                     tipo=TireEventType.DESMONTAJE,
                     descripcion=f"Desmontaje por reemplazo (Entra {tire.codigo_interno})",
                     unidad_economico=unit_economico_str,
-                    unidad_id=payload.unidad_id,
+                    unit_id=payload.unit_id,
                     km=occupant.km_recorridos,
                     responsable="Sistema",
                 )
@@ -207,7 +207,7 @@ def assign_tire(db: Session, tire_id: int, payload: schemas.AssignTirePayload):
     if payload.notas:
         desc += f". Notas: {payload.notas}"
 
-    tire.unit_id = payload.unidad_id
+    tire.unit_id = payload.unit_id
     tire.posicion = payload.posicion
 
     history = models.TireHistory(
@@ -216,7 +216,7 @@ def assign_tire(db: Session, tire_id: int, payload: schemas.AssignTirePayload):
         tipo=tipo_evento,  # ✅ enum
         descripcion=desc,
         unidad_economico=unit_economico_str,
-        unidad_id=payload.unidad_id,
+        unit_id=payload.unit_id,
         posicion=payload.posicion,
         km=tire.km_recorridos,
         responsable="Operaciones",
@@ -353,7 +353,7 @@ def update_tire(db: Session, tire_id: int, tire_in: schemas.TireUpdate):
         tipo=TireEventType.INSPECCION,  # ✅ usa un enum válido (no existe "edicion")
         descripcion=f"Datos editados: {campos_editados}",
         unidad_economico=unit_eco,
-        unidad_id=tire.unit_id,
+        unit_id=tire.unit_id,
         posicion=tire.posicion,
         km=tire.km_recorridos,
         costo=0,

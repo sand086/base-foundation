@@ -6,15 +6,16 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-// Interfaz actualizada para coincidir con la API (UnidadDetalle)
+// Interfaz actualizada para coincidir con el JSON de tu API
 export interface Tire {
-  id?: number | string; // Puede ser number desde DB o string temporal
-  position: string; // La API suele devolver string "1", "2"
-  marca?: string; // Opcional
-  profundidad: number;
-  estado: string;
-  renovado?: number;
-  marcajeInterno?: string; // Opcional
+  id?: number | string;
+  posicion?: string; // Ej: "Eje 1 Izq"
+  marca?: string;
+  modelo?: string;
+  profundidad_actual?: number; // Ej: 15.5
+  estado?: string;
+  estado_fisico?: string;
+  codigo_interno?: string;
 }
 
 interface TruckChassisSVGProps {
@@ -22,8 +23,44 @@ interface TruckChassisSVGProps {
   unitType?: "sencillo" | "full";
 }
 
+// Mapeo: Convierte el texto de la BD ("Eje 1 Izq") al ID numérico del SVG (1)
+const POSITION_MAP: Record<string, number> = {
+  "e1-izq": 1,
+  "Eje 1 Izq": 1,
+  "Eje 1 Izquierda": 1,
+
+  "e1-der": 2,
+  "Eje 1 Der": 2,
+  "Eje 1 Derecha": 2,
+
+  "e2-izq": 3,
+  "Eje 2 Izq": 3,
+  "Eje 2 Izquierda": 3,
+
+  "e2-der": 4,
+  "Eje 2 Der": 4,
+  "Eje 2 Derecha": 4,
+
+  "e3-izq-ext": 5,
+  "Eje 3 Izq Ext": 5,
+  "Eje 3 Izquierda Ext": 5,
+
+  "e3-izq-int": 6,
+  "Eje 3 Izq Int": 6,
+  "Eje 3 Izquierda Int": 6,
+
+  "e3-der-int": 7,
+  "Eje 3 Der Int": 7,
+  "Eje 3 Derecha Int": 7,
+
+  "e3-der-ext": 8,
+  "Eje 3 Der Ext": 8,
+  "Eje 3 Derecha Ext": 8,
+};
+
 const getTireStatus = (depth: number) => {
-  if (depth < 3) {
+  if (depth < 5) {
+    // Ajustado a tu lógica (antes era 3)
     return {
       fill: "fill-red-950/50",
       stroke: "stroke-red-500",
@@ -33,7 +70,8 @@ const getTireStatus = (depth: number) => {
       labelColor: "text-red-400",
     };
   }
-  if (depth <= 6) {
+  if (depth <= 10) {
+    // Ajustado a tu lógica (antes era 6)
     return {
       fill: "fill-amber-950/50",
       stroke: "stroke-amber-500",
@@ -54,27 +92,23 @@ const getTireStatus = (depth: number) => {
 };
 
 export function TruckChassisSVG({
-  tires = [], // Valor por defecto para evitar crash si es undefined
+  tires = [],
   unitType = "sencillo",
 }: TruckChassisSVGProps) {
   const [hoveredTire, setHoveredTire] = useState<string | number | null>(null);
 
   // Tire positions for the SVG (worm's-eye view - from below)
   const tirePositions = [
-    // Front axle (steering) - positions 1-2
     { x: 80, y: 60, position: 1 },
     { x: 220, y: 60, position: 2 },
-    // Second axle - positions 3-4
     { x: 80, y: 180, position: 3 },
     { x: 220, y: 180, position: 4 },
-    // Rear dual axle - positions 5-8
     { x: 65, y: 280, position: 5 },
     { x: 95, y: 280, position: 6 },
     { x: 205, y: 280, position: 7 },
     { x: 235, y: 280, position: 8 },
   ];
 
-  // Add extra axle for "full" configuration
   const fullTirePositions =
     unitType === "full"
       ? [
@@ -88,6 +122,16 @@ export function TruckChassisSVG({
   const allTirePositions = [...tirePositions, ...fullTirePositions];
   const svgHeight = unitType === "full" ? 440 : 360;
 
+  // Filtrado seguro para las estadísticas usando profundidad_actual
+  const getDepth = (t: Tire) => t.profundidad_actual ?? 0;
+  const criticalCount = tires.filter(
+    (t) => getDepth(t) > 0 && getDepth(t) < 5,
+  ).length;
+  const alertCount = tires.filter(
+    (t) => getDepth(t) >= 5 && getDepth(t) <= 10,
+  ).length;
+  const optimalCount = tires.filter((t) => getDepth(t) > 10).length;
+
   return (
     <TooltipProvider>
       <div className="relative w-full flex flex-col items-center">
@@ -96,17 +140,17 @@ export function TruckChassisSVG({
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 rounded bg-red-500/50 border border-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]" />
             <span className="text-xs text-muted-foreground">
-              {"<3mm Crítico"}
+              {"<5mm Crítico"}
             </span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 rounded bg-amber-500/50 border border-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
-            <span className="text-xs text-muted-foreground">3-6mm Alerta</span>
+            <span className="text-xs text-muted-foreground">5-10mm Alerta</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 rounded bg-emerald-500/50 border border-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]" />
             <span className="text-xs text-muted-foreground">
-              {">6mm Óptimo"}
+              {">10mm Óptimo"}
             </span>
           </div>
         </div>
@@ -117,7 +161,6 @@ export function TruckChassisSVG({
           className="w-full max-w-md"
           style={{ filter: "drop-shadow(0 4px 20px rgba(0,0,0,0.3))" }}
         >
-          {/* Background glow */}
           <defs>
             <radialGradient id="chassisGlow" cx="50%" cy="50%" r="50%">
               <stop offset="0%" stopColor="rgba(255,255,255,0.05)" />
@@ -132,7 +175,7 @@ export function TruckChassisSVG({
             </filter>
           </defs>
 
-          {/* Chassis frame - worm's eye view */}
+          {/* Chassis frame */}
           <rect
             x="120"
             y="40"
@@ -142,8 +185,6 @@ export function TruckChassisSVG({
             className="fill-muted/20 stroke-muted-foreground/30"
             strokeWidth="1"
           />
-
-          {/* Cardan shaft */}
           <line
             x1="150"
             y1="80"
@@ -154,7 +195,7 @@ export function TruckChassisSVG({
             strokeDasharray="8 4"
           />
 
-          {/* Front axle */}
+          {/* Ejes y diferenciales (se mantienen igual) */}
           <line
             x1="60"
             y1="60"
@@ -164,8 +205,6 @@ export function TruckChassisSVG({
             strokeWidth="4"
           />
           <circle cx="150" cy="60" r="6" className="fill-muted-foreground/30" />
-
-          {/* Second axle */}
           <line
             x1="60"
             y1="180"
@@ -180,8 +219,6 @@ export function TruckChassisSVG({
             r="8"
             className="fill-muted-foreground/40"
           />
-
-          {/* Rear differential housing */}
           <ellipse
             cx="150"
             cy="280"
@@ -190,8 +227,6 @@ export function TruckChassisSVG({
             className="fill-muted/30 stroke-muted-foreground/40"
             strokeWidth="2"
           />
-
-          {/* Rear axle */}
           <line
             x1="45"
             y1="280"
@@ -201,7 +236,6 @@ export function TruckChassisSVG({
             strokeWidth="4"
           />
 
-          {/* Extra axle for full configuration */}
           {unitType === "full" && (
             <>
               <ellipse
@@ -225,16 +259,18 @@ export function TruckChassisSVG({
 
           {/* Tires with neon effect */}
           {allTirePositions.map((pos) => {
-            // CORRECCIÓN IMPORTANTE: Buscar por posición string en lugar de índice
-            const tire = tires.find(
-              (t) => parseInt(t.position) === pos.position,
-            );
+            // CORRECCIÓN MAGISTRAL: Buscar la llanta usando el mapa de traducción de posiciones
+            const tire = tires.find((t) => {
+              if (!t.posicion) return false;
+              // Buscamos si el string ("Eje 1 Izq") mapea al número de esta posición SVG (1)
+              return POSITION_MAP[t.posicion] === pos.position;
+            });
 
-            // Si no hay llanta en esa posición, no renderizamos nada (o podrías renderizar un placeholder)
             if (!tire) return null;
 
-            const tireId = tire.id || `pos-${pos.position}`; // Fallback para ID
-            const status = getTireStatus(tire.profundidad);
+            const tireId = tire.id || `pos-${pos.position}`;
+            const depth = tire.profundidad_actual ?? 0;
+            const status = getTireStatus(depth);
             const isHovered = hoveredTire === tireId;
             const isDualTire = pos.position >= 5;
             const tireWidth = isDualTire ? 22 : 28;
@@ -263,7 +299,6 @@ export function TruckChassisSVG({
                       className={`${status.fill} ${status.glow} ${status.pulse}`}
                       filter="url(#neonGlow)"
                     />
-
                     {/* Tire body */}
                     <rect
                       x={pos.x - tireWidth / 2}
@@ -273,7 +308,6 @@ export function TruckChassisSVG({
                       rx="4"
                       className={`${status.fill} ${status.stroke} stroke-2 ${status.pulse}`}
                     />
-
                     {/* Tire tread pattern */}
                     {[...Array(5)].map((_, i) => (
                       <line
@@ -286,7 +320,6 @@ export function TruckChassisSVG({
                         strokeWidth="1"
                       />
                     ))}
-
                     {/* Position label */}
                     <text
                       x={pos.x}
@@ -303,23 +336,22 @@ export function TruckChassisSVG({
                   className="backdrop-blur-xl bg-black/80 border-white/20 shadow-2xl"
                 >
                   <div className="space-y-1">
-                    <p className="font-bold text-foreground">
-                      Posición {pos.position}
-                    </p>
+                    <p className="font-bold text-foreground">{tire.posicion}</p>
                     <p className="text-sm text-muted-foreground">
-                      {tire.marca || "Marca N/A"}
+                      {tire.marca || "Marca N/A"}{" "}
+                      {tire.modelo ? `- ${tire.modelo}` : ""}
                     </p>
                     <div className="flex items-center gap-2">
                       <span
                         className={`text-lg font-bold ${status.labelColor}`}
                       >
-                        {tire.profundidad}mm
+                        {depth}mm
                       </span>
                       <span
                         className={`text-xs px-2 py-0.5 rounded-full ${
-                          tire.profundidad < 3
+                          depth < 5
                             ? "bg-red-500/20 text-red-400"
-                            : tire.profundidad <= 6
+                            : depth <= 10
                               ? "bg-amber-500/20 text-amber-400"
                               : "bg-emerald-500/20 text-emerald-400"
                         }`}
@@ -328,7 +360,7 @@ export function TruckChassisSVG({
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground/70">
-                      ID: {tire.marcajeInterno || "S/N"}
+                      ID: {tire.codigo_interno || "S/N"}
                     </p>
                   </div>
                 </TooltipContent>
@@ -336,7 +368,7 @@ export function TruckChassisSVG({
             );
           })}
 
-          {/* Labels */}
+          {/* Labels y flecha de dirección (se mantienen) */}
           <text
             x="20"
             y="65"
@@ -368,7 +400,6 @@ export function TruckChassisSVG({
             </text>
           )}
 
-          {/* Direction indicator */}
           <polygon
             points="150,15 145,30 155,30"
             className="fill-muted-foreground/40"
@@ -386,23 +417,16 @@ export function TruckChassisSVG({
         {/* Stats summary */}
         <div className="grid grid-cols-3 gap-4 mt-8 w-full max-w-md">
           <div className="backdrop-blur-xl bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-center">
-            <p className="text-2xl font-bold text-red-400">
-              {tires.filter((t) => t.profundidad < 3).length}
-            </p>
+            <p className="text-2xl font-bold text-red-400">{criticalCount}</p>
             <p className="text-xs text-muted-foreground">Críticas</p>
           </div>
           <div className="backdrop-blur-xl bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 text-center">
-            <p className="text-2xl font-bold text-amber-400">
-              {
-                tires.filter((t) => t.profundidad >= 3 && t.profundidad <= 6)
-                  .length
-              }
-            </p>
+            <p className="text-2xl font-bold text-amber-400">{alertCount}</p>
             <p className="text-xs text-muted-foreground">Alerta</p>
           </div>
           <div className="backdrop-blur-xl bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 text-center">
             <p className="text-2xl font-bold text-emerald-400">
-              {tires.filter((t) => t.profundidad > 6).length}
+              {optimalCount}
             </p>
             <p className="text-xs text-muted-foreground">Óptimas</p>
           </div>

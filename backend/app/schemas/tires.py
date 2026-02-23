@@ -60,7 +60,7 @@ class TireHistoryBase(ORMBase):
     descripcion: Optional[str] = Field(default=None, max_length=255)
 
     # unidad_id = FK units.id nullable
-    unidad_id: Optional[int] = None
+    unit_id: Optional[int] = None
 
     # unidad_economico = Column(String(50), nullable=True)
     unidad_economico: Optional[str] = Field(default=None, max_length=50)
@@ -80,7 +80,7 @@ class TireHistoryCreate(ORMBase):
     # cuando creas un evento (si lo soportas vía API)
     tipo: TireEventType
     descripcion: Optional[str] = Field(default=None, max_length=255)
-    unidad_id: Optional[int] = None
+    unit_id: Optional[int] = None
     unidad_economico: Optional[str] = Field(default=None, max_length=50)
     posicion: Optional[str] = Field(default=None, max_length=50)
     km: float = 0.0
@@ -155,7 +155,7 @@ class TireCreate(ORMBase):
     medida: Optional[str] = Field(default=None, max_length=20)
     dot: Optional[str] = Field(default=None, max_length=10)
 
-    unidad_id: Optional[int] = Field(default=None, description="alias UI", exclude=True)
+    unit_id: Optional[int] = Field(default=None, description="alias UI", exclude=True)
     unit_id: Optional[int] = None
     posicion: Optional[str] = Field(default=None, max_length=50)
 

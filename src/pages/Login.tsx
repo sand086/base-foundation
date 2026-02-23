@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
+import { authService } from "@/services/authService"; // Importamos el servicio
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { User, Lock, AlertCircle, Eye, EyeOff, ArrowRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-// Ajusta la importación de assets según tu estructura real
 import { logos_3t } from "@/assets/img";
 import { AxiosError } from "axios";
 
@@ -19,6 +19,7 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [remember, setRemember] = useState(true);
 
+  // Traemos la función login de nuestro contexto global
   const { login } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -29,11 +30,11 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      // 1. Llamada al Backend Real
-      const response = await login(username, password);
+      // 1. Llamada al Backend a través del Servicio
+      const response = await authService.login({ email: username, password });
 
       // 2. Caso: El backend dice que el usuario tiene 2FA activado
-      if (response?.require_2fa) {
+      if (response.require_2fa) {
         toast({
           title: "Verificación requerida",
           description: "Ingresa el código de tu autenticador",
@@ -49,19 +50,23 @@ export default function Login() {
         return;
       }
 
-      // 3. CORRECCIÓN CRÍTICA: Verificamos access_token en lugar de success
-      if (response?.access_token) {
+      // 3. Si el login es directo (y tenemos token + user)
+      if (response.access_token && response.user) {
+        // Guardamos en el estado global (Contexto) y en localStorage
+        login(response.user, response.access_token);
+
         toast({
           title: "Bienvenido",
           description: "Has iniciado sesión correctamente",
         });
+
+        // Redirigimos al Dashboard
         navigate("/", { replace: true });
       }
     } catch (err) {
       console.error("Error en login:", err);
 
       if (err instanceof AxiosError) {
-        // Aquí TypeScript YA SABE que 'err' tiene response y status
         const status = err.response?.status;
 
         if (status === 401) {
@@ -74,7 +79,6 @@ export default function Login() {
           setError(`Error del servidor: ${status}`);
         }
       } else {
-        // 4. Si el error NO es de Axios (ej. error de código o red sin respuesta)
         setError("Ocurrió un error inesperado. Verifica tu conexión.");
       }
     } finally {

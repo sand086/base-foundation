@@ -3,7 +3,7 @@ import {
   Search,
   ChevronDown,
   LogOut,
-  User,
+  User as UserIcon,
   Settings,
   Command,
 } from "lucide-react";
@@ -19,30 +19,40 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+
+// Importamos el hook que hicimos para la sesión
 import { useAuth } from "@/context/AuthContext";
 import { openGlobalSearch } from "@/components/common/GlobalSearch";
 
 export function AppHeader() {
-  const { user, logout } = useAuth();
+  const { user, logout } = useAuth(); // Traemos al usuario del estado global
   const navigate = useNavigate();
 
   const handleLogout = () => {
-    logout();
-    navigate("/login", { replace: true });
+    logout(); // Esto limpia el localStorage y manda al login
+  };
+
+  // Helper para sacar las iniciales ("Juan Perez" -> "JP", "Admin" -> "AD")
+  const getInitials = (nombre?: string) => {
+    if (!nombre) return "US";
+    const partes = nombre.trim().split(" ");
+    if (partes.length >= 2) {
+      return `${partes[0][0]}${partes[1][0]}`.toUpperCase();
+    }
+    return nombre.substring(0, 2).toUpperCase();
   };
 
   return (
     <header className="sticky top-0 z-30 flex h-12 items-center justify-between border-b border-border bg-card px-4">
-      {/* Global Search - Clickable to open Command Palette */}
+      {/* Global Search */}
       <button
         onClick={() => openGlobalSearch()}
         className="relative w-72 flex items-center gap-2 h-8 px-3 text-xs bg-muted/50 hover:bg-muted/80 rounded cursor-pointer transition-colors duration-150 group"
       >
         <Search className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
         <span className="text-muted-foreground group-hover:text-foreground/80 transition-colors flex-1 text-left">
-          Buscar guías, clients, unidades...
+          Buscar guías, clientes, unidades...
         </span>
-        {/* Keyboard shortcut hint */}
         <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground bg-background/80 rounded border border-border/50">
           <Command className="h-2.5 w-2.5" />
           <span>K</span>
@@ -67,27 +77,33 @@ export function AppHeader() {
               className="flex items-center gap-2 h-8 px-2"
             >
               <Avatar className="h-6 w-6">
-                <AvatarImage alt="Avatar" />
+                {/* Leemos el avatar_url de la DB si existe */}
+                <AvatarImage src={user?.avatar_url || ""} alt="Avatar" />
                 <AvatarFallback className="bg-brand-red text-white text-[10px] font-bold">
-                  {user?.username?.slice(0, 2).toUpperCase() || "AD"}
+                  {getInitials(user?.nombre)}
                 </AvatarFallback>
               </Avatar>
               <div className="flex flex-col items-start text-left">
+                {/* Usamos user.nombre real */}
                 <span className="text-xs font-medium leading-none capitalize">
-                  {user?.username || "Administrador"}
+                  {user?.nombre || "Cargando..."}
                 </span>
               </div>
               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuLabel className="text-xs">Mi Cuenta</DropdownMenuLabel>
+            <DropdownMenuLabel className="text-xs">
+              <span className="block truncate">
+                {user?.email || "Mi Cuenta"}
+              </span>
+            </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="text-xs cursor-pointer"
               onClick={() => navigate("/perfil")}
             >
-              <User className="h-3.5 w-3.5 mr-2" />
+              <UserIcon className="h-3.5 w-3.5 mr-2" />
               Mi Perfil
             </DropdownMenuItem>
             <DropdownMenuItem

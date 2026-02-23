@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from "react";
+// src/pages/RolesPermisosPage.tsx
+import React, { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/ui/page-header";
 import {
   Card,
@@ -49,10 +50,10 @@ import {
   Pencil,
   Download,
   Lock,
-  Copy,
   History,
   Key,
   Settings,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CreatePermissionModal } from "@/features/permisos/CreatePermissionModal";
@@ -60,6 +61,9 @@ import { ManageModulesModal } from "@/features/permisos/ManageModulesModal";
 import { AuditLogPanel } from "@/features/auditoria/AuditLogPanel";
 import { useRoles } from "@/hooks/useRoles";
 
+/**
+ * Tipos
+ */
 type Permiso = {
   ver: boolean;
   editar: boolean;
@@ -68,6 +72,29 @@ type Permiso = {
 };
 
 type PermisosMap = Record<string, Permiso>;
+
+type Role = {
+  id: number;
+  nombre: string;
+  descripcion?: string | null;
+  name_key?: string | null;
+  permisos?: unknown;
+};
+
+type Module = {
+  id: string;
+  nombre: string;
+  descripcion?: string | null;
+  icono: string;
+};
+
+type MeUser = {
+  id: number;
+  nombre: string;
+  email: string;
+  role_id: number | null;
+  avatar_url?: string | null;
+};
 
 const iconMap: Record<string, React.ElementType> = {
   LayoutDashboard,
@@ -90,6 +117,50 @@ const EMPTY_PERMISO: Permiso = {
   exportar: false,
 };
 
+// ---- helpers localStorage/fetch ----
+function safeJsonParse<T>(value: string | null): T | null {
+  if (!value) return null;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return null;
+  }
+}
+
+// Ajusta si tu token se llama diferente
+function getAuthToken(): string | null {
+  return (
+    localStorage.getItem("access_token") ||
+    localStorage.getItem("token") ||
+    localStorage.getItem("auth_token") ||
+    null
+  );
+}
+
+async function fetchMeUser(): Promise<MeUser | null> {
+  const API_BASE = (import.meta as any)?.env?.VITE_API_BASE_URL ?? "";
+  const token = getAuthToken();
+
+  if (!API_BASE || !token) return null;
+
+  try {
+    const res = await fetch(`${API_BASE}/usuarios/me`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!res.ok) return null;
+
+    const data = (await res.json()) as MeUser;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
 const RolesPermisosPage: React.FC = () => {
   const {
     roles,
@@ -102,13 +173,82 @@ const RolesPermisosPage: React.FC = () => {
     addModule,
     updateSystemModule,
     deleteSystemModule,
-  } = useRoles();
+  } = useRoles() as unknown as {
+    roles: Role[];
+    setRoles: React.Dispatch<React.SetStateAction<Role[]>>;
+    modules: Module[];
+    isLoading: boolean;
+    createRole: (nombre: string, descripcion?: string) => Promise<boolean>;
+    deleteRole: (roleId: number) => Promise<boolean>;
+    updateRole: (
+      roleId: number,
+      payload: { nombre: string; descripcion?: string; permisos: unknown },
+    ) => Promise<boolean>;
+    addModule: (
+      descripcion: string,
+      key: string,
+      detalle?: string,
+    ) => Promise<boolean>;
+    updateSystemModule: (moduleId: string, payload: any) => Promise<boolean>;
+    deleteSystemModule: (moduleId: string) => Promise<boolean>;
+  };
+
+  // ✅ usuario desde localStorage o /usuarios/me
+  const [meUser, setMeUser] = useState<MeUser | null>(null);
+  const [meLoading, setMeLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+
+    (async () => {
+      const fromLs = safeJsonParse<MeUser>(localStorage.getItem("user_data"));
+      if (alive && fromLs?.id) {
+        setMeUser(fromLs);
+        setMeLoading(false);
+        return;
+      }
+
+      const fromApi = await fetchMeUser();
+      if (alive && fromApi?.id) {
+        setMeUser(fromApi);
+        localStorage.setItem("user_data", JSON.stringify(fromApi));
+        setMeLoading(false);
+        return;
+      }
+
+      if (alive) setMeLoading(false);
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // ✅ resolver role_key con role_id + roles
+  const myRoleResolved = useMemo(() => {
+    const roleId = meUser?.role_id ?? null;
+    const found = roleId ? roles.find((r) => r.id === roleId) : undefined;
+
+    const key =
+      found?.name_key?.toLowerCase().trim() ||
+      (found?.nombre ? found.nombre.toLowerCase().trim() : "") ||
+      "";
+
+    return {
+      roleId,
+      roleName: found?.nombre ?? null,
+      roleKey: key || null,
+    };
+  }, [meUser?.role_id, roles]);
+
+  // ✅ admin
+  const isAdminUser =
+    myRoleResolved.roleKey === "admin" || myRoleResolved.roleId === 1;
 
   const [showRoleEditor, setShowRoleEditor] = useState(false);
   const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null);
   const [isCreatingRole, setIsCreatingRole] = useState(false);
 
-  // Nombres y descripción editables
   const [newRoleName, setNewRoleName] = useState("");
   const [newRoleDescription, setNewRoleDescription] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -119,8 +259,6 @@ const RolesPermisosPage: React.FC = () => {
   const [showCreatePermissionModal, setShowCreatePermissionModal] =
     useState(false);
   const [showAuditLogPanel, setShowAuditLogPanel] = useState(false);
-
-  // ✅ NUEVO: Administrar módulos
   const [showManageModules, setShowManageModules] = useState(false);
 
   const currentRole = useMemo(
@@ -130,26 +268,21 @@ const RolesPermisosPage: React.FC = () => {
 
   // ==========================================
   // NORMALIZADOR BLINDADO DE PERMISOS
-  // Convierte lo que sea que mande la BD a un objeto de fácil lectura
   // ==========================================
   const currentPermisos: PermisosMap = useMemo(() => {
     const out: PermisosMap = {};
     const raw = currentRole?.permisos;
-
     if (!raw) return out;
 
     try {
       const permsData =
         typeof raw === "string" ? (JSON.parse(raw) as unknown) : raw;
 
-      // Si quedó guardado como Array (legacy)
       if (Array.isArray(permsData)) {
         (permsData as any[]).forEach((p) => {
           if (p?.moduloId) out[String(p.moduloId).toLowerCase()] = p as Permiso;
         });
-      }
-      // Formato correcto nuevo: objeto mapa
-      else if (typeof permsData === "object" && permsData !== null) {
+      } else if (typeof permsData === "object" && permsData !== null) {
         Object.keys(permsData as Record<string, unknown>).forEach((k) => {
           out[String(k).toLowerCase()] = (permsData as any)[k] as Permiso;
         });
@@ -277,14 +410,20 @@ const RolesPermisosPage: React.FC = () => {
     try {
       if (isCreatingRole) {
         const success = await createRole(newRoleName, newRoleDescription);
-        if (success) setShowRoleEditor(false);
+        if (success) {
+          toast.success("Rol creado exitosamente");
+          setShowRoleEditor(false);
+        }
       } else if (currentRole) {
         const success = await updateRole(currentRole.id, {
           nombre: newRoleName,
           descripcion: newRoleDescription,
           permisos: currentRole.permisos,
         });
-        if (success) setShowRoleEditor(false);
+        if (success) {
+          toast.success("Rol actualizado exitosamente");
+          setShowRoleEditor(false);
+        }
       }
     } finally {
       setIsSaving(false);
@@ -316,11 +455,13 @@ const RolesPermisosPage: React.FC = () => {
     await deleteRole(roleToDelete);
     setShowDeleteDialog(false);
     setRoleToDelete(null);
+    toast.success("Rol eliminado exitosamente");
   };
 
-  const handleDuplicateRole = (roleId: number, e: React.MouseEvent): void => {
+  const promptDeleteRole = (roleId: number, e: React.MouseEvent): void => {
     e.stopPropagation();
-    toast.info("Función de duplicar próximamente");
+    setRoleToDelete(roleId);
+    setShowDeleteDialog(true);
   };
 
   if (isLoading) {
@@ -338,19 +479,48 @@ const RolesPermisosPage: React.FC = () => {
     <div className="p-6 space-y-6">
       <PageHeader
         title="Roles y Permisos"
-        description="Gestiona los roles del sistema y sus permisos por módulo"
+        description="Define responsabilidades y controla qué puede ver/editar cada perfil en el sistema."
       />
 
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5" /> Roles del Sistema
+              <CardTitle className="flex items-center gap-2 mb-3">
+                <Shield className="h-5 w-5" /> Perfiles de Acceso
               </CardTitle>
+
               <CardDescription>
-                Configura los permisos de cada rol para controlar el acceso
+                Define permisos por acción para cada módulo (lectura, edición,
+                eliminación, exportación).
               </CardDescription>
+
+              {/* DEBUG: rol real del usuario */}
+              {/*               <div className="mt-2 flex flex-wrap items-center gap-2">
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "text-xs",
+                    getRoleBadgeColor(myRoleResolved.roleKey || ""),
+                  )}
+                >
+                  Mi rol:{" "}
+                  {myRoleResolved.roleKey
+                    ? myRoleResolved.roleKey.toUpperCase()
+                    : meLoading
+                      ? "CARGANDO..."
+                      : "NO DEFINIDO"}
+                </Badge>
+
+                <Badge variant="outline" className="text-xs">
+                  role_id: {myRoleResolved.roleId ?? "NULL"}
+                </Badge>
+
+                <Badge variant="outline" className="text-xs">
+                  usuario:{" "}
+                  {meUser?.email ?? (meLoading ? "cargando..." : "N/A")}
+                </Badge>
+              </div> */}
             </div>
 
             <div className="flex items-center gap-2">
@@ -370,7 +540,6 @@ const RolesPermisosPage: React.FC = () => {
                 <Key className="h-4 w-4" /> Crear Permiso
               </Button>
 
-              {/* ✅ NUEVO: Administrar Módulos */}
               <Button
                 variant="outline"
                 onClick={() => setShowManageModules(true)}
@@ -392,7 +561,6 @@ const RolesPermisosPage: React.FC = () => {
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {roles.map((rol) => {
-              // Conteo para la barrita de progreso
               let localPermsRaw: unknown = rol.permisos;
               try {
                 localPermsRaw =
@@ -422,14 +590,24 @@ const RolesPermisosPage: React.FC = () => {
 
               const maxPermisos = availableModules.length * 4;
 
-              const isSystemRole = ["admin", "operativo", "finanzas"].includes(
-                rol.name_key?.toLowerCase(),
-              );
+              // ✅ REGLA FINAL: SOLO depende del usuario (admin elimina todo)
+              const canDeleteByUser = isAdminUser;
+              const deleteDisabled = !canDeleteByUser;
+
+              const deleteDisabledReason = `No cuentas con permisos para eliminar roles. Tu rol actual es ${
+                myRoleResolved.roleKey?.toUpperCase() ||
+                myRoleResolved.roleId ||
+                "N/A"
+              }.`;
+
+              const roleKeyNormalized = String(rol.name_key || rol.nombre || "")
+                .toLowerCase()
+                .trim();
 
               return (
                 <Card
                   key={rol.id}
-                  className="cursor-pointer hover:shadow-md transition-all border-2 hover:border-primary/50"
+                  className="cursor-pointer hover:shadow-md transition-all border-2 hover:border-primary/50 relative overflow-hidden"
                   onClick={() => openRoleEditor(rol.id)}
                 >
                   <CardContent className="pt-6">
@@ -439,7 +617,9 @@ const RolesPermisosPage: React.FC = () => {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {isSystemRole && (
+                        {["admin", "operativo", "finanzas"].includes(
+                          roleKeyNormalized,
+                        ) && (
                           <Badge variant="outline" className="text-xs bg-muted">
                             <Lock className="h-3 w-3 mr-1" /> Sistema
                           </Badge>
@@ -449,10 +629,12 @@ const RolesPermisosPage: React.FC = () => {
                           variant="outline"
                           className={cn(
                             "text-xs",
-                            getRoleBadgeColor(rol.name_key),
+                            getRoleBadgeColor(roleKeyNormalized),
                           )}
                         >
-                          {rol.name_key?.toUpperCase()}
+                          {roleKeyNormalized
+                            ? roleKeyNormalized.toUpperCase()
+                            : "ROL"}
                         </Badge>
                       </div>
                     </div>
@@ -463,9 +645,9 @@ const RolesPermisosPage: React.FC = () => {
                       {rol.descripcion || "Sin descripción"}
                     </p>
 
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2 w-24 bg-muted rounded-full overflow-hidden">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 flex-1">
+                        <div className="h-2 w-full max-w-[120px] bg-muted rounded-full overflow-hidden">
                           <div
                             className="h-full bg-primary rounded-full transition-all"
                             style={{
@@ -473,36 +655,43 @@ const RolesPermisosPage: React.FC = () => {
                             }}
                           />
                         </div>
+
                         <span className="text-xs text-muted-foreground">
                           {totalPermisos}/{maxPermisos}
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-1">
+                      {/* ✅ Tooltip + toast cuando esté disabled */}
+                      <span
+                        className="shrink-0"
+                        title={
+                          deleteDisabled ? deleteDisabledReason : "Eliminar Rol"
+                        }
+                        onClick={(e) => {
+                          if (deleteDisabled) {
+                            e.stopPropagation();
+                            toast.error(deleteDisabledReason);
+                          }
+                        }}
+                      >
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8"
-                          onClick={(e) => handleDuplicateRole(rol.id, e)}
+                          disabled={deleteDisabled}
+                          className={cn(
+                            "h-8 w-8",
+                            deleteDisabled
+                              ? "text-muted-foreground cursor-not-allowed opacity-60"
+                              : "text-destructive hover:bg-destructive/10 hover:text-destructive",
+                          )}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            promptDeleteRole(rol.id, e);
+                          }}
                         >
-                          <Copy className="h-4 w-4" />
+                          <Trash2 className="h-4 w-4" />
                         </Button>
-
-                        {!isSystemRole && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive hover:text-destructive"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setRoleToDelete(rol.id);
-                              setShowDeleteDialog(true);
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
+                      </span>
                     </div>
                   </CardContent>
                 </Card>
@@ -730,6 +919,7 @@ const RolesPermisosPage: React.FC = () => {
             <Button variant="outline" onClick={() => setShowRoleEditor(false)}>
               Cancelar
             </Button>
+
             <Button
               onClick={handleSavePermisos}
               disabled={isSaving || !newRoleName.trim()}
@@ -746,23 +936,34 @@ const RolesPermisosPage: React.FC = () => {
         </SheetContent>
       </Sheet>
 
+      {/* Diálogo de Eliminación con Alerta Crítica */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent>
+        <AlertDialogContent className="border-destructive/50">
           <AlertDialogHeader>
-            <AlertDialogTitle>Eliminar Rol</AlertDialogTitle>
-            <AlertDialogDescription>
-              ¿Estás seguro de que deseas eliminar este rol? Esta acción no se
-              puede deshacer.
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" /> Eliminar Rol Crítico
+            </AlertDialogTitle>
+
+            <AlertDialogDescription className="text-base text-foreground mt-4">
+              ¿Estás completamente seguro de que deseas eliminar este rol?
             </AlertDialogDescription>
+
+            <div className="bg-destructive/10 border border-destructive/20 p-3 rounded-md mt-4">
+              <p className="text-sm font-medium text-destructive">
+                ⚠️ ATENCIÓN: Esta función es irreversible y afectará el
+                funcionamiento de todos los usuarios que tengan asignado este
+                perfil.
+              </p>
+            </div>
           </AlertDialogHeader>
 
-          <AlertDialogFooter>
+          <AlertDialogFooter className="mt-6">
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteRole}
-              className="bg-destructive hover:bg-destructive/90"
+              className="bg-destructive hover:bg-destructive/90 text-white"
             >
-              Eliminar
+              Sí, Eliminar Rol
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -786,7 +987,6 @@ const RolesPermisosPage: React.FC = () => {
         }}
       />
 
-      {/* ✅ NUEVO: modal administrar módulos */}
       <ManageModulesModal
         open={showManageModules}
         onOpenChange={setShowManageModules}

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Optional
+from typing import Optional, List
+from app.schemas.tires import TireResponse
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -155,3 +156,7 @@ class UnitResponse(UnitBase):
     updated_at: datetime
     created_by_id: Optional[int] = None
     updated_by_id: Optional[int] = None
+    tires: List[TireResponse] = []
+
+    class Config:
+        from_attributes = True
