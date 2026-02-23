@@ -76,21 +76,33 @@ export interface Unit {
 }
 
 export interface Operator {
-  id: number; // <--- INTEGER
-  public_id?: string; // Opcional (ej. OP-001)
-
+  id: number;
+  public_id?: string;
   name: string;
-  license_number: string;
-  license_expiry: string;
-  medical_check_expiry: string;
   phone?: string;
-
   status: OperatorStatus;
 
-  assigned_unit_id?: number | null; // <--- INTEGER (Relación FK)
+  // Datos de Licencia
+  license_number: string;
+  license_type: string;
+  license_expiry: string; // YYYY-MM-DD
 
-  // Datos opcionales para visualización
+  // Salud y Emergencia
+  medical_check_expiry: string; // YYYY-MM-DD
+  emergency_contact?: string;
+  emergency_phone?: string;
+  hire_date?: string;
+
+  // Relaciones
+  assigned_unit_id?: number | null;
   unit_economico?: string;
+
+  // ✅ URLs de Documentos (Sincronizado con el modelo nuevo)
+  foto_url?: string | null;
+  licencia_url?: string | null;
+  ine_url?: string | null;
+  apto_medico_url?: string | null;
+  comprobante_domicilio_url?: string | null;
 }
 
 // --- COMERCIAL (Clientes, Subclientes, Tarifas) ---

@@ -42,18 +42,20 @@ import {
   Eye,
   Download,
 } from "lucide-react";
+import { DocumentUploadManager } from "@/features/flota/DocumentUploadManager";
 
 // IMPORTANTE: interfaz real del servicio (ID numérico, etc.)
-import { Operador } from "@/services/operatorService";
+import { operatorService } from "@/services/operatorService";
+import { Operator } from "@/types/api.types";
 
 import { format, differenceInYears, isValid } from "date-fns";
 import { es } from "date-fns/locale";
 
 interface OperatorDetailSheetProps {
-  operator: Operador | null;
+  operator: Operator | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave?: (operator: Operador) => void;
+  onSave?: (operator: Operator) => void;
 }
 
 interface DocumentItem {
@@ -261,7 +263,7 @@ export function OperatorDetailSheet({
   const handleSave = () => {
     if (!operator) return;
 
-    const updatedOperator: Operador = {
+    const updatedOperator: Operator = {
       ...operator, // mantiene id:number, status, assigned_unit_id, etc.
       name: formData.name,
       phone: formData.phone,
@@ -290,11 +292,29 @@ export function OperatorDetailSheet({
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file && uploadingDocId) {
-      const tempUrl = URL.createObjectURL(file);
+    if (!file || !uploadingDocId || !operator) return;
 
+    // Validación Senior: Tamaño máximo 5MB
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "Archivo demasiado grande",
+        variant: "destructive",
+        description: "El límite es de 5MB",
+      });
+      return;
+    }
+
+    try {
+      // LLAMADA REAL AL BACKEND
+      const result = await operatorService.uploadDocument(
+        operator.id,
+        uploadingDocId,
+        file,
+      );
+
+      // Actualizamos la UI con la URL real que devolvió Nginx/FastAPI
       setDocuments((prev) =>
         prev.map((doc) =>
           doc.id === uploadingDocId
@@ -302,7 +322,7 @@ export function OperatorDetailSheet({
                 ...doc,
                 fileName: file.name,
                 status: "vigente",
-                fileUrl: tempUrl,
+                fileUrl: result.url, // URL del servidor: /static/operators/...
                 type: file.type.includes("image") ? "image" : "pdf",
               }
             : doc,
@@ -310,13 +330,19 @@ export function OperatorDetailSheet({
       );
 
       toast({
-        title: "Documento subido",
-        description: `${file.name} cargado correctamente.`,
+        title: "Éxito",
+        description: "Documento guardado en el expediente del servidor.",
       });
-
+    } catch (error) {
+      toast({
+        title: "Error de carga",
+        variant: "destructive",
+        description: "No se pudo subir el archivo al servidor.",
+      });
+    } finally {
       setUploadingDocId(null);
+      e.target.value = "";
     }
-    e.target.value = "";
   };
 
   const handleViewDocument = (doc: DocumentItem) => {
@@ -487,9 +513,9 @@ export function OperatorDetailSheet({
             )}
           </div>
 
-          {operator.assigned_unit && !isEditing && (
+          {operator.assigned_unit_id && !isEditing && (
             <Badge variant="outline" className="mt-2 font-mono gap-1">
-              <Truck className="h-3 w-3" /> Unidad {operator.assigned_unit}
+              <Truck className="h-3 w-3" /> Unidad {operator.assigned_unit_id}
             </Badge>
           )}
 
@@ -697,89 +723,41 @@ export function OperatorDetailSheet({
               <FileText className="h-4 w-4 text-primary" /> Documentación Legal
             </h3>
 
-            <div className="space-y-2 mb-4">
-              {documents.map((doc) => (
-                <div
-                  key={doc.id}
-                  className="flex items-center gap-3 p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
-                >
-                  <div className="p-2 rounded-lg bg-muted/30">
-                    {doc.type === "pdf" ? (
-                      <FileText className="h-4 w-4 text-rose-400" />
-                    ) : (
-                      <ImageIcon className="h-4 w-4 text-sky-400" />
-                    )}
-                  </div>
+            <div className="grid grid-cols-1 gap-3">
+              {/* Licencia Federal */}
+              <DocumentUploadManager
+                entityId={operator.id}
+                entityType="operator" // <-- Asegúrate de habilitar este string en el Manager
+                docType="licencia"
+                docLabel="Licencia Federal"
+                currentUrl={operator.licencia_url}
+                onUploadSuccess={(url) => {
+                  toast({ title: "Licencia Federal actualizada" });
+                }}
+              />
 
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{doc.name}</p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {doc.fileName || "Sin archivo"}
-                    </p>
-                  </div>
+              {/* INE */}
+              <DocumentUploadManager
+                entityId={operator.id}
+                entityType="operator"
+                docType="ine"
+                docLabel="INE / Identificación"
+                currentUrl={operator.ine_url}
+                onUploadSuccess={(url) => toast({ title: "INE Actualizada" })}
+              />
 
-                  <div className="flex items-center gap-2">
-                    {getDocStatusBadge(doc.status)}
-
-                    {(doc.fileName || doc.fileUrl) && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleViewDocument(doc)}
-                        className="h-8 w-8 p-0 opacity-70 hover:opacity-100"
-                        type="button"
-                      >
-                        {doc.fileUrl ? (
-                          <Eye className="h-4 w-4 text-sky-400" />
-                        ) : (
-                          <Download className="h-4 w-4 text-muted-foreground" />
-                        )}
-                      </Button>
-                    )}
-
-                    {isEditing && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleFileUpload(doc.id)}
-                        className="h-8 w-8 p-0 opacity-70 hover:opacity-100"
-                        type="button"
-                      >
-                        <UploadCloud className="h-4 w-4 text-primary" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ))}
+              {/* Apto Médico */}
+              <DocumentUploadManager
+                entityId={operator.id}
+                entityType="operator"
+                docType="apto_medico"
+                docLabel="Examen Psicofísico"
+                currentUrl={operator.apto_medico_url}
+                onUploadSuccess={(url) =>
+                  toast({ title: "Apto Médico Actualizado" })
+                }
+              />
             </div>
-
-            {isEditing && (
-              <div
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                className={cn(
-                  "border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all",
-                  isDragOver
-                    ? "border-primary bg-primary/10"
-                    : "border-white/20 bg-white/5",
-                )}
-              >
-                <div className="flex flex-col items-center gap-2">
-                  <UploadCloud
-                    className={cn(
-                      "h-6 w-6",
-                      isDragOver ? "text-primary" : "text-muted-foreground",
-                    )}
-                  />
-                  <p className="text-sm font-medium">
-                    {isDragOver
-                      ? "Suelta para subir"
-                      : "Arrastra archivos aquí"}
-                  </p>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Contact Info */}

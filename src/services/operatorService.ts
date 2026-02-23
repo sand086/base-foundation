@@ -1,43 +1,46 @@
 import axiosClient from "@/api/axiosClient";
-
-export interface Operador {
-  id: number;
-  name: string;
-  license_number: string;
-  license_type: string;
-  license_expiry: string; // YYYY-MM-DD
-  medical_check_expiry: string; // YYYY-MM-DD
-  phone?: string;
-  status: "activo" | "inactivo" | "vacaciones" | "incapacidad";
-  assigned_unit_id?: number; // ID de la unidad (relación)
-  assigned_unit?: string; // Nombre/NumEco para mostrar (opcional si el backend lo popula)
-  hire_date?: string;
-  emergency_contact?: string;
-  emergency_phone?: string;
-}
+import { Operator } from "@/types/api.types";
 
 export const operatorService = {
-  getAll: async (): Promise<Operador[]> => {
+  getAll: async (): Promise<Operator[]> => {
     const { data } = await axiosClient.get("/operators");
     return data;
   },
 
-  create: async (operador: Omit<Operador, "id">): Promise<Operador> => {
-    const { data } = await axiosClient.post("/operators", operador);
+  create: async (Operator: Omit<Operator, "id">): Promise<Operator> => {
+    const { data } = await axiosClient.post("/operators", Operator);
     return data;
   },
 
   update: async (
     id: number,
-    operador: Partial<Operador>,
-  ): Promise<Operador> => {
+    Operator: Partial<Operator>,
+  ): Promise<Operator> => {
     // <--- number
-    const { data } = await axiosClient.put(`/operators/${id}`, operador);
+    const { data } = await axiosClient.put(`/operators/${id}`, Operator);
     return data;
   },
 
   delete: async (id: number): Promise<void> => {
     // <--- number
     await axiosClient.delete(`/operators/${id}`);
+  },
+
+  uploadDocument: async (operatorId: number, docType: string, file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const { data } = await axiosClient.post(
+      `/operators/${operatorId}/documents/${docType}`,
+      formData,
+      { headers: { "Content-Type": "multipart/form-data" } },
+    );
+    return data;
+  },
+
+  getDocumentHistory: async (operatorId: number, docType: string) => {
+    const { data } = await axiosClient.get(
+      `/operators/${operatorId}/documents/${docType}/history`,
+    );
+    return data;
   },
 };

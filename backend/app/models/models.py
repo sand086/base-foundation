@@ -525,9 +525,19 @@ class Operator(AuditMixin, Base):
     hire_date = Column(Date)
     emergency_contact = Column(String(100))
     emergency_phone = Column(String(20))
+    foto_url = Column(String(500), nullable=True)
+    licencia_url = Column(String(500), nullable=True)
+    ine_url = Column(String(500), nullable=True)
+    apto_medico_url = Column(String(500), nullable=True)
+    comprobante_domicilio_url = Column(String(500), nullable=True)
 
     assigned_unit = relationship("Unit", back_populates="operators")
     trips = relationship("Trip", back_populates="operator")
+    document_history = relationship(
+        "OperatorDocumentHistory",
+        back_populates="operator",
+        cascade="all, delete-orphan",
+    )
 
 
 class Trip(AuditMixin, Base):
@@ -1038,3 +1048,23 @@ class FuelLog(AuditMixin, Base):
         "Unit", back_populates="fuel_logs"
     )  # Agregaremos back_populates en Unit
     operator = relationship("Operator")
+
+
+class OperatorDocumentHistory(AuditMixin, Base):
+    __tablename__ = "operator_document_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    operator_id = Column(
+        Integer, ForeignKey("operators.id", ondelete="CASCADE"), nullable=False
+    )
+
+    document_type = Column(String(50), nullable=False)  # licencia, ine, apto_medico
+    filename = Column(String(255), nullable=False)
+    file_url = Column(String(500), nullable=False)
+    file_size = Column(Integer, nullable=True)
+    mime_type = Column(String(100), nullable=True)
+
+    version = Column(Integer, default=1)
+    is_active = Column(Boolean, default=True)
+
+    operator = relationship("Operator", back_populates="document_history")

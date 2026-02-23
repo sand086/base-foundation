@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { unitService } from "@/services/unitService";
 import { clientService } from "@/services/clientService";
+import { operatorService } from "@/services/operatorService";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -30,7 +31,7 @@ import axiosClient from "@/api/axiosClient";
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "/";
 
-type EntityType = "unit" | "client";
+type EntityType = "unit" | "client" | "operator";
 
 type DocHistoryItem = {
   id: number;
@@ -135,10 +136,14 @@ export function DocumentUploadManager({
     if (!activeId) return;
 
     try {
-      const endpoint =
-        entityType === "unit"
-          ? `/units/${activeId}/documents/${docType}/history`
-          : `/clients/${activeId}/documents/${docType}/history`;
+      let endpoint = "";
+      if (entityType === "unit") {
+        endpoint = `/units/${activeId}/documents/${docType}/history`;
+      } else if (entityType === "client") {
+        endpoint = `/clients/${activeId}/documents/${docType}/history`;
+      } else if (entityType === "operator") {
+        endpoint = `/operators/${activeId}/documents/${docType}/history`;
+      }
 
       const res = await axiosClient.get(endpoint);
       const items = (res.data || []) as DocHistoryItem[];
@@ -160,17 +165,22 @@ export function DocumentUploadManager({
     if (!file || !activeId) return;
 
     setIsUploading(true);
+
     try {
-      const result =
-        entityType === "unit"
-          ? await unitService.uploadDocument(activeId, docType, file)
-          : await clientService.uploadDocument(activeId, docType, file);
+      let result;
+      if (entityType === "unit") {
+        result = await unitService.uploadDocument(activeId, docType, file);
+      } else if (entityType === "client") {
+        result = await clientService.uploadDocument(activeId, docType, file);
+      } else if (entityType === "operator") {
+        result = await operatorService.uploadDocument(activeId, docType, file);
+      }
 
-      toast.success("Documento actualizado correctamente");
-      onUploadSuccess(result.url);
-
-      // refresca historial + last date
-      await loadHistory(false);
+      if (result) {
+        toast.success("Archivo cargado con éxito");
+        onUploadSuccess(result.url);
+        await loadHistory(false);
+      }
     } catch (error) {
       console.error("Error al subir documento:", error);
       toast.error("Error al subir documento");
