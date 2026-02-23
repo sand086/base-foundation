@@ -14,7 +14,7 @@ from __future__ import annotations
 from datetime import date
 from enum import Enum as PyEnum
 from sqlalchemy import Enum as SAEnum
-
+from typing import List, Optional, Any
 from sqlalchemy import (
     Column,
     Integer,
@@ -159,8 +159,8 @@ class RecordStatus(str, PyEnum):
 
 class PaymentMethod(str, PyEnum):
     TAG = "TAG"
-    EFECTIVO = "Efectivo"
-    AMBOS = "Ambos"
+    EFECTIVO = "EFECTIVO"
+    AMBOS = "AMBOS"
 
 
 class TollUnitType(str, PyEnum):
@@ -383,6 +383,7 @@ class Unit(AuditMixin, Base):
     operators = relationship("Operator", back_populates="assigned_unit")
     tires = relationship("Tire", back_populates="unit")
     work_orders = relationship("WorkOrder", back_populates="unit")
+    fuel_logs = relationship("FuelLog", back_populates="unit")
 
 
 class UnitDocumentHistory(AuditMixin, Base):
@@ -947,11 +948,14 @@ class TollBooth(AuditMixin, Base):
     id = Column(Integer, primary_key=True, index=True)
     nombre = Column(String(100), nullable=False)
     tramo = Column(String(255), nullable=False)
+    carretera = Column(String(100), nullable=True)
+    estado = Column(String(50), nullable=True)
     costo_5_ejes_sencillo = Column(Float, default=0.0)
     costo_5_ejes_full = Column(Float, default=0.0)
     costo_9_ejes_sencillo = Column(Float, default=0.0)
     costo_9_ejes_full = Column(Float, default=0.0)
-    forma_pago = Column(String(20), default="Ambos")
+    forma_pago = Column(String(20), default="AMBOS")
+    route_segments = relationship("RateSegment", back_populates="toll")
 
 
 class RateTemplate(AuditMixin, Base):
@@ -982,15 +986,55 @@ class RateSegment(Base):
     rate_template_id = Column(
         Integer, ForeignKey("rate_templates.id", ondelete="CASCADE")
     )
-    nombre_segmento = Column(String(255))
+    nombre_segmento = Column(String(255), nullable=False)
     estado = Column(String(50))
     carretera = Column(String(100))
     distancia_km = Column(Float, default=0.0)
     tiempo_minutos = Column(Integer, default=0)
-    toll_booth_id = Column(Integer, ForeignKey("toll_booths.id"), nullable=True)
-    orden = Column(Integer)
+    toll_booth_id = Column(
+        Integer, ForeignKey("toll_booths.id", ondelete="SET NULL"), nullable=True
+    )
+    orden = Column(Integer, nullable=False)
     costo_momento_sencillo = Column(Float, default=0.0)
     costo_momento_full = Column(Float, default=0.0)
 
     template = relationship("RateTemplate", back_populates="segments")
-    toll = relationship("TollBooth")
+    toll = relationship("TollBooth", back_populates="route_segments")
+
+
+class FuelLog(AuditMixin, Base):
+    __tablename__ = "fuel_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Relaciones (Foreign Keys)
+    unit_id = Column(
+        Integer, ForeignKey("units.id", ondelete="RESTRICT"), nullable=False
+    )
+    operator_id = Column(
+        Integer, ForeignKey("operators.id", ondelete="RESTRICT"), nullable=False
+    )
+
+    # Datos de carga
+    fecha_hora = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    estacion = Column(String(200), nullable=False)
+    tipo_combustible = Column(String(20), nullable=False)  # 'diesel' | 'urea'
+
+    # Métricas
+    litros = Column(Float, default=0.0, nullable=False)
+    precio_por_litro = Column(Float, default=0.0, nullable=False)
+    total = Column(Float, default=0.0, nullable=False)
+    odometro = Column(Integer, nullable=False)
+
+    # Gestión de Alertas y Archivos
+    evidencia_url = Column(String(500), nullable=True)
+    excede_tanque = Column(Boolean, default=False)
+    capacidad_tanque_snapshot = Column(Float, nullable=True)
+
+    # Relaciones ORM
+    unit = relationship(
+        "Unit", back_populates="fuel_logs"
+    )  # Agregaremos back_populates en Unit
+    operator = relationship("Operator")

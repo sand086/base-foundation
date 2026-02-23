@@ -2,14 +2,17 @@ from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
 
 
+# --- CASETAS ---
 class TollBoothBase(BaseModel):
     nombre: str
     tramo: str
+    estado: Optional[str] = None  # NUEVO
+    carretera: Optional[str] = None  # NUEVO
     costo_5_ejes_sencillo: float = 0.0
     costo_5_ejes_full: float = 0.0
     costo_9_ejes_sencillo: float = 0.0
     costo_9_ejes_full: float = 0.0
-    forma_pago: str = "Ambos"
+    forma_pago: str = "AMBOS"
 
 
 class TollBoothCreate(TollBoothBase):
@@ -32,19 +35,36 @@ class TollBoothResponse(TollBoothBase):
     model_config = ConfigDict(from_attributes=True)
 
 
-class RateTemplateTollResponse(BaseModel):
+# --- SEGMENTOS DE RUTA (Look SCT) ---
+class RateSegmentBase(BaseModel):
+    nombre_segmento: str
+    estado: Optional[str] = None
+    carretera: Optional[str] = None
+    distancia_km: float = 0.0
+    tiempo_minutos: int = 0
+    toll_booth_id: Optional[int] = None
+    orden: int
+
+
+class RateSegmentCreate(RateSegmentBase):
+    pass
+
+
+class RateSegmentResponse(RateSegmentBase):
     id: int
-    nombre: str
-    position: int
+    toll_nombre: Optional[str] = None
+    costo_momento_sencillo: float
+    costo_momento_full: float
     model_config = ConfigDict(from_attributes=True)
 
 
+# --- PLANTILLAS DE RUTA ---
 class RateTemplateCreate(BaseModel):
     client_id: int
     origen: str
     destino: str
-    toll_unit_type: str
-    toll_ids: List[int]
+    tipo_unidad: str  # '5ejes' | '9ejes'
+    segments: List[RateSegmentCreate]  # Lista detallada de tramos
 
 
 class RateTemplateResponse(BaseModel):
@@ -52,8 +72,10 @@ class RateTemplateResponse(BaseModel):
     client_id: int
     origen: str
     destino: str
-    toll_unit_type: str
+    tipo_unidad: str
     costo_total_sencillo: float
     costo_total_full: float
-    casetas_ordenadas: List[RateTemplateTollResponse] = []
+    distancia_total_km: float
+    tiempo_total_minutos: int
+    segments: List[RateSegmentResponse]
     model_config = ConfigDict(from_attributes=True)

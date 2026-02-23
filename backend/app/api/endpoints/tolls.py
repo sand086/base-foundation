@@ -15,7 +15,7 @@ def list_tolls(search: str = "", db: Session = Depends(get_db)):
     if search:
         query = query.filter(
             models.TollBooth.nombre.ilike(f"%{search}%")
-            | models.models.TollBooth.tramo.ilike(f"%{search}%")
+            | models.TollBooth.tramo.ilike(f"%{search}%")
         )
     return query.all()
 
@@ -66,49 +66,60 @@ def delete_toll(toll_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/rate-templates", response_model=schemas.RateTemplateResponse)
-def create_route_template(
+def create_template(
     data: schemas.RateTemplateCreate,
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    # Calcular costos consultando los precios reales de las casetas
-    tolls = (
-        db.query(models.TollBooth).filter(models.TollBooth.id.in_(data.toll_ids)).all()
-    )
-    toll_map = {t.id: t for t in tolls}
-
-    cost_sencillo = 0.0
-    cost_full = 0.0
-
-    for tid in data.toll_ids:
-        t = toll_map.get(tid)
-        if t:
-            if data.toll_unit_type == "5ejes":
-                cost_sencillo += t.costo_5_ejes_sencillo
-                cost_full += t.costo_5_ejes_full
-            else:
-                cost_sencillo += t.costo_9_ejes_sencillo
-                cost_full += t.costo_9_ejes_full
-
+    # 1. Crear cabecera
     new_template = models.RateTemplate(
         client_id=data.client_id,
         origen=data.origen,
         destino=data.destino,
-        toll_unit_type=data.toll_unit_type,
-        costo_total_sencillo=cost_sencillo,
-        costo_total_full=cost_full,
+        tipo_unidad=data.tipo_unidad,
         created_by_id=user.id,
     )
     db.add(new_template)
-    db.flush()  # Para obtener el ID
+    db.flush()
 
-    # Guardar asociación con orden (posición)
-    for idx, tid in enumerate(data.toll_ids):
-        db.add(
-            models.RateTemplateToll(
-                rate_template_id=new_template.id, toll_booth_id=tid, position=idx + 1
-            )
+    total_s = 0.0
+    total_f = 0.0
+    total_km = 0.0
+    total_min = 0
+
+    # 2. Procesar Segmentos
+    for seg_data in data.segments:
+        cost_s = 0.0
+        cost_f = 0.0
+
+        # Si tiene caseta, obtener costos actuales para el snapshot
+        if seg_data.toll_booth_id:
+            toll = db.query(models.TollBooth).get(seg_data.toll_booth_id)
+            if toll:
+                if data.tipo_unidad == "5ejes":
+                    cost_s, cost_f = toll.costo_5_ejes_sencillo, toll.costo_5_ejes_full
+                else:
+                    cost_s, cost_f = toll.costo_9_ejes_sencillo, toll.costo_9_ejes_full
+
+        segment = models.RateSegment(
+            rate_template_id=new_template.id,
+            **seg_data.model_dump(exclude={"toll_booth_id"}),
+            toll_booth_id=seg_data.toll_booth_id,
+            costo_momento_sencillo=cost_s,
+            costo_momento_full=cost_f,
         )
+        db.add(segment)
+
+        total_s += cost_s
+        total_f += cost_f
+        total_km += seg_data.distancia_km
+        total_min += seg_data.tiempo_minutos
+
+    # 3. Actualizar totales en cabecera
+    new_template.costo_total_sencillo = total_s
+    new_template.costo_total_full = total_f
+    new_template.distancia_total_km = total_km
+    new_template.tiempo_total_minutos = total_min
 
     db.commit()
     db.refresh(new_template)

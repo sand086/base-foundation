@@ -1,24 +1,29 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { Edit, Loader2, Fuel, Droplets, AlertTriangle } from 'lucide-react';
-import { toast } from 'sonner';
-import { type CargaCombustible, type TipoCombustible, unidadesCombustible, operadoresCombustible } from '@/data/combustibleData';
-
+} from "@/components/ui/select";
+import { Edit, Loader2, Fuel, Droplets, AlertTriangle } from "lucide-react";
+import { toast } from "sonner";
+import {
+  type CargaCombustible,
+  type TipoCombustible,
+  unidadesCombustible,
+  operadoresCombustible,
+} from "@/data/combustibleData";
+import { fuelService } from "@/services/fuelService";
 interface EditCargaModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -26,17 +31,22 @@ interface EditCargaModalProps {
   onSave: (carga: CargaCombustible) => void;
 }
 
-export function EditCargaModal({ open, onOpenChange, carga, onSave }: EditCargaModalProps) {
+export function EditCargaModal({
+  open,
+  onOpenChange,
+  carga,
+  onSave,
+}: EditCargaModalProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState({
-    unidadId: '',
-    operadorId: '',
-    tipoCombustible: 'diesel' as TipoCombustible,
+    unidadId: "",
+    operadorId: "",
+    tipoCombustible: "diesel" as TipoCombustible,
     litros: 0,
     precioPorLitro: 0,
     odometro: 0,
-    estacion: '',
-    fechaHora: '',
+    estacion: "",
+    fechaHora: "",
   });
 
   useEffect(() => {
@@ -49,7 +59,7 @@ export function EditCargaModal({ open, onOpenChange, carga, onSave }: EditCargaM
         precioPorLitro: carga.precioPorLitro,
         odometro: carga.odometro,
         estacion: carga.estacion,
-        fechaHora: carga.fechaHora.replace(' ', 'T'),
+        fechaHora: carga.fechaHora.replace(" ", "T"),
       });
     }
   }, [carga, open]);
@@ -59,22 +69,25 @@ export function EditCargaModal({ open, onOpenChange, carga, onSave }: EditCargaM
     if (!carga) return;
 
     setIsSaving(true);
-    
+
     // Simulate API call
     await new Promise((resolve) => setTimeout(resolve, 800));
 
-    const unit = unidadesCombustible.find(u => u.id === formData.unidadId);
-    const operator = operadoresCombustible.find(o => o.id === formData.operadorId);
-    
+    const unit = unidadesCombustible.find((u) => u.id === formData.unidadId);
+    const operator = operadoresCombustible.find(
+      (o) => o.id === formData.operadorId,
+    );
+
     if (!unit || !operator) {
-      toast.error('Error', { description: 'Unidad u operador no válidos.' });
+      toast.error("Error", { description: "Unidad u operador no válidos." });
       setIsSaving(false);
       return;
     }
 
-    const tankCapacity = formData.tipoCombustible === 'diesel' 
-      ? unit.capacidadTanqueDiesel 
-      : unit.capacidadTanqueUrea;
+    const tankCapacity =
+      formData.tipoCombustible === "diesel"
+        ? unit.capacidadTanqueDiesel
+        : unit.capacidadTanqueUrea;
 
     const updatedCarga: CargaCombustible = {
       ...carga,
@@ -88,15 +101,15 @@ export function EditCargaModal({ open, onOpenChange, carga, onSave }: EditCargaM
       total: formData.litros * formData.precioPorLitro,
       odometro: formData.odometro,
       estacion: formData.estacion,
-      fechaHora: formData.fechaHora.replace('T', ' '),
+      fechaHora: formData.fechaHora.replace("T", " "),
       capacidadTanque: tankCapacity,
       excedeTanque: formData.litros > tankCapacity,
     };
 
     onSave(updatedCarga);
-    
+
     setIsSaving(false);
-    toast.success('Ticket actualizado', {
+    toast.success("Ticket actualizado", {
       description: `Los datos del ticket ${carga.id} han sido guardados.`,
     });
     onOpenChange(false);
@@ -105,9 +118,13 @@ export function EditCargaModal({ open, onOpenChange, carga, onSave }: EditCargaM
   if (!carga) return null;
 
   const total = formData.litros * formData.precioPorLitro;
-  const selectedUnit = unidadesCombustible.find(u => u.id === formData.unidadId);
-  const tankCapacity = selectedUnit 
-    ? (formData.tipoCombustible === 'diesel' ? selectedUnit.capacidadTanqueDiesel : selectedUnit.capacidadTanqueUrea)
+  const selectedUnit = unidadesCombustible.find(
+    (u) => u.id === formData.unidadId,
+  );
+  const tankCapacity = selectedUnit
+    ? formData.tipoCombustible === "diesel"
+      ? selectedUnit.capacidadTanqueDiesel
+      : selectedUnit.capacidadTanqueUrea
     : 0;
   const exceedsTank = formData.litros > tankCapacity;
 
@@ -136,7 +153,9 @@ export function EditCargaModal({ open, onOpenChange, carga, onSave }: EditCargaM
               <Input
                 type="datetime-local"
                 value={formData.fechaHora}
-                onChange={(e) => setFormData({ ...formData, fechaHora: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, fechaHora: e.target.value })
+                }
                 required
                 className="h-9 text-sm"
               />
@@ -147,7 +166,9 @@ export function EditCargaModal({ open, onOpenChange, carga, onSave }: EditCargaM
               </Label>
               <Select
                 value={formData.tipoCombustible}
-                onValueChange={(value: TipoCombustible) => setFormData({ ...formData, tipoCombustible: value })}
+                onValueChange={(value: TipoCombustible) =>
+                  setFormData({ ...formData, tipoCombustible: value })
+                }
               >
                 <SelectTrigger className="h-9">
                   <SelectValue />
@@ -178,7 +199,9 @@ export function EditCargaModal({ open, onOpenChange, carga, onSave }: EditCargaM
               </Label>
               <Select
                 value={formData.unidadId}
-                onValueChange={(value) => setFormData({ ...formData, unidadId: value })}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, unidadId: value })
+                }
               >
                 <SelectTrigger className="h-9">
                   <SelectValue placeholder="Seleccionar..." />
@@ -198,7 +221,9 @@ export function EditCargaModal({ open, onOpenChange, carga, onSave }: EditCargaM
               </Label>
               <Select
                 value={formData.operadorId}
-                onValueChange={(value) => setFormData({ ...formData, operadorId: value })}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, operadorId: value })
+                }
               >
                 <SelectTrigger className="h-9">
                   <SelectValue placeholder="Seleccionar..." />
@@ -221,7 +246,9 @@ export function EditCargaModal({ open, onOpenChange, carga, onSave }: EditCargaM
             </Label>
             <Input
               value={formData.estacion}
-              onChange={(e) => setFormData({ ...formData, estacion: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, estacion: e.target.value })
+              }
               placeholder="Nombre de la estación..."
               required
               className="h-9 text-sm"
@@ -239,7 +266,12 @@ export function EditCargaModal({ open, onOpenChange, carga, onSave }: EditCargaM
                 step="0.01"
                 min="0"
                 value={formData.litros}
-                onChange={(e) => setFormData({ ...formData, litros: parseFloat(e.target.value) || 0 })}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    litros: parseFloat(e.target.value) || 0,
+                  })
+                }
                 required
                 className="h-9 text-sm font-mono"
               />
@@ -253,7 +285,12 @@ export function EditCargaModal({ open, onOpenChange, carga, onSave }: EditCargaM
                 step="0.01"
                 min="0"
                 value={formData.precioPorLitro}
-                onChange={(e) => setFormData({ ...formData, precioPorLitro: parseFloat(e.target.value) || 0 })}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    precioPorLitro: parseFloat(e.target.value) || 0,
+                  })
+                }
                 required
                 className="h-9 text-sm font-mono"
               />
@@ -266,7 +303,12 @@ export function EditCargaModal({ open, onOpenChange, carga, onSave }: EditCargaM
                 type="number"
                 min="0"
                 value={formData.odometro}
-                onChange={(e) => setFormData({ ...formData, odometro: parseInt(e.target.value) || 0 })}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    odometro: parseInt(e.target.value) || 0,
+                  })
+                }
                 required
                 className="h-9 text-sm font-mono"
               />
@@ -278,7 +320,8 @@ export function EditCargaModal({ open, onOpenChange, carga, onSave }: EditCargaM
             <div className="flex items-center gap-2 p-3 bg-status-warning-bg rounded-lg border border-status-warning-border">
               <AlertTriangle className="h-4 w-4 text-status-warning flex-shrink-0" />
               <p className="text-xs text-status-warning">
-                Los litros ({formData.litros}L) exceden la capacidad del tanque ({tankCapacity}L).
+                Los litros ({formData.litros}L) exceden la capacidad del tanque
+                ({tankCapacity}L).
               </p>
             </div>
           )}
@@ -287,7 +330,7 @@ export function EditCargaModal({ open, onOpenChange, carga, onSave }: EditCargaM
           <div className="p-4 bg-muted/50 rounded-lg flex items-center justify-between">
             <span className="text-sm font-medium">Total:</span>
             <span className="text-lg font-bold">
-              ${total.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN
+              ${total.toLocaleString("es-MX", { minimumFractionDigits: 2 })} MXN
             </span>
           </div>
 
@@ -311,7 +354,7 @@ export function EditCargaModal({ open, onOpenChange, carga, onSave }: EditCargaM
                   Guardando...
                 </>
               ) : (
-                'Guardar Cambios'
+                "Guardar Cambios"
               )}
             </Button>
           </div>

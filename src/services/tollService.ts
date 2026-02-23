@@ -1,43 +1,84 @@
 import axiosClient from "@/api/axiosClient";
 import { TollBooth, RateTemplate } from "@/types/api.types";
 
+// Tipos para la creación (Payloads)
+export interface RateSegmentCreate {
+  nombre_segmento: string;
+  estado: string;
+  carretera: string;
+  distancia_km: number;
+  tiempo_minutos: number;
+  toll_booth_id: number | null;
+  orden: number;
+  costo_s: number; // El backend lo mapeará a costo_momento_sencillo
+  costo_f: number; // El backend lo mapeará a costo_momento_full
+}
+
 export interface RateTemplateCreate {
   client_id: number;
   origen: string;
   destino: string;
-  toll_unit_type: string;
-  toll_ids: number[];
+  tipo_unidad: string;
+  segments: RateSegmentCreate[];
 }
 
 export const tollService = {
-  getTolls: async (search = "") => {
-    const { data } = await axiosClient.get<TollBooth[]>(
-      `/tolls?search=${search}`,
-    );
+  // --- GESTIÓN DE CASETAS (CATÁLOGO) ---
+  getTolls: async (search?: string): Promise<TollBooth[]> => {
+    const params = search ? { search } : {};
+    const { data } = await axiosClient.get<TollBooth[]>("/tolls", { params });
     return data;
   },
-  createToll: async (toll: Partial<TollBooth>) => {
+
+  createToll: async (toll: Partial<TollBooth>): Promise<TollBooth> => {
     const { data } = await axiosClient.post<TollBooth>("/tolls", toll);
     return data;
   },
-  updateToll: async (id: number, toll: Partial<TollBooth>) => {
+
+  updateToll: async (
+    id: number,
+    toll: Partial<TollBooth>,
+  ): Promise<TollBooth> => {
     const { data } = await axiosClient.put<TollBooth>(`/tolls/${id}`, toll);
     return data;
   },
-  deleteToll: async (id: number) => {
+
+  deleteToll: async (id: number): Promise<void> => {
     await axiosClient.delete(`/tolls/${id}`);
   },
-  getTemplates: async (clientId?: number) => {
-    const url = clientId
-      ? `/rate-templates?client_id=${clientId}`
-      : "/rate-templates";
-    const { data } = await axiosClient.get<RateTemplate[]>(url);
+
+  // --- GESTIÓN DE TARIFAS AUTORIZADAS (ARMADOR) ---
+
+  // ✅ Obtener todas las plantillas (Incluye los segments por defecto)
+  getTemplates: async (): Promise<RateTemplate[]> => {
+    const { data } = await axiosClient.get<RateTemplate[]>("/rate-templates");
     return data;
   },
-  saveTemplate: async (template: RateTemplateCreate) => {
+
+  // ✅ Guardar nueva ruta autorizada
+  saveTemplate: async (payload: RateTemplateCreate): Promise<RateTemplate> => {
+    // Senior Tip: Limpiamos los strings antes de enviar
+    const cleanPayload = {
+      ...payload,
+      origen: payload.origen.trim().toUpperCase(),
+      destino: payload.destino.trim().toUpperCase(),
+    };
     const { data } = await axiosClient.post<RateTemplate>(
       "/rate-templates",
-      template,
+      cleanPayload,
+    );
+    return data;
+  },
+
+  // ✅ Eliminar tarifa
+  deleteTemplate: async (id: number): Promise<void> => {
+    await axiosClient.delete(`/rate-templates/${id}`);
+  },
+
+  // ✅ Obtener detalle de una sola ruta (por si necesitas ver el reporte SCT individual)
+  getTemplateById: async (id: number): Promise<RateTemplate> => {
+    const { data } = await axiosClient.get<RateTemplate>(
+      `/rate-templates/${id}`,
     );
     return data;
   },

@@ -2,22 +2,22 @@ import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
 import { cn } from "@/lib/utils";
 
-export interface ActionButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface ActionButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   asChild?: boolean;
+  variant?: string;
   size?: "sm" | "md" | "lg";
 }
 
 const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProps>(
   ({ className, asChild = false, size = "md", ...props }, ref) => {
     const Comp = asChild ? Slot : "button";
-    
+
     const sizeStyles = {
       sm: "h-8 px-3 text-xs",
       md: "h-9 px-4 text-sm",
       lg: "h-10 px-6 text-sm",
     };
-    
+
     return (
       <Comp
         className={cn(
@@ -26,13 +26,13 @@ const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProps>(
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2",
           "disabled:pointer-events-none disabled:opacity-50",
           sizeStyles[size],
-          className
+          className,
         )}
         ref={ref}
         {...props}
       />
     );
-  }
+  },
 );
 ActionButton.displayName = "ActionButton";
 

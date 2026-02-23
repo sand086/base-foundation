@@ -3,13 +3,41 @@ import {
   Plus,
   Trash2,
   GripVertical,
+  Search,
   Route,
-  Calculator,
   ArrowRight,
-  MoreHorizontal,
-  Edit,
   Loader2,
+  Check,
+  MapPin,
+  AlertTriangle,
+  History,
+  Repeat,
+  HelpCircle,
+  Eye,
+  Pencil,
+  MoreVertical,
 } from "lucide-react";
+
+// DND Kit
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+
+// UI Components
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { ActionButton } from "@/components/ui/action-button";
@@ -17,6 +45,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Select,
   SelectContent,
@@ -31,6 +60,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,9 +85,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+
+// Services & Hooks
 import { TollBooth, RateTemplate } from "@/types/api.types";
 import { useTiposUnidad } from "@/hooks/useTiposUnidad";
-import { useRutasAutorizadas } from "@/hooks/useRutasAutorizadas";
 import { useClients } from "@/hooks/useClients";
 import { tollService, RateTemplateCreate } from "@/services/tollService";
 import { cn } from "@/lib/utils";
@@ -60,150 +98,410 @@ import {
   ColumnDef,
 } from "@/components/ui/enhanced-data-table";
 
+interface SegmentEntry {
+  tempId: string;
+  nombre_segmento: string;
+  estado: string;
+  carretera: string;
+  distancia_km: number;
+  tiempo_minutos: number;
+  toll_booth_id: number | null;
+  toll_nombre?: string;
+  costo_s: number;
+  costo_f: number;
+}
+
+type UpdateField = keyof SegmentEntry;
+
+const genTempId = () => `seg-${Math.random().toString(36).slice(2, 11)}`;
+
+// --- COMPONENTE FILA (SORTABLE) ---
+const SortableTableRow = ({
+  seg,
+  idx,
+  isFullUnit,
+  updateSegment,
+  removeSegment,
+  formatCurrency,
+  hasGap,
+}: any) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: seg.tempId });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : "auto",
+    opacity: isDragging ? 0.6 : 1,
+  };
+
+  return (
+    <>
+      {hasGap && (
+        <TableRow className="bg-amber-50/30 border-none h-7">
+          <TableCell colSpan={8} className="py-0">
+            <div className="flex items-center justify-center gap-2 text-[9px] font-bold text-amber-600 uppercase tracking-tighter">
+              <AlertTriangle className="h-3 w-3" /> Discontinuidad:{" "}
+              {(seg.nombre_segmento.split("-")[0] || "").trim()} no conecta con
+              el anterior
+            </div>
+          </TableCell>
+        </TableRow>
+      )}
+      <TableRow
+        ref={setNodeRef}
+        style={style}
+        className={cn(
+          "group transition-colors",
+          isDragging
+            ? "bg-slate-100 shadow-2xl"
+            : seg.toll_booth_id
+              ? "bg-white"
+              : "bg-slate-50/40",
+        )}
+      >
+        <TableCell className="w-10">
+          <div
+            {...attributes}
+            {...listeners}
+            className="cursor-grab active:cursor-grabbing p-1 text-slate-300 hover:text-primary transition-colors"
+          >
+            <GripVertical className="h-4 w-4" />
+          </div>
+        </TableCell>
+        <TableCell className="w-[30%]">
+          <div className="flex flex-col gap-0.5">
+            <Input
+              className="h-7 text-xs font-bold border-transparent hover:border-slate-200 focus:bg-white"
+              value={seg.nombre_segmento}
+              onChange={(e) =>
+                updateSegment(idx, "nombre_segmento", e.target.value)
+              }
+            />
+            {seg.toll_booth_id && (
+              <span className="text-[8px] font-black text-primary px-1 uppercase tracking-tighter">
+                ● Peaje Registrado
+              </span>
+            )}
+          </div>
+        </TableCell>
+        <TableCell className="w-16">
+          <Input
+            className="h-7 text-[10px] uppercase w-16 text-center border-transparent hover:border-slate-200 focus:bg-white"
+            value={seg.estado}
+            onChange={(e) => updateSegment(idx, "estado", e.target.value)}
+          />
+        </TableCell>
+        <TableCell className="w-24">
+          <Input
+            className="h-7 text-[10px] uppercase w-24 border-transparent hover:border-slate-200 focus:bg-white"
+            value={seg.carretera}
+            onChange={(e) => updateSegment(idx, "carretera", e.target.value)}
+          />
+        </TableCell>
+        <TableCell className="w-20">
+          <Input
+            type="number"
+            className="h-7 text-[10px] w-20 text-right font-mono border-transparent hover:border-slate-200 focus:bg-white"
+            value={seg.distancia_km}
+            onChange={(e) =>
+              updateSegment(
+                idx,
+                "distancia_km",
+                parseFloat(e.target.value) || 0,
+              )
+            }
+          />
+        </TableCell>
+        <TableCell className="w-20">
+          <Input
+            type="number"
+            className="h-7 text-[10px] w-20 text-right font-mono border-transparent hover:border-slate-200 focus:bg-white"
+            value={seg.tiempo_minutos}
+            onChange={(e) =>
+              updateSegment(
+                idx,
+                "tiempo_minutos",
+                parseInt(e.target.value) || 0,
+              )
+            }
+          />
+        </TableCell>
+        <TableCell className="text-right font-mono font-bold text-slate-700 text-xs">
+          {formatCurrency(isFullUnit ? seg.costo_f : seg.costo_s)}
+        </TableCell>
+        <TableCell className="w-10 text-right">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 text-destructive opacity-0 group-hover:opacity-100"
+            onClick={() => removeSegment(idx)}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </TableCell>
+      </TableRow>
+    </>
+  );
+};
+
+// --- COMPONENTE PRINCIPAL ---
 export const ArmadorRutas = () => {
   const { tiposActivos } = useTiposUnidad();
-  const { rutasActivas } = useRutasAutorizadas();
   const { clients } = useClients();
 
   const [selectedCliente, setSelectedCliente] = useState("");
-  const [rutaSeleccionada, setRutaSeleccionada] = useState("");
   const [origen, setOrigen] = useState("");
   const [destino, setDestino] = useState("");
-  const [tipoUnidad, setTipoUnidad] = useState("");
-  const [selectedTolls, setSelectedTolls] = useState<TollBooth[]>([]);
+  const [tipoUnidadId, setTipoUnidadId] = useState("");
+  const [segments, setSegments] = useState<SegmentEntry[]>([]);
   const [allTolls, setAllTolls] = useState<TollBooth[]>([]);
   const [savedRoutes, setSavedRoutes] = useState<RateTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [tollSearch, setTollSearch] = useState("");
+
+  // Estados para Eliminación
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [routeToDelete, setRouteToDelete] = useState<RateTemplate | null>(null);
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+
   useEffect(() => {
-    const init = async () => {
+    const fetchData = async () => {
       try {
-        const [tollsData, templatesData] = await Promise.all([
+        const [t, rs] = await Promise.all([
           tollService.getTolls(),
           tollService.getTemplates(),
         ]);
-        setAllTolls(tollsData);
-        setSavedRoutes(templatesData);
-      } catch (e) {
-        toast.error("Error al sincronizar con el servidor");
+        setAllTolls(t);
+        setSavedRoutes(rs);
       } finally {
         setIsLoading(false);
       }
     };
-    init();
+    void fetchData();
   }, []);
 
-  const handleRutaChange = (rutaId: string) => {
-    setRutaSeleccionada(rutaId);
-    const ruta = rutasActivas.find((r) => r.id === rutaId);
-    if (ruta) {
-      setOrigen(ruta.origen);
-      setDestino(ruta.destino);
-    }
-  };
-
   const isFullUnit = useMemo(() => {
-    const tipo = tiposActivos.find((t) => t.id === tipoUnidad);
+    const t = tiposActivos.find((x) => x.id === tipoUnidadId);
+    const name = t?.nombre?.toLowerCase?.() || "";
     return (
-      tipo?.nombre.toLowerCase().includes("full") ||
-      tipo?.nombre.toLowerCase().includes("9 ejes")
+      name.includes("full") || name.includes("9 ejes") || name.includes("9ejes")
     );
-  }, [tipoUnidad, tiposActivos]);
+  }, [tipoUnidadId, tiposActivos]);
 
-  const costs = useMemo(() => {
-    return selectedTolls.reduce(
-      (acc, toll) => {
-        if (isFullUnit) {
-          acc.sencillo += toll.costo_9_ejes_sencillo;
-          acc.full += toll.costo_9_ejes_full;
-        } else {
-          acc.sencillo += toll.costo_5_ejes_sencillo;
-          acc.full += toll.costo_5_ejes_full;
-        }
+  const totals = useMemo(() => {
+    return segments.reduce(
+      (acc, s) => {
+        acc.distancia += s.distancia_km || 0;
+        acc.tiempo += s.tiempo_minutos || 0;
+        acc.costo += isFullUnit ? s.costo_f : s.costo_s;
         return acc;
       },
-      { sencillo: 0, full: 0 },
+      { distancia: 0, tiempo: 0, costo: 0 },
     );
-  }, [selectedTolls, isFullUnit]);
+  }, [segments, isFullUnit]);
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("es-MX", {
+  const formatCurrency = (val: number) =>
+    new Intl.NumberFormat("es-MX", {
       style: "currency",
       currency: "MXN",
-    }).format(amount);
+    }).format(val || 0);
+
+  // --- MANEJADORES ---
+  const updateSegment = (idx: number, field: UpdateField, value: unknown) => {
+    setSegments((prev) => {
+      const updated = [...prev];
+      updated[idx] = { ...updated[idx], [field]: value };
+      if (field === "nombre_segmento") {
+        const match = allTolls.find(
+          (t) => (t.tramo || "").toLowerCase() === String(value).toLowerCase(),
+        );
+        if (match) {
+          updated[idx].carretera = (match as any).carretera || "";
+          updated[idx].estado = (match as any).estado || "";
+          updated[idx].toll_booth_id = match.id;
+          updated[idx].costo_s = isFullUnit
+            ? match.costo_9_ejes_sencillo
+            : match.costo_5_ejes_sencillo;
+          updated[idx].costo_f = isFullUnit
+            ? match.costo_9_ejes_full
+            : match.costo_5_ejes_full;
+        }
+      }
+      return updated;
+    });
   };
 
-  const handleSaveRoute = async () => {
-    if (!selectedCliente || !origen || !destino || !tipoUnidad) {
-      toast.error("Completa los campos obligatorios");
-      return;
-    }
+  const handleEditRoute = (route: RateTemplate) => {
+    setSelectedCliente(route.client_id.toString());
+    setOrigen(route.origen);
+    setDestino(route.destino);
 
+    const unit = tiposActivos.find((t) =>
+      route.tipo_unidad === "9ejes"
+        ? t.nombre.toLowerCase().includes("9")
+        : t.nombre.toLowerCase().includes("5"),
+    );
+    if (unit) setTipoUnidadId(unit.id);
+
+    setSegments(
+      route.segments.map((s) => ({
+        tempId: genTempId(),
+        nombre_segmento: s.nombre_segmento,
+        estado: s.estado || "",
+        carretera: s.carretera || "",
+        distancia_km: s.distancia_km,
+        tiempo_minutos: s.tiempo_minutos,
+        toll_booth_id: s.toll_booth_id,
+        costo_s: s.costo_momento_sencillo,
+        costo_f: s.costo_momento_full,
+      })),
+    );
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    toast.info("Ruta cargada para edición");
+  };
+
+  // ✅ Manejador del fin del arrastre (DndContext logic)
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    // Si no hay destino o se soltó en el mismo lugar, no hacemos nada
+    if (!over || active.id === over.id) return;
+
+    setSegments((items) => {
+      // Buscamos los índices basados en el tempId que definimos
+      const oldIndex = items.findIndex((i) => i.tempId === active.id);
+      const newIndex = items.findIndex((i) => i.tempId === over.id);
+
+      // Usamos arrayMove de @dnd-kit/sortable para generar el nuevo array ordenado
+      return arrayMove(items, oldIndex, newIndex);
+    });
+
+    toast.info("Orden de ruta actualizado", { duration: 1000 });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!routeToDelete) return;
+    try {
+      await tollService.deleteTemplate(routeToDelete.id);
+      setSavedRoutes((prev) => prev.filter((r) => r.id !== routeToDelete.id));
+      toast.success("Tarifa eliminada");
+    } catch {
+      toast.error("Error al eliminar");
+    } finally {
+      setDeleteDialogOpen(false);
+    }
+  };
+
+  const handleReverseRoute = () => {
+    if (segments.length === 0) return;
+    const oldO = origen;
+    setOrigen(destino);
+    setDestino(oldO);
+    setSegments((prev) =>
+      [...prev].reverse().map((s) => ({
+        ...s,
+        nombre_segmento: s.nombre_segmento.includes("-")
+          ? s.nombre_segmento
+              .split("-")
+              .map((x) => x.trim())
+              .reverse()
+              .join(" - ")
+          : s.nombre_segmento,
+      })),
+    );
+    toast.success("Ruta invertida");
+  };
+  // ✅ Validación de coherencia geográfica (SCT Gap Detection)
+  const checkRouteGap = (idx: number) => {
+    // Si es el primer tramo, no hay nada con qué comparar
+    if (idx === 0 || !segments[idx] || !segments[idx - 1]) return false;
+
+    const currentStart = segments[idx].nombre_segmento
+      .split("-")[0]
+      ?.trim()
+      .toLowerCase();
+    const prevEnd = segments[idx - 1].nombre_segmento
+      .split("-")[1]
+      ?.trim()
+      .toLowerCase();
+
+    // Si el destino del anterior no es igual al origen del actual, hay un "hueco"
+    return Boolean(prevEnd && currentStart && prevEnd !== currentStart);
+  };
+  const handleSave = async () => {
+    if (!selectedCliente || !origen || !destino || !tipoUnidadId)
+      return toast.error("Datos incompletos");
     const payload: RateTemplateCreate = {
-      client_id: parseInt(selectedCliente),
+      client_id: parseInt(selectedCliente, 10),
       origen,
       destino,
-      toll_unit_type: isFullUnit ? "9ejes" : "5ejes",
-      toll_ids: selectedTolls.map((t) => t.id),
+      tipo_unidad: isFullUnit ? "9ejes" : "5ejes",
+      segments: segments.map((s, idx) => ({ ...s, orden: idx + 1 })) as any,
     };
-
     try {
-      const result = await tollService.saveTemplate(payload);
-      setSavedRoutes([result, ...savedRoutes]);
-      toast.success("Tarifa guardada exitosamente");
-      handleClearForm();
-    } catch (e) {
-      toast.error("Error al guardar la tarifa");
+      const res = await tollService.saveTemplate(payload);
+      setSavedRoutes((prev) => [res, ...prev]);
+      setSegments([]);
+      toast.success("Tarifa Autorizada Guardada");
+    } catch {
+      toast.error("Error al guardar");
     }
   };
 
-  const handleClearForm = () => {
-    setSelectedCliente("");
-    setRutaSeleccionada("");
-    setOrigen("");
-    setDestino("");
-    setTipoUnidad("");
-    setSelectedTolls([]);
-  };
-
-  const availableTolls = allTolls.filter(
-    (t) => !selectedTolls.find((st) => st.id === t.id),
-  );
-
-  const columns: ColumnDef<RateTemplate>[] = useMemo(
+  const historyColumns: ColumnDef<RateTemplate>[] = useMemo(
     () => [
-      { key: "cliente_nombre", header: "Cliente", sortable: true },
+      {
+        key: "client_id",
+        header: "Cliente",
+        render: (val) => clients.find((c) => c.id === val)?.razon_social || val,
+      },
       {
         key: "origen",
         header: "Ruta",
         render: (_, row) => (
-          <div className="flex items-center gap-2 font-medium">
-            {row.origen} <ArrowRight className="h-3 w-3 opacity-50" />{" "}
-            {row.destino}
+          <div className="flex items-center gap-1 font-bold text-slate-700">
+            <span>{row.origen}</span>
+            <ArrowRight className="h-3 w-3 text-muted-foreground" />
+            <span>{row.destino}</span>
           </div>
         ),
       },
       {
-        key: "toll_unit_type",
-        header: "Configuración",
-        render: (val) => (
+        key: "tipo_unidad",
+        header: "Config.",
+        render: (v) => (
           <Badge
             variant="outline"
-            className={val === "9ejes" ? "bg-amber-50" : "bg-blue-50"}
+            className={
+              v === "9ejes"
+                ? "bg-amber-50 text-amber-700"
+                : "bg-blue-50 text-blue-700"
+            }
           >
-            {val === "9ejes" ? "9 Ejes (Full)" : "5 Ejes"}
+            {v === "9ejes" ? "9 Ejes (Full)" : "5 Ejes (Senc.)"}
           </Badge>
         ),
       },
       {
         key: "costo_total_full",
-        header: "Costo Total (Full)",
-        render: (val) => (
-          <span className="font-mono font-bold text-emerald-700">
-            {formatCurrency(val as number)}
+        header: "Costo Autorizado",
+        render: (v) => (
+          <span className="font-mono font-bold text-emerald-600">
+            {formatCurrency(Number(v))}
           </span>
         ),
       },
@@ -211,47 +509,75 @@ export const ArmadorRutas = () => {
         key: "id",
         header: "Acciones",
         render: (_, row) => (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => {
-              setRouteToDelete(row);
-              setDeleteDialogOpen(true);
-            }}
-          >
-            <Trash2 className="h-4 w-4 text-destructive" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 hover:bg-slate-200"
+              >
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleEditRoute(row)}>
+                <Pencil className="mr-2 h-4 w-4 text-blue-500" /> Editar Ruta
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => toast.info("Generando reporte...")}
+              >
+                <Eye className="mr-2 h-4 w-4 text-slate-500" /> Ver Detalle
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-destructive"
+                onClick={() => {
+                  setRouteToDelete(row);
+                  setDeleteDialogOpen(true);
+                }}
+              >
+                <Trash2 className="mr-2 h-4 w-4" /> Eliminar
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         ),
       },
     ],
-    [savedRoutes],
+    [clients, tiposActivos, savedRoutes],
   );
 
   if (isLoading)
     return (
       <div className="flex justify-center py-20">
-        <Loader2 className="animate-spin" />
+        <Loader2 className="animate-spin text-primary h-10 w-10" />
       </div>
     );
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Route className="h-5 w-5" /> Armador de Ruta
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Cliente *</Label>
+      <Alert className="bg-blue-50 border-blue-200 mb-6 shadow-sm">
+        <HelpCircle className="h-4 w-4 text-blue-600" />
+        <AlertDescription className="text-blue-700 text-xs leading-relaxed font-medium">
+          **Guía:** Selecciona cliente y unidad. Inserta casetas o tramos
+          libres. **Arrastra (::)** para reordenar y observa (⚠️) si hay
+          desconexiones. Al guardar, los costos se congelan como snapshot para
+          proteger tu tarifa autorizada.
+        </AlertDescription>
+      </Alert>
+
+      <Card className="border-t-4 border-t-primary shadow-xl overflow-hidden">
+        <CardHeader className="bg-slate-50/80 border-b p-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+            <div className="space-y-1">
+              <Label className="text-[10px] uppercase font-bold text-slate-500">
+                Cliente Autorizado
+              </Label>
               <Select
                 value={selectedCliente}
                 onValueChange={setSelectedCliente}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar..." />
+                <SelectTrigger className="h-9 bg-white">
+                  <SelectValue placeholder="Cliente..." />
                 </SelectTrigger>
                 <SelectContent>
                   {clients.map((c) => (
@@ -262,146 +588,273 @@ export const ArmadorRutas = () => {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Origen *</Label>
-                <Input
-                  value={origen}
-                  onChange={(e) => setOrigen(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Destino *</Label>
-                <Input
-                  value={destino}
-                  onChange={(e) => setDestino(e.target.value)}
-                />
-              </div>
+            <div className="space-y-1">
+              <Label className="text-[10px] uppercase font-bold text-slate-500">
+                Origen
+              </Label>
+              <Input
+                placeholder="CDMX"
+                className="h-9 bg-white"
+                value={origen}
+                onChange={(e) => setOrigen(e.target.value)}
+              />
             </div>
-            <div className="space-y-2">
-              <Label>Tipo de Unidad *</Label>
-              <Select value={tipoUnidad} onValueChange={setTipoUnidad}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Configuración de ejes..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {tiposActivos.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      {t.nombre}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="space-y-1">
+              <Label className="text-[10px] uppercase font-bold text-slate-500">
+                Destino
+              </Label>
+              <Input
+                placeholder="VERACRUZ"
+                className="h-9 bg-white"
+                value={destino}
+                onChange={(e) => setDestino(e.target.value)}
+              />
             </div>
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" className="w-full border-dashed">
-                  <Plus className="h-4 w-4 mr-2" /> Agregar Caseta
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Casetas Disponibles</DialogTitle>
-                </DialogHeader>
-                <ScrollArea className="h-72 pr-4">
-                  {availableTolls.map((t) => (
-                    <div
-                      key={t.id}
-                      className="flex justify-between items-center p-3 border-b hover:bg-slate-50 cursor-pointer"
-                      onClick={() => {
-                        setSelectedTolls([...selectedTolls, t]);
-                        setDialogOpen(false);
-                      }}
-                    >
-                      <div>
-                        <p className="text-sm font-bold">{t.nombre}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {t.tramo}
-                        </p>
-                      </div>
-                      <div className="text-right font-mono text-xs text-primary">
-                        {formatCurrency(t.costo_5_ejes_sencillo)}
-                      </div>
-                    </div>
-                  ))}
-                </ScrollArea>
-              </DialogContent>
-            </Dialog>
-            <div className="flex gap-2 pt-4">
+            <div className="flex gap-2">
+              <div className="flex-1 space-y-1">
+                <Label className="text-[10px] uppercase font-bold text-slate-500">
+                  Unidad
+                </Label>
+                <Select value={tipoUnidadId} onValueChange={setTipoUnidadId}>
+                  <SelectTrigger className="h-9 bg-white">
+                    <SelectValue placeholder="Ejes..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tiposActivos.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <Button
-                variant="ghost"
-                onClick={handleClearForm}
-                className="flex-1"
+                variant="outline"
+                size="icon"
+                className="h-9 w-9 shrink-0 border-slate-300 hover:bg-slate-100"
+                onClick={handleReverseRoute}
+                title="Invertir"
               >
-                Limpiar
+                <Repeat className="h-4 w-4 text-slate-600" />
               </Button>
-              <ActionButton onClick={handleSaveRoute} className="flex-1">
-                Guardar Tarifa
-              </ActionButton>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span>
-                <Calculator className="h-5 w-5 inline mr-2" /> Casetas en Ruta
-              </span>
-              <Badge>{selectedTolls.length}</Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2 min-h-[200px]">
-              {selectedTolls.map((t, idx) => (
-                <div
-                  key={t.id}
-                  className="flex items-center gap-3 p-2 bg-slate-50 border rounded-md group"
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <Table>
+              <TableHeader className="bg-slate-100">
+                <TableRow className="text-[10px] uppercase font-bold text-slate-600">
+                  <TableHead className="w-10"></TableHead>
+                  <TableHead className="w-[30%]">Tramo / Plaza</TableHead>
+                  <TableHead className="w-16">Edo.</TableHead>
+                  <TableHead className="w-24">Carr.</TableHead>
+                  <TableHead className="text-right w-20">Km</TableHead>
+                  <TableHead className="text-right w-20">Min</TableHead>
+                  <TableHead className="text-right">Costo</TableHead>
+                  <TableHead className="w-10"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody className="relative">
+                <SortableContext
+                  items={segments.map((s) => s.tempId)}
+                  strategy={verticalListSortingStrategy}
                 >
-                  <GripVertical className="h-4 w-4 text-slate-300" />
-                  <div className="flex-1">
-                    <p className="text-xs font-bold">{t.nombre}</p>
-                    <p className="text-[10px] text-muted-foreground">
-                      {t.tramo}
-                    </p>
-                  </div>
-                  <div className="font-mono text-xs">
-                    {formatCurrency(
-                      isFullUnit ? t.costo_9_ejes_full : t.costo_5_ejes_full,
-                    )}
-                  </div>
-                  <button
-                    onClick={() =>
-                      setSelectedTolls(
-                        selectedTolls.filter((st) => st.id !== t.id),
-                      )
-                    }
+                  {segments.map((seg, idx) => (
+                    <SortableTableRow
+                      key={seg.tempId}
+                      seg={seg}
+                      idx={idx}
+                      isFullUnit={isFullUnit}
+                      updateSegment={updateSegment}
+                      removeSegment={(i: number) =>
+                        setSegments((prev) =>
+                          prev.filter((_, idx) => idx !== i),
+                        )
+                      }
+                      formatCurrency={formatCurrency}
+                      hasGap={checkRouteGap(idx)}
+                    />
+                  ))}
+                </SortableContext>
+                <TableRow className="bg-slate-900 text-white font-bold hover:bg-slate-900 border-none sticky bottom-0">
+                  <TableCell
+                    colSpan={4}
+                    className="text-right text-[10px] uppercase tracking-widest opacity-70"
                   >
-                    <Trash2 className="h-3 w-3 text-destructive opacity-0 group-hover:opacity-100" />
-                  </button>
+                    Totales SCT
+                  </TableCell>
+                  <TableCell className="text-right font-mono text-xs border-l border-white/10">
+                    {totals.distancia.toFixed(1)} km
+                  </TableCell>
+                  <TableCell className="text-right font-mono text-xs border-l border-white/10">
+                    {Math.floor(totals.tiempo / 60)}h {totals.tiempo % 60}m
+                  </TableCell>
+                  <TableCell className="text-right text-base font-bold text-emerald-400 border-l border-white/10">
+                    {formatCurrency(totals.costo)}
+                  </TableCell>
+                  <TableCell />
+                </TableRow>
+              </TableBody>
+            </Table>
+          </DndContext>
+        </CardContent>
+      </Card>
+
+      <div className="flex flex-col md:flex-row justify-between items-center bg-white p-5 rounded-2xl border shadow-sm gap-4">
+        <div className="flex gap-3">
+          <Button
+            onClick={() =>
+              setSegments([
+                ...segments,
+                {
+                  tempId: genTempId(),
+                  nombre_segmento: "Nuevo Tramo - ",
+                  estado: "",
+                  carretera: "",
+                  distancia_km: 0,
+                  tiempo_minutos: 0,
+                  toll_booth_id: null,
+                  costo_s: 0,
+                  costo_f: 0,
+                },
+              ])
+            }
+            variant="outline"
+            className="h-10 border-slate-200"
+          >
+            <Plus className="h-4 w-4 mr-2 text-primary" /> Tramo Libre
+          </Button>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="h-10 border-slate-200">
+                <MapPin className="h-4 w-4 mr-2 text-emerald-600" /> Catálogo
+                Casetas
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Insertar Caseta</DialogTitle>
+              </DialogHeader>
+              <div className="relative my-2">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Input
+                  placeholder="Filtrar..."
+                  className="pl-9 h-9"
+                  value={tollSearch}
+                  onChange={(e) => setTollSearch(e.target.value)}
+                />
+              </div>
+              <ScrollArea className="h-80 pr-4">
+                <div className="space-y-1">
+                  {allTolls
+                    .filter(
+                      (t) =>
+                        t.nombre
+                          .toLowerCase()
+                          .includes(tollSearch.toLowerCase()) ||
+                        t.tramo
+                          .toLowerCase()
+                          .includes(tollSearch.toLowerCase()),
+                    )
+                    .map((t) => (
+                      <div
+                        key={t.id}
+                        className="p-3 border rounded-lg flex justify-between items-center hover:bg-slate-50 cursor-pointer group"
+                        onClick={() => {
+                          setSegments([
+                            ...segments,
+                            {
+                              tempId: genTempId(),
+                              nombre_segmento: t.tramo,
+                              estado: (t as any).estado || "",
+                              carretera: (t as any).carretera || "",
+                              distancia_km: 0,
+                              tiempo_minutos: 0,
+                              toll_booth_id: t.id,
+                              toll_nombre: t.nombre,
+                              costo_s: isFullUnit
+                                ? t.costo_9_ejes_sencillo
+                                : t.costo_5_ejes_sencillo,
+                              costo_f: isFullUnit
+                                ? t.costo_9_ejes_full
+                                : t.costo_5_ejes_full,
+                            },
+                          ]);
+                          setDialogOpen(false);
+                        }}
+                      >
+                        <div className="flex-1">
+                          <p className="text-sm font-bold group-hover:text-primary">
+                            {t.nombre}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground uppercase">
+                            {t.tramo}
+                          </p>
+                        </div>
+                        <Badge
+                          variant="secondary"
+                          className="font-mono text-[10px]"
+                        >
+                          {formatCurrency(
+                            isFullUnit
+                              ? t.costo_9_ejes_full
+                              : t.costo_5_ejes_full,
+                          )}
+                        </Badge>
+                      </div>
+                    ))}
                 </div>
-              ))}
-            </div>
-            <div className="mt-6 p-4 bg-emerald-50 rounded-xl border border-emerald-100 flex justify-between items-center">
-              <span className="text-xs font-bold text-emerald-800 uppercase">
-                Costo Total Estimado
-              </span>
-              <span className="text-xl font-mono font-bold text-emerald-700">
-                {formatCurrency(costs.full)}
-              </span>
-            </div>
-          </CardContent>
-        </Card>
+              </ScrollArea>
+            </DialogContent>
+          </Dialog>
+        </div>
+        <ActionButton
+          onClick={handleSave}
+          className="px-12 h-11 text-base shadow-lg shadow-primary/20"
+        >
+          <Check className="h-5 w-5 mr-2" /> Guardar y Autorizar
+        </ActionButton>
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Tarifas Vigentes</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between border-b bg-slate-50/50 py-3">
+          <CardTitle className="text-lg">Tarifas Autorizadas</CardTitle>
         </CardHeader>
-        <CardContent>
-          <EnhancedDataTable data={savedRoutes} columns={columns} />
+        <CardContent className="pt-6">
+          <EnhancedDataTable
+            data={savedRoutes}
+            columns={historyColumns}
+            exportFileName="tarifas_tms"
+          />
         </CardContent>
       </Card>
+
+      {/* MODAL DE ELIMINACIÓN */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar tarifa autorizada?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción es irreversible y afectará los reportes de
+              rentabilidad históricos asociados a esta ruta.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              Confirmar Eliminación
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

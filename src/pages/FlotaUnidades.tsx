@@ -53,7 +53,7 @@ import { AddUnidadModal } from "@/features/flota/AddUnidadModal";
 import { PatrimonialView } from "@/features/flota/PatrimonialView";
 import { useUnits } from "@/hooks/useUnits";
 
-import { Unidad } from "@/types/api.types";
+import { Unit } from "@/types/api.types";
 
 // --- Helpers Visuales ---
 const getStatusBadge = (status: string) => {
@@ -108,7 +108,7 @@ export default function FlotaUnidades() {
   const [isSaving, setIsSaving] = useState(false);
 
   // Tipado correcto: IDs son numéricos y la unidad a editar es tipo Unidad completa
-  const [unidadToEdit, setUnidadToEdit] = useState<Unidad | null>(null);
+  const [unidadToEdit, setUnidadToEdit] = useState<Unit | null>(null);
   const [unidadToDelete, setUnidadToDelete] = useState<number | null>(null);
 
   // Contadores para KPIs rápidos
@@ -125,14 +125,14 @@ export default function FlotaUnidades() {
    * Recibe el payload LIMPIO desde AddUnidadModal.
    * Ya no necesitamos transformar datos aquí.
    */
-  const handleSave = async (unitData: Partial<Unidad>) => {
+  const handleSave = async (unitData: Partial<Unit>) => {
     setIsSaving(true);
     let success = false;
 
     // Si tiene ID, es una actualización
     if (unitData.id) {
       // updateUnit en el hook debería aceptar (id, data)
-      success = await updateUnit(unitData.id.toString(), unitData);
+      success = await updateUnit(unitData.id, unitData);
     } else {
       // Crear nueva unidad
       success = await createUnit(unitData as any);
@@ -147,12 +147,12 @@ export default function FlotaUnidades() {
   const handleDelete = async () => {
     if (unidadToDelete) {
       // deleteUnit espera string en tu hook actual, convertimos si es necesario
-      await deleteUnit(unidadToDelete.toString());
+      await deleteUnit(unidadToDelete);
       setUnidadToDelete(null);
     }
   };
 
-  const handleEdit = (unidad: Unidad) => {
+  const handleEdit = (unidad: Unit) => {
     // Pasamos el objeto Unidad completo, el Modal sabrá mapearlo
     setUnidadToEdit(unidad);
     setIsModalOpen(true);
@@ -172,7 +172,7 @@ export default function FlotaUnidades() {
   };
 
   // Definición de columnas usando el tipo Unit correcto
-  const columns: ColumnDef<Unidad>[] = useMemo(
+  const columns: ColumnDef<Unit>[] = useMemo(
     () => [
       {
         key: "numero_economico",
