@@ -850,12 +850,94 @@ class Supplier(AuditMixin, Base):
     contacto_principal = Column(String(100))
     categoria = Column(String(50))
 
-    # BD: supplierstatus
+    # --- NUEVOS CAMPOS OPERATIVOS Y FINANCIEROS ---
+    tipo_proveedor = Column(String(50))  # Ej: 'Hombre-Camión', 'Flota', 'Agencia'
+    zonas_cobertura = Column(
+        String(255)
+    )  # O JSONB si quieres múltiples zonas estructuradas
+
+    # Datos Bancarios
+    banco = Column(String(100))
+    cuenta_bancaria = Column(String(50))
+    clabe = Column(String(18))
+
     estatus = Column(
         Enum(SupplierStatus, name="supplierstatus"), default=SupplierStatus.ACTIVO
     )
 
+    # Relaciones
     invoices = relationship("PayableInvoice", back_populates="supplier")
+    tariffs = relationship(
+        "SupplierTariff", back_populates="supplier", cascade="all, delete-orphan"
+    )
+    document_history = relationship(
+        "SupplierDocumentHistory",
+        back_populates="supplier",
+        cascade="all, delete-orphan",
+    )
+
+
+class SupplierTariff(AuditMixin, Base):
+    __tablename__ = "supplier_tariffs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    supplier_id = Column(
+        Integer, ForeignKey("suppliers.id", ondelete="CASCADE"), nullable=False
+    )
+
+    # Vínculo con el catálogo maestro de rutas (igual que en Clientes)
+    rate_template_id = Column(
+        Integer, ForeignKey("rate_templates.id", ondelete="SET NULL"), nullable=True
+    )
+
+    nombre_ruta = Column(String(200), nullable=False)
+    tipo_unidad = Column(
+        Enum(UnitType, name="unittype"), nullable=False
+    )  # 'sencillo' (6 ejes) o 'full' (9 ejes)
+
+    # Costos
+    tarifa_base = Column(
+        Float, nullable=False, default=0.0
+    )  # Lo que nos cobra el proveedor
+    costo_casetas = Column(
+        Float, default=0
+    )  # Snapshot del costo de casetas en el momento
+
+    # Configuración fiscal (por defecto estándar de transporte)
+    iva_porcentaje = Column(Float, default=16.0)
+    retencion_porcentaje = Column(Float, default=4.0)
+
+    moneda = Column(Enum(Currency, name="currency"), default=Currency.MXN)
+    vigencia = Column(Date, nullable=False)
+    estatus = Column(
+        Enum(TariffStatus, name="tariffstatus"), default=TariffStatus.ACTIVA
+    )
+
+    # Relaciones
+    supplier = relationship("Supplier", back_populates="tariffs")
+    route_template = relationship("RateTemplate", lazy="joined")
+
+
+class SupplierDocumentHistory(AuditMixin, Base):
+    __tablename__ = "supplier_document_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    supplier_id = Column(
+        Integer, ForeignKey("suppliers.id", ondelete="CASCADE"), nullable=False
+    )
+
+    document_type = Column(
+        String(50), nullable=False
+    )  # Ej: constancia_fiscal, ine, opinion_cumplimiento, permiso_sct, seguro
+    filename = Column(String(255), nullable=False)
+    file_url = Column(String(500), nullable=False)
+    file_size = Column(Integer, nullable=True)
+    mime_type = Column(String(100), nullable=True)
+
+    version = Column(Integer, default=1)
+    is_active = Column(Boolean, default=True)
+
+    supplier = relationship("Supplier", back_populates="document_history")
 
 
 # =========================================================
