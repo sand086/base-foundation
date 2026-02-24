@@ -1,5 +1,6 @@
 // src/features/tarifas/CatalogoCasetas.tsx
-import { useState, useEffect, useMemo } from "react";
+import * as React from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Search,
   Plus,
@@ -11,8 +12,6 @@ import {
   Loader2,
   Check,
   Route,
-  Info,
-  ArrowRight,
   FileText,
 } from "lucide-react";
 
@@ -66,10 +65,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-import { TollBooth } from "@/types/api.types";
+import type { TollBooth } from "@/types/api.types";
 import { tollService } from "@/services/tollService";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 
 type FormaPago = "TAG" | "EFECTIVO" | "AMBOS";
 
@@ -84,6 +82,8 @@ type TollForm = {
 
   tramo: string;
 
+  // ✅ NOTA: campos se quedan igual en backend (5 y 9),
+  // pero en UI se renombran como 6 y 9 ejes.
   costo_5_ejes_sencillo: number;
   costo_5_ejes_full: number;
   costo_9_ejes_sencillo: number;
@@ -106,6 +106,19 @@ const emptyForm = (): TollForm => ({
   forma_pago: "AMBOS",
 });
 
+const formatCurrency = (amount: number) =>
+  new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(
+    amount || 0,
+  );
+
+const splitTramo = (tramoRaw: string) => {
+  const tramo = (tramoRaw ?? "").trim();
+  const parts = tramo.includes("-")
+    ? tramo.split("-").map((p) => p.trim())
+    : [tramo, ""];
+  return { tramo, origen: parts[0] ?? "", destino: parts[1] ?? "" };
+};
+
 export const CatalogoCasetas = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [tollBooths, setTollBooths] = useState<TollBooth[]>([]);
@@ -119,18 +132,21 @@ export const CatalogoCasetas = () => {
 
   const [formData, setFormData] = useState<TollForm>(emptyForm());
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("es-MX", {
-      style: "currency",
-      currency: "MXN",
-    }).format(amount || 0);
+  const getFormaPagoBadge = (formaPago: string) => {
+    const styles: Record<string, string> = {
+      TAG: "bg-blue-100 text-blue-700 border-blue-200",
+      EFECTIVO: "bg-amber-100 text-amber-700 border-amber-200",
+      AMBOS: "bg-slate-100 text-slate-700 border-slate-200",
+    };
+    const cls = styles[formaPago] ?? styles.AMBOS;
+    return <Badge className={`${cls} hover:opacity-80`}>{formaPago}</Badge>;
   };
 
   const loadTolls = async () => {
     setIsLoading(true);
     try {
       const data = await tollService.getTolls(searchTerm);
-      setTollBooths(data);
+      setTollBooths(data ?? []);
     } catch (error) {
       console.error(error);
       toast.error("Error al cargar el catálogo");
@@ -159,16 +175,6 @@ export const CatalogoCasetas = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.origen_tramo, formData.destino_tramo]);
 
-  const getFormaPagoBadge = (formaPago: string) => {
-    const styles: Record<string, string> = {
-      TAG: "bg-blue-100 text-blue-700 border-blue-200",
-      EFECTIVO: "bg-amber-100 text-amber-700 border-amber-200",
-      AMBOS: "bg-slate-100 text-slate-700 border-slate-200",
-    };
-    const cls = styles[formaPago] ?? styles.AMBOS;
-    return <Badge className={`${cls} hover:opacity-80`}>{formaPago}</Badge>;
-  };
-
   // --- MANEJADORES ---
   const handleOpenCreate = () => {
     setSelectedToll(null);
@@ -179,18 +185,15 @@ export const CatalogoCasetas = () => {
   const handleOpenEdit = (toll: TollBooth) => {
     setSelectedToll(toll);
 
-    const tramo = (toll.tramo ?? "").trim();
-    const parts = tramo.includes("-")
-      ? tramo.split("-").map((p) => p.trim())
-      : [tramo, ""];
+    const { tramo, origen, destino } = splitTramo(String(toll.tramo ?? ""));
 
     setFormData({
       nombre: toll.nombre ?? "",
       carretera: (toll as any).carretera ?? "",
       estado: (toll as any).estado ?? "",
-      origen_tramo: parts[0] ?? "",
-      destino_tramo: parts[1] ?? "",
-      tramo: tramo,
+      origen_tramo: origen,
+      destino_tramo: destino,
+      tramo,
       costo_5_ejes_sencillo: toll.costo_5_ejes_sencillo ?? 0,
       costo_5_ejes_full: toll.costo_5_ejes_full ?? 0,
       costo_9_ejes_sencillo: toll.costo_9_ejes_sencillo ?? 0,
@@ -229,7 +232,7 @@ export const CatalogoCasetas = () => {
       return;
     }
 
-    // 2) Payload a backend (no enviamos origen_tramo/destino_tramo si el backend no los tiene)
+    // 2) Payload a backend
     const payload: Partial<TollBooth> & {
       carretera?: string;
       estado?: string;
@@ -280,7 +283,7 @@ export const CatalogoCasetas = () => {
     }
   };
 
-  // ✅ UI: tabla más limpia agrupando costos
+  // ✅ UI: tabla más limpia agrupando costos con nueva nomenclatura (6 y 9 ejes)
   const columns = useMemo(() => {
     const cols: Array<{
       key: string;
@@ -314,16 +317,26 @@ export const CatalogoCasetas = () => {
       },
       {
         key: "costos",
-        header: "Tarifas (Sencillo / Full)",
+        header: "Tarifas Autorizadas",
         render: (_, t) => (
-          <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
-            <div className="text-blue-600">
-              5E: {formatCurrency(t.costo_5_ejes_sencillo)} /{" "}
-              {formatCurrency(t.costo_5_ejes_full)}
+          <div className="grid grid-cols-2 gap-4 text-[10px] font-mono">
+            <div className="flex flex-col border-l-2 border-blue-500 pl-2">
+              <span className="text-slate-500 uppercase font-bold text-[8px]">
+                6 Ejes (Sencillo)
+              </span>
+              <span className="text-blue-600 font-bold">
+                {formatCurrency(t.costo_5_ejes_sencillo)} /{" "}
+                {formatCurrency(t.costo_5_ejes_full)}
+              </span>
             </div>
-            <div className="text-amber-600">
-              9E: {formatCurrency(t.costo_9_ejes_sencillo)} /{" "}
-              {formatCurrency(t.costo_9_ejes_full)}
+            <div className="flex flex-col border-l-2 border-amber-500 pl-2">
+              <span className="text-slate-500 uppercase font-bold text-[8px]">
+                9 Ejes (Full)
+              </span>
+              <span className="text-amber-600 font-bold">
+                {formatCurrency(t.costo_9_ejes_sencillo)} /{" "}
+                {formatCurrency(t.costo_9_ejes_full)}
+              </span>
             </div>
           </div>
         ),
@@ -335,7 +348,7 @@ export const CatalogoCasetas = () => {
       },
       {
         key: "acciones",
-        header: "Acciones",
+        header: "",
         render: (_, t) => (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -363,7 +376,6 @@ export const CatalogoCasetas = () => {
       },
     ];
     return cols;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tollBooths]);
 
   return (
@@ -415,10 +427,9 @@ export const CatalogoCasetas = () => {
         </DataTable>
       )}
 
-      {/* ✅ DIALOG: ficha técnica + tramo automático */}
+      {/* ✅ DIALOG: Ajustado a 6 y 9 ejes */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-2xl border-t-4 border-t-primary p-0 overflow-hidden flex flex-col max-h-[95vh]">
-          {/* Header Fijo */}
           <DialogHeader className="p-6 pb-2 shrink-0">
             <DialogTitle className="flex items-center gap-2 text-xl font-black uppercase tracking-tight text-slate-800">
               <MapPin className="h-6 w-6 text-primary" />
@@ -426,13 +437,9 @@ export const CatalogoCasetas = () => {
             </DialogTitle>
           </DialogHeader>
 
-          {/* Contenedor con Scroll 
-              max-h-[calc(95vh-200px)]: Restamos el espacio aproximado de header y footer
-          */}
           <div className="flex-1 overflow-y-auto p-6 pt-2 scrollbar-thin scrollbar-thumb-slate-200">
             <div className="space-y-6">
-              {/* UBICACIÓN */}
-              {/* SECCIÓN 1: UBICACIÓN - Ahora "Ficha Técnica" */}
+              {/* SECCIÓN 1: UBICACIÓN (sin cambios) */}
               <div className="grid grid-cols-2 gap-x-6 gap-y-4 bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-inner">
                 <div className="col-span-2 flex items-center justify-between border-b border-slate-200 pb-2 mb-2">
                   <div className="flex items-center gap-2">
@@ -512,7 +519,7 @@ export const CatalogoCasetas = () => {
                   </Select>
                 </div>
 
-                {/* SECCIÓN AUTO-TRAMO */}
+                {/* AUTO-TRAMO */}
                 <div className="col-span-2 space-y-3 pt-2">
                   <div className="flex items-center gap-2">
                     <div className="h-px flex-1 bg-slate-200" />
@@ -573,14 +580,14 @@ export const CatalogoCasetas = () => {
                 </div>
               </div>
 
-              {/* COSTOS */}
+              {/* SECCIÓN 2: COSTOS (✅ 6 y 9 ejes) */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* 5 Ejes */}
-                <div className="space-y-3 p-4 rounded-xl border border-blue-100 bg-blue-50/20">
+                {/* 6 Ejes (antes 5) */}
+                <div className="space-y-3 p-4 rounded-xl border border-blue-100 bg-blue-50/20 shadow-sm">
                   <div className="flex items-center gap-2 border-b border-blue-100 pb-2">
                     <div className="w-2 h-2 rounded-full bg-blue-500" />
                     <span className="text-[10px] font-black uppercase text-blue-700">
-                      Configuración 5 Ejes
+                      Configuración 6 Ejes (Sencillo)
                     </span>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -625,12 +632,12 @@ export const CatalogoCasetas = () => {
                   </div>
                 </div>
 
-                {/* 9 Ejes */}
-                <div className="space-y-3 p-4 rounded-xl border border-amber-100 bg-amber-50/20">
+                {/* 9 Ejes (Full) */}
+                <div className="space-y-3 p-4 rounded-xl border border-amber-100 bg-amber-50/20 shadow-sm">
                   <div className="flex items-center gap-2 border-b border-amber-100 pb-2">
                     <div className="w-2 h-2 rounded-full bg-amber-500" />
                     <span className="text-[10px] font-black uppercase text-amber-700">
-                      Configuración 9 Ejes
+                      Configuración 9 Ejes (Full)
                     </span>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -675,10 +682,10 @@ export const CatalogoCasetas = () => {
                   </div>
                 </div>
               </div>
+              {/* /COSTOS */}
             </div>
           </div>
 
-          {/* Footer Fijo */}
           <DialogFooter className="bg-slate-50 p-4 border-t border-slate-200 shrink-0">
             <Button
               variant="outline"

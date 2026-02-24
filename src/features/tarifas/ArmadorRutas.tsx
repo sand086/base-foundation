@@ -1,16 +1,15 @@
-import { useState, useMemo, useEffect } from "react";
+// src/features/tarifas/ArmadorRutas.tsx
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Plus,
   Trash2,
   GripVertical,
   Search,
-  Route,
   ArrowRight,
   Loader2,
   Check,
   MapPin,
   AlertTriangle,
-  History,
   Repeat,
   HelpCircle,
   Eye,
@@ -107,24 +106,33 @@ interface SegmentEntry {
   tiempo_minutos: number;
   toll_booth_id: number | null;
   toll_nombre?: string;
-  costo_s: number;
-  costo_f: number;
+  //  Siempre presentes (lado a lado)
+  costo_s: number; // 6 ejes (Sencillo) en UI
+  costo_f: number; // 9 ejes (Full) en UI
 }
 
 type UpdateField = keyof SegmentEntry;
 
 const genTempId = () => `seg-${Math.random().toString(36).slice(2, 11)}`;
 
+type SortableRowProps = {
+  seg: SegmentEntry;
+  idx: number;
+  updateSegment: (idx: number, field: UpdateField, value: unknown) => void;
+  removeSegment: (idx: number) => void;
+  formatCurrency: (val: number) => string;
+  hasGap: boolean;
+};
+
 // --- COMPONENTE FILA (SORTABLE) ---
-const SortableTableRow = ({
+const SortableTableRow: React.FC<SortableRowProps> = ({
   seg,
   idx,
-  isFullUnit,
   updateSegment,
   removeSegment,
   formatCurrency,
   hasGap,
-}: any) => {
+}) => {
   const {
     attributes,
     listeners,
@@ -145,7 +153,8 @@ const SortableTableRow = ({
     <>
       {hasGap && (
         <TableRow className="bg-amber-50/30 border-none h-7">
-          <TableCell colSpan={8} className="py-0">
+          {/*  colSpan actualizado a 9 */}
+          <TableCell colSpan={9} className="py-0">
             <div className="flex items-center justify-center gap-2 text-[9px] font-bold text-amber-600 uppercase tracking-tighter">
               <AlertTriangle className="h-3 w-3" /> Discontinuidad:{" "}
               {(seg.nombre_segmento.split("-")[0] || "").trim()} no conecta con
@@ -154,6 +163,7 @@ const SortableTableRow = ({
           </TableCell>
         </TableRow>
       )}
+
       <TableRow
         ref={setNodeRef}
         style={style}
@@ -175,6 +185,7 @@ const SortableTableRow = ({
             <GripVertical className="h-4 w-4" />
           </div>
         </TableCell>
+
         <TableCell className="w-[30%]">
           <div className="flex flex-col gap-0.5">
             <Input
@@ -191,6 +202,7 @@ const SortableTableRow = ({
             )}
           </div>
         </TableCell>
+
         <TableCell className="w-16">
           <Input
             className="h-7 text-[10px] uppercase w-16 text-center border-transparent hover:border-slate-200 focus:bg-white"
@@ -198,6 +210,7 @@ const SortableTableRow = ({
             onChange={(e) => updateSegment(idx, "estado", e.target.value)}
           />
         </TableCell>
+
         <TableCell className="w-24">
           <Input
             className="h-7 text-[10px] uppercase w-24 border-transparent hover:border-slate-200 focus:bg-white"
@@ -205,6 +218,7 @@ const SortableTableRow = ({
             onChange={(e) => updateSegment(idx, "carretera", e.target.value)}
           />
         </TableCell>
+
         <TableCell className="w-20">
           <Input
             type="number"
@@ -219,6 +233,7 @@ const SortableTableRow = ({
             }
           />
         </TableCell>
+
         <TableCell className="w-20">
           <Input
             type="number"
@@ -233,9 +248,17 @@ const SortableTableRow = ({
             }
           />
         </TableCell>
-        <TableCell className="text-right font-mono font-bold text-slate-700 text-xs">
-          {formatCurrency(isFullUnit ? seg.costo_f : seg.costo_s)}
+
+        {/*  6 ejes (Sencillo) */}
+        <TableCell className="text-right font-mono text-slate-600 text-xs">
+          {formatCurrency(seg.costo_s)}
         </TableCell>
+
+        {/*  9 ejes (Full) */}
+        <TableCell className="text-right font-mono font-bold text-slate-800 text-xs bg-slate-50/40">
+          {formatCurrency(seg.costo_f)}
+        </TableCell>
+
         <TableCell className="w-10 text-right">
           <Button
             variant="ghost"
@@ -252,7 +275,7 @@ const SortableTableRow = ({
 };
 
 // --- COMPONENTE PRINCIPAL ---
-export const ArmadorRutas = () => {
+export const ArmadorRutas: React.FC = () => {
   const { tiposActivos } = useTiposUnidad();
   const { clients } = useClients();
 
@@ -260,16 +283,23 @@ export const ArmadorRutas = () => {
   const [origen, setOrigen] = useState("");
   const [destino, setDestino] = useState("");
   const [tipoUnidadId, setTipoUnidadId] = useState("");
+
   const [segments, setSegments] = useState<SegmentEntry[]>([]);
   const [allTolls, setAllTolls] = useState<TollBooth[]>([]);
   const [savedRoutes, setSavedRoutes] = useState<RateTemplate[]>([]);
+
   const [isLoading, setIsLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [tollSearch, setTollSearch] = useState("");
 
-  // Estados para Eliminación
+  // Eliminación
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [routeToDelete, setRouteToDelete] = useState<RateTemplate | null>(null);
+
+  //  Estados para el Modal de Detalle (Timeline)
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [selectedRouteDetail, setSelectedRouteDetail] =
+    useState<RateTemplate | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -294,6 +324,7 @@ export const ArmadorRutas = () => {
     void fetchData();
   }, []);
 
+  //  Detección FULL (se sigue usando para "tipo_unidad" al guardar, por compatibilidad)
   const isFullUnit = useMemo(() => {
     const t = tiposActivos.find((x) => x.id === tipoUnidadId);
     const name = t?.nombre?.toLowerCase?.() || "";
@@ -302,17 +333,19 @@ export const ArmadorRutas = () => {
     );
   }, [tipoUnidadId, tiposActivos]);
 
+  //  Totales lado a lado (sin depender de isFullUnit)
   const totals = useMemo(() => {
     return segments.reduce(
       (acc, s) => {
         acc.distancia += s.distancia_km || 0;
         acc.tiempo += s.tiempo_minutos || 0;
-        acc.costo += isFullUnit ? s.costo_f : s.costo_s;
+        acc.costo_s += s.costo_s || 0; // 6 ejes
+        acc.costo_f += s.costo_f || 0; // 9 ejes
         return acc;
       },
-      { distancia: 0, tiempo: 0, costo: 0 },
+      { distancia: 0, tiempo: 0, costo_s: 0, costo_f: 0 },
     );
-  }, [segments, isFullUnit]);
+  }, [segments]);
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("es-MX", {
@@ -325,22 +358,26 @@ export const ArmadorRutas = () => {
     setSegments((prev) => {
       const updated = [...prev];
       updated[idx] = { ...updated[idx], [field]: value };
+
       if (field === "nombre_segmento") {
         const match = allTolls.find(
           (t) => (t.tramo || "").toLowerCase() === String(value).toLowerCase(),
         );
+
+        //  Mapeo correcto estático (SIEMPRE)
         if (match) {
           updated[idx].carretera = (match as any).carretera || "";
           updated[idx].estado = (match as any).estado || "";
           updated[idx].toll_booth_id = match.id;
-          updated[idx].costo_s = isFullUnit
-            ? match.costo_9_ejes_sencillo
-            : match.costo_5_ejes_sencillo;
-          updated[idx].costo_f = isFullUnit
-            ? match.costo_9_ejes_full
-            : match.costo_5_ejes_full;
+
+          // 6 ejes (Sencillo) en UI
+          updated[idx].costo_s = (match as any).costo_5_ejes_sencillo ?? 0;
+
+          // 9 ejes (Full) en UI
+          updated[idx].costo_f = (match as any).costo_9_ejes_full ?? 0;
         }
       }
+
       return updated;
     });
   };
@@ -350,6 +387,7 @@ export const ArmadorRutas = () => {
     setOrigen(route.origen);
     setDestino(route.destino);
 
+    // Compatibilidad: seguimos seleccionando unidad por el campo tipo_unidad guardado
     const unit = tiposActivos.find((t) =>
       route.tipo_unidad === "9ejes"
         ? t.nombre.toLowerCase().includes("9")
@@ -370,23 +408,21 @@ export const ArmadorRutas = () => {
         costo_f: s.costo_momento_full,
       })),
     );
-    window.scrollTo({ top: 0, behavior: "smooth" });
+
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }, 800);
+
     toast.info("Ruta cargada para edición");
   };
 
-  // ✅ Manejador del fin del arrastre (DndContext logic)
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
-
-    // Si no hay destino o se soltó en el mismo lugar, no hacemos nada
     if (!over || active.id === over.id) return;
 
     setSegments((items) => {
-      // Buscamos los índices basados en el tempId que definimos
       const oldIndex = items.findIndex((i) => i.tempId === active.id);
       const newIndex = items.findIndex((i) => i.tempId === over.id);
-
-      // Usamos arrayMove de @dnd-kit/sortable para generar el nuevo array ordenado
       return arrayMove(items, oldIndex, newIndex);
     });
 
@@ -411,6 +447,7 @@ export const ArmadorRutas = () => {
     const oldO = origen;
     setOrigen(destino);
     setDestino(oldO);
+
     setSegments((prev) =>
       [...prev].reverse().map((s) => ({
         ...s,
@@ -423,11 +460,11 @@ export const ArmadorRutas = () => {
           : s.nombre_segmento,
       })),
     );
+
     toast.success("Ruta invertida");
   };
-  // ✅ Validación de coherencia geográfica (SCT Gap Detection)
+
   const checkRouteGap = (idx: number) => {
-    // Si es el primer tramo, no hay nada con qué comparar
     if (idx === 0 || !segments[idx] || !segments[idx - 1]) return false;
 
     const currentStart = segments[idx].nombre_segmento
@@ -439,12 +476,14 @@ export const ArmadorRutas = () => {
       ?.trim()
       .toLowerCase();
 
-    // Si el destino del anterior no es igual al origen del actual, hay un "hueco"
     return Boolean(prevEnd && currentStart && prevEnd !== currentStart);
   };
+
   const handleSave = async () => {
-    if (!selectedCliente || !origen || !destino || !tipoUnidadId)
+    if (!selectedCliente || !origen || !destino || !tipoUnidadId) {
       return toast.error("Datos incompletos");
+    }
+
     const payload: RateTemplateCreate = {
       client_id: parseInt(selectedCliente, 10),
       origen,
@@ -452,6 +491,7 @@ export const ArmadorRutas = () => {
       tipo_unidad: isFullUnit ? "9ejes" : "5ejes",
       segments: segments.map((s, idx) => ({ ...s, orden: idx + 1 })) as any,
     };
+
     try {
       const res = await tollService.saveTemplate(payload);
       setSavedRoutes((prev) => [res, ...prev]);
@@ -462,6 +502,7 @@ export const ArmadorRutas = () => {
     }
   };
 
+  //  History actualizado: Casetas + Costo 6 + Costo 9 (sin "Config")
   const historyColumns: ColumnDef<RateTemplate>[] = useMemo(
     () => [
       {
@@ -481,27 +522,34 @@ export const ArmadorRutas = () => {
         ),
       },
       {
-        key: "tipo_unidad",
-        header: "Config.",
+        key: "casetas",
+        header: "Casetas",
+        render: (_, row) => {
+          const numCasetas =
+            row.segments?.filter((s: any) => s.toll_booth_id !== null).length ||
+            0;
+          return (
+            <Badge variant="outline" className="bg-slate-50 text-slate-600">
+              {numCasetas} {numCasetas === 1 ? "Caseta" : "Casetas"}
+            </Badge>
+          );
+        },
+      },
+      {
+        key: "costo_total_sencillo",
+        header: "Costo 6 Ejes",
         render: (v) => (
-          <Badge
-            variant="outline"
-            className={
-              v === "9ejes"
-                ? "bg-amber-50 text-amber-700"
-                : "bg-blue-50 text-blue-700"
-            }
-          >
-            {v === "9ejes" ? "9 Ejes (Full)" : "5 Ejes (Senc.)"}
-          </Badge>
+          <span className="font-mono font-medium text-blue-600">
+            {formatCurrency(Number(v || 0))}
+          </span>
         ),
       },
       {
         key: "costo_total_full",
-        header: "Costo Autorizado",
+        header: "Costo 9 Ejes",
         render: (v) => (
           <span className="font-mono font-bold text-emerald-600">
-            {formatCurrency(Number(v))}
+            {formatCurrency(Number(v || 0))}
           </span>
         ),
       },
@@ -523,11 +571,16 @@ export const ArmadorRutas = () => {
               <DropdownMenuItem onClick={() => handleEditRoute(row)}>
                 <Pencil className="mr-2 h-4 w-4 text-blue-500" /> Editar Ruta
               </DropdownMenuItem>
+
               <DropdownMenuItem
-                onClick={() => toast.info("Generando reporte...")}
+                onClick={() => {
+                  setSelectedRouteDetail(row);
+                  setDetailModalOpen(true);
+                }}
               >
                 <Eye className="mr-2 h-4 w-4 text-slate-500" /> Ver Detalle
               </DropdownMenuItem>
+
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-destructive"
@@ -543,15 +596,16 @@ export const ArmadorRutas = () => {
         ),
       },
     ],
-    [clients, tiposActivos, savedRoutes],
+    [clients],
   );
 
-  if (isLoading)
+  if (isLoading) {
     return (
       <div className="flex justify-center py-20">
         <Loader2 className="animate-spin text-primary h-10 w-10" />
       </div>
     );
+  }
 
   return (
     <div className="space-y-6">
@@ -588,6 +642,7 @@ export const ArmadorRutas = () => {
                 </SelectContent>
               </Select>
             </div>
+
             <div className="space-y-1">
               <Label className="text-[10px] uppercase font-bold text-slate-500">
                 Origen
@@ -599,6 +654,7 @@ export const ArmadorRutas = () => {
                 onChange={(e) => setOrigen(e.target.value)}
               />
             </div>
+
             <div className="space-y-1">
               <Label className="text-[10px] uppercase font-bold text-slate-500">
                 Destino
@@ -610,6 +666,7 @@ export const ArmadorRutas = () => {
                 onChange={(e) => setDestino(e.target.value)}
               />
             </div>
+
             <div className="flex gap-2">
               <div className="flex-1 space-y-1">
                 <Label className="text-[10px] uppercase font-bold text-slate-500">
@@ -628,6 +685,7 @@ export const ArmadorRutas = () => {
                   </SelectContent>
                 </Select>
               </div>
+
               <Button
                 variant="outline"
                 size="icon"
@@ -640,6 +698,7 @@ export const ArmadorRutas = () => {
             </div>
           </div>
         </CardHeader>
+
         <CardContent className="p-0">
           <DndContext
             sensors={sensors}
@@ -655,10 +714,12 @@ export const ArmadorRutas = () => {
                   <TableHead className="w-24">Carr.</TableHead>
                   <TableHead className="text-right w-20">Km</TableHead>
                   <TableHead className="text-right w-20">Min</TableHead>
-                  <TableHead className="text-right">Costo</TableHead>
+                  <TableHead className="text-right">6 Ejes (Senc.)</TableHead>
+                  <TableHead className="text-right">9 Ejes (Full)</TableHead>
                   <TableHead className="w-10"></TableHead>
                 </TableRow>
               </TableHeader>
+
               <TableBody className="relative">
                 <SortableContext
                   items={segments.map((s) => s.tempId)}
@@ -669,11 +730,10 @@ export const ArmadorRutas = () => {
                       key={seg.tempId}
                       seg={seg}
                       idx={idx}
-                      isFullUnit={isFullUnit}
                       updateSegment={updateSegment}
-                      removeSegment={(i: number) =>
+                      removeSegment={(i) =>
                         setSegments((prev) =>
-                          prev.filter((_, idx) => idx !== i),
+                          prev.filter((_, idxx) => idxx !== i),
                         )
                       }
                       formatCurrency={formatCurrency}
@@ -681,6 +741,7 @@ export const ArmadorRutas = () => {
                     />
                   ))}
                 </SortableContext>
+
                 <TableRow className="bg-slate-900 text-white font-bold hover:bg-slate-900 border-none sticky bottom-0">
                   <TableCell
                     colSpan={4}
@@ -694,8 +755,11 @@ export const ArmadorRutas = () => {
                   <TableCell className="text-right font-mono text-xs border-l border-white/10">
                     {Math.floor(totals.tiempo / 60)}h {totals.tiempo % 60}m
                   </TableCell>
+                  <TableCell className="text-right text-base font-bold text-blue-400 border-l border-white/10">
+                    {formatCurrency(totals.costo_s)}
+                  </TableCell>
                   <TableCell className="text-right text-base font-bold text-emerald-400 border-l border-white/10">
-                    {formatCurrency(totals.costo)}
+                    {formatCurrency(totals.costo_f)}
                   </TableCell>
                   <TableCell />
                 </TableRow>
@@ -729,6 +793,7 @@ export const ArmadorRutas = () => {
           >
             <Plus className="h-4 w-4 mr-2 text-primary" /> Tramo Libre
           </Button>
+
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" className="h-10 border-slate-200">
@@ -736,10 +801,12 @@ export const ArmadorRutas = () => {
                 Casetas
               </Button>
             </DialogTrigger>
+
             <DialogContent className="max-w-md">
               <DialogHeader>
                 <DialogTitle>Insertar Caseta</DialogTitle>
               </DialogHeader>
+
               <div className="relative my-2">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <Input
@@ -749,6 +816,7 @@ export const ArmadorRutas = () => {
                   onChange={(e) => setTollSearch(e.target.value)}
                 />
               </div>
+
               <ScrollArea className="h-80 pr-4">
                 <div className="space-y-1">
                   {allTolls
@@ -777,12 +845,8 @@ export const ArmadorRutas = () => {
                               tiempo_minutos: 0,
                               toll_booth_id: t.id,
                               toll_nombre: t.nombre,
-                              costo_s: isFullUnit
-                                ? t.costo_9_ejes_sencillo
-                                : t.costo_5_ejes_sencillo,
-                              costo_f: isFullUnit
-                                ? t.costo_9_ejes_full
-                                : t.costo_5_ejes_full,
+                              costo_s: (t as any).costo_5_ejes_sencillo ?? 0,
+                              costo_f: (t as any).costo_9_ejes_full ?? 0,
                             },
                           ]);
                           setDialogOpen(false);
@@ -796,15 +860,12 @@ export const ArmadorRutas = () => {
                             {t.tramo}
                           </p>
                         </div>
+
                         <Badge
                           variant="secondary"
                           className="font-mono text-[10px]"
                         >
-                          {formatCurrency(
-                            isFullUnit
-                              ? t.costo_9_ejes_full
-                              : t.costo_5_ejes_full,
-                          )}
+                          {formatCurrency((t as any).costo_9_ejes_full ?? 0)}
                         </Badge>
                       </div>
                     ))}
@@ -813,6 +874,7 @@ export const ArmadorRutas = () => {
             </DialogContent>
           </Dialog>
         </div>
+
         <ActionButton
           onClick={handleSave}
           className="px-12 h-11 text-base shadow-lg shadow-primary/20"
@@ -855,6 +917,100 @@ export const ArmadorRutas = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/*  MODAL DE DETALLE (TIMELINE) */}
+      <Dialog open={detailModalOpen} onOpenChange={setDetailModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+          <DialogHeader className="pb-4 border-b">
+            <DialogTitle className="flex flex-col gap-2">
+              <span className="text-sm text-muted-foreground uppercase tracking-wider">
+                Detalles de Ruta
+              </span>
+              <div className="flex items-center gap-2 text-xl text-primary">
+                <span>{selectedRouteDetail?.origen}</span>
+                <ArrowRight className="h-5 w-5" />
+                <span>{selectedRouteDetail?.destino}</span>
+              </div>
+            </DialogTitle>
+          </DialogHeader>
+
+          <ScrollArea className="flex-1 px-2 py-4">
+            {selectedRouteDetail && (
+              <div className="relative border-l-2 border-slate-200 ml-4 mt-2 space-y-8 pb-6">
+                {selectedRouteDetail.segments.map((seg: any, idx: number) => (
+                  <div key={seg.id || idx} className="relative pl-6">
+                    <span
+                      className={cn(
+                        "absolute -left-[9px] top-1 h-4 w-4 rounded-full border-2 border-white",
+                        seg.toll_booth_id ? "bg-amber-500" : "bg-blue-500",
+                      )}
+                    />
+
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-start justify-between">
+                        <span className="text-sm font-bold text-slate-800">
+                          {seg.nombre_segmento}
+                        </span>
+                        {seg.toll_booth_id ? (
+                          <Badge
+                            variant="outline"
+                            className="bg-amber-50 text-amber-700 border-amber-200 uppercase text-[9px]"
+                          >
+                            Caseta
+                          </Badge>
+                        ) : (
+                          <Badge
+                            variant="outline"
+                            className="bg-blue-50 text-blue-700 border-blue-200 uppercase text-[9px]"
+                          >
+                            Tramo Libre
+                          </Badge>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 mt-1 text-xs">
+                        <div className="p-2.5 bg-slate-50 border rounded-lg">
+                          <p className="text-slate-500 font-semibold mb-1 text-[10px] uppercase">
+                            Sencillo (6 Ejes)
+                          </p>
+                          <p className="font-mono text-sm">
+                            {formatCurrency(
+                              Number(seg.costo_momento_sencillo || 0),
+                            )}
+                          </p>
+                        </div>
+                        <div className="p-2.5 bg-slate-50 border rounded-lg">
+                          <p className="text-slate-500 font-semibold mb-1 text-[10px] uppercase">
+                            Full (9 Ejes)
+                          </p>
+                          <p className="font-mono font-bold text-emerald-600 text-sm">
+                            {formatCurrency(
+                              Number(seg.costo_momento_full || 0),
+                            )}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-4 mt-1 text-[11px] text-slate-500 font-mono bg-white p-2 border border-dashed rounded-md">
+                        <span className="flex items-center gap-1">
+                          <MapPin className="h-3 w-3" /> {seg.carretera}
+                        </span>
+
+                        <span>Distancia: {seg.distancia_km} km</span>
+
+                        <span>
+                          Tiempo: {Math.floor(seg.tiempo_minutos / 60)}h{" "}
+                          {seg.tiempo_minutos % 60}m
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
