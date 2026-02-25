@@ -5,7 +5,10 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.models import OperatorStatus  # ajusta el import a tu ruta real
+from app.models.models import (
+    OperatorStatus,
+    RecordStatus,
+)  # ajusta la ruta real si aplica
 
 
 class ORMBase(BaseModel):
@@ -18,7 +21,6 @@ class ORMBase(BaseModel):
 
 
 class OperatorBase(ORMBase):
-    # Modelo:
     # public_id = Column(String(50), unique=True, nullable=True)
     public_id: Optional[str] = Field(default=None, max_length=50)
 
@@ -40,7 +42,7 @@ class OperatorBase(ORMBase):
     # phone = Column(String(20))
     phone: Optional[str] = Field(default=None, max_length=20)
 
-    # status = Column(Enum(OperatorStatus, name="operatorstatus"), default=OperatorStatus.ACTIVO)
+    # status = Column(pg_enum(OperatorStatus, "operatorstatus"), default=OperatorStatus.ACTIVO)
     status: OperatorStatus = OperatorStatus.ACTIVO
 
     # assigned_unit_id = Column(Integer, ForeignKey("units.id", ondelete="SET NULL"), nullable=True)
@@ -55,14 +57,45 @@ class OperatorBase(ORMBase):
     # emergency_phone = Column(String(20))
     emergency_phone: Optional[str] = Field(default=None, max_length=20)
 
+    # Campos de archivos/URLs que existen en tu modelo ORM Operator
+    foto_url: Optional[str] = Field(default=None, max_length=500)
+    licencia_url: Optional[str] = Field(default=None, max_length=500)
+    ine_url: Optional[str] = Field(default=None, max_length=500)
+    apto_medico_url: Optional[str] = Field(default=None, max_length=500)
+    comprobante_domicilio_url: Optional[str] = Field(default=None, max_length=500)
 
-class OperatorCreate(OperatorBase):
+
+class OperatorCreate(ORMBase):
     """
     Para crear, no necesitas created_at/updated_at (los pone BD).
     public_id es opcional por tu modelo (nullable=True).
     """
 
-    pass
+    public_id: Optional[str] = Field(default=None, max_length=50)
+
+    name: str = Field(..., min_length=1, max_length=100)
+    license_number: str = Field(..., min_length=1, max_length=50)
+    license_type: str = Field(default="E", max_length=5)
+
+    license_expiry: date
+    medical_check_expiry: date
+
+    phone: Optional[str] = Field(default=None, max_length=20)
+    status: OperatorStatus = OperatorStatus.ACTIVO
+
+    assigned_unit_id: Optional[int] = None
+    hire_date: Optional[date] = None
+
+    emergency_contact: Optional[str] = Field(default=None, max_length=100)
+    emergency_phone: Optional[str] = Field(default=None, max_length=20)
+
+    foto_url: Optional[str] = Field(default=None, max_length=500)
+    licencia_url: Optional[str] = Field(default=None, max_length=500)
+    ine_url: Optional[str] = Field(default=None, max_length=500)
+    apto_medico_url: Optional[str] = Field(default=None, max_length=500)
+    comprobante_domicilio_url: Optional[str] = Field(default=None, max_length=500)
+
+    model_config = ConfigDict(extra="ignore")
 
 
 class OperatorUpdate(ORMBase):
@@ -71,31 +104,38 @@ class OperatorUpdate(ORMBase):
     """
 
     public_id: Optional[str] = Field(default=None, max_length=50)
+
     name: Optional[str] = Field(default=None, min_length=1, max_length=100)
     license_number: Optional[str] = Field(default=None, min_length=1, max_length=50)
     license_type: Optional[str] = Field(default=None, max_length=5)
+
     license_expiry: Optional[date] = None
     medical_check_expiry: Optional[date] = None
+
     phone: Optional[str] = Field(default=None, max_length=20)
     status: Optional[OperatorStatus] = None
+
     assigned_unit_id: Optional[int] = None
     hire_date: Optional[date] = None
+
     emergency_contact: Optional[str] = Field(default=None, max_length=100)
     emergency_phone: Optional[str] = Field(default=None, max_length=20)
+
+    foto_url: Optional[str] = Field(default=None, max_length=500)
+    licencia_url: Optional[str] = Field(default=None, max_length=500)
+    ine_url: Optional[str] = Field(default=None, max_length=500)
+    apto_medico_url: Optional[str] = Field(default=None, max_length=500)
+    comprobante_domicilio_url: Optional[str] = Field(default=None, max_length=500)
+
+    model_config = ConfigDict(extra="ignore")
 
 
 class OperatorResponse(OperatorBase):
     id: int
 
-    # AuditMixin (siempre existen en modelo)
+    # AuditMixin
+    record_status: RecordStatus
     created_at: datetime
     updated_at: datetime
-
-    # Auditoría (nullable=True)
     created_by_id: Optional[int] = None
     updated_by_id: Optional[int] = None
-
-    # Soft status
-    record_status: Optional[str] = (
-        None  # si quieres tiparlo estricto usa RecordStatus (ver nota abajo)
-    )

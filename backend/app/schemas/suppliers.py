@@ -1,16 +1,17 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field, EmailStr, computed_field
-from typing import List, Optional
 from datetime import date, datetime
+from typing import List, Optional
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, computed_field
 
 from app.models.models import (
-    SupplierStatus,
+    Currency,
     InvoiceStatus,
     RecordStatus,
-    UnitType,
-    Currency,
+    SupplierStatus,
     TariffStatus,
+    UnitType,
 )
 from .tolls import RateTemplateResponse
 
@@ -34,13 +35,6 @@ class InvoicePaymentBase(ORMBase):
 
 
 class InvoicePaymentCreate(InvoicePaymentBase):
-    fecha_pago: date
-    monto: float
-    metodo_pago: Optional[str] = Field(default=None, max_length=50)
-    referencia: Optional[str] = Field(default=None, max_length=100)
-    cuenta_retiro: Optional[str] = Field(default=None, max_length=50)
-    complemento_uuid: Optional[str] = Field(default=None, max_length=36)
-
     model_config = ConfigDict(extra="ignore")
 
 
@@ -85,7 +79,7 @@ class PayableInvoiceBase(ORMBase):
     monto_total: float
     saldo_pendiente: float
 
-    moneda: str = Field(default="MXN", min_length=3, max_length=3)
+    moneda: Currency = Currency.MXN
 
     fecha_emision: date
     fecha_vencimiento: date
@@ -108,7 +102,7 @@ class PayableInvoiceCreate(ORMBase):
     folio_interno: Optional[str] = Field(default=None, max_length=50)
 
     monto_total: float
-    moneda: str = Field(default="MXN", min_length=3, max_length=3)
+    moneda: Currency = Currency.MXN
 
     fecha_emision: date
     fecha_vencimiento: date
@@ -131,10 +125,8 @@ class PayableInvoiceUpdate(ORMBase):
     folio_interno: Optional[str] = Field(default=None, max_length=50)
 
     monto_total: Optional[float] = None
-    saldo_pendiente: Optional[float] = (
-        None  # solo si lo permites manualmente (si no, bórralo)
-    )
-    moneda: Optional[str] = Field(default=None, min_length=3, max_length=3)
+    saldo_pendiente: Optional[float] = None  # si NO lo permites manualmente, elimínalo
+    moneda: Optional[Currency] = None
 
     fecha_emision: Optional[date] = None
     fecha_vencimiento: Optional[date] = None
@@ -161,7 +153,7 @@ class PayableInvoiceResponse(ORMBase):
     supplier_razon_social: Optional[str] = None
     monto_total: float
     saldo_pendiente: float
-    moneda: str
+    moneda: Currency
 
     fecha_emision: date
     fecha_vencimiento: date
@@ -231,26 +223,28 @@ class SupplierTariffResponse(SupplierTariffBase):
 
 
 # =========================================================
-# NUEVO: DOCUMENTOS DE PROVEEDOR
+# DOCUMENTOS DE PROVEEDOR
 # =========================================================
-class SupplierDocumentResponse(BaseModel):
+
+
+class SupplierDocumentResponse(ORMBase):
     id: int
     supplier_id: int
     document_type: str
     filename: str
     file_url: str
-    file_size: Optional[int]
-    mime_type: Optional[str]
+    file_size: Optional[int] = None
+    mime_type: Optional[str] = None
     version: int
     is_active: bool
     uploaded_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
-
 
 # =========================================================
-# ACTUALIZACIÓN: PROVEEDORES (Supplier)
+# PROVEEDORES (Supplier)
 # =========================================================
+
+
 class SupplierBase(ORMBase):
     razon_social: str = Field(..., max_length=200)
     rfc: str = Field(..., max_length=13)
@@ -274,20 +268,31 @@ class SupplierBase(ORMBase):
 
 
 class SupplierCreate(SupplierBase):
-    tariffs: List[SupplierTariffCreate] = []
+    tariffs: List[SupplierTariffCreate] = Field(default_factory=list)
 
 
 class SupplierUpdate(ORMBase):
-    # (Todos los campos de SupplierBase como Optional...)
     razon_social: Optional[str] = Field(default=None, max_length=200)
     rfc: Optional[str] = Field(default=None, max_length=13)
-    # ... (omitidos por brevedad, misma lógica que schemas/clients.py)
+    email: Optional[EmailStr] = None
+    telefono: Optional[str] = Field(default=None, max_length=20)
+    direccion: Optional[str] = None
+    codigo_postal: Optional[str] = Field(default=None, max_length=10)
+    dias_credito: Optional[int] = None
+    limite_credito: Optional[float] = None
+    contacto_principal: Optional[str] = Field(default=None, max_length=100)
+    categoria: Optional[str] = Field(default=None, max_length=50)
+
+    tipo_proveedor: Optional[str] = Field(default=None, max_length=50)
+    zonas_cobertura: Optional[str] = Field(default=None, max_length=255)
     banco: Optional[str] = Field(default=None, max_length=100)
     cuenta_bancaria: Optional[str] = Field(default=None, max_length=50)
     clabe: Optional[str] = Field(default=None, max_length=18)
-    estatus: Optional[SupplierStatus] = None
 
+    estatus: Optional[SupplierStatus] = None
     tariffs: Optional[List[SupplierTariffUpdate]] = None
+
+    model_config = ConfigDict(extra="ignore")
 
 
 class SupplierResponse(SupplierBase):
@@ -295,8 +300,6 @@ class SupplierResponse(SupplierBase):
 
     invoices: List[PayableInvoiceResponse] = Field(default_factory=list)
     tariffs: List[SupplierTariffResponse] = Field(default_factory=list)
-    # Los documentos generalmente se cargan en un endpoint separado para no pesar el payload,
-    # pero podemos incluirlos si es necesario.
 
     record_status: RecordStatus
     created_at: datetime

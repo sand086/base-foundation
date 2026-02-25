@@ -3,10 +3,7 @@ SQLAlchemy ORM Models for TMS
 - Postgres ready
 - AuditMixin estandarizado (record_status, created_at, updated_at, created_by_id, updated_by_id)
 - sin created_at/updated_at manuales repetidos
-- Enum names alineados a los tipos existentes en Postgres:
-  clientstatus, currency, inventorycategory, invoicestatus, operationtype, operatorstatus,
-  supplierstatus, tariffstatus, tripstatus, unitstatus, unittype, workorderstatus,
-  y los nuevos: record_status_enum, tire_status_enum, tire_condition_enum, tire_event_type_enum
+- Enum names alineados a los tipos existentes en Postgres.
 """
 
 from __future__ import annotations
@@ -38,6 +35,16 @@ from app.db.database import Base
 # =========================================================
 # ENUMS
 # =========================================================
+
+
+def pg_enum(py_enum, pg_name: str):
+    return SAEnum(
+        py_enum,
+        name=pg_name,
+        native_enum=True,
+        create_type=False,
+        values_callable=lambda e: [x.value for x in e],
+    )
 
 
 class UnitType(str, PyEnum):
@@ -177,20 +184,14 @@ class TollUnitType(str, PyEnum):
 class AuditMixin:
     """
     Auditoría estándar:
-    - record_status: A/I/E (Enum ya existe en BD: record_status_enum)
+    - record_status: A/I/E (Enum ya existe en BD: recordstatus)
     - created_at/updated_at con timezone y default server-side
     - updated_at se actualiza por TRIGGER en BD (tu set_updated_at), por eso NO usamos onupdate client-side.
     - created_by_id / updated_by_id a users.id
     """
 
     record_status = Column(
-        SAEnum(
-            RecordStatus,
-            name="record_status_enum",
-            values_callable=lambda enum: [e.value for e in enum],  # ✅ A/I/E
-            native_enum=True,
-            create_type=False,  # ✅ NO intentes recrear el enum en Postgres
-        ),
+        pg_enum(RecordStatus, "recordstatus"),
         nullable=False,
         server_default=RecordStatus.ACTIVO.value,
     )
@@ -248,7 +249,7 @@ class Client(AuditMixin, Base):
 
     # BD: clientstatus
     estatus = Column(
-        Enum(ClientStatus, name="clientstatus"), default=ClientStatus.PENDIENTE
+        pg_enum(ClientStatus, "clientstatus"), default=ClientStatus.PENDIENTE
     )
 
     dias_credito = Column(Integer, default=0)
@@ -280,7 +281,7 @@ class SubClient(AuditMixin, Base):
 
     # BD: operationtype
     tipo_operacion = Column(
-        Enum(OperationType, name="operationtype"), default=OperationType.NACIONAL
+        pg_enum(OperationType, "operationtype"), default=OperationType.NACIONAL
     )
 
     contacto = Column(String(100))
@@ -316,7 +317,7 @@ class Tariff(AuditMixin, Base):
     )
 
     nombre_ruta = Column(String(200), nullable=False)
-    tipo_unidad = Column(Enum(UnitType, name="unittype"), nullable=False)
+    tipo_unidad = Column(pg_enum(UnitType, "unittype"), nullable=False)
     tarifa_base = Column(Float, nullable=False, default=0.0)
 
     #  Configuración fiscal por tarifa
@@ -324,11 +325,9 @@ class Tariff(AuditMixin, Base):
     retencion_porcentaje = Column(Float, default=4.0)
 
     costo_casetas = Column(Float, default=0)  # Valor manual o snapshot
-    moneda = Column(Enum(Currency, name="currency"), default=Currency.MXN)
+    moneda = Column(pg_enum(Currency, "currency"), default=Currency.MXN)
     vigencia = Column(Date, nullable=False)
-    estatus = Column(
-        Enum(TariffStatus, name="tariffstatus"), default=TariffStatus.ACTIVA
-    )
+    estatus = Column(pg_enum(TariffStatus, "tariffstatus"), default=TariffStatus.ACTIVA)
 
     # Relaciones
     sub_client = relationship("SubClient", back_populates="tariffs")
@@ -358,7 +357,7 @@ class Unit(AuditMixin, Base):
     capacidad_carga = Column(Float, nullable=True)
 
     # BD: unitstatus
-    status = Column(Enum(UnitStatus, name="unitstatus"), default=UnitStatus.DISPONIBLE)
+    status = Column(pg_enum(UnitStatus, "unitstatus"), default=UnitStatus.DISPONIBLE)
 
     razon_bloqueo = Column(String(255), nullable=True)
 
@@ -434,25 +433,12 @@ class Tire(AuditMixin, Base):
     posicion = Column(String(50), nullable=True)
 
     estado = Column(
-        Enum(
-            TireStatus,
-            name="tire_status_enum",
-            native_enum=False,  # <--- CLAVE 1: No dependemos del enum de postgres
-            validate_strings=False,  # <--- CLAVE 2: Acepta mayúsculas o minúsculas sin explotar
-        ),
+        pg_enum(TireStatus, "tirestatus"),
         default=TireStatus.NUEVO,
     )
 
     estado_fisico = Column(
-        Enum(
-            TireCondition,
-            name="tire_condition_enum",
-            native_enum=False,
-            validate_strings=False,
-            values_callable=lambda obj: [
-                e.value for e in obj
-            ],  # <--- ¡ESTA ES LA LÍNEA QUE FALTÓ!
-        ),
+        pg_enum(TireCondition, "tirecondition"),
         default=TireCondition.BUENA,
     )
 
@@ -481,15 +467,7 @@ class TireHistory(AuditMixin, Base):
 
     fecha = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     tipo = Column(
-        Enum(
-            TireEventType,
-            name="tire_event_type_enum",
-            native_enum=False,
-            validate_strings=False,
-            values_callable=lambda obj: [
-                e.value for e in obj
-            ],  # <--- PONLA AQUÍ TAMBIÉN
-        ),
+        pg_enum(TireEventType, "tireeventtype"),
         nullable=False,
     )
     descripcion = Column(String(255))
@@ -523,7 +501,7 @@ class Operator(AuditMixin, Base):
 
     # BD: operatorstatus
     status = Column(
-        Enum(OperatorStatus, name="operatorstatus"), default=OperatorStatus.ACTIVO
+        pg_enum(OperatorStatus, "operatorstatus"), default=OperatorStatus.ACTIVO
     )
 
     assigned_unit_id = Column(
@@ -574,7 +552,7 @@ class Trip(AuditMixin, Base):
     route_name = Column(String(200))
 
     # BD: tripstatus
-    status = Column(Enum(TripStatus, name="tripstatus"), default=TripStatus.CREADO)
+    status = Column(pg_enum(TripStatus, "tripstatus"), default=TripStatus.CREADO)
 
     tarifa_base = Column(Float, nullable=False)
     costo_casetas = Column(Float, default=0)
@@ -718,7 +696,7 @@ class InventoryItem(AuditMixin, Base):
 
     # BD: inventorycategory
     categoria = Column(
-        Enum(InventoryCategory, name="inventorycategory"),
+        pg_enum(InventoryCategory, "inventorycategory"),
         default=InventoryCategory.GENERAL,
     )
 
@@ -862,7 +840,7 @@ class Supplier(AuditMixin, Base):
     clabe = Column(String(18))
 
     estatus = Column(
-        Enum(SupplierStatus, name="supplierstatus"), default=SupplierStatus.ACTIVO
+        pg_enum(SupplierStatus, "supplierstatus"), default=SupplierStatus.ACTIVO
     )
 
     # Relaciones
@@ -892,7 +870,7 @@ class SupplierTariff(AuditMixin, Base):
 
     nombre_ruta = Column(String(200), nullable=False)
     tipo_unidad = Column(
-        Enum(UnitType, name="unittype"), nullable=False
+        pg_enum(UnitType, "unittype"), nullable=False
     )  # 'sencillo' (6 ejes) o 'full' (9 ejes)
 
     # Costos
@@ -907,11 +885,9 @@ class SupplierTariff(AuditMixin, Base):
     iva_porcentaje = Column(Float, default=16.0)
     retencion_porcentaje = Column(Float, default=4.0)
 
-    moneda = Column(Enum(Currency, name="currency"), default=Currency.MXN)
+    moneda = Column(pg_enum(Currency, "currency"), default=Currency.MXN)
     vigencia = Column(Date, nullable=False)
-    estatus = Column(
-        Enum(TariffStatus, name="tariffstatus"), default=TariffStatus.ACTIVA
-    )
+    estatus = Column(pg_enum(TariffStatus, "tariffstatus"), default=TariffStatus.ACTIVA)
 
     # Relaciones
     supplier = relationship("Supplier", back_populates="tariffs")
@@ -982,14 +958,14 @@ class PayableInvoice(AuditMixin, Base):
     monto_total = Column(Float, nullable=False)
     saldo_pendiente = Column(Float, nullable=False)
 
-    moneda = Column(Enum(Currency, name="currency"), default=Currency.MXN)
+    moneda = Column(pg_enum(Currency, "currency"), default=Currency.MXN)
     fecha_emision = Column(Date, nullable=False)
     fecha_vencimiento = Column(Date, nullable=False)
     concepto = Column(String(200))
     clasificacion = Column(String(50))  # 'costo_directo', 'mantenimiento', 'indirecto'
 
     estatus = Column(
-        Enum(InvoiceStatus, name="invoicestatus"), default=InvoiceStatus.PENDIENTE
+        pg_enum(InvoiceStatus, "invoicestatus"), default=InvoiceStatus.PENDIENTE
     )
 
     # Archivos
@@ -1106,7 +1082,7 @@ class RateTemplate(AuditMixin, Base):
     )
     origen = Column(String(150), nullable=False)
     destino = Column(String(150), nullable=False)
-    tipo_unidad = Column(String(20), nullable=False)
+    tipo_unidad = Column(pg_enum(TollUnitType, "tollunittype"), nullable=False)
     costo_total_sencillo = Column(Float, default=0.0)
     costo_total_full = Column(Float, default=0.0)
     distancia_total_km = Column(Float, default=0.0)

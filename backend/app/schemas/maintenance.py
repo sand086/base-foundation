@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Optional, List
+from typing import List, Optional
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.models import InventoryCategory, WorkOrderStatus, RecordStatus
+from app.models.models import InventoryCategory, RecordStatus, WorkOrderStatus
 
 
 # =========================================================
@@ -82,8 +82,31 @@ class MechanicDocumentBase(ORMBase):
     tipo_documento: str = Field(..., max_length=50)
     nombre_archivo: str = Field(..., max_length=255)
     url_archivo: str = Field(..., max_length=500)
+
     fecha_vencimiento: Optional[date] = None
-    subido_en: Optional[datetime] = None  # server_default func.now()
+
+    # En tu ORM MechanicDocument:
+    #   file_size = Column(Integer, nullable=True)
+    #   subido_en = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    file_size: Optional[int] = None
+    subido_en: Optional[datetime] = None
+
+
+class MechanicDocumentCreate(MechanicDocumentBase):
+    mechanic_id: int
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class MechanicDocumentUpdate(ORMBase):
+    tipo_documento: Optional[str] = Field(default=None, max_length=50)
+    nombre_archivo: Optional[str] = Field(default=None, max_length=255)
+    url_archivo: Optional[str] = Field(default=None, max_length=500)
+    fecha_vencimiento: Optional[date] = None
+    file_size: Optional[int] = None
+    subido_en: Optional[datetime] = None
+
+    model_config = ConfigDict(extra="ignore")
 
 
 class MechanicDocumentResponse(MechanicDocumentBase):
@@ -167,9 +190,21 @@ class MechanicResponse(MechanicBase):
 # =========================================================
 
 
-class WorkOrderPartCreate(ORMBase):
+class WorkOrderPartBase(ORMBase):
     inventory_item_id: int
     cantidad: int
+
+
+class WorkOrderPartCreate(WorkOrderPartBase):
+    model_config = ConfigDict(extra="ignore")
+
+
+class WorkOrderPartUpdate(ORMBase):
+    inventory_item_id: Optional[int] = None
+    cantidad: Optional[int] = None
+    costo_unitario_snapshot: Optional[float] = None
+
+    model_config = ConfigDict(extra="ignore")
 
 
 class WorkOrderPartResponse(ORMBase):
@@ -177,6 +212,8 @@ class WorkOrderPartResponse(ORMBase):
     work_order_id: int
     inventory_item_id: int
     cantidad: int
+
+    # En ORM: existe y es NOT NULL
     costo_unitario_snapshot: float
 
     # UI helpers (NO existen como columnas)
@@ -185,17 +222,36 @@ class WorkOrderPartResponse(ORMBase):
 
     # AuditMixin
     record_status: RecordStatus
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
     created_by_id: Optional[int] = None
     updated_by_id: Optional[int] = None
 
 
-class WorkOrderCreate(ORMBase):
+class WorkOrderBase(ORMBase):
     unit_id: int
     mechanic_id: Optional[int] = None
     descripcion_problema: str
+
+
+class WorkOrderCreate(WorkOrderBase):
+    # En ORM: folio es NOT NULL y UNIQUE
+    # Si tu backend lo genera, no lo pidas. Si NO lo genera, descomenta:
+    # folio: str = Field(..., max_length=20)
+
     parts: List[WorkOrderPartCreate] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class WorkOrderUpdate(ORMBase):
+    unit_id: Optional[int] = None
+    mechanic_id: Optional[int] = None
+    descripcion_problema: Optional[str] = None
+    status: Optional[WorkOrderStatus] = None
+    fecha_cierre: Optional[datetime] = None
+
+    parts: Optional[List[WorkOrderPartUpdate]] = None
 
     model_config = ConfigDict(extra="ignore")
 
@@ -208,8 +264,11 @@ class WorkOrderResponse(ORMBase):
     mechanic_id: Optional[int] = None
 
     descripcion_problema: str
+
+    # En ORM: status = workorderstatus
     status: WorkOrderStatus
 
+    # En ORM: fecha_apertura tiene server_default=now()
     fecha_apertura: datetime
     fecha_cierre: Optional[datetime] = None
 
@@ -221,8 +280,6 @@ class WorkOrderResponse(ORMBase):
 
     # AuditMixin
     record_status: RecordStatus
-    fecha_apertura: Optional[datetime] = None
-    fecha_cierre: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
     created_by_id: Optional[int] = None
@@ -231,3 +288,5 @@ class WorkOrderResponse(ORMBase):
 
 class WorkOrderStatusUpdate(ORMBase):
     status: WorkOrderStatus
+
+    model_config = ConfigDict(extra="ignore")

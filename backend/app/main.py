@@ -14,7 +14,7 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# --- CORRECCIÓN CORS: Permisivo para desarrollo ---
+# ---  Permisivo para desarrollo ---
 app.add_middleware(
     CORSMiddleware,
     # allow_origins=["http://23.29.114.149"],# Usar ["*"] permite cualquier origen (IP, localhost, dominios, etc.)

@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from typing import List, Optional
-from pydantic import BaseModel, ConfigDict, Field, field_validator, computed_field
 
+from pydantic import BaseModel, ConfigDict, Field, EmailStr, computed_field
 
-from pydantic import BaseModel, ConfigDict, Field, EmailStr
 from .tolls import RateTemplateResponse
 from app.models.models import (
     UnitType,
@@ -33,9 +32,15 @@ class TariffBase(ORMBase):
     moneda: Currency = Currency.MXN
     vigencia: date
     estatus: TariffStatus = TariffStatus.ACTIVA
+
+    # Nota: en tu ORM Tariff no vi estos campos en el snippet final.
+    # Los dejo porque tu schema ya los usa; si NO existen en tu tabla,
+    # Pydantic no truena en respuesta (from_attributes ignora extra),
+    # pero en Create/Update sí debes mandar solo lo que tu API acepte.
     distancia_km: float = 0.0
     iva_porcentaje: float = 16.0
     retencion_porcentaje: float = 4.0
+
     rate_template_id: Optional[int] = None
 
 
@@ -53,37 +58,35 @@ class TariffUpdate(ORMBase):
     vigencia: Optional[date] = None
     estatus: Optional[TariffStatus] = None
 
+    distancia_km: Optional[float] = None
+    iva_porcentaje: Optional[float] = None
+    retencion_porcentaje: Optional[float] = None
 
-# app/schemas/client.py
+    rate_template_id: Optional[int] = None
+
+    model_config = ConfigDict(extra="ignore")
 
 
 class TariffResponse(TariffBase):
     id: int
-    # ✅ PASO 1: Agrega esta línea para que Pydantic reconozca la relación
+
+    # Para que Pydantic reconozca la relación (si viene cargada)
     route_template: Optional[RateTemplateResponse] = None
 
-    # ✅ PASO 2: Corrige la propiedad que está tronando
     @computed_field
     @property
     def total_flete(self) -> float:
-        # Usamos los valores que ya están en la tabla (el snapshot)
-        # Esto es más seguro que intentar recalcular desde la relación
         subtotal = self.tarifa_base + self.costo_casetas
         iva = subtotal * (self.iva_porcentaje / 100)
         ret = subtotal * (self.retencion_porcentaje / 100)
         return subtotal + iva - ret
 
-    # Si tienes esta función que menciona el error, asegúrate de que use 'getattr'
-    # o verifique si el objeto existe de forma segura:
     @computed_field
     @property
     def costo_casetas_dinamico(self) -> float:
-        # Si la relación no cargó, usamos el valor guardado en la columna
-        if not hasattr(self, "route_template") or self.route_template is None:
+        # Si la relación no cargó, usamos el snapshot
+        if self.route_template is None:
             return self.costo_casetas
-
-        # Si existe, podrías sacar el costo fresco, pero
-        # lo mejor es confiar en el snapshot 'costo_casetas'
         return self.costo_casetas
 
 
@@ -118,7 +121,9 @@ class SubClientBase(ORMBase):
 
 class SubClientCreate(SubClientBase):
     id: Optional[int] = None
-    tariffs: List[TariffCreate] = []
+    tariffs: List[TariffCreate] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="ignore")
 
 
 class SubClientUpdate(ORMBase):
@@ -143,14 +148,15 @@ class SubClientUpdate(ORMBase):
     convenio_especial: Optional[bool] = None
     contrato_url: Optional[str] = Field(default=None, max_length=500)
 
-    # si quieres permitir update nested:
     tariffs: Optional[List[TariffUpdate]] = None
+
+    model_config = ConfigDict(extra="ignore")
 
 
 class SubClientResponse(SubClientBase):
     id: int
     client_id: int
-    tariffs: List[TariffResponse] = []
+    tariffs: List[TariffResponse] = Field(default_factory=list)
 
 
 # =========================================================
@@ -181,11 +187,12 @@ class ClientBase(ORMBase):
 
 
 class ClientCreate(ClientBase):
-    sub_clients: List[SubClientCreate] = []
+    sub_clients: List[SubClientCreate] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="ignore")
 
 
 class ClientUpdate(ORMBase):
-    # parcial
     razon_social: Optional[str] = Field(default=None, max_length=200)
     public_id: Optional[str] = Field(default=None, max_length=50)
 
@@ -206,28 +213,26 @@ class ClientUpdate(ORMBase):
     dias_credito: Optional[int] = None
     contrato_url: Optional[str] = Field(default=None, max_length=500)
 
-    # si quieres permitir update nested:
     sub_clients: Optional[List[SubClientUpdate]] = None
+
+    model_config = ConfigDict(extra="ignore")
 
 
 class ClientResponse(ClientBase):
     id: int
     created_at: datetime
     updated_at: datetime
-    sub_clients: List[SubClientResponse] = []
+    sub_clients: List[SubClientResponse] = Field(default_factory=list)
 
 
-class ClientDocumentResponse(BaseModel):
+class ClientDocumentResponse(ORMBase):
     id: int
     client_id: int
     document_type: str
     filename: str
     file_url: str
-    file_size: Optional[int]
-    mime_type: Optional[str]
+    file_size: Optional[int] = None
+    mime_type: Optional[str] = None
     version: int
     is_active: bool
     uploaded_at: datetime
-
-    class Config:
-        from_attributes = True
