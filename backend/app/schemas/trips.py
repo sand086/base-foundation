@@ -3,9 +3,9 @@ from __future__ import annotations
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
-from app.models.models import TripStatus, RecordStatus  # ajusta ruta real
+from app.models.models import RecordStatus, TripStatus
 
 
 class ORMBase(BaseModel):
@@ -13,24 +13,20 @@ class ORMBase(BaseModel):
 
 
 # =========================================================
-# TRIP TIMELINE EVENTS
+# TIMELINE (TripTimelineEvent)
 # =========================================================
 
 
 class TripTimelineEventBase(ORMBase):
-    # time = Column(DateTime(timezone=True), nullable=False)
     time: datetime
-
-    # event = Column(String(500), nullable=False)
     event: str = Field(..., max_length=500)
-
-    # event_type = Column(String(20), default="info")
     event_type: str = Field(default="info", max_length=20)
 
 
 class TripTimelineEventCreate(TripTimelineEventBase):
-    # trip_id viene por path normalmente, pero lo dejo opcional por si lo mandas
-    trip_id: Optional[int] = None
+    """Para crear eventos en el timeline (nested o endpoint dedicado)."""
+
+    model_config = ConfigDict(extra="ignore")
 
 
 class TripTimelineEventUpdate(ORMBase):
@@ -38,12 +34,14 @@ class TripTimelineEventUpdate(ORMBase):
     event: Optional[str] = Field(default=None, max_length=500)
     event_type: Optional[str] = Field(default=None, max_length=20)
 
+    model_config = ConfigDict(extra="ignore")
+
 
 class TripTimelineEventResponse(TripTimelineEventBase):
     id: int
     trip_id: int
 
-    # AuditMixin
+    # AuditMixin (alineado a models / BD)
     record_status: RecordStatus
     created_at: datetime
     updated_at: datetime
@@ -57,16 +55,22 @@ class TripTimelineEventResponse(TripTimelineEventBase):
 
 
 class TripBase(ORMBase):
-    # origin/destination/route_name
+    # Relaciones obligatorias según tu ORM
+    client_id: int
+    sub_client_id: int
+    unit_id: int
+    operator_id: int
+    tariff_id: Optional[int] = None
+
     origin: str = Field(..., max_length=200)
     destination: str = Field(..., max_length=200)
     route_name: Optional[str] = Field(default=None, max_length=200)
 
-    # status = Enum(TripStatus, name="tripstatus")
+    # Enum alineado a BD: tripstatus
     status: TripStatus = TripStatus.CREADO
 
-    # costos
-    tarifa_base: float = Field(..., gt=0)
+    # Costos / anticipos
+    tarifa_base: float
     costo_casetas: float = 0.0
     anticipo_casetas: float = 0.0
     anticipo_viaticos: float = 0.0
@@ -74,21 +78,17 @@ class TripBase(ORMBase):
     otros_anticipos: float = 0.0
     saldo_operador: float = 0.0
 
-    # fechas
+    # Fechas (start_date es requerido en tu ORM)
     start_date: datetime
     estimated_arrival: Optional[datetime] = None
     actual_arrival: Optional[datetime] = None
     closed_at: Optional[datetime] = None
 
-    # tracking
-    last_update: Optional[datetime] = None
+    # Tracking (en BD last_update tiene server_default)
     last_location: Optional[str] = Field(default=None, max_length=200)
 
 
 class TripCreate(ORMBase):
-    # public_id existe pero es opcional
-    public_id: Optional[str] = Field(default=None, max_length=50)
-
     client_id: int
     sub_client_id: int
     unit_id: int
@@ -101,7 +101,7 @@ class TripCreate(ORMBase):
 
     status: TripStatus = TripStatus.CREADO
 
-    tarifa_base: float = Field(..., gt=0)
+    tarifa_base: float
     costo_casetas: float = 0.0
     anticipo_casetas: float = 0.0
     anticipo_viaticos: float = 0.0
@@ -111,17 +111,17 @@ class TripCreate(ORMBase):
 
     start_date: datetime
     estimated_arrival: Optional[datetime] = None
-    actual_arrival: Optional[datetime] = None
-    closed_at: Optional[datetime] = None
 
     last_location: Optional[str] = Field(default=None, max_length=200)
 
+    # Si quieres permitir crear timeline nested (opcional)
+    timeline_events: List[TripTimelineEventCreate] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="ignore")
+
 
 class TripUpdate(ORMBase):
-    # Parcial (exclude_unset=True en service)
-
-    public_id: Optional[str] = Field(default=None, max_length=50)
-
+    # Relaciones (normalmente no se cambian, pero lo dejo por flexibilidad)
     client_id: Optional[int] = None
     sub_client_id: Optional[int] = None
     unit_id: Optional[int] = None
@@ -134,7 +134,7 @@ class TripUpdate(ORMBase):
 
     status: Optional[TripStatus] = None
 
-    tarifa_base: Optional[float] = Field(default=None, gt=0)
+    tarifa_base: Optional[float] = None
     costo_casetas: Optional[float] = None
     anticipo_casetas: Optional[float] = None
     anticipo_viaticos: Optional[float] = None
@@ -147,21 +147,22 @@ class TripUpdate(ORMBase):
     actual_arrival: Optional[datetime] = None
     closed_at: Optional[datetime] = None
 
-    last_update: Optional[datetime] = None
     last_location: Optional[str] = Field(default=None, max_length=200)
+
+    # Si quieres permitir update nested (opcional)
+    timeline_events: Optional[List[TripTimelineEventUpdate]] = None
+
+    model_config = ConfigDict(extra="ignore")
 
 
 class TripResponse(TripBase):
     id: int
     public_id: Optional[str] = None
 
-    client_id: int
-    sub_client_id: int
-    unit_id: int
-    operator_id: int
-    tariff_id: Optional[int] = None
+    # Campos extra del ORM
+    last_update: datetime
 
-    timeline_events: List[TripTimelineEventResponse] = []
+    timeline_events: List[TripTimelineEventResponse] = Field(default_factory=list)
 
     # AuditMixin
     record_status: RecordStatus
@@ -169,3 +170,19 @@ class TripResponse(TripBase):
     updated_at: datetime
     created_by_id: Optional[int] = None
     updated_by_id: Optional[int] = None
+
+    @computed_field
+    @property
+    def total_anticipos(self) -> float:
+        return (
+            (self.anticipo_casetas or 0.0)
+            + (self.anticipo_viaticos or 0.0)
+            + (self.anticipo_combustible or 0.0)
+            + (self.otros_anticipos or 0.0)
+        )
+
+    @computed_field
+    @property
+    def saldo_estimado(self) -> float:
+        # Por si quieres un indicador rápido (ajústalo a tu lógica real si difiere)
+        return (self.tarifa_base or 0.0) - (self.total_anticipos or 0.0)

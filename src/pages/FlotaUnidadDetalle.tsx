@@ -1170,7 +1170,11 @@ export default function FlotaUnidadDetalle() {
             </p>
             <Separator orientation="vertical" className="h-8" />
 
-            <Button variant="ghost" onClick={handleCancel} className="gap-2">
+            <Button
+              variant="secondary"
+              onClick={handleCancel}
+              className="gap-2"
+            >
               <X className="h-4 w-4" /> Cancelar
             </Button>
 
