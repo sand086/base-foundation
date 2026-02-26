@@ -273,7 +273,6 @@ class WorkOrderResponse(ORMBase):
     # UI helpers (NO existen como columnas)
     unit_numero: Optional[str] = None
     mechanic_nombre: Optional[str] = None
-
     parts: List[WorkOrderPartResponse] = Field(default_factory=list)
 
     # AuditMixin
