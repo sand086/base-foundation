@@ -137,12 +137,12 @@ class WorkOrderStatus(str, PyEnum):
 
 
 class InventoryCategory(str, PyEnum):
-    MOTOR = "Motor"
-    FRENOS = "Frenos"
-    ELECTRICO = "Eléctrico"
-    SUSPENSION = "Suspensión"
-    TRANSMISION = "Transmisión"
-    GENERAL = "General"
+    MOTOR = "motor"
+    FRENOS = "frenos"
+    ELECTRICO = "eléctrico"
+    SUSPENSION = "suspensión"
+    TRANSMISION = "transmisión"
+    GENERAL = "general"
 
 
 class SupplierStatus(str, PyEnum):
@@ -778,7 +778,7 @@ class WorkOrder(AuditMixin, Base):
 
     # BD: workorderstatus
     status = Column(
-        Enum(WorkOrderStatus, name="workorderstatus"), default=WorkOrderStatus.ABIERTA
+        pg_enum(WorkOrderStatus, "workorderstatus"), default=WorkOrderStatus.ABIERTA
     )
 
     fecha_apertura = Column(

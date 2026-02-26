@@ -15,6 +15,7 @@ import {
   Eye,
   Pencil,
   MoreVertical,
+  Wand2, // ✅ NUEVO
 } from "lucide-react";
 
 // DND Kit
@@ -45,6 +46,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Switch } from "@/components/ui/switch"; // ✅ NUEVO
 import {
   Select,
   SelectContent,
@@ -106,7 +108,7 @@ interface SegmentEntry {
   tiempo_minutos: number;
   toll_booth_id: number | null;
   toll_nombre?: string;
-  //  Siempre presentes (lado a lado)
+  // Siempre presentes (lado a lado)
   costo_s: number; // 6 ejes (Sencillo) en UI
   costo_f: number; // 9 ejes (Full) en UI
 }
@@ -122,6 +124,7 @@ type SortableRowProps = {
   removeSegment: (idx: number) => void;
   formatCurrency: (val: number) => string;
   hasGap: boolean;
+  showAdvanced: boolean; // ✅ NUEVO (para ocultar/mostrar Edo/Carr)
 };
 
 // --- COMPONENTE FILA (SORTABLE) ---
@@ -132,6 +135,7 @@ const SortableTableRow: React.FC<SortableRowProps> = ({
   removeSegment,
   formatCurrency,
   hasGap,
+  showAdvanced,
 }) => {
   const {
     attributes,
@@ -153,8 +157,8 @@ const SortableTableRow: React.FC<SortableRowProps> = ({
     <>
       {hasGap && (
         <TableRow className="bg-amber-50/30 border-none h-7">
-          {/*  colSpan actualizado a 9 */}
-          <TableCell colSpan={9} className="py-0">
+          {/* ✅ colSpan dinámico según columnas visibles */}
+          <TableCell colSpan={showAdvanced ? 9 : 7} className="py-0">
             <div className="flex items-center justify-center gap-2 text-[9px] font-bold text-amber-600 uppercase tracking-tighter">
               <AlertTriangle className="h-3 w-3" /> Discontinuidad:{" "}
               {(seg.nombre_segmento.split("-")[0] || "").trim()} no conecta con
@@ -186,7 +190,7 @@ const SortableTableRow: React.FC<SortableRowProps> = ({
           </div>
         </TableCell>
 
-        <TableCell className="w-[30%]">
+        <TableCell className={showAdvanced ? "w-[30%]" : "w-[40%]"}>
           <div className="flex flex-col gap-0.5">
             <Input
               className="h-7 text-xs font-bold border-transparent hover:border-slate-200 focus:bg-white"
@@ -194,6 +198,7 @@ const SortableTableRow: React.FC<SortableRowProps> = ({
               onChange={(e) =>
                 updateSegment(idx, "nombre_segmento", e.target.value)
               }
+              placeholder="Ej: CDMX - Puebla"
             />
             {seg.toll_booth_id && (
               <span className="text-[8px] font-black text-primary px-1 uppercase tracking-tighter">
@@ -203,27 +208,36 @@ const SortableTableRow: React.FC<SortableRowProps> = ({
           </div>
         </TableCell>
 
-        <TableCell className="w-16">
-          <Input
-            className="h-7 text-[10px] uppercase w-16 text-center border-transparent hover:border-slate-200 focus:bg-white"
-            value={seg.estado}
-            onChange={(e) => updateSegment(idx, "estado", e.target.value)}
-          />
-        </TableCell>
+        {/* ✅ COLUMNAS OPCIONALES: Estado/Carretera */}
+        {showAdvanced && (
+          <>
+            <TableCell className="w-16">
+              <Input
+                className="h-7 text-[10px] uppercase w-16 text-center border-transparent hover:border-slate-200 focus:bg-white"
+                value={seg.estado}
+                placeholder="Edo."
+                onChange={(e) => updateSegment(idx, "estado", e.target.value)}
+              />
+            </TableCell>
 
-        <TableCell className="w-24">
-          <Input
-            className="h-7 text-[10px] uppercase w-24 border-transparent hover:border-slate-200 focus:bg-white"
-            value={seg.carretera}
-            onChange={(e) => updateSegment(idx, "carretera", e.target.value)}
-          />
-        </TableCell>
+            <TableCell className="w-24">
+              <Input
+                className="h-7 text-[10px] uppercase w-24 border-transparent hover:border-slate-200 focus:bg-white"
+                value={seg.carretera}
+                placeholder="Carr."
+                onChange={(e) =>
+                  updateSegment(idx, "carretera", e.target.value)
+                }
+              />
+            </TableCell>
+          </>
+        )}
 
         <TableCell className="w-20">
           <Input
             type="number"
             className="h-7 text-[10px] w-20 text-right font-mono border-transparent hover:border-slate-200 focus:bg-white"
-            value={seg.distancia_km}
+            value={seg.distancia_km || ""}
             onChange={(e) =>
               updateSegment(
                 idx,
@@ -238,7 +252,7 @@ const SortableTableRow: React.FC<SortableRowProps> = ({
           <Input
             type="number"
             className="h-7 text-[10px] w-20 text-right font-mono border-transparent hover:border-slate-200 focus:bg-white"
-            value={seg.tiempo_minutos}
+            value={seg.tiempo_minutos || ""}
             onChange={(e) =>
               updateSegment(
                 idx,
@@ -249,12 +263,12 @@ const SortableTableRow: React.FC<SortableRowProps> = ({
           />
         </TableCell>
 
-        {/*  6 ejes (Sencillo) */}
+        {/* 6 ejes (Sencillo) */}
         <TableCell className="text-right font-mono text-slate-600 text-xs">
           {formatCurrency(seg.costo_s)}
         </TableCell>
 
-        {/*  9 ejes (Full) */}
+        {/* 9 ejes (Full) */}
         <TableCell className="text-right font-mono font-bold text-slate-800 text-xs bg-slate-50/40">
           {formatCurrency(seg.costo_f)}
         </TableCell>
@@ -292,11 +306,17 @@ export const ArmadorRutas: React.FC = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [tollSearch, setTollSearch] = useState("");
 
+  // ✅ NUEVO: Toggle Modo Avanzado
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // ✅ NUEVO: Estado de cálculo
+  const [isCalculating, setIsCalculating] = useState(false);
+
   // Eliminación
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [routeToDelete, setRouteToDelete] = useState<RateTemplate | null>(null);
 
-  //  Estados para el Modal de Detalle (Timeline)
+  // Modal detalle (Timeline)
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedRouteDetail, setSelectedRouteDetail] =
     useState<RateTemplate | null>(null);
@@ -324,7 +344,7 @@ export const ArmadorRutas: React.FC = () => {
     void fetchData();
   }, []);
 
-  //  Detección FULL (se sigue usando para "tipo_unidad" al guardar, por compatibilidad)
+  // Detección FULL (se usa solo para tipo_unidad al guardar, compatibilidad)
   const isFullUnit = useMemo(() => {
     const t = tiposActivos.find((x) => x.id === tipoUnidadId);
     const name = t?.nombre?.toLowerCase?.() || "";
@@ -333,14 +353,14 @@ export const ArmadorRutas: React.FC = () => {
     );
   }, [tipoUnidadId, tiposActivos]);
 
-  //  Totales lado a lado (sin depender de isFullUnit)
+  // Totales lado a lado
   const totals = useMemo(() => {
     return segments.reduce(
       (acc, s) => {
         acc.distancia += s.distancia_km || 0;
         acc.tiempo += s.tiempo_minutos || 0;
-        acc.costo_s += s.costo_s || 0; // 6 ejes
-        acc.costo_f += s.costo_f || 0; // 9 ejes
+        acc.costo_s += s.costo_s || 0;
+        acc.costo_f += s.costo_f || 0;
         return acc;
       },
       { distancia: 0, tiempo: 0, costo_s: 0, costo_f: 0 },
@@ -360,21 +380,26 @@ export const ArmadorRutas: React.FC = () => {
       updated[idx] = { ...updated[idx], [field]: value };
 
       if (field === "nombre_segmento") {
+        // Buscar por nombre O por tramo
         const match = allTolls.find(
-          (t) => (t.tramo || "").toLowerCase() === String(value).toLowerCase(),
+          (t) =>
+            (t.nombre || "").toLowerCase() === String(value).toLowerCase() ||
+            (t.tramo || "").toLowerCase() === String(value).toLowerCase(),
         );
 
-        //  Mapeo correcto estático (SIEMPRE)
         if (match) {
           updated[idx].carretera = (match as any).carretera || "";
           updated[idx].estado = (match as any).estado || "";
           updated[idx].toll_booth_id = match.id;
 
-          // 6 ejes (Sencillo) en UI
+          // 6 ejes (Sencillo)
           updated[idx].costo_s = (match as any).costo_5_ejes_sencillo ?? 0;
 
-          // 9 ejes (Full) en UI
+          // 9 ejes (Full)
           updated[idx].costo_f = (match as any).costo_9_ejes_full ?? 0;
+        } else {
+          // Si el usuario escribe algo que no es caseta, limpiamos el peaje
+          updated[idx].toll_booth_id = null;
         }
       }
 
@@ -382,12 +407,49 @@ export const ArmadorRutas: React.FC = () => {
     });
   };
 
+  // ✅ NUEVO: Auto-calcular KM y Min (mock listo para reemplazar por API real)
+  const handleAutoCalculate = async () => {
+    if (segments.length === 0) {
+      toast.warning("Agrega al menos un tramo/caseta para calcular");
+      return;
+    }
+
+    setIsCalculating(true);
+
+    // TODO (producción):
+    // const response = await api.post("/api/rutas/calcular", { origen, destino, segments });
+    // setSegments(response.data.segments);
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    setSegments((prev) =>
+      prev.map((seg) => {
+        const newKm =
+          seg.distancia_km > 0
+            ? seg.distancia_km
+            : Math.floor(Math.random() * 50) + 20; // 20..70
+        const newMins =
+          seg.tiempo_minutos > 0
+            ? seg.tiempo_minutos
+            : Math.floor(newKm * 0.85); // ~70km/h
+
+        return {
+          ...seg,
+          distancia_km: newKm,
+          tiempo_minutos: newMins,
+        };
+      }),
+    );
+
+    setIsCalculating(false);
+    toast.success("Distancias y tiempos estimados calculados.");
+  };
+
   const handleEditRoute = (route: RateTemplate) => {
     setSelectedCliente(route.client_id.toString());
     setOrigen(route.origen);
     setDestino(route.destino);
 
-    // Compatibilidad: seguimos seleccionando unidad por el campo tipo_unidad guardado
     const unit = tiposActivos.find((t) =>
       route.tipo_unidad === "9ejes"
         ? t.nombre.toLowerCase().includes("9")
@@ -502,7 +564,7 @@ export const ArmadorRutas: React.FC = () => {
     }
   };
 
-  //  History actualizado: Casetas + Costo 6 + Costo 9 (sin "Config")
+  // History: Casetas + Costo 6 + Costo 9
   const historyColumns: ColumnDef<RateTemplate>[] = useMemo(
     () => [
       {
@@ -609,15 +671,15 @@ export const ArmadorRutas: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <Alert className="bg-blue-50 border-blue-200 mb-6 shadow-sm">
+      {/* <Alert className="bg-blue-50 border-blue-200 mb-6 shadow-sm">
         <HelpCircle className="h-4 w-4 text-blue-600" />
         <AlertDescription className="text-blue-700 text-xs leading-relaxed font-medium">
           **Guía:** Selecciona cliente y unidad. Inserta casetas o tramos
-          libres. **Arrastra (::)** para reordenar y observa (⚠️) si hay
-          desconexiones. Al guardar, los costos se congelan como snapshot para
-          proteger tu tarifa autorizada.
+          libres. Activa **Modo Avanzado** para ver/editar Estado y Carretera.
+          Usa **Auto-calcular** para estimar KM y tiempo (mock listo para
+          conectarlo a tu API).
         </AlertDescription>
-      </Alert>
+      </Alert> */}
 
       <Card className="border-t-4 border-t-primary shadow-xl overflow-hidden">
         <CardHeader className="bg-slate-50/80 border-b p-4">
@@ -699,6 +761,38 @@ export const ArmadorRutas: React.FC = () => {
           </div>
         </CardHeader>
 
+        {/* ✅ TOOLBAR: switch + autocalc */}
+        <div className="bg-slate-100/50 border-b p-3 flex justify-between items-center">
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="advanced-mode"
+              checked={showAdvanced}
+              onCheckedChange={setShowAdvanced}
+            />
+            <Label
+              htmlFor="advanced-mode"
+              className="text-xs font-semibold cursor-pointer"
+            >
+              Mostrar Carretera / Estado
+            </Label>
+          </div>
+
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleAutoCalculate}
+            disabled={isCalculating || segments.length === 0}
+            className="h-8 bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200"
+          >
+            {isCalculating ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Wand2 className="h-4 w-4 mr-2" />
+            )}
+            Auto-Calcular KM / Min
+          </Button>
+        </div>
+
         <CardContent className="p-0">
           <DndContext
             sensors={sensors}
@@ -709,9 +803,13 @@ export const ArmadorRutas: React.FC = () => {
               <TableHeader className="bg-slate-100">
                 <TableRow className="text-[10px] uppercase font-bold text-slate-600">
                   <TableHead className="w-10"></TableHead>
-                  <TableHead className="w-[30%]">Tramo / Plaza</TableHead>
-                  <TableHead className="w-16">Edo.</TableHead>
-                  <TableHead className="w-24">Carr.</TableHead>
+                  <TableHead className={showAdvanced ? "w-[30%]" : "w-[40%]"}>
+                    Tramo / Plaza
+                  </TableHead>
+                  {showAdvanced && <TableHead className="w-16">Edo.</TableHead>}
+                  {showAdvanced && (
+                    <TableHead className="w-24">Carr.</TableHead>
+                  )}
                   <TableHead className="text-right w-20">Km</TableHead>
                   <TableHead className="text-right w-20">Min</TableHead>
                   <TableHead className="text-right">6 Ejes (Senc.)</TableHead>
@@ -738,13 +836,15 @@ export const ArmadorRutas: React.FC = () => {
                       }
                       formatCurrency={formatCurrency}
                       hasGap={checkRouteGap(idx)}
+                      showAdvanced={showAdvanced}
                     />
                   ))}
                 </SortableContext>
 
+                {/* TOTALES */}
                 <TableRow className="bg-slate-900 text-white font-bold hover:bg-slate-900 border-none sticky bottom-0">
                   <TableCell
-                    colSpan={4}
+                    colSpan={showAdvanced ? 4 : 2}
                     className="text-right text-[10px] uppercase tracking-widest opacity-70"
                   >
                     Totales SCT
@@ -769,6 +869,7 @@ export const ArmadorRutas: React.FC = () => {
         </CardContent>
       </Card>
 
+      {/* BOTONES INFERIORES */}
       <div className="flex flex-col md:flex-row justify-between items-center bg-white p-5 rounded-2xl border shadow-sm gap-4">
         <div className="flex gap-3">
           <Button
@@ -810,7 +911,7 @@ export const ArmadorRutas: React.FC = () => {
               <div className="relative my-2">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <Input
-                  placeholder="Filtrar..."
+                  placeholder="Filtrar por nombre o tramo..."
                   className="pl-9 h-9"
                   value={tollSearch}
                   onChange={(e) => setTollSearch(e.target.value)}
@@ -818,7 +919,7 @@ export const ArmadorRutas: React.FC = () => {
               </div>
 
               <ScrollArea className="h-80 pr-4">
-                <div className="space-y-1">
+                <div className="space-y-2">
                   {allTolls
                     .filter(
                       (t) =>
@@ -832,13 +933,13 @@ export const ArmadorRutas: React.FC = () => {
                     .map((t) => (
                       <div
                         key={t.id}
-                        className="p-3 border rounded-lg flex justify-between items-center hover:bg-slate-50 cursor-pointer group"
+                        className="p-3 border rounded-lg flex justify-between items-center hover:bg-slate-50 cursor-pointer group transition-colors"
                         onClick={() => {
                           setSegments([
                             ...segments,
                             {
                               tempId: genTempId(),
-                              nombre_segmento: t.tramo,
+                              nombre_segmento: t.nombre, // ✅ nombre
                               estado: (t as any).estado || "",
                               carretera: (t as any).carretera || "",
                               distancia_km: 0,
@@ -852,21 +953,42 @@ export const ArmadorRutas: React.FC = () => {
                           setDialogOpen(false);
                         }}
                       >
-                        <div className="flex-1">
+                        <div className="flex-1 pr-4">
                           <p className="text-sm font-bold group-hover:text-primary">
                             {t.nombre}
                           </p>
-                          <p className="text-[10px] text-muted-foreground uppercase">
+                          <p className="text-[10px] text-muted-foreground uppercase leading-tight mt-0.5">
                             {t.tramo}
+                            {((t as any).carretera || (t as any).estado) && (
+                              <span className="block mt-0.5 text-slate-400">
+                                📍 {(t as any).carretera}{" "}
+                                {(t as any).carretera && (t as any).estado
+                                  ? "•"
+                                  : ""}{" "}
+                                {(t as any).estado}
+                              </span>
+                            )}
                           </p>
                         </div>
 
-                        <Badge
-                          variant="secondary"
-                          className="font-mono text-[10px]"
-                        >
-                          {formatCurrency((t as any).costo_9_ejes_full ?? 0)}
-                        </Badge>
+                        <div className="flex flex-col items-end gap-1.5 shrink-0">
+                          <Badge
+                            variant="secondary"
+                            className="font-mono text-[9px] bg-blue-50 text-blue-700 border-blue-100 px-1.5"
+                          >
+                            Sencillo:{" "}
+                            {formatCurrency(
+                              (t as any).costo_5_ejes_sencillo ?? 0,
+                            )}
+                          </Badge>
+                          <Badge
+                            variant="secondary"
+                            className="font-mono text-[9px] bg-emerald-50 text-emerald-700 border-emerald-100 px-1.5"
+                          >
+                            Full:{" "}
+                            {formatCurrency((t as any).costo_9_ejes_full ?? 0)}
+                          </Badge>
+                        </div>
                       </div>
                     ))}
                 </div>
@@ -883,6 +1005,7 @@ export const ArmadorRutas: React.FC = () => {
         </ActionButton>
       </div>
 
+      {/* TABLA TARIFAS */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between border-b bg-slate-50/50 py-3">
           <CardTitle className="text-lg">Tarifas Autorizadas</CardTitle>
@@ -896,7 +1019,7 @@ export const ArmadorRutas: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* MODAL DE ELIMINACIÓN */}
+      {/* MODAL ELIMINACIÓN */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -918,7 +1041,7 @@ export const ArmadorRutas: React.FC = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/*  MODAL DE DETALLE (TIMELINE) */}
+      {/* MODAL DETALLE (TIMELINE) */}
       <Dialog open={detailModalOpen} onOpenChange={setDetailModalOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
           <DialogHeader className="pb-4 border-b">
@@ -995,9 +1118,7 @@ export const ArmadorRutas: React.FC = () => {
                         <span className="flex items-center gap-1">
                           <MapPin className="h-3 w-3" /> {seg.carretera}
                         </span>
-
                         <span>Distancia: {seg.distancia_km} km</span>
-
                         <span>
                           Tiempo: {Math.floor(seg.tiempo_minutos / 60)}h{" "}
                           {seg.tiempo_minutos % 60}m
