@@ -1,9 +1,4 @@
 // src/pages/ProveedoresCxP.tsx
-//  Versión SIN datos fake: usa hooks/servicios (DB) en lugar de mockSuppliers/initialPayableInvoices/bankAccounts/initialPayments
-//  Mantiene el mismo UI/UX (Tabs, KPIs, tablas, modales)
-//  Soporta prefill desde Compras por URL params
-//  Aplana pagos desde invoices.payments (tab "Pagos")
-
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
@@ -17,7 +12,9 @@ import {
   CreditCard,
   MoreHorizontal,
   Package,
+  Trash2,
 } from "lucide-react";
+
 import { PageHeader } from "@/components/ui/page-header";
 import { ActionButton } from "@/components/ui/action-button";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -41,6 +38,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -49,45 +57,32 @@ import { es } from "date-fns/locale";
 import { RegisterExpenseModal } from "@/features/cxp/RegisterExpenseModal";
 import { InvoiceDetailSheet } from "@/features/cxp/InvoiceDetailSheet";
 import { RegisterPaymentModal } from "@/features/cxp/RegisterPaymentModal";
+import { SupplierModal } from "@/features/cxp/SupplierModal";
+import { SupplierDetailSheet } from "@/features/cxp/SupplierDetailSheet";
 
-//  Tipos & helpers (ajusta si tu proyecto ya los tiene)
-import {
-  PayableInvoice,
-  InvoicePayment,
-  getInvoiceStatusInfo,
-  getClasificacionLabel,
-  getClasificacionColor,
-} from "@/features/cxp/types";
-
-//  Hooks reales (DB/API) — crea/ajusta según tus endpoints
+// Hooks
 import { useSuppliers } from "@/hooks/useSuppliers";
 import { useBankAccounts } from "@/hooks/useBankAccounts";
 
-type Supplier = {
-  id: number;
-  razon_social: string;
-  rfc: string;
-  contacto?: string | null;
-  telefono?: string | null;
-  giro?: string | null;
-  estatus?: "activo" | "inactivo" | string;
-  categoria?: string | null;
-  dias_credito?: number | null;
-};
+// Types (Centralizados)
+import type { PayableInvoice, Supplier } from "@/types/api.types";
+
+//  Helpers
+import {
+  getInvoiceStatusInfo,
+  getClasificacionLabel,
+  getClasificacionColor,
+} from "@/lib/utils"; // <-- asegúrate que esta ruta sea la correcta
 
 interface PrefillData {
   proveedor: string;
-  proveedorId: string; // viene como string desde URL
+  proveedorId: string;
   concepto: string;
   montoTotal: number;
   ordenCompraId: string;
   ordenCompraFolio: string;
 }
 
-/**
- * Helpers para normalizar tipos/fechas/strings entre API y UI.
- * Si tu API ya manda todo “bonito”, puedes simplificar.
- */
 const safeLower = (v: unknown) =>
   typeof v === "string" ? v.toLowerCase() : "";
 const isValidDate = (d: Date) => !Number.isNaN(d.getTime());
@@ -100,21 +95,20 @@ const parseDateSafe = (v: unknown): Date | null => {
 export default function ProveedoresCxP() {
   const [searchParams, setSearchParams] = useSearchParams();
 
-  //  Data real desde DB/API
+  // Data real desde DB/API
   const {
     suppliers,
     invoices,
     isLoadingSuppliers,
     isLoadingInvoices,
-    refreshSuppliers,
     refreshInvoices,
-
-    createInvoice, // (payload) => Promise<boolean>
-    updateInvoice, // (id, payload) => Promise<boolean>
-    registerPayment, // (invoiceId, payload) => Promise<boolean>
-
-    // opcional: si tu hook también trae pagos por separado
-    // payments,
+    createInvoice,
+    updateInvoice,
+    deleteInvoice, // ✅ NUEVO
+    registerPayment,
+    createSupplier,
+    updateSupplier,
+    deleteSupplier,
   } = useSuppliers();
 
   const { bankAccounts, isLoadingBankAccounts } = useBankAccounts();
@@ -122,12 +116,19 @@ export default function ProveedoresCxP() {
   const [searchCatalog, setSearchCatalog] = useState("");
   const [searchCxP, setSearchCxP] = useState("");
 
-  // Modal states
+  // =====================
+  // Modal states - Facturas
+  // =====================
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
-  // Selections
+  // ✅ NUEVO: delete factura
+  const [isDeleteInvoiceOpen, setIsDeleteInvoiceOpen] = useState(false);
+  const [invoiceToDelete, setInvoiceToDelete] = useState<PayableInvoice | null>(
+    null,
+  );
+
   const [selectedInvoice, setSelectedInvoice] = useState<PayableInvoice | null>(
     null,
   );
@@ -136,10 +137,24 @@ export default function ProveedoresCxP() {
   );
   const [prefillData, setPrefillData] = useState<PrefillData | null>(null);
 
-  /**
-   *  Prefill desde Compras vía URL params:
-   * /cxp?fromCompras=true&proveedor=...&proveedorId=...&concepto=...&monto=...&ordenId=...&ordenFolio=...
-   */
+  // =====================
+  // Modal states - Proveedores
+  // =====================
+  const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
+  const [isSupplierDetailOpen, setIsSupplierDetailOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+
+  const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(
+    null,
+  );
+  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
+  const [supplierToDelete, setSupplierToDelete] = useState<Supplier | null>(
+    null,
+  );
+
+  // =====================
+  // Prefill desde Compras vía URL params
+  // =====================
   useEffect(() => {
     const fromCompras = searchParams.get("fromCompras");
     if (fromCompras === "true") {
@@ -163,88 +178,75 @@ export default function ProveedoresCxP() {
     }
   }, [searchParams, setSearchParams]);
 
-  //  KPIs (usa snake_case en invoices si así viene de API)
+  // =====================
+  // KPIs
+  // =====================
   const kpis = useMemo(() => {
     const totalVencido = invoices
       .filter((inv) => getInvoiceStatusInfo(inv).status === "danger")
-      .reduce(
-        (sum, inv) => sum + (inv.saldo_pendiente ?? inv.saldoPendiente ?? 0),
-        0,
-      );
+      .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
 
     const totalPorPagar = invoices
       .filter((inv) => {
         const s = getInvoiceStatusInfo(inv).status;
         return s === "warning" || s === "default";
       })
-      .reduce(
-        (sum, inv) => sum + (inv.saldo_pendiente ?? inv.saldoPendiente ?? 0),
-        0,
-      );
+      .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
 
     const totalParcial = invoices
       .filter((inv) => getInvoiceStatusInfo(inv).status === "info")
-      .reduce(
-        (sum, inv) => sum + (inv.saldo_pendiente ?? inv.saldoPendiente ?? 0),
-        0,
-      );
+      .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
 
     const fromComprasCount = invoices.filter(
-      (inv) => !!(inv.orden_compra_id ?? inv.ordenCompraId),
+      (inv) => !!inv.orden_compra_id,
     ).length;
 
     return { totalVencido, totalPorPagar, totalParcial, fromComprasCount };
   }, [invoices]);
 
-  //  Filters
+  // =====================
+  // Filters
+  // =====================
   const filteredSuppliers = useMemo(() => {
     const q = safeLower(searchCatalog);
-    return (suppliers as Supplier[]).filter((s) => {
-      return (
-        safeLower(s.razon_social).includes(q) || safeLower(s.rfc).includes(q)
-      );
-    });
+    return suppliers.filter(
+      (s) =>
+        safeLower(s.razon_social).includes(q) || safeLower(s.rfc).includes(q),
+    );
   }, [suppliers, searchCatalog]);
 
   const filteredInvoices = useMemo(() => {
     const q = safeLower(searchCxP);
     return invoices.filter((inv) => {
-      const proveedor = safeLower(
-        inv.supplier_razon_social ?? inv.proveedor ?? "",
-      );
-      const uuid = safeLower(inv.uuid ?? "");
-      const concepto = safeLower(inv.concepto ?? "");
+      const proveedor = safeLower(inv.supplier_razon_social || "");
+      const uuid = safeLower(inv.uuid || "");
+      const concepto = safeLower(inv.concepto || "");
       return proveedor.includes(q) || uuid.includes(q) || concepto.includes(q);
     });
   }, [invoices, searchCxP]);
 
-  //  Aplanar pagos desde invoices.payments (DB)
+  // =====================
+  // Aplanar pagos desde invoices.payments
+  // =====================
   const allPayments = useMemo(() => {
-    const rows =
-      invoices.flatMap((inv) => {
-        const supplierName = inv.supplier_razon_social ?? inv.proveedor ?? "";
-        const folioFactura =
-          inv.folio_interno ??
-          inv.id?.toString?.() ??
-          (inv.uuid ? inv.uuid.substring(0, 8) : "");
-        const payments = (inv.payments ??
-          inv.pagos ??
-          []) as (InvoicePayment & {
-          fecha_pago?: string;
-          metodo_pago?: string;
-        })[];
+    const rows = invoices.flatMap((inv) => {
+      const supplierName = inv.supplier_razon_social || "";
+      const folioFactura =
+        inv.folio_interno ||
+        inv.id.toString() ||
+        (inv.uuid ? inv.uuid.substring(0, 8) : "");
+      const payments = inv.payments || [];
 
-        return payments.map((p) => ({
-          id: p.id,
-          proveedor: supplierName,
-          folioFactura,
-          fecha_pago: p.fecha_pago ?? p.fecha ?? "",
-          monto: p.monto,
-          metodo_pago: p.metodo_pago ?? p.metodoPago ?? "Transferencia",
-          complemento_uuid:
-            (p as any).complemento_uuid ?? (p as any).complementoUUID ?? null,
-        }));
-      }) ?? [];
+      return payments.map((p) => ({
+        id: p.id,
+        proveedor: supplierName,
+        folioFactura,
+        fecha_pago: p.fecha_pago || "",
+        monto: p.monto,
+        metodo_pago: p.metodo_pago || "Transferencia",
+        complemento_uuid: p.complemento_uuid || null,
+      }));
+    });
 
     return rows.sort((a, b) => {
       const da = parseDateSafe(a.fecha_pago)?.getTime() ?? 0;
@@ -253,44 +255,64 @@ export default function ProveedoresCxP() {
     });
   }, [invoices]);
 
-  //  Acciones
-  const handleCreateInvoice = async (invoiceData: any) => {
-    // invoiceData viene del modal (tu modal ya debe enviar snake_case o tú mapeas aquí)
+  // =====================
+  // Acciones Facturas
+  // =====================
+  const handleCreateInvoice = async (invoiceData: Partial<PayableInvoice>) => {
     const ok = await createInvoice(invoiceData);
     if (ok) {
-      toast.success("Factura registrada correctamente");
       setIsExpenseModalOpen(false);
       setPrefillData(null);
       await refreshInvoices?.();
     }
   };
 
-  const handleUpdateInvoice = async (invoiceData: any) => {
+  const handleUpdateInvoice = async (invoiceData: Partial<PayableInvoice>) => {
     if (!editingInvoice) return;
-    const id = Number(editingInvoice.id);
-    const ok = await updateInvoice(id, invoiceData);
+    const ok = await updateInvoice(editingInvoice.id, invoiceData);
     if (ok) {
-      toast.success("Factura actualizada correctamente");
       setEditingInvoice(null);
       setIsExpenseModalOpen(false);
       await refreshInvoices?.();
     }
   };
 
-  const handleRegisterPayment = async (paymentData: any) => {
-    if (!selectedInvoice) return;
+  // ✅ NUEVO: eliminar factura (con modal confirm)
+  const handleConfirmDeleteInvoice = async () => {
+    if (!invoiceToDelete) return;
+    const ok = await deleteInvoice(invoiceToDelete.id);
+    if (ok) {
+      setIsDeleteInvoiceOpen(false);
+      setInvoiceToDelete(null);
+      // Por consistencia, refresca
+      await refreshInvoices?.();
+    }
+  };
 
-    const invoiceId = Number(selectedInvoice.id);
+  const handleRegisterPayment = async (invoiceId: number, paymentData: any) => {
     const ok = await registerPayment(invoiceId, paymentData);
     if (ok) {
-      toast.success("Pago registrado correctamente");
       setIsPaymentModalOpen(false);
       setSelectedInvoice(null);
       await refreshInvoices?.();
     }
   };
 
-  // UI handlers
+  // =====================
+  // Acciones Proveedores
+  // =====================
+  const handleConfirmDeleteSupplier = async () => {
+    if (!supplierToDelete) return;
+    const ok = await deleteSupplier(supplierToDelete.id);
+    if (ok) {
+      setIsDeleteDialogOpen(false);
+      setSupplierToDelete(null);
+    }
+  };
+
+  // =====================
+  // UI Handlers Facturas
+  // =====================
   const handleViewInvoice = (invoice: PayableInvoice) => {
     setSelectedInvoice(invoice);
     setIsDetailSheetOpen(true);
@@ -333,7 +355,7 @@ export default function ProveedoresCxP() {
           </TabsTrigger>
         </TabsList>
 
-        {/* TAB 1: Catálogo de Proveedores */}
+        {/* TAB 1: Catálogo */}
         <TabsContent value="catalogo" className="space-y-4">
           <div className="flex items-center justify-between gap-4">
             <div className="relative flex-1 max-w-md">
@@ -347,14 +369,11 @@ export default function ProveedoresCxP() {
             </div>
             <ActionButton
               onClick={() => {
-                toast.info("Pendiente: modal de proveedor", {
-                  description:
-                    "Conecta aquí tu modal/route de alta de proveedor.",
-                });
+                setEditingSupplier(null);
+                setIsSupplierModalOpen(true);
               }}
             >
-              <Plus className="h-4 w-4 mr-2" />
-              Nuevo Proveedor
+              <Plus className="h-4 w-4 mr-2" /> Nuevo Proveedor
             </ActionButton>
           </div>
 
@@ -371,7 +390,6 @@ export default function ProveedoresCxP() {
                   <DataTableHead>RFC</DataTableHead>
                   <DataTableHead>Contacto</DataTableHead>
                   <DataTableHead>Teléfono</DataTableHead>
-                  <DataTableHead>Giro</DataTableHead>
                   <DataTableHead>Estatus</DataTableHead>
                 </DataTableRow>
               </DataTableHeader>
@@ -387,21 +405,65 @@ export default function ProveedoresCxP() {
                     <DataTableCell className="font-mono text-xs">
                       {supplier.rfc}
                     </DataTableCell>
-                    <DataTableCell>{supplier.contacto || "—"}</DataTableCell>
-                    <DataTableCell>{supplier.telefono || "—"}</DataTableCell>
-                    <DataTableCell>{supplier.giro || "—"}</DataTableCell>
                     <DataTableCell>
-                      <StatusBadge
-                        status={
-                          (supplier.estatus || "activo") === "activo"
-                            ? "success"
-                            : "warning"
-                        }
-                      >
-                        {(supplier.estatus || "activo") === "activo"
-                          ? "Activo"
-                          : "Inactivo"}
-                      </StatusBadge>
+                      {supplier.contacto_principal || "—"}
+                    </DataTableCell>
+                    <DataTableCell>{supplier.telefono || "—"}</DataTableCell>
+                    <DataTableCell>
+                      <div className="flex items-center gap-2">
+                        <StatusBadge
+                          status={
+                            supplier.estatus === "activo"
+                              ? "success"
+                              : "warning"
+                          }
+                        >
+                          {supplier.estatus === "activo"
+                            ? "Activo"
+                            : "Inactivo"}
+                        </StatusBadge>
+
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 ml-auto"
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="bg-card">
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setSelectedSupplier(supplier);
+                                setIsSupplierDetailOpen(true);
+                              }}
+                            >
+                              <Eye className="h-4 w-4 mr-2" /> Ver Detalle
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setEditingSupplier(supplier);
+                                setIsSupplierModalOpen(true);
+                              }}
+                            >
+                              <Edit className="h-4 w-4 mr-2 text-blue-600" />{" "}
+                              Editar
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setSupplierToDelete(supplier);
+                                setIsDeleteDialogOpen(true);
+                              }}
+                              className="text-status-danger focus:text-status-danger"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" /> Eliminar
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </DataTableCell>
                   </DataTableRow>
                 ))}
@@ -412,13 +474,12 @@ export default function ProveedoresCxP() {
 
         {/* TAB 2: Cuentas por Pagar */}
         <TabsContent value="cuentas" className="space-y-4">
-          {/* KPI Cards */}
+          {/* KPIs */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <Card className="border-red-200 bg-red-50">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-red-700 flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4" />
-                  Total Vencido
+                  <AlertCircle className="h-4 w-4" /> Total Vencido
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -431,8 +492,7 @@ export default function ProveedoresCxP() {
             <Card className="border-amber-200 bg-amber-50">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-amber-700 flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
-                  Por Pagar (Vigente)
+                  <FileText className="h-4 w-4" /> Por Pagar (Vigente)
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -445,8 +505,7 @@ export default function ProveedoresCxP() {
             <Card className="border-blue-200 bg-blue-50">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-blue-700 flex items-center gap-2">
-                  <CreditCard className="h-4 w-4" />
-                  Pagos Parciales
+                  <CreditCard className="h-4 w-4" /> Pagos Parciales
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -459,8 +518,7 @@ export default function ProveedoresCxP() {
             <Card className="border-slate-200">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                  <Package className="h-4 w-4" />
-                  Desde Compras
+                  <Package className="h-4 w-4" /> Desde Compras
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -471,7 +529,6 @@ export default function ProveedoresCxP() {
             </Card>
           </div>
 
-          {/* Search and Actions */}
           <div className="flex items-center justify-between gap-4">
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -482,6 +539,7 @@ export default function ProveedoresCxP() {
                 className="pl-10"
               />
             </div>
+
             <ActionButton
               onClick={() => {
                 setEditingInvoice(null);
@@ -494,7 +552,6 @@ export default function ProveedoresCxP() {
             </ActionButton>
           </div>
 
-          {/* Invoices Table */}
           {isLoading ? (
             <div className="text-sm text-muted-foreground">
               Cargando facturas...
@@ -521,23 +578,14 @@ export default function ProveedoresCxP() {
               <DataTableBody>
                 {filteredInvoices.map((invoice) => {
                   const statusInfo = getInvoiceStatusInfo(invoice);
-                  const saldo =
-                    invoice.saldo_pendiente ?? invoice.saldoPendiente ?? 0;
-                  const monto = invoice.monto_total ?? invoice.montoTotal ?? 0;
-
-                  const venc =
-                    invoice.fecha_vencimiento ?? invoice.fechaVencimiento ?? "";
+                  const saldo = invoice.saldo_pendiente || 0;
+                  const monto = invoice.monto_total || 0;
+                  const venc = invoice.fecha_vencimiento || "";
                   const isOverdue = statusInfo.status === "danger" && saldo > 0;
 
-                  const proveedor =
-                    invoice.supplier_razon_social ?? invoice.proveedor ?? "—";
-                  const uuid = invoice.uuid ?? "";
-                  const clasificacion = (invoice.clasificacion ?? "") as any;
-
-                  const ordenCompraFolio =
-                    invoice.orden_compra_folio ??
-                    invoice.ordenCompraFolio ??
-                    null;
+                  const uuid = invoice.uuid || "";
+                  const clasificacion = invoice.clasificacion || "";
+                  const ordenCompraFolio = invoice.orden_compra_folio || null;
 
                   return (
                     <DataTableRow
@@ -546,7 +594,7 @@ export default function ProveedoresCxP() {
                     >
                       <DataTableCell className="font-mono text-xs font-medium">
                         <div className="flex flex-col">
-                          {invoice.folio_interno ?? invoice.id}
+                          {invoice.folio_interno || invoice.id}
                           {ordenCompraFolio && (
                             <span className="text-[10px] text-muted-foreground">
                               ← {ordenCompraFolio}
@@ -556,7 +604,7 @@ export default function ProveedoresCxP() {
                       </DataTableCell>
 
                       <DataTableCell className="font-medium max-w-[150px] truncate">
-                        {proveedor}
+                        {invoice.supplier_razon_social || "—"}
                       </DataTableCell>
 
                       <DataTableCell>
@@ -590,7 +638,7 @@ export default function ProveedoresCxP() {
                       <DataTableCell className="text-right font-medium">
                         ${monto.toLocaleString("es-MX")}
                         <span className="text-xs text-muted-foreground ml-1">
-                          {invoice.moneda ?? invoice.currency ?? "MXN"}
+                          {invoice.moneda || "MXN"}
                         </span>
                       </DataTableCell>
 
@@ -632,14 +680,13 @@ export default function ProveedoresCxP() {
                               <DropdownMenuItem
                                 onClick={() => handleViewInvoice(invoice)}
                               >
-                                <Eye className="h-4 w-4 mr-2" />
-                                Ver Detalle
+                                <Eye className="h-4 w-4 mr-2" /> Ver Detalle
                               </DropdownMenuItem>
 
                               <DropdownMenuItem
                                 onClick={() => handleEditInvoice(invoice)}
                               >
-                                <Edit className="h-4 w-4 mr-2" />
+                                <Edit className="h-4 w-4 mr-2 text-blue-600" />{" "}
                                 Editar
                               </DropdownMenuItem>
 
@@ -654,8 +701,21 @@ export default function ProveedoresCxP() {
                                     : ""
                                 }
                               >
-                                <CreditCard className="h-4 w-4 mr-2" />
+                                <CreditCard className="h-4 w-4 mr-2" />{" "}
                                 Registrar Pago
+                              </DropdownMenuItem>
+
+                              {/* ✅ NUEVO: Eliminar Factura */}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setInvoiceToDelete(invoice);
+                                  setIsDeleteInvoiceOpen(true);
+                                }}
+                                className="text-status-danger focus:text-status-danger"
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" /> Eliminar
+                                Factura
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -669,7 +729,7 @@ export default function ProveedoresCxP() {
           )}
         </TabsContent>
 
-        {/* TAB 3: Pagos y Complementos */}
+        {/* TAB 3: Pagos */}
         <TabsContent value="pagos" className="space-y-4">
           <div className="flex items-center justify-between gap-4">
             <div className="relative flex-1 max-w-md">
@@ -698,6 +758,7 @@ export default function ProveedoresCxP() {
                   <DataTableHead>Acciones</DataTableHead>
                 </DataTableRow>
               </DataTableHeader>
+
               <DataTableBody>
                 {allPayments.map((p) => {
                   const fecha = parseDateSafe(p.fecha_pago);
@@ -728,16 +789,11 @@ export default function ProveedoresCxP() {
                           variant="outline"
                           size="sm"
                           className="gap-2"
-                          onClick={() => {
-                            // TODO: conecta a endpoint real para descargar complemento PDF
-                            toast.info("Descarga de complemento", {
-                              description:
-                                "Conecta el endpoint /payments/{id}/complemento.pdf",
-                            });
-                          }}
+                          onClick={() =>
+                            toast.info("Descarga de complemento pendiente")
+                          }
                         >
-                          <Download className="h-3 w-3" />
-                          Complemento PDF
+                          <Download className="h-3 w-3" /> Complemento
                         </Button>
                       </DataTableCell>
                     </DataTableRow>
@@ -749,7 +805,11 @@ export default function ProveedoresCxP() {
         </TabsContent>
       </Tabs>
 
-      {/* Modals */}
+      {/* ======================================================== */}
+      {/* ZONA DE MODALES */}
+      {/* ======================================================== */}
+
+      {/* Modal: Registro/Edición Facturas */}
       <RegisterExpenseModal
         open={isExpenseModalOpen}
         onOpenChange={(open) => {
@@ -760,24 +820,117 @@ export default function ProveedoresCxP() {
           }
         }}
         onSubmit={editingInvoice ? handleUpdateInvoice : handleCreateInvoice}
-        suppliers={suppliers as any}
-        editInvoice={editingInvoice as any}
-        prefillData={prefillData as any}
+        suppliers={suppliers}
+        editInvoice={editingInvoice}
+        prefillData={prefillData}
       />
 
-      <InvoiceDetailSheet
-        open={isDetailSheetOpen}
-        onOpenChange={setIsDetailSheetOpen}
-        invoice={selectedInvoice as any}
+      {/* ✅ OJO: en tu snippet “actualizaciones” lo renderizas siempre.
+          Para evitar crash, lo mostramos solo si hay selectedInvoice. */}
+      {selectedInvoice && (
+        <InvoiceDetailSheet
+          open={isDetailSheetOpen}
+          onOpenChange={setIsDetailSheetOpen}
+          invoice={selectedInvoice}
+        />
+      )}
+
+      {selectedInvoice && (
+        <RegisterPaymentModal
+          open={isPaymentModalOpen}
+          onOpenChange={setIsPaymentModalOpen}
+          invoice={selectedInvoice}
+          bankAccounts={bankAccounts}
+          onSubmit={handleRegisterPayment}
+        />
+      )}
+
+      {/* Modal: Registro/Edición Proveedores */}
+      <SupplierModal
+        open={isSupplierModalOpen}
+        onOpenChange={setIsSupplierModalOpen}
+        supplier={editingSupplier}
+        onSubmit={async (payload) => {
+          if (editingSupplier) {
+            await updateSupplier(editingSupplier.id, payload);
+          } else {
+            await createSupplier(payload);
+          }
+        }}
       />
 
-      <RegisterPaymentModal
-        open={isPaymentModalOpen}
-        onOpenChange={setIsPaymentModalOpen}
-        invoice={selectedInvoice as any}
-        bankAccounts={bankAccounts as any} //  pásalo al modal para evitar bankAccounts fake
-        onSubmit={handleRegisterPayment}
+      {/* Modal: Visualización Proveedor */}
+      <SupplierDetailSheet
+        open={isSupplierDetailOpen}
+        onOpenChange={setIsSupplierDetailOpen}
+        supplier={selectedSupplier}
       />
+
+      {/* Modal: Confirmación Eliminar Proveedor */}
+      <AlertDialog
+        open={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-status-danger flex items-center gap-2">
+              <AlertCircle className="h-5 w-5" />
+              ¿Eliminar Proveedor?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Estás a punto de eliminar al proveedor{" "}
+              <strong>{supplierToDelete?.razon_social}</strong>. Esta acción no
+              se puede deshacer. Los registros históricos (facturas, pagos)
+              asociados a este proveedor se mantendrán intactos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setSupplierToDelete(null)}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDeleteSupplier}
+              className="bg-status-danger hover:bg-status-danger/90 text-white"
+            >
+              Sí, eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ✅ NUEVO: Modal Confirmación Eliminar Factura */}
+      <AlertDialog
+        open={isDeleteInvoiceOpen}
+        onOpenChange={setIsDeleteInvoiceOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-status-danger flex items-center gap-2">
+              <AlertCircle className="h-5 w-5" />
+              ¿Eliminar Factura?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Estás a punto de eliminar la factura con UUID{" "}
+              <strong className="font-mono text-xs">
+                {invoiceToDelete?.uuid || "—"}
+              </strong>
+              . Esta acción no se puede deshacer y{" "}
+              <strong>eliminará todos los pagos</strong> asociados a ella.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setInvoiceToDelete(null)}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDeleteInvoice}
+              className="bg-status-danger hover:bg-status-danger/90 text-white"
+            >
+              Sí, eliminar factura
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

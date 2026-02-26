@@ -73,7 +73,8 @@ class InvoicePaymentResponse(ORMBase):
 
 
 class PayableInvoiceBase(ORMBase):
-    uuid: str = Field(..., max_length=36)
+    supplier_id: Optional[int] = None
+    uuid: Optional[str] = Field(default=None, max_length=36)
     folio_interno: Optional[str] = Field(default=None, max_length=50)
 
     monto_total: float
@@ -96,9 +97,9 @@ class PayableInvoiceBase(ORMBase):
 
 
 class PayableInvoiceCreate(ORMBase):
-    supplier_id: int
+    supplier_id: Optional[int] = None
 
-    uuid: str = Field(..., max_length=36)
+    uuid: Optional[str] = Field(default=None, max_length=36)
     folio_interno: Optional[str] = Field(default=None, max_length=50)
 
     monto_total: float

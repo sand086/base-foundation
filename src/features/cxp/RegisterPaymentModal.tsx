@@ -1,12 +1,4 @@
 // src/features/cxp/RegisterPaymentModal.tsx
-//  ALINEADO a la actualización "DB real" (snake_case)
-//  Sin bankAccounts fake (se reciben por props)
-//  Soporta invoice con snake_case o camelCase (para no romper si llega mezclado)
-//  Valida monto, saldo, cuenta, fecha; preview de saldo post-pago
-//  Devuelve payload listo para backend: { fecha_pago, monto, metodo_pago, referencia, cuenta_retiro }
-//  onSubmit ahora es (invoiceId: number, payload) => Promise|void (como tu flujo actual con parseInt)
-
-// Ajusta rutas si tu proyecto las tiene distintas
 import { useEffect, useMemo, useState } from "react";
 import {
   Dialog,
@@ -28,42 +20,27 @@ import {
 import { CreditCard, DollarSign, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 
-// Si ya tienes tipos oficiales, puedes reemplazar estos por imports reales
-import type { PayableInvoice } from "@/features/cxp/types";
+// ✅ 1. ÚNICA FUENTE DE LA VERDAD (api.types.ts)
+import {
+  PayableInvoice,
+  BankAccount,
+  RegisterPaymentPayload,
+} from "@/types/api.types";
 
-export type BankAccount = {
-  id: number; //  DB
-  name: string; //  DB
-  last_digits?: string; //  DB (opcional)
-};
-
-export type RegisterPaymentPayload = {
-  fecha_pago: string; // YYYY-MM-DD
-  monto: number; // number
-  metodo_pago: "Transferencia" | "Efectivo" | "Cheque" | "Tarjeta" | string;
-  referencia: string | null; // opcional
-  cuenta_retiro: number; // bank_account_id
-};
-
+// ✅ 2. INTERFAZ LOCAL (Solo para los props del componente)
 interface RegisterPaymentModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-
   invoice: PayableInvoice | null;
-
-  //  ahora vienen reales (no data.ts fake)
-  bankAccounts: BankAccount[];
-
-  //  alineado a tu flujo actualizado (id number + payload snake_case)
+  bankAccounts: BankAccount[]; // Viene de api.types
   onSubmit: (
     invoiceId: number,
     payment: RegisterPaymentPayload,
   ) => void | Promise<void>;
-
-  // opcional: si quieres fijar método de pago
-  defaultMethod?: RegisterPaymentPayload["metodo_pago"];
+  defaultMethod?: string;
 }
 
+// Helpers locales de formato
 const today = () => new Date().toISOString().split("T")[0];
 
 const toNumber = (v: any): number => {
@@ -84,11 +61,12 @@ export function RegisterPaymentModal({
   onSubmit,
   defaultMethod = "Transferencia",
 }: RegisterPaymentModalProps) {
+  // Estado local del formulario
   const [formData, setFormData] = useState<{
     fecha_pago: string;
     monto: number;
-    metodo_pago: RegisterPaymentPayload["metodo_pago"];
-    cuenta_retiro: string; // string para Select
+    metodo_pago: string;
+    cuenta_retiro: string;
     referencia: string;
   }>({
     fecha_pago: today(),
@@ -101,32 +79,22 @@ export function RegisterPaymentModal({
   const [error, setError] = useState<string>("");
 
   // ===========
-  // Normalizar invoice (soporta snake_case/camelCase)
+  // Normalizar datos desde invoice tipado
   // ===========
   const invoiceId = useMemo(() => {
-    if (!invoice) return 0;
-    return toInt((invoice as any).id);
+    return invoice ? toInt(invoice.id) : 0;
   }, [invoice]);
 
   const supplierName = useMemo(() => {
-    if (!invoice) return "";
-    return (
-      (invoice as any).supplier_razon_social ?? (invoice as any).proveedor ?? ""
-    );
+    return invoice ? invoice.supplier_razon_social || "—" : "";
   }, [invoice]);
 
   const montoTotal = useMemo(() => {
-    if (!invoice) return 0;
-    return toNumber(
-      (invoice as any).monto_total ?? (invoice as any).montoTotal,
-    );
+    return invoice ? toNumber(invoice.monto_total) : 0;
   }, [invoice]);
 
   const saldoPendiente = useMemo(() => {
-    if (!invoice) return 0;
-    return toNumber(
-      (invoice as any).saldo_pendiente ?? (invoice as any).saldoPendiente,
-    );
+    return invoice ? toNumber(invoice.saldo_pendiente) : 0;
   }, [invoice]);
 
   // ===========
@@ -137,7 +105,7 @@ export function RegisterPaymentModal({
 
     setFormData({
       fecha_pago: today(),
-      monto: saldoPendiente, // default: pagar todo
+      monto: saldoPendiente, // Por defecto sugiere pagar todo el saldo
       metodo_pago: defaultMethod,
       cuenta_retiro: "",
       referencia: "",
@@ -189,6 +157,7 @@ export function RegisterPaymentModal({
 
     const accountId = toInt(formData.cuenta_retiro);
 
+    // Armamos el payload estricto como lo pide api.types.ts
     const payload: RegisterPaymentPayload = {
       fecha_pago: formData.fecha_pago,
       monto: toNumber(formData.monto),
@@ -196,7 +165,7 @@ export function RegisterPaymentModal({
       referencia: formData.referencia.trim()
         ? formData.referencia.trim()
         : null,
-      cuenta_retiro: accountId,
+      cuenta_retiro: accountId, // Se manda como número
     };
 
     try {
@@ -223,11 +192,15 @@ export function RegisterPaymentModal({
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <p className="text-muted-foreground text-xs">Factura</p>
-                <p className="font-medium">{invoiceId}</p>
+                <p className="font-medium">
+                  {invoice.folio_interno || invoiceId}
+                </p>
               </div>
               <div>
                 <p className="text-muted-foreground text-xs">Proveedor</p>
-                <p className="font-medium truncate">{supplierName || "—"}</p>
+                <p className="font-medium truncate" title={supplierName}>
+                  {supplierName}
+                </p>
               </div>
               <div>
                 <p className="text-muted-foreground text-xs">Monto Total</p>
@@ -341,28 +314,20 @@ export function RegisterPaymentModal({
           {/* Preview saldo */}
           {formData.monto > 0 && (
             <div
-              className={`p-3 rounded-lg border ${
-                willBeFullyPaid
-                  ? "bg-emerald-50 border-emerald-200"
-                  : "bg-amber-50 border-amber-200"
-              }`}
+              className={`p-3 rounded-lg border ${willBeFullyPaid ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"}`}
             >
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">
                   Saldo después del pago:
                 </span>
                 <span
-                  className={`font-bold ${
-                    willBeFullyPaid ? "text-emerald-700" : "text-amber-700"
-                  }`}
+                  className={`font-bold ${willBeFullyPaid ? "text-emerald-700" : "text-amber-700"}`}
                 >
                   ${remainingAfterPayment.toLocaleString("es-MX")}
                 </span>
               </div>
               <p
-                className={`text-xs mt-1 ${
-                  willBeFullyPaid ? "text-emerald-600" : "text-amber-600"
-                }`}
+                className={`text-xs mt-1 ${willBeFullyPaid ? "text-emerald-600" : "text-amber-600"}`}
               >
                 {willBeFullyPaid
                   ? "✓ La factura quedará completamente pagada"

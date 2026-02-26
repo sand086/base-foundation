@@ -1,56 +1,5 @@
 import axiosClient from "@/api/axiosClient";
-
-// ==========================================
-// INTERFACES (Ajusta los imports si ya las tienes en api.types.ts)
-// ==========================================
-
-export interface Supplier {
-  id: number;
-  razon_social: string;
-  rfc: string;
-  email?: string;
-  telefono?: string;
-  direccion?: string;
-  codigo_postal?: string;
-  dias_credito: number;
-  limite_credito: number;
-  contacto_principal?: string;
-  categoria?: string;
-  estatus: "activo" | "inactivo" | "suspendido";
-  created_at: string;
-  updated_at: string;
-}
-
-export interface InvoicePayment {
-  id?: number;
-  invoice_id?: number;
-  fecha_pago: string; // YYYY-MM-DD
-  monto: number;
-  metodo_pago?: string;
-  referencia?: string;
-  cuenta_retiro?: string;
-  complemento_uuid?: string;
-}
-
-export interface PayableInvoice {
-  id: number;
-  supplier_id: number;
-  supplier_razon_social?: string; // Viene del backend
-  uuid: string;
-  folio_interno?: string;
-  monto_total: number;
-  saldo_pendiente: number;
-  moneda: string;
-  fecha_emision: string; // YYYY-MM-DD
-  fecha_vencimiento: string; // YYYY-MM-DD
-  concepto?: string;
-  clasificacion?: string;
-  estatus: "pendiente" | "pago_parcial" | "pagado" | "cancelado";
-  pdf_url?: string;
-  xml_url?: string;
-  orden_compra_id?: string;
-  payments?: InvoicePayment[];
-}
+import { Supplier, PayableInvoice, InvoicePayment } from "@/types/api.types";
 
 // ==========================================
 // SERVICIOS

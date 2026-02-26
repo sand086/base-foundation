@@ -1,5 +1,7 @@
+// src/types/api.types.ts
+
 // ==========================================
-// ENUMS (Coinciden con models.py)
+// ENUMS Y TIPOS LITERALES
 // ==========================================
 
 export type UnitTipo = string;
@@ -18,59 +20,56 @@ export type OperatorStatus =
 
 export type ClientStatus = "activo" | "pendiente" | "incompleto";
 
+export type FormaPago = "TAG" | "EFECTIVO" | "AMBOS";
+
+export type ClasificacionFinanciera =
+  | "costo_directo_viaje"
+  | "costo_mantenimiento"
+  | "gasto_indirecto_fijo"
+  | "gasto_indirecto_variable"
+  | "ingreso_flete"
+  | "maniobras";
+
 // ==========================================
 // INTERFACES (Ids Numéricos)
 // ==========================================
 
 export interface Unit {
-  id: number; // <--- INTEGER
-  public_id: string; // ID Visual (ej. UNIT-001)
-
+  id: number;
+  public_id: string;
   numero_economico: string;
   placas: string;
   vin?: string | null;
   marca: string;
   modelo: string;
   year?: number;
-
   tipo: UnitTipo;
   status: UnitStatus;
   razon_bloqueo?: string | null;
   ignore_blocking?: boolean | null;
-
   permiso_sct_folio?: string;
   permiso_sct_url?: string | null;
   caat_folio?: string;
   caat_vence?: string;
   caat_url?: string | null;
-
-  // Campos técnicos
   tipo_1?: string;
   tipo_carga?: string | null;
   numero_serie_motor?: string | null;
   marca_motor?: string | null;
   capacidad_carga?: number | null;
-
-  // Alertas
   documentos_vencidos: number;
   llantas_criticas: number;
-
-  // Fechas (Strings ISO YYYY-MM-DD que vienen del JSON)
   seguro_vence?: string | null;
   verificacion_humo_vence?: string | null;
   verificacion_fisico_mecanica_vence?: string | null;
   verificacion_vence?: string | null;
   permiso_sct_vence?: string | null;
-
-  // Documentos URLs
   tarjeta_circulacion_url?: string | null;
   poliza_seguro_url?: string | null;
   verificacion_humo_url?: string | null;
   verificacion_fisico_mecanica_url?: string | null;
   permiso_doble_articulado_url?: string | null;
-
   tarjeta_circulacion_folio?: string | null;
-
   created_at?: string;
   updated_at?: string;
 }
@@ -81,23 +80,15 @@ export interface Operator {
   name: string;
   phone?: string;
   status: OperatorStatus;
-
-  // Datos de Licencia
   license_number: string;
   license_type: string;
-  license_expiry: string; // YYYY-MM-DD
-
-  // Salud y Emergencia
-  medical_check_expiry: string; // YYYY-MM-DD
+  license_expiry: string;
+  medical_check_expiry: string;
   emergency_contact?: string;
   emergency_phone?: string;
   hire_date?: string;
-
-  // Relaciones
   assigned_unit_id?: number | null;
   unit_economico?: string;
-
-  // ✅ URLs de Documentos (Sincronizado con el modelo nuevo)
   foto_url?: string | null;
   licencia_url?: string | null;
   ine_url?: string | null;
@@ -108,38 +99,34 @@ export interface Operator {
 // --- COMERCIAL (Clientes, Subclientes, Tarifas) ---
 
 export interface Tariff {
-  id: number; // <--- INTEGER
+  id: number;
   sub_client_id: number;
   nombre_ruta: string;
-  tipo_unidad: string; // O UnitTipo si el backend lo valida estricto
+  tipo_unidad: string;
   tarifa_base: number;
   costo_casetas: number;
   moneda: string;
-  vigencia: string; // YYYY-MM-DD
+  vigencia: string;
   estatus: string;
 }
 
 export interface SubClient {
-  id: number; // <--- INTEGER
+  id: number;
   client_id: number;
-
   nombre: string;
   alias?: string;
   direccion: string;
   ciudad: string;
   estado: string;
   codigo_postal?: string;
-
-  tipo_operacion: string; // 'nacional', 'importacion', etc.
+  tipo_operacion: string;
   contacto?: string;
   telefono?: string;
   horario_recepcion?: string;
   dias_credito?: number;
-
   requiere_contrato: boolean;
   convenio_especial: boolean;
-
-  tariffs: Tariff[]; // Array de tarifas anidadas
+  tariffs: Tariff[];
 }
 
 export interface Client {
@@ -156,8 +143,7 @@ export interface Client {
   direccion_fiscal?: string;
   codigo_postal_fiscal?: string;
   contrato_url?: string;
-  dias_credito?: number; // ✅ Campo importante
-  // Campos de documentos para evitar error ts(2353)
+  dias_credito?: number;
   constancia_fiscal_url?: string | null;
   acta_constitutiva_url?: string | null;
   comprobante_domicilio_url?: string | null;
@@ -169,10 +155,10 @@ export interface Client {
 // ==========================================
 
 export interface User {
-  id: number; // <--- INTEGER
+  id: number;
   nombre: string;
   email: string;
-  role_id?: number | null; // <--- INTEGER
+  role_id?: number | null;
   avatar_url?: string;
   activo?: boolean;
 }
@@ -185,11 +171,8 @@ export interface LoginRequest {
 export interface LoginResponse {
   access_token?: string;
   token_type?: string;
-
-  // Flujo 2FA
   require_2fa?: boolean;
   temp_token?: string;
-
   user?: User;
 }
 
@@ -201,7 +184,6 @@ export interface TwoFactorVerifyRequest {
 export interface TwoFactorVerifyResponse {
   access_token?: string;
   token_type?: string;
-
   user?: User;
 }
 
@@ -242,8 +224,9 @@ export interface TollBooth {
   costo_5_ejes_full: number;
   costo_9_ejes_sencillo: number;
   costo_9_ejes_full: number;
-  forma_pago: "TAG" | "EFECTIVO" | "AMBOS";
+  forma_pago: FormaPago;
 }
+
 export interface RateSegment {
   id: number;
   nombre_segmento: string;
@@ -256,18 +239,151 @@ export interface RateSegment {
   costo_momento_full: number;
   orden: number;
 }
+
 export interface RateTemplate {
   id: number;
   client_id: number;
   origen: string;
   destino: string;
-  // ✅ AGREGA ESTA PROPIEDAD:
   tipo_unidad: "5ejes" | "9ejes" | string;
   distancia_total_km: number;
   tiempo_total_minutos: number;
   costo_total_sencillo: number;
   costo_total_full: number;
-
   created_at: string;
   segments: RateSegment[];
+}
+
+// ==========================================
+// Cuentas por Pagar (CxP) y Cuentas por Cobrar (CxC)
+// ==========================================
+
+export interface Supplier {
+  id: number;
+  razon_social: string;
+  rfc: string;
+  email?: string;
+  telefono?: string;
+  direccion?: string;
+  codigo_postal?: string;
+  dias_credito: number;
+  limite_credito: number;
+  contacto_principal?: string;
+  categoria?: string;
+  tipo_proveedor?: string;
+  zonas_cobertura?: string;
+  banco?: string;
+  cuenta_bancaria?: string;
+  clabe?: string;
+  estatus: "activo" | "inactivo" | "suspendido";
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface InvoicePayment {
+  id?: number;
+  invoice_id?: number;
+  fecha_pago: string; // YYYY-MM-DD
+  monto: number;
+  metodo_pago?: string;
+  referencia?: string;
+  cuenta_retiro?: string;
+  complemento_uuid?: string;
+}
+
+export interface PayableInvoice {
+  id: number;
+  supplier_id?: number | null;
+
+  supplier_razon_social?: string;
+  viaje_id?: number | null;
+  unit_id?: number | null;
+  categoria_indirecto_id?: number | null;
+  uuid?: string | null;
+  folio_interno?: string;
+  subtotal?: number;
+  iva?: number;
+  retenciones?: number;
+  monto_total: number;
+  saldo_pendiente: number;
+  dias_credito?: number;
+  moneda: string;
+  fecha_emision: string; // YYYY-MM-DD
+  fecha_vencimiento: string; // YYYY-MM-DD
+  concepto?: string;
+  clasificacion?: string;
+  estatus: "pendiente" | "pago_parcial" | "pagado" | "cancelado";
+  pdf_url?: string;
+  xml_url?: string;
+  orden_compra_id?: string;
+  orden_compra_folio?: string;
+  payments?: InvoicePayment[];
+}
+
+// ==========================================
+// UTILIDADES PARA MODALES (Prefills, Lites, Payloads)
+// ==========================================
+
+export interface TripLite {
+  id: number;
+  folio: string;
+  origin: string;
+  destination: string;
+}
+
+export interface UnitLite {
+  id: number;
+  numero_economico: string;
+  tipo: string;
+  placas: string;
+}
+
+export interface IndirectCategory {
+  id: number;
+  nombre: string;
+  tipo: "fijo" | "variable";
+  estatus?: "activo" | "inactivo" | string;
+}
+
+export interface BankAccount {
+  id: number;
+  name: string;
+  last_digits?: string;
+  currency?: string;
+}
+
+export interface PrefillData {
+  proveedor: string;
+  proveedorId: string;
+  concepto: string;
+  montoTotal: number;
+  ordenCompraId: string;
+  ordenCompraFolio: string;
+}
+
+export interface RegisterExpensePayload {
+  supplier_id: number | null;
+  concepto: string;
+  monto_total: number;
+  moneda: "MXN" | "USD";
+  uuid: string | null;
+  fecha_emision: string;
+  dias_credito: number;
+  fecha_vencimiento: string;
+  clasificacion: ClasificacionFinanciera | string;
+  viaje_id: number | null;
+  unidad_id: number | null;
+  categoria_indirecto_id: number | null;
+  orden_compra_id: string | null;
+  orden_compra_folio: string | null;
+  pdf_url: string | null;
+  xml_url: string | null;
+}
+
+export interface RegisterPaymentPayload {
+  fecha_pago: string;
+  monto: number;
+  metodo_pago: string;
+  referencia: string | null;
+  cuenta_retiro: number;
 }

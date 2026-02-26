@@ -934,7 +934,7 @@ class PayableInvoice(AuditMixin, Base):
 
     id = Column(Integer, primary_key=True, index=True)
     supplier_id = Column(
-        Integer, ForeignKey("suppliers.id", ondelete="RESTRICT"), nullable=False
+        Integer, ForeignKey("suppliers.id", ondelete="RESTRICT"), nullable=True
     )
 
     # Atribución (Cruce Operativo-Financiero)
@@ -948,7 +948,7 @@ class PayableInvoice(AuditMixin, Base):
         Integer, ForeignKey("indirect_expense_categories.id"), nullable=True
     )
 
-    uuid = Column(String(36), unique=True, nullable=False)
+    uuid = Column(String(36), unique=True, nullable=True)
     folio_interno = Column(String(50))
 
     # Desglose Financiero

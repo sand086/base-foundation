@@ -1,48 +1,54 @@
-import { useCallback, useEffect, useState } from "react";
+// src/hooks/useBankAccounts.ts
+import { useState, useEffect } from "react";
+import { toast } from "sonner";
+// Importa tu cliente axios real si ya tienes el endpoint, o usa un mock temporal
 
 export type BankAccount = {
-  id?: number | string;
-  banco?: string;
-  cuenta?: string;
-  clabe?: string;
-  beneficiario?: string;
-  moneda?: string;
-  estatus?: string;
+  id: number;
+  name: string;
+  last_digits?: string;
+  currency?: string;
 };
 
-type Result = {
-  bankAccounts: BankAccount[];
-  isLoading: boolean;
-  error: unknown;
-  refetch: () => Promise<void>;
-};
-
-export function useBankAccounts(): Result {
+export const useBankAccounts = () => {
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<unknown>(null);
-
-  const refetch = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-
-      // TODO: aquí conecta a tu API real
-      // const res = await fetch("/api/finance/bank-accounts");
-      // const data = await res.json();
-      // setBankAccounts(data);
-
-      setBankAccounts([]); // stub
-    } catch (e) {
-      setError(e);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  const [isLoadingBankAccounts, setIsLoadingBankAccounts] = useState(true);
 
   useEffect(() => {
-    void refetch();
-  }, [refetch]);
+    const fetchAccounts = async () => {
+      try {
+        setIsLoadingBankAccounts(true);
+        // TODO: Conectar a tu API real:
+        // const response = await axiosClient.get("/finance/bank-accounts");
+        // setBankAccounts(response.data);
 
-  return { bankAccounts, isLoading, error, refetch };
-}
+        // Mock temporal para que funcione la UI
+        setBankAccounts([
+          {
+            id: 1,
+            name: "BBVA Principal",
+            last_digits: "1234",
+            currency: "MXN",
+          },
+          {
+            id: 2,
+            name: "Banamex Dólares",
+            last_digits: "9876",
+            currency: "USD",
+          },
+        ]);
+      } catch (error) {
+        toast.error("Error al cargar cuentas bancarias");
+      } finally {
+        setIsLoadingBankAccounts(false);
+      }
+    };
+
+    fetchAccounts();
+  }, []);
+
+  return {
+    bankAccounts,
+    isLoadingBankAccounts,
+  };
+};
