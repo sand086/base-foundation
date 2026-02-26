@@ -264,12 +264,10 @@ class WorkOrderResponse(ORMBase):
     mechanic_id: Optional[int] = None
 
     descripcion_problema: str
-
-    # En ORM: status = workorderstatus
     status: WorkOrderStatus
 
-    # En ORM: fecha_apertura tiene server_default=now()
-    fecha_apertura: datetime
+    # 1. Hacemos que sea Optional por si hay registros viejos en la BD con valor nulo
+    fecha_apertura: Optional[datetime] = None
     fecha_cierre: Optional[datetime] = None
 
     # UI helpers (NO existen como columnas)
@@ -280,6 +278,7 @@ class WorkOrderResponse(ORMBase):
 
     # AuditMixin
     record_status: RecordStatus
+    # 2. ELIMINAMOS AQUI LAS LINEAS DUPLICADAS DE fecha_apertura y fecha_cierre
     created_at: datetime
     updated_at: datetime
     created_by_id: Optional[int] = None

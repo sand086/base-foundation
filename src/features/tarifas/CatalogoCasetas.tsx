@@ -12,7 +12,6 @@ import {
   Loader2,
   Check,
   Route,
-  FileText,
 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
@@ -20,6 +19,7 @@ import { ActionButton } from "@/components/ui/action-button";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 
 import {
   DataTable,
@@ -76,18 +76,14 @@ type TollForm = {
   carretera: string;
   estado: string;
 
-  // UX SCT: se arma automáticamente a partir de origen/destino
+  // Avanzado SCT (opcional)
   origen_tramo: string;
   destino_tramo: string;
-
   tramo: string;
 
-  // ✅ NOTA: campos se quedan igual en backend (5 y 9),
-  // pero en UI se renombran como 6 y 9 ejes.
-  costo_5_ejes_sencillo: number;
-  costo_5_ejes_full: number;
-  costo_9_ejes_sencillo: number;
-  costo_9_ejes_full: number;
+  // UI simplificada (backend se queda igual)
+  costo_5_ejes_sencillo: number; // UI: 6 Ejes (Sencillo)
+  costo_9_ejes_full: number; // UI: 9 Ejes (Full)
 
   forma_pago: FormaPago;
 };
@@ -100,15 +96,13 @@ const emptyForm = (): TollForm => ({
   destino_tramo: "",
   tramo: "",
   costo_5_ejes_sencillo: 0,
-  costo_5_ejes_full: 0,
-  costo_9_ejes_sencillo: 0,
   costo_9_ejes_full: 0,
   forma_pago: "AMBOS",
 });
 
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(
-    amount || 0,
+    Number.isFinite(amount) ? amount : 0,
   );
 
 const splitTramo = (tramoRaw: string) => {
@@ -129,6 +123,9 @@ export const CatalogoCasetas = () => {
 
   const [selectedToll, setSelectedToll] = useState<TollBooth | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // ✅ Toggle avanzado SCT
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const [formData, setFormData] = useState<TollForm>(emptyForm());
 
@@ -164,21 +161,27 @@ export const CatalogoCasetas = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm]);
 
-  // ✅ UX: Construcción automática del tramo SCT
+  // ✅ Solo construimos "tramo" en vivo si el usuario está en modo avanzado
   useEffect(() => {
+    if (!showAdvanced) return;
+
     if (formData.origen_tramo || formData.destino_tramo) {
       setFormData((prev) => ({
         ...prev,
         tramo: `${prev.origen_tramo} - ${prev.destino_tramo}`.trim(),
       }));
+    } else if (formData.tramo) {
+      // Si apagaron el avanzado, dejamos el tramo limpio (se resolverá al guardar)
+      setFormData((prev) => ({ ...prev, tramo: "" }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData.origen_tramo, formData.destino_tramo]);
+  }, [formData.origen_tramo, formData.destino_tramo, showAdvanced]);
 
   // --- MANEJADORES ---
   const handleOpenCreate = () => {
     setSelectedToll(null);
     setFormData(emptyForm());
+    setShowAdvanced(false);
     setDialogOpen(true);
   };
 
@@ -187,6 +190,12 @@ export const CatalogoCasetas = () => {
 
     const { tramo, origen, destino } = splitTramo(String(toll.tramo ?? ""));
 
+    // si viene "Origen - Destino" lo abrimos en modo avanzado para que lo vean
+    const shouldOpenAdvanced = Boolean(
+      tramo.includes("-") && (origen || destino),
+    );
+    setShowAdvanced(shouldOpenAdvanced);
+
     setFormData({
       nombre: toll.nombre ?? "",
       carretera: (toll as any).carretera ?? "",
@@ -194,9 +203,8 @@ export const CatalogoCasetas = () => {
       origen_tramo: origen,
       destino_tramo: destino,
       tramo,
+      // ✅ Vista simplificada
       costo_5_ejes_sencillo: toll.costo_5_ejes_sencillo ?? 0,
-      costo_5_ejes_full: toll.costo_5_ejes_full ?? 0,
-      costo_9_ejes_sencillo: toll.costo_9_ejes_sencillo ?? 0,
       costo_9_ejes_full: toll.costo_9_ejes_full ?? 0,
       forma_pago: ((toll as any).forma_pago ?? "AMBOS") as FormaPago,
     });
@@ -205,47 +213,53 @@ export const CatalogoCasetas = () => {
   };
 
   const handleSave = async () => {
-    // 1) Validaciones
-    if (!formData.nombre.trim() || !formData.carretera.trim()) {
-      toast.error("Nombre y Carretera son obligatorios");
+    // 1) Validación mínima
+    if (!formData.nombre.trim()) {
+      toast.error("El Nombre de la caseta es obligatorio");
       return;
     }
 
-    // Si armamos tramo por origen/destino, exigimos ambos (porque SCT)
-    const hasAutoTramo = Boolean(
-      formData.origen_tramo || formData.destino_tramo,
-    );
-    if (
-      hasAutoTramo &&
-      (!formData.origen_tramo.trim() || !formData.destino_tramo.trim())
-    ) {
-      toast.error("Completa Origen y Destino del tramo");
-      return;
+    // 2) Resolver tramo para BD (NOT NULL)
+    let finalTramo = formData.tramo.trim();
+
+    if (showAdvanced) {
+      const hasAny = Boolean(
+        formData.origen_tramo.trim() || formData.destino_tramo.trim(),
+      );
+      if (hasAny) {
+        if (!formData.origen_tramo.trim() || !formData.destino_tramo.trim()) {
+          toast.error(
+            "Completa Origen y Destino del tramo SCT si usas modo avanzado",
+          );
+          return;
+        }
+        finalTramo = `${formData.origen_tramo.trim()} - ${formData.destino_tramo.trim()}`;
+      } else {
+        // avanzado prendido pero vacío: default inteligente
+        finalTramo = formData.nombre.trim();
+      }
+    } else {
+      // avanzado apagado: default inteligente
+      finalTramo = formData.nombre.trim();
     }
 
-    // Validación de formato SCT: debe incluir "-"
-    if (!formData.tramo.trim() || !formData.tramo.includes("-")) {
-      toast.error("Formato de Tramo inválido", {
-        description:
-          "Debe usar el formato: Origen - Destino (ej: México - Puebla)",
-      });
-      return;
-    }
-
-    // 2) Payload a backend
+    // 3) Payload a backend:
+    // - Mandamos solo las 2 tarifas útiles y “apagamos” las 2 que ya no se usan (0)
     const payload: Partial<TollBooth> & {
       carretera?: string;
       estado?: string;
       forma_pago?: FormaPago;
     } = {
       nombre: formData.nombre.trim(),
-      tramo: formData.tramo.trim(),
+      tramo: finalTramo,
+
       costo_5_ejes_sencillo: Number(formData.costo_5_ejes_sencillo || 0),
-      costo_5_ejes_full: Number(formData.costo_5_ejes_full || 0),
-      costo_9_ejes_sencillo: Number(formData.costo_9_ejes_sencillo || 0),
+      costo_5_ejes_full: 0,
+      costo_9_ejes_sencillo: 0,
       costo_9_ejes_full: Number(formData.costo_9_ejes_full || 0),
-      carretera: formData.carretera.trim(),
-      estado: formData.estado.trim(),
+
+      carretera: formData.carretera.trim() || "",
+      estado: formData.estado.trim() || "",
       forma_pago: formData.forma_pago,
     };
 
@@ -263,7 +277,7 @@ export const CatalogoCasetas = () => {
       setDialogOpen(false);
     } catch (error) {
       console.error(error);
-      toast.error("Error al procesar la solicitud");
+      toast.error("Error al guardar la caseta");
     } finally {
       setIsSubmitting(false);
     }
@@ -283,13 +297,12 @@ export const CatalogoCasetas = () => {
     }
   };
 
-  // ✅ UI: tabla más limpia agrupando costos con nueva nomenclatura (6 y 9 ejes)
+  // ✅ UI tabla: solo 6 (sencillo) y 9 (full)
   const columns = useMemo(() => {
     const cols: Array<{
       key: string;
       header: string;
       render?: (value: any, row: TollBooth) => React.ReactNode;
-      align?: "left" | "right" | "center";
     }> = [
       {
         key: "nombre",
@@ -297,21 +310,23 @@ export const CatalogoCasetas = () => {
         render: (_, t) => (
           <div className="flex flex-col">
             <span className="font-bold text-slate-900">{t.nombre}</span>
-            <span className="text-[10px] text-primary font-mono uppercase">
-              {(t as any).carretera || "—"} | {(t as any).estado || "—"}
-            </span>
+            {((t as any).carretera || (t as any).estado) && (
+              <span className="text-[10px] text-primary font-mono uppercase mt-0.5">
+                {(t as any).carretera || "—"} | {(t as any).estado || "—"}
+              </span>
+            )}
           </div>
         ),
       },
       {
         key: "tramo",
         header: "Tramo SCT",
-        render: (v) => (
+        render: (v, t) => (
           <Badge
             variant="outline"
-            className="font-mono text-[10px] bg-slate-50"
+            className="font-mono text-[10px] bg-slate-50 text-slate-500 font-medium"
           >
-            {String(v ?? "")}
+            {String(v ?? t.nombre)}
           </Badge>
         ),
       },
@@ -319,23 +334,21 @@ export const CatalogoCasetas = () => {
         key: "costos",
         header: "Tarifas Autorizadas",
         render: (_, t) => (
-          <div className="grid grid-cols-2 gap-4 text-[10px] font-mono">
+          <div className="grid grid-cols-2 gap-4 text-[10px] font-mono w-48">
             <div className="flex flex-col border-l-2 border-blue-500 pl-2">
               <span className="text-slate-500 uppercase font-bold text-[8px]">
                 6 Ejes (Sencillo)
               </span>
-              <span className="text-blue-600 font-bold">
-                {formatCurrency(t.costo_5_ejes_sencillo)} /{" "}
-                {formatCurrency(t.costo_5_ejes_full)}
+              <span className="text-blue-600 font-bold text-sm">
+                {formatCurrency(t.costo_5_ejes_sencillo ?? 0)}
               </span>
             </div>
-            <div className="flex flex-col border-l-2 border-amber-500 pl-2">
+            <div className="flex flex-col border-l-2 border-emerald-500 pl-2">
               <span className="text-slate-500 uppercase font-bold text-[8px]">
                 9 Ejes (Full)
               </span>
-              <span className="text-amber-600 font-bold">
-                {formatCurrency(t.costo_9_ejes_sencillo)} /{" "}
-                {formatCurrency(t.costo_9_ejes_full)}
+              <span className="text-emerald-600 font-bold text-sm">
+                {formatCurrency(t.costo_9_ejes_full ?? 0)}
               </span>
             </div>
           </div>
@@ -358,7 +371,7 @@ export const CatalogoCasetas = () => {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => handleOpenEdit(t)}>
-                <Edit className="h-4 w-4 mr-2" /> Editar
+                <Edit className="h-4 w-4 mr-2 text-blue-600" /> Editar
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -385,7 +398,7 @@ export const CatalogoCasetas = () => {
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input
-            placeholder="Buscar caseta o tramo..."
+            placeholder="Buscar por caseta o tramo..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
@@ -397,7 +410,7 @@ export const CatalogoCasetas = () => {
         </ActionButton>
       </div>
 
-      {/* Table & Loader */}
+      {/* Table */}
       {isLoading ? (
         <div className="flex justify-center py-20">
           <Loader2 className="h-10 w-10 animate-spin text-primary opacity-50" />
@@ -411,6 +424,7 @@ export const CatalogoCasetas = () => {
               ))}
             </DataTableRow>
           </DataTableHeader>
+
           <DataTableBody>
             {tollBooths.map((t) => (
               <DataTableRow key={t.id}>
@@ -427,38 +441,23 @@ export const CatalogoCasetas = () => {
         </DataTable>
       )}
 
-      {/* ✅ DIALOG: Ajustado a 6 y 9 ejes */}
+      {/* DIALOG CREAR / EDITAR */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-2xl border-t-4 border-t-primary p-0 overflow-hidden flex flex-col max-h-[95vh]">
-          <DialogHeader className="p-6 pb-2 shrink-0">
+          <DialogHeader className="p-6 pb-4 shrink-0 border-b border-slate-100 bg-slate-50/50">
             <DialogTitle className="flex items-center gap-2 text-xl font-black uppercase tracking-tight text-slate-800">
               <MapPin className="h-6 w-6 text-primary" />
-              {selectedToll ? "Editar Caseta" : "Alta de Caseta SCT"}
+              {selectedToll ? "Editar Caseta" : "Alta de Caseta"}
             </DialogTitle>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto p-6 pt-2 scrollbar-thin scrollbar-thumb-slate-200">
+          <div className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-slate-200">
             <div className="space-y-6">
-              {/* SECCIÓN 1: UBICACIÓN (sin cambios) */}
-              <div className="grid grid-cols-2 gap-x-6 gap-y-4 bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-inner">
-                <div className="col-span-2 flex items-center justify-between border-b border-slate-200 pb-2 mb-2">
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-primary" />
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                      Ficha Técnica del Peaje
-                    </span>
-                  </div>
-                  <Badge
-                    variant="outline"
-                    className="bg-white text-[9px] font-bold text-primary border-primary/20"
-                  >
-                    DATOS SCT
-                  </Badge>
-                </div>
-
-                <div className="space-y-2">
+              {/* SECCIÓN 1: DATOS BÁSICOS */}
+              <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                <div className="col-span-2 space-y-1.5">
                   <Label className="text-xs font-bold text-slate-700">
-                    Nombre de la Caseta *
+                    Nombre de la Caseta <span className="text-red-500">*</span>
                   </Label>
                   <Input
                     placeholder="Ej: San Marcos"
@@ -470,9 +469,9 @@ export const CatalogoCasetas = () => {
                   />
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label className="text-xs font-bold text-slate-700">
-                    Identificador Carretera *
+                    Carretera (Opcional)
                   </Label>
                   <Input
                     placeholder="Ej: Mex 150D"
@@ -484,9 +483,9 @@ export const CatalogoCasetas = () => {
                   />
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label className="text-xs font-bold text-slate-700">
-                    Estado
+                    Estado (Opcional)
                   </Label>
                   <Input
                     placeholder="Ej: Puebla"
@@ -498,9 +497,9 @@ export const CatalogoCasetas = () => {
                   />
                 </div>
 
-                <div className="space-y-2">
+                <div className="col-span-2 space-y-1.5 pt-2">
                   <Label className="text-xs font-bold text-slate-700">
-                    Método de Cobro
+                    Método de Cobro Aceptado
                   </Label>
                   <Select
                     value={formData.forma_pago}
@@ -508,7 +507,7 @@ export const CatalogoCasetas = () => {
                       setFormData({ ...formData, forma_pago: v as FormaPago })
                     }
                   >
-                    <SelectTrigger className="bg-white border-slate-300 h-10">
+                    <SelectTrigger className="bg-white border-slate-300 h-10 w-full sm:w-1/2">
                       <SelectValue placeholder="Seleccionar..." />
                     </SelectTrigger>
                     <SelectContent>
@@ -518,21 +517,85 @@ export const CatalogoCasetas = () => {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
 
-                {/* AUTO-TRAMO */}
-                <div className="col-span-2 space-y-3 pt-2">
-                  <div className="flex items-center gap-2">
-                    <div className="h-px flex-1 bg-slate-200" />
-                    <span className="text-[9px] font-bold text-slate-400 uppercase">
-                      Configuración de Tramo
+              {/* SECCIÓN 2: COSTOS SIMPLIFICADOS */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-dashed border-slate-200">
+                {/* 6 Ejes Sencillo */}
+                <div className="space-y-3 p-4 rounded-xl border border-blue-100 bg-blue-50/30">
+                  <div className="flex items-center gap-2 border-b border-blue-100 pb-2">
+                    <div className="w-2 h-2 rounded-full bg-blue-500" />
+                    <span className="text-[10px] font-black uppercase text-blue-800">
+                      Tarifa 6 Ejes (Sencillo)
                     </span>
-                    <div className="h-px flex-1 bg-slate-200" />
                   </div>
+                  <div className="relative">
+                    <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <Input
+                      type="number"
+                      value={formData.costo_5_ejes_sencillo || ""}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          costo_5_ejes_sencillo: Number(e.target.value),
+                        })
+                      }
+                      className="h-10 pl-8 bg-white font-mono text-sm border-blue-200 focus:border-blue-500"
+                      placeholder="0.00"
+                      min={0}
+                      step="0.01"
+                    />
+                  </div>
+                </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
+                {/* 9 Ejes Full */}
+                <div className="space-y-3 p-4 rounded-xl border border-emerald-100 bg-emerald-50/30">
+                  <div className="flex items-center gap-2 border-b border-emerald-100 pb-2">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span className="text-[10px] font-black uppercase text-emerald-800">
+                      Tarifa 9 Ejes (Full)
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <Input
+                      type="number"
+                      value={formData.costo_9_ejes_full || ""}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          costo_9_ejes_full: Number(e.target.value),
+                        })
+                      }
+                      className="h-10 pl-8 bg-white font-mono text-sm border-emerald-200 focus:border-emerald-500"
+                      placeholder="0.00"
+                      min={0}
+                      step="0.01"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* SECCIÓN 3: CONFIGURACIÓN AVANZADA DE TRAMO (OPCIONAL) */}
+              <div className="mt-2 bg-slate-50 border border-slate-200 rounded-xl overflow-hidden transition-all duration-300">
+                <div className="flex items-center justify-between p-3.5 bg-slate-100/50">
+                  <div className="flex items-center gap-2">
+                    <Route className="h-4 w-4 text-slate-500" />
+                    <span className="text-xs font-bold text-slate-600">
+                      Configuración Avanzada (Tramo SCT)
+                    </span>
+                  </div>
+                  <Switch
+                    checked={showAdvanced}
+                    onCheckedChange={setShowAdvanced}
+                  />
+                </div>
+
+                {showAdvanced && (
+                  <div className="p-4 grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                    <div className="space-y-1.5">
                       <Label className="text-[10px] font-bold text-slate-500">
-                        Origen
+                        Origen de Tramo
                       </Label>
                       <Input
                         placeholder="Ej: México"
@@ -546,9 +609,10 @@ export const CatalogoCasetas = () => {
                         className="bg-white h-9 text-xs"
                       />
                     </div>
-                    <div className="space-y-1">
+
+                    <div className="space-y-1.5">
                       <Label className="text-[10px] font-bold text-slate-500">
-                        Destino
+                        Destino de Tramo
                       </Label>
                       <Input
                         placeholder="Ej: Puebla"
@@ -562,142 +626,34 @@ export const CatalogoCasetas = () => {
                         className="bg-white h-9 text-xs"
                       />
                     </div>
-                  </div>
 
-                  <div className="bg-primary/5 p-3 rounded-lg border border-primary/10 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="p-1 bg-white rounded border border-primary/20">
-                        <Route className="h-3 w-3 text-primary" />
-                      </div>
-                      <span className="text-[10px] font-bold text-primary uppercase">
-                        Tramo SCT:
-                      </span>
+                    <div className="col-span-2 mt-2 bg-slate-100 p-2 rounded text-center text-[10px] font-mono text-slate-500 border border-dashed border-slate-300">
+                      Resultado: {formData.tramo || "Esperando datos..."}
                     </div>
-                    <span className="text-xs font-mono font-black text-slate-700">
-                      {formData.tramo || "Esperando datos..."}
-                    </span>
+
+                    <div className="col-span-2 text-[10px] text-slate-500">
+                      Si lo dejas vacío, el sistema guardará el <b>Nombre</b>{" "}
+                      como tramo.
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
-
-              {/* SECCIÓN 2: COSTOS (✅ 6 y 9 ejes) */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* 6 Ejes (antes 5) */}
-                <div className="space-y-3 p-4 rounded-xl border border-blue-100 bg-blue-50/20 shadow-sm">
-                  <div className="flex items-center gap-2 border-b border-blue-100 pb-2">
-                    <div className="w-2 h-2 rounded-full bg-blue-500" />
-                    <span className="text-[10px] font-black uppercase text-blue-700">
-                      Configuración 6 Ejes (Sencillo)
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label className="text-[9px] font-bold text-slate-500 uppercase">
-                        Sencillo
-                      </Label>
-                      <div className="relative">
-                        <DollarSign className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
-                        <Input
-                          type="number"
-                          value={formData.costo_5_ejes_sencillo}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              costo_5_ejes_sencillo: Number(e.target.value),
-                            })
-                          }
-                          className="h-8 pl-6 bg-white font-mono text-xs"
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-[9px] font-bold text-slate-500 uppercase">
-                        Full
-                      </Label>
-                      <div className="relative">
-                        <DollarSign className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
-                        <Input
-                          type="number"
-                          value={formData.costo_5_ejes_full}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              costo_5_ejes_full: Number(e.target.value),
-                            })
-                          }
-                          className="h-8 pl-6 bg-white font-mono text-xs"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 9 Ejes (Full) */}
-                <div className="space-y-3 p-4 rounded-xl border border-amber-100 bg-amber-50/20 shadow-sm">
-                  <div className="flex items-center gap-2 border-b border-amber-100 pb-2">
-                    <div className="w-2 h-2 rounded-full bg-amber-500" />
-                    <span className="text-[10px] font-black uppercase text-amber-700">
-                      Configuración 9 Ejes (Full)
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label className="text-[9px] font-bold text-slate-500 uppercase">
-                        Sencillo
-                      </Label>
-                      <div className="relative">
-                        <DollarSign className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
-                        <Input
-                          type="number"
-                          value={formData.costo_9_ejes_sencillo}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              costo_9_ejes_sencillo: Number(e.target.value),
-                            })
-                          }
-                          className="h-8 pl-6 bg-white font-mono text-xs"
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-[9px] font-bold text-slate-500 uppercase">
-                        Full
-                      </Label>
-                      <div className="relative">
-                        <DollarSign className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
-                        <Input
-                          type="number"
-                          value={formData.costo_9_ejes_full}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              costo_9_ejes_full: Number(e.target.value),
-                            })
-                          }
-                          className="h-8 pl-6 bg-white font-mono text-xs"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              {/* /COSTOS */}
             </div>
           </div>
 
-          <DialogFooter className="bg-slate-50 p-4 border-t border-slate-200 shrink-0">
+          <DialogFooter className="bg-white p-4 border-t border-slate-200 shrink-0">
             <Button
               variant="outline"
               onClick={() => setDialogOpen(false)}
-              className="h-10 px-6"
+              className="h-10 px-6 border-slate-300"
             >
               Cancelar
             </Button>
+
             <ActionButton
               onClick={handleSave}
               disabled={isSubmitting}
-              className="h-10 px-8 shadow-md"
+              className="h-10 px-8 shadow-md shadow-primary/20"
             >
               {isSubmitting ? (
                 <Loader2 className="animate-spin h-4 w-4 mr-2" />
@@ -710,16 +666,16 @@ export const CatalogoCasetas = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Delete */}
+      {/* MODAL ELIMINAR */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>¿Confirmar eliminación?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción no se puede deshacer y puede afectar tarifas.
+              Esta acción no se puede deshacer y puede afectar tarifas o rutas
+              previamente guardadas.
             </AlertDialogDescription>
           </AlertDialogHeader>
-
           <AlertDialogFooter>
             <AlertDialogCancel>Regresar</AlertDialogCancel>
             <AlertDialogAction
