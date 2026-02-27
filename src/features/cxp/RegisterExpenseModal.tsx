@@ -26,6 +26,7 @@ import {
   DollarSign,
   AlertCircle,
   Plus,
+  Settings2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -624,10 +625,24 @@ export function RegisterExpenseModal({
             {(formData.clasificacion === "gasto_indirecto_fijo" ||
               formData.clasificacion === "gasto_indirecto_variable") && (
               <div className="space-y-2">
-                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Categoría de Gasto{" "}
-                  <span className="text-status-danger">*</span>
-                </Label>
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    Categoría de Gasto{" "}
+                    <span className="text-status-danger">*</span>
+                  </Label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Disparamos un evento personalizado que atraparemos en ProveedoresCxP
+                      document.dispatchEvent(
+                        new CustomEvent("open-manage-categories"),
+                      );
+                    }}
+                    className="text-[10px] flex items-center gap-1 text-blue-600 hover:underline"
+                  >
+                    <Settings2 className="h-3 w-3" /> Administrar
+                  </button>
+                </div>
                 {!showNewCategoryInput ? (
                   <Select
                     value={formData.categoria_indirecto_id}

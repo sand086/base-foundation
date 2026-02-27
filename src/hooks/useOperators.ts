@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import { operatorService, Operador } from "@/services/operatorService";
+import { operatorService } from "@/services/operatorService";
+import { Operator } from "@/types/api.types";
 import { toast } from "sonner";
 
 export const useOperators = () => {
-  const [operadores, setOperadores] = useState<Operador[]>([]);
+  const [operadores, setOperadores] = useState<Operator[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchOperators = useCallback(async () => {
@@ -24,7 +25,7 @@ export const useOperators = () => {
   }, [fetchOperators]);
 
   // CORRECCIÓN: Usamos Omit<Operador, "id"> para crear, ya que no tenemos ID aún
-  const createOperator = async (operador: Omit<Operador, "id">) => {
+  const createOperator = async (operador: Omit<Operator, "id">) => {
     try {
       await operatorService.create(operador);
       toast.success("Operador registrado exitosamente");
@@ -37,7 +38,7 @@ export const useOperators = () => {
   };
 
   // CORRECCIÓN: id es number
-  const updateOperator = async (id: number, operador: Partial<Operador>) => {
+  const updateOperator = async (id: number, operador: Partial<Operator>) => {
     try {
       await operatorService.update(id, operador);
       toast.success("Operador actualizado");

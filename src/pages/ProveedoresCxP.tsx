@@ -59,6 +59,7 @@ import { InvoiceDetailSheet } from "@/features/cxp/InvoiceDetailSheet";
 import { RegisterPaymentModal } from "@/features/cxp/RegisterPaymentModal";
 import { SupplierModal } from "@/features/cxp/SupplierModal";
 import { SupplierDetailSheet } from "@/features/cxp/SupplierDetailSheet";
+import { ManageCategoriesModal } from "@/features/cxp/ManageCategoriesModal";
 
 // Hooks
 import { useSuppliers } from "@/hooks/useSuppliers";
@@ -104,11 +105,14 @@ export default function ProveedoresCxP() {
     refreshInvoices,
     createInvoice,
     updateInvoice,
-    deleteInvoice, // ✅ NUEVO
+    deleteInvoice, //  NUEVO
     registerPayment,
     createSupplier,
     updateSupplier,
     deleteSupplier,
+    updateIndirectCategory,
+    deleteIndirectCategory,
+    indirectCategories,
   } = useSuppliers();
 
   const { bankAccounts, isLoadingBankAccounts } = useBankAccounts();
@@ -123,7 +127,7 @@ export default function ProveedoresCxP() {
   const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
-  // ✅ NUEVO: delete factura
+  //  NUEVO: delete factura
   const [isDeleteInvoiceOpen, setIsDeleteInvoiceOpen] = useState(false);
   const [invoiceToDelete, setInvoiceToDelete] = useState<PayableInvoice | null>(
     null,
@@ -136,6 +140,8 @@ export default function ProveedoresCxP() {
     null,
   );
   const [prefillData, setPrefillData] = useState<PrefillData | null>(null);
+
+  const [isManageCatOpen, setIsManageCatOpen] = useState(false);
 
   // =====================
   // Modal states - Proveedores
@@ -177,6 +183,13 @@ export default function ProveedoresCxP() {
       });
     }
   }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    const handleOpen = () => setIsManageCatOpen(true);
+    document.addEventListener("open-manage-categories", handleOpen);
+    return () =>
+      document.removeEventListener("open-manage-categories", handleOpen);
+  }, []);
 
   // =====================
   // KPIs
@@ -277,7 +290,7 @@ export default function ProveedoresCxP() {
     }
   };
 
-  // ✅ NUEVO: eliminar factura (con modal confirm)
+  //  NUEVO: eliminar factura (con modal confirm)
   const handleConfirmDeleteInvoice = async () => {
     if (!invoiceToDelete) return;
     const ok = await deleteInvoice(invoiceToDelete.id);
@@ -705,7 +718,7 @@ export default function ProveedoresCxP() {
                                 Registrar Pago
                               </DropdownMenuItem>
 
-                              {/* ✅ NUEVO: Eliminar Factura */}
+                              {/*  NUEVO: Eliminar Factura */}
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 onClick={() => {
@@ -825,7 +838,7 @@ export default function ProveedoresCxP() {
         prefillData={prefillData}
       />
 
-      {/* ✅ OJO: en tu snippet “actualizaciones” lo renderizas siempre.
+      {/*  OJO: en tu snippet “actualizaciones” lo renderizas siempre.
           Para evitar crash, lo mostramos solo si hay selectedInvoice. */}
       {selectedInvoice && (
         <InvoiceDetailSheet
@@ -866,6 +879,14 @@ export default function ProveedoresCxP() {
         supplier={selectedSupplier}
       />
 
+      <ManageCategoriesModal
+        open={isManageCatOpen}
+        onOpenChange={setIsManageCatOpen}
+        categories={indirectCategories}
+        onUpdate={updateIndirectCategory}
+        onDelete={deleteIndirectCategory}
+      />
+
       {/* Modal: Confirmación Eliminar Proveedor */}
       <AlertDialog
         open={isDeleteDialogOpen}
@@ -898,7 +919,7 @@ export default function ProveedoresCxP() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* ✅ NUEVO: Modal Confirmación Eliminar Factura */}
+      {/*  NUEVO: Modal Confirmación Eliminar Factura */}
       <AlertDialog
         open={isDeleteInvoiceOpen}
         onOpenChange={setIsDeleteInvoiceOpen}

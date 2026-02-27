@@ -1,5 +1,10 @@
 import axiosClient from "@/api/axiosClient";
-import { Supplier, PayableInvoice, InvoicePayment } from "@/types/api.types";
+import {
+  Supplier,
+  PayableInvoice,
+  InvoicePayment,
+  IndirectCategory,
+} from "@/types/api.types";
 
 // ==========================================
 // SERVICIOS
@@ -98,6 +103,43 @@ export const supplierService = {
     const response = await axiosClient.post<PayableInvoice>(
       `/finance/invoices/${invoiceId}/payments`,
       payment,
+    );
+    return response.data;
+  },
+
+  // ---  CATECORRIAS ---
+
+  // --- MÓDULO: CATEGORÍAS INDIRECTAS ---
+  getIndirectCategories: async () => {
+    const response = await axiosClient.get<IndirectCategory[]>(
+      "/finance/indirect-categories",
+    );
+    return response.data;
+  },
+  createIndirectCategory: async (category: {
+    nombre: string;
+    tipo: "fijo" | "variable";
+  }) => {
+    const response = await axiosClient.post<IndirectCategory>(
+      "/finance/indirect-categories",
+      category,
+    );
+    return response.data;
+  },
+  // ✅ NUEVAS FUNCIONES
+  updateIndirectCategory: async (
+    id: number,
+    data: Partial<IndirectCategory>,
+  ) => {
+    const response = await axiosClient.put<IndirectCategory>(
+      `/finance/indirect-categories/${id}`,
+      data,
+    );
+    return response.data;
+  },
+  deleteIndirectCategory: async (id: number) => {
+    const response = await axiosClient.delete(
+      `/finance/indirect-categories/${id}`,
     );
     return response.data;
   },
