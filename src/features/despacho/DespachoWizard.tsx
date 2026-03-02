@@ -10,6 +10,8 @@ import {
   Truck,
   ChevronsUpDown,
   Clock,
+  Gauge,
+  Droplets,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -72,6 +74,10 @@ type WizardData = {
   dollyId: string;
   remolque2Id: string;
   driverId: string;
+
+  // 🚀 NUEVOS: Lecturas Iniciales (Vital para liquidación)
+  odometro_inicial: number;
+  nivel_tanque_inicial: number;
 
   // Finanzas
   anticipo_casetas: number;
@@ -144,7 +150,7 @@ function SearchableSelect({
   );
 }
 
-// Utilidad para limpiar acentos y mayúsculas (Ej: "Tractocamión" -> "tractocamion")
+// Utilidad para limpiar acentos y mayúsculas
 const normalizeStr = (str?: string | null) =>
   str
     ?.toLowerCase()
@@ -156,13 +162,11 @@ export const DespachoWizard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Hooks de datos reales
   const { unidades } = useUnits();
   const { operadores } = useOperators();
   const { createTrip } = useTrips();
   const { clients } = useClients();
 
-  // Estado principal
   const [data, setData] = useState<WizardData>({
     clienteId: "",
     subClienteId: "",
@@ -177,12 +181,14 @@ export const DespachoWizard = () => {
     remolque2Id: "",
     driverId: "",
 
+    odometro_inicial: 0,
+    nivel_tanque_inicial: 100, // Por defecto lleno
+
     anticipo_casetas: 0,
     anticipo_viaticos: 0,
     anticipo_combustible: 0,
   });
 
-  // Aseguramos que la data venga como array (evita crasheos si el hook regresa null/obj)
   const arrUnidades = useMemo(
     () => (Array.isArray(unidades) ? unidades : []),
     [unidades],
@@ -196,7 +202,6 @@ export const DespachoWizard = () => {
     [clients],
   );
 
-  // --- FILTROS INTELIGENTES ---
   const availableTractos = useMemo(
     () =>
       arrUnidades
@@ -205,7 +210,6 @@ export const DespachoWizard = () => {
             `${u.tipo_1} ${u.tipo} ${u.tipo_unidad}`.toLowerCase();
           const esTracto =
             searchIn.includes("tracto") || searchIn.includes("camion");
-
           const estaDisponible = ["disponible", "bloqueado"].includes(
             u.status?.toLowerCase(),
           );
@@ -223,16 +227,9 @@ export const DespachoWizard = () => {
       .filter((u: any) => {
         const strTipo1 = normalizeStr(u.tipo_1);
         const strTipo = normalizeStr(u.tipo);
-
-        const esRemolque = [
-          "remolque",
-          "caja",
-          "plataforma",
-          "chasis",
-          "utilitario",
-        ].some((p) => strTipo1.includes(p) || strTipo.includes(p));
-
-        return esRemolque;
+        return ["remolque", "caja", "plataforma", "chasis", "utilitario"].some(
+          (p) => strTipo1.includes(p) || strTipo.includes(p),
+        );
       })
       .map((u: any) => ({
         label: `${u.numero_economico} - ${u.placas || "Sin placas"} (${normalizeStr(u.tipo_1)})`,
@@ -240,76 +237,59 @@ export const DespachoWizard = () => {
       }));
 
     if (remolquesReales.length === 0) {
-      return [
-        { label: "REM-PRUEBA - (No tienes remolques en BD)", value: "9998" },
-        { label: "REM-PRUEBA2 - (No tienes remolques en BD)", value: "9999" },
-      ];
+      return [{ label: "REM-PRUEBA - (No tienes remolques)", value: "9998" }];
     }
     return remolquesReales;
   }, [arrUnidades]);
 
   const availableDollies = useMemo(() => {
     const dolliesReales = arrUnidades
-      .filter((u: any) => {
-        return true;
-      })
+      .filter((u: any) => true)
       .map((u: any) => ({
         label: `${u.numero_economico} (${normalizeStr(u.tipo_1)})`,
         value: String(u.id),
       }));
 
     if (dolliesReales.length === 0) {
-      return [
-        { label: "DOLLY-PRUEBA - (No tienes dollies en BD)", value: "9997" },
-      ];
+      return [{ label: "DOLLY-PRUEBA - (No tienes dollies)", value: "9997" }];
     }
     return dolliesReales;
   }, [arrUnidades]);
 
   const availableOperators = useMemo(
     () =>
-      arrOperadores.map((o: any) => ({
-        label: o.name,
-        value: String(o.id),
-      })),
+      arrOperadores.map((o: any) => ({ label: o.name, value: String(o.id) })),
     [arrOperadores],
   );
 
-  // --- LÓGICA EN CASCADA: cliente -> subcliente -> tarifas ---
   const selectedClient = useMemo(
     () => arrClients.find((c: any) => String(c.id) === data.clienteId),
     [arrClients, data.clienteId],
   );
-
   const availableSubClientes = useMemo(
     () => (selectedClient?.sub_clients || []) as SubClient[],
     [selectedClient],
   );
-
   const selectedSubClient = useMemo(
     () => availableSubClientes.find((s) => String(s.id) === data.subClienteId),
     [availableSubClientes, data.subClienteId],
   );
-
   const availableTariffs = useMemo(
     () => (selectedSubClient?.tariffs || []) as Tariff[],
     [selectedSubClient],
   );
-
   const selectedTariff = useMemo(
     () => availableTariffs.find((t) => String(t.id) === data.routeId),
     [availableTariffs, data.routeId],
   );
 
-  // --- FULL dinámico por tarifa ---
   const isFullTrip = useMemo(() => {
     const tu = normalizeStr((selectedTariff as any)?.tipo_unidad);
     return tu === "full" || tu === "9ejes" || tu === "9 ejes" || tu === "doble";
   }, [selectedTariff]);
 
-  // --- Info financiera ---
   const infoTarifa = useMemo(() => {
-    if (!selectedTariff) {
+    if (!selectedTariff)
       return {
         base: 0,
         casetas: 0,
@@ -320,42 +300,50 @@ export const DespachoWizard = () => {
         ret: 0,
         total: 0,
       };
-    }
-
     const base = Number((selectedTariff as any).tarifa_base || 0);
     const casetas = Number((selectedTariff as any).costo_casetas || 0);
     const subtotal = base + casetas;
-
     const ivaPct = Number((selectedTariff as any).iva_porcentaje ?? 16) / 100;
     const retPct =
       Number((selectedTariff as any).retencion_porcentaje ?? 4) / 100;
-
     const iva = subtotal * ivaPct;
     const ret = subtotal * retPct;
-    const total = subtotal + iva - ret;
-
-    return { base, casetas, subtotal, ivaPct, retPct, iva, ret, total };
+    return {
+      base,
+      casetas,
+      subtotal,
+      ivaPct,
+      retPct,
+      iva,
+      ret,
+      total: subtotal + iva - ret,
+    };
   }, [selectedTariff]);
 
   const resetRecursosFull = (nextIsFull: boolean) => {
-    if (!nextIsFull) {
-      setData((prev) => ({
-        ...prev,
-        dollyId: "",
-        remolque2Id: "",
-      }));
-    }
+    if (!nextIsFull)
+      setData((prev) => ({ ...prev, dollyId: "", remolque2Id: "" }));
   };
 
   const handleCreate = async (status: TripStatus = "creado") => {
     const cleanId = (val: string) => {
       const parsed = parseInt(val, 10);
-      if (isNaN(parsed) || parsed >= 9000) return null;
-      return parsed;
+      return isNaN(parsed) || parsed >= 9000 ? null : parsed;
     };
 
+    // Validación Básica
+    if (!data.odometro_inicial || data.odometro_inicial <= 0) {
+      toast({
+        variant: "destructive",
+        title: "Falta Odómetro",
+        description: "Por favor, ingresa el odómetro inicial de la unidad.",
+      });
+      return;
+    }
+
     try {
-      const payload: TripCreatePayload = {
+      const payload: any = {
+        // Usa any si los nuevos campos aún no están en TripCreatePayload
         client_id: parseInt(data.clienteId, 10),
         sub_client_id: parseInt(data.subClienteId, 10),
         tariff_id: cleanId(data.routeId),
@@ -367,6 +355,8 @@ export const DespachoWizard = () => {
         remolque_1_id: cleanId(data.remolque1Id),
         dolly_id: isFullTrip ? cleanId(data.dollyId) : null,
         remolque_2_id: isFullTrip ? cleanId(data.remolque2Id) : null,
+
+        // Finanzas
         tarifa_base: Number(infoTarifa.base || 0),
         costo_casetas: Number(infoTarifa.casetas || 0),
         anticipo_casetas: Number(data.anticipo_casetas || 0),
@@ -374,7 +364,12 @@ export const DespachoWizard = () => {
         anticipo_combustible: Number(data.anticipo_combustible || 0),
         otros_anticipos: 0,
         saldo_operador: 0,
-        status: status as any, // ✅ Evitamos el error estricto forzando el tipo
+
+        // Datos Vitales para Liquidación
+        odometro_inicial: Number(data.odometro_inicial),
+        nivel_tanque_inicial: Number(data.nivel_tanque_inicial),
+
+        status: status as any,
         start_date: new Date().toISOString(),
       };
 
@@ -385,10 +380,7 @@ export const DespachoWizard = () => {
             status === "en_transito"
               ? "¡Viaje Despachado!"
               : "¡Viaje en Stand-By!",
-          description:
-            status === "en_transito"
-              ? "La unidad ya está en ruta."
-              : "El viaje quedó guardado para inicio posterior.",
+          description: "Información guardada exitosamente.",
         });
         setTimeout(() => navigate("/trips"), 1500);
       }
@@ -405,24 +397,21 @@ export const DespachoWizard = () => {
   const isStep1Valid = Boolean(
     data.clienteId && data.subClienteId && data.routeId,
   );
-
   const isStep2Valid = useMemo(() => {
-    if (isFullTrip) {
-      return Boolean(
-        data.unitId &&
-        data.driverId &&
-        data.remolque1Id &&
-        data.dollyId &&
-        data.remolque2Id,
-      );
-    }
-    return Boolean(data.unitId && data.driverId && data.remolque1Id);
+    const baseValido = Boolean(
+      data.unitId &&
+      data.driverId &&
+      data.remolque1Id &&
+      data.odometro_inicial > 0,
+    );
+    if (isFullTrip)
+      return Boolean(baseValido && data.dollyId && data.remolque2Id);
+    return baseValido;
   }, [isFullTrip, data]);
 
   return (
     <Card>
       <CardContent className="pt-6 space-y-6">
-        {/* STEPS */}
         <div className="flex gap-2 mb-6">
           <Badge variant={currentStep >= 1 ? "default" : "outline"}>
             1. Ruta
@@ -435,14 +424,13 @@ export const DespachoWizard = () => {
           </Badge>
         </div>
 
-        {/* STEP 1: RUTA */}
         {currentStep === 1 && (
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Cliente</Label>
               <Select
                 value={data.clienteId}
-                onValueChange={(v) => {
+                onValueChange={(v) =>
                   setData((prev) => ({
                     ...prev,
                     clienteId: v,
@@ -456,8 +444,8 @@ export const DespachoWizard = () => {
                     remolque2Id: "",
                     driverId: "",
                     anticipo_casetas: 0,
-                  }));
-                }}
+                  }))
+                }
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccionar..." />
@@ -519,21 +507,18 @@ export const DespachoWizard = () => {
                   const tariff = availableTariffs.find(
                     (t) => String(t.id) === v,
                   ) as any;
-
                   const nextTipo = normalizeStr(tariff?.tipo_unidad);
                   const nextIsFull =
                     nextTipo === "full" ||
                     nextTipo === "9ejes" ||
                     nextTipo === "9 ejes" ||
                     nextTipo === "doble";
-
                   setData((prev) => ({
                     ...prev,
                     routeId: v,
                     routeNombre: tariff?.nombre_ruta || "",
                     anticipo_casetas: Number(tariff?.costo_casetas || 0),
                   }));
-
                   resetRecursosFull(nextIsFull);
                 }}
               >
@@ -550,19 +535,16 @@ export const DespachoWizard = () => {
                       const base = Number(t.tarifa_base || 0);
                       const casetas = Number(t.costo_casetas || 0);
                       const subtotal = base + casetas;
-
                       const tu = normalizeStr(t.tipo_unidad);
                       const labelTipo = tu
                         ? String(t.tipo_unidad).toUpperCase()
                         : "N/A";
-
                       const ivaPct =
                         Number((t as any).iva_porcentaje ?? 16) / 100;
                       const retPct =
                         Number((t as any).retencion_porcentaje ?? 4) / 100;
                       const total =
                         subtotal + subtotal * ivaPct - subtotal * retPct;
-
                       return (
                         <SelectItem key={t.id} value={String(t.id)}>
                           {t.nombre_ruta} — Base: $
@@ -584,15 +566,14 @@ export const DespachoWizard = () => {
           </div>
         )}
 
-        {/* STEP 2: RECURSOS */}
         {currentStep === 2 && (
           <div className="space-y-6">
-            <div className="flex items-center gap-2 pb-2 border-b">
+            <div className="flex items-center justify-between pb-2 border-b">
               <Badge variant={isFullTrip ? "destructive" : "secondary"}>
                 MODO: {isFullTrip ? "FULL / DOBLE ARTICULADO" : "SENCILLO"}
               </Badge>
-              <span className="text-xs text-muted-foreground">
-                Asigna los recursos. Puedes teclear para buscar.
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <Gauge className="h-3 w-3" /> El odómetro es obligatorio
               </span>
             </div>
 
@@ -642,7 +623,6 @@ export const DespachoWizard = () => {
                       placeholder="Buscar económico del dolly..."
                     />
                   </div>
-
                   <div className="space-y-2">
                     <Label className="flex items-center gap-2 text-rose-600">
                       <LinkIcon className="h-3 w-3" /> Remolque 2 (Trasero) *
@@ -659,17 +639,62 @@ export const DespachoWizard = () => {
                 </>
               )}
             </div>
+
+            {/* 🚀 LECTURAS INICIALES (ODÓMETRO Y COMBUSTIBLE) */}
+            <div className="grid grid-cols-2 gap-4 pt-4 border-t bg-slate-50 p-4 rounded-lg">
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2 font-bold text-brand-navy">
+                  <Gauge className="h-4 w-4" /> Odómetro Inicial (km) *
+                </Label>
+                <Input
+                  type="number"
+                  value={data.odometro_inicial || ""}
+                  onChange={(e) =>
+                    setData((p) => ({
+                      ...p,
+                      odometro_inicial: Number(e.target.value),
+                    }))
+                  }
+                  placeholder="Ej: 250400"
+                  className="font-mono text-lg"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2 font-bold text-brand-navy">
+                  <Droplets className="h-4 w-4" /> Nivel Tanque Inicial (%) *
+                </Label>
+                <div className="relative">
+                  <Input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={data.nivel_tanque_inicial}
+                    onChange={(e) =>
+                      setData((p) => ({
+                        ...p,
+                        nivel_tanque_inicial: Number(e.target.value),
+                      }))
+                    }
+                    className="font-mono text-lg pr-8"
+                    required
+                  />
+                  <span className="absolute right-3 top-3 font-bold text-muted-foreground">
+                    %
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
-        {/* STEP 3: FINANZAS */}
         {currentStep === 3 && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Card className="bg-slate-50 border-dashed border-2">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm flex items-center gap-2">
-                  <DollarSign className="h-4 w-4 text-emerald-600" />
-                  Ingreso (A Facturar)
+                  <DollarSign className="h-4 w-4 text-emerald-600" /> Ingreso (A
+                  Facturar)
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
@@ -693,9 +718,7 @@ export const DespachoWizard = () => {
                     })}
                   </span>
                 </div>
-
                 <Separator className="my-2" />
-
                 <div className="flex justify-between font-semibold">
                   <span>Subtotal:</span>
                   <span>
@@ -705,7 +728,6 @@ export const DespachoWizard = () => {
                     })}
                   </span>
                 </div>
-
                 <div className="flex justify-between items-center mt-3 bg-emerald-100 p-3 rounded-lg text-emerald-800 font-bold">
                   <span>TOTAL NETO:</span>
                   <span className="text-lg">
@@ -721,8 +743,7 @@ export const DespachoWizard = () => {
             <Card className="border-slate-200">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm flex items-center gap-2">
-                  <Truck className="h-4 w-4 text-blue-600" />
-                  Egresos (Operador)
+                  <Truck className="h-4 w-4 text-blue-600" /> Egresos (Operador)
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4 pt-2">
@@ -770,7 +791,6 @@ export const DespachoWizard = () => {
           </div>
         )}
 
-        {/* NAVEGACIÓN Y BOTONES */}
         <div className="flex justify-between pt-6 border-t mt-4">
           <Button
             variant="outline"
@@ -779,7 +799,6 @@ export const DespachoWizard = () => {
           >
             Atrás
           </Button>
-
           {currentStep < 3 ? (
             <ActionButton
               onClick={() => setCurrentStep((p) => (p + 1) as Step)}
@@ -792,7 +811,6 @@ export const DespachoWizard = () => {
             </ActionButton>
           ) : (
             <div className="flex gap-3">
-              {/* ✅ BOTÓN STAND-BY: Usamos Button nativo */}
               <Button
                 type="button"
                 variant="secondary"
@@ -804,8 +822,6 @@ export const DespachoWizard = () => {
               >
                 <Clock className="h-4 w-4 mr-2" /> Guardar en Stand-By
               </Button>
-
-              {/* ✅ BOTÓN DESPACHAR: Usamos ActionButton pero envolvemos la función */}
               <ActionButton
                 type="button"
                 onClick={(e) => {
