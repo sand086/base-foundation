@@ -85,6 +85,7 @@ class TripStatus(str, PyEnum):
     ENTREGADO = "entregado"
     CERRADO = "cerrado"
     ACCIDENTE = "accidente"
+    BLOQUEADO = "bloqueado"
 
 
 class ClientStatus(str, PyEnum):
@@ -323,6 +324,7 @@ class Tariff(AuditMixin, Base):
     #  Configuración fiscal por tarifa
     iva_porcentaje = Column(Float, default=16.0)
     retencion_porcentaje = Column(Float, default=4.0)
+    distancia_km = Column(Float, default=0.0)
 
     costo_casetas = Column(Float, default=0)  # Valor manual o snapshot
     moneda = Column(pg_enum(Currency, "currency"), default=Currency.MXN)
@@ -385,7 +387,7 @@ class Unit(AuditMixin, Base):
     caat_url = Column(String(500), nullable=True)
     tarjeta_circulacion_folio = Column(String(50), nullable=True)
 
-    trips = relationship("Trip", back_populates="unit")
+    trips = relationship("Trip", back_populates="unit", foreign_keys="[Trip.unit_id]")
     operators = relationship("Operator", back_populates="assigned_unit")
     tires = relationship("Tire", back_populates="unit")
     work_orders = relationship("WorkOrder", back_populates="unit")
@@ -531,37 +533,50 @@ class Trip(AuditMixin, Base):
     id = Column(Integer, primary_key=True, index=True)
     public_id = Column(String(50), unique=True, nullable=True)
 
+    # --- LLAVES FORÁNEAS (Columnas físicas) ---
     client_id = Column(
         Integer, ForeignKey("clients.id", ondelete="RESTRICT"), nullable=False
     )
     sub_client_id = Column(
         Integer, ForeignKey("sub_clients.id", ondelete="RESTRICT"), nullable=False
     )
-    unit_id = Column(
-        Integer, ForeignKey("units.id", ondelete="RESTRICT"), nullable=False
-    )
     operator_id = Column(
         Integer, ForeignKey("operators.id", ondelete="RESTRICT"), nullable=False
+    )
+    unit_id = Column(
+        Integer, ForeignKey("units.id", ondelete="RESTRICT"), nullable=False
     )
     tariff_id = Column(
         Integer, ForeignKey("tariffs.id", ondelete="SET NULL"), nullable=True
     )
 
+    # Equipos adicionales (Todos apuntan a la misma tabla 'units')
+    remolque_1_id = Column(
+        Integer, ForeignKey("units.id", ondelete="SET NULL"), nullable=True
+    )
+    dolly_id = Column(
+        Integer, ForeignKey("units.id", ondelete="SET NULL"), nullable=True
+    )
+    remolque_2_id = Column(
+        Integer, ForeignKey("units.id", ondelete="SET NULL"), nullable=True
+    )
+
+    # --- DATOS DEL VIAJE ---
     origin = Column(String(200), nullable=False)
     destination = Column(String(200), nullable=False)
     route_name = Column(String(200))
-
-    # BD: tripstatus
     status = Column(pg_enum(TripStatus, "tripstatus"), default=TripStatus.CREADO)
 
-    tarifa_base = Column(Float, nullable=False)
-    costo_casetas = Column(Float, default=0)
-    anticipo_casetas = Column(Float, default=0)
-    anticipo_viaticos = Column(Float, default=0)
-    anticipo_combustible = Column(Float, default=0)
-    otros_anticipos = Column(Float, default=0)
-    saldo_operador = Column(Float, default=0)
+    # --- FINANZAS ---
+    tarifa_base = Column(Float, nullable=False, default=0.0)
+    costo_casetas = Column(Float, default=0.0)
+    anticipo_casetas = Column(Float, default=0.0)
+    anticipo_viaticos = Column(Float, default=0.0)
+    anticipo_combustible = Column(Float, default=0.0)
+    otros_anticipos = Column(Float, default=0.0)
+    saldo_operador = Column(Float, default=0.0)
 
+    # --- TIEMPOS Y SEGUIMIENTO ---
     start_date = Column(DateTime(timezone=True), nullable=False)
     estimated_arrival = Column(DateTime(timezone=True))
     actual_arrival = Column(DateTime(timezone=True))
@@ -572,12 +587,23 @@ class Trip(AuditMixin, Base):
     )
     last_location = Column(String(200))
 
+    # =========================================================
+    # RELACIONES ORM (Para cargar objetos completos)
+    # =========================================================
+
+    # Relaciones simples
     client = relationship("Client", back_populates="trips")
     sub_client = relationship("SubClient", back_populates="trips")
-    unit = relationship("Unit", back_populates="trips")
     operator = relationship("Operator", back_populates="trips")
     tariff = relationship("Tariff", back_populates="trips")
 
+    # (Units)
+    unit = relationship("Unit", foreign_keys=[unit_id])
+    remolque_1 = relationship("Unit", foreign_keys=[remolque_1_id])
+    dolly = relationship("Unit", foreign_keys=[dolly_id])
+    remolque_2 = relationship("Unit", foreign_keys=[remolque_2_id])
+
+    # Eventos del viaje
     timeline_events = relationship(
         "TripTimelineEvent",
         back_populates="trip",
@@ -1078,8 +1104,8 @@ class RateTemplate(AuditMixin, Base):
     __tablename__ = "rate_templates"
     id = Column(Integer, primary_key=True, index=True)
     client_id = Column(
-        Integer, ForeignKey("clients.id", ondelete="RESTRICT"), nullable=False
-    )
+        Integer, ForeignKey("clients.id", ondelete="RESTRICT"), nullable=True
+    )  # <-- Cambiar a True
     origen = Column(String(150), nullable=False)
     destino = Column(String(150), nullable=False)
     tipo_unidad = Column(pg_enum(TollUnitType, "tollunittype"), nullable=False)

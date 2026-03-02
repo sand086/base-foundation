@@ -638,7 +638,7 @@ export function RegisterExpenseModal({
                         new CustomEvent("open-manage-categories"),
                       );
                     }}
-                    className="text-[10px] flex items-center gap-1 text-blue-600 hover:underline"
+                    className=" flex items-center gap-1 text-blue-600 hover:underline"
                   >
                     <Settings2 className="h-3 w-3" /> Administrar
                   </button>

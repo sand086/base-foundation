@@ -53,7 +53,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useUnits } from "@/hooks/useUnits"; // <--- Hook real
-import { Unidad } from "@/services/unitService";
+import { Unit } from "@/types/api.types"; // <--- Tipo real del backend
 
 // Definimos la interfaz local que usa tu vista (ligeramente diferente a Unidad del backend)
 export interface ActivoPatrimonial {
@@ -190,6 +190,8 @@ export function PatrimonialView() {
       return <Warehouse className="h-5 w-5" />;
     if (tipoLower.includes("utilitario")) return <Car className="h-5 w-5" />;
     return <Truck className="h-5 w-5" />;
+    if (tipoLower.includes("tractocamion")) return <Car className="h-5 w-5" />;
+    return <Truck className="h-5 w-5" />;
   };
 
   const handleOpenBaja = (activo: ActivoPatrimonial) => {
@@ -222,7 +224,7 @@ export function PatrimonialView() {
       // podrías necesitar actualizar el Enum en el backend o usar un campo 'situacion_patrimonial'.
       // Por ahora, lo marcamos como 'bloqueado' en la operativa y guardamos la nota.
 
-      await updateUnit(activoToBaja.id, {
+      await updateUnit(Number(activoToBaja.id), {
         status: "bloqueado", // O el estado que corresponda en tu lógica de negocio
         // En un sistema real enviarías { estatus_patrimonial: 'baja_venta', ... }
       });

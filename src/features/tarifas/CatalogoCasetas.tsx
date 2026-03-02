@@ -310,11 +310,11 @@ export const CatalogoCasetas = () => {
         render: (_, t) => (
           <div className="flex flex-col">
             <span className="font-bold text-slate-900">{t.nombre}</span>
-            {((t as any).carretera || (t as any).estado) && (
-              <span className="text-[10px] text-primary font-mono uppercase mt-0.5">
+            {/* {((t as any).carretera || (t as any).estado) && (
+              <span className=" text-primary font-mono uppercase mt-0.5">
                 {(t as any).carretera || "—"} | {(t as any).estado || "—"}
               </span>
-            )}
+            )} */}
           </div>
         ),
       },
@@ -324,7 +324,7 @@ export const CatalogoCasetas = () => {
         render: (v, t) => (
           <Badge
             variant="outline"
-            className="font-mono text-[10px] bg-slate-50 text-slate-500 font-medium"
+            className="font-mono  bg-slate-50 text-slate-500 font-medium"
           >
             {String(v ?? t.nombre)}
           </Badge>
@@ -334,7 +334,7 @@ export const CatalogoCasetas = () => {
         key: "costos",
         header: "Tarifas Autorizadas",
         render: (_, t) => (
-          <div className="grid grid-cols-2 gap-4 text-[10px] font-mono w-48">
+          <div className="grid grid-cols-2 gap-4  font-mono w-48">
             <div className="flex flex-col border-l-2 border-blue-500 pl-2">
               <span className="text-slate-500 uppercase font-bold text-[8px]">
                 6 Ejes (Sencillo)
@@ -525,7 +525,7 @@ export const CatalogoCasetas = () => {
                 <div className="space-y-3 p-4 rounded-xl border border-blue-100 bg-blue-50/30">
                   <div className="flex items-center gap-2 border-b border-blue-100 pb-2">
                     <div className="w-2 h-2 rounded-full bg-blue-500" />
-                    <span className="text-[10px] font-black uppercase text-blue-800">
+                    <span className=" font-black uppercase text-blue-800">
                       Tarifa 6 Ejes (Sencillo)
                     </span>
                   </div>
@@ -552,7 +552,7 @@ export const CatalogoCasetas = () => {
                 <div className="space-y-3 p-4 rounded-xl border border-emerald-100 bg-emerald-50/30">
                   <div className="flex items-center gap-2 border-b border-emerald-100 pb-2">
                     <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                    <span className="text-[10px] font-black uppercase text-emerald-800">
+                    <span className=" font-black uppercase text-emerald-800">
                       Tarifa 9 Ejes (Full)
                     </span>
                   </div>
@@ -594,7 +594,7 @@ export const CatalogoCasetas = () => {
                 {showAdvanced && (
                   <div className="p-4 grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
                     <div className="space-y-1.5">
-                      <Label className="text-[10px] font-bold text-slate-500">
+                      <Label className=" font-bold text-slate-500">
                         Origen de Tramo
                       </Label>
                       <Input
@@ -611,7 +611,7 @@ export const CatalogoCasetas = () => {
                     </div>
 
                     <div className="space-y-1.5">
-                      <Label className="text-[10px] font-bold text-slate-500">
+                      <Label className=" font-bold text-slate-500">
                         Destino de Tramo
                       </Label>
                       <Input
@@ -627,11 +627,11 @@ export const CatalogoCasetas = () => {
                       />
                     </div>
 
-                    <div className="col-span-2 mt-2 bg-slate-100 p-2 rounded text-center text-[10px] font-mono text-slate-500 border border-dashed border-slate-300">
+                    <div className="col-span-2 mt-2 bg-slate-100 p-2 rounded text-center  font-mono text-slate-500 border border-dashed border-slate-300">
                       Resultado: {formData.tramo || "Esperando datos..."}
                     </div>
 
-                    <div className="col-span-2 text-[10px] text-slate-500">
+                    <div className="col-span-2  text-slate-500">
                       Si lo dejas vacío, el sistema guardará el <b>Nombre</b>{" "}
                       como tramo.
                     </div>

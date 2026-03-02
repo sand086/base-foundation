@@ -609,7 +609,7 @@ export default function ProveedoresCxP() {
                         <div className="flex flex-col">
                           {invoice.folio_interno || invoice.id}
                           {ordenCompraFolio && (
-                            <span className="text-[10px] text-muted-foreground">
+                            <span className=" text-muted-foreground">
                               ← {ordenCompraFolio}
                             </span>
                           )}
@@ -623,7 +623,7 @@ export default function ProveedoresCxP() {
                       <DataTableCell>
                         {clasificacion ? (
                           <Badge
-                            className={`text-[10px] ${getClasificacionColor(clasificacion)}`}
+                            className={` ${getClasificacionColor(clasificacion)}`}
                           >
                             {getClasificacionLabel(clasificacion)}
                           </Badge>

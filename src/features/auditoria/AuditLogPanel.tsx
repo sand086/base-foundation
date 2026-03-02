@@ -359,7 +359,7 @@ export function AuditLogPanel({ open, onOpenChange }: AuditLogPanelProps) {
 
                           <TableCell>
                             <div className="flex items-center gap-2">
-                              <div className="h-6 w-6 rounded-full bg-secondary flex items-center justify-center text-[10px] font-bold">
+                              <div className="h-6 w-6 rounded-full bg-secondary flex items-center justify-center  font-bold">
                                 {log.usuario.substring(0, 2).toUpperCase()}
                               </div>
                               <span
@@ -417,7 +417,7 @@ export function AuditLogPanel({ open, onOpenChange }: AuditLogPanelProps) {
                               </div>
                               {log.dispositivo && (
                                 <div
-                                  className="flex items-center gap-1 text-[10px] text-muted-foreground max-w-[100px] truncate"
+                                  className="flex items-center gap-1  text-muted-foreground max-w-[100px] truncate"
                                   title={log.dispositivo}
                                 >
                                   <Laptop className="h-3 w-3 flex-shrink-0" />
@@ -546,7 +546,7 @@ export function AuditLogCard() {
                     >
                       {log.detalles || "Sin detalles adicionales"}
                     </p>
-                    <div className="flex items-center gap-2 text-[10px] font-mono text-muted-foreground mt-1.5">
+                    <div className="flex items-center gap-2  font-mono text-muted-foreground mt-1.5">
                       <span className="font-sans font-medium text-primary/80">
                         {log.usuario}
                       </span>

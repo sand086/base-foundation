@@ -80,7 +80,7 @@ const CargasMasivas = () => {
                         {importType.recordCount} registros
                       </Badge>
                     )}
-                    <span className="text-[10px] text-muted-foreground">
+                    <span className=" text-muted-foreground">
                       {requiredCount} obligatorios / {totalCount} campos
                     </span>
                   </div>

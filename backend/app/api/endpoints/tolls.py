@@ -101,13 +101,20 @@ def create_template(
                 else:
                     cost_s, cost_f = toll.costo_9_ejes_sencillo, toll.costo_9_ejes_full
 
-        segment = models.RateSegment(
-            rate_template_id=new_template.id,
-            **seg_data.model_dump(exclude={"toll_booth_id"}),
-            toll_booth_id=seg_data.toll_booth_id,
-            costo_momento_sencillo=cost_s,
-            costo_momento_full=cost_f,
-        )
+            segment = models.RateSegment(
+                rate_template_id=new_template.id,
+                **seg_data.model_dump(
+                    exclude={
+                        "toll_booth_id",
+                        "rate_template_id",
+                        "costo_momento_sencillo",
+                        "costo_momento_full",
+                    }
+                ),
+                toll_booth_id=seg_data.toll_booth_id,
+                costo_momento_sencillo=cost_s,
+                costo_momento_full=cost_f,
+            )
         db.add(segment)
 
         total_s += cost_s
@@ -128,7 +135,7 @@ def create_template(
 
 @router.get("/rate-templates", response_model=List[schemas.RateTemplateResponse])
 def list_templates(
-    search: str = "",  # ✅ Recibe el texto del buscador
+    search: str = "",
     client_id: Optional[int] = None,
     db: Session = Depends(get_db),
 ):
@@ -136,7 +143,6 @@ def list_templates(
         models.RateTemplate.record_status == "A"
     )
 
-    # ✅ Lógica de búsqueda en SQL (Filtrar por origen o destino)
     if search:
         query = query.filter(
             models.RateTemplate.origen.ilike(f"%{search}%")
@@ -146,5 +152,29 @@ def list_templates(
     if client_id:
         query = query.filter_by(client_id=client_id)
 
-    # ✅ LIMITANTE: Solo trae los primeros 50 resultados para que no explote el navegador
     return query.limit(50).all()
+
+
+@router.delete("/rate-templates/{template_id}")
+def delete_template(
+    template_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)
+):
+    # 1. Buscar la ruta por ID
+    db_template = (
+        db.query(models.RateTemplate)
+        .filter(models.RateTemplate.id == template_id)
+        .first()
+    )
+
+    # 2. Si no existe, lanzar 404
+    if not db_template:
+        raise HTTPException(status_code=404, detail="Ruta no encontrada")
+
+    # 3. Borrado lógico: cambiar record_status a 'E' (Eliminado)
+    db_template.record_status = "E"
+
+    # 4. Registrar quién lo eliminó (aprovechando el AuditMixin)
+    db_template.updated_by_id = user.id
+
+    db.commit()
+    return {"status": "deleted", "message": "Ruta eliminada correctamente"}

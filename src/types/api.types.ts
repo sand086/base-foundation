@@ -11,7 +11,6 @@ export type UnitStatus =
   | "en_ruta"
   | "mantenimiento"
   | "bloqueado";
-
 export type OperatorStatus =
   | "activo"
   | "inactivo"
@@ -101,10 +100,14 @@ export interface Operator {
 export interface Tariff {
   id: number;
   sub_client_id: number;
+  rate_template_id?: number | null;
   nombre_ruta: string;
   tipo_unidad: string;
   tarifa_base: number;
   costo_casetas: number;
+  distancia_km?: number;
+  iva_porcentaje: number;
+  retencion_porcentaje: number;
   moneda: string;
   vigencia: string;
   estatus: string;
@@ -242,7 +245,7 @@ export interface RateSegment {
 
 export interface RateTemplate {
   id: number;
-  client_id: number;
+  client_id: number | null;
   origen: string;
   destino: string;
   tipo_unidad: "5ejes" | "9ejes" | string;
@@ -399,7 +402,8 @@ export type TripStatus =
   | "retraso"
   | "entregado"
   | "cerrado"
-  | "accidente";
+  | "accidente"
+  | "bloqueado";
 
 export interface Trip {
   id: number;
@@ -409,6 +413,10 @@ export interface Trip {
   unit_id: number;
   operator_id: number;
   tariff_id?: number | null;
+
+  remolque_1_id?: number | null;
+  dolly_id?: number | null;
+  remolque_2_id?: number | null;
 
   origin: string;
   destination: string;
@@ -428,6 +436,7 @@ export interface Trip {
   actual_arrival?: string | null;
   closed_at?: string | null;
   last_location?: string | null;
+  last_update?: string | null;
 
   // Relaciones (Opcionales dependiendo de tu endpoint GET)
   client?: Client;
@@ -441,6 +450,9 @@ export interface TripCreatePayload {
   sub_client_id: number;
   unit_id: number;
   operator_id: number;
+  remolque_1_id?: number | null;
+  dolly_id?: number | null;
+  remolque_2_id?: number | null;
   tariff_id?: number | null;
   origin: string;
   destination: string;
@@ -453,4 +465,5 @@ export interface TripCreatePayload {
   otros_anticipos?: number;
   saldo_operador?: number;
   start_date: string;
+  status: TripStatus;
 }

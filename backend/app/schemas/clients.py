@@ -32,14 +32,9 @@ class TariffBase(ORMBase):
     moneda: Currency = Currency.MXN
     vigencia: date
     estatus: TariffStatus = TariffStatus.ACTIVA
-
-    # Nota: en tu ORM Tariff no vi estos campos en el snippet final.
-    # Los dejo porque tu schema ya los usa; si NO existen en tu tabla,
-    # Pydantic no truena en respuesta (from_attributes ignora extra),
-    # pero en Create/Update sí debes mandar solo lo que tu API acepte.
-    distancia_km: float = 0.0
-    iva_porcentaje: float = 16.0
-    retencion_porcentaje: float = 4.0
+    distancia_km: float | None = 0.0
+    iva_porcentaje: float | None = 16.0
+    retencion_porcentaje: float | None = 4.0
 
     rate_template_id: Optional[int] = None
 
@@ -50,6 +45,7 @@ class TariffCreate(TariffBase):
 
 
 class TariffUpdate(ORMBase):
+    id: Optional[int] = None
     nombre_ruta: Optional[str] = Field(default=None, max_length=200)
     tipo_unidad: Optional[UnitType] = None
     tarifa_base: Optional[float] = None
@@ -127,6 +123,7 @@ class SubClientCreate(SubClientBase):
 
 
 class SubClientUpdate(ORMBase):
+    id: Optional[int] = None
     nombre: Optional[str] = Field(default=None, max_length=200)
     alias: Optional[str] = Field(default=None, max_length=100)
 
@@ -182,7 +179,7 @@ class ClientBase(ORMBase):
 
     estatus: ClientStatus = ClientStatus.PENDIENTE
 
-    dias_credito: int = 0
+    dias_credito: int | None = 0
     contrato_url: Optional[str] = Field(default=None, max_length=500)
 
 

@@ -327,9 +327,7 @@ export function BulkUploadDrawer({
                         )}
                       >
                         {col.name}{" "}
-                        {col.required && (
-                          <span className="ml-1 text-[10px]">*</span>
-                        )}
+                        {col.required && <span className="ml-1 ">*</span>}
                       </Badge>
                     ))}
                   </div>

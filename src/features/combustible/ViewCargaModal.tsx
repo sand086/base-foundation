@@ -97,7 +97,7 @@ export function ViewCargaModal({ open, onOpenChange, carga }: any) {
 
           <div className="grid grid-cols-2 gap-4">
             <div className="p-3 bg-muted/40 rounded-lg">
-              <p className="text-[10px] text-muted-foreground uppercase font-bold">
+              <p className=" text-muted-foreground uppercase font-bold">
                 Unidad
               </p>
               <p className="font-bold flex items-center gap-2">
@@ -105,7 +105,7 @@ export function ViewCargaModal({ open, onOpenChange, carga }: any) {
               </p>
             </div>
             <div className="p-3 bg-muted/40 rounded-lg">
-              <p className="text-[10px] text-muted-foreground uppercase font-bold">
+              <p className=" text-muted-foreground uppercase font-bold">
                 Operador
               </p>
               <p className="font-bold flex items-center gap-2 truncate">
@@ -116,17 +116,13 @@ export function ViewCargaModal({ open, onOpenChange, carga }: any) {
 
           <div className="grid grid-cols-3 gap-2">
             <div className="text-center p-2 bg-slate-100 rounded-lg border">
-              <p className="text-[10px] text-muted-foreground uppercase">
-                Litros
-              </p>
+              <p className=" text-muted-foreground uppercase">Litros</p>
               <p className="text-lg font-bold font-mono">
                 {Number(carga.litros || 0).toFixed(1)}
               </p>
             </div>
             <div className="text-center p-2 bg-slate-100 rounded-lg border">
-              <p className="text-[10px] text-muted-foreground uppercase">
-                Precio/L
-              </p>
+              <p className=" text-muted-foreground uppercase">Precio/L</p>
               <p className="text-lg font-bold font-mono">
                 $
                 {Number(
@@ -135,9 +131,7 @@ export function ViewCargaModal({ open, onOpenChange, carga }: any) {
               </p>
             </div>
             <div className="text-center p-2 bg-emerald-50 rounded-lg border border-emerald-200">
-              <p className="text-[10px] text-emerald-700 uppercase font-bold">
-                Total
-              </p>
+              <p className=" text-emerald-700 uppercase font-bold">Total</p>
               <p className="text-lg font-bold font-mono text-emerald-700">
                 ${Number(carga.total || 0).toFixed(2)}
               </p>
@@ -149,7 +143,7 @@ export function ViewCargaModal({ open, onOpenChange, carga }: any) {
           {/* ✅ SECCIÓN DE EVIDENCIA CORREGIDA */}
           <div className="space-y-2 mt-4">
             <div className="flex items-center justify-between">
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1">
+              <p className=" font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1">
                 <Camera className="h-3 w-3" /> Evidencia del Ticket
               </p>
               {fullUrl && (
@@ -158,7 +152,7 @@ export function ViewCargaModal({ open, onOpenChange, carga }: any) {
                   download
                   target="_blank"
                   rel="noreferrer"
-                  className="text-[10px] text-primary hover:underline flex items-center gap-1"
+                  className=" text-primary hover:underline flex items-center gap-1"
                 >
                   <Download className="h-3 w-3" /> Descargar Original
                 </a>

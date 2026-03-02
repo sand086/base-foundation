@@ -19,10 +19,12 @@ def get_trips(db: Session, skip: int = 0, limit: int = 100):
             joinedload(models.Trip.client),
             joinedload(models.Trip.unit),
             joinedload(models.Trip.operator),
-            joinedload(models.Trip.timeline_events),
+            joinedload(models.Trip.remolque_1),
+            joinedload(models.Trip.dolly),
+            joinedload(models.Trip.remolque_2),
         )
         .filter(models.Trip.record_status != RecordStatus.ELIMINADO)
-        .order_by(models.Trip.start_date.desc())
+        .order_by(models.Trip.id.asc())
         .offset(skip)
         .limit(limit)
         .all()
@@ -58,7 +60,7 @@ def get_trip(db: Session, trip_id: str):
 def create_trip(db: Session, trip: schemas.TripCreate):
     """
     Crea viaje (record_status default A por AuditMixin).
-    Calcula saldo_operador y pone unidad EN_RUTA.
+    Calcula saldo_operador y pone TODAS las unidades asignadas en EN_RUTA.
     """
     total_anticipos = (
         (trip.anticipo_casetas or 0)
@@ -68,21 +70,45 @@ def create_trip(db: Session, trip: schemas.TripCreate):
     )
     saldo = (trip.tarifa_base or 0) - total_anticipos
 
-    db_trip = models.Trip(**trip.model_dump(), saldo_operador=saldo)
+    db_trip = models.Trip(
+        **trip.model_dump(exclude={"saldo_operador"}), saldo_operador=saldo
+    )
     db.add(db_trip)
 
-    # Actualizar estado de unidad a EN_RUTA (si la unidad no está eliminada)
-    unit = (
-        db.query(models.Unit)
-        .filter(
-            models.Unit.id == trip.unit_id,
-            models.Unit.record_status != RecordStatus.ELIMINADO,
+    # 1. Recopilar todos los IDs de unidades involucradas (Tracto, Remolques, Dolly)
+    unit_ids_to_block = [
+        trip.unit_id,
+        getattr(trip, "remolque_1_id", None),
+        getattr(trip, "dolly_id", None),
+        getattr(trip, "remolque_2_id", None),
+    ]
+
+    # 2. Filtrar los que sean nulos (Ej: si es un viaje sencillo, dolly y remolque 2 serán None)
+    valid_unit_ids = [uid for uid in unit_ids_to_block if uid is not None]
+
+    # 3. Bloquear todas las unidades de una sola vez
+    if valid_unit_ids:
+        units = (
+            db.query(models.Unit)
+            .filter(
+                models.Unit.id.in_(valid_unit_ids),
+                models.Unit.record_status != RecordStatus.ELIMINADO,
+            )
+            .all()
         )
-        .first()
+        for u in units:
+            u.status = models.UnitStatus.EN_RUTA
+            db.add(u)
+
+    # 4. Bloquear al operador (Opcional, pero muy recomendado)
+    operator = (
+        db.query(models.Operator).filter(models.Operator.id == trip.operator_id).first()
     )
-    if unit:
-        unit.status = models.UnitStatus.EN_RUTA
-        db.add(unit)
+    if operator:
+        operator.status = (
+            models.OperatorStatus.INACTIVO
+        )  # o un estado EN_RUTA si lo tienes en OperatorStatus
+        db.add(operator)
 
     db.commit()
     db.refresh(db_trip)
@@ -96,20 +122,46 @@ def update_trip_status(
     location: str | None = None,
 ):
     """
-    Update de status:
-    - No tocar updated_at manual (lo hace trigger/server_onupdate).
-    - last_update sí se actualiza porque es un campo de negocio del trip.
-    - Agrega evento en timeline.
+    Actualiza el estado del viaje.
+    Si el viaje termina, libera MASIVAMENTE todos los recursos (Unidades y Operador).
     """
     trip = get_trip(db, trip_id)
     if not trip:
         return None
 
-    # Si el viaje está soft-deleted, get_trip ya no lo regresa.
     trip.status = status
     trip.last_update = datetime.utcnow()
     if location:
         trip.last_location = location
+
+    # LÓGICA DE LIBERACIÓN DE RECURSOS
+    if status in [models.TripStatus.ENTREGADO, models.TripStatus.CERRADO]:
+        trip.actual_arrival = datetime.utcnow()
+        if status == models.TripStatus.CERRADO:
+            trip.closed_at = datetime.utcnow()
+
+        # 1. Recopilar los IDs de todas las unidades atadas a este viaje
+        unit_ids_to_free = [
+            trip.unit_id,
+            getattr(trip, "remolque_1_id", None),
+            getattr(trip, "dolly_id", None),
+            getattr(trip, "remolque_2_id", None),
+        ]
+        valid_unit_ids = [uid for uid in unit_ids_to_free if uid is not None]
+
+        # 2. Liberarlas todas de un jalón
+        if valid_unit_ids:
+            units = (
+                db.query(models.Unit).filter(models.Unit.id.in_(valid_unit_ids)).all()
+            )
+            for u in units:
+                u.status = models.UnitStatus.DISPONIBLE
+                db.add(u)
+
+        # 3. Liberar el operador
+        if trip.operator:
+            trip.operator.status = models.OperatorStatus.ACTIVO
+            db.add(trip.operator)
 
     # Timeline
     event = models.TripTimelineEvent(

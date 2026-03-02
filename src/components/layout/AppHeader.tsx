@@ -53,7 +53,7 @@ export function AppHeader() {
         <span className="text-muted-foreground group-hover:text-foreground/80 transition-colors flex-1 text-left">
           Buscar guías, clientes, unidades...
         </span>
-        <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground bg-background/80 rounded border border-border/50">
+        <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5  font-medium text-muted-foreground bg-background/80 rounded border border-border/50">
           <Command className="h-2.5 w-2.5" />
           <span>K</span>
         </kbd>
@@ -79,7 +79,7 @@ export function AppHeader() {
               <Avatar className="h-6 w-6">
                 {/* Leemos el avatar_url de la DB si existe */}
                 <AvatarImage src={user?.avatar_url || ""} alt="Avatar" />
-                <AvatarFallback className="bg-brand-red text-white text-[10px] font-bold">
+                <AvatarFallback className="bg-brand-red text-white  font-bold">
                   {getInitials(user?.nombre)}
                 </AvatarFallback>
               </Avatar>

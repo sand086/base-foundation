@@ -8,6 +8,11 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field
 from app.models.models import RecordStatus, TripStatus
 
 
+from app.schemas.clients import ClientResponse
+from app.schemas.units import UnitResponse
+from app.schemas.operators import OperatorResponse
+
+
 class ORMBase(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -41,10 +46,10 @@ class TripTimelineEventResponse(TripTimelineEventBase):
     id: int
     trip_id: int
 
-    # AuditMixin (alineado a models / BD)
+    # AuditMixin (Cambiamos datetime por Optional[datetime])
     record_status: RecordStatus
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None  # ✅ Ahora permite nulos
+    updated_at: Optional[datetime] = None  # ✅ Ahora permite nulos
     created_by_id: Optional[int] = None
     updated_by_id: Optional[int] = None
 
@@ -55,21 +60,20 @@ class TripTimelineEventResponse(TripTimelineEventBase):
 
 
 class TripBase(ORMBase):
-    # Relaciones obligatorias según tu ORM
     client_id: int
     sub_client_id: int
     unit_id: int
     operator_id: int
-    tariff_id: Optional[int] = None
+    remolque_1_id: Optional[int] = None
+    dolly_id: Optional[int] = None
+    remolque_2_id: Optional[int] = None
 
+    tariff_id: Optional[int] = None
     origin: str = Field(..., max_length=200)
     destination: str = Field(..., max_length=200)
     route_name: Optional[str] = Field(default=None, max_length=200)
-
-    # Enum alineado a BD: tripstatus
     status: TripStatus = TripStatus.CREADO
 
-    # Costos / anticipos
     tarifa_base: float
     costo_casetas: float = 0.0
     anticipo_casetas: float = 0.0
@@ -78,13 +82,10 @@ class TripBase(ORMBase):
     otros_anticipos: float = 0.0
     saldo_operador: float = 0.0
 
-    # Fechas (start_date es requerido en tu ORM)
     start_date: datetime
     estimated_arrival: Optional[datetime] = None
     actual_arrival: Optional[datetime] = None
     closed_at: Optional[datetime] = None
-
-    # Tracking (en BD last_update tiene server_default)
     last_location: Optional[str] = Field(default=None, max_length=200)
 
 
@@ -93,6 +94,11 @@ class TripCreate(ORMBase):
     sub_client_id: int
     unit_id: int
     operator_id: int
+
+    remolque_1_id: Optional[int] = None
+    dolly_id: Optional[int] = None
+    remolque_2_id: Optional[int] = None
+
     tariff_id: Optional[int] = None
 
     origin: str = Field(..., max_length=200)
@@ -158,18 +164,21 @@ class TripUpdate(ORMBase):
 class TripResponse(TripBase):
     id: int
     public_id: Optional[str] = None
+    last_update: datetime | None = None
 
-    # Campos extra del ORM
-    last_update: datetime
+    client: Optional[ClientResponse] = None
+    unit: Optional[UnitResponse] = None
+    operator: Optional[OperatorResponse] = None
+
+    remolque_1_id: Optional[UnitResponse] = None
+    dolly: Optional[UnitResponse] = None
+    remolque_2_id: Optional[UnitResponse] = None
 
     timeline_events: List[TripTimelineEventResponse] = Field(default_factory=list)
 
-    # AuditMixin
     record_status: RecordStatus
     created_at: datetime
     updated_at: datetime
-    created_by_id: Optional[int] = None
-    updated_by_id: Optional[int] = None
 
     @computed_field
     @property
@@ -184,5 +193,4 @@ class TripResponse(TripBase):
     @computed_field
     @property
     def saldo_estimado(self) -> float:
-        # Por si quieres un indicador rápido (ajústalo a tu lógica real si difiere)
         return (self.tarifa_base or 0.0) - (self.total_anticipos or 0.0)

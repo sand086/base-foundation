@@ -184,10 +184,7 @@ export function UpdateStatusModal({
             </Label>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label
-                  htmlFor="lat"
-                  className="text-[10px] text-muted-foreground"
-                >
+                <Label htmlFor="lat" className=" text-muted-foreground">
                   Latitud
                 </Label>
                 <Input
@@ -202,10 +199,7 @@ export function UpdateStatusModal({
                 />
               </div>
               <div className="space-y-1">
-                <Label
-                  htmlFor="lng"
-                  className="text-[10px] text-muted-foreground"
-                >
+                <Label htmlFor="lng" className=" text-muted-foreground">
                   Longitud
                 </Label>
                 <Input

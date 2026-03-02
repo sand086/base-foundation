@@ -24,7 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useTiposUnidad } from "@/hooks/useTiposUnidad";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Unidad } from "@/types/api.types";
+import { Unit } from "@/types/api.types";
 
 // =====================
 // Types
@@ -44,7 +44,7 @@ interface UnidadFormData {
   // IMPORTANT:
   // tipo = configuracion (enum backend: SENCILLO/FULL/RABON/...)
   // tipo_1 = categoria backend (TRACTOCAMION/REMOLQUE/UTILITARIO/custom)
-  tipo: Unidad["tipo"] | "";
+  tipo: Unit["tipo"] | "";
   tipo_1: string;
 
   // Tech
@@ -107,7 +107,7 @@ const emptyFormData: UnidadFormData = {
 const getStatusBadge = (dateStr: string) => {
   if (!dateStr) {
     return (
-      <Badge variant="outline" className="text-muted-foreground text-[10px]">
+      <Badge variant="outline" className="text-muted-foreground ">
         PENDIENTE
       </Badge>
     );
@@ -123,33 +123,37 @@ const getStatusBadge = (dateStr: string) => {
 
   if (days < 0)
     return (
-      <Badge className="bg-red-100 text-red-700 hover:bg-red-100 text-[10px]">
+      <Badge className="bg-red-100 text-red-700 hover:bg-red-100 ">
         VENCIDO
       </Badge>
     );
   if (days <= 30)
     return (
-      <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 text-[10px]">
+      <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 ">
         POR VENCER ({days}d)
       </Badge>
     );
 
   return (
-    <Badge className="bg-green-100 text-green-700 hover:bg-green-100 text-[10px]">
+    <Badge className="bg-green-100 text-green-700 hover:bg-green-100 ">
       VIGENTE
     </Badge>
   );
 };
 
 const normalizeCategoriaUI = (tipo1?: string | null) => {
-  // Backend -> UI category
-  let cat = (tipo1 || "TRACTOCAMION").toString().trim();
+  const cat_ = (tipo1 || "TRACTOCAMION")
+    .toString()
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
 
-  if (cat === "TRACTOCAMION") return "tractocamion";
-  if (cat === "REMOLQUE") return "remolque_dolly";
-  if (cat === "UTILITARIO") return "utilitario";
+  if (cat_ === "TRACTOCAMION") return "tractocamion";
+  if (cat_ === "REMOLQUE") return "remolque_dolly";
+  if (cat_ === "UTILITARIO") return "utilitario";
 
-  return cat.toLowerCase();
+  return cat_.toLowerCase();
 };
 
 const mapCategoriaToBackend = (categoriaActivo: string) => {
@@ -169,12 +173,12 @@ const mapCategoriaToBackend = (categoriaActivo: string) => {
  *  - "Rabon" -> "RABON"
  *  - "full"  -> "FULL"
  */
-const normalizeTipoToSave = (value: unknown): Unidad["tipo"] | "" => {
+const normalizeTipoToSave = (value: unknown): Unit["tipo"] | "" => {
   const raw = String(value ?? "").trim();
   if (!raw) return "";
 
   const noAccents = raw.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  return noAccents.toUpperCase() as Unidad["tipo"];
+  return noAccents.toUpperCase() as Unit["tipo"];
 };
 
 // =====================
@@ -183,7 +187,7 @@ const normalizeTipoToSave = (value: unknown): Unidad["tipo"] | "" => {
 interface AddUnidadModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  unidadToEdit?: Unidad | null;
+  unidadToEdit?: Unit | null;
   onSave?: (unidad: any) => void;
   isSaving?: boolean;
 }
@@ -334,13 +338,12 @@ export function AddUnidadModal({
     const tipo1Backend = mapCategoriaToBackend(formData.categoriaActivo);
 
     // tipo = "configuración" -> SIEMPRE normalizada para guardar
-    const tipoPayload: Unidad["tipo"] =
+    const tipoPayload: Unit["tipo"] =
       formData.categoriaActivo === "tractocamion" && formData.tipo
-        ? (normalizeTipoToSave(formData.tipo) as Unidad["tipo"])
-        : ((normalizeTipoToSave(unidadToEdit?.tipo) ||
-            "FULL") as Unidad["tipo"]);
+        ? (normalizeTipoToSave(formData.tipo) as Unit["tipo"])
+        : ((normalizeTipoToSave(unidadToEdit?.tipo) || "FULL") as Unit["tipo"]);
 
-    const payload: Partial<Unidad> = {
+    const payload: Partial<Unit> = {
       ...(isEditMode && unidadToEdit ? { id: unidadToEdit.id } : {}),
 
       numero_economico: formData.numero_economico,
@@ -904,10 +907,7 @@ export function AddUnidadModal({
                     />
                   </div>
                   <div className="w-[140px] flex justify-center pb-1">
-                    <Badge
-                      variant="outline"
-                      className="text-muted-foreground text-[10px]"
-                    >
+                    <Badge variant="outline" className="text-muted-foreground ">
                       PERMANENTE
                     </Badge>
                   </div>
@@ -932,10 +932,7 @@ export function AddUnidadModal({
                     />
                   </div>
                   <div className="w-[140px] flex justify-center pb-1">
-                    <Badge
-                      variant="outline"
-                      className="text-muted-foreground text-[10px]"
-                    >
+                    <Badge variant="outline" className="text-muted-foreground ">
                       INFO
                     </Badge>
                   </div>

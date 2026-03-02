@@ -288,7 +288,7 @@ export function MechanicDocuments({ mechanic }: Props) {
                     <p className="text-xs text-muted-foreground truncate">
                       {doc.nombre_archivo}
                     </p>
-                    <p className="text-[10px] text-slate-400">
+                    <p className=" text-slate-400">
                       {new Date(doc.subido_en).toLocaleDateString()}
                     </p>
                   </div>

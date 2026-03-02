@@ -235,7 +235,7 @@ export function DocumentUploadManager({
             {statusBadge}
           </div>
           {lastUploadDate && (
-            <p className="text-[10px] text-muted-foreground font-mono">
+            <p className=" text-muted-foreground font-mono">
               Ult: {formatDate(lastUploadDate)}
             </p>
           )}
@@ -246,7 +246,7 @@ export function DocumentUploadManager({
             <Button
               variant="outline"
               size="sm"
-              className="h-7 text-[10px] font-bold uppercase gap-1.5 border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100"
+              className="h-7  font-bold uppercase gap-1.5 border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100"
             >
               <History className="w-3.5 h-3.5" /> Lista / Historial
             </Button>
@@ -291,7 +291,7 @@ export function DocumentUploadManager({
                           <Badge variant="outline" className="text-[9px]">
                             v{item.version}
                           </Badge>
-                          <span className="text-[10px] text-muted-foreground">
+                          <span className=" text-muted-foreground">
                             {item.created_at
                               ? formatDate(item.created_at)
                               : "N/A"}

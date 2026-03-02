@@ -161,7 +161,7 @@ export default function DespachoNuevo() {
     if (!data.tarifaSeleccionada) return [];
     return unidades.filter(
       (u) =>
-        (u.status === "disponible" || u.status === "DISPONIBLE") &&
+        u.status === "disponible" &&
         u.tipo?.toLowerCase() ===
           data.tarifaSeleccionada.tipo_unidad?.toLowerCase(),
     );
@@ -173,9 +173,7 @@ export default function DespachoNuevo() {
 
   const operadoresDisponibles = useMemo(() => {
     return operadores.filter(
-      (op: any) =>
-        (op.status === "activo" || op.status === "ACTIVO") &&
-        !op.assigned_unit_id, // Que no tenga unidad ya asignada
+      (op: any) => op.status === "activo" && !op.assigned_unit_id, // Que no tenga unidad ya asignada
     );
   }, [operadores]);
 
