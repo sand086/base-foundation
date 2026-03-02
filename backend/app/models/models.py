@@ -596,6 +596,7 @@ class Trip(AuditMixin, Base):
     sub_client = relationship("SubClient", back_populates="trips")
     operator = relationship("Operator", back_populates="trips")
     tariff = relationship("Tariff", back_populates="trips")
+    fuel_logs = relationship("FuelLog", back_populates="trip")
 
     # (Units)
     unit = relationship("Unit", foreign_keys=[unit_id])
@@ -1202,6 +1203,9 @@ class FuelLog(AuditMixin, Base):
     operator_id = Column(
         Integer, ForeignKey("operators.id", ondelete="RESTRICT"), nullable=False
     )
+    trip_id = Column(
+        Integer, ForeignKey("trips.id", ondelete="SET NULL"), nullable=True
+    )
 
     fecha_hora = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -1222,7 +1226,7 @@ class FuelLog(AuditMixin, Base):
     # Relaciones ORM
     unit = relationship("Unit", back_populates="fuel_logs")
     operator = relationship("Operator")
-
+    trip = relationship("Trip", back_populates="fuel_logs")
     # Historial de documentos
     document_history = relationship(
         "FuelDocumentHistory", back_populates="fuel_log", cascade="all, delete-orphan"

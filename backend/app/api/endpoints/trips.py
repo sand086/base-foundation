@@ -89,3 +89,35 @@ def update_trip(
     if not trip:
         raise HTTPException(status_code=404, detail="Viaje no encontrado")
     return trip
+
+
+@router.post("/trips/{trip_id}/timeline", response_model=schemas.TripResponse)
+def create_timeline_event(
+    trip_id: int,
+    payload: schemas.TripTimelineEventCreatePayload,
+    db: Session = Depends(get_db),
+):
+    trip = crud.add_timeline_event(db, trip_id, payload)
+    if not trip:
+        raise HTTPException(status_code=404, detail="Viaje no encontrado")
+    return trip
+
+
+@router.get(
+    "/trips/{trip_id}/settlement", response_model=schemas.TripSettlementResponse
+)
+def get_trip_settlement(trip_id: int, db: Session = Depends(get_db)):
+    settlement = crud.get_trip_settlement(db, trip_id)
+    if not settlement:
+        raise HTTPException(status_code=404, detail="Viaje no encontrado para liquidar")
+    return settlement
+
+
+@router.post("/trips/{trip_id}/close-settlement", response_model=schemas.TripResponse)
+def close_trip_settlement(
+    trip_id: int, payload: schemas.CloseSettlementPayload, db: Session = Depends(get_db)
+):
+    trip = crud.close_trip_settlement(db, trip_id, payload)
+    if not trip:
+        raise HTTPException(status_code=404, detail="Viaje no encontrado")
+    return trip

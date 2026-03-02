@@ -34,6 +34,15 @@ class TripTimelineEventCreate(TripTimelineEventBase):
     model_config = ConfigDict(extra="ignore")
 
 
+class TripTimelineEventCreatePayload(BaseModel):
+    status: str
+    location: str
+    comments: Optional[str] = ""
+    lat: Optional[str] = None
+    lng: Optional[str] = None
+    notifyClient: Optional[bool] = False
+
+
 class TripTimelineEventUpdate(ORMBase):
     time: Optional[datetime] = None
     event: Optional[str] = Field(default=None, max_length=500)
@@ -194,3 +203,41 @@ class TripResponse(TripBase):
     @property
     def saldo_estimado(self) -> float:
         return (self.tarifa_base or 0.0) - (self.total_anticipos or 0.0)
+
+
+class ConceptoPago(BaseModel):
+    id: str
+    tipo: str  # "ingreso" o "deduccion"
+    categoria: str  # "tarifa", "bono", "anticipo", "combustible"
+    descripcion: str
+    monto: float
+    referencia: Optional[str] = None
+    esAutomatico: bool = True
+
+
+class TripSettlementResponse(BaseModel):
+    viajeId: str
+    operadorNombre: str
+    unidadNumero: str
+    ruta: str
+    fechaViaje: str
+    kmsRecorridos: float
+    estatus: str
+
+    conceptos: List[ConceptoPago]
+    totalIngresos: float
+    totalDeducciones: float
+    netoAPagar: float
+
+    consumoEsperadoLitros: float
+    consumoRealLitros: float
+    diferenciaLitros: float
+    precioPorLitro: float
+    deduccionCombustible: float
+
+
+class CloseSettlementPayload(BaseModel):
+    conceptos: List[ConceptoPago]
+    totalIngresos: float
+    totalDeducciones: float
+    netoAPagar: float

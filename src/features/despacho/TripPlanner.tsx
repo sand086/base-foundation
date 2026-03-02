@@ -1,11 +1,14 @@
 // src/features/despacho/TripPlanner.tsx
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { format } from "date-fns";
+import { es } from "date-fns/locale";
 import {
   AlertTriangle,
   CheckCircle2,
   Clock,
   DollarSign,
+  Edit2,
+  Eye,
   LayoutGrid,
   Link as LinkIcon,
   List,
@@ -13,37 +16,21 @@ import {
   Navigation,
   Trash2,
   Truck,
-  Eye, // ✅ IMPORTAMOS EL ÍCONO DEL OJO
+  User,
+  Banknote,
 } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-// DND Kit
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  DndContext,
-  DragEndEvent,
-  closestCorners,
-  useDraggable,
-  useDroppable,
-} from "@dnd-kit/core";
-//  DataTable
-import {
-  DataTable,
-  DataTableBody,
-  DataTableCell,
-  DataTableHead,
-  DataTableHeader,
-  DataTableRow,
-} from "@/components/ui/data-table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import {
   Dialog,
   DialogContent,
@@ -53,10 +40,44 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 
+// DND Kit
+import {
+  DndContext,
+  DragEndEvent,
+  closestCorners,
+  useDraggable,
+  useDroppable,
+} from "@dnd-kit/core";
+
+// DataTable
+import {
+  DataTable,
+  DataTableBody,
+  DataTableCell,
+  DataTableHead,
+  DataTableHeader,
+  DataTableRow,
+} from "@/components/ui/data-table";
+
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
 import { useTrips } from "@/hooks/useTrips";
 import { Trip, TripStatus } from "@/types/api.types";
 
-import { TripDetailsModal } from "./TripDetailsModal";
+//  Componentes de Monitoreo (ya conectados a BD por addTimelineEvent)
+import {
+  UpdateStatusModal,
+  StatusUpdateData,
+} from "@/features/monitoreo/UpdateStatusModal";
+import { TripSettlementModal } from "@/features/cierre/TripSettlementModal";
+import { TripDetailsModal } from "@/features/despacho/TripDetailsModal";
+import { TripMapPlaceholder } from "@/features/monitoreo/TripMapPlaceholder";
 
 // =====================
 // Helpers
@@ -97,14 +118,31 @@ const getTrackingUrl = (trip: Trip): string | null => {
 
 const groupKeyFromStatus = (rawStatus: unknown): KanbanColumnId | null => {
   const s = normalizeStatus(rawStatus);
-
   if (s === "creado") return "creado";
   if (s === "en_transito") return "en_transito";
   if (s === "detenido" || s === "retraso" || s === "accidente")
     return "detenido";
   if (s === "entregado" || s === "cerrado") return "entregado";
-
   return null;
+};
+
+const getStatusColor = (status: unknown) => {
+  const s = normalizeStatus(status);
+  switch (s) {
+    case "creado":
+      return "bg-slate-100 text-slate-700";
+    case "en_transito":
+      return "bg-blue-100 text-blue-700";
+    case "detenido":
+    case "retraso":
+    case "accidente":
+      return "bg-amber-100 text-amber-700";
+    case "entregado":
+    case "cerrado":
+      return "bg-emerald-100 text-emerald-700";
+    default:
+      return "bg-gray-100 text-gray-700";
+  }
 };
 
 // =====================
@@ -158,14 +196,20 @@ const KANBAN_COLUMNS: Array<{
 ];
 
 // =====================
-// Draggable card
+// Draggable card (UI/UX Ultra Compacta)
 // =====================
 function KanbanCard({
   trip,
   onClick,
+  onEditClick,
+  onDeleteClick,
+  onSettleClick,
 }: {
   trip: Trip;
   onClick: (t: Trip) => void;
+  onEditClick: (t: Trip) => void;
+  onDeleteClick: (t: Trip) => void;
+  onSettleClick: (t: Trip) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({
@@ -190,154 +234,178 @@ function KanbanCard({
       {...listeners}
       {...attributes}
       className="cursor-grab active:cursor-grabbing group relative"
-      // ✅ 1. Quitamos el onClick del div principal
     >
+      {/* 🚀 ACTION BAR FLOTANTE (Solo aparece al pasar el mouse) */}
+      <div className="absolute -top-3 -right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all duration-200 bg-white shadow-md border border-slate-200 rounded-lg p-1 z-10 translate-y-1 group-hover:translate-y-0">
+        {trackingUrl && (
+          <a
+            href={trackingUrl}
+            target="_blank"
+            rel="noreferrer"
+            onPointerDown={(e) => e.stopPropagation()}
+            className="p-5 hover:bg-slate-100 rounded text-blue-600 transition-colors"
+            title="Rastreo GPS"
+          >
+            <LinkIcon className="h-3.5 w-3.5" />
+          </a>
+        )}
+        <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onEditClick(trip);
+          }}
+          className="p-5 hover:bg-amber-50 rounded text-amber-600 transition-colors"
+          title="Editar Anticipos"
+        >
+          <Edit2 className="h-3.5 w-3.5" />
+        </button>
+        {trip.status === "entregado" && (
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSettleClick(trip);
+            }}
+            className="p-5 hover:bg-emerald-50 rounded text-emerald-600 transition-colors"
+            title="Liquidar Viaje"
+          >
+            <Banknote className="h-3.5 w-3.5" />
+          </button>
+        )}
+        <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onClick(trip);
+          }}
+          className="p-5 hover:bg-blue-50 rounded text-brand-navy transition-colors"
+          title="Torre de Control"
+        >
+          <Eye className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDeleteClick(trip);
+          }}
+          className="p-5 hover:bg-red-50 rounded text-red-600 transition-colors"
+          title="Eliminar Viaje"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      {/* 💳 TARJETA VISUAL */}
       <Card
-        className={`shadow-sm transition-all border-slate-200 ${
-          isDragging ? "ring-2 ring-primary shadow-lg" : "hover:shadow-md"
+        className={`overflow-hidden shadow-sm transition-all border-slate-200 ${
+          isDragging
+            ? "ring-2 ring-brand-navy shadow-xl scale-[1.02]"
+            : "hover:shadow-md hover:border-slate-300"
         }`}
       >
         <CardContent className="p-3">
-          <div className="space-y-2">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] font-black text-primary uppercase truncate max-w-[140px]">
+          {/* Header: Cliente y Ruta */}
+          <div className="flex flex-col mb-2.5">
+            <div className="flex items-start justify-between gap-2">
+              <span className="text-[11px] font-black text-slate-800 uppercase truncate leading-tight">
                 {trip.client?.razon_social || "CLIENTE GENERAL"}
               </span>
+              <Badge
+                variant="outline"
+                className="text-[9px] font-mono px-1 h-4 bg-slate-50 text-slate-500 shrink-0"
+              >
+                #{trip.public_id || trip.id}
+              </Badge>
+            </div>
+            <span className="text-[9px] font-bold text-primary uppercase tracking-tighter truncate mt-0.5">
+              {trip.route_name || "RUTA ESTÁNDAR"}
+            </span>
+          </div>
 
-              <div className="flex items-center gap-1">
-                {trackingUrl ? (
-                  <a
-                    href={trackingUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex"
-                    onClick={(e) => e.stopPropagation()}
-                    onPointerDown={(e) => e.stopPropagation()} // Evita arrastre
-                    title="Abrir tracking"
-                  >
-                    <Badge
-                      variant="outline"
-                      className="text-[9px] font-mono px-1 h-4 bg-white text-slate-500 hover:bg-slate-50"
-                    >
-                      <LinkIcon className="h-3 w-3" />
-                    </Badge>
-                  </a>
-                ) : null}
+          {/* Rutas Compactas (Mini-Itinerario) */}
+          <div className="bg-slate-50/80 rounded border border-slate-100 p-5 mb-2.5">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="w-5 h-5 rounded-full bg-blue-500 shrink-0" />
+              <span className="text-[10px] text-slate-600 truncate leading-none">
+                {trip.origin || "Origen N/A"}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 rounded-full bg-emerald-500 shrink-0" />
+              <span className="text-[10px] font-medium text-slate-800 truncate leading-none">
+                {trip.destination || "Destino N/A"}
+              </span>
+            </div>
+          </div>
 
+          {/* Recursos Operativos (Camión y Operador en una línea) */}
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-1 text-[10px] font-semibold text-slate-700 bg-slate-100 px-5 py-0.5 rounded">
+              <Truck className="h-5 w-5 text-slate-400" />
+              <span className="truncate max-w-[60px]">
+                {trip.unit?.numero_economico || "N/A"}
+              </span>
+            </div>
+            <div className="flex items-center gap-1 text-[10px] font-medium text-slate-600 bg-slate-100 px-5 py-0.5 rounded">
+              <User className="h-5 w-5 text-slate-400" />
+              <span className="truncate max-w-[70px]">
+                {trip.operator?.name?.split(" ")[0] || "N/A"}
+              </span>
+            </div>
+          </div>
+
+          {/* Equipo Adicional (Remolques / Dolly) - Oculto si no hay */}
+          {(trip.remolque_1_id ||
+            (trip as any).dolly_id ||
+            trip.remolque_2_id) && (
+            <div className="flex flex-wrap gap-1 mb-2">
+              {trip.remolque_1_id && (
                 <Badge
                   variant="outline"
-                  className=" font-mono px-1 h-4 bg-slate-50 text-slate-500"
+                  className="text-[8px] py-0 h-3.5 border-slate-200 text-slate-400"
                 >
-                  {trip.public_id || `ID: ${trip.id}`}
+                  R1
                 </Badge>
-
-                {/* ✅ 2. AÑADIMOS EL BOTÓN DE VER DETALLES */}
-                <button
-                  type="button"
-                  onPointerDown={(e) => e.stopPropagation()} // CRÍTICO: Evita que dnd-kit intercepte el clic
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onClick(trip); // Llama a la función para abrir el modal
-                  }}
-                  className="h-8 w-8 bg-slate-100 hover:bg-slate-200 text-brand-navy rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                  title="Ver / Editar Detalles"
+              )}
+              {(trip as any).dolly_id && (
+                <Badge
+                  variant="outline"
+                  className="text-[8px] py-0 h-3.5 border-blue-100 bg-blue-50 text-blue-500"
                 >
-                  <Eye className="h-5 w-5" />
-                </button>
-              </div>
+                  D
+                </Badge>
+              )}
+              {trip.remolque_2_id && (
+                <Badge
+                  variant="outline"
+                  className="text-[8px] py-0 h-3.5 border-slate-200 text-slate-400"
+                >
+                  R2
+                </Badge>
+              )}
             </div>
+          )}
 
-            <div className="border-l-2 border-primary/30 pl-2 py-0.5">
-              <div className="flex items-center gap-1 mb-1">
-                <Navigation className="h-2.5 w-2.5 text-primary" />
-                <span className="text-[9px] font-bold text-primary uppercase tracking-tighter">
-                  {trip.route_name || "RUTA ESTÁNDAR"}
-                </span>
-              </div>
-
-              <div className="flex items-start gap-1">
-                <MapPin className="h-3 w-3 text-slate-400 mt-0.5" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-bold text-slate-800 leading-tight truncate">
-                    {trip.origin || "Origen N/A"}
-                  </p>
-                  <p className="text-[10px] text-slate-400 font-medium leading-none my-0.5">
-                    hacia
-                  </p>
-                  <p className="text-xs font-bold text-slate-800 leading-tight truncate">
-                    {trip.destination || "Destino N/A"}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-1.5 mt-2">
-              <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded text-[10px]">
-                <Truck className="h-3.5 w-3.5 text-slate-500" />
-                <span className="font-bold text-slate-700 truncate">
-                  {trip.unit?.numero_economico ||
-                    `Eco ${trip.unit_id ?? "N/A"}`}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded text-[10px]">
-                <div className="h-3.5 w-3.5 rounded-full bg-slate-300 text-white flex items-center justify-center text-[7px] font-black">
-                  OP
-                </div>
-                <span className="truncate font-medium text-slate-700">
-                  {trip.operator?.name?.split?.(" ")?.[0] ||
-                    `ID: ${trip.operator_id ?? "N/A"}`}
-                </span>
-              </div>
-            </div>
-
-            {(trip.remolque_1_id ||
-              (trip as any).dolly_id ||
-              trip.remolque_2_id) && (
-              <div className="flex flex-wrap gap-1 mt-1">
-                {trip.remolque_1_id && (
-                  <Badge
-                    variant="outline"
-                    className="text-[8px] py-0 h-4 border-slate-200 text-slate-400"
-                  >
-                    R1: {trip.remolque_1_id}
-                  </Badge>
-                )}
-
-                {(trip as any).dolly_id && (
-                  <Badge
-                    variant="outline"
-                    className="text-[8px] py-0 h-4 border-blue-100 bg-blue-50 text-blue-500"
-                  >
-                    Dolly
-                  </Badge>
-                )}
-
-                {trip.remolque_2_id && (
-                  <Badge
-                    variant="outline"
-                    className="text-[8px] py-0 h-4 border-slate-200 text-slate-400"
-                  >
-                    R2: {trip.remolque_2_id}
-                  </Badge>
-                )}
-              </div>
-            )}
-
-            <div className="flex items-center justify-between text-[9px] pt-1.5 border-t border-slate-100">
-              <div className="flex items-center gap-1 text-emerald-600 font-bold">
-                <DollarSign className="h-2.5 w-2.5" />
-                <span>
-                  Saldo: $
-                  {typeof trip.saldo_operador === "number"
-                    ? trip.saldo_operador.toLocaleString()
-                    : "0"}
-                </span>
-              </div>
-              <span className="text-slate-400 font-medium">
-                {trip.start_date
-                  ? format(new Date(trip.start_date), "dd/MM HH:mm")
-                  : "--/--"}
+          {/* Footer (Fecha y Saldo) */}
+          <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+            <span className="text-[9px] text-slate-400 flex items-center gap-1 font-medium">
+              <Clock className="h-2.5 w-2.5" />
+              {trip.start_date
+                ? format(new Date(trip.start_date), "dd/MM HH:mm")
+                : "--/--"}
+            </span>
+            <div className="flex items-center gap-0.5 text-emerald-600 font-bold bg-emerald-50 px-5 py-0.5 rounded text-[9px]">
+              <DollarSign className="h-2.5 w-2.5" />
+              <span>
+                {typeof trip.saldo_operador === "number"
+                  ? trip.saldo_operador.toLocaleString()
+                  : "0"}
               </span>
             </div>
           </div>
@@ -354,12 +422,19 @@ function KanbanColumn({
   column,
   trips,
   onTripClick,
+  onEditClick,
+  onDeleteClick,
+  onSettleClick,
 }: {
   column: any;
   trips: Trip[];
   onTripClick: (t: Trip) => void;
+  onEditClick: (t: Trip) => void;
+  onDeleteClick: (t: Trip) => void;
+  onSettleClick: (t: Trip) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
+  const [tripToDelete, setTripToDelete] = useState<Trip | null>(null);
   const Icon = column.icon;
 
   return (
@@ -385,7 +460,14 @@ function KanbanColumn({
           </div>
         ) : (
           trips.map((trip) => (
-            <KanbanCard key={trip.id} trip={trip} onClick={onTripClick} />
+            <KanbanCard
+              key={trip.id}
+              trip={trip}
+              onClick={onTripClick}
+              onEditClick={onEditClick}
+              onDeleteClick={onDeleteClick}
+              onSettleClick={onSettleClick}
+            />
           ))
         )}
       </div>
@@ -399,14 +481,13 @@ function KanbanColumn({
 function TripsTable({
   trips,
   onRowClick,
+  onEditClick,
 }: {
   trips: Trip[];
   onRowClick: (t: Trip) => void;
+  onEditClick: (t: Trip) => void;
 }) {
-  //  deleteTrip de tu hook
   const { updateTripStatus, deleteTrip } = useTrips();
-
-  //  Estado para controlar el modal de confirmación de eliminación
   const [tripToDelete, setTripToDelete] = useState<Trip | null>(null);
 
   if (trips.length === 0) {
@@ -420,27 +501,7 @@ function TripsTable({
   const confirmDelete = async () => {
     if (tripToDelete && deleteTrip) {
       await deleteTrip(String(tripToDelete.id));
-      setTripToDelete(null); // Cierra el modal después de eliminar
-    }
-  };
-
-  const getStatusColor = (status: unknown) => {
-    const s = normalizeStatus(status);
-
-    switch (s) {
-      case "creado":
-        return "bg-slate-100 text-slate-700";
-      case "en_transito":
-        return "bg-blue-100 text-blue-700";
-      case "detenido":
-      case "retraso":
-      case "accidente":
-        return "bg-amber-100 text-amber-700";
-      case "entregado":
-      case "cerrado":
-        return "bg-emerald-100 text-emerald-700";
-      default:
-        return "bg-gray-100 text-gray-700";
+      setTripToDelete(null);
     }
   };
 
@@ -484,7 +545,7 @@ function TripsTable({
               </DataTableCell>
 
               <DataTableCell>
-                <div className="flex items-center gap-1.5 text-sm font-medium">
+                <div className="flex items-center gap-5 text-sm font-medium">
                   <Truck className="h-3.5 w-3.5 text-slate-400" />{" "}
                   {trip.unit?.numero_economico ||
                     `Eco ${trip.unit_id ?? "N/A"}`}
@@ -530,7 +591,6 @@ function TripsTable({
                 </Select>
               </DataTableCell>
 
-              {/* ✅ CELDA DE ACCIONES (ELIMINAR) */}
               <DataTableCell
                 className="text-right"
                 onClick={(e) => e.stopPropagation()}
@@ -538,10 +598,18 @@ function TripsTable({
                 <Button
                   variant="ghost"
                   size="icon"
+                  className="h-8 w-8 text-slate-400 hover:text-amber-600 hover:bg-amber-50"
+                  onClick={() => onEditClick(trip)}
+                >
+                  <Edit2 className="h-5 w-5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
                   className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50"
                   onClick={() => setTripToDelete(trip)}
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 className="h-5 w-5" />
                 </Button>
               </DataTableCell>
             </DataTableRow>
@@ -549,7 +617,6 @@ function TripsTable({
         </DataTableBody>
       </DataTable>
 
-      {/* ✅ MODAL DE CONFIRMACIÓN DE ELIMINACIÓN */}
       <Dialog
         open={!!tripToDelete}
         onOpenChange={(open) => !open && setTripToDelete(null)}
@@ -593,9 +660,17 @@ function TripsTable({
 // Main component
 // =====================
 export const TripPlanner = () => {
-  const { trips, loading, updateTripStatus } = useTrips();
+  //  Asegúrate que tu hook ya retorna: addTimelineEvent
+  const { trips, loading, updateTripStatus, addTimelineEvent } = useTrips();
+
   const [viewMode, setViewMode] = useState<"kanban" | "table">("kanban");
+
+  //  Drawer Torre de Control + Modal UpdateStatus
   const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
+  const [updateModalOpen, setUpdateModalOpen] = useState(false);
+  const [tripToEdit, setTripToEdit] = useState<Trip | null>(null);
+  const [tripToSettle, setTripToSettle] = useState<string | null>(null);
+  const [tripToDelete, setTripToDelete] = useState<Trip | null>(null);
 
   const safeTrips = Array.isArray(trips) ? trips : [];
 
@@ -606,12 +681,10 @@ export const TripPlanner = () => {
       detenido: [],
       entregado: [],
     };
-
     for (const trip of safeTrips) {
       const key = groupKeyFromStatus(trip.status);
       if (key) groups[key].push(trip);
     }
-
     return groups;
   }, [safeTrips]);
 
@@ -646,6 +719,30 @@ export const TripPlanner = () => {
       targetStatus,
       "Actualizado por Drag & Drop",
     );
+  };
+
+  //  Guardado real a BD (timeline + status)
+  //  Guardado real a BD (timeline + status)
+  const handleSaveStatusEvent = async (data: StatusUpdateData) => {
+    if (!selectedTrip) return;
+
+    const ok = await addTimelineEvent(String(selectedTrip.id), {
+      status: data.status,
+      location: data.location,
+      comments: data.comments,
+      lat: data.lat,
+      lng: data.lng,
+      notifyClient: data.notifyClient,
+    });
+
+    if (ok) {
+      setUpdateModalOpen(false);
+      // 🔥 TRUCO PRO: Forzamos que selectedTrip tome los datos recién bajados del hook
+      // Necesitamos un pequeño timeout para darle tiempo al fetchTrips() del hook de terminar
+      setTimeout(() => {
+        setSelectedTrip(trips.find((t) => t.id === selectedTrip.id) || null);
+      }, 500);
+    }
   };
 
   if (loading) {
@@ -759,18 +856,271 @@ export const TripPlanner = () => {
                 column={column}
                 trips={groupedTrips[column.id] || []}
                 onTripClick={setSelectedTrip}
+                onEditClick={setTripToEdit}
+                onDeleteClick={setTripToDelete} //  ASEGÚRATE DE PASAR ESTO
+                onSettleClick={(trip: Trip) => setTripToSettle(String(trip.id))} //  ASEGÚRATE DE PASAR ESTO
               />
             ))}
           </div>
         </DndContext>
       ) : (
-        <TripsTable trips={safeTrips} onRowClick={setSelectedTrip} />
+        <TripsTable
+          trips={safeTrips}
+          onRowClick={setSelectedTrip}
+          onEditClick={setTripToEdit}
+        />
       )}
 
-      <TripDetailsModal
+      {/* ========================================= */}
+      {/*  SHEET: TORRE DE CONTROL (Monitoreo) */}
+      {/* ========================================= */}
+      <Sheet
         open={!!selectedTrip}
         onOpenChange={(open) => !open && setSelectedTrip(null)}
-        trip={selectedTrip}
+      >
+        <SheetContent className="w-full sm:max-w-2xl p-0 flex flex-col bg-slate-50/80">
+          {/*  HEADER MEJORADO */}
+          <SheetHeader className="p-5 border-b bg-white shadow-sm sticky top-0 z-20 flex flex-row items-start justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-brand-navy flex items-center justify-center shadow-inner shrink-0">
+                <Navigation className="h-5 w-5 text-white" />
+              </div>
+              <div className="flex flex-col text-left">
+                <SheetTitle className="text-lg font-black text-slate-800 leading-tight">
+                  {selectedTrip?.client?.razon_social || "Cliente General"}
+                </SheetTitle>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <Badge
+                    variant="outline"
+                    className="font-mono  px-5 h-4 bg-slate-100 text-slate-500"
+                  >
+                    {selectedTrip?.public_id || `ID: ${selectedTrip?.id}`}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground font-medium">
+                    {selectedTrip?.route_name || "Ruta Estándar"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Controles de la cabecera: Estatus + Botón Cerrar */}
+            <div className="flex items-center gap-3">
+              <Badge
+                className={`${getStatusColor(selectedTrip?.status)} border-0 uppercase text-xs px-3 py-1 shadow-sm`}
+              >
+                {normalizeStatus(selectedTrip?.status).replace("_", " ")}
+              </Badge>
+              {/* Botón de cerrar explícito */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full"
+                onClick={() => setSelectedTrip(null)}
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="lucide lucide-x h-4 w-4"
+                >
+                  <path d="M18 6 6 18" />
+                  <path d="m6 6 12 12" />
+                </svg>
+                <span className="sr-only">Cerrar</span>
+              </Button>
+            </div>
+          </SheetHeader>
+
+          {/*  CUERPO (SCROLL) */}
+          {selectedTrip && (
+            <ScrollArea className="flex-1">
+              <div className="p-5 space-y-5">
+                {/* 🚀 NUEVO ACOMODO: Tarjetas Arriba, Mapa Abajo */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Origen y Destino Flujo */}
+                  <div className="bg-white p-4 rounded-xl border shadow-sm relative overflow-hidden">
+                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-brand-navy/80"></div>
+                    <div className="space-y-4 pl-1">
+                      <div className="flex gap-3 items-start">
+                        <div className="w-6 h-6 rounded-full bg-blue-50 flex items-center justify-center shrink-0 border border-blue-100">
+                          <div className="w-4 h-4 rounded-full bg-blue-600" />
+                        </div>
+                        <div className="min-w-0 pt-0.5">
+                          <p className=" font-bold text-muted-foreground uppercase tracking-wide">
+                            Origen
+                          </p>
+                          <p className="text-sm font-semibold text-slate-800 leading-tight">
+                            {selectedTrip.origin || "Origen N/A"}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex gap-3 items-start">
+                        <div className="w-6 h-6 rounded-full bg-emerald-50 flex items-center justify-center shrink-0 border border-emerald-100">
+                          <MapPin className="h-4 w-4 text-emerald-600" />
+                        </div>
+                        <div className="min-w-0 pt-0.5">
+                          <p className=" font-bold text-muted-foreground uppercase tracking-wide">
+                            Destino
+                          </p>
+                          <p className="text-sm font-semibold text-slate-800 leading-tight">
+                            {selectedTrip.destination || "Destino N/A"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Asignación (Operador/Unidad) */}
+                  <div className="bg-white p-4 rounded-xl border shadow-sm flex flex-col justify-center">
+                    <p className=" font-bold text-muted-foreground uppercase tracking-wide mb-3">
+                      Recursos Asignados
+                    </p>
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 border">
+                          <Truck className="h-5 w-5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className=" text-slate-400 font-medium leading-none uppercase tracking-wide">
+                            Unidad
+                          </p>
+                          <p className="text-sm font-bold text-slate-800 truncate mt-0.5">
+                            {selectedTrip.unit?.numero_economico ||
+                              `Eco ${selectedTrip.unit_id}`}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 border">
+                          <User className="h-5 w-5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className=" text-slate-400 font-medium leading-none uppercase tracking-wide">
+                            Operador
+                          </p>
+                          <p className="text-sm font-bold text-slate-700 truncate mt-0.5">
+                            {selectedTrip.operator?.name || "No asignado"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 🚀 MAPA (Ancho Completo) */}
+                <div className="w-full h-[220px]">
+                  <TripMapPlaceholder
+                    lastUpdate={
+                      (selectedTrip as any)?.last_update
+                        ? format(
+                            new Date((selectedTrip as any).last_update),
+                            "dd MMM, HH:mm",
+                            { locale: es },
+                          )
+                        : undefined
+                    }
+                    lastLocation={
+                      (selectedTrip as any)?.last_location || undefined
+                    }
+                    className="h-full bg-white shadow-sm rounded-xl"
+                  />
+                </div>
+
+                {/*  Timeline Historial (Bitácora) */}
+                <div className="bg-white p-5 rounded-xl border shadow-sm">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 mb-5 flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-brand-navy" /> Bitácora
+                    Operativa
+                  </h4>
+
+                  <div className="space-y-1 pl-1">
+                    {selectedTrip.timeline_events &&
+                    selectedTrip.timeline_events.length > 0 ? (
+                      selectedTrip.timeline_events.map((event, idx) => (
+                        <div key={event.id || idx} className="flex gap-4">
+                          <div className="flex flex-col items-center">
+                            <div
+                              className={`w-3 h-3 rounded-full mt-1 ring-4 ring-white shadow-sm ${
+                                event.event_type === "alert"
+                                  ? "bg-red-500"
+                                  : "bg-blue-500"
+                              }`}
+                            />
+                            {idx < selectedTrip.timeline_events!.length - 1 && (
+                              <div className="w-[2px] flex-1 bg-slate-100 my-1" />
+                            )}
+                          </div>
+                          <div className="flex-1 pb-5">
+                            <p className="text-sm font-medium text-slate-800 leading-snug">
+                              {event.event}
+                            </p>
+                            <p className="text-[11px] font-mono text-slate-400 mt-1">
+                              {format(
+                                new Date(event.time),
+                                "dd MMM yyyy - HH:mm",
+                                { locale: es },
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-6 bg-slate-50 rounded-lg border border-dashed">
+                        <p className="text-sm text-muted-foreground font-medium">
+                          Sin eventos registrados aún.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </ScrollArea>
+          )}
+
+          {/*  STICKY FOOTER: Acción principal siempre al alcance de la mano */}
+          <div className="p-4 bg-white border-t border-slate-200 sticky bottom-0 z-20 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+            <Button
+              className="w-full h-11 text-sm font-semibold gap-2 bg-brand-navy hover:bg-brand-navy/90 text-white shadow-md transition-transform active:scale-[0.98]"
+              onClick={() => setUpdateModalOpen(true)}
+            >
+              <Edit2 className="h-4 w-4" />
+              Actualizar Estatus / Añadir a Bitácora
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* ========================================= */}
+      {/*  MODAL: UpdateStatus -> guarda en BD */}
+      {/* ========================================= */}
+
+      {/* MODAL DE ACTUALIZAR BITÁCORA */}
+      {selectedTrip && (
+        <UpdateStatusModal
+          open={updateModalOpen}
+          onOpenChange={setUpdateModalOpen}
+          serviceId={selectedTrip.public_id || String(selectedTrip.id)}
+          onSubmit={handleSaveStatusEvent}
+        />
+      )}
+
+      {/*  MODAL DE EDITAR DETALLES/ANTICIPOS */}
+      <TripDetailsModal
+        open={!!tripToEdit}
+        onOpenChange={(open) => !open && setTripToEdit(null)}
+        trip={tripToEdit}
+      />
+
+      <TripSettlementModal
+        open={!!tripToSettle}
+        onOpenChange={(open) => !open && setTripToSettle(null)}
+        tripId={tripToSettle}
       />
     </div>
   );

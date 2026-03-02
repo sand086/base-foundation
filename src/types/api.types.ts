@@ -437,7 +437,7 @@ export interface Trip {
   closed_at?: string | null;
   last_location?: string | null;
   last_update?: string | null;
-
+  timeline_events?: TripTimelineEvent[];
   // Relaciones (Opcionales dependiendo de tu endpoint GET)
   client?: Client;
   sub_client?: SubClient;
@@ -466,4 +466,11 @@ export interface TripCreatePayload {
   saldo_operador?: number;
   start_date: string;
   status: TripStatus;
+}
+
+export interface TripTimelineEvent {
+  id?: number;
+  time: string;
+  event: string;
+  event_type: string;
 }

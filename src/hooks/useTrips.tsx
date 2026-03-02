@@ -105,6 +105,82 @@ export const useTrips = () => {
     }
   };
 
+  const addTimelineEvent = async (
+    tripId: string,
+    data: {
+      status: string;
+      location: string;
+      comments: string;
+      lat?: string;
+      lng?: string;
+      notifyClient?: boolean;
+    },
+  ) => {
+    try {
+      const payload = {
+        status: data.status,
+        event:
+          data.comments ||
+          `Actualización de estatus a ${data.status.replace("_", " ").toUpperCase()}`,
+        location: data.location,
+        lat: data.lat || null,
+        lng: data.lng || null,
+        notifyClient: data.notifyClient || false,
+        event_type: ["retraso", "accidente", "detenido"].includes(data.status)
+          ? "alert"
+          : "checkpoint",
+      };
+
+      await axiosClient.post(`/trips/${tripId}/timeline`, payload);
+      toast({
+        title: "Bitácora actualizada",
+        description: "El evento se guardó correctamente.",
+      });
+      await fetchTrips(); // 🔄 Recarga los viajes
+      return true;
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No se pudo guardar en la bitácora.",
+      });
+      return false;
+    }
+  };
+
+  const getTripSettlement = async (tripId: string) => {
+    try {
+      const response = await axiosClient.get(`/trips/${tripId}/settlement`);
+      return response.data;
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No se pudo cargar la liquidación de este viaje.",
+      });
+      return null;
+    }
+  };
+
+  const closeTripSettlement = async (tripId: string, payload: any) => {
+    try {
+      await axiosClient.post(`/trips/${tripId}/close-settlement`, payload);
+      toast({
+        title: "Viaje Liquidado",
+        description: "El viaje ha sido cerrado exitosamente.",
+      });
+      await fetchTrips(); // Recargamos para que el viaje pase a "Cerrado" en el tablero
+      return true;
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error al liquidar",
+        description: "Hubo un problema cerrando el viaje.",
+      });
+      return false;
+    }
+  };
+
   // Auto-arranque al cargar cualquier componente que use este hook
   useEffect(() => {
     fetchTrips();
@@ -118,5 +194,8 @@ export const useTrips = () => {
     updateTripStatus,
     editTrip,
     deleteTrip,
+    addTimelineEvent,
+    getTripSettlement,
+    closeTripSettlement,
   };
 };
