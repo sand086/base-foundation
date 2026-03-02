@@ -255,15 +255,8 @@ def get_trip_settlement(db: Session, trip_id: int):
     )
     fecha_viaje = trip.start_date.strftime("%Y-%m-%d") if trip.start_date else "N/A"
 
-    # 🔍 BUSCAMOS EL COMBUSTIBLE POR UNIDAD Y RANGO DE FECHAS DEL VIAJE
-    end_date = trip.actual_arrival or trip.closed_at or datetime.utcnow()
-    fuel_logs = (
-        db.query(models.FuelLog)
-        .filter(models.FuelLog.unit_id == trip.unit_id)
-        .filter(models.FuelLog.fecha_hora >= trip.start_date)
-        .filter(models.FuelLog.fecha_hora <= end_date)
-        .all()
-    )
+    # 1. Obtener cargas de combustible asociadas a este viaje
+    fuel_logs = db.query(models.FuelLog).filter(models.FuelLog.trip_id == trip_id).all()
 
     consumo_real_litros = sum(f.litros for f in fuel_logs)
     precio_promedio_litro = (
@@ -272,22 +265,26 @@ def get_trip_settlement(db: Session, trip_id: int):
         else 24.50
     )
 
-    RENDIMIENTO_ESPERADO = 3.2
+    # 2. Lógica de Tolerancia y Consumo
+    RENDIMIENTO_ESPERADO = 3.2  # Esto debería venir de la BD (configuración de unidad), pero lo dejamos fijo por ahora
     consumo_esperado = (
         kms_recorridos / RENDIMIENTO_ESPERADO if kms_recorridos > 0 else 0
     )
 
-    TOLERANCIA_PCT = 0.05
+    TOLERANCIA_PCT = 0.05  # 5% de tolerancia
     diferencia_litros = consumo_real_litros - consumo_esperado
     litros_a_cobrar = 0
     deduccion_combustible = 0
 
+    # Solo cobramos si la diferencia es POSITIVA y EXCEdE la tolerancia
     if diferencia_litros > (consumo_esperado * TOLERANCIA_PCT):
         litros_a_cobrar = diferencia_litros
         deduccion_combustible = litros_a_cobrar * precio_promedio_litro
 
+    # 3. Armar los Conceptos de Pago
     conceptos = []
 
+    # INGRESOS
     conceptos.append(
         schemas.ConceptoPago(
             id=str(uuid.uuid4())[:8],
@@ -299,6 +296,7 @@ def get_trip_settlement(db: Session, trip_id: int):
         )
     )
 
+    # DEDUCCIONES (Anticipos dados previamente)
     if trip.anticipo_casetas > 0:
         conceptos.append(
             schemas.ConceptoPago(
@@ -344,6 +342,7 @@ def get_trip_settlement(db: Session, trip_id: int):
             )
         )
 
+    # DEDUCCIÓN POR EXCESO DE COMBUSTIBLE
     if deduccion_combustible > 0:
         conceptos.append(
             schemas.ConceptoPago(
@@ -356,10 +355,12 @@ def get_trip_settlement(db: Session, trip_id: int):
             )
         )
 
+    # 4. Sumas Finales
     total_ingresos = sum(c.monto for c in conceptos if c.tipo == "ingreso")
     total_deducciones = sum(c.monto for c in conceptos if c.tipo == "deduccion")
     neto_pagar = total_ingresos - total_deducciones
 
+    # 5. Retornar el esquema completo
     return schemas.TripSettlementResponse(
         viajeId=trip.public_id or f"VIAJE-{trip.id}",
         operadorNombre=trip.operator.name if trip.operator else "N/A",
