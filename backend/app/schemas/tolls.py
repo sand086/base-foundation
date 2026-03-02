@@ -140,10 +140,10 @@ class RateSegmentResponse(RateSegmentBase):
 
 
 class RateTemplateBase(ORMBase):
-    client_id: int
-    origen: str = Field(..., max_length=150)
-    destino: str = Field(..., max_length=150)
+    client_id: int | None = Field(default=None)
 
+    origen: str | None = Field(default=None, max_length=150)
+    destino: str | None = Field(default=None, max_length=150)
     # IMPORTANTÍSIMO:
     # En tu MODELO actual RateTemplate.tipo_unidad es Column(String(20), nullable=False)
     # (en algún punto lo cambiaste a TollUnitType, pero en el models pegado aquí es string).

@@ -50,13 +50,13 @@ export function SupplierDetailSheet({
 
           <div className="grid grid-cols-2 gap-4">
             <div className="p-3 bg-slate-50 border rounded-lg">
-              <p className="text-[10px] text-muted-foreground uppercase font-bold flex items-center gap-1">
+              <p className=" text-muted-foreground uppercase font-bold flex items-center gap-1">
                 <Hash className="h-3 w-3" /> RFC
               </p>
               <p className="font-mono text-sm mt-1">{supplier.rfc}</p>
             </div>
             <div className="p-3 bg-slate-50 border rounded-lg">
-              <p className="text-[10px] text-muted-foreground uppercase font-bold flex items-center gap-1">
+              <p className=" text-muted-foreground uppercase font-bold flex items-center gap-1">
                 <CreditCard className="h-3 w-3" /> Días Crédito
               </p>
               <p className="font-mono text-sm mt-1">

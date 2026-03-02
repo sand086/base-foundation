@@ -1,10 +1,16 @@
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { Badge } from '@/components/ui/badge';
+import { useState, useEffect } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -12,7 +18,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,16 +28,16 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import { Plus, Pencil, Trash2, Truck } from 'lucide-react';
-import { TipoUnidad } from '@/data/tiposUnidadData';
-import { useTiposUnidad } from '@/hooks/useTiposUnidad';
-import { toast } from 'sonner';
+} from "@/components/ui/alert-dialog";
+import { Plus, Pencil, Trash2, Truck } from "lucide-react";
+import { TipoUnidad } from "@/data/tiposUnidadData";
+import { useTiposUnidad } from "@/hooks/useTiposUnidad";
+import { toast } from "sonner";
 
 export function TiposUnidadConfig() {
   const { tiposUnidad, saveTiposUnidad, loading } = useTiposUnidad();
   const [tipos, setTipos] = useState<TipoUnidad[]>([]);
-  
+
   // Sync local state with hook
   useEffect(() => {
     if (!loading) {
@@ -41,17 +47,17 @@ export function TiposUnidadConfig() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTipo, setEditingTipo] = useState<TipoUnidad | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  
+
   // Form state
   const [formData, setFormData] = useState({
-    nombre: '',
-    descripcion: '',
-    icono: '🚛',
+    nombre: "",
+    descripcion: "",
+    icono: "🚛",
   });
 
   const handleOpenNew = () => {
     setEditingTipo(null);
-    setFormData({ nombre: '', descripcion: '', icono: '🚛' });
+    setFormData({ nombre: "", descripcion: "", icono: "🚛" });
     setIsModalOpen(true);
   };
 
@@ -67,50 +73,50 @@ export function TiposUnidadConfig() {
 
   const handleSave = () => {
     if (!formData.nombre.trim()) {
-      toast.error('El nombre es obligatorio');
+      toast.error("El nombre es obligatorio");
       return;
     }
 
     if (editingTipo) {
-      const updated = tipos.map(t => 
-        t.id === editingTipo.id 
-          ? { ...t, ...formData }
-          : t
+      const updated = tipos.map((t) =>
+        t.id === editingTipo.id ? { ...t, ...formData } : t,
       );
       setTipos(updated);
       saveTiposUnidad(updated);
-      toast.success('Tipo de unidad actualizado');
+      toast.success("Tipo de unidad actualizado");
     } else {
       const newTipo: TipoUnidad = {
-        id: `tipo-${formData.nombre.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`,
+        id: `tipo-${formData.nombre.toLowerCase().replace(/\s+/g, "-")}-${Date.now()}`,
         nombre: formData.nombre,
         descripcion: formData.descripcion,
         icono: formData.icono,
         activo: true,
-        createdAt: new Date().toISOString().split('T')[0],
+        createdAt: new Date().toISOString().split("T")[0],
       };
       const updated = [...tipos, newTipo];
       setTipos(updated);
       saveTiposUnidad(updated);
-      toast.success('Tipo de unidad agregado');
+      toast.success("Tipo de unidad agregado");
     }
     setIsModalOpen(false);
   };
 
   const handleToggleActive = (id: string) => {
-    const tipo = tipos.find(t => t.id === id);
-    const updated = tipos.map(t => 
-      t.id === id ? { ...t, activo: !t.activo } : t
+    const tipo = tipos.find((t) => t.id === id);
+    const updated = tipos.map((t) =>
+      t.id === id ? { ...t, activo: !t.activo } : t,
     );
     setTipos(updated);
     saveTiposUnidad(updated);
-    toast.success(`${tipo?.nombre} ${tipo?.activo ? 'desactivado' : 'activado'}`);
+    toast.success(
+      `${tipo?.nombre} ${tipo?.activo ? "desactivado" : "activado"}`,
+    );
   };
 
   const handleDelete = () => {
     if (!deleteId) return;
-    const tipo = tipos.find(t => t.id === deleteId);
-    const updated = tipos.filter(t => t.id !== deleteId);
+    const tipo = tipos.find((t) => t.id === deleteId);
+    const updated = tipos.filter((t) => t.id !== deleteId);
     setTipos(updated);
     saveTiposUnidad(updated);
     toast.success(`${tipo?.nombre} eliminado`);
@@ -129,7 +135,20 @@ export function TiposUnidadConfig() {
     );
   }
 
-  const emojis = ['🚛', '🚚', '📦', '❄️', '🛻', '🏗️', '🏭', '🚗', '🚐', '🚌', '🏎️', '🚜'];
+  const emojis = [
+    "🚛",
+    "🚚",
+    "📦",
+    "❄️",
+    "🛻",
+    "🏗️",
+    "🏭",
+    "🚗",
+    "🚐",
+    "🚌",
+    "🏎️",
+    "🚜",
+  ];
 
   return (
     <Card>
@@ -144,7 +163,11 @@ export function TiposUnidadConfig() {
               Configura los tipos de vehículos disponibles en el sistema
             </CardDescription>
           </div>
-          <Button onClick={handleOpenNew} size="sm" className="gap-2 bg-action hover:bg-action-hover text-action-foreground">
+          <Button
+            onClick={handleOpenNew}
+            size="sm"
+            className="gap-2 bg-action hover:bg-action-hover text-action-foreground"
+          >
             <Plus className="h-4 w-4" />
             Agregar Tipo
           </Button>
@@ -156,41 +179,48 @@ export function TiposUnidadConfig() {
             <div
               key={tipo.id}
               className={`p-4 border rounded-lg transition-all ${
-                tipo.activo 
-                  ? 'bg-card hover:shadow-md' 
-                  : 'bg-muted/50 opacity-60'
+                tipo.activo
+                  ? "bg-card hover:shadow-md"
+                  : "bg-muted/50 opacity-60"
               }`}
             >
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
                   <span className="text-2xl">{tipo.icono}</span>
                   <div>
-                    <h4 className="font-semibold text-foreground">{tipo.nombre}</h4>
-                    <p className="text-xs text-muted-foreground">{tipo.descripcion}</p>
+                    <h4 className="font-semibold text-foreground">
+                      {tipo.nombre}
+                    </h4>
+                    <p className="text-xs text-muted-foreground">
+                      {tipo.descripcion}
+                    </p>
                   </div>
                 </div>
-                <Badge variant={tipo.activo ? "default" : "secondary"} className="text-[10px]">
-                  {tipo.activo ? 'Activo' : 'Inactivo'}
+                <Badge
+                  variant={tipo.activo ? "default" : "secondary"}
+                  className=""
+                >
+                  {tipo.activo ? "Activo" : "Inactivo"}
                 </Badge>
               </div>
-              
+
               <div className="flex items-center justify-between mt-4 pt-3 border-t">
                 <Switch
                   checked={tipo.activo}
                   onCheckedChange={() => handleToggleActive(tipo.id)}
                 />
                 <div className="flex gap-1">
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
+                  <Button
+                    variant="ghost"
+                    size="icon"
                     className="h-8 w-8"
                     onClick={() => handleEdit(tipo)}
                   >
                     <Pencil className="h-4 w-4" />
                   </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
+                  <Button
+                    variant="ghost"
+                    size="icon"
                     className="h-8 w-8 text-destructive hover:text-destructive"
                     onClick={() => setDeleteId(tipo.id)}
                   >
@@ -208,32 +238,36 @@ export function TiposUnidadConfig() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {editingTipo ? 'Editar Tipo de Unidad' : 'Nuevo Tipo de Unidad'}
+              {editingTipo ? "Editar Tipo de Unidad" : "Nuevo Tipo de Unidad"}
             </DialogTitle>
             <DialogDescription>
               Define un nuevo tipo de vehículo para el catálogo de flota
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Nombre *</Label>
               <Input
                 placeholder="Ej: Refrigerado, Cama Baja..."
                 value={formData.nombre}
-                onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, nombre: e.target.value })
+                }
               />
             </div>
-            
+
             <div className="space-y-2">
               <Label>Descripción</Label>
               <Input
                 placeholder="Descripción breve del tipo de unidad"
                 value={formData.descripcion}
-                onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, descripcion: e.target.value })
+                }
               />
             </div>
-            
+
             <div className="space-y-2">
               <Label>Icono</Label>
               <div className="flex flex-wrap gap-2">
@@ -243,9 +277,9 @@ export function TiposUnidadConfig() {
                     type="button"
                     onClick={() => setFormData({ ...formData, icono: emoji })}
                     className={`w-10 h-10 text-xl rounded-lg border-2 transition-all ${
-                      formData.icono === emoji 
-                        ? 'border-primary bg-primary/10' 
-                        : 'border-border hover:border-primary/50'
+                      formData.icono === emoji
+                        ? "border-primary bg-primary/10"
+                        : "border-border hover:border-primary/50"
                     }`}
                   >
                     {emoji}
@@ -259,8 +293,11 @@ export function TiposUnidadConfig() {
             <Button variant="outline" onClick={() => setIsModalOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleSave} className="bg-action hover:bg-action-hover text-action-foreground">
-              {editingTipo ? 'Actualizar' : 'Agregar'}
+            <Button
+              onClick={handleSave}
+              className="bg-action hover:bg-action-hover text-action-foreground"
+            >
+              {editingTipo ? "Actualizar" : "Agregar"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -272,8 +309,8 @@ export function TiposUnidadConfig() {
           <AlertDialogHeader>
             <AlertDialogTitle>¿Eliminar tipo de unidad?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción no se puede deshacer. Las unidades existentes de este tipo
-              mantendrán su clasificación actual.
+              Esta acción no se puede deshacer. Las unidades existentes de este
+              tipo mantendrán su clasificación actual.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

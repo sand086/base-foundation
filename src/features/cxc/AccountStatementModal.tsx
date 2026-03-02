@@ -258,7 +258,7 @@ export function AccountStatementModal({
                           ).toLocaleDateString("es-MX")}
                         </span>
                         {isOverdue && (
-                          <span className="text-[10px] text-status-danger font-medium">
+                          <span className=" text-status-danger font-medium">
                             +{daysOverdue}d vencido
                           </span>
                         )}

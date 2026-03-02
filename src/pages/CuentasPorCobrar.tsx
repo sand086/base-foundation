@@ -320,7 +320,7 @@ export default function CuentasPorCobrar() {
                 {new Date(value).toLocaleDateString("es-MX")}
               </span>
               {isPastDue && (
-                <span className="text-[10px] text-red-600 font-medium">
+                <span className=" text-red-600 font-medium">
                   +{daysOverdue}d vencido
                 </span>
               )}

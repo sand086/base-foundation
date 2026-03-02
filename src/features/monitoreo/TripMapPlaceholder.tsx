@@ -1,164 +1,85 @@
-import { MapPin, Navigation, Clock } from 'lucide-react';
-import { cn } from '@/lib/utils';
-
-interface LocationPoint {
-  label: string;
-  type: 'origin' | 'destination' | 'checkpoint' | 'alert' | 'current';
-  time?: string;
-}
+// src/features/monitoreo/TripMapPlaceholder.tsx
+import { MapPin, Clock, Map } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface TripMapPlaceholderProps {
-  origin: string;
-  destination: string;
-  checkpoints?: { event: string; time: string; type: string }[];
   lastUpdate?: string;
   lastLocation?: string;
   className?: string;
 }
 
 export function TripMapPlaceholder({
-  origin,
-  destination,
-  checkpoints = [],
   lastUpdate,
   lastLocation,
   className,
 }: TripMapPlaceholderProps) {
-  // Generate location points from checkpoints
-  const locationPoints: LocationPoint[] = [
-    { label: origin, type: 'origin' },
-    ...checkpoints
-      .filter(cp => cp.type === 'checkpoint' || cp.type === 'alert')
-      .slice(0, 3)
-      .map(cp => ({
-        label: cp.event.split(' - ')[1] || cp.event,
-        type: cp.type as 'checkpoint' | 'alert',
-        time: cp.time,
-      })),
-    { label: destination, type: 'destination' },
-  ];
-
   return (
-    <div className={cn("relative bg-slate-100 rounded-lg overflow-hidden border", className)}>
-      {/* Map Background - Static placeholder with grid pattern */}
-      <div className="absolute inset-0 opacity-30">
-        <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#94a3b8" strokeWidth="0.5"/>
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#grid)" />
-        </svg>
-      </div>
-      
-      {/* Map Content */}
-      <div className="relative h-full p-4 flex flex-col">
-        {/* Route Visualization */}
-        <div className="flex-1 flex items-center justify-center">
-          <div className="relative w-full max-w-xs">
-            {/* Route Line */}
-            <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gradient-to-b from-brand-green via-brand-red to-brand-dark" />
-            
-            {/* Location Points */}
-            <div className="space-y-6 relative z-10">
-              {locationPoints.map((point, idx) => (
-                <div key={idx} className="flex items-start gap-3">
-                  {/* Marker */}
-                  <div
-                    className={cn(
-                      "w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-md",
-                      point.type === 'origin' && "bg-brand-green text-white",
-                      point.type === 'destination' && "bg-brand-dark text-white",
-                      point.type === 'checkpoint' && "bg-white text-brand-green border-2 border-brand-green",
-                      point.type === 'alert' && "bg-status-danger text-white",
-                      point.type === 'current' && "bg-brand-red text-white animate-pulse"
-                    )}
-                  >
-                    {point.type === 'origin' ? (
-                      <Navigation className="h-4 w-4" />
-                    ) : point.type === 'destination' ? (
-                      <MapPin className="h-4 w-4" />
-                    ) : (
-                      <div className="w-2 h-2 rounded-full bg-current" />
-                    )}
-                  </div>
-                  
-                  {/* Label */}
-                  <div className="flex-1 min-w-0 pt-1">
-                    <p className={cn(
-                      "text-xs font-medium truncate",
-                      (point.type === 'origin' || point.type === 'destination') 
-                        ? "text-brand-dark" 
-                        : "text-muted-foreground"
-                    )}>
-                      {point.label}
-                    </p>
-                    {point.time && (
-                      <p className="text-[10px] text-muted-foreground">{point.time}</p>
-                    )}
-                    {point.type === 'origin' && (
-                      <span className="text-[10px] text-brand-green font-medium">ORIGEN</span>
-                    )}
-                    {point.type === 'destination' && (
-                      <span className="text-[10px] text-brand-dark font-medium">DESTINO</span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-        
-        {/* Last Location Overlay */}
-        {lastLocation && (
-          <div className="absolute bottom-3 left-3 right-3">
-            <div className="bg-white/95 backdrop-blur-sm rounded-lg border shadow-lg p-3">
-              <div className="flex items-start gap-2">
-                <div className="w-6 h-6 rounded-full bg-brand-red flex items-center justify-center shrink-0">
-                  <MapPin className="h-3 w-3 text-white" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-                    Última Ubicación
-                  </p>
-                  <p className="text-xs font-medium text-brand-dark truncate">
-                    {lastLocation}
-                  </p>
-                  {lastUpdate && (
-                    <div className="flex items-center gap-1 mt-1">
-                      <Clock className="h-3 w-3 text-muted-foreground" />
-                      <span className="text-[10px] text-muted-foreground">
-                        {lastUpdate}
-                      </span>
-                    </div>
-                  )}
+    <div
+      className={cn(
+        "relative bg-slate-50/50 rounded-xl overflow-hidden border shadow-inner flex items-center justify-center",
+        className,
+      )}
+    >
+      {/* Fondo estilo Dot Matrix */}
+      <div
+        className="absolute inset-0 opacity-[0.15]"
+        style={{
+          backgroundImage: "radial-gradient(#64748b 1px, transparent 1px)",
+          backgroundSize: "20px 20px",
+        }}
+      />
+
+      {/* Sombra sutil perimetral para profundidad */}
+      <div className="absolute inset-0 shadow-[inset_0_0_20px_rgba(0,0,0,0.05)] pointer-events-none" />
+
+      <div className="relative z-10 w-full px-6 flex flex-col items-center justify-center text-center">
+        {/* Tarjeta central de Ubicación */}
+        {lastLocation ? (
+          <div className=" backdrop-blur-md  px-5 py-4 rounded-2xl max-w-sm w-full transition-all ">
+            <div className="flex flex-col items-center gap-3">
+              {/* Ícono animado (Ping) */}
+              <div className="relative flex h-10 w-10 items-center justify-center">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-30"></span>
+                <div className="relative inline-flex rounded-full h-10 w-10 bg-blue-100 items-center justify-center text-blue-600 border border-blue-200">
+                  <MapPin className="h-5 w-5" />
                 </div>
               </div>
+
+              {/* Textos */}
+              <div className="flex flex-col w-full">
+                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">
+                  Ubicación Actual Detectada
+                </span>
+                <span className="text-sm font-bold text-slate-800 leading-tight">
+                  {lastLocation}
+                </span>
+              </div>
+
+              {/* Divisor */}
+              <div className="w-12 h-[1px] bg-slate-200 my-1"></div>
+
+              {/* Timestamp */}
+              {lastUpdate && (
+                <div className="flex items-center gap-1.5 text-xs font-mono text-slate-500">
+                  <Clock className="h-3.5 w-3.5" />
+                  Actualizado: {lastUpdate}
+                </div>
+              )}
             </div>
           </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center gap-3 bg-white/80 backdrop-blur-sm border border-slate-200 px-6 py-5 rounded-2xl shadow-sm text-slate-500 max-w-xs w-full">
+            <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center mb-1">
+              <Map className="h-5 w-5 text-slate-400" />
+            </div>
+            <span className="text-sm font-medium">
+              Esperando datos de telemetría...
+            </span>
+            <span className="text-xs text-muted-foreground">
+              La ubicación aparecerá cuando se actualice el estatus.
+            </span>
+          </div>
         )}
-        
-        {/* Map Legend */}
-        <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm rounded border px-2 py-1.5 text-[9px] space-y-1">
-          <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-brand-green" />
-            <span className="text-muted-foreground">Origen</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-status-danger" />
-            <span className="text-muted-foreground">Alerta</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-brand-dark" />
-            <span className="text-muted-foreground">Destino</span>
-          </div>
-        </div>
-
-        {/* "Mapa Placeholder" Label */}
-        <div className="absolute top-3 left-3 bg-slate-800/80 text-white text-[9px] px-2 py-1 rounded font-medium">
-          Vista de Ruta (Demo)
-        </div>
       </div>
     </div>
   );

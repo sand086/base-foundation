@@ -75,7 +75,7 @@ export function InvoiceDetailSheet({
                 {statusInfo.label}
               </StatusBadge>
               {invoice.requiereREP && (
-                <span className="text-[10px] px-2 py-0.5 bg-amber-100 text-amber-700 rounded font-medium">
+                <span className=" px-2 py-0.5 bg-amber-100 text-amber-700 rounded font-medium">
                   PENDIENTE REP
                 </span>
               )}

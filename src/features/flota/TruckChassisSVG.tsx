@@ -325,7 +325,7 @@ export function TruckChassisSVG({
                       x={pos.x}
                       y={pos.y + 3}
                       textAnchor="middle"
-                      className={`text-[10px] font-bold ${status.labelColor} fill-current`}
+                      className={` font-bold ${status.labelColor} fill-current`}
                     >
                       {pos.position}
                     </text>

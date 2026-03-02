@@ -248,7 +248,7 @@ export default function CentroMonitoreo() {
                       <div className="p-3 bg-status-success-bg rounded-lg border border-status-success-border">
                         <div className="flex items-center gap-2 mb-1">
                           <Navigation className="h-3.5 w-3.5 text-status-success" />
-                          <span className="text-[10px] font-semibold text-status-success uppercase tracking-wide">
+                          <span className=" font-semibold text-status-success uppercase tracking-wide">
                             Origen
                           </span>
                         </div>
@@ -261,7 +261,7 @@ export default function CentroMonitoreo() {
                       <div className="p-3 bg-muted rounded-lg border">
                         <div className="flex items-center gap-2 mb-1">
                           <MapPin className="h-3.5 w-3.5 text-brand-dark" />
-                          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                          <span className=" font-semibold text-muted-foreground uppercase tracking-wide">
                             Destino
                           </span>
                         </div>
@@ -274,7 +274,7 @@ export default function CentroMonitoreo() {
                       <div className="p-3 bg-muted rounded-lg border">
                         <div className="flex items-center gap-2 mb-1">
                           <User className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                          <span className=" font-semibold text-muted-foreground uppercase tracking-wide">
                             Operador
                           </span>
                         </div>
@@ -293,13 +293,13 @@ export default function CentroMonitoreo() {
                       <div className="p-3 bg-card rounded-lg border">
                         <div className="flex items-center justify-between">
                           <div>
-                            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">
+                            <span className=" font-semibold text-muted-foreground uppercase tracking-wide block mb-1">
                               Estatus Actual
                             </span>
                             {getStatusBadge(selectedTrip.status)}
                           </div>
                           <div className="text-right">
-                            <span className="text-[10px] text-muted-foreground block">
+                            <span className=" text-muted-foreground block">
                               Última Act.
                             </span>
                             <span className="text-xs font-medium text-brand-dark">
@@ -331,7 +331,7 @@ export default function CentroMonitoreo() {
 
                   {/* Client Info */}
                   <div className="p-3 bg-muted/50 rounded-lg border">
-                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                    <span className=" font-semibold text-muted-foreground uppercase tracking-wide">
                       Client
                     </span>
                     <p className="text-sm font-medium text-brand-dark mt-0.5">
@@ -374,7 +374,7 @@ export default function CentroMonitoreo() {
                             <p className="text-sm font-medium text-brand-dark leading-tight">
                               {event.event}
                             </p>
-                            <p className="text-[10px] text-muted-foreground mt-1">
+                            <p className=" text-muted-foreground mt-1">
                               {event.time}
                             </p>
                           </div>

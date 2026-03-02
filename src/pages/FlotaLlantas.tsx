@@ -262,7 +262,7 @@ export default function FlotaLlantas() {
               <div className="flex items-center justify-between text-xs">
                 <span>{value}mm</span>
                 <Badge
-                  className={`${semaphore.bgColor} ${semaphore.color} text-[10px] px-1.5`}
+                  className={`${semaphore.bgColor} ${semaphore.color}  px-1.5`}
                 >
                   {semaphore.label}
                 </Badge>

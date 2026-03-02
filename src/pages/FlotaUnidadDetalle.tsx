@@ -739,7 +739,7 @@ export default function FlotaUnidadDetalle() {
                   statusBadge={getDateBadge(formData.seguro_vence)}
                   dateInput={
                     <div className="space-y-1">
-                      <Label className="text-[10px] text-muted-foreground uppercase font-bold">
+                      <Label className=" text-muted-foreground uppercase font-bold">
                         Vigencia
                       </Label>
                       <Input
@@ -775,7 +775,7 @@ export default function FlotaUnidadDetalle() {
                   statusBadge={getDateBadge(formData.verificacion_humo_vence)}
                   dateInput={
                     <div className="space-y-1">
-                      <Label className="text-[10px] text-muted-foreground uppercase font-bold">
+                      <Label className=" text-muted-foreground uppercase font-bold">
                         Vigencia
                       </Label>
                       <Input
@@ -813,7 +813,7 @@ export default function FlotaUnidadDetalle() {
                   )}
                   dateInput={
                     <div className="space-y-1">
-                      <Label className="text-[10px] text-muted-foreground uppercase font-bold">
+                      <Label className=" text-muted-foreground uppercase font-bold">
                         Vigencia
                       </Label>
                       <Input
@@ -847,7 +847,7 @@ export default function FlotaUnidadDetalle() {
                     statusBadge={getDateBadge(formData.caat_vence)}
                     dateInput={
                       <div className="space-y-1">
-                        <Label className="text-[10px] text-muted-foreground uppercase font-bold">
+                        <Label className=" text-muted-foreground uppercase font-bold">
                           Vigencia
                         </Label>
                         <Input
@@ -1027,7 +1027,7 @@ export default function FlotaUnidadDetalle() {
                           <td className="p-3">
                             {tire.marca || "Desconocida"}
                             {tire.modelo && (
-                              <span className="block text-[10px] text-muted-foreground">
+                              <span className="block  text-muted-foreground">
                                 {tire.modelo}
                               </span>
                             )}

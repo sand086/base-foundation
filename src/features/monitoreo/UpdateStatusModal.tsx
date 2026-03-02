@@ -1,3 +1,4 @@
+// src/features/monitoreo/UpdateStatusModal.tsx
 import { useState } from "react";
 import {
   Dialog,
@@ -37,11 +38,13 @@ export interface StatusUpdateData {
   timestamp: string;
 }
 
+// ✅ CORRECCIÓN: Los 'value' ahora coinciden EXACTAMENTE con tu backend (TripStatus)
 const statusOptions = [
-  { value: "en_ruta", label: "En Ruta", color: "bg-status-success" },
-  { value: "detenido", label: "Detenido", color: "bg-status-warning" },
-  { value: "retraso", label: "Retraso", color: "bg-status-danger" },
-  { value: "accidente", label: "Accidente", color: "bg-status-danger" },
+  { value: "en_transito", label: "En Tránsito", color: "bg-blue-500" },
+  { value: "detenido", label: "Detenido", color: "bg-amber-500" },
+  { value: "retraso", label: "Retraso", color: "bg-orange-500" },
+  { value: "accidente", label: "Accidente", color: "bg-red-600" },
+  { value: "entregado", label: "Entregado", color: "bg-emerald-500" },
 ];
 
 export function UpdateStatusModal({
@@ -56,50 +59,38 @@ export function UpdateStatusModal({
     lat: "",
     lng: "",
     comments: "",
-    notifyClient: true,
+    notifyClient: false, // Por defecto apagado para no simular spam
     timestamp: "",
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const now = new Date();
-    const timestamp = now.toLocaleString("es-MX", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
 
-    const selectedStatusLabel =
-      statusOptions.find((s) => s.value === formData.status)?.label ||
-      formData.status;
+    // Generar timestamp actual
+    const now = new Date();
+    const timestamp = now.toISOString(); // Enviamos formato ISO para la BD
 
     onSubmit({
       ...formData,
       timestamp,
     });
 
-    // Simulate email notification if enabled
     if (formData.notifyClient) {
-      // In real implementation, this would trigger an actual email
       toast.success("Correo enviado al cliente", {
-        description: `Tu unidad [${serviceId}] está en [${formData.location}] - ${selectedStatusLabel}`,
-        duration: 5000,
+        description: `Notificación de estatus enviada exitosamente.`,
       });
     }
 
-    // Reset form
+    // Resetear formulario
     setFormData({
       status: "",
       location: "",
       lat: "",
       lng: "",
       comments: "",
-      notifyClient: true,
+      notifyClient: false,
       timestamp: "",
     });
-    onOpenChange(false);
   };
 
   const selectedStatus = statusOptions.find((s) => s.value === formData.status);
@@ -110,16 +101,15 @@ export function UpdateStatusModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-brand-dark">
             <Clock className="h-5 w-5" />
-            Bitácora de Viaje - {serviceId}
+            Actualizar Bitácora - {serviceId}
           </DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-5 pt-4">
-          {/* Status Dropdown */}
           <div className="space-y-2">
             <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
               <Navigation className="h-3 w-3" />
-              Estatus
+              Nuevo Estatus
             </Label>
             <Select
               value={formData.status}
@@ -140,7 +130,7 @@ export function UpdateStatusModal({
                   )}
                 </SelectValue>
               </SelectTrigger>
-              <SelectContent className="bg-card">
+              <SelectContent className="bg-white">
                 {statusOptions.map((status) => (
                   <SelectItem
                     key={status.value}
@@ -159,77 +149,30 @@ export function UpdateStatusModal({
             </Select>
           </div>
 
-          {/* Location Text Area */}
           <div className="space-y-2">
             <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
               <MapPin className="h-3 w-3" />
-              Ubicación Manual
+              Ubicación / Referencia
             </Label>
             <Textarea
-              placeholder="Paste GPS location text here (e.g., Km 45 Autopista México-Qro)"
+              placeholder="Ej: Caseta de Tepotzotlán, Km 45 Autopista México-Qro"
               value={formData.location}
               onChange={(e) =>
                 setFormData({ ...formData, location: e.target.value })
               }
-              rows={3}
+              rows={2}
               className="text-sm resize-none"
               required
             />
           </div>
 
-          {/* Coordinates (Optional) */}
-          <div className="space-y-2">
-            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Coordenadas (Opcional)
-            </Label>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label
-                  htmlFor="lat"
-                  className="text-[10px] text-muted-foreground"
-                >
-                  Latitud
-                </Label>
-                <Input
-                  id="lat"
-                  type="text"
-                  placeholder="19.4326"
-                  value={formData.lat}
-                  onChange={(e) =>
-                    setFormData({ ...formData, lat: e.target.value })
-                  }
-                  className="h-9 text-sm font-mono"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label
-                  htmlFor="lng"
-                  className="text-[10px] text-muted-foreground"
-                >
-                  Longitud
-                </Label>
-                <Input
-                  id="lng"
-                  type="text"
-                  placeholder="-99.1332"
-                  value={formData.lng}
-                  onChange={(e) =>
-                    setFormData({ ...formData, lng: e.target.value })
-                  }
-                  className="h-9 text-sm font-mono"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Comments */}
           <div className="space-y-2">
             <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
               <MessageSquare className="h-3 w-3" />
-              Comentarios
+              Comentarios Adicionales
             </Label>
             <Textarea
-              placeholder="Notas internas sobre la actualización..."
+              placeholder="Notas internas o motivo del retraso..."
               value={formData.comments}
               onChange={(e) =>
                 setFormData({ ...formData, comments: e.target.value })
@@ -239,26 +182,23 @@ export function UpdateStatusModal({
             />
           </div>
 
-          {/* Notify Client Checkbox */}
-          <div className="flex items-center space-x-3 p-3 rounded-lg bg-muted/50 border">
+          <div className="flex items-center space-x-3 p-3 rounded-lg bg-slate-50 border">
             <Checkbox
               id="notifyClient"
               checked={formData.notifyClient}
               onCheckedChange={(checked) =>
                 setFormData({ ...formData, notifyClient: checked as boolean })
               }
-              className="data-[state=checked]:bg-brand-green data-[state=checked]:border-brand-green"
             />
             <Label
               htmlFor="notifyClient"
               className="text-sm flex items-center gap-2 cursor-pointer"
             >
               <Mail className="h-4 w-4 text-muted-foreground" />
-              Notificar al Client por Correo
+              Notificar al Cliente por Correo
             </Label>
           </div>
 
-          {/* Action Buttons */}
           <div className="flex justify-end gap-3 pt-4 border-t">
             <Button
               type="button"
@@ -270,10 +210,10 @@ export function UpdateStatusModal({
             </Button>
             <Button
               type="submit"
-              className="h-9 text-sm bg-brand-green hover:bg-brand-green/90 text-white"
+              className="h-9 text-sm bg-brand-navy hover:bg-brand-navy/90 text-white"
               disabled={!formData.status || !formData.location}
             >
-              Guardar Actualización
+              Guardar en Bitácora
             </Button>
           </div>
         </form>

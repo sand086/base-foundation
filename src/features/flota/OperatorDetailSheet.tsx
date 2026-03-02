@@ -136,25 +136,25 @@ const getDocStatusBadge = (status: DocumentItem["status"]) => {
   switch (status) {
     case "vigente":
       return (
-        <Badge className="bg-emerald-500/20 text-emerald-500 border-emerald-500/30 text-[10px]">
+        <Badge className="bg-emerald-500/20 text-emerald-500 border-emerald-500/30 ">
           Vigente
         </Badge>
       );
     case "por_vencer":
       return (
-        <Badge className="bg-amber-500/20 text-amber-500 border-amber-500/30 text-[10px]">
+        <Badge className="bg-amber-500/20 text-amber-500 border-amber-500/30 ">
           Por Vencer
         </Badge>
       );
     case "vencido":
       return (
-        <Badge className="bg-rose-500/20 text-rose-500 border-rose-500/30 text-[10px]">
+        <Badge className="bg-rose-500/20 text-rose-500 border-rose-500/30 ">
           Vencido
         </Badge>
       );
     case "faltante":
       return (
-        <Badge className="bg-muted/50 text-muted-foreground border-muted text-[10px]">
+        <Badge className="bg-muted/50 text-muted-foreground border-muted ">
           Faltante
         </Badge>
       );
@@ -547,7 +547,7 @@ export function OperatorDetailSheet({
 
               <Badge
                 className={cn(
-                  "text-[10px]",
+                  "",
                   licenseStatus === "success"
                     ? "bg-emerald-500/20 text-emerald-500"
                     : licenseStatus === "warning"

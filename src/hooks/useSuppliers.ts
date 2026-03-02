@@ -2,11 +2,14 @@
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { supplierService } from "@/services/supplierService";
-import { Supplier, PayableInvoice } from "@/types/api.types";
+import { Supplier, PayableInvoice, IndirectCategory } from "@/types/api.types"; // <-- AQUÍ SE AGREGÓ
 
 export const useSuppliers = () => {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [invoices, setInvoices] = useState<PayableInvoice[]>([]);
+  const [indirectCategories, setIndirectCategories] = useState<
+    IndirectCategory[]
+  >([]);
 
   // Separamos los estados de carga para que la vista no llore
   const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(true);
@@ -38,10 +41,24 @@ export const useSuppliers = () => {
     }
   }, []);
 
+  const fetchCategories = useCallback(async () => {
+    try {
+      const data = await supplierService.getIndirectCategories();
+      setIndirectCategories(data);
+    } catch (error) {
+      console.error(error);
+    }
+  }, []);
+
   useEffect(() => {
     fetchSuppliers();
     fetchInvoices();
-  }, [fetchSuppliers, fetchInvoices]);
+    fetchCategories();
+  }, [fetchSuppliers, fetchInvoices, fetchCategories]);
+
+  // ==========================
+  // FACTURAS
+  // ==========================
 
   const createInvoice = async (invoiceData: Partial<PayableInvoice>) => {
     try {
@@ -78,7 +95,9 @@ export const useSuppliers = () => {
     }
   };
 
-  // pagos
+  // ==========================
+  // PAGOS
+  // ==========================
 
   const registerPayment = async (invoiceId: number, paymentData: any) => {
     try {
@@ -89,6 +108,10 @@ export const useSuppliers = () => {
       return false;
     }
   };
+
+  // ==========================
+  // PROVEEDORES
+  // ==========================
 
   const handleCreateSupplier = async (data: Partial<Supplier>) => {
     try {
@@ -126,20 +149,74 @@ export const useSuppliers = () => {
     }
   };
 
+  // ==========================
+  // CATEGORÍAS INDIRECTAS
+  // ==========================
+
+  const handleUpdateCategory = async (
+    id: number,
+    data: Partial<IndirectCategory>,
+  ) => {
+    try {
+      await supplierService.updateIndirectCategory(id, data);
+      toast.success("Categoría actualizada");
+      fetchCategories(); // Recarga la lista
+      return true;
+    } catch (error) {
+      toast.error("Error al actualizar categoría");
+      return false;
+    }
+  };
+
+  const handleDeleteCategory = async (id: number) => {
+    try {
+      await supplierService.deleteIndirectCategory(id);
+      toast.success("Categoría eliminada");
+      fetchCategories(); // Recarga la lista
+      return true;
+    } catch (error) {
+      toast.error("Error al eliminar categoría (¿está en uso?)");
+      return false;
+    }
+  };
+
+  const handleCreateCategory = async (input: {
+    nombre: string;
+    tipo: "fijo" | "variable";
+  }) => {
+    try {
+      const created = await supplierService.createIndirectCategory(input);
+      fetchCategories(); // Recarga la lista
+      return created;
+    } catch (error) {
+      toast.error("Error al crear categoría de gasto");
+      return null;
+    }
+  };
+
   // Asegúrate de agregarlas en el 'return' del hook:
   return {
     suppliers,
     invoices,
+    indirectCategories,
     isLoadingSuppliers,
     isLoadingInvoices,
-    deleteInvoice: handleDeleteInvoice,
+
     refreshSuppliers: fetchSuppliers,
     refreshInvoices: fetchInvoices,
+
     createInvoice,
     updateInvoice,
+    deleteInvoice: handleDeleteInvoice,
+
     registerPayment,
+
     createSupplier: handleCreateSupplier,
     updateSupplier: handleUpdateSupplier,
     deleteSupplier: handleDeleteSupplier,
+
+    createIndirectCategory: handleCreateCategory, // Faltaba exportar esta función
+    updateIndirectCategory: handleUpdateCategory,
+    deleteIndirectCategory: handleDeleteCategory,
   };
 };

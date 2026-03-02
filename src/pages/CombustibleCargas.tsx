@@ -303,7 +303,7 @@ const CombustibleCargas = () => {
       <div className="flex justify-center">
         <Badge
           variant="outline"
-          className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200"
+          className=" bg-emerald-50 text-emerald-700 border-emerald-200"
         >
           Sí
         </Badge>
@@ -312,7 +312,7 @@ const CombustibleCargas = () => {
       <div className="flex justify-center">
         <Badge
           variant="outline"
-          className="text-[10px] bg-slate-50 text-slate-600 border-slate-200"
+          className=" bg-slate-50 text-slate-600 border-slate-200"
         >
           No
         </Badge>
@@ -441,7 +441,7 @@ const CombustibleCargas = () => {
             {row.excedeTanque ? (
               <Badge
                 variant="outline"
-                className="text-[10px] bg-amber-50 text-amber-700 border-amber-200"
+                className=" bg-amber-50 text-amber-700 border-amber-200"
                 title="Los litros exceden la capacidad configurada para la unidad"
               >
                 ALERTA
@@ -449,7 +449,7 @@ const CombustibleCargas = () => {
             ) : (
               <Badge
                 variant="outline"
-                className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200"
+                className=" bg-emerald-50 text-emerald-700 border-emerald-200"
               >
                 OK
               </Badge>

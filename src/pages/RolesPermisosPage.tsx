@@ -848,7 +848,7 @@ const RolesPermisosPage: React.FC = () => {
                               </div>
 
                               {modulo.descripcion && (
-                                <p className="text-[10px] text-muted-foreground pl-7">
+                                <p className=" text-muted-foreground pl-7">
                                   {modulo.descripcion}
                                 </p>
                               )}
