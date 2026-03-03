@@ -16,6 +16,7 @@ from app.schemas import operators as schemas
 
 
 def get_operators(db: Session, skip: int = 0, limit: int = 100):
+
     return (
         db.query(models.Operator)
         .filter(models.Operator.record_status != RecordStatus.ELIMINADO)

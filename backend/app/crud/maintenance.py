@@ -10,10 +10,10 @@ from sqlalchemy.orm import Session, joinedload, lazyload
 
 from app.models import models
 
-print("RecordStatus ELIMINADO value =>", models.RecordStatus.ELIMINADO.value)
+""" print("RecordStatus ELIMINADO value =>", models.RecordStatus.ELIMINADO.value)
 print("RecordStatus members =>", [e.value for e in models.RecordStatus])
 print("models loaded from =>", getattr(models, "__file__", None))
-
+ """
 
 from app.schemas import maintenance as schemas
 

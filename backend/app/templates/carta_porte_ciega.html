@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Carta Porte - Operador</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        font-size: 12px;
+        color: #333;
+        margin: 0;
+        padding: 0;
+      }
+      .header {
+        text-align: center;
+        border-bottom: 2px solid #1e293b;
+        padding-bottom: 10px;
+        margin-bottom: 20px;
+      }
+      .title {
+        font-size: 18px;
+        font-weight: bold;
+        margin: 0;
+        color: #1e293b;
+      }
+      .subtitle {
+        font-size: 14px;
+        font-weight: bold;
+        color: #64748b;
+        margin-top: 5px;
+      }
+
+      .section {
+        margin-bottom: 20px;
+        border: 1px solid #cbd5e1;
+        border-radius: 5px;
+        overflow: hidden;
+      }
+      .section-header {
+        background-color: #f1f5f9;
+        padding: 8px;
+        font-weight: bold;
+        border-bottom: 1px solid #cbd5e1;
+        font-size: 13px;
+      }
+      .section-content {
+        padding: 10px;
+        display: table;
+        width: 100%;
+        box-sizing: border-box;
+      }
+
+      .col {
+        display: table-cell;
+        width: 50%;
+        padding-right: 10px;
+        vertical-align: top;
+      }
+      .field {
+        margin-bottom: 8px;
+      }
+      .label {
+        font-weight: bold;
+        color: #475569;
+        font-size: 10px;
+        text-transform: uppercase;
+      }
+      .value {
+        font-size: 13px;
+        color: #0f172a;
+        margin-top: 2px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+      }
+      th,
+      td {
+        border: 1px solid #cbd5e1;
+        padding: 8px;
+        text-align: left;
+      }
+      th {
+        background-color: #f8fafc;
+        font-weight: bold;
+        font-size: 11px;
+      }
+
+      .finanzas {
+        text-align: right;
+        font-size: 14px;
+        font-weight: bold;
+        margin-top: 20px;
+        padding: 10px;
+        background-color: #f8fafc;
+        border: 1px dashed #94a3b8;
+      }
+      .legal {
+        margin-top: 30px;
+        font-size: 9px;
+        color: #64748b;
+        text-align: justify;
+        border-top: 1px solid #e2e8f0;
+        padding-top: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1 class="title">DOCUMENTO DE TRASLADO / CARTA PORTE (OPERADOR)</h1>
+      <p class="subtitle">
+        Folio Interno: #{{ trip.public_id or trip.id }} | Fecha de Emisión: {{
+        fecha_impresion }}
+      </p>
+    </div>
+
+    <div class="section">
+      <div class="section-header">1. DATOS DE LA RUTA Y CLIENTE</div>
+      <div class="section-content">
+        <div class="col">
+          <div class="field">
+            <div class="label">Cliente:</div>
+            <div class="value">
+              {{ trip.client.razon_social if trip.client else 'N/A' }}
+            </div>
+          </div>
+          <div class="field">
+            <div class="label">Origen:</div>
+            <div class="value">{{ trip.origin }}</div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="field">
+            <div class="label">Ruta:</div>
+            <div class="value">{{ trip.route_name }}</div>
+          </div>
+          <div class="field">
+            <div class="label">Destino Final:</div>
+            <div class="value">{{ trip.destination }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">2. DATOS DE LA MERCANCÍA</div>
+      <div class="section-content">
+        <table>
+          <thead>
+            <tr>
+              <th>Descripción (Catálogo SAT)</th>
+              <th>Peso Estimado (Ton)</th>
+              <th>¿Material Peligroso?</th>
+              <th>Clase IMO</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>{{ trip.descripcion_mercancia or 'Carga General' }}</td>
+              <td>{{ trip.peso_toneladas or '0.00' }} Ton</td>
+              <td>{{ 'SÍ' if trip.es_material_peligroso else 'NO' }}</td>
+              <td>{{ trip.clase_imo or 'N/A' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">3. RECURSOS ASIGNADOS AL TRAMO ACTUAL</div>
+      <div class="section-content">
+        <div class="col">
+          <div class="field">
+            <div class="label">Tractocamión:</div>
+            <div class="value">
+              {{ leg.unit.numero_economico if leg and leg.unit else 'Por
+              asignar' }} (Placas: {{ leg.unit.placas if leg and leg.unit else
+              'N/A' }})
+            </div>
+          </div>
+          <div class="field">
+            <div class="label">Remolque 1:</div>
+            <div class="value">Eco: {{ trip.remolque_1_id or 'N/A' }}</div>
+          </div>
+          <div class="field">
+            <div class="label">Remolque 2 / Dolly:</div>
+            <div class="value">
+              R2: {{ trip.remolque_2_id or 'N/A' }} | Dolly: {{ trip.dolly_id or
+              'N/A' }}
+            </div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="field">
+            <div class="label">Operador Asignado:</div>
+            <div class="value">
+              {{ leg.operator.name if leg and leg.operator else 'Por asignar' }}
+            </div>
+          </div>
+          <div class="field">
+            <div class="label">Licencia Federal:</div>
+            <div class="value">
+              {{ leg.operator.license_number if leg and leg.operator else 'N/A'
+              }}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="finanzas">Costo de Servicio (Flete): $ 1.00 MXN</div>
+
+    <div class="legal">
+      <strong>ADENDAS Y CONDICIONES DEL TRANSPORTE:</strong><br />
+      1. Para los efectos del presente contrato de transporte, se denomina
+      transportista al que realiza el servicio de transporte.<br />
+      2. La mercancía descrita en este documento NO es propiedad del
+      transportista. Todo el contenido y mercancía lícita o ilícita que se
+      encuentre al interior de los contenedores/remolques es responsabilidad
+      única y exclusiva del cliente o generador de la carga.<br />
+      3. El operador se exime de cualquier responsabilidad relacionada con
+      anomalías en la mercancía no declaradas en este documento.
+    </div>
+  </body>
+</html>

@@ -27,6 +27,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch"; // <-- NUEVO IMPORT PARA LA MERCANCÍA PELIGROSA
 
 // Componentes para el Buscador (shadcn)
 import {
@@ -49,6 +50,7 @@ import { useUnits } from "@/hooks/useUnits";
 import { useOperators } from "@/hooks/useOperators";
 import { useTrips } from "@/hooks/useTrips";
 import { useClients } from "@/hooks/useClients";
+import { useSatCatalogs } from "@/hooks/useSatCatalogs";
 
 // Tipos Reales
 import type {
@@ -68,6 +70,12 @@ type WizardData = {
   origen: string;
   destino: string;
 
+  //  Datos de la Mercancía
+  descripcion_mercancia: string;
+  peso_toneladas: number;
+  es_material_peligroso: boolean;
+  clase_imo: string;
+
   // Recursos
   unitId: string; // Tracto
   remolque1Id: string;
@@ -75,7 +83,9 @@ type WizardData = {
   remolque2Id: string;
   driverId: string;
 
-  // 🚀 NUEVOS: Lecturas Iniciales (Vital para liquidación)
+  leg_type: string;
+
+  // Lecturas Iniciales (Vital para liquidación)
   odometro_inicial: number;
   nivel_tanque_inicial: number;
 
@@ -166,6 +176,16 @@ export const DespachoWizard = () => {
   const { operadores } = useOperators();
   const { createTrip } = useTrips();
   const { clients } = useClients();
+  const { products: satProducts } = useSatCatalogs();
+
+  // 🚀 Formatear los productos para el SearchableSelect
+  const availableSatProducts = useMemo(() => {
+    return satProducts.map((p) => ({
+      label: `${p.clave} - ${p.descripcion}`, // Lo que ve el usuario
+      value: p.clave, // Usaremos la clave para identificarlo
+      ...p, // Guardamos la info extra por si acaso
+    }));
+  }, [satProducts]);
 
   const [data, setData] = useState<WizardData>({
     clienteId: "",
@@ -175,14 +195,22 @@ export const DespachoWizard = () => {
     origen: "",
     destino: "",
 
+    // Inicializar Mercancía
+    descripcion_mercancia: "Carga General",
+    peso_toneladas: 0,
+    es_material_peligroso: false,
+    clase_imo: "",
+
     unitId: "",
     remolque1Id: "",
     dollyId: "",
     remolque2Id: "",
     driverId: "",
 
+    leg_type: "carga_muelle",
+
     odometro_inicial: 0,
-    nivel_tanque_inicial: 100, // Por defecto lleno
+    nivel_tanque_inicial: 100,
 
     anticipo_casetas: 0,
     anticipo_viaticos: 0,
@@ -342,38 +370,47 @@ export const DespachoWizard = () => {
     }
 
     try {
+      // Usamos `any` temporalmente para que TS no llore si no has actualizado api.types.ts
       const payload: any = {
-        // Usa any si los nuevos campos aún no están en TripCreatePayload
         client_id: parseInt(data.clienteId, 10),
         sub_client_id: parseInt(data.subClienteId, 10),
         tariff_id: cleanId(data.routeId),
         origin: data.origen || selectedClient?.razon_social || "Origen",
         destination: data.destino || selectedSubClient?.ciudad || "Destino",
         route_name: data.routeNombre || "Ruta Estándar",
-        unit_id: parseInt(data.unitId, 10),
-        operator_id: parseInt(data.driverId, 10),
+
+        // 🚀 DATOS DE LA MERCANCÍA (Para Carta Porte)
+        descripcion_mercancia: data.descripcion_mercancia,
+        peso_toneladas: Number(data.peso_toneladas),
+        es_material_peligroso: data.es_material_peligroso,
+        clase_imo: data.es_material_peligroso ? data.clase_imo : null,
+
         remolque_1_id: cleanId(data.remolque1Id),
         dolly_id: isFullTrip ? cleanId(data.dollyId) : null,
         remolque_2_id: isFullTrip ? cleanId(data.remolque2Id) : null,
 
-        // Finanzas
+        // Finanzas Globales del Viaje
         tarifa_base: Number(infoTarifa.base || 0),
         costo_casetas: Number(infoTarifa.casetas || 0),
-        anticipo_casetas: Number(data.anticipo_casetas || 0),
-        anticipo_viaticos: Number(data.anticipo_viaticos || 0),
-        anticipo_combustible: Number(data.anticipo_combustible || 0),
-        otros_anticipos: 0,
-        saldo_operador: 0,
 
-        // Datos Vitales para Liquidación
-        odometro_inicial: Number(data.odometro_inicial),
-        nivel_tanque_inicial: Number(data.nivel_tanque_inicial),
-
-        status: status as any,
+        status: status,
         start_date: new Date().toISOString(),
+
+        // 🚀 El primer tramo envuelto
+        initial_leg: {
+          // Por defecto, asume que el primer paso es ir al muelle
+          unit_id: parseInt(data.unitId, 10),
+          leg_type: data.leg_type,
+          operator_id: parseInt(data.driverId, 10),
+          odometro_inicial: Number(data.odometro_inicial),
+          nivel_tanque_inicial: Number(data.nivel_tanque_inicial),
+          anticipo_casetas: Number(data.anticipo_casetas || 0),
+          anticipo_viaticos: Number(data.anticipo_viaticos || 0),
+          anticipo_combustible: Number(data.anticipo_combustible || 0),
+        },
       };
 
-      const result = await createTrip(payload);
+      const result = await createTrip(payload as TripCreatePayload);
       if (result) {
         toast({
           title:
@@ -382,7 +419,7 @@ export const DespachoWizard = () => {
               : "¡Viaje en Stand-By!",
           description: "Información guardada exitosamente.",
         });
-        setTimeout(() => navigate("/trips"), 1500);
+        setTimeout(() => navigate("/despacho"), 1500);
       }
     } catch (error) {
       console.error("Error al despachar:", error);
@@ -414,7 +451,7 @@ export const DespachoWizard = () => {
       <CardContent className="pt-6 space-y-6">
         <div className="flex gap-2 mb-6">
           <Badge variant={currentStep >= 1 ? "default" : "outline"}>
-            1. Ruta
+            1. Ruta y Mercancía
           </Badge>
           <Badge variant={currentStep >= 2 ? "default" : "outline"}>
             2. Recursos
@@ -563,6 +600,98 @@ export const DespachoWizard = () => {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* 🚀 NUEVA SECCIÓN: DATOS DE LA MERCANCÍA */}
+            <div className="col-span-2 mt-4 space-y-4 bg-slate-50 p-4 rounded-lg border border-slate-200">
+              <h4 className="text-sm font-bold text-brand-navy flex items-center gap-2">
+                Datos de la Mercancía (Para Carta Porte)
+              </h4>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Descripción de la Carga (Catálogo SAT) *</Label>
+                  <SearchableSelect
+                    items={availableSatProducts}
+                    value={data.descripcion_mercancia.split(" ")[0]} // Tomar solo la clave si ya está guardada
+                    onSelect={(val) => {
+                      // Buscar el producto original para auto-completar si es peligroso
+                      const selectedProd = availableSatProducts.find(
+                        (p) => p.value === val,
+                      );
+                      if (selectedProd) {
+                        const esPeligroso =
+                          selectedProd.es_material_peligroso === "1";
+                        setData((p) => ({
+                          ...p,
+                          // Guardamos la cadena combinada para el PDF: "Clave - Descripción"
+                          descripcion_mercancia: selectedProd.label,
+                          es_material_peligroso: esPeligroso,
+                          clase_imo: esPeligroso ? p.clase_imo : "",
+                        }));
+                      }
+                    }}
+                    placeholder="Buscar producto o clave SAT..."
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Peso Estimado (Toneladas)</Label>
+                  <Input
+                    type="number"
+                    placeholder="Ej: 3.5"
+                    value={data.peso_toneladas || ""}
+                    onChange={(e) =>
+                      setData((p) => ({
+                        ...p,
+                        peso_toneladas: parseFloat(e.target.value) || 0,
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-6 pt-2">
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="peligroso"
+                    checked={data.es_material_peligroso}
+                    onCheckedChange={(checked) =>
+                      setData((p) => ({
+                        ...p,
+                        es_material_peligroso: checked,
+                        clase_imo: checked ? p.clase_imo : "",
+                      }))
+                    }
+                  />
+                  <Label
+                    htmlFor="peligroso"
+                    className={
+                      data.es_material_peligroso
+                        ? "text-rose-600 font-bold"
+                        : ""
+                    }
+                  >
+                    ¿Es Material Peligroso?
+                  </Label>
+                </div>
+
+                {data.es_material_peligroso && (
+                  <div className="flex-1 space-y-1">
+                    <Label className="text-xs text-rose-600">
+                      Clase IMO (Ej: 8 - Corrosivos)
+                    </Label>
+                    <Input
+                      className="h-8 border-rose-200"
+                      placeholder="Indique la clase IMO..."
+                      value={data.clase_imo}
+                      onChange={(e) =>
+                        setData((p) => ({ ...p, clase_imo: e.target.value }))
+                      }
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -575,6 +704,35 @@ export const DespachoWizard = () => {
               <span className="text-xs text-muted-foreground flex items-center gap-1">
                 <Gauge className="h-3 w-3" /> El odómetro es obligatorio
               </span>
+            </div>
+            <div className="flex items-center gap-3 bg-indigo-50 p-2 rounded-lg border border-indigo-100">
+              <Label className="text-xs font-bold text-indigo-800 uppercase tracking-wider whitespace-nowrap">
+                Fase Inicial:
+              </Label>
+              <Select
+                value={data.leg_type}
+                onValueChange={(val) =>
+                  setData((p) => ({ ...p, leg_type: val }))
+                }
+              >
+                <SelectTrigger className="h-8 text-xs bg-white border-indigo-200 w-[200px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem
+                    value="carga_muelle"
+                    className="font-medium text-indigo-900"
+                  >
+                    1. Carga (Muelle / Patio)
+                  </SelectItem>
+                  <SelectItem
+                    value="ruta_carretera"
+                    className="font-medium text-emerald-900"
+                  >
+                    2. Ruta Directa (Carretera)
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="grid grid-cols-2 gap-4">

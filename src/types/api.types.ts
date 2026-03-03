@@ -392,7 +392,7 @@ export interface RegisterPaymentPayload {
 }
 
 // ==========================================
-// DESPACHO / VIAJES (Trips)
+// DESPACHO / VIAJES (Trips & Legs)
 // ==========================================
 
 export type TripStatus =
@@ -405,13 +405,51 @@ export type TripStatus =
   | "accidente"
   | "bloqueado";
 
+export type TripLegType = "carga_muelle" | "ruta_carretera" | "entrega_vacio";
+
+export interface TripTimelineEvent {
+  id?: number;
+  time: string;
+  event: string;
+  event_type: string;
+}
+
+// 🚀 EL NUEVO TRAMO (Esta es la nueva "Tarjeta" del Kanban)
+export interface TripLeg {
+  id: number;
+  trip_id: number;
+  leg_type: TripLegType;
+  status: TripStatus;
+
+  unit_id?: number | null;
+  operator_id?: number | null;
+
+  anticipo_casetas: number;
+  anticipo_viaticos: number;
+  anticipo_combustible: number;
+  otros_anticipos: number;
+  saldo_operador: number;
+
+  odometro_inicial: number;
+  nivel_tanque_inicial: number;
+
+  start_date?: string | null;
+  actual_arrival?: string | null;
+  last_location?: string | null;
+  last_update?: string | null;
+
+  timeline_events?: TripTimelineEvent[];
+  unit?: Unit;
+  operator?: Operator;
+  trip?: Trip; // Referencia al viaje padre (opcional)
+}
+
+// 🚀 EL VIAJE PADRE (Contenedor general)
 export interface Trip {
   id: number;
   public_id?: string;
   client_id: number;
   sub_client_id: number;
-  unit_id: number;
-  operator_id: number;
   tariff_id?: number | null;
 
   remolque_1_id?: number | null;
@@ -425,52 +463,47 @@ export interface Trip {
 
   tarifa_base: number;
   costo_casetas: number;
+
+  start_date: string;
+  closed_at?: string | null;
+
+  // Relaciones
+  client?: Client;
+  sub_client?: SubClient;
+  remolque_1?: Unit;
+  dolly?: Unit;
+  remolque_2?: Unit;
+
+  legs?: TripLeg[]; // Lista de tramos de este viaje
+}
+
+export interface TripLegCreatePayload {
+  leg_type: TripLegType;
+  unit_id?: number | null;
+  operator_id?: number | null;
+  odometro_inicial: number;
+  nivel_tanque_inicial: number;
   anticipo_casetas: number;
   anticipo_viaticos: number;
   anticipo_combustible: number;
-  otros_anticipos: number;
-  saldo_operador: number;
-
-  start_date: string;
-  estimated_arrival?: string | null;
-  actual_arrival?: string | null;
-  closed_at?: string | null;
-  last_location?: string | null;
-  last_update?: string | null;
-  timeline_events?: TripTimelineEvent[];
-  // Relaciones (Opcionales dependiendo de tu endpoint GET)
-  client?: Client;
-  sub_client?: SubClient;
-  unit?: Unit;
-  operator?: Operator;
 }
 
 export interface TripCreatePayload {
   client_id: number;
   sub_client_id: number;
-  unit_id: number;
-  operator_id: number;
-  remolque_1_id?: number | null;
-  dolly_id?: number | null;
-  remolque_2_id?: number | null;
   tariff_id?: number | null;
   origin: string;
   destination: string;
   route_name?: string | null;
+
+  remolque_1_id?: number | null;
+  dolly_id?: number | null;
+  remolque_2_id?: number | null;
+
   tarifa_base: number;
   costo_casetas?: number;
-  anticipo_casetas?: number;
-  anticipo_viaticos?: number;
-  anticipo_combustible?: number;
-  otros_anticipos?: number;
-  saldo_operador?: number;
-  start_date: string;
   status: TripStatus;
-}
+  start_date: string;
 
-export interface TripTimelineEvent {
-  id?: number;
-  time: string;
-  event: string;
-  event_type: string;
+  initial_leg: TripLegCreatePayload; // ✅ Requisito de tu backend
 }

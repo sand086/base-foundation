@@ -1,21 +1,22 @@
+// src/hooks/useTrips.ts
 import { useState, useCallback, useEffect } from "react";
 import axiosClient from "../api/axiosClient";
 import { useToast } from "@/components/ui/use-toast";
-import { Trip, TripCreatePayload } from "@/types/api.types";
+import {
+  Trip,
+  TripCreatePayload,
+  TripLegCreatePayload,
+} from "@/types/api.types";
 
 export const useTrips = () => {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  // 🔍 EL SERVICIO GET: Trae los datos de la DB
   const fetchTrips = useCallback(async () => {
     setLoading(true);
     try {
-      // Si tu backend usa prefijo /api, asegúrate que axiosClient lo tenga
-      // o cámbialo aquí a "/api/trips"
       const response = await axiosClient.get("/trips");
-      console.log("Datos recibidos:", response.data); // Debug en consola
       setTrips(response.data);
     } catch (error) {
       console.error("Error fetching trips:", error);
@@ -29,12 +30,11 @@ export const useTrips = () => {
     }
   }, [toast]);
 
-  // 🚀 EL SERVICIO POST: Crea un nuevo viaje
   const createTrip = async (tripData: TripCreatePayload) => {
     try {
       const response = await axiosClient.post("/trips", tripData);
       toast({ title: "Éxito", description: "Viaje despachado correctamente" });
-      await fetchTrips(); // Recargar la lista automáticamente
+      await fetchTrips();
       return response.data;
     } catch (error: any) {
       const detail = error.response?.data?.detail || "Error al crear despacho";
@@ -48,7 +48,36 @@ export const useTrips = () => {
     }
   };
 
-  // 🔄 EL SERVICIO PATCH: Actualiza el estatus (usado en el Drag & Drop)
+  // 🚀 NUEVA FUNCIÓN: DESENGANCHAR Y CREAR SIGUIENTE TRAMO
+  const createNextLeg = async (
+    tripId: string,
+    legData: TripLegCreatePayload,
+  ) => {
+    try {
+      const response = await axiosClient.post(
+        `/trips/${tripId}/next-leg`,
+        legData,
+      );
+      toast({
+        title: "Relevo Exitoso",
+        description: "El remolque ha sido asignado a la nueva unidad.",
+      });
+      await fetchTrips();
+      return response.data;
+    } catch (error: any) {
+      const detail = error.response?.data?.detail || "Error al hacer el relevo";
+      toast({
+        title: "Error",
+        description:
+          typeof detail === "string"
+            ? detail
+            : "No se pudo realizar el desenganche.",
+        variant: "destructive",
+      });
+      return null;
+    }
+  };
+
   const updateTripStatus = async (
     id: string,
     status: string,
@@ -58,20 +87,18 @@ export const useTrips = () => {
       await axiosClient.patch(`/trips/${id}/status`, null, {
         params: { status, location },
       });
-      // Actualización optimista local para que el Kanban sea fluido
-      setTrips((prev) =>
-        prev.map((t) =>
-          String(t.id) === id ? { ...t, status: status as any } : t,
-        ),
-      );
-      toast({ title: "Actualizado", description: `Viaje movido a ${status}` });
+      toast({
+        title: "Actualizado",
+        description: `Viaje movido a ${status.replace("_", " ")}`,
+      });
+      fetchTrips(); // Refrescamos todo para no fallar con los tramos anidados
     } catch (error) {
       toast({
         title: "Error",
         description: "No se pudo cambiar el estado del viaje",
         variant: "destructive",
       });
-      fetchTrips(); // Revertir cambios recargando desde el server
+      fetchTrips();
     }
   };
 
@@ -79,7 +106,7 @@ export const useTrips = () => {
     try {
       await axiosClient.put(`/trips/${id}`, tripData);
       toast({ title: "Éxito", description: "Viaje actualizado correctamente" });
-      await fetchTrips(); // Recarga la info
+      await fetchTrips();
       return true;
     } catch (error) {
       toast({
@@ -95,7 +122,7 @@ export const useTrips = () => {
     try {
       await axiosClient.delete(`/trips/${id}`);
       toast({ title: "Eliminado", description: "El viaje ha sido borrado." });
-      fetchTrips(); // Recarga la lista
+      fetchTrips();
     } catch (error) {
       toast({
         variant: "destructive",
@@ -136,7 +163,7 @@ export const useTrips = () => {
         title: "Bitácora actualizada",
         description: "El evento se guardó correctamente.",
       });
-      await fetchTrips(); // 🔄 Recarga los viajes
+      await fetchTrips();
       return true;
     } catch (error) {
       toast({
@@ -148,40 +175,42 @@ export const useTrips = () => {
     }
   };
 
-  const getTripSettlement = async (tripId: string) => {
+  //  Las URLs de liquidación ahora apuntan a /leg/
+  const getTripSettlement = async (legId: string) => {
     try {
-      const response = await axiosClient.get(`/trips/${tripId}/settlement`);
+      const response = await axiosClient.get(`/trips/leg/${legId}/settlement`);
       return response.data;
     } catch (error) {
       toast({
         variant: "destructive",
         title: "Error",
-        description: "No se pudo cargar la liquidación de este viaje.",
+        description: "No se pudo cargar la liquidación de este tramo.",
       });
       return null;
     }
   };
 
-  const closeTripSettlement = async (tripId: string, payload: any) => {
+  
+
+  const closeTripSettlement = async (legId: string, payload: any) => {
     try {
-      await axiosClient.post(`/trips/${tripId}/close-settlement`, payload);
+      await axiosClient.post(`/trips/leg/${legId}/close-settlement`, payload);
       toast({
-        title: "Viaje Liquidado",
-        description: "El viaje ha sido cerrado exitosamente.",
+        title: "Tramo Liquidado",
+        description: "El pago del operador ha sido cerrado exitosamente.",
       });
-      await fetchTrips(); // Recargamos para que el viaje pase a "Cerrado" en el tablero
+      await fetchTrips();
       return true;
     } catch (error) {
       toast({
         variant: "destructive",
         title: "Error al liquidar",
-        description: "Hubo un problema cerrando el viaje.",
+        description: "Hubo un problema cerrando el tramo.",
       });
       return false;
     }
   };
 
-  // Auto-arranque al cargar cualquier componente que use este hook
   useEffect(() => {
     fetchTrips();
   }, [fetchTrips]);
@@ -191,6 +220,7 @@ export const useTrips = () => {
     loading,
     fetchTrips,
     createTrip,
+    createNextLeg, // <- Nueva función expuesta
     updateTripStatus,
     editTrip,
     deleteTrip,
