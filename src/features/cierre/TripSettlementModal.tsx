@@ -20,9 +20,10 @@ import {
   Award,
   Loader2,
   Calculator,
-  Gauge,
   ShieldAlert,
   Shield,
+  Gauge,
+  X,
 } from "lucide-react";
 import {
   Card,
@@ -61,23 +62,37 @@ export function TripSettlementModal({
   tripId,
 }: TripSettlementModalProps) {
   const { getTripSettlement, closeTripSettlement } = useTrips();
+
+  // Estado principal que viene del Backend
   const [settlement, setSettlement] = useState<any>(null);
+
   const [loading, setLoading] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
 
-  // Estados para Bono Manual
+  // Paso actual (0 = Conciliacion Combustible, 1 = Gastos Extra, 2 = Liquidacion)
+  const [step, setStep] = useState(0);
+
+  // Formularios manuales para agregar cosas en el momento
   const [showAddBonoDialog, setShowAddBonoDialog] = useState(false);
   const [bonoAmount, setBonoAmount] = useState("");
   const [bonoDescription, setBonoDescription] = useState("");
 
-  // Paso actual (0 = Conciliacion Combustible, 1 = Liquidacion Financiera)
-  const [step, setStep] = useState(0);
+  const [showFuelForm, setShowFuelForm] = useState(false);
+  const [manualFuel, setManualFuel] = useState({
+    litros: "",
+    precio: "",
+    estacion: "",
+  });
 
-  // Formulario de Auditoría
-  const [fuelForm, setFuelForm] = useState({
-    litrosBomba: "",
-    litrosVales: "",
+  const [showExpenseForm, setShowExpenseForm] = useState(false);
+  const [manualExpense, setManualExpense] = useState({
+    monto: "",
+    descripcion: "",
+  });
+
+  // Formulario de Auditoría (ECM)
+  const [ecmForm, setEcmForm] = useState({
     lecturaInicialECM: "",
     lecturaFinalECM: "",
     litrosConsumidosECM: "",
@@ -87,28 +102,23 @@ export function TripSettlementModal({
     if (open && tripId) {
       setLoading(true);
       setStep(0);
+      // Reset forms
+      setEcmForm({
+        lecturaInicialECM: "",
+        lecturaFinalECM: "",
+        litrosConsumidosECM: "",
+      });
+      setShowFuelForm(false);
+      setShowExpenseForm(false);
+
       getTripSettlement(tripId).then((data) => {
         setSettlement(data);
-        // Precargamos los litros de vales que el backend haya encontrado
-        setFuelForm({
-          litrosBomba: "",
-          litrosVales: data?.consumoRealLitros
-            ? String(data.consumoRealLitros)
-            : "",
-          lecturaInicialECM: "",
-          lecturaFinalECM: "",
-          litrosConsumidosECM: "",
-        });
         setLoading(false);
       });
     } else {
       setSettlement(null);
     }
-  }, [open, tripId]);
-
-  const handleInputChange = (field: string, value: string) => {
-    setFuelForm((prev) => ({ ...prev, [field]: value }));
-  };
+  }, [open, tripId, getTripSettlement]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("es-MX", {
@@ -117,90 +127,123 @@ export function TripSettlementModal({
     }).format(amount || 0);
   };
 
-  // Cálculo en tiempo real de la auditoría
+  // ==========================================
+  // LÓGICA DE CÁLCULOS DINÁMICOS
+  // ==========================================
+
+  const fuelTickets = useMemo(() => {
+    if (!settlement) return [];
+    // Filtramos los conceptos que son vales de diesel de la DB
+    return settlement.conceptos.filter(
+      (c: any) => c.categoria === "combustible_ticket",
+    );
+  }, [settlement]);
+
+  const totalLitrosFisicos = useMemo(() => {
+    return fuelTickets.reduce(
+      (sum: number, t: any) => sum + (t.metadata?.litros || 0),
+      0,
+    );
+  }, [fuelTickets]);
+
   const auditResult = useMemo(() => {
     if (!settlement) return null;
 
-    const litrosBomba = parseFloat(fuelForm.litrosBomba) || 0;
-    const litrosVales = parseFloat(fuelForm.litrosVales) || 0;
-    const litrosConsumidosECM = parseFloat(fuelForm.litrosConsumidosECM) || 0;
-    const lecturaInicial = parseFloat(fuelForm.lecturaInicialECM) || 0;
-    const lecturaFinal = parseFloat(fuelForm.lecturaFinalECM) || 0;
-
+    const litrosConsumidosECM = parseFloat(ecmForm.litrosConsumidosECM) || 0;
     if (litrosConsumidosECM <= 0) return null;
 
-    const totalFisicoLitros = litrosBomba + litrosVales;
-    const totalDigitalLitros = litrosConsumidosECM;
-    const diferenciaLitros = totalFisicoLitros - totalDigitalLitros;
-
-    const kmsRecorridos =
-      lecturaFinal > lecturaInicial
-        ? lecturaFinal - lecturaInicial
-        : settlement.kmsRecorridos;
-    const rendimientoKmL =
-      totalFisicoLitros > 0 ? kmsRecorridos / totalFisicoLitros : 0;
-
-    const toleranciaPermitida = totalDigitalLitros * TOLERANCE_PERCENTAGE;
+    const diferenciaLitros = totalLitrosFisicos - litrosConsumidosECM;
+    const toleranciaPermitida = litrosConsumidosECM * TOLERANCE_PERCENTAGE;
     const esRoboSospechado = diferenciaLitros > toleranciaPermitida;
+
+    // Calculamos el precio promedio pagado por litro para hacer la deducción
+    const precioPromedio =
+      fuelTickets.length > 0
+        ? fuelTickets.reduce(
+            (sum: number, t: any) => sum + (t.metadata?.precio_por_litro || 0),
+            0,
+          ) / fuelTickets.length
+        : settlement.precioPorLitro || 24.5;
+
     const deduccionCalculada = esRoboSospechado
-      ? diferenciaLitros * settlement.precioPorLitro
+      ? diferenciaLitros * precioPromedio
       : 0;
 
     return {
-      totalFisicoLitros,
-      totalDigitalLitros,
       diferenciaLitros,
-      rendimientoKmL,
       toleranciaPermitida,
       esRoboSospechado,
       deduccionCalculada,
+      litrosConsumidosECM,
     };
-  }, [fuelForm, settlement]);
+  }, [ecmForm, totalLitrosFisicos, settlement, fuelTickets]);
 
-  const handleContinueToFinance = () => {
-    if (!auditResult) {
-      toast.error("Datos Incompletos", {
-        description: "Ingresa los litros consumidos (ECM) para continuar.",
-      });
-      return;
+  // ==========================================
+  // HANDLERS PARA AGREGAR DATOS MANUALES
+  // ==========================================
+
+  const handleAddManualFuel = () => {
+    const lts = parseFloat(manualFuel.litros);
+    const prc = parseFloat(manualFuel.precio);
+    if (
+      isNaN(lts) ||
+      isNaN(prc) ||
+      lts <= 0 ||
+      prc <= 0 ||
+      !manualFuel.estacion
+    ) {
+      return toast.error("Completa todos los campos del ticket");
     }
 
-    // Actualizamos los conceptos de liquidación basados en esta auditoría manual
-    setSettlement((prev: any) => {
-      // Filtramos cualquier deducción de combustible previa del backend
-      const conceptosLimpios = prev.conceptos.filter(
-        (c: any) => c.categoria !== "combustible",
-      );
+    const montoTotal = lts * prc;
 
-      // Si la auditoría manual detectó robo, agregamos el vale
-      if (auditResult.esRoboSospechado) {
-        conceptosLimpios.push({
-          id: `CP-COMB-${Date.now()}`,
-          tipo: "deduccion",
-          categoria: "combustible",
-          descripcion: `Vale Exceso Combustible (${auditResult.diferenciaLitros.toFixed(2)} L)`,
-          monto: auditResult.deduccionCalculada,
-          esAutomatico: true,
-        });
-      }
+    const nuevoConcepto = {
+      id: `CP-COMB-MANUAL-${Date.now()}`,
+      tipo: "deduccion",
+      categoria: "combustible_ticket",
+      descripcion: `Ticket Manual: ${manualFuel.estacion}`,
+      monto: montoTotal,
+      esAutomatico: false,
+      metadata: { litros: lts, precio_por_litro: prc }, // Guardamos litros extra para el recálculo
+    };
 
-      const totalIng = conceptosLimpios
-        .filter((c: any) => c.tipo === "ingreso")
-        .reduce((sum: number, c: any) => sum + c.monto, 0);
-      const totalDed = conceptosLimpios
-        .filter((c: any) => c.tipo === "deduccion")
-        .reduce((sum: number, c: any) => sum + c.monto, 0);
+    setSettlement((prev: any) => ({
+      ...prev,
+      conceptos: [...prev.conceptos, nuevoConcepto],
+      totalDeducciones: prev.totalDeducciones + montoTotal,
+      netoAPagar: prev.totalIngresos - (prev.totalDeducciones + montoTotal),
+    }));
 
-      return {
-        ...prev,
-        conceptos: conceptosLimpios,
-        totalIngresos: totalIng,
-        totalDeducciones: totalDed,
-        netoAPagar: totalIng - totalDed,
-      };
-    });
+    setManualFuel({ litros: "", precio: "", estacion: "" });
+    setShowFuelForm(false);
+    toast.success("Ticket de combustible agregado");
+  };
 
-    setStep(1); // Pasamos al paso 2
+  const handleAddManualExpense = () => {
+    const monto = parseFloat(manualExpense.monto);
+    if (isNaN(monto) || monto <= 0 || !manualExpense.descripcion) {
+      return toast.error("Completa descripción y monto del gasto");
+    }
+
+    const nuevoConcepto = {
+      id: `CP-GASTO-${Date.now()}`,
+      tipo: "ingreso", // Se asume que la empresa le REEMBOLSA el gasto al chofer (Ingreso a su favor)
+      categoria: "gasto_extra",
+      descripcion: `Reembolso Gasto: ${manualExpense.descripcion}`,
+      monto: monto,
+      esAutomatico: false,
+    };
+
+    setSettlement((prev: any) => ({
+      ...prev,
+      conceptos: [...prev.conceptos, nuevoConcepto],
+      totalIngresos: prev.totalIngresos + monto,
+      netoAPagar: prev.totalIngresos + monto - prev.totalDeducciones,
+    }));
+
+    setManualExpense({ monto: "", descripcion: "" });
+    setShowExpenseForm(false);
+    toast.success("Gasto extra agregado como reembolso");
   };
 
   const handleAddBono = () => {
@@ -228,6 +271,56 @@ export function TripSettlementModal({
     setBonoAmount("");
     setBonoDescription("");
     toast.success(`Se agregó un bono de ${formatCurrency(amount)}`);
+  };
+
+  // ==========================================
+  // NAVEGACIÓN Y CIERRE FINAL
+  // ==========================================
+
+  const proceedToFinance = () => {
+    if (!auditResult && totalLitrosFisicos > 0) {
+      return toast.error(
+        "Debes ingresar los litros del ECM para validar el rendimiento.",
+      );
+    }
+
+    // Inyectar el vale de cobro si hubo robo
+    if (auditResult && auditResult.esRoboSospechado) {
+      setSettlement((prev: any) => {
+        // Limpiamos vales de exceso anteriores para no duplicar si el usuario va y viene
+        const limpios = prev.conceptos.filter(
+          (c: any) => c.categoria !== "cobro_exceso_combustible",
+        );
+
+        const valeCastigo = {
+          id: `CP-EXCESO-${Date.now()}`,
+          tipo: "deduccion",
+          categoria: "cobro_exceso_combustible",
+          descripcion: `Cobro Exceso Combustible (${auditResult.diferenciaLitros.toFixed(2)} L)`,
+          monto: auditResult.deduccionCalculada,
+          esAutomatico: true,
+        };
+
+        limpios.push(valeCastigo);
+
+        const tIngresos = limpios
+          .filter((c: any) => c.tipo === "ingreso")
+          .reduce((a: number, b: any) => a + b.monto, 0);
+        const tDeducciones = limpios
+          .filter((c: any) => c.tipo === "deduccion")
+          .reduce((a: number, b: any) => a + b.monto, 0);
+
+        return {
+          ...prev,
+          conceptos: limpios,
+          totalIngresos: tIngresos,
+          totalDeducciones: tDeducciones,
+          netoAPagar: tIngresos - tDeducciones,
+        };
+      });
+    }
+
+    setStep(1);
   };
 
   const handleAuthorizeAndClose = async () => {
@@ -266,15 +359,15 @@ export function TripSettlementModal({
               <FileCheck className="h-6 w-6" />
             )}
             {step === 0
-              ? "1. Auditoría de Combustible"
-              : "2. Liquidación Financiera"}
+              ? "Paso 1: Auditoría y Gastos de Ruta"
+              : "Paso 2: Resumen y Cierre Financiero"}
           </DialogTitle>
         </DialogHeader>
 
         {loading || !settlement ? (
           <div className="flex flex-col items-center justify-center p-12 text-muted-foreground">
             <Loader2 className="h-8 w-8 animate-spin mb-4 text-brand-navy" />
-            <p>Cargando información del viaje...</p>
+            <p>Cruzando datos de viaje, anticipos y combustible...</p>
           </div>
         ) : (
           <div className="space-y-6 pb-4">
@@ -329,210 +422,303 @@ export function TripSettlementModal({
             </div>
 
             {/* ============================================================== */}
-            {/* PASO 1: CONCILIACIÓN DE COMBUSTIBLE */}
+            {/* PASO 1: CONCILIACIÓN DE COMBUSTIBLE Y GASTOS */}
             {/* ============================================================== */}
             {step === 0 && (
-              <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+              <div className="space-y-6 animate-in fade-in slide-in-from-left-4 duration-300">
                 <div className="grid md:grid-cols-2 gap-6">
-                  {/* Datos Físicos */}
-                  <Card className="border-t-4 border-t-sky-500 shadow-sm">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-lg flex items-center gap-2">
-                        <Fuel className="h-5 w-5 text-sky-500" /> Datos Físicos
-                      </CardTitle>
-                      <CardDescription>
-                        Combustible entregado real
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="space-y-2">
-                        <Label>Litros Bomba (Patio)</Label>
-                        <div className="relative">
-                          <Input
-                            type="number"
-                            value={fuelForm.litrosBomba}
-                            onChange={(e) =>
-                              handleInputChange("litrosBomba", e.target.value)
-                            }
-                            className="pr-10"
-                            placeholder="0.00"
-                          />
-                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
-                            L
-                          </span>
+                  {/* SECCIÓN DE TICKETS Y GASTOS */}
+                  <div className="space-y-4">
+                    <Card className="border-t-4 border-t-sky-500 shadow-sm h-full">
+                      <CardHeader className="pb-3 flex flex-row items-center justify-between">
+                        <div>
+                          <CardTitle className="text-lg flex items-center gap-2">
+                            <Fuel className="h-5 w-5 text-sky-500" /> Cargas
+                            Físicas de Ruta
+                          </CardTitle>
+                          <CardDescription>
+                            Tickets registrados y vales.
+                          </CardDescription>
                         </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Litros Vales (En Ruta)</Label>
-                        <div className="relative">
-                          <Input
-                            type="number"
-                            value={fuelForm.litrosVales}
-                            onChange={(e) =>
-                              handleInputChange("litrosVales", e.target.value)
-                            }
-                            className="pr-10"
-                            placeholder="0.00"
-                          />
-                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
-                            L
-                          </span>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowFuelForm(!showFuelForm)}
+                        >
+                          <Plus className="h-4 w-4 mr-1" /> Ticket
+                        </Button>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        {/* Formulario Oculto Ticket */}
+                        {showFuelForm && (
+                          <div className="bg-slate-50 p-3 rounded-lg border border-sky-200 mb-4 grid grid-cols-2 gap-2 relative">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-white border"
+                              onClick={() => setShowFuelForm(false)}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                            <div className="col-span-2 space-y-1">
+                              <Label className="text-xs">
+                                Estación/Referencia
+                              </Label>
+                              <Input
+                                value={manualFuel.estacion}
+                                onChange={(e) =>
+                                  setManualFuel({
+                                    ...manualFuel,
+                                    estacion: e.target.value,
+                                  })
+                                }
+                                className="h-8 text-sm"
+                                placeholder="Ej: OXXO Gas Celaya"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Litros</Label>
+                              <Input
+                                type="number"
+                                value={manualFuel.litros}
+                                onChange={(e) =>
+                                  setManualFuel({
+                                    ...manualFuel,
+                                    litros: e.target.value,
+                                  })
+                                }
+                                className="h-8 text-sm"
+                                placeholder="0.00"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Precio/L</Label>
+                              <Input
+                                type="number"
+                                value={manualFuel.precio}
+                                onChange={(e) =>
+                                  setManualFuel({
+                                    ...manualFuel,
+                                    precio: e.target.value,
+                                  })
+                                }
+                                className="h-8 text-sm"
+                                placeholder="24.50"
+                              />
+                            </div>
+                            <Button
+                              className="col-span-2 h-8 text-xs mt-1"
+                              onClick={handleAddManualFuel}
+                            >
+                              Guardar Ticket
+                            </Button>
+                          </div>
+                        )}
 
-                  {/* Datos Digitales (ECM) */}
-                  <Card className="border-t-4 border-t-primary shadow-sm">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-lg flex items-center gap-2">
-                        <Gauge className="h-5 w-5 text-primary" /> Datos
-                        Digitales (ECM)
-                      </CardTitle>
-                      <CardDescription>
-                        Lecturas del computador del motor
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label>Lectura Inicial (km)</Label>
-                          <Input
-                            type="number"
-                            value={fuelForm.lecturaInicialECM}
-                            onChange={(e) =>
-                              handleInputChange(
-                                "lecturaInicialECM",
-                                e.target.value,
-                              )
-                            }
-                            placeholder="Opcional"
-                          />
+                          {fuelTickets.length === 0 ? (
+                            <p className="text-sm text-muted-foreground italic text-center py-4 bg-slate-50 rounded border border-dashed">
+                              No hay tickets registrados en este viaje.
+                            </p>
+                          ) : (
+                            fuelTickets.map((t: any, idx: number) => (
+                              <div
+                                key={idx}
+                                className="flex justify-between items-center bg-sky-50/50 border border-sky-100 p-2 rounded-md text-sm"
+                              >
+                                <span className="font-medium text-slate-700">
+                                  {t.descripcion}
+                                </span>
+                                <span className="font-mono text-sky-700 font-bold">
+                                  {t.metadata?.litros?.toFixed(2) || 0} L
+                                </span>
+                              </div>
+                            ))
+                          )}
                         </div>
-                        <div className="space-y-2">
-                          <Label>Lectura Final (km)</Label>
-                          <Input
-                            type="number"
-                            value={fuelForm.lecturaFinalECM}
-                            onChange={(e) =>
-                              handleInputChange(
-                                "lecturaFinalECM",
-                                e.target.value,
-                              )
-                            }
-                            placeholder="Opcional"
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="font-bold">
-                          Litros Consumidos (ECM) *
-                        </Label>
-                        <div className="relative">
-                          <Input
-                            type="number"
-                            value={fuelForm.litrosConsumidosECM}
-                            onChange={(e) =>
-                              handleInputChange(
-                                "litrosConsumidosECM",
-                                e.target.value,
-                              )
-                            }
-                            className="pr-10 border-primary"
-                            placeholder="0.00"
-                          />
-                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
-                            L
+                        <div className="flex justify-between p-3 bg-slate-100 rounded-lg font-bold border">
+                          <span>Total Litros Físicos:</span>
+                          <span className="font-mono text-lg">
+                            {totalLitrosFisicos.toFixed(2)} L
                           </span>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* SECCIÓN ECM Y GASTOS ADICIONALES */}
+                  <div className="space-y-4">
+                    <Card className="border-t-4 border-t-primary shadow-sm">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-lg flex items-center gap-2">
+                          <Gauge className="h-5 w-5 text-primary" /> Datos del
+                          Motor (ECM)
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <Label className="font-bold text-brand-navy">
+                              Total Litros Consumidos (Lectura ECM) *
+                            </Label>
+                            <div className="relative">
+                              <Input
+                                type="number"
+                                value={ecmForm.litrosConsumidosECM}
+                                onChange={(e) =>
+                                  setEcmForm({
+                                    ...ecmForm,
+                                    litrosConsumidosECM: e.target.value,
+                                  })
+                                }
+                                className="pr-10 border-primary h-12 text-lg font-mono"
+                                placeholder="0.00"
+                              />
+                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">
+                                L
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="shadow-sm border border-slate-200">
+                      <CardHeader className="pb-3 flex flex-row justify-between items-center py-3">
+                        <CardTitle className="text-sm font-bold flex items-center gap-2 text-slate-700">
+                          <Receipt className="h-4 w-4" /> Gastos de Ruta /
+                          Emergencias
+                        </CardTitle>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowExpenseForm(!showExpenseForm)}
+                          className="h-7 text-xs border"
+                        >
+                          <Plus className="h-3 w-3 mr-1" /> Reembolsar Gasto
+                        </Button>
+                      </CardHeader>
+                      {showExpenseForm && (
+                        <CardContent className="pt-0">
+                          <div className="bg-amber-50 p-3 rounded-lg border border-amber-200 grid gap-3 relative">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="absolute top-1 right-1 h-6 w-6 rounded-full"
+                              onClick={() => setShowExpenseForm(false)}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                            <div className="space-y-1">
+                              <Label className="text-xs">
+                                Motivo (Ej: Talachero, Pensión)
+                              </Label>
+                              <Input
+                                value={manualExpense.descripcion}
+                                onChange={(e) =>
+                                  setManualExpense({
+                                    ...manualExpense,
+                                    descripcion: e.target.value,
+                                  })
+                                }
+                                className="h-8 text-sm bg-white"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">
+                                Monto a Reembolsar (MXN)
+                              </Label>
+                              <Input
+                                type="number"
+                                value={manualExpense.monto}
+                                onChange={(e) =>
+                                  setManualExpense({
+                                    ...manualExpense,
+                                    monto: e.target.value,
+                                  })
+                                }
+                                className="h-8 text-sm bg-white"
+                                placeholder="0.00"
+                              />
+                            </div>
+                            <Button
+                              className="h-8 text-xs bg-amber-600 hover:bg-amber-700 text-white"
+                              onClick={handleAddManualExpense}
+                            >
+                              Registrar como Reembolso
+                            </Button>
+                          </div>
+                        </CardContent>
+                      )}
+                    </Card>
+                  </div>
                 </div>
 
-                {/* Resultados del Análisis */}
+                {/* RESULTADO AUDITORIA EN VIVO */}
                 {auditResult && (
                   <Card
-                    className={`border-2 ${auditResult.esRoboSospechado ? "border-status-danger bg-status-danger-bg/30" : "border-status-success bg-status-success-bg/30"}`}
+                    className={`border-2 shadow-md ${auditResult.esRoboSospechado ? "border-status-danger bg-status-danger-bg/20" : "border-status-success bg-status-success-bg/20"}`}
                   >
-                    <CardHeader className="pb-3">
+                    <CardHeader className="pb-2">
                       <CardTitle className="text-lg flex items-center gap-2">
-                        <TrendingUp className="h-5 w-5" /> Resultados de
-                        Auditoría (Tolerancia:{" "}
-                        {(TOLERANCE_PERCENTAGE * 100).toFixed(1)}%)
+                        <TrendingUp className="h-5 w-5" /> Resultado de
+                        Auditoría de Combustible
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <Card
-                          className={
-                            auditResult.esRoboSospechado
-                              ? "border-status-danger"
-                              : "border-status-success"
-                          }
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
+                        <div
+                          className={`p-4 rounded-xl border ${auditResult.esRoboSospechado ? "bg-white border-red-200" : "bg-white border-emerald-200"}`}
                         >
-                          <CardContent className="pt-6 text-center">
-                            <p className="text-sm font-medium text-muted-foreground">
-                              Diferencia Físico - ECM
-                            </p>
-                            <p
-                              className={`text-4xl font-bold font-mono ${auditResult.esRoboSospechado ? "text-status-danger" : "text-status-success"}`}
+                          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">
+                            Diferencia Físico - ECM
+                          </p>
+                          <p
+                            className={`text-3xl font-bold font-mono mt-1 ${auditResult.esRoboSospechado ? "text-status-danger" : "text-status-success"}`}
+                          >
+                            {auditResult.diferenciaLitros > 0 ? "+" : ""}
+                            {auditResult.diferenciaLitros.toFixed(2)} L
+                          </p>
+                          <p className="text-[10px] text-muted-foreground mt-1">
+                            Tolerancia permitida: ±
+                            {auditResult.toleranciaPermitida.toFixed(2)} L
+                          </p>
+                        </div>
+
+                        <div className="p-4 rounded-xl bg-white border shadow-sm flex flex-col justify-center items-center text-center">
+                          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">
+                            Estatus Sistema
+                          </p>
+                          {auditResult.esRoboSospechado ? (
+                            <Badge
+                              variant="destructive"
+                              className="mt-2 text-sm py-1 px-3 flex items-center gap-1 shadow-sm animate-pulse"
                             >
-                              {auditResult.diferenciaLitros > 0 ? "+" : ""}
-                              {auditResult.diferenciaLitros.toFixed(2)} L
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Tolerancia permitida: ±
-                              {auditResult.toleranciaPermitida.toFixed(2)} L
-                            </p>
-                          </CardContent>
-                        </Card>
+                              <ShieldAlert className="h-4 w-4" /> EXCESO
+                              DETECTADO
+                            </Badge>
+                          ) : (
+                            <Badge className="mt-2 text-sm py-1 px-3 flex items-center gap-1 bg-emerald-500 shadow-sm">
+                              <Shield className="h-4 w-4" /> CONCILIADO OK
+                            </Badge>
+                          )}
+                        </div>
 
-                        <Card>
-                          <CardContent className="pt-6 text-center">
-                            <p className="text-sm font-medium text-muted-foreground">
-                              Rendimiento Calculado
+                        {auditResult.esRoboSospechado && (
+                          <div className="p-4 rounded-xl bg-red-100 border border-red-300 flex flex-col justify-center">
+                            <p className="text-xs font-bold text-red-800 uppercase tracking-wide flex items-center gap-1">
+                              <AlertTriangle className="h-3 w-3" /> Acción
                             </p>
-                            <p className="text-4xl font-bold font-mono">
-                              {auditResult.rendimientoKmL.toFixed(2)}
+                            <p className="text-xl font-bold text-red-600 mt-1 font-mono">
+                              Deducción de{" "}
+                              {formatCurrency(auditResult.deduccionCalculada)}
                             </p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Km/L
+                            <p className="text-[10px] text-red-700 mt-1 leading-tight">
+                              Se creará un Vale de Cobro en la liquidación
+                              automáticamente.
                             </p>
-                          </CardContent>
-                        </Card>
-
-                        <Card
-                          className={
-                            auditResult.esRoboSospechado
-                              ? "border-status-danger"
-                              : "border-status-success"
-                          }
-                        >
-                          <CardContent className="pt-6 text-center">
-                            <p className="text-sm font-medium text-muted-foreground mb-3">
-                              Estatus
-                            </p>
-                            {auditResult.esRoboSospechado ? (
-                              <div className="flex flex-col items-center">
-                                <ShieldAlert className="h-10 w-10 text-status-danger animate-pulse mb-2" />
-                                <Badge
-                                  variant="destructive"
-                                  className="text-sm"
-                                >
-                                  COBRO AL OPERADOR
-                                </Badge>
-                              </div>
-                            ) : (
-                              <div className="flex flex-col items-center">
-                                <Shield className="h-10 w-10 text-status-success mb-2" />
-                                <Badge className="text-sm bg-status-success text-white hover:bg-status-success/90">
-                                  CONCILIADO OK
-                                </Badge>
-                              </div>
-                            )}
-                          </CardContent>
-                        </Card>
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -541,10 +727,10 @@ export function TripSettlementModal({
                 <div className="flex justify-end pt-4">
                   <Button
                     size="lg"
-                    onClick={handleContinueToFinance}
-                    className="bg-brand-navy hover:bg-brand-navy/90 text-white shadow-md"
+                    onClick={proceedToFinance}
+                    className="bg-brand-navy hover:bg-brand-navy/90 text-white shadow-lg text-md h-12 px-8"
                   >
-                    Continuar a Liquidación Financiera
+                    Continuar a Liquidación Financiera →
                   </Button>
                 </div>
               </div>
@@ -559,7 +745,7 @@ export function TripSettlementModal({
                   <CardHeader className="border-b bg-slate-50/50">
                     <CardTitle className="flex items-center gap-2 text-lg">
                       <Banknote className="h-5 w-5 text-brand-navy" /> Resumen
-                      Final (Ingresos y Deducciones)
+                      de Liquidación del Operador
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="pt-6">
@@ -568,7 +754,7 @@ export function TripSettlementModal({
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2 text-emerald-600 font-bold">
-                            <ArrowUpCircle className="h-5 w-5" /> INGRESOS AL
+                            <ArrowUpCircle className="h-5 w-5" /> A FAVOR DEL
                             OPERADOR
                           </div>
                           <Button
@@ -578,7 +764,7 @@ export function TripSettlementModal({
                             disabled={settlement.estatus === "cerrado"}
                             className="h-8"
                           >
-                            <Award className="h-3 w-3 mr-2" /> Agregar Bono
+                            <Award className="h-3 w-3 mr-2" /> Bono Extra
                           </Button>
                         </div>
                         <div className="space-y-2">
@@ -587,11 +773,14 @@ export function TripSettlementModal({
                             .map((c: any, i: number) => (
                               <div
                                 key={i}
-                                className={`flex justify-between items-center p-3 rounded border ${c.categoria === "bono" ? "bg-amber-50 border-amber-200" : "bg-slate-50"}`}
+                                className={`flex justify-between items-center p-3 rounded border ${c.categoria === "bono" ? "bg-amber-50 border-amber-200" : c.categoria === "gasto_extra" ? "bg-sky-50 border-sky-200" : "bg-slate-50"}`}
                               >
                                 <span className="text-sm font-medium flex items-center gap-2">
                                   {c.categoria === "bono" && (
                                     <Award className="h-4 w-4 text-amber-600" />
+                                  )}
+                                  {c.categoria === "gasto_extra" && (
+                                    <Receipt className="h-4 w-4 text-sky-600" />
                                   )}
                                   {c.descripcion}
                                 </span>
@@ -601,9 +790,9 @@ export function TripSettlementModal({
                               </div>
                             ))}
                         </div>
-                        <div className="flex justify-between p-3 bg-emerald-50 rounded-lg font-bold text-emerald-700">
-                          <span>Subtotal Ingresos</span>
-                          <span>
+                        <div className="flex justify-between p-3 bg-emerald-50 rounded-lg font-bold text-emerald-700 border border-emerald-200">
+                          <span>Total a Favor</span>
+                          <span className="text-lg">
                             {formatCurrency(settlement.totalIngresos)}
                           </span>
                         </div>
@@ -612,7 +801,7 @@ export function TripSettlementModal({
                       {/* COLUMNA DEDUCCIONES */}
                       <div className="space-y-4">
                         <div className="flex items-center gap-2 text-red-600 font-bold h-8">
-                          <ArrowDownCircle className="h-5 w-5" /> DEDUCCIONES /
+                          <ArrowDownCircle className="h-5 w-5" /> DESCUENTOS /
                           ANTICIPOS
                         </div>
                         <div className="space-y-2">
@@ -621,11 +810,11 @@ export function TripSettlementModal({
                             .map((c: any, i: number) => (
                               <div
                                 key={i}
-                                className={`flex justify-between items-center p-3 rounded border ${c.categoria === "combustible" ? "bg-red-50 border-red-200 text-red-700" : "bg-slate-50"}`}
+                                className={`flex justify-between items-center p-3 rounded border ${c.categoria.includes("combustible") ? "bg-red-50 border-red-200 text-red-700" : "bg-slate-50"}`}
                               >
                                 <span className="text-sm font-medium flex items-center gap-2">
-                                  {c.categoria === "combustible" && (
-                                    <AlertTriangle className="h-4 w-4 text-red-600" />
+                                  {c.categoria.includes("combustible") && (
+                                    <Fuel className="h-4 w-4 text-red-600" />
                                   )}
                                   {c.descripcion}
                                 </span>
@@ -642,31 +831,29 @@ export function TripSettlementModal({
                             </p>
                           )}
                         </div>
-                        <div className="flex justify-between p-3 bg-red-50 rounded-lg font-bold text-red-700">
-                          <span>Subtotal Deducciones</span>
-                          <span>
+                        <div className="flex justify-between p-3 bg-red-50 rounded-lg font-bold text-red-700 border border-red-200">
+                          <span>Total Descuentos</span>
+                          <span className="text-lg">
                             -{formatCurrency(settlement.totalDeducciones)}
                           </span>
                         </div>
                       </div>
                     </div>
 
-                    <Separator className="my-6" />
+                    <Separator className="my-8" />
 
                     {/* GRAN TOTAL FINAL */}
-                    <div className="flex items-center justify-between bg-brand-navyp-5 rounded-xl shadow-md">
-                      <div>
-                        <p className="text-sm opacity-80 uppercase tracking-wide font-bold">
-                          SALDO NETO A PAGAR
+                    <div className="flex items-center justify-between bg-brand-dark text-white p-6 rounded-2xl shadow-xl relative overflow-hidden">
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-bl-full pointer-events-none"></div>
+                      <div className="relative z-10">
+                        <p className="text-sm text-white/70 uppercase tracking-widest font-bold mb-1">
+                          Cálculo Final
                         </p>
-                        {settlement.estatus === "cerrado" && (
-                          <p className="text-xs text-emerald-300 mt-1 flex items-center gap-1">
-                            <CheckCircle className="h-3 w-3" /> Liquidado y
-                            Cerrado
-                          </p>
-                        )}
+                        <p className="text-xl font-medium">
+                          Saldo a Pagar al Operador
+                        </p>
                       </div>
-                      <span className="text-4xl font-mono font-black">
+                      <span className="text-5xl font-mono font-black relative z-10">
                         {formatCurrency(settlement.netoAPagar)}
                       </span>
                     </div>
@@ -675,25 +862,33 @@ export function TripSettlementModal({
 
                 {/* BOTONES DE NAVEGACIÓN Y CIERRE */}
                 <div className="flex justify-between pt-4">
-                  <Button variant="outline" onClick={() => setStep(0)}>
-                    ← Regresar a Conciliación
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    onClick={() => setStep(0)}
+                  >
+                    ← Corregir Auditoría
                   </Button>
                   <div className="space-x-3">
-                    <Button variant="ghost" onClick={() => onOpenChange(false)}>
-                      Cancelar
+                    <Button
+                      variant="ghost"
+                      size="lg"
+                      onClick={() => onOpenChange(false)}
+                    >
+                      Posponer Cierre
                     </Button>
                     <Button
                       size="lg"
                       disabled={isAnimating || settlement.estatus === "cerrado"}
                       onClick={handleAuthorizeAndClose}
-                      className="bg-emerald-600 hover:bg-emerald-700 shadow-md"
+                      className="bg-emerald-600 hover:bg-emerald-700 shadow-lg text-md px-8"
                     >
                       {isAnimating ? (
                         <Loader2 className="h-5 w-5 animate-spin mr-2" />
                       ) : (
                         <CheckCircle className="h-5 w-5 mr-2" />
                       )}
-                      Autorizar y Cerrar Viaje
+                      Autorizar, Guardar y Generar PDF
                     </Button>
                   </div>
                 </div>
@@ -707,7 +902,7 @@ export function TripSettlementModal({
       <Dialog open={showAddBonoDialog} onOpenChange={setShowAddBonoDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Agregar Bono Manual</DialogTitle>
+            <DialogTitle>Agregar Bono / Incentivo</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
@@ -715,7 +910,7 @@ export function TripSettlementModal({
               <Input
                 value={bonoDescription}
                 onChange={(e) => setBonoDescription(e.target.value)}
-                placeholder="Ej: Bono por rendimiento"
+                placeholder="Ej: Bono por rendimiento de Diésel"
               />
             </div>
             <div className="space-y-2">
@@ -736,9 +931,7 @@ export function TripSettlementModal({
             >
               Cancelar
             </Button>
-            <Button onClick={handleAddBono} disabled={!bonoAmount}>
-              Aplicar Bono
-            </Button>
+            <Button onClick={handleAddBono}>Aplicar Bono</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -14,6 +14,7 @@ from app.api.endpoints import (
     suppliers,
     tolls,
     fuel,
+    catalogs_sat,
 )
 
 api_router = APIRouter()
@@ -43,3 +44,5 @@ api_router.include_router(
 api_router.include_router(
     suppliers.router, prefix="/finance", tags=["Proveedores y CXP"]
 )
+
+api_router.include_router(catalogs_sat.router, prefix="/catalogs", tags=["Catalogs"])

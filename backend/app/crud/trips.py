@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from datetime import datetime
-
+import uuid
 
 from sqlalchemy.orm import Session, joinedload
 
 from app.models import models
-from app.models.models import RecordStatus
+from app.models.models import RecordStatus, TripLegType
 from app.schemas import trips as schemas
 
 import uuid
@@ -15,16 +15,17 @@ import uuid
 def get_trips(db: Session, skip: int = 0, limit: int = 100):
     """
     Lista viajes visibles (A e I). Oculta eliminados (E).
+    Ahora carga los tramos (legs) en lugar del unit/operator directo del viaje.
     """
     return (
         db.query(models.Trip)
         .options(
             joinedload(models.Trip.client),
-            joinedload(models.Trip.unit),
-            joinedload(models.Trip.operator),
             joinedload(models.Trip.remolque_1),
             joinedload(models.Trip.dolly),
             joinedload(models.Trip.remolque_2),
+            joinedload(models.Trip.legs).joinedload(models.TripLeg.unit),
+            joinedload(models.Trip.legs).joinedload(models.TripLeg.operator),
         )
         .filter(models.Trip.record_status != RecordStatus.ELIMINADO)
         .order_by(models.Trip.id.asc())
@@ -36,8 +37,7 @@ def get_trips(db: Session, skip: int = 0, limit: int = 100):
 
 def get_trip(db: Session, trip_id: str):
     """
-    Obtiene un viaje visible (A e I). Oculta eliminados (E).
-    Nota: tu id en modelo es Integer, pero dejas trip_id como str por compat.
+    Obtiene un viaje visible.
     """
     try:
         tid = int(trip_id)
@@ -48,9 +48,10 @@ def get_trip(db: Session, trip_id: str):
         db.query(models.Trip)
         .options(
             joinedload(models.Trip.client),
-            joinedload(models.Trip.unit),
-            joinedload(models.Trip.operator),
-            joinedload(models.Trip.timeline_events),
+            joinedload(models.Trip.remolque_1),
+            joinedload(models.Trip.legs).joinedload(models.TripLeg.unit),
+            joinedload(models.Trip.legs).joinedload(models.TripLeg.operator),
+            joinedload(models.Trip.legs).joinedload(models.TripLeg.timeline_events),
         )
         .filter(
             models.Trip.id == tid,
@@ -62,34 +63,64 @@ def get_trip(db: Session, trip_id: str):
 
 def create_trip(db: Session, trip: schemas.TripCreate):
     """
-    Crea viaje (record_status default A por AuditMixin).
-    Calcula saldo_operador y pone TODAS las unidades asignadas en EN_RUTA.
+    1. Crea el Viaje Padre (con remolques y tarifa).
+    2. Crea el Primer Tramo (TripLeg) usando `initial_leg` (con Tracto, Operador, Anticipos y Odómetro).
+    3. Bloquea las unidades y al operador asignados a este primer tramo.
     """
-    total_anticipos = (
-        (trip.anticipo_casetas or 0)
-        + (trip.anticipo_viaticos or 0)
-        + (trip.anticipo_combustible or 0)
-        + (trip.otros_anticipos or 0)
-    )
-    saldo = (trip.tarifa_base or 0) - total_anticipos
-
+    # 1. Crear el Viaje Padre
     db_trip = models.Trip(
-        **trip.model_dump(exclude={"saldo_operador"}), saldo_operador=saldo
+        client_id=trip.client_id,
+        sub_client_id=trip.sub_client_id,
+        tariff_id=trip.tariff_id,
+        remolque_1_id=trip.remolque_1_id,
+        dolly_id=trip.dolly_id,
+        remolque_2_id=trip.remolque_2_id,
+        origin=trip.origin,
+        destination=trip.destination,
+        route_name=trip.route_name,
+        status=trip.status,
+        tarifa_base=trip.tarifa_base,
+        costo_casetas=trip.costo_casetas,
+        start_date=trip.start_date,
     )
     db.add(db_trip)
+    db.flush()  # Para obtener el db_trip.id
 
-    # 1. Recopilar todos los IDs de unidades involucradas (Tracto, Remolques, Dolly)
+    # 2. Calcular saldo estimado para el primer tramo
+    leg_data = trip.initial_leg
+    total_anticipos = (
+        (leg_data.anticipo_casetas or 0)
+        + (leg_data.anticipo_viaticos or 0)
+        + (leg_data.anticipo_combustible or 0)
+    )
+    saldo_estimado = (trip.tarifa_base or 0) - total_anticipos
+
+    # 3. Crear el Primer Tramo (Leg)
+    db_leg = models.TripLeg(
+        trip_id=db_trip.id,
+        leg_type=leg_data.leg_type,
+        status=trip.status,
+        unit_id=leg_data.unit_id,
+        operator_id=leg_data.operator_id,
+        anticipo_casetas=leg_data.anticipo_casetas,
+        anticipo_viaticos=leg_data.anticipo_viaticos,
+        anticipo_combustible=leg_data.anticipo_combustible,
+        saldo_operador=saldo_estimado,
+        odometro_inicial=leg_data.odometro_inicial,
+        nivel_tanque_inicial=leg_data.nivel_tanque_inicial,
+        start_date=trip.start_date,
+    )
+    db.add(db_leg)
+
+    # 4. Bloquear Unidades (Tracto del tramo + Remolques del viaje)
     unit_ids_to_block = [
-        trip.unit_id,
-        getattr(trip, "remolque_1_id", None),
-        getattr(trip, "dolly_id", None),
-        getattr(trip, "remolque_2_id", None),
+        leg_data.unit_id,
+        trip.remolque_1_id,
+        trip.dolly_id,
+        trip.remolque_2_id,
     ]
-
-    # 2. Filtrar los que sean nulos (Ej: si es un viaje sencillo, dolly y remolque 2 serán None)
     valid_unit_ids = [uid for uid in unit_ids_to_block if uid is not None]
 
-    # 3. Bloquear todas las unidades de una sola vez
     if valid_unit_ids:
         units = (
             db.query(models.Unit)
@@ -103,15 +134,16 @@ def create_trip(db: Session, trip: schemas.TripCreate):
             u.status = models.UnitStatus.EN_RUTA
             db.add(u)
 
-    # 4. Bloquear al operador (Opcional, pero muy recomendado)
-    operator = (
-        db.query(models.Operator).filter(models.Operator.id == trip.operator_id).first()
-    )
-    if operator:
-        operator.status = (
-            models.OperatorStatus.INACTIVO
-        )  # o un estado EN_RUTA si lo tienes en OperatorStatus
-        db.add(operator)
+    # 5. Bloquear al Operador
+    if leg_data.operator_id:
+        operator = (
+            db.query(models.Operator)
+            .filter(models.Operator.id == leg_data.operator_id)
+            .first()
+        )
+        if operator:
+            operator.status = models.OperatorStatus.INACTIVO  # o EN_RUTA
+            db.add(operator)
 
     db.commit()
     db.refresh(db_trip)
@@ -119,14 +151,11 @@ def create_trip(db: Session, trip: schemas.TripCreate):
 
 
 def update_trip_status(
-    db: Session,
-    trip_id: str,
-    status: str,
-    location: str | None = None,
+    db: Session, trip_id: str, status: str, location: str | None = None
 ):
     """
-    Actualiza el estado del viaje.
-    Si el viaje termina, libera MASIVAMENTE todos los recursos (Unidades y Operador).
+    Actualiza el estado del viaje general y de su tramo activo.
+    Libera recursos si el viaje/tramo termina.
     """
     trip = get_trip(db, trip_id)
     if not trip:
@@ -134,25 +163,34 @@ def update_trip_status(
 
     trip.status = status
     trip.last_update = datetime.utcnow()
-    if location:
-        trip.last_location = location
+
+    # Buscamos el último tramo creado para este viaje
+    active_leg = None
+    if trip.legs:
+        active_leg = trip.legs[-1]  # El último tramo agregado
+        active_leg.status = status
+        active_leg.last_update = datetime.utcnow()
+        if location:
+            active_leg.last_location = location
 
     # LÓGICA DE LIBERACIÓN DE RECURSOS
     if status in [models.TripStatus.ENTREGADO, models.TripStatus.CERRADO]:
         trip.actual_arrival = datetime.utcnow()
+        if active_leg:
+            active_leg.actual_arrival = datetime.utcnow()
+
         if status == models.TripStatus.CERRADO:
             trip.closed_at = datetime.utcnow()
 
-        # 1. Recopilar los IDs de todas las unidades atadas a este viaje
+        # Liberar Remolques (del viaje padre) y Tracto (del tramo)
         unit_ids_to_free = [
-            trip.unit_id,
-            getattr(trip, "remolque_1_id", None),
-            getattr(trip, "dolly_id", None),
-            getattr(trip, "remolque_2_id", None),
+            active_leg.unit_id if active_leg else None,
+            trip.remolque_1_id,
+            trip.dolly_id,
+            trip.remolque_2_id,
         ]
         valid_unit_ids = [uid for uid in unit_ids_to_free if uid is not None]
 
-        # 2. Liberarlas todas de un jalón
         if valid_unit_ids:
             units = (
                 db.query(models.Unit).filter(models.Unit.id.in_(valid_unit_ids)).all()
@@ -161,19 +199,20 @@ def update_trip_status(
                 u.status = models.UnitStatus.DISPONIBLE
                 db.add(u)
 
-        # 3. Liberar el operador
-        if trip.operator:
-            trip.operator.status = models.OperatorStatus.ACTIVO
-            db.add(trip.operator)
+        # Liberar Operador
+        if active_leg and active_leg.operator:
+            active_leg.operator.status = models.OperatorStatus.ACTIVO
+            db.add(active_leg.operator)
 
-    # Timeline
-    event = models.TripTimelineEvent(
-        trip_id=trip.id,
-        time=datetime.utcnow(),
-        event=f"Status actualizado a {status}",
-        event_type="status_change",
-    )
-    db.add(event)
+    # Timeline (Se amarra al Tramo Activo)
+    if active_leg:
+        event = models.TripTimelineEvent(
+            trip_leg_id=active_leg.id,
+            time=datetime.utcnow(),
+            event=f"Status actualizado a {status}",
+            event_type="status_change",
+        )
+        db.add(event)
 
     db.add(trip)
     db.commit()
@@ -181,11 +220,24 @@ def update_trip_status(
     return trip
 
 
+def update_trip(db: Session, trip_id: int, trip_in: schemas.TripUpdate):
+    db_trip = db.query(models.Trip).filter(models.Trip.id == trip_id).first()
+    if not db_trip:
+        return None
+
+    update_data = trip_in.model_dump(exclude_unset=True)
+
+    for field, value in update_data.items():
+        setattr(db_trip, field, value)
+
+    db_trip.last_update = datetime.utcnow()
+    db.add(db_trip)
+    db.commit()
+    db.refresh(db_trip)
+    return db_trip
+
+
 def delete_trip(db: Session, trip_id: str):
-    """
-    Soft delete:
-    - record_status = E
-    """
     try:
         tid = int(trip_id)
     except (TypeError, ValueError):
@@ -194,8 +246,7 @@ def delete_trip(db: Session, trip_id: str):
     trip = (
         db.query(models.Trip)
         .filter(
-            models.Trip.id == tid,
-            models.Trip.record_status != RecordStatus.ELIMINADO,
+            models.Trip.id == tid, models.Trip.record_status != RecordStatus.ELIMINADO
         )
         .first()
     )
@@ -215,48 +266,66 @@ def add_timeline_event(
     if not trip:
         return None
 
-    # 1. Actualizar el estatus general y ubicación del viaje
+    # Actualizamos viaje padre
     trip.status = payload.status
     trip.last_update = datetime.utcnow()
-    trip.last_location = payload.location
 
-    # 2. Formatear el texto de la bitácora
-    event_text = f"Estatus actualizado a {payload.status.replace('_', ' ').title()} en {payload.location}"
-    if payload.comments:
-        event_text += f" | Notas: {payload.comments}"
+    # Buscamos el Tramo activo
+    active_leg = trip.legs[-1] if trip.legs else None
 
-    # 3. Determinar el tipo de evento (Alerta o Checkpoint normal)
-    event_type = (
-        "alert"
-        if payload.status in ["retraso", "accidente", "detenido"]
-        else "checkpoint"
-    )
+    if active_leg:
+        active_leg.status = payload.status
+        active_leg.last_update = datetime.utcnow()
+        active_leg.last_location = payload.location
 
-    # 4. Crear el registro en el timeline
-    db_event = models.TripTimelineEvent(
-        trip_id=trip.id, time=datetime.utcnow(), event=event_text, event_type=event_type
-    )
+        event_text = f"Estatus actualizado a {payload.status.replace('_', ' ').title()} en {payload.location}"
+        if payload.comments:
+            event_text += f" | Notas: {payload.comments}"
 
-    db.add(db_event)
+        event_type = (
+            "alert"
+            if payload.status in ["retraso", "accidente", "detenido"]
+            else "checkpoint"
+        )
+
+        db_event = models.TripTimelineEvent(
+            trip_leg_id=active_leg.id,
+            time=datetime.utcnow(),
+            event=event_text,
+            event_type=event_type,
+        )
+        db.add(db_event)
+
     db.add(trip)
     db.commit()
     db.refresh(trip)
-
     return trip
 
 
-def get_trip_settlement(db: Session, trip_id: int):
-    trip = db.query(models.Trip).filter(models.Trip.id == trip_id).first()
-    if not trip:
+def get_trip_settlement(db: Session, trip_leg_id: int):
+    """
+    Liquidación. OJO: Ahora liquida un TRAMO (TripLeg), no un viaje entero.
+    """
+    leg = (
+        db.query(models.TripLeg)
+        .options(joinedload(models.TripLeg.trip))
+        .filter(models.TripLeg.id == trip_leg_id)
+        .first()
+    )
+    if not leg or not leg.trip:
         return None
+
+    trip = leg.trip
 
     kms_recorridos = (
         trip.tariff.distancia_km if trip.tariff and trip.tariff.distancia_km else 0
     )
-    fecha_viaje = trip.start_date.strftime("%Y-%m-%d") if trip.start_date else "N/A"
+    fecha_viaje = leg.start_date.strftime("%Y-%m-%d") if leg.start_date else "N/A"
 
-    # 1. Obtener cargas de combustible asociadas a este viaje
-    fuel_logs = db.query(models.FuelLog).filter(models.FuelLog.trip_id == trip_id).all()
+    # 1. Obtener cargas de combustible asociadas EXACTAMENTE A ESTE TRAMO
+    fuel_logs = (
+        db.query(models.FuelLog).filter(models.FuelLog.trip_leg_id == trip_leg_id).all()
+    )
 
     consumo_real_litros = sum(f.litros for f in fuel_logs)
     precio_promedio_litro = (
@@ -265,18 +334,16 @@ def get_trip_settlement(db: Session, trip_id: int):
         else 24.50
     )
 
-    # 2. Lógica de Tolerancia y Consumo
-    RENDIMIENTO_ESPERADO = 3.2  # Esto debería venir de la BD (configuración de unidad), pero lo dejamos fijo por ahora
+    RENDIMIENTO_ESPERADO = 3.2
     consumo_esperado = (
         kms_recorridos / RENDIMIENTO_ESPERADO if kms_recorridos > 0 else 0
     )
 
-    TOLERANCIA_PCT = 0.05  # 5% de tolerancia
+    TOLERANCIA_PCT = 0.05
     diferencia_litros = consumo_real_litros - consumo_esperado
     litros_a_cobrar = 0
     deduccion_combustible = 0
 
-    # Solo cobramos si la diferencia es POSITIVA y EXCEdE la tolerancia
     if diferencia_litros > (consumo_esperado * TOLERANCIA_PCT):
         litros_a_cobrar = diferencia_litros
         deduccion_combustible = litros_a_cobrar * precio_promedio_litro
@@ -284,65 +351,64 @@ def get_trip_settlement(db: Session, trip_id: int):
     # 3. Armar los Conceptos de Pago
     conceptos = []
 
-    # INGRESOS
+    # INGRESOS (Solo la tarifa del viaje si es el tramo principal)
     conceptos.append(
         schemas.ConceptoPago(
             id=str(uuid.uuid4())[:8],
             tipo="ingreso",
             categoria="tarifa",
-            descripcion="Tarifa Base de Viaje",
+            descripcion=f"Tarifa Base ({leg.leg_type.value})",
             monto=trip.tarifa_base,
             esAutomatico=True,
         )
     )
 
-    # DEDUCCIONES (Anticipos dados previamente)
-    if trip.anticipo_casetas > 0:
+    # DEDUCCIONES (Del Tramo)
+    if leg.anticipo_casetas > 0:
         conceptos.append(
             schemas.ConceptoPago(
                 id=str(uuid.uuid4())[:8],
                 tipo="deduccion",
                 categoria="anticipo",
                 descripcion="Anticipo Casetas",
-                monto=trip.anticipo_casetas,
+                monto=leg.anticipo_casetas,
                 esAutomatico=True,
             )
         )
-    if trip.anticipo_viaticos > 0:
+    if leg.anticipo_viaticos > 0:
         conceptos.append(
             schemas.ConceptoPago(
                 id=str(uuid.uuid4())[:8],
                 tipo="deduccion",
                 categoria="anticipo",
                 descripcion="Anticipo Viáticos",
-                monto=trip.anticipo_viaticos,
+                monto=leg.anticipo_viaticos,
                 esAutomatico=True,
             )
         )
-    if trip.anticipo_combustible > 0:
+    if leg.anticipo_combustible > 0:
         conceptos.append(
             schemas.ConceptoPago(
                 id=str(uuid.uuid4())[:8],
                 tipo="deduccion",
                 categoria="anticipo",
                 descripcion="Anticipo Diésel",
-                monto=trip.anticipo_combustible,
+                monto=leg.anticipo_combustible,
                 esAutomatico=True,
             )
         )
-    if trip.otros_anticipos > 0:
+    if leg.otros_anticipos > 0:
         conceptos.append(
             schemas.ConceptoPago(
                 id=str(uuid.uuid4())[:8],
                 tipo="deduccion",
                 categoria="anticipo",
                 descripcion="Otros Anticipos",
-                monto=trip.otros_anticipos,
+                monto=leg.otros_anticipos,
                 esAutomatico=True,
             )
         )
 
-    # DEDUCCIÓN POR EXCESO DE COMBUSTIBLE
     if deduccion_combustible > 0:
         conceptos.append(
             schemas.ConceptoPago(
@@ -355,20 +421,19 @@ def get_trip_settlement(db: Session, trip_id: int):
             )
         )
 
-    # 4. Sumas Finales
     total_ingresos = sum(c.monto for c in conceptos if c.tipo == "ingreso")
     total_deducciones = sum(c.monto for c in conceptos if c.tipo == "deduccion")
     neto_pagar = total_ingresos - total_deducciones
 
-    # 5. Retornar el esquema completo
     return schemas.TripSettlementResponse(
         viajeId=trip.public_id or f"VIAJE-{trip.id}",
-        operadorNombre=trip.operator.name if trip.operator else "N/A",
-        unidadNumero=trip.unit.numero_economico if trip.unit else "N/A",
+        legId=leg.id,
+        operadorNombre=leg.operator.name if leg.operator else "N/A",
+        unidadNumero=leg.unit.numero_economico if leg.unit else "N/A",
         ruta=trip.route_name or f"{trip.origin} -> {trip.destination}",
         fechaViaje=fecha_viaje,
         kmsRecorridos=kms_recorridos,
-        estatus=trip.status,
+        estatus=leg.status,
         conceptos=conceptos,
         totalIngresos=total_ingresos,
         totalDeducciones=total_deducciones,
@@ -382,29 +447,137 @@ def get_trip_settlement(db: Session, trip_id: int):
 
 
 def close_trip_settlement(
-    db: Session, trip_id: int, payload: schemas.CloseSettlementPayload
+    db: Session, trip_leg_id: int, payload: schemas.CloseSettlementPayload
 ):
-    trip = db.query(models.Trip).filter(models.Trip.id == trip_id).first()
+    """
+    Cierra UN TRAMO y, si es el último, cierra el VIAJE.
+    """
+    leg = db.query(models.TripLeg).filter(models.TripLeg.id == trip_leg_id).first()
+    if not leg:
+        return None
+
+    # Cerramos el Tramo
+    leg.status = models.TripStatus.CERRADO
+    leg.saldo_operador = payload.netoAPagar
+    leg.actual_arrival = datetime.utcnow()
+
+    event = models.TripTimelineEvent(
+        trip_leg_id=leg.id,
+        time=datetime.utcnow(),
+        event=f"Tramo Liquidado y Cerrado. Saldo pagado: ${payload.netoAPagar:,.2f}",
+        event_type="success",
+    )
+    db.add(event)
+
+    # Revisamos si debemos cerrar el viaje completo (Opcional, de momento lo cerramos siempre)
+    if leg.trip:
+        leg.trip.status = models.TripStatus.CERRADO
+        leg.trip.closed_at = datetime.utcnow()
+        db.add(leg.trip)
+
+    db.add(leg)
+    db.commit()
+    db.refresh(leg)
+    return leg.trip
+
+
+def create_next_leg(db: Session, trip_id: str, payload: schemas.TripLegCreate):
+    """
+    Cierra el tramo actual (si existe) liberando el camión/chofer anterior,
+    y crea un nuevo tramo enganchando al nuevo camión/chofer.
+    """
+    tid = int(trip_id)
+    trip = db.query(models.Trip).filter(models.Trip.id == tid).first()
+
     if not trip:
         return None
 
-    # 1. Cambiamos el estatus a cerrado
-    trip.status = models.TripStatus.CERRADO
-    trip.closed_at = datetime.utcnow()
+    # 1. Cerrar el tramo anterior (si existe alguno)
+    if trip.legs:
+        last_leg = trip.legs[-1]
 
-    # 2. Guardamos el saldo final exacto acordado en la liquidación
-    trip.saldo_operador = payload.netoAPagar
+        # Si el tramo anterior no estaba entregado, forzamos su cierre/entrega
+        if last_leg.status not in [
+            models.TripStatus.ENTREGADO,
+            models.TripStatus.CERRADO,
+        ]:
+            last_leg.status = models.TripStatus.ENTREGADO
+            last_leg.actual_arrival = datetime.utcnow()
+            last_leg.last_update = datetime.utcnow()
 
-    # 3. Agregamos el evento a la bitácora
-    event = models.TripTimelineEvent(
+            # Liberamos la unidad y operador ANTERIORES
+            if last_leg.unit_id:
+                old_unit = (
+                    db.query(models.Unit)
+                    .filter(models.Unit.id == last_leg.unit_id)
+                    .first()
+                )
+                if old_unit:
+                    old_unit.status = models.UnitStatus.DISPONIBLE
+                    db.add(old_unit)
+
+            if last_leg.operator_id:
+                old_op = (
+                    db.query(models.Operator)
+                    .filter(models.Operator.id == last_leg.operator_id)
+                    .first()
+                )
+                if old_op:
+                    old_op.status = models.OperatorStatus.ACTIVO
+                    db.add(old_op)
+
+            # Dejamos un log en el tramo anterior
+            db_event = models.TripTimelineEvent(
+                trip_leg_id=last_leg.id,
+                time=datetime.utcnow(),
+                event="Tramo concluido por Desenganche / Cambio de operador.",
+                event_type="info",
+            )
+            db.add(db_event)
+            db.add(last_leg)
+
+    # 2. Crear el NUEVO Tramo
+    new_leg = models.TripLeg(
         trip_id=trip.id,
-        time=datetime.utcnow(),
-        event=f"Viaje Liquidado y Cerrado. Saldo pagado: ${payload.netoAPagar:,.2f}",
-        event_type="success",
+        leg_type=payload.leg_type,
+        status=models.TripStatus.CREADO,
+        unit_id=payload.unit_id,
+        operator_id=payload.operator_id,
+        anticipo_casetas=payload.anticipo_casetas,
+        anticipo_viaticos=payload.anticipo_viaticos,
+        anticipo_combustible=payload.anticipo_combustible,
+        odometro_inicial=payload.odometro_inicial,
+        nivel_tanque_inicial=payload.nivel_tanque_inicial,
+        start_date=datetime.utcnow(),
     )
+    db.add(new_leg)
+    db.flush()  # Para obtener el new_leg.id
 
-    db.add(event)
+    # 3. Bloquear el NUEVO camión y operador
+    if payload.unit_id:
+        new_unit = (
+            db.query(models.Unit).filter(models.Unit.id == payload.unit_id).first()
+        )
+        if new_unit:
+            new_unit.status = models.UnitStatus.EN_RUTA
+            db.add(new_unit)
+
+    if payload.operator_id:
+        new_op = (
+            db.query(models.Operator)
+            .filter(models.Operator.id == payload.operator_id)
+            .first()
+        )
+        if new_op:
+            new_op.status = models.OperatorStatus.INACTIVO
+            db.add(new_op)
+
+    # 4. Asegurarnos de que el viaje general vuelva a estar "En Proceso"
+    trip.status = models.TripStatus.EN_TRANSITO
+    trip.last_update = datetime.utcnow()
     db.add(trip)
+
+    # 5. Guardar todo
     db.commit()
     db.refresh(trip)
     return trip
