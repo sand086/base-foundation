@@ -1,10 +1,13 @@
-// src/features/combustible/CombustibleCargas.tsx
+// src/pages/CombustibleCargas.tsx
 import * as React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 import {
   Fuel,
   Plus,
@@ -18,6 +21,11 @@ import {
   Pencil,
   Trash2,
   Loader2,
+  Calendar,
+  FilterX,
+  Search,
+  ArrowUpRight,
+  BarChart3,
 } from "lucide-react";
 
 import type { CargaCombustible, TipoCombustible } from "@/data/combustibleData";
@@ -37,7 +45,6 @@ import { cn } from "@/lib/utils";
 
 import { toast } from "sonner";
 import { fuelService } from "@/services/fuelService";
-
 import { unitService } from "@/services/unitService";
 import { operatorService } from "@/services/operatorService";
 
@@ -52,6 +59,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -62,29 +77,19 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-/** =========================
- * Tipos mínimos (ajusta si ya los tienes tipados en otro archivo)
- * ========================= */
+/** =========================================================
+ * Tipos y Helpers
+ * ========================================================= */
 type ID = string | number;
 
-type Unit = {
+interface Unit {
   id: ID;
   numero_economico?: string | null;
   placas?: string | null;
+  tipo_1?: string | null;
   capacidad_tanque_diesel?: number | null;
   capacidad_tanque_urea?: number | null;
-
-  // compat opcional
-  capacidadTanqueDiesel?: number | null;
-  capacidadTanqueUrea?: number | null;
-};
-
-type Operator = {
-  id: ID;
-  name?: string | null;
-  // compat opcional
-  nombre?: string | null;
-};
+}
 
 function unitLabel(u: Unit) {
   const ne = (u.numero_economico ?? "").trim();
@@ -95,580 +100,468 @@ function unitLabel(u: Unit) {
   return `Unidad ${String(u.id)}`;
 }
 
-function operatorLabel(o: Operator) {
-  const n = (o.name ?? o.nombre ?? "").trim();
-  return n || `Operador ${String(o.id)}`;
-}
-
-function getDieselCapacity(u: Unit): number | null {
-  return (u.capacidad_tanque_diesel ?? u.capacidadTanqueDiesel ?? null) as
-    | number
-    | null;
-}
-function getUreaCapacity(u: Unit): number | null {
-  return (u.capacidad_tanque_urea ?? u.capacidadTanqueUrea ?? null) as
-    | number
-    | null;
-}
-
 const CombustibleCargas = () => {
-  const [units, setUnits] = useState<any[]>([]);
-  const [idParaEliminar, setIdParaEliminar] = useState<string | null>(null);
+  const [units, setUnits] = useState<Unit[]>([]);
   const [operators, setOperators] = useState<any[]>([]);
   const [cargas, setCargas] = useState<CargaCombustible[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [idParaEliminar, setIdParaEliminar] = useState<string | null>(null);
+
+  //  ESTADOS DE FILTRO Y AUDITORÍA (Proceso Gustavo)
+  const [selectedUnitId, setSelectedUnitId] = useState<string>("all");
+  const [searchTerm, setSearchTerm] = useState("");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [cargaToView, setCargaToView] = useState<CargaCombustible | null>(null);
   const [cargaToEdit, setCargaToEdit] = useState<CargaCombustible | null>(null);
 
-  /** =========================
-   * 1) Carga masiva de catálogos (fuel + unidades + operadores)
-   * ========================= */
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const [uData, oData, fData] = await Promise.all([
-          unitService.getAll(),
-          operatorService.getAll(),
-          fuelService.getAll(),
-        ]);
-
-        setUnits(uData || []);
-        setOperators(oData || []);
-
-        // ✅ NORMALIZACIÓN: Convertimos snake_case a camelCase para que React lo entienda
-        const normalizedFuel = (fData || []).map((item: any) => ({
-          ...item,
-          // Si el backend manda snake_case, lo mapeamos a lo que el Front usa
-          tipoCombustible: item.tipo_combustible || item.tipoCombustible,
-          fechaHora: item.fecha_hora || item.fechaHora,
-          precioPorLitro: item.precio_por_litro || item.precioPorLitro,
-          excedeTanque: item.excede_tanque ?? item.excedeTanque,
-          evidenciaUrl: item.evidencia_url || item.evidenciaUrl,
-        }));
-
-        setCargas(normalizedFuel);
-      } catch (error) {
-        console.error("Error cargando catálogos:", error);
-        toast.error("Error al sincronizar con el servidor");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    loadData();
-  }, []);
-
-  /** =========================
-   * Totales
-   * ========================= */
-  const dieselCargas = useMemo(
-    () => cargas.filter((c) => c.tipoCombustible === "diesel"),
-    [cargas],
-  );
-  const ureaCargas = useMemo(
-    () => cargas.filter((c) => c.tipoCombustible === "urea"),
-    [cargas],
-  );
-
-  const totalLitrosDiesel = useMemo(
-    () => dieselCargas.reduce((sum, c) => sum + (c.litros || 0), 0),
-    [dieselCargas],
-  );
-  const totalLitrosUrea = useMemo(
-    () => ureaCargas.reduce((sum, c) => sum + (c.litros || 0), 0),
-    [ureaCargas],
-  );
-  const totalMontoDiesel = useMemo(
-    () => dieselCargas.reduce((sum, c) => sum + (c.total || 0), 0),
-    [dieselCargas],
-  );
-  const totalMontoUrea = useMemo(
-    () => ureaCargas.reduce((sum, c) => sum + (c.total || 0), 0),
-    [ureaCargas],
-  );
-  const cargasConAlerta = useMemo(
-    () => cargas.filter((c) => c.excedeTanque).length,
-    [cargas],
-  );
-
-  const FuelTypeBadge = ({ type }: { type: TipoCombustible }) => (
-    <Badge
-      variant="outline"
-      className={cn(
-        "gap-1 font-medium transition-all",
-        type === "diesel"
-          ? "bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-200"
-          : "bg-sky-100 text-sky-700 border-sky-300 hover:bg-sky-200",
-      )}
-    >
-      {type === "diesel" ? (
-        <Fuel className="h-3 w-3" />
-      ) : (
-        <Droplets className="h-3 w-3" />
-      )}
-      {type === "diesel" ? "Diesel" : "Urea"}
-    </Badge>
-  );
-
-  /** =========================
-   * 2) Crear ticket (real)
-   * - snapshot de capacidad desde UNITS reales (no catálogo local)
-   * - refresh completo de fuelService.getAll()
-   * ========================= */
-  const handleAddTicket = async (data: TicketFormData) => {
-    const toastId = toast.loading("Registrando ticket...");
+  /** =========================================================
+   * 1) Carga masiva de datos y normalización
+   * ========================================================= */
+  const loadData = async () => {
     try {
-      await fuelService.create(data);
-      const updated = await fuelService.getAll();
+      const [uData, oData, fData] = await Promise.all([
+        unitService.getAll(),
+        operatorService.getAll(),
+        fuelService.getAll(),
+      ]);
 
-      const normalized = updated.map((item: any) => ({
+      setUnits(uData || []);
+      setOperators(oData || []);
+
+      const normalizedFuel = (fData || []).map((item: any) => ({
         ...item,
         tipoCombustible: item.tipo_combustible || item.tipoCombustible,
         fechaHora: item.fecha_hora || item.fechaHora,
         precioPorLitro: item.precio_por_litro || item.precioPorLitro,
-        excedeTanque: item.excede_tanque ?? item.excedeTanque, // ✅ Faltaba este
-        evidenciaUrl: item.evidencia_url || item.evidenciaUrl, // ✅ Faltaba este
+        excedeTanque: item.excede_tanque ?? item.excedeTanque,
+        evidenciaUrl: item.evidencia_url || item.evidenciaUrl,
+        unidadNumero: item.unit?.numero_economico || "N/A",
+        operadorNombre: item.operator?.name || "N/A",
       }));
 
-      setCargas(normalized);
-      toast.success("Ticket registrado", { id: toastId });
-      setIsModalOpen(false);
+      setCargas(normalizedFuel);
     } catch (error) {
-      toast.error("Error al guardar", { id: toastId });
+      console.error("Error cargando datos:", error);
+      toast.error("Error al sincronizar con el servidor");
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  /** =========================
-   * Edit (placeholder si tu endpoint aún no está)
-   * Si ya tienes fuelService.update(id, payload), reemplaza aquí.
-   * ========================= */
-  const handleEditCarga = async (updatedCarga: CargaCombustible) => {
-    setCargas((prev) =>
-      prev.map((c) => (c.id === updatedCarga.id ? updatedCarga : c)),
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  /** =========================================================
+   *  LÓGICA DE AUDITORÍA: RENDIMIENTOS Y REMANENTES
+   * ========================================================= */
+
+  const filteredCargas = useMemo(() => {
+    return cargas.filter((c) => {
+      const matchesUnit =
+        selectedUnitId === "all" || String(c.unidadId) === selectedUnitId;
+      const term = searchTerm.toLowerCase();
+      const matchesSearch =
+        c.unidadNumero?.toLowerCase().includes(term) ||
+        c.estacion?.toLowerCase().includes(term);
+      return matchesUnit && matchesSearch;
+    });
+  }, [cargas, selectedUnitId, searchTerm]);
+
+  const statsAuditoria = useMemo(() => {
+    const ahora = new Date();
+    const hace7Dias = new Date(ahora.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    // Solo tomamos en cuenta los últimos 7 días para el dashboard de rendimiento
+    const cargasSemana = filteredCargas.filter(
+      (c) => new Date(c.fechaHora) >= hace7Dias,
     );
-    toast.success("Cambios aplicados");
+
+    const litros = cargasSemana.reduce((sum, c) => sum + (c.litros || 0), 0);
+    const inversion = cargasSemana.reduce((sum, c) => sum + (c.total || 0), 0);
+
+    // Cálculo de odómetro (Diferencia entre la carga más nueva y la más antigua de la semana)
+    const sorted = [...cargasSemana].sort(
+      (a, b) =>
+        new Date(b.fechaHora).getTime() - new Date(a.fechaHora).getTime(),
+    );
+    const odoActual = sorted.length > 0 ? sorted[0].odometro : 0;
+    const odoAnterior =
+      sorted.length > 1 ? sorted[sorted.length - 1].odometro : odoActual;
+    const kmRecorridos = odoActual - odoAnterior;
+
+    const rendimiento =
+      kmRecorridos > 0 && litros > 0
+        ? (kmRecorridos / litros).toFixed(2)
+        : "0.00";
+
+    return { litros, inversion, odoActual, kmRecorridos, rendimiento };
+  }, [filteredCargas]);
+
+  const selectedUnitObj = useMemo(
+    () => units.find((u) => String(u.id) === selectedUnitId),
+    [units, selectedUnitId],
+  );
+
+  /** =========================================================
+   * 2) Handlers
+   * ========================================================= */
+  const handleAddTicket = async (data: TicketFormData) => {
+    const toastId = toast.loading("Registrando ticket...");
+    try {
+      await fuelService.create(data);
+      await loadData();
+      toast.success("Ticket registrado correctamente", { id: toastId });
+      setIsModalOpen(false);
+    } catch (error) {
+      toast.error("Error al guardar ticket", { id: toastId });
+    }
   };
 
   const handleDelete = async () => {
     if (!idParaEliminar) return;
-
     const toastId = toast.loading("Eliminando registro...");
     try {
       await fuelService.delete(idParaEliminar);
-
-      // Actualizamos la UI
       setCargas((prev) => prev.filter((c) => String(c.id) !== idParaEliminar));
-
-      toast.success("Registro eliminado correctamente", { id: toastId });
+      toast.success("Registro eliminado", { id: toastId });
     } catch (error) {
-      console.error(error);
-      toast.error("No se pudo eliminar el registro", { id: toastId });
+      toast.error("No se pudo eliminar", { id: toastId });
     } finally {
-      setIdParaEliminar(null); // Cerramos el modal
+      setIdParaEliminar(null);
     }
   };
 
-  /** =========================
-   * Mappers para display en la tabla
-   * - si tu API ya trae unidadNumero/operadorNombre, se respeta
-   * - si no, se resuelve con catálogos units/operators
-   * ========================= */
-  const resolveUnidadDisplay = (row: CargaCombustible) => {
-    const direct = (row as any).unidadNumero ?? (row as any).unidad_numero;
-    if (direct) return String(direct);
-
-    const unitId = (row as any).unidadId ?? (row as any).unidad_id;
-    const u = units.find((x) => String(x.id) === String(unitId));
-    return u ? unitLabel(u) : "";
-  };
-
-  const resolveOperadorDisplay = (row: CargaCombustible) => {
-    const direct = (row as any).operadorNombre ?? (row as any).operador_nombre;
-    if (direct) return String(direct);
-
-    const opId = (row as any).operadorId ?? (row as any).operador_id;
-    const o = operators.find((x) => String(x.id) === String(opId));
-    return o ? operatorLabel(o) : "";
-  };
-
-  const resolveEvidenciaCell = (row: CargaCombustible) => {
-    // si tu API trae un booleano/URL, ajústalo
-    const has =
-      Boolean((row as any).tieneEvidencia) ||
-      Boolean((row as any).evidencia_url) ||
-      Boolean((row as any).evidencia);
-
-    return has ? (
-      <div className="flex justify-center">
-        <Badge
-          variant="outline"
-          className=" bg-emerald-50 text-emerald-700 border-emerald-200"
-        >
-          Sí
-        </Badge>
-      </div>
-    ) : (
-      <div className="flex justify-center">
-        <Badge
-          variant="outline"
-          className=" bg-slate-50 text-slate-600 border-slate-200"
-        >
-          No
-        </Badge>
-      </div>
-    );
-  };
-
-  /** =========================
-   * Columns
-   * ========================= */
+  /** =========================================================
+   *  Columnas de la Tabla
+   * ========================================================= */
   const columns: ColumnDef<CargaCombustible>[] = useMemo(
     () => [
       {
         key: "fechaHora",
-        header: "Fecha/Hora",
-        render: (value) => {
-          if (!value) return "---";
-          const date = new Date(String(value));
-          return (
-            <span className="font-mono text-xs">
-              {date.toLocaleDateString("es-MX")}{" "}
-              {date.toLocaleTimeString("es-MX", {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
+        header: "Fecha y Hora",
+        render: (v) => (
+          <div className="flex flex-col">
+            <span className="font-bold text-slate-700">
+              {new Date(String(v)).toLocaleDateString()}
             </span>
-          );
-        },
-      },
-      {
-        key: "tipoCombustible",
-        header: "Tipo",
-        type: "status",
-        statusOptions: ["diesel", "urea"],
-        render: (value) => <FuelTypeBadge type={value as TipoCombustible} />,
-      },
-      {
-        key: "unidadNumero",
-        header: "Unidad",
-        render: (_, row) => (
-          <Badge variant="outline" className="font-mono">
-            {resolveUnidadDisplay(row)}
-          </Badge>
-        ),
-      },
-      {
-        key: "operadorNombre",
-        header: "Operador",
-        render: (_, row) => (
-          <span className="text-sm max-w-[150px] truncate">
-            {resolveOperadorDisplay(row)}
-          </span>
-        ),
-      },
-      {
-        key: "estacion",
-        header: "Estación",
-        render: (value) => (
-          <span className="text-sm max-w-[200px] truncate text-muted-foreground">
-            {String(value ?? "")}
-          </span>
-        ),
-      },
-      {
-        key: "litros",
-        header: "Litros",
-        type: "number",
-        render: (value, row) => (
-          <div className="flex items-center justify-end gap-1">
-            {row.excedeTanque && (
-              <AlertTriangle className="h-4 w-4 text-status-warning" />
-            )}
-            <span
-              className={
-                row.excedeTanque
-                  ? "text-status-warning font-semibold"
-                  : "font-mono"
-              }
-            >
-              {Number(value ?? 0).toFixed(1)} L
+            <span className="text-[10px] text-slate-400 font-mono">
+              {new Date(String(v)).toLocaleTimeString()}
             </span>
           </div>
         ),
       },
       {
-        key: "precioPorLitro",
-        header: "Precio/L",
-        type: "number",
-        render: (value) => (
-          <span className="font-mono text-sm text-right">
-            ${Number(value ?? 0).toFixed(2)}
-          </span>
+        key: "tipoCombustible",
+        header: "Tipo",
+        render: (v) => (
+          <Badge
+            variant="outline"
+            className={cn(
+              "gap-1",
+              v === "diesel"
+                ? "bg-amber-50 text-amber-700 border-amber-200"
+                : "bg-sky-50 text-sky-700 border-sky-200",
+            )}
+          >
+            {v === "diesel" ? (
+              <Fuel className="h-3 w-3" />
+            ) : (
+              <Droplets className="h-3 w-3" />
+            )}
+            {String(v).toUpperCase()}
+          </Badge>
+        ),
+      },
+      {
+        key: "unidadNumero",
+        header: "Unidad",
+        render: (v) => (
+          <Badge variant="secondary" className="font-black">
+            {v}
+          </Badge>
+        ),
+      },
+      {
+        key: "litros",
+        header: "Litros",
+        render: (v, row) => (
+          <div className="flex items-center gap-2">
+            <span
+              className={cn(
+                "font-mono font-bold",
+                row.excedeTanque && "text-rose-600",
+              )}
+            >
+              {Number(v).toFixed(1)} L
+            </span>
+            {row.excedeTanque && (
+              <AlertTriangle className="h-3 w-3 text-rose-500 animate-pulse" />
+            )}
+          </div>
         ),
       },
       {
         key: "total",
-        header: "Total",
-        type: "number",
-        render: (value) => (
-          <span className="font-semibold text-right">
-            $
-            {Number(value ?? 0).toLocaleString("es-MX", {
-              minimumFractionDigits: 2,
-            })}
+        header: "Monto",
+        render: (v) => (
+          <span className="font-bold text-emerald-700">
+            ${Number(v).toLocaleString()}
           </span>
         ),
       },
       {
         key: "odometro",
         header: "Odómetro",
-        type: "number",
-        render: (value) => (
-          <div className="flex items-center justify-end gap-1 text-muted-foreground">
+        render: (v) => (
+          <div className="flex items-center gap-1 text-slate-500">
             <Gauge className="h-3 w-3" />
-            <span className="font-mono text-sm">
-              {Number(value ?? 0).toLocaleString()}
+            <span className="font-mono text-xs">
+              {Number(v).toLocaleString()} km
             </span>
           </div>
         ),
       },
       {
-        key: "estado",
-        header: "Estado",
-        render: (_, row) => (
-          <div className="flex justify-center">
-            {row.excedeTanque ? (
-              <Badge
-                variant="outline"
-                className=" bg-amber-50 text-amber-700 border-amber-200"
-                title="Los litros exceden la capacidad configurada para la unidad"
-              >
-                ALERTA
-              </Badge>
-            ) : (
-              <Badge
-                variant="outline"
-                className=" bg-emerald-50 text-emerald-700 border-emerald-200"
-              >
-                OK
-              </Badge>
-            )}
-          </div>
-        ),
-      },
-      {
-        key: "tieneEvidencia",
-        header: "Evidencia",
-        render: (_, row) => resolveEvidenciaCell(row),
+        key: "evidenciaUrl",
+        header: "Ticket",
+        render: (v) =>
+          v ? (
+            <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-200">
+              OK
+            </Badge>
+          ) : (
+            <Badge
+              variant="outline"
+              className="text-slate-300 border-slate-200"
+            >
+              Falta
+            </Badge>
+          ),
       },
       {
         key: "acciones",
-        header: "Acciones",
+        header: "",
         render: (_, row) => (
-          <div
-            className="flex justify-end"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {" "}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8">
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setCargaToView(row)}>
-                  <Eye className="mr-2 h-4 w-4" /> Ver Detalles
-                </DropdownMenuItem>
-
-                <DropdownMenuItem onClick={() => setCargaToEdit(row)}>
-                  <Pencil className="mr-2 h-4 w-4" /> Editar
-                </DropdownMenuItem>
-
-                <DropdownMenuSeparator />
-
-                <DropdownMenuItem
-                  className="text-destructive"
-                  onClick={(e) => {
-                    e.stopPropagation(); // Evita que se abra el modal de detalles
-                    setIdParaEliminar(String(row.id)); // 1. Guardamos el ID (esto abre el AlertDialog automáticamente)
-                  }}
-                >
-                  <Trash2 className="mr-2 h-4 w-4" /> Eliminar
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setCargaToView(row)}>
+                <Eye className="h-4 w-4 mr-2" />
+                Detalles
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setCargaToEdit(row)}>
+                <Pencil className="h-4 w-4 mr-2" />
+                Editar
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-destructive"
+                onClick={() => setIdParaEliminar(String(row.id))}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Eliminar
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         ),
       },
     ],
-    // dependencias reales que afectan render
-    [cargas, units, operators],
+    [],
   );
-
-  const handleRowClick = (row: CargaCombustible) => setCargaToView(row);
 
   if (isLoading) {
     return (
-      <div className="flex justify-center p-20">
-        <Loader2 className="animate-spin h-10 w-10 text-primary" />
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 className="animate-spin h-12 w-12 text-brand-navy" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Bitácora de Cargas"
-        description="Registro de tickets de combustible (Diesel y Urea/DEF)"
-      />
+    <div className="p-6 space-y-6 bg-slate-50/50 min-h-screen">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <PageHeader
+          title="Bitácora de Combustible"
+          description="Control semanal de cargas, rendimientos y remanentes"
+        />
 
-      {/* Help */}
-      <Alert className="bg-amber-50 border-amber-200 mb-6">
-        <Fuel className="h-4 w-4 text-amber-600" />
-        <AlertDescription className="text-amber-800 text-xs">
-          <span className="font-bold">Sistema de Control de Combustible:</span>{" "}
-          Registra cargas de Diesel y Urea. El sistema validará automáticamente
-          si los litros ingresados exceden la capacidad configurada en la{" "}
-          <span className="font-bold">Ficha de la Unidad</span>. Es obligatorio
-          subir la foto del ticket para auditoría.
-        </AlertDescription>
-      </Alert>
-      <AlertDialog
-        open={!!idParaEliminar}
-        onOpenChange={(open) => !open && setIdParaEliminar(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Confirmar eliminación?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta acción marcará el ticket #{idParaEliminar} como eliminado.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => handleDelete()} // 2. Ahora sí ejecutamos la función real
-              className="bg-destructive text-white hover:bg-destructive/90"
+        {/*  FILTROS DE AUDITORÍA (Lógica Gustavo) */}
+        <div className="flex items-center gap-3 bg-white p-2 rounded-2xl border shadow-sm">
+          <div className="flex items-center gap-2 border-r pr-4 pl-2">
+            <Search className="h-4 w-4 text-slate-400" />
+            <Input
+              placeholder="Buscar unidad, estación u operador..."
+              className="border-none shadow-none focus-visible:ring-0 text-xs w-[250px]"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <Select value={selectedUnitId} onValueChange={setSelectedUnitId}>
+            <SelectTrigger className="w-[180px] border-none shadow-none focus:ring-0 font-bold text-brand-navy">
+              <SelectValue placeholder="Todas las unidades" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas las unidades</SelectItem>
+              {units.map((u) => (
+                <SelectItem key={u.id} value={String(u.id)}>
+                  Eco-{u.numero_economico}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {selectedUnitId !== "all" && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setSelectedUnitId("all")}
             >
-              Eliminar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+              <FilterX className="h-4 w-4 text-slate-400" />
+            </Button>
+          )}
+        </div>
+      </div>
 
-      {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-        <Card className="border-l-4 border-l-primary">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Total Cargas</p>
-                <p className="text-3xl font-bold">{cargas.length}</p>
+      {/*  DASHBOARD DE RENDIMIENTO (Gustavo min 16:24) */}
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card className="border-none shadow-md bg-white group hover:ring-2 hover:ring-amber-500/20 transition-all">
+          <CardContent className="p-5">
+            <div className="flex justify-between items-center">
+              <div className="space-y-1">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">
+                  Litros (7 días)
+                </p>
+                <p className="text-2xl font-black text-brand-navy">
+                  {statsAuditoria.litros.toLocaleString()} L
+                </p>
               </div>
-              <FileText className="h-8 w-8 text-primary opacity-60" />
+              <div className="h-10 w-10 rounded-full bg-amber-50 flex items-center justify-center text-amber-600">
+                <Fuel className="h-5 w-5" />
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              {dieselCargas.length} Diesel • {ureaCargas.length} Urea
+            <div className="mt-4 h-1 bg-slate-100 rounded-full overflow-hidden">
+              <div className="h-full bg-amber-500 w-[60%]" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-none shadow-md bg-white group">
+          <CardContent className="p-5">
+            <div className="flex justify-between items-center">
+              <div className="space-y-1">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">
+                  Inversión Semanal
+                </p>
+                <p className="text-2xl font-black text-emerald-600">
+                  ${statsAuditoria.inversion.toLocaleString()}
+                </p>
+              </div>
+              <div className="h-10 w-10 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600">
+                <TrendingUp className="h-5 w-5" />
+              </div>
+            </div>
+            <p className="text-[10px] text-emerald-500 font-bold mt-2 flex items-center gap-1">
+              <ArrowUpRight className="h-3 w-3" /> Basado en tickets cargados
             </p>
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-amber-500 overflow-hidden relative">
-          <div className="absolute top-0 right-0 w-16 h-16 bg-amber-500/10 rounded-bl-full" />
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground flex items-center gap-1">
-                  <Fuel className="h-3 w-3" /> Litros Diesel
+        <Card className="border-none shadow-md bg-white group">
+          <CardContent className="p-5">
+            <div className="flex justify-between items-center">
+              <div className="space-y-1">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">
+                  Rendimiento Real
                 </p>
-                <p className="text-3xl font-bold text-amber-600">
-                  {totalLitrosDiesel.toLocaleString()}
+                <p className="text-2xl font-black text-blue-600">
+                  {statsAuditoria.rendimiento}{" "}
+                  <span className="text-xs">km/L</span>
                 </p>
               </div>
-              <Fuel className="h-8 w-8 text-amber-500 opacity-60" />
+              <div className="h-10 w-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600">
+                <BarChart3 className="h-5 w-5" />
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              ${totalMontoDiesel.toLocaleString("es-MX")} MXN
+            <p className="text-[10px] text-slate-400 mt-2">
+              Diferencia de odómetros / Litros
             </p>
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-sky-500 overflow-hidden relative">
-          <div className="absolute top-0 right-0 w-16 h-16 bg-sky-500/10 rounded-bl-full" />
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground flex items-center gap-1">
-                  <Droplets className="h-3 w-3" /> Litros Urea/DEF
+        <Card className="border-none shadow-md bg-brand-navy text-white group">
+          <CardContent className="p-5">
+            <div className="flex justify-between items-center">
+              <div className="space-y-1">
+                <p className="text-[10px] font-black text-slate-300 uppercase tracking-tighter">
+                  Último Odómetro
                 </p>
-                <p className="text-3xl font-bold text-sky-600">
-                  {totalLitrosUrea.toLocaleString()}
+                <p className="text-2xl font-black">
+                  {statsAuditoria.odoActual.toLocaleString()}{" "}
+                  <span className="text-xs">km</span>
                 </p>
               </div>
-              <Droplets className="h-8 w-8 text-sky-500 opacity-60" />
+              <div className="h-10 w-10 rounded-full bg-white/10 flex items-center justify-center text-white">
+                <Gauge className="h-5 w-5" />
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              ${totalMontoUrea.toLocaleString("es-MX")} MXN
+            <p className="text-[10px] text-slate-300 mt-2">
+              Cierre de bitácora actual
             </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-l-status-success">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Monto Total</p>
-                <p className="text-2xl font-bold">
-                  ${(totalMontoDiesel + totalMontoUrea).toLocaleString("es-MX")}
-                </p>
-              </div>
-              <TrendingUp className="h-8 w-8 text-status-success opacity-60" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-l-status-warning">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Con Alerta</p>
-                <p className="text-3xl font-bold text-status-warning">
-                  {cargasConAlerta}
-                </p>
-              </div>
-              <AlertTriangle className="h-8 w-8 text-status-warning opacity-60" />
-            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Toolbar */}
-      <div className="flex justify-end">
+      {/*  ALERTA DE CONTROL PARA UNIDADES DE PATIO (Min 02:53) */}
+      {selectedUnitId !== "all" &&
+        selectedUnitObj?.tipo_1?.toLowerCase().includes("patio") && (
+          <Alert className="bg-indigo-50 border-indigo-200 rounded-2xl shadow-sm">
+            <Calendar className="h-4 w-4 text-indigo-600" />
+            <AlertDescription className="text-indigo-900 text-xs flex justify-between items-center w-full">
+              <span>
+                <strong>Control de Patio Registrado:</strong> Esta unidad opera
+                bajo esquema de carga semanal. Consumo proyectado:{" "}
+                <strong>~{(statsAuditoria.litros / 7).toFixed(1)} L/día</strong>
+                .
+              </span>
+              <Badge className="bg-indigo-600 text-white border-none px-3">
+                Revision Semanal Activa
+              </Badge>
+            </AlertDescription>
+          </Alert>
+        )}
+
+      {/* TOOLBAR Y TABLA */}
+      <div className="flex justify-between items-center">
+        <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+          <FileText className="h-4 w-4 text-brand-navy" /> Historial de
+          Movimientos
+        </h3>
         <Button
           onClick={() => setIsModalOpen(true)}
-          className="h-9 gap-2 bg-action hover:bg-action-hover text-action-foreground"
+          className="bg-brand-navy hover:bg-brand-navy/90 gap-2 shadow-lg shadow-brand-navy/20 h-10 px-6 rounded-xl"
         >
-          <Plus className="h-4 w-4" />
-          Agregar Ticket
+          <Plus className="h-4 w-4" /> Registrar Vale / Ticket
         </Button>
       </div>
 
-      {/* Table */}
-      <Card>
-        <CardContent className="pt-6">
+      <Card className="border-none shadow-xl bg-white rounded-2xl overflow-hidden">
+        <CardContent className="p-0">
           <EnhancedDataTable
-            data={cargas}
+            data={filteredCargas}
             columns={columns}
-            onRowClick={handleRowClick}
-            exportFileName="cargas_combustible"
+            onRowClick={(row) => setCargaToView(row)}
+            exportFileName="auditoria_combustible"
           />
         </CardContent>
       </Card>
 
-      {/* Modals */}
+      {/* MODALES */}
       <AddTicketModal
         open={isModalOpen}
         onOpenChange={setIsModalOpen}
@@ -687,23 +580,38 @@ const CombustibleCargas = () => {
         open={!!cargaToEdit}
         onOpenChange={() => setCargaToEdit(null)}
         carga={cargaToEdit}
-        units={units} //
-        operators={operators} //
-        onSave={async () => {
-          // Al guardar en el modal, refrescamos la lista entera desde el servidor
-          const updated = await fuelService.getAll();
-          // Re-normalizamos la data para los KPIs
-          const normalized = updated.map((item: any) => ({
-            ...item,
-            tipoCombustible: item.tipo_combustible || item.tipoCombustible,
-            fechaHora: item.fecha_hora || item.fechaHora,
-            precioPorLitro: item.precio_por_litro || item.precioPorLitro,
-            excedeTanque: item.excede_tanque ?? item.excedeTanque,
-            evidenciaUrl: item.evidencia_url || item.evidenciaUrl,
-          }));
-          setCargas(normalized);
-        }}
+        units={units}
+        operators={operators}
+        onSave={loadData}
       />
+
+      <AlertDialog
+        open={!!idParaEliminar}
+        onOpenChange={(o) => !o && setIdParaEliminar(null)}
+      >
+        <AlertDialogContent className="rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-brand-navy font-black">
+              ¿Eliminar registro?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción es irreversible y afectará el cálculo de rendimiento
+              km/L de la unidad.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl">
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-white rounded-xl"
+            >
+              Confirmar Eliminación
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
