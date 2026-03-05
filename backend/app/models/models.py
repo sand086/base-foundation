@@ -374,6 +374,7 @@ class Unit(AuditMixin, Base):
     permiso_sct_url = Column(String(500), nullable=True)
     caat_url = Column(String(500), nullable=True)
     tarjeta_circulacion_folio = Column(String(50), nullable=True)
+    is_loaded = Column(Boolean, nullable=False, server_default="false", default=False)
 
     # ✅ RELACIONES CORREGIDAS
     operators = relationship("Operator", back_populates="assigned_unit")
@@ -1312,3 +1313,23 @@ class ReceivableInvoice(AuditMixin, Base):
     client = relationship("Client")
     sub_client = relationship("SubClient")
     trip = relationship("Trip")
+
+
+class ReceivableInvoicePayment(AuditMixin, Base):
+    __tablename__ = "receivable_invoice_payments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    invoice_id = Column(
+        Integer,
+        ForeignKey("receivable_invoices.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    fecha_pago = Column(Date, default=date.today)
+    monto = Column(Float, nullable=False)
+    metodo_pago = Column(String(50))  # Ej: TRANSFERENCIA, CHEQUE, EFECTIVO
+    referencia = Column(String(100))  # Ej: Folio de transferencia
+    cuenta_deposito = Column(String(50))  # A qué cuenta de la empresa cayó
+
+    # Relación inversa
+    invoice = relationship("ReceivableInvoice", backref="payments")

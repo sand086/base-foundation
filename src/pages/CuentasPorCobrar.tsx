@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+// src/pages/CuentasPorCobrar.tsx
+import { useState, useMemo, useEffect } from "react";
 import {
   Download,
   AlertCircle,
@@ -11,7 +12,8 @@ import {
   Clock,
   Ban,
   CheckCircle2,
-  DollarSign,
+  Sheet as SheetIcon,
+  Loader2,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -41,7 +43,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-// Feature components
+import axiosClient from "@/api/axiosClient";
+
+// Feature components (Asegúrate de que las rutas a tus modales sean correctas)
 import { ImportServicesModal } from "@/features/cxc/ImportServicesModal";
 import { CreateInvoiceModal } from "@/features/cxc/CreateInvoiceModal";
 import { InvoiceDetailSheet } from "@/features/cxc/InvoiceDetailSheet";
@@ -55,18 +59,11 @@ import {
   getAgingCategory,
   calculateDaysOverdue,
 } from "@/features/cxc/types";
-import {
-  initialReceivableInvoices,
-  finalizableServices as initialServices,
-} from "@/features/cxc/data";
 
 export default function CuentasPorCobrar() {
-  // State for invoices and services
-  const [invoices, setInvoices] = useState<ReceivableInvoice[]>(
-    initialReceivableInvoices,
-  );
-  const [services, setServices] =
-    useState<FinalizableService[]>(initialServices);
+  const [invoices, setInvoices] = useState<ReceivableInvoice[]>([]);
+  const [services, setServices] = useState<FinalizableService[]>([]);
+  const [loading, setLoading] = useState(true);
 
   // Modal states
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -76,7 +73,7 @@ export default function CuentasPorCobrar() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isAccountStatementOpen, setIsAccountStatementOpen] = useState(false);
 
-  // Selected invoice for actions
+  // Selected state
   const [selectedInvoice, setSelectedInvoice] =
     useState<ReceivableInvoice | null>(null);
   const [importedServices, setImportedServices] = useState<
@@ -85,7 +82,93 @@ export default function CuentasPorCobrar() {
   const [invoiceToDelete, setInvoiceToDelete] =
     useState<ReceivableInvoice | null>(null);
 
-  // Calculate Aging Report KPIs
+  // 🚀 CONEXIÓN AL BACKEND REAL
+  const fetchInvoices = async () => {
+    try {
+      setLoading(true);
+      // Esta ruta la crearemos en el paso 2
+      const response = await axiosClient.get("/receivables");
+
+      // Mapear los datos del backend al formato que espera la tabla
+      const formattedData = response.data.map((inv: any) => ({
+        id: String(inv.id),
+        folio: inv.folio_interno || `CXC-${inv.id}`,
+        cliente: inv.client?.razon_social || "Cliente Desconocido",
+        montoTotal: inv.monto_total,
+        saldoPendiente: inv.saldo_pendiente,
+        fechaEmision: inv.fecha_emision,
+        fechaVencimiento: inv.fecha_vencimiento,
+        estatus: inv.estatus,
+        moneda: inv.moneda,
+        requiereREP: inv.saldo_pendiente > 0, // Lógica básica para REP
+        cobros: [], // Por ahora vacío hasta que implementes abonos
+      }));
+
+      setInvoices(formattedData);
+    } catch (error) {
+      toast.error("Error al cargar las cuentas por cobrar");
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchInvoices();
+  }, []);
+
+  // 🚀 GUSTAVO UX: EXPORTAR A EXCEL (CSV)
+  const handleExportToExcel = () => {
+    if (invoices.length === 0) {
+      toast.error("No hay datos para exportar");
+      return;
+    }
+
+    const headers = [
+      "Folio",
+      "Cliente",
+      "Fecha Emisión",
+      "Fecha Vencimiento",
+      "Monto Total",
+      "Saldo Pendiente",
+      "Estatus",
+      "Días Vencidos",
+    ];
+
+    const rows = invoices.map((inv) => {
+      const diasVencidos = calculateDaysOverdue(inv.fechaVencimiento);
+      return [
+        inv.folio,
+        `"${inv.cliente}"`, // Comillas por si el cliente tiene comas
+        inv.fechaEmision,
+        inv.fechaVencimiento,
+        inv.montoTotal,
+        inv.saldoPendiente,
+        inv.estatus.toUpperCase(),
+        diasVencidos > 0 ? diasVencidos : 0,
+      ].join(",");
+    });
+
+    const csvContent = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob(["\uFEFF" + csvContent], {
+      type: "text/csv;charset=utf-8;",
+    }); // \uFEFF es para que Excel lea los acentos (UTF-8)
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute(
+      "download",
+      `Cartera_Cobranza_${new Date().toISOString().split("T")[0]}.csv`,
+    );
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    toast.success("Archivo Excel generado exitosamente");
+  };
+
+  // Cálculo del Reporte de Antigüedad (Aging)
   const agingReport = useMemo(() => {
     const corriente = invoices
       .filter(
@@ -93,142 +176,75 @@ export default function CuentasPorCobrar() {
           getAgingCategory(inv) === "corriente" && inv.saldoPendiente > 0,
       )
       .reduce((sum, inv) => sum + inv.saldoPendiente, 0);
-
     const vencido1_30 = invoices
       .filter((inv) => getAgingCategory(inv) === "vencido_1_30")
       .reduce((sum, inv) => sum + inv.saldoPendiente, 0);
-
     const vencido31_60 = invoices
       .filter((inv) => getAgingCategory(inv) === "vencido_31_60")
       .reduce((sum, inv) => sum + inv.saldoPendiente, 0);
-
     const incobrable = invoices
       .filter((inv) => getAgingCategory(inv) === "incobrable")
       .reduce((sum, inv) => sum + inv.saldoPendiente, 0);
-
     return { corriente, vencido1_30, vencido31_60, incobrable };
   }, [invoices]);
 
-  // Handle importing services
+  // Handlers para UI
   const handleImportServices = (selectedServices: FinalizableService[]) => {
     setImportedServices(selectedServices);
     setIsImportModalOpen(false);
     setIsCreateModalOpen(true);
   };
 
-  // Handle creating invoice
-  const handleCreateInvoice = (
+  const handleCreateInvoice = async (
     invoiceData: Omit<ReceivableInvoice, "id" | "folio" | "cobros" | "estatus">,
   ) => {
-    const newId = `FAC-${String(invoices.length + 1).padStart(3, "0")}`;
-    const newFolio = `A-2025-${String(invoices.length + 1).padStart(3, "0")}`;
-
-    const newInvoice: ReceivableInvoice = {
-      ...invoiceData,
-      id: newId,
-      folio: newFolio,
-      cobros: [],
-      estatus: "corriente",
-    };
-
-    setInvoices([newInvoice, ...invoices]);
-
-    // Mark imported services as invoiced
-    if (importedServices) {
-      setServices(
-        services.map((s) =>
-          importedServices.find((imp) => imp.id === s.id)
-            ? { ...s, facturado: true }
-            : s,
-        ),
-      );
-      setImportedServices(undefined);
-    }
-
-    toast.success("Factura creada correctamente", {
-      description: `${newFolio} - ${invoiceData.cliente} - $${invoiceData.montoTotal.toLocaleString("es-MX")}`,
-    });
+    // Aquí conectarías a axiosClient.post('/receivables', invoiceData)
+    toast.info("Función de creación manual en desarrollo");
   };
 
-  // Handle registering payment
-  const handleRegisterPayment = (
-    invoiceId: string,
-    payment: Omit<InvoicePayment, "id">,
-  ) => {
-    setInvoices(
-      invoices.map((inv) => {
-        if (inv.id === invoiceId) {
-          const newPayment: InvoicePayment = {
-            ...payment,
-            id: `COB-${Date.now()}`,
-          };
-
-          const newSaldo = inv.saldoPendiente - payment.monto;
-          const newEstatus = newSaldo === 0 ? "pagada" : "pago_parcial";
-
-          return {
-            ...inv,
-            saldoPendiente: newSaldo,
-            estatus: newEstatus,
-            cobros: [...inv.cobros, newPayment],
-            requiereREP: payment.requiereREP || inv.requiereREP,
-          };
-        }
-        return inv;
-      }),
-    );
-
-    toast.success("Cobro registrado correctamente", {
-      description: `$${payment.monto.toLocaleString("es-MX")} aplicado a ${invoiceId}`,
-    });
-  };
-
-  // Handle delete invoice
-  const handleDeleteInvoice = () => {
-    if (!invoiceToDelete) return;
-
-    // Check if invoice has payments
-    if (invoiceToDelete.saldoPendiente < invoiceToDelete.montoTotal) {
-      toast.error("No se puede eliminar", {
-        description:
-          "Esta factura tiene abonos registrados. No es posible eliminarla.",
+  const handleRegisterPayment = async (invoiceId: string, payment: any) => {
+    try {
+      // 1. Enviamos el pago al backend
+      await axiosClient.post(`/receivables/${invoiceId}/payments`, {
+        monto: payment.monto,
+        metodo_pago: payment.metodoPago || "TRANSFERENCIA",
+        referencia: payment.referencia || "",
       });
+
+      toast.success("¡Cobro Registrado!", {
+        description: `Se abonaron $${payment.monto.toLocaleString("es-MX")} a la factura.`,
+      });
+
+      // 2. Cerramos el modal
+      setIsPaymentModalOpen(false);
+      setSelectedInvoice(null);
+
+      // 3. Recargamos la tabla para que los números en Verde y los semáforos se actualicen solos
+      fetchInvoices();
+    } catch (error: any) {
+      toast.error("Error al registrar el cobro", {
+        description:
+          error.response?.data?.detail ||
+          "Verifica los datos y vuelve a intentar.",
+      });
+      console.error(error);
+    }
+  };
+
+  const handleDeleteInvoice = async () => {
+    if (!invoiceToDelete) return;
+    try {
+      await axiosClient.delete(`/receivables/${invoiceToDelete.id}`);
+      setInvoices(invoices.filter((inv) => inv.id !== invoiceToDelete.id));
+      toast.success("Factura eliminada correctamente");
+    } catch (error) {
+      toast.error("Error al eliminar la factura");
+    } finally {
       setIsDeleteDialogOpen(false);
       setInvoiceToDelete(null);
-      return;
     }
-
-    setInvoices(invoices.filter((inv) => inv.id !== invoiceToDelete.id));
-    toast.success("Factura eliminada correctamente", {
-      description: `${invoiceToDelete.folio} ha sido eliminada.`,
-    });
-    setIsDeleteDialogOpen(false);
-    setInvoiceToDelete(null);
   };
 
-  // Open detail sheet
-  const handleViewInvoice = (invoice: ReceivableInvoice) => {
-    setSelectedInvoice(invoice);
-    setIsDetailSheetOpen(true);
-  };
-
-  // Open payment modal
-  const handlePayInvoice = (invoice: ReceivableInvoice) => {
-    setSelectedInvoice(invoice);
-    setIsPaymentModalOpen(true);
-  };
-
-  // Open delete dialog
-  const handleDeleteClick = (invoice: ReceivableInvoice) => {
-    setInvoiceToDelete(invoice);
-    setIsDeleteDialogOpen(true);
-  };
-
-  const handleOpenAccountStatement = () => {
-    setIsAccountStatementOpen(true);
-  };
-
-  // Define columns for EnhancedDataTable
   const columns: ColumnDef<ReceivableInvoice>[] = useMemo(
     () => [
       {
@@ -239,24 +255,19 @@ export default function CuentasPorCobrar() {
           return (
             <div className="flex flex-col">
               <span
-                className={`font-mono text-sm font-medium ${statusInfo.status === "danger" ? "text-red-700" : "text-slate-700"}`}
+                className={`font-mono text-sm font-bold ${statusInfo.status === "danger" ? "text-red-700" : "text-brand-navy"}`}
               >
                 {value}
               </span>
-              {row.requiereREP && (
-                <span className="text-[9px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded font-medium w-fit mt-0.5">
-                  PEND. REP
-                </span>
-              )}
             </div>
           );
         },
       },
       {
         key: "cliente",
-        header: "Client",
+        header: "Cliente",
         render: (value) => (
-          <span className="text-sm font-medium text-slate-700 max-w-[150px] truncate block">
+          <span className="text-sm font-black text-slate-700 max-w-[200px] truncate block uppercase">
             {value}
           </span>
         ),
@@ -267,8 +278,8 @@ export default function CuentasPorCobrar() {
         type: "number",
         render: (value, row) => (
           <span className="text-sm font-bold text-slate-700">
-            ${value.toLocaleString("es-MX")}
-            <span className="text-xs text-muted-foreground ml-1">
+            ${value.toLocaleString("es-MX", { minimumFractionDigits: 2 })}{" "}
+            <span className="text-[10px] text-muted-foreground">
               {row.moneda}
             </span>
           </span>
@@ -276,21 +287,15 @@ export default function CuentasPorCobrar() {
       },
       {
         key: "saldoPendiente",
-        header: "Saldo",
+        header: "Saldo a Cobrar",
         type: "number",
         render: (value, row) => {
           const statusInfo = getInvoiceStatusInfo(row);
           return (
             <span
-              className={`text-sm font-bold ${
-                value === 0
-                  ? "text-emerald-700"
-                  : statusInfo.status === "danger"
-                    ? "text-red-700"
-                    : "text-amber-700"
-              }`}
+              className={`text-sm font-black ${value === 0 ? "text-emerald-600" : statusInfo.status === "danger" ? "text-red-600" : "text-amber-600"}`}
             >
-              ${value.toLocaleString("es-MX")}
+              ${value.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
             </span>
           );
         },
@@ -300,7 +305,7 @@ export default function CuentasPorCobrar() {
         header: "Emisión",
         type: "date",
         render: (value) => (
-          <span className="text-sm text-muted-foreground">
+          <span className="text-xs font-medium text-slate-500">
             {new Date(value).toLocaleDateString("es-MX")}
           </span>
         ),
@@ -315,13 +320,13 @@ export default function CuentasPorCobrar() {
           return (
             <div className="flex flex-col">
               <span
-                className={`text-sm ${isPastDue ? "text-red-700 font-medium" : "text-slate-700"}`}
+                className={`text-xs font-bold ${isPastDue ? "text-red-600" : "text-slate-700"}`}
               >
                 {new Date(value).toLocaleDateString("es-MX")}
               </span>
               {isPastDue && (
-                <span className=" text-red-600 font-medium">
-                  +{daysOverdue}d vencido
+                <span className="text-[10px] text-red-500 font-black animate-pulse">
+                  +{daysOverdue} DÍAS VENCIDO
                 </span>
               )}
             </div>
@@ -336,7 +341,10 @@ export default function CuentasPorCobrar() {
         render: (_, row) => {
           const statusInfo = getInvoiceStatusInfo(row);
           return (
-            <StatusBadge status={statusInfo.status}>
+            <StatusBadge
+              status={statusInfo.status}
+              className="uppercase font-bold text-[10px] tracking-wider px-2 py-1"
+            >
               {statusInfo.label}
             </StatusBadge>
           );
@@ -353,29 +361,43 @@ export default function CuentasPorCobrar() {
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="bg-card">
-              <DropdownMenuItem onClick={() => handleViewInvoice(row)}>
-                <Eye className="h-4 w-4 mr-2" />
-                Ver Detalle
+            <DropdownMenuContent
+              align="end"
+              className="bg-white rounded-xl shadow-xl p-1"
+            >
+              <DropdownMenuItem
+                onClick={() => {
+                  setSelectedInvoice(row);
+                  setIsDetailSheetOpen(true);
+                }}
+                className="rounded-lg"
+              >
+                <Eye className="h-4 w-4 mr-2 text-slate-400" /> Ver Detalle
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={() => handlePayInvoice(row)}
+                onClick={() => {
+                  setSelectedInvoice(row);
+                  setIsPaymentModalOpen(true);
+                }}
                 disabled={row.saldoPendiente === 0}
                 className={
-                  row.saldoPendiente > 0 ? "text-brand-green font-medium" : ""
+                  row.saldoPendiente > 0
+                    ? "text-emerald-700 font-bold rounded-lg"
+                    : "rounded-lg"
                 }
               >
-                <CreditCard className="h-4 w-4 mr-2" />
-                Registrar Cobro
+                <CreditCard className="h-4 w-4 mr-2" /> Registrar Cobro
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={() => handleDeleteClick(row)}
-                className="text-status-danger"
+                onClick={() => {
+                  setInvoiceToDelete(row);
+                  setIsDeleteDialogOpen(true);
+                }}
+                className="text-red-600 font-bold rounded-lg"
               >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Eliminar
+                <Trash2 className="h-4 w-4 mr-2" /> Eliminar Factura
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -385,110 +407,128 @@ export default function CuentasPorCobrar() {
     [],
   );
 
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-brand-navy" />
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-20">
       <PageHeader
-        title="Cuentas por Cobrar"
-        description="Gestión de cartera y estado de cuenta"
+        title="Cuentas por Cobrar (Tesorería)"
+        description="Gestión de cartera, antigüedad de saldos y cobranza a clientes."
       >
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {/* 🚀 BOTÓN GIGANTE PARA GUSTAVO: EXPORTAR A EXCEL */}
+          <Button
+            variant="outline"
+            className="border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 font-bold"
+            onClick={handleExportToExcel}
+          >
+            <SheetIcon className="h-4 w-4 mr-2 text-emerald-600" /> Exportar a
+            Excel
+          </Button>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <ActionButton size="md">
-                <Plus className="h-4 w-4 mr-2" />
-                Facturar Servicio
+              <ActionButton
+                size="md"
+                className="bg-brand-navy hover:bg-brand-navy/90"
+              >
+                <Plus className="h-4 w-4 mr-2" /> Nueva Factura
               </ActionButton>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="bg-card w-48">
+            <DropdownMenuContent
+              align="end"
+              className="w-56 rounded-xl p-1 shadow-xl bg-white"
+            >
+              <DropdownMenuItem
+                onClick={() => setIsImportModalOpen(true)}
+                className="rounded-lg cursor-pointer py-2"
+              >
+                <FileInput className="h-4 w-4 mr-3 text-brand-navy" />{" "}
+                <span className="font-medium">Importar desde Operaciones</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => {
                   setImportedServices(undefined);
                   setIsCreateModalOpen(true);
                 }}
+                className="rounded-lg cursor-pointer py-2"
               >
-                <Plus className="h-4 w-4 mr-2" />
-                Factura Manual
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setIsImportModalOpen(true)}>
-                <FileInput className="h-4 w-4 mr-2" />
-                Importar de Servicios
+                <Plus className="h-4 w-4 mr-3 text-slate-400" />{" "}
+                <span className="font-medium">Crear Factura Manual</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button variant="outline" onClick={handleOpenAccountStatement}>
-            <Download className="h-4 w-4 mr-2" />
-            Generar Estado de Cuenta
-          </Button>
         </div>
       </PageHeader>
 
-      {/* Aging Report Cards */}
+      {/* DASHBOARD DE ANTIGÜEDAD DE SALDOS */}
       <div className="grid gap-4 md:grid-cols-4">
-        <Card className="border-l-4 border-l-status-success">
-          <CardContent className="pt-6">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground flex items-center gap-1">
-                  <CheckCircle2 className="h-4 w-4" />
-                  Por Cobrar (Corriente)
-                </p>
-                <p className="text-2xl font-bold text-status-success mt-1">
-                  ${agingReport.corriente.toLocaleString("es-MX")}
-                </p>
-              </div>
-            </div>
+        <Card className="border-l-4 border-l-emerald-500 shadow-sm hover:shadow-md transition-shadow">
+          <CardContent className="p-5">
+            <p className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mb-1">
+              <CheckCircle2 className="h-4 w-4 text-emerald-500" /> Corriente
+              (Al Día)
+            </p>
+            <p className="text-2xl font-black text-slate-800">
+              $
+              {agingReport.corriente.toLocaleString("es-MX", {
+                minimumFractionDigits: 2,
+              })}
+            </p>
           </CardContent>
         </Card>
-        <Card className="border-l-4 border-l-status-warning">
-          <CardContent className="pt-6">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground flex items-center gap-1">
-                  <Clock className="h-4 w-4" />
-                  Vencido 1-30 días
-                </p>
-                <p className="text-2xl font-bold text-status-warning mt-1">
-                  ${agingReport.vencido1_30.toLocaleString("es-MX")}
-                </p>
-              </div>
-            </div>
+        <Card className="border-l-4 border-l-amber-400 shadow-sm hover:shadow-md transition-shadow">
+          <CardContent className="p-5">
+            <p className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mb-1">
+              <Clock className="h-4 w-4 text-amber-500" /> Vencido 1-30 Días
+            </p>
+            <p className="text-2xl font-black text-amber-600">
+              $
+              {agingReport.vencido1_30.toLocaleString("es-MX", {
+                minimumFractionDigits: 2,
+              })}
+            </p>
           </CardContent>
         </Card>
-        <Card className="border-l-4 border-l-orange-500">
-          <CardContent className="pt-6">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground flex items-center gap-1">
-                  <AlertCircle className="h-4 w-4" />
-                  Vencido 31-60 días
-                </p>
-                <p className="text-2xl font-bold text-orange-600 mt-1">
-                  ${agingReport.vencido31_60.toLocaleString("es-MX")}
-                </p>
-              </div>
-            </div>
+        <Card className="border-l-4 border-l-orange-500 shadow-sm hover:shadow-md transition-shadow">
+          <CardContent className="p-5">
+            <p className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mb-1">
+              <AlertCircle className="h-4 w-4 text-orange-500" /> Vencido 31-60
+              Días
+            </p>
+            <p className="text-2xl font-black text-orange-600">
+              $
+              {agingReport.vencido31_60.toLocaleString("es-MX", {
+                minimumFractionDigits: 2,
+              })}
+            </p>
           </CardContent>
         </Card>
-        <Card className="border-l-4 border-l-status-danger">
-          <CardContent className="pt-6">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground flex items-center gap-1">
-                  <Ban className="h-4 w-4" />
-                  Incobrable (+90 días)
-                </p>
-                <p className="text-2xl font-bold text-status-danger mt-1">
-                  ${agingReport.incobrable.toLocaleString("es-MX")}
-                </p>
-              </div>
-            </div>
+        <Card className="border-l-4 border-l-red-600 shadow-sm hover:shadow-md transition-shadow">
+          <CardContent className="p-5">
+            <p className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mb-1">
+              <Ban className="h-4 w-4 text-red-500" /> Cartera Vencida (+90)
+            </p>
+            <p className="text-2xl font-black text-red-700">
+              $
+              {agingReport.incobrable.toLocaleString("es-MX", {
+                minimumFractionDigits: 2,
+              })}
+            </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Data Table */}
-      <Card>
-        <CardContent className="pt-6">
+      {/* TABLA PRINCIPAL */}
+      <Card className="shadow-lg border-slate-200 overflow-hidden rounded-2xl">
+        <CardContent className="p-0">
           <EnhancedDataTable
             data={invoices}
             columns={columns}
@@ -497,45 +537,13 @@ export default function CuentasPorCobrar() {
         </CardContent>
       </Card>
 
-      {/* Legend */}
-      <Card>
-        <CardContent className="pt-6">
-          <h4 className="font-semibold text-slate-700 mb-3">
-            Leyenda de Estados
-          </h4>
-          <div className="flex flex-wrap gap-6">
-            <div className="flex items-center gap-2">
-              <StatusBadge status="warning">POR COBRAR</StatusBadge>
-              <span className="text-sm text-slate-600">Dentro de plazo</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <StatusBadge status="info">PAGO PARCIAL</StatusBadge>
-              <span className="text-sm text-slate-600">Tiene abonos</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <StatusBadge status="danger">VENCIDA</StatusBadge>
-              <span className="text-sm text-slate-600">
-                Fecha límite excedida
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <StatusBadge status="success">PAGADA</StatusBadge>
-              <span className="text-sm text-slate-600">
-                Cobrada en su totalidad
-              </span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Modals */}
+      {/* Modales Existentes (Mantenemos los que ya tenías) */}
       <ImportServicesModal
         open={isImportModalOpen}
         onOpenChange={setIsImportModalOpen}
         services={services}
         onImport={handleImportServices}
       />
-
       <CreateInvoiceModal
         open={isCreateModalOpen}
         onOpenChange={(open) => {
@@ -545,59 +553,60 @@ export default function CuentasPorCobrar() {
         onSubmit={handleCreateInvoice}
         importedServices={importedServices}
       />
-
       <InvoiceDetailSheet
         open={isDetailSheetOpen}
         onOpenChange={setIsDetailSheetOpen}
         invoice={selectedInvoice}
       />
-
       <RegisterPaymentModal
         open={isPaymentModalOpen}
         onOpenChange={setIsPaymentModalOpen}
         invoice={selectedInvoice}
         onSubmit={handleRegisterPayment}
       />
-
-      {/* Account Statement Modal */}
       <AccountStatementModal
         open={isAccountStatementOpen}
         onClose={() => setIsAccountStatementOpen(false)}
         invoices={invoices}
       />
 
-      {/* Delete Confirmation Dialog */}
+      {/* DIÁLOGO DE ELIMINACIÓN */}
       <AlertDialog
         open={isDeleteDialogOpen}
         onOpenChange={setIsDeleteDialogOpen}
       >
-        <AlertDialogContent>
+        <AlertDialogContent className="rounded-2xl">
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar factura?</AlertDialogTitle>
+            <AlertDialogTitle className="text-brand-navy font-black">
+              ¿Eliminar Factura?
+            </AlertDialogTitle>
             <AlertDialogDescription>
               {invoiceToDelete &&
               invoiceToDelete.saldoPendiente < invoiceToDelete.montoTotal ? (
-                <span className="text-status-danger font-medium">
-                  ⚠️ Esta factura tiene abonos registrados y no puede ser
-                  eliminada.
+                <span className="text-red-600 font-bold bg-red-50 p-3 rounded-lg block mt-2 border border-red-200">
+                  ⚠️ Error: Esta factura ya tiene abonos/pagos registrados. Por
+                  auditoría fiscal, no es posible eliminarla. Cancele los pagos
+                  primero.
                 </span>
               ) : (
-                <>
+                <span className="block mt-2">
                   Esta acción no se puede deshacer. Se eliminará la factura{" "}
-                  <strong>{invoiceToDelete?.folio}</strong> de forma permanente.
-                </>
+                  <strong>{invoiceToDelete?.folio}</strong> del sistema.
+                </span>
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel className="rounded-xl">
+              Cancelar
+            </AlertDialogCancel>
             {invoiceToDelete &&
               invoiceToDelete.saldoPendiente === invoiceToDelete.montoTotal && (
                 <AlertDialogAction
                   onClick={handleDeleteInvoice}
-                  className="bg-status-danger hover:bg-status-danger/90 text-white"
+                  className="bg-red-600 hover:bg-red-700 text-white rounded-xl"
                 >
-                  Eliminar
+                  Sí, Eliminar
                 </AlertDialogAction>
               )}
           </AlertDialogFooter>

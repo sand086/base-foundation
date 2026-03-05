@@ -155,36 +155,35 @@ TEMPLATE_DIR = os.path.join(
 jinja_env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
 
 
-@router.post("/legs/{leg_id}/settle")
+@router.post("/trips/legs/{leg_id}/settle")
 def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(get_db)):
-    # 1. Buscar el tramo específico
+    # 1. Buscar el tramo
     leg = db.query(models.TripLeg).filter(models.TripLeg.id == leg_id).first()
     if not leg:
         raise HTTPException(status_code=404, detail="Tramo no encontrado")
 
-    # 2. Guardar el saldo final a favor del operador y cerrar su tramo
+    # 2. Guardar el saldo final a favor del operador y cerrar el tramo
     leg.status = "cerrado"
     leg.saldo_operador = data.get("netoAPagar", 0.0)
     db.commit()
     db.refresh(leg)
 
-    # 3. LÓGICA GUSTAVO: ¿Ya se cerraron todos los tramos?
+    # 3. LÓGICA GUSTAVO: Verificar si ya se acabaron todas las fases
     trip = db.query(models.Trip).filter(models.Trip.id == leg.trip_id).first()
 
-    # Revisar si todas las fases del viaje están entregadas o cerradas
+    # Revisamos si TODOS los tramos están entregados, liquidados o cerrados
     all_completed = all(
         l.status in ["entregado", "cerrado", "liquidado"] for l in trip.legs
     )
 
     cxc_creada = False
 
+    # 4. Si ya acabaron todos, cerramos el viaje y CREAMOS LA FACTURA (CxC)
     if all_completed and trip.status != "cerrado":
-        # A) Cerramos operativamente el viaje
         trip.status = "cerrado"
         trip.closed_at = func.now()
 
-        # B) MAGIA EMPRESARIAL: Generar Factura Borrador (CxC) automáticamente
-        # Prevenimos duplicados por si acaso:
+        # Evitar duplicados: checar si ya existe una pre-factura para este viaje
         existing_cxc = (
             db.query(models.ReceivableInvoice)
             .filter(models.ReceivableInvoice.viaje_id == trip.id)
@@ -192,31 +191,35 @@ def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(g
         )
 
         if not existing_cxc:
-            # Cálculos Exactos de Autotransporte (Retención del 4% e IVA del 16%)
-            subtotal = (trip.tarifa_base or 0.0) + (trip.costo_casetas or 0.0)
+            # Cálculos Financieros Estándar de Autotransporte
+            base = trip.tarifa_base or 0.0
+            casetas = trip.costo_casetas or 0.0
+            subtotal = base + casetas
+
+            # IVA 16% y Retención 4%
             iva = subtotal * 0.16
             retencion = subtotal * 0.04
             monto_total = subtotal + iva - retencion
 
-            # Traer los días de crédito del cliente, si no tiene, darle 15 días por defecto
-            dias_credito = (
-                trip.client.dias_credito
-                if trip.client and trip.client.dias_credito
-                else 15
-            )
+            # Días de crédito del cliente (por defecto 15 si no tiene asignados)
+            dias_credito = 15
+            if trip.client and trip.client.dias_credito:
+                dias_credito = trip.client.dias_credito
+
             fecha_vencimiento = date.today() + timedelta(days=dias_credito)
 
+            # Crear la Pre-Factura en Cuentas por Cobrar
             nueva_cxc = models.ReceivableInvoice(
                 client_id=trip.client_id,
                 sub_client_id=trip.sub_client_id,
                 viaje_id=trip.id,
                 folio_interno=f"CXC-VIAJE-{trip.public_id or trip.id}",
-                concepto=f"Servicio de Flete Autotransporte - {trip.origin} a {trip.destination}",
+                concepto=f"Servicio de Flete: {trip.origin} a {trip.destination}",
                 subtotal=subtotal,
                 iva=iva,
                 retenciones=retencion,
                 monto_total=monto_total,
-                saldo_pendiente=monto_total,  # Inicia debiendo el 100%
+                saldo_pendiente=monto_total,  # Inicia debiendo todo
                 fecha_emision=date.today(),
                 fecha_vencimiento=fecha_vencimiento,
                 estatus=models.InvoiceStatus.PENDIENTE,
@@ -227,10 +230,10 @@ def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(g
         db.commit()
 
     return {
-        "message": "Liquidación de operador guardada exitosamente",
+        "message": "Liquidación guardada correctamente",
         "neto_pagado": leg.saldo_operador,
         "viaje_cerrado_globalmente": all_completed,
-        "cuenta_por_cobrar_generada": cxc_creada,
+        "cxc_generada_automaticamente": cxc_creada,
     }
 
 
