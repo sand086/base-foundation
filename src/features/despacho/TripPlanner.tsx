@@ -463,19 +463,23 @@ export const TripPlanner = () => {
   const allActiveLegs = useMemo(() => {
     const items: KanbanItem[] = [];
     for (const trip of safeTrips) {
+      // 🚀 REGLA DE ORO: Si el viaje ya terminó su ciclo completo (está cerrado),
+      // lo ocultamos permanentemente del Pizarrón de Despacho.
+      if (trip.status === "cerrado") {
+        continue;
+      }
+
       if (trip.legs && trip.legs.length > 0) {
-        let activeLeg = trip.legs.find(
-          (leg) => leg.status !== "entregado" && leg.status !== "cerrado",
-        );
-        if (!activeLeg) {
-          const sortedLegs = [...trip.legs].sort((a, b) => b.id - a.id);
-          activeLeg = sortedLegs[0];
-        }
+        // Busca la primera fase/tramo que aún necesite atención (que NO esté cerrada)
+        const activeLeg = trip.legs.find((leg) => leg.status !== "cerrado");
+
+        // Si hay un tramo activo o pendiente de liquidar, lo mostramos
         if (activeLeg) {
           items.push({ leg: activeLeg, tripPadre: trip });
         }
       }
     }
+    // Ordenamos por ID descendente para que lo más reciente salga arriba
     return items.sort((a, b) => b.leg.id - a.leg.id);
   }, [safeTrips]);
 

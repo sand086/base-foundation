@@ -31,6 +31,7 @@ import {
   DollarSign,
   MapPin,
   Navigation,
+  Undo,
   Wallet,
   CalendarClock,
   Link as LinkIcon,
@@ -493,18 +494,57 @@ export function TripDetailsModal({
                                       </Button>
                                     </>
                                   ) : (
-                                    <Button
-                                      size="lg"
-                                      className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black shadow-md tracking-wide h-12 text-base"
-                                      onClick={() =>
-                                        onSettleClick &&
-                                        onSettleClick(leg, trip)
-                                      }
-                                    >
-                                      <Banknote className="h-5 w-5 mr-3" />{" "}
-                                      Liquidar a{" "}
-                                      {leg.operator?.name?.split(" ")[0]}
-                                    </Button>
+                                    <>
+                                      {/* 🚀 NUEVO BOTÓN: REABRIR FASE (DESHACER) */}
+                                      <Button
+                                        size="lg"
+                                        variant="outline"
+                                        className="w-1/3 border-amber-200 text-amber-700 hover:bg-amber-50 h-12 text-sm font-bold shadow-sm"
+                                        onClick={async () => {
+                                          if (
+                                            confirm(
+                                              "¿Estás seguro de reabrir esta fase? Se anulará la liquidación y la factura del cliente.",
+                                            )
+                                          ) {
+                                            try {
+                                              await axiosClient.post(
+                                                `/trips/legs/${leg.id}/reopen`,
+                                              );
+                                              toast.success(
+                                                "Fase reabierta exitosamente",
+                                              );
+                                              onOpenChange(false);
+                                              setTimeout(
+                                                () => window.location.reload(),
+                                                500,
+                                              );
+                                            } catch (error: any) {
+                                              toast.error(
+                                                error.response?.data?.detail ||
+                                                  "Error al reabrir la fase",
+                                              );
+                                            }
+                                          }
+                                        }}
+                                      >
+                                        <Undo className="h-4 w-4 mr-2" />{" "}
+                                        Reabrir
+                                      </Button>
+
+                                      {/* BOTÓN EXISTENTE DE LIQUIDAR */}
+                                      <Button
+                                        size="lg"
+                                        className="w-2/3 bg-emerald-500 hover:bg-emerald-600 text-white font-black shadow-md tracking-wide h-12 text-base"
+                                        onClick={() =>
+                                          onSettleClick &&
+                                          onSettleClick(leg, trip)
+                                        }
+                                      >
+                                        <Banknote className="h-5 w-5 mr-3" />{" "}
+                                        Liquidar a{" "}
+                                        {leg.operator?.name?.split(" ")[0]}
+                                      </Button>
+                                    </>
                                   )}
                                 </CardFooter>
                               </Card>

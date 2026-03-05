@@ -14,6 +14,7 @@ import {
   Calculator,
   Percent,
   Loader2,
+  Undo,
   CheckCircle,
 } from "lucide-react";
 
@@ -193,7 +194,7 @@ export function TripSettlementModal({
       // 4. Forzamos una recarga rápida para que el Kanban/Tabla se actualice y la tarjeta desaparezca
       setTimeout(() => {
         window.location.reload();
-      }, 500);
+      }, 1000);
     } catch (error) {
       console.error(error);
       toast.error(
