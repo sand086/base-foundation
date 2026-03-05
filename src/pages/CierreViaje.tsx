@@ -1,27 +1,24 @@
-import { useState } from "react";
+import * as React from "react";
+import { useState, useMemo } from "react";
 import {
   FileCheck,
-  Camera,
-  Fuel,
-  CreditCard,
-  CheckCircle,
-  XCircle,
-  Clock,
-  Truck,
   User,
+  Truck,
   MapPin,
-  AlertTriangle,
   DollarSign,
   Receipt,
   TrendingUp,
   Banknote,
   ArrowDownCircle,
   ArrowUpCircle,
-  BadgeAlert,
-  Droplets,
   Plus,
   Award,
+  Calculator,
+  Percent,
+  Loader2,
+  CheckCircle,
 } from "lucide-react";
+
 import {
   Card,
   CardContent,
@@ -34,7 +31,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -43,100 +40,130 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  mockTripSettlement,
-  TripSettlement,
-  ConceptoPago,
-} from "@/data/liquidacionData";
-import { SettlementReceiptModal } from "@/features/cierre/SettlementReceiptModal";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
-interface Checkpoint {
+import { useTrips } from "@/hooks/useTrips";
+import type { Trip, TripLeg } from "@/types/api.types";
+
+interface ConceptoExtra {
   id: string;
-  title: string;
-  description: string;
-  icon: React.ElementType;
-  status: "ok" | "pending" | "error";
-  details?: string;
+  descripcion: string;
+  monto: number;
+  tipo: "ingreso" | "deduccion";
 }
 
 export default function CierreViaje() {
-  const [settlement, setSettlement] =
-    useState<TripSettlement>(mockTripSettlement);
-  const [showReceipt, setShowReceipt] = useState(false);
-  const [isAnimating, setIsAnimating] = useState(false);
-  const [showAddBonoDialog, setShowAddBonoDialog] = useState(false);
-  const [bonoAmount, setBonoAmount] = useState("");
-  const [bonoDescription, setBonoDescription] = useState("");
+  const { trips } = useTrips();
 
-  const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([
-    {
-      id: "pod",
-      title: "POD / Evidencias",
-      description: "Prueba de entrega y fotografías",
-      icon: Camera,
-      status: "ok",
-      details: "3 fotos cargadas, firma digital recibida",
-    },
-    {
-      id: "combustible",
-      title: "Combustible",
-      description: "Conciliación ECM vs Ticket",
-      icon: Fuel,
-      status: settlement.diferenciaLitros > 0 ? "pending" : "ok",
-      details:
-        settlement.diferenciaLitros > 0
-          ? `Exceso detectado: ${settlement.diferenciaLitros}L - Vale generado`
-          : "Consumo dentro de tolerancia",
-    },
-    {
-      id: "casetas",
-      title: "Casetas",
-      description: "Cruces de caseta y pagos",
-      icon: CreditCard,
-      status: "ok",
-      details: "4 casetas registradas - $1,250 MXN",
-    },
+  // ==========================================
+  // ESTADOS DE SELECCIÓN
+  // ==========================================
+  const [selectedTripId, setSelectedTripId] = useState<string>("");
+  const [selectedLegId, setSelectedLegId] = useState<string>("");
+
+  // ==========================================
+  // ESTADOS DE CÁLCULO (Opción A y B)
+  // ==========================================
+  const [calcMode, setCalcMode] = useState<"percentage" | "fixed">(
+    "percentage",
+  );
+  const [porcentajeFlete, setPorcentajeFlete] = useState<number>(15); // Default 15%
+  const [montoFijo, setMontoFijo] = useState<number>(0);
+
+  // ==========================================
+  // ESTADOS DE CONCEPTOS MANUALES
+  // ==========================================
+  const [conceptosExtra, setConceptosExtra] = useState<ConceptoExtra[]>([]);
+  const [showAddConceptoDialog, setShowAddConceptoDialog] = useState(false);
+  const [newConceptoType, setNewConceptoType] = useState<
+    "ingreso" | "deduccion"
+  >("ingreso");
+  const [newConceptoDesc, setNewConceptoDesc] = useState("");
+  const [newConceptoAmount, setNewConceptoAmount] = useState("");
+
+  const [isAnimating, setIsAnimating] = useState(false);
+
+  // ==========================================
+  // DERIVACIONES Y CÁLCULOS MÁGICOS
+  // ==========================================
+
+  // 1. Filtrar viajes que tengan tramos (legs)
+  const tripsWithLegs = useMemo(() => {
+    return trips.filter((t) => t.legs && t.legs.length > 0);
+  }, [trips]);
+
+  const selectedTrip = useMemo(() => {
+    return tripsWithLegs.find((t) => String(t.id) === selectedTripId) || null;
+  }, [tripsWithLegs, selectedTripId]);
+
+  const selectedLeg = useMemo(() => {
+    return (
+      selectedTrip?.legs?.find((l) => String(l.id) === selectedLegId) || null
+    );
+  }, [selectedTrip, selectedLegId]);
+
+  // 2. El corazón financiero: Cálculos de Liquidación
+  const liquidacion = useMemo(() => {
+    if (!selectedTrip || !selectedLeg) return null;
+
+    // a) PAGO BASE (Opción A o B)
+    let pagoBaseBruto = 0;
+    if (calcMode === "percentage") {
+      // El porcentaje se calcula sobre la Tarifa Base del Viaje completo
+      pagoBaseBruto = (selectedTrip.tarifa_base * porcentajeFlete) / 100;
+    } else {
+      pagoBaseBruto = montoFijo;
+    }
+
+    // b) INGRESOS TOTALES
+    const bonosAdicionales = conceptosExtra
+      .filter((c) => c.tipo === "ingreso")
+      .reduce((sum, c) => sum + c.monto, 0);
+    const totalIngresos = pagoBaseBruto + bonosAdicionales;
+
+    // c) DEDUCCIONES (Automáticas + Manuales)
+    // Regla de Negocio: Los viáticos dados como anticipo se descuentan del sueldo final del operador.
+    const deduccionViaticos = selectedLeg.anticipo_viaticos || 0;
+    // Otros anticipos (préstamos personales, etc)
+    const otrosAnticipos = selectedLeg.otros_anticipos || 0;
+
+    const deduccionesManuales = conceptosExtra
+      .filter((c) => c.tipo === "deduccion")
+      .reduce((sum, c) => sum + c.monto, 0);
+    const totalDeducciones =
+      deduccionViaticos + otrosAnticipos + deduccionesManuales;
+
+    // d) NETO A PAGAR
+    const netoAPagar = totalIngresos - totalDeducciones;
+
+    return {
+      pagoBaseBruto,
+      bonosAdicionales,
+      totalIngresos,
+      deduccionViaticos,
+      otrosAnticipos,
+      deduccionesManuales,
+      totalDeducciones,
+      netoAPagar,
+    };
+  }, [
+    selectedTrip,
+    selectedLeg,
+    calcMode,
+    porcentajeFlete,
+    montoFijo,
+    conceptosExtra,
   ]);
 
-  const allCheckpointsOk = checkpoints.every((cp) => cp.status === "ok");
-
-  const toggleCheckpoint = (id: string) => {
-    setCheckpoints((prev) =>
-      prev.map((cp) =>
-        cp.id === id
-          ? { ...cp, status: cp.status === "ok" ? "pending" : "ok" }
-          : cp,
-      ),
-    );
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "ok":
-        return <CheckCircle className="h-8 w-8 text-status-success" />;
-      case "pending":
-        return <Clock className="h-8 w-8 text-status-warning" />;
-      case "error":
-        return <XCircle className="h-8 w-8 text-status-danger" />;
-      default:
-        return <Clock className="h-8 w-8 text-muted-foreground" />;
-    }
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "ok":
-        return <Badge className="bg-status-success text-white">Completo</Badge>;
-      case "pending":
-        return (
-          <Badge className="bg-status-warning text-black">Pendiente</Badge>
-        );
-      case "error":
-        return <Badge className="bg-status-danger text-white">Error</Badge>;
-      default:
-        return <Badge variant="secondary">Desconocido</Badge>;
-    }
-  };
-
+  // ==========================================
+  // HANDLERS
+  // ==========================================
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("es-MX", {
       style: "currency",
@@ -144,600 +171,443 @@ export default function CierreViaje() {
     }).format(amount);
   };
 
-  const handleAddBono = () => {
-    const amount = parseFloat(bonoAmount);
+  const handleAddConcepto = () => {
+    const amount = parseFloat(newConceptoAmount);
     if (isNaN(amount) || amount <= 0) {
-      toast({
-        title: "Error",
-        description: "Ingresa un monto válido mayor a 0",
-        variant: "destructive",
-      });
+      toast.error("Ingresa un monto válido mayor a 0");
       return;
     }
 
-    const newBono: ConceptoPago = {
-      id: `CP-BONO-${Date.now()}`,
-      tipo: "ingreso",
-      categoria: "bono",
-      descripcion: bonoDescription.trim() || "Bono adicional",
+    const newConcepto: ConceptoExtra = {
+      id: `CE-${Date.now()}`,
+      tipo: newConceptoType,
+      descripcion:
+        newConceptoDesc.trim() ||
+        (newConceptoType === "ingreso" ? "Bono Extra" : "Descuento Extra"),
       monto: amount,
-      esAutomatico: false,
     };
 
-    const newConceptos = [...settlement.conceptos, newBono];
-    const newTotalIngresos = settlement.totalIngresos + amount;
-    const newNetoAPagar = newTotalIngresos - settlement.totalDeducciones;
-
-    setSettlement({
-      ...settlement,
-      conceptos: newConceptos,
-      totalIngresos: newTotalIngresos,
-      netoAPagar: newNetoAPagar,
-    });
-
-    setShowAddBonoDialog(false);
-    setBonoAmount("");
-    setBonoDescription("");
-
-    toast({
-      title: " Bono agregado",
-      description: `Se agregó un bono de ${formatCurrency(amount)} al operador.`,
-    });
+    setConceptosExtra([...conceptosExtra, newConcepto]);
+    setShowAddConceptoDialog(false);
+    setNewConceptoDesc("");
+    setNewConceptoAmount("");
+    toast.success(
+      `${newConceptoType === "ingreso" ? "Bono" : "Descuento"} agregado correctamente`,
+    );
   };
 
-  const handleAuthorizeAndClose = () => {
+  const handleLiquidate = () => {
     setIsAnimating(true);
-
-    // Simulate authorization process
+    // Simulación de guardado en el backend
     setTimeout(() => {
-      setSettlement((prev) => ({
-        ...prev,
-        estatus: "liquidado",
-        fechaAutorizacion: new Date().toISOString(),
-        autorizadoPor: "Admin TMS",
-      }));
-
       setIsAnimating(false);
-      setShowReceipt(true);
-
-      toast({
-        title: " Viaje Liquidado Exitosamente",
-        description: `El operador ${settlement.operadorNombre} recibirá ${formatCurrency(settlement.netoAPagar)}.`,
+      toast.success("Liquidación Autorizada", {
+        description: `Se registró un saldo de ${formatCurrency(liquidacion?.netoAPagar || 0)} a favor del operador.`,
       });
+      // Aquí llamarías a tu endpoint: await settleTripLeg(selectedLegId, payloadDeLiquidacion)
+      // Resetear para el siguiente
+      setSelectedLegId("");
+      setConceptosExtra([]);
     }, 1500);
   };
 
-  const ingresos = settlement.conceptos.filter((c) => c.tipo === "ingreso");
-  const deducciones = settlement.conceptos.filter(
-    (c) => c.tipo === "deduccion",
-  );
-  const fuelDeduction = deducciones.find((d) => d.categoria === "combustible");
-  const bonos = ingresos.filter((c) => c.categoria === "bono");
-  const anticipos = deducciones.filter((c) => c.categoria === "anticipo");
-
-  // Calculate excess percentage
-  const excessPercentage =
-    settlement.consumoEsperadoLitros > 0
-      ? (
-          (settlement.diferenciaLitros / settlement.consumoEsperadoLitros) *
-          100
-        ).toFixed(1)
-      : 0;
+  const legTypeLabels: Record<string, string> = {
+    carga_muelle: "1. Movimiento a Muelle/Carga",
+    ruta_carretera: "2. Ruta en Carretera",
+    entrega_vacio: "3. Retorno de Vacío",
+  };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-6xl mx-auto pb-20">
       <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <FileCheck className="h-6 w-6" /> Cierre de Viaje y Liquidación
+        <h1 className="text-2xl font-black text-brand-navy flex items-center gap-2">
+          <FileCheck className="h-6 w-6 text-emerald-600" /> Liquidación por
+          Tramos (Pago a Operadores)
         </h1>
-        <p className="text-muted-foreground">
-          Validación de checkpoints y cálculo de pago al operador
+        <p className="text-muted-foreground mt-1">
+          Selecciona el viaje y el tramo que deseas liquidar. El sistema
+          deducirá los viáticos automáticamente.
         </p>
       </div>
 
-      {/* Trip Summary */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Truck className="h-5 w-5" /> Resumen del Viaje
+      {/* PASO 1: SELECCIÓN DE VIAJE Y TRAMO */}
+      <Card className="border-indigo-100 shadow-sm">
+        <CardHeader className="bg-indigo-50/50 pb-4 border-b border-indigo-100">
+          <CardTitle className="text-sm font-bold text-indigo-900 uppercase flex items-center gap-2">
+            <MapPin className="h-4 w-4" /> 1. Seleccionar Operación
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">ID Viaje</p>
-              <p className="font-bold text-lg">{settlement.viajeId}</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground flex items-center gap-1">
-                <User className="h-3 w-3" /> Operador
-              </p>
-              <p className="font-medium">{settlement.operadorNombre}</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground flex items-center gap-1">
-                <Truck className="h-3 w-3" /> Unidad
-              </p>
-              <p className="font-mono font-bold">{settlement.unidadNumero}</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground flex items-center gap-1">
-                <MapPin className="h-3 w-3" /> Ruta
-              </p>
-              <p className="font-medium">{settlement.ruta}</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Fecha del Viaje</p>
-              <p className="font-medium">{settlement.fechaViaje}</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Kms Recorridos</p>
-              <p className="font-bold text-lg">
-                {settlement.kmsRecorridos.toLocaleString()} km
-              </p>
-            </div>
-            <div className="space-y-1 col-span-2">
-              <p className="text-sm text-muted-foreground">Estatus</p>
-              <Badge
+        <CardContent className="pt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-2">
+            <Label>Folio de Viaje Matriz</Label>
+            <Select
+              value={selectedTripId}
+              onValueChange={(val) => {
+                setSelectedTripId(val);
+                setSelectedLegId("");
+                setConceptosExtra([]);
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecciona un viaje..." />
+              </SelectTrigger>
+              <SelectContent>
+                {tripsWithLegs.map((t) => (
+                  <SelectItem key={t.id} value={String(t.id)}>
+                    Viaje #{t.id} - {t.origin} a {t.destination} (
+                    {formatCurrency(t.tarifa_base)})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Tramo a Liquidar (Operador)</Label>
+            <Select
+              value={selectedLegId}
+              onValueChange={setSelectedLegId}
+              disabled={!selectedTripId}
+            >
+              <SelectTrigger
                 className={
-                  settlement.estatus === "liquidado"
-                    ? "bg-status-success text-white"
-                    : settlement.estatus === "autorizado"
-                      ? "bg-blue-500 text-white"
-                      : "bg-status-warning text-black"
+                  selectedLegId ? "border-emerald-400 bg-emerald-50" : ""
                 }
               >
-                {settlement.estatus === "liquidado"
-                  ? "Liquidado"
-                  : settlement.estatus === "autorizado"
-                    ? "Autorizado"
-                    : "Pendiente"}
-              </Badge>
-            </div>
+                <SelectValue placeholder="Selecciona la fase/tramo..." />
+              </SelectTrigger>
+              <SelectContent>
+                {selectedTrip?.legs?.map((l) => (
+                  <SelectItem key={l.id} value={String(l.id)}>
+                    {legTypeLabels[l.leg_type] || l.leg_type} -{" "}
+                    {l.operator?.name || "Operador Desconocido"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </CardContent>
       </Card>
 
-      {/* Fuel Reconciliation Alert - Critical Connection */}
-      {settlement.diferenciaLitros > 0 && (
-        <Card className="border-status-danger border-2 bg-status-danger/5 animate-in fade-in duration-500">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-status-danger">
-              <BadgeAlert className="h-5 w-5" />
-              ⚠️ Alerta de Consumo Excesivo - Conexión con Módulo Combustible
-            </CardTitle>
-            <CardDescription>
-              El sistema detectó que el consumo real excedió el consumo esperado
-              para este viaje
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 md:grid-cols-4">
-              <div className="p-4 bg-background rounded-lg border">
-                <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
-                  <Fuel className="h-4 w-4" /> Consumo Esperado
-                </div>
-                <p className="text-xl font-bold">
-                  {settlement.consumoEsperadoLitros} L
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {settlement.kmsRecorridos} km ÷ 3.2 km/L
-                </p>
-              </div>
-              <div className="p-4 bg-background rounded-lg border">
-                <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
-                  <Droplets className="h-4 w-4" /> Consumo Real (Tickets)
-                </div>
-                <p className="text-xl font-bold">
-                  {settlement.consumoRealLitros} L
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Según cargas registradas
-                </p>
-              </div>
-              <div className="p-4 bg-status-danger/10 rounded-lg border border-status-danger">
-                <div className="flex items-center gap-2 text-status-danger text-sm mb-1">
-                  <TrendingUp className="h-4 w-4" /> Diferencia (Exceso)
-                </div>
-                <p className="text-xl font-bold text-status-danger">
-                  +{settlement.diferenciaLitros} L ({excessPercentage}%)
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Mayor a tolerancia del 5%
-                </p>
-              </div>
-              <div className="p-4 bg-status-danger/10 rounded-lg border border-status-danger">
-                <div className="flex items-center gap-2 text-status-danger text-sm mb-1">
-                  <DollarSign className="h-4 w-4" /> Vale de Cobro
-                </div>
-                <p className="text-xl font-bold text-status-danger">
-                  {formatCurrency(settlement.deduccionCombustible)}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {settlement.diferenciaLitros}L ×{" "}
-                  {formatCurrency(settlement.precioPorLitro)}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* PASO 2 Y 3: CÁLCULOS Y RESUMEN (Solo se muestran si hay tramo seleccionado) */}
+      {selectedTrip && selectedLeg && liquidacion && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-in fade-in slide-in-from-bottom-4">
+          {/* COLUMNA IZQUIERDA: CONFIGURACIÓN DE TARIFA */}
+          <div className="lg:col-span-4 space-y-6">
+            <Card className="border-slate-200 shadow-sm">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2">
+                  <Calculator className="h-4 w-4" /> 2. Esquema de Pago
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Tabs
+                  value={calcMode}
+                  onValueChange={(v) => setCalcMode(v as any)}
+                  className="w-full"
+                >
+                  <TabsList className="grid w-full grid-cols-2 mb-4">
+                    <TabsTrigger value="percentage" className="text-xs">
+                      Porcentaje (%)
+                    </TabsTrigger>
+                    <TabsTrigger value="fixed" className="text-xs">
+                      Cuota Fija ($)
+                    </TabsTrigger>
+                  </TabsList>
 
-      {/* Checkpoint Cards */}
-      <div className="grid gap-6 md:grid-cols-3">
-        {checkpoints.map((checkpoint) => {
-          const Icon = checkpoint.icon;
-          return (
-            <Card
-              key={checkpoint.id}
-              className={`cursor-pointer transition-all hover:shadow-md ${
-                checkpoint.status === "ok"
-                  ? "border-status-success border-2 bg-status-success/5"
-                  : checkpoint.status === "pending"
-                    ? "border-status-warning border-2 bg-status-warning/5"
-                    : "border-status-danger border-2 bg-status-danger/5"
-              }`}
-              onClick={() => toggleCheckpoint(checkpoint.id)}
-            >
-              <CardContent className="pt-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div
-                    className={`p-3 rounded-md ${
-                      checkpoint.status === "ok"
-                        ? "bg-status-success/20"
-                        : checkpoint.status === "pending"
-                          ? "bg-status-warning/20"
-                          : "bg-status-danger/20"
-                    }`}
-                  >
-                    <Icon
-                      className={`h-8 w-8 ${
-                        checkpoint.status === "ok"
-                          ? "text-status-success"
-                          : checkpoint.status === "pending"
-                            ? "text-status-warning"
-                            : "text-status-danger"
-                      }`}
-                    />
+                  <TabsContent value="percentage" className="space-y-4">
+                    <div className="space-y-2">
+                      <Label className="text-xs text-muted-foreground">
+                        Porcentaje sobre Flete Base
+                      </Label>
+                      <div className="relative">
+                        <Input
+                          type="number"
+                          value={porcentajeFlete}
+                          onChange={(e) =>
+                            setPorcentajeFlete(Number(e.target.value))
+                          }
+                          className="pl-8 text-lg font-bold text-brand-navy"
+                        />
+                        <Percent className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        {porcentajeFlete}% de{" "}
+                        {formatCurrency(selectedTrip.tarifa_base)} =
+                        <span className="font-bold text-emerald-600 ml-1">
+                          {formatCurrency(liquidacion.pagoBaseBruto)}
+                        </span>
+                      </p>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="fixed" className="space-y-4">
+                    <div className="space-y-2">
+                      <Label className="text-xs text-muted-foreground">
+                        Monto Fijo Acordado (MXN)
+                      </Label>
+                      <div className="relative">
+                        <Input
+                          type="number"
+                          value={montoFijo || ""}
+                          onChange={(e) => setMontoFijo(Number(e.target.value))}
+                          placeholder="Ej: 300"
+                          className="pl-8 text-lg font-bold text-brand-navy"
+                        />
+                        <DollarSign className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        Ideal para movimientos locales o maniobras de patio.
+                      </p>
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-slate-50 border-dashed border-2">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 bg-white rounded-full flex items-center justify-center shadow-sm">
+                    <User className="h-5 w-5 text-brand-navy" />
                   </div>
-                  {getStatusIcon(checkpoint.status)}
-                </div>
-                <h3 className="font-bold text-lg mb-1">{checkpoint.title}</h3>
-                <p className="text-sm text-muted-foreground mb-3">
-                  {checkpoint.description}
-                </p>
-                <Separator className="my-3" />
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-muted-foreground">
-                    {checkpoint.details}
-                  </p>
-                  {getStatusBadge(checkpoint.status)}
+                  <div>
+                    <p className="text-xs font-bold text-slate-500 uppercase">
+                      Operador a Liquidar
+                    </p>
+                    <p className="font-black text-brand-navy">
+                      {selectedLeg.operator?.name}
+                    </p>
+                    <p className="text-xs text-slate-500 flex items-center gap-1">
+                      <Truck className="h-3 w-3" /> Eco:{" "}
+                      {selectedLeg.unit?.numero_economico}
+                    </p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
-          );
-        })}
-      </div>
+          </div>
 
-      {/* Financial Settlement Summary */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Banknote className="h-5 w-5" /> Liquidación del Operador
-          </CardTitle>
-          <CardDescription>
-            Cálculo: Pago Base + Bonos - Anticipos de Liquidación - Deducción
-            Combustible = Neto a Pagar
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-6 md:grid-cols-2">
-            {/* Income Section */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-status-success font-bold">
-                  <ArrowUpCircle className="h-5 w-5" />
-                  INGRESOS
+          {/* COLUMNA DERECHA: ESTADO DE CUENTA */}
+          <div className="lg:col-span-8">
+            <Card className="border-slate-200 shadow-lg h-full flex flex-col">
+              <CardHeader className="bg-slate-50 border-b pb-4 flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2">
+                    <Banknote className="h-4 w-4" /> 3. Resumen de Liquidación
+                  </CardTitle>
+                  <CardDescription className="mt-1">
+                    Ingresos y Descuentos del Tramo
+                  </CardDescription>
                 </div>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="gap-1"
-                  onClick={() => setShowAddBonoDialog(true)}
-                  disabled={settlement.estatus === "liquidado"}
+                  onClick={() => {
+                    setNewConceptoType("ingreso");
+                    setShowAddConceptoDialog(true);
+                  }}
+                  className="border-emerald-200 text-emerald-700 hover:bg-emerald-50"
                 >
-                  <Award className="h-4 w-4" />
-                  Agregar Bono
+                  <Plus className="h-3 w-3 mr-1" /> Añadir Bono
                 </Button>
-              </div>
-              <div className="space-y-2">
-                {ingresos.map((concepto, index) => (
-                  <div
-                    key={concepto.id}
-                    className={`flex justify-between items-center p-3 rounded-lg border animate-in fade-in slide-in-from-left duration-300 ${
-                      concepto.categoria === "bono"
-                        ? "bg-amber-50 border-amber-200"
-                        : "bg-status-success/5 border-status-success/20"
-                    }`}
-                    style={{ animationDelay: `${index * 100}ms` }}
-                  >
-                    <div>
-                      <p className="font-medium flex items-center gap-2">
-                        {concepto.categoria === "bono" && (
-                          <Award className="h-4 w-4 text-amber-600" />
-                        )}
-                        {concepto.descripcion}
-                      </p>
-                      {concepto.referencia && (
-                        <p className="text-xs text-muted-foreground">
-                          {concepto.referencia}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setNewConceptoType("deduccion");
+                    setShowAddConceptoDialog(true);
+                  }}
+                  className="border-rose-200 text-rose-700 hover:bg-rose-50 ml-2"
+                >
+                  <Plus className="h-3 w-3 mr-1" /> Añadir Cargo
+                </Button>
+              </CardHeader>
+
+              <CardContent className="pt-6 flex-1 flex flex-col">
+                <div className="grid grid-cols-2 gap-8 flex-1">
+                  {/* INGRESOS */}
+                  <div className="space-y-4">
+                    <h4 className="flex items-center gap-2 font-bold text-emerald-600 text-sm border-b pb-2">
+                      <ArrowUpCircle className="h-4 w-4" /> INGRESOS A FAVOR
+                    </h4>
+
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-slate-600 font-medium">
+                          Pago Base (Flete/Maniobra)
+                        </span>
+                        <span className="font-mono font-bold text-emerald-600">
+                          +{formatCurrency(liquidacion.pagoBaseBruto)}
+                        </span>
+                      </div>
+
+                      {conceptosExtra
+                        .filter((c) => c.tipo === "ingreso")
+                        .map((bono) => (
+                          <div
+                            key={bono.id}
+                            className="flex justify-between items-center text-sm bg-emerald-50/50 p-2 rounded"
+                          >
+                            <span className="text-slate-600 flex items-center gap-1">
+                              <Award className="h-3 w-3 text-emerald-500" />{" "}
+                              {bono.descripcion}
+                            </span>
+                            <span className="font-mono font-bold text-emerald-600">
+                              +{formatCurrency(bono.monto)}
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+
+                  {/* DEDUCCIONES */}
+                  <div className="space-y-4 border-l pl-8">
+                    <h4 className="flex items-center gap-2 font-bold text-rose-600 text-sm border-b pb-2">
+                      <ArrowDownCircle className="h-4 w-4" /> DESCUENTOS
+                    </h4>
+
+                    <div className="space-y-3">
+                      {liquidacion.deduccionViaticos > 0 && (
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-slate-600 font-medium">
+                            Anticipo Viáticos (Entregados)
+                          </span>
+                          <span className="font-mono font-bold text-rose-600">
+                            -{formatCurrency(liquidacion.deduccionViaticos)}
+                          </span>
+                        </div>
+                      )}
+
+                      {liquidacion.otrosAnticipos > 0 && (
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-slate-600 font-medium">
+                            Préstamos / Otros Anticipos
+                          </span>
+                          <span className="font-mono font-bold text-rose-600">
+                            -{formatCurrency(liquidacion.otrosAnticipos)}
+                          </span>
+                        </div>
+                      )}
+
+                      {conceptosExtra
+                        .filter((c) => c.tipo === "deduccion")
+                        .map((desc) => (
+                          <div
+                            key={desc.id}
+                            className="flex justify-between items-center text-sm bg-rose-50/50 p-2 rounded"
+                          >
+                            <span className="text-slate-600">
+                              {desc.descripcion}
+                            </span>
+                            <span className="font-mono font-bold text-rose-600">
+                              -{formatCurrency(desc.monto)}
+                            </span>
+                          </div>
+                        ))}
+
+                      {liquidacion.totalDeducciones === 0 && (
+                        <p className="text-xs text-slate-400 italic">
+                          No hay descuentos registrados.
                         </p>
                       )}
-                      {concepto.esAutomatico && (
-                        <Badge variant="outline" className="mt-1 text-xs">
-                          Automático
-                        </Badge>
-                      )}
                     </div>
-                    <span
-                      className={`font-bold font-mono ${
-                        concepto.categoria === "bono"
-                          ? "text-amber-600"
-                          : "text-status-success"
-                      }`}
-                    >
-                      +{formatCurrency(concepto.monto)}
-                    </span>
                   </div>
-                ))}
-              </div>
-              <div className="flex justify-between p-3 bg-status-success/10 rounded-lg font-bold">
-                <span>Subtotal Ingresos</span>
-                <span className="font-mono text-status-success">
-                  {formatCurrency(settlement.totalIngresos)}
-                </span>
-              </div>
-            </div>
+                </div>
 
-            {/* Deductions Section */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-status-danger font-bold">
-                <ArrowDownCircle className="h-5 w-5" />
-                DEDUCCIONES
-              </div>
-              <div className="space-y-2">
-                {deducciones.map((concepto, index) => (
-                  <div
-                    key={concepto.id}
-                    className={`flex justify-between items-center p-3 rounded-lg border animate-in fade-in slide-in-from-right duration-300 ${
-                      concepto.categoria === "combustible"
-                        ? "bg-status-danger/10 border-status-danger"
-                        : concepto.categoria === "anticipo"
-                          ? "bg-blue-50 border-blue-200"
-                          : "bg-status-danger/5 border-status-danger/20"
-                    }`}
-                    style={{ animationDelay: `${index * 100}ms` }}
-                  >
-                    <div>
-                      <p
-                        className={`font-medium ${concepto.categoria === "combustible" ? "text-status-danger" : ""}`}
-                      >
-                        {concepto.descripcion}
-                      </p>
-                      {concepto.referencia && (
-                        <p className="text-xs text-muted-foreground">
-                          {concepto.referencia}
-                        </p>
-                      )}
-                      {concepto.esAutomatico && (
-                        <Badge
-                          variant="outline"
-                          className={`mt-1 text-xs ${concepto.categoria === "combustible" ? "border-status-danger text-status-danger" : ""}`}
-                        >
-                          {concepto.categoria === "combustible"
-                            ? "⚠️ Desde Módulo Combustible"
-                            : "Automático"}
-                        </Badge>
-                      )}
-                      {concepto.categoria === "anticipo" && (
-                        <Badge
-                          variant="outline"
-                          className="mt-1 text-xs border-blue-300 text-blue-600"
-                        >
-                          Anticipo de Liquidación
-                        </Badge>
-                      )}
-                    </div>
-                    <span className="font-bold font-mono text-status-danger">
-                      -{formatCurrency(concepto.monto)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <div className="flex justify-between p-3 bg-status-danger/10 rounded-lg font-bold">
-                <span>Subtotal Deducciones</span>
-                <span className="font-mono text-status-danger">
-                  -{formatCurrency(settlement.totalDeducciones)}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Grand Total */}
-          <Separator className="my-6" />
-
-          <div className="grid gap-4 md:grid-cols-5 mb-6">
-            <div className="p-4 bg-muted/30 rounded-lg text-center">
-              <p className="text-sm text-muted-foreground mb-1">
-                Total Ingresos
-              </p>
-              <p className="text-xl font-bold text-status-success font-mono">
-                {formatCurrency(settlement.totalIngresos)}
-              </p>
-            </div>
-            <div className="p-4 bg-amber-50 rounded-lg text-center border border-amber-200">
-              <p className="text-sm text-amber-700 mb-1 flex items-center justify-center gap-1">
-                <Award className="h-3 w-3" /> Bonos
-              </p>
-              <p className="text-xl font-bold text-amber-600 font-mono">
-                +{formatCurrency(bonos.reduce((sum, b) => sum + b.monto, 0))}
-              </p>
-            </div>
-            <div className="p-4 bg-muted/30 rounded-lg text-center">
-              <p className="text-sm text-muted-foreground mb-1">
-                Total Deducciones
-              </p>
-              <p className="text-xl font-bold text-status-danger font-mono">
-                -{formatCurrency(settlement.totalDeducciones)}
-              </p>
-            </div>
-            {fuelDeduction && (
-              <div className="p-4 bg-status-danger/10 rounded-lg text-center border border-status-danger">
-                <p className="text-sm text-status-danger mb-1 flex items-center justify-center gap-1">
-                  <Fuel className="h-3 w-3" /> Combustible
-                </p>
-                <p className="text-xl font-bold text-status-danger font-mono">
-                  -{formatCurrency(fuelDeduction.monto)}
-                </p>
-              </div>
-            )}
-            <div className="p-4 bg-primary/10 rounded-lg text-center border-2 border-primary">
-              <p className="text-sm text-primary mb-1 font-medium">
-                NETO A PAGAR
-              </p>
-              <p className="text-2xl font-bold text-primary font-mono">
-                {formatCurrency(settlement.netoAPagar)}
-              </p>
-            </div>
-          </div>
-
-          {/* Status & Action */}
-          <Card
-            className={
-              allCheckpointsOk
-                ? "border-status-success border-2"
-                : "border-status-warning border-2"
-            }
-          >
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  {allCheckpointsOk ? (
-                    <div className="p-3 rounded-full bg-status-success/20">
-                      <CheckCircle className="h-8 w-8 text-status-success" />
-                    </div>
-                  ) : (
-                    <div className="p-3 rounded-full bg-status-warning/20">
-                      <AlertTriangle className="h-8 w-8 text-status-warning" />
-                    </div>
-                  )}
+                {/* GRAN TOTAL */}
+                <div className="mt-8 bg-brand-navy rounded-xl p-6 flex items-center justify-between text-white shadow-xl">
                   <div>
-                    <h3 className="font-bold text-lg">
-                      {allCheckpointsOk
-                        ? "Listo para Autorizar y Cerrar"
-                        : "Checkpoints pendientes de validación"}
-                    </h3>
-                    <p className="text-sm text-muted-foreground">
-                      {allCheckpointsOk
-                        ? `El operador recibirá ${formatCurrency(settlement.netoAPagar)}`
-                        : `${checkpoints.filter((c) => c.status !== "ok").length} checkpoint(s) requieren atención`}
+                    <p className="text-sm text-slate-300 font-medium uppercase tracking-widest">
+                      Saldo a favor del operador
+                    </p>
+                    <p className="text-4xl font-black font-mono mt-1">
+                      {formatCurrency(liquidacion.netoAPagar)}
                     </p>
                   </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Badge variant="outline" className="text-lg py-1 px-3">
-                    {checkpoints.filter((c) => c.status === "ok").length} /{" "}
-                    {checkpoints.length} OK
-                  </Badge>
                   <Button
                     size="lg"
-                    className="gap-2"
-                    disabled={
-                      !allCheckpointsOk ||
-                      isAnimating ||
-                      settlement.estatus === "liquidado"
-                    }
-                    onClick={handleAuthorizeAndClose}
+                    className="bg-emerald-500 hover:bg-emerald-400 text-brand-navy font-bold gap-2 text-lg h-14 px-8"
+                    disabled={isAnimating}
+                    onClick={handleLiquidate}
                   >
                     {isAnimating ? (
-                      <>
-                        <span className="animate-spin">⏳</span>
-                        Procesando...
-                      </>
-                    ) : settlement.estatus === "liquidado" ? (
-                      <>
-                        <CheckCircle className="h-5 w-5" />
-                        Liquidado
-                      </>
+                      <Loader2 className="h-5 w-5 animate-spin" />
                     ) : (
-                      <>
-                        <Receipt className="h-5 w-5" />
-                        Autorizar y Cerrar
-                      </>
+                      <CheckCircle className="h-5 w-5" />
                     )}
+                    {isAnimating ? "Procesando..." : "Cerrar y Autorizar Pago"}
                   </Button>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        </CardContent>
-      </Card>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
 
-      {/* Add Bono Dialog */}
-      <Dialog open={showAddBonoDialog} onOpenChange={setShowAddBonoDialog}>
-        <DialogContent>
+      {/* MODAL PARA AGREGAR CONCEPTOS EXTRA */}
+      <Dialog
+        open={showAddConceptoDialog}
+        onOpenChange={setShowAddConceptoDialog}
+      >
+        <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Award className="h-5 w-5 text-amber-600" />
-              Agregar Bono al Operador
+            <DialogTitle
+              className={`flex items-center gap-2 ${newConceptoType === "ingreso" ? "text-emerald-600" : "text-rose-600"}`}
+            >
+              {newConceptoType === "ingreso" ? (
+                <ArrowUpCircle className="h-5 w-5" />
+              ) : (
+                <ArrowDownCircle className="h-5 w-5" />
+              )}
+              Agregar {newConceptoType === "ingreso" ? "Bono" : "Descuento"}{" "}
+              Extra
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="bono-description">Concepto del Bono</Label>
+              <Label>Concepto / Motivo</Label>
               <Input
-                id="bono-description"
-                placeholder="Ej: Bono por entrega anticipada, Buen rendimiento..."
-                value={bonoDescription}
-                onChange={(e) => setBonoDescription(e.target.value)}
+                placeholder={
+                  newConceptoType === "ingreso"
+                    ? "Ej: Rendimiento de diésel, Maniobra extra..."
+                    : "Ej: Faltante de lona, Infracción..."
+                }
+                value={newConceptoDesc}
+                onChange={(e) => setNewConceptoDesc(e.target.value)}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="bono-amount">Monto (MXN) *</Label>
+              <Label>Monto (MXN) *</Label>
               <Input
-                id="bono-amount"
                 type="number"
                 placeholder="0.00"
-                value={bonoAmount}
-                onChange={(e) => setBonoAmount(e.target.value)}
-                min="0"
-                step="0.01"
+                value={newConceptoAmount}
+                onChange={(e) => setNewConceptoAmount(e.target.value)}
+                className="text-lg font-mono"
               />
             </div>
           </div>
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setShowAddBonoDialog(false)}
+              onClick={() => setShowAddConceptoDialog(false)}
             >
               Cancelar
             </Button>
-            <Button onClick={handleAddBono} disabled={!bonoAmount}>
-              <Plus className="h-4 w-4 mr-2" />
-              Agregar Bono
+            <Button
+              onClick={handleAddConcepto}
+              className={
+                newConceptoType === "ingreso"
+                  ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                  : "bg-rose-600 hover:bg-rose-700 text-white"
+              }
+            >
+              Guardar
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Settlement Receipt Modal */}
-      <SettlementReceiptModal
-        open={showReceipt}
-        onClose={() => setShowReceipt(false)}
-        settlement={settlement}
-        authorizationDate={new Date().toLocaleDateString("es-MX")}
-        authorizationUser="Admin TMS"
-      />
     </div>
   );
 }

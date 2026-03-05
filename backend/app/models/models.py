@@ -1266,3 +1266,49 @@ class SatLocationCode(Base):
     estado_clave = Column(String(10), nullable=False)  # Ej: VER
     municipio_clave = Column(String(10))  # Ej: 193
     localidad_clave = Column(String(10))  # Ej: 17
+
+
+class ReceivableInvoice(AuditMixin, Base):
+    __tablename__ = "receivable_invoices"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Relaciones al cliente y al viaje
+    client_id = Column(
+        Integer, ForeignKey("clients.id", ondelete="RESTRICT"), nullable=False
+    )
+    sub_client_id = Column(
+        Integer, ForeignKey("sub_clients.id", ondelete="RESTRICT"), nullable=True
+    )
+    viaje_id = Column(
+        Integer, ForeignKey("trips.id", ondelete="SET NULL"), nullable=True
+    )
+
+    uuid = Column(
+        String(36), unique=True, nullable=True
+    )  # UUID del SAT cuando se timbre
+    folio_interno = Column(String(50))
+
+    # Finanzas
+    subtotal = Column(Float, default=0.0)
+    iva = Column(Float, default=0.0)
+    retenciones = Column(Float, default=0.0)
+    monto_total = Column(Float, nullable=False)
+    saldo_pendiente = Column(Float, nullable=False)
+
+    moneda = Column(pg_enum(Currency, "currency"), default=Currency.MXN)
+    fecha_emision = Column(Date, nullable=False)
+    fecha_vencimiento = Column(Date, nullable=False)
+    concepto = Column(String(255))
+
+    estatus = Column(
+        pg_enum(InvoiceStatus, "invoicestatus"), default=InvoiceStatus.PENDIENTE
+    )
+
+    pdf_url = Column(String(500))
+    xml_url = Column(String(500))
+
+    # Relaciones de navegación
+    client = relationship("Client")
+    sub_client = relationship("SubClient")
+    trip = relationship("Trip")

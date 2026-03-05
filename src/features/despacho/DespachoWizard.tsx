@@ -396,7 +396,7 @@ export const DespachoWizard = () => {
         status: status,
         start_date: new Date().toISOString(),
 
-        // 🚀 El primer tramo envuelto
+        // El primer tramo envuelto
         initial_leg: {
           // Por defecto, asume que el primer paso es ir al muelle
           unit_id: parseInt(data.unitId, 10),

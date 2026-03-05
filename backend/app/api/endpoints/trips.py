@@ -1,8 +1,8 @@
 # src/api/endpoints/trips.py
 import os
-from datetime import datetime
+from datetime import date, timedelta
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.models import models
@@ -10,7 +10,9 @@ from app.schemas import trips as schemas
 from app.crud import trips as crud
 from app.api.endpoints.auth import (
     get_current_user,
-)  # Asegúrate de tener esta importación
+)
+
+from sqlalchemy import func
 
 from fastapi.responses import Response
 from jinja2 import Environment, FileSystemLoader
@@ -151,6 +153,85 @@ TEMPLATE_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "../../templates"
 )
 jinja_env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
+
+
+@router.post("/legs/{leg_id}/settle")
+def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(get_db)):
+    # 1. Buscar el tramo específico
+    leg = db.query(models.TripLeg).filter(models.TripLeg.id == leg_id).first()
+    if not leg:
+        raise HTTPException(status_code=404, detail="Tramo no encontrado")
+
+    # 2. Guardar el saldo final a favor del operador y cerrar su tramo
+    leg.status = "cerrado"
+    leg.saldo_operador = data.get("netoAPagar", 0.0)
+    db.commit()
+    db.refresh(leg)
+
+    # 3. LÓGICA GUSTAVO: ¿Ya se cerraron todos los tramos?
+    trip = db.query(models.Trip).filter(models.Trip.id == leg.trip_id).first()
+
+    # Revisar si todas las fases del viaje están entregadas o cerradas
+    all_completed = all(
+        l.status in ["entregado", "cerrado", "liquidado"] for l in trip.legs
+    )
+
+    cxc_creada = False
+
+    if all_completed and trip.status != "cerrado":
+        # A) Cerramos operativamente el viaje
+        trip.status = "cerrado"
+        trip.closed_at = func.now()
+
+        # B) MAGIA EMPRESARIAL: Generar Factura Borrador (CxC) automáticamente
+        # Prevenimos duplicados por si acaso:
+        existing_cxc = (
+            db.query(models.ReceivableInvoice)
+            .filter(models.ReceivableInvoice.viaje_id == trip.id)
+            .first()
+        )
+
+        if not existing_cxc:
+            # Cálculos Exactos de Autotransporte (Retención del 4% e IVA del 16%)
+            subtotal = (trip.tarifa_base or 0.0) + (trip.costo_casetas or 0.0)
+            iva = subtotal * 0.16
+            retencion = subtotal * 0.04
+            monto_total = subtotal + iva - retencion
+
+            # Traer los días de crédito del cliente, si no tiene, darle 15 días por defecto
+            dias_credito = (
+                trip.client.dias_credito
+                if trip.client and trip.client.dias_credito
+                else 15
+            )
+            fecha_vencimiento = date.today() + timedelta(days=dias_credito)
+
+            nueva_cxc = models.ReceivableInvoice(
+                client_id=trip.client_id,
+                sub_client_id=trip.sub_client_id,
+                viaje_id=trip.id,
+                folio_interno=f"CXC-VIAJE-{trip.public_id or trip.id}",
+                concepto=f"Servicio de Flete Autotransporte - {trip.origin} a {trip.destination}",
+                subtotal=subtotal,
+                iva=iva,
+                retenciones=retencion,
+                monto_total=monto_total,
+                saldo_pendiente=monto_total,  # Inicia debiendo el 100%
+                fecha_emision=date.today(),
+                fecha_vencimiento=fecha_vencimiento,
+                estatus=models.InvoiceStatus.PENDIENTE,
+            )
+            db.add(nueva_cxc)
+            cxc_creada = True
+
+        db.commit()
+
+    return {
+        "message": "Liquidación de operador guardada exitosamente",
+        "neto_pagado": leg.saldo_operador,
+        "viaje_cerrado_globalmente": all_completed,
+        "cuenta_por_cobrar_generada": cxc_creada,
+    }
 
 
 @router.get("/trips/{trip_id}/carta-porte-ciega")
