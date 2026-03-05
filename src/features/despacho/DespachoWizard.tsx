@@ -255,17 +255,26 @@ export const DespachoWizard = () => {
       .filter((u: any) => {
         const strTipo1 = normalizeStr(u.tipo_1);
         const strTipo = normalizeStr(u.tipo);
-        return ["remolque", "caja", "plataforma", "chasis", "utilitario"].some(
-          (p) => strTipo1.includes(p) || strTipo.includes(p),
+        const estaDisponible = ["disponible", "bloqueado"].includes(
+          u.status?.toLowerCase(),
+        );
+        return (
+          ["remolque", "caja", "plataforma", "chasis", "utilitario"].some(
+            (p) => strTipo1.includes(p) || strTipo.includes(p),
+          ) && estaDisponible
         );
       })
-      .map((u: any) => ({
-        label: `${u.numero_economico} - ${u.placas || "Sin placas"} (${normalizeStr(u.tipo_1)})`,
-        value: String(u.id),
-      }));
+      .map((u: any) => {
+        //  LÓGICA GUSTAVO: Mostrar visualmente si el chasis tiene un "bote" arriba
+        const estadoCarga = u.is_loaded ? "📦 CARGADO" : "➖ ESQUELETO VACÍO";
+        return {
+          label: `${u.numero_economico} - ${u.placas || "S/P"} | ${estadoCarga}`,
+          value: String(u.id),
+        };
+      });
 
     if (remolquesReales.length === 0) {
-      return [{ label: "REM-PRUEBA - (No tienes remolques)", value: "9998" }];
+      return [{ label: "No hay remolques disponibles", value: "" }];
     }
     return remolquesReales;
   }, [arrUnidades]);
