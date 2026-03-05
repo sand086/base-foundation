@@ -1,6 +1,6 @@
 # src/api/endpoints/trips.py
 import os
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session

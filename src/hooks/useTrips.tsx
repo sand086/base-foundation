@@ -1,4 +1,4 @@
-// src/hooks/useTrips.ts
+// src/hooks/useTrips.tsx
 import { useState, useCallback, useEffect } from "react";
 import axiosClient from "../api/axiosClient";
 import { useToast } from "@/components/ui/use-toast";
@@ -13,6 +13,10 @@ export const useTrips = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
+  /**
+   * 🔄 REFRESH MAESTRO
+   * Trae la lista actualizada de viajes y sus tramos.
+   */
   const fetchTrips = useCallback(async () => {
     setLoading(true);
     try {
@@ -21,8 +25,8 @@ export const useTrips = () => {
     } catch (error) {
       console.error("Error fetching trips:", error);
       toast({
-        title: "Error",
-        description: "No se pudieron cargar los viajes desde el servidor.",
+        title: "Error de Sincronización",
+        description: "No se pudieron cargar los viajes. Verifica tu conexión.",
         variant: "destructive",
       });
     } finally {
@@ -30,27 +34,32 @@ export const useTrips = () => {
     }
   }, [toast]);
 
+  /**
+   * 🚀 INICIO DEL CICLO (Etapa 1: Carga)
+   * Crea el viaje raíz y su primer tramo.
+   */
   const createTrip = async (tripData: TripCreatePayload) => {
     try {
       const response = await axiosClient.post("/trips", tripData);
       toast({ title: "Éxito", description: "Viaje despachado correctamente" });
-      await fetchTrips();
+      await fetchTrips(); // Actualiza la UI
       return response.data;
     } catch (error: any) {
-      const detail = error.response?.data?.detail || "Error al crear despacho";
       toast({
         title: "Error",
-        description:
-          typeof detail === "string" ? detail : "Error de validación",
+        description: error.response?.data?.detail || "Error al crear despacho",
         variant: "destructive",
       });
       return null;
     }
   };
 
-  // 🚀 NUEVA FUNCIÓN: DESENGANCHAR Y CREAR SIGUIENTE TRAMO
+  /**
+   * 🔄 DESENGANCHE / RELEVO (Etapa 2 y 3)
+   * Registra el "Drop" de un tractor y crea la siguiente fase para otro recurso.
+   */
   const createNextLeg = async (
-    tripId: string,
+    tripId: string | number,
     legData: TripLegCreatePayload,
   ) => {
     try {
@@ -62,24 +71,25 @@ export const useTrips = () => {
         title: "Relevo Exitoso",
         description: "El remolque ha sido asignado a la nueva unidad.",
       });
-      await fetchTrips();
+      await fetchTrips(); // Mueve el viaje en el Pizarrón
       return response.data;
     } catch (error: any) {
-      const detail = error.response?.data?.detail || "Error al hacer el relevo";
       toast({
         title: "Error",
         description:
-          typeof detail === "string"
-            ? detail
-            : "No se pudo realizar el desenganche.",
+          error.response?.data?.detail || "No se pudo realizar el desenganche.",
         variant: "destructive",
       });
       return null;
     }
   };
 
+  /**
+   * 📈 ACTUALIZAR ESTATUS OPERATIVO
+   * Cambia el estado del viaje (en_transito, entregado, etc.)
+   */
   const updateTripStatus = async (
-    id: string,
+    id: string | number,
     status: string,
     location?: string,
   ) => {
@@ -88,24 +98,30 @@ export const useTrips = () => {
         params: { status, location },
       });
       toast({
-        title: "Actualizado",
-        description: `Viaje movido a ${status.replace("_", " ")}`,
+        title: "Estatus Actualizado",
+        description: `Viaje movido a ${status.replace("_", " ").toUpperCase()}`,
       });
-      fetchTrips(); // Refrescamos todo para no fallar con los tramos anidados
+      await fetchTrips();
     } catch (error) {
       toast({
         title: "Error",
         description: "No se pudo cambiar el estado del viaje",
         variant: "destructive",
       });
-      fetchTrips();
     }
   };
 
-  const editTrip = async (id: string, tripData: Partial<Trip>) => {
+  /**
+   * 🛠️ EDITAR DATOS MAESTROS
+   * Útil para ajustar finanzas (Tarifa Base/Casetas) desde el Centro de Mando.
+   */
+  const editTrip = async (id: string | number, tripData: Partial<Trip>) => {
     try {
       await axiosClient.put(`/trips/${id}`, tripData);
-      toast({ title: "Éxito", description: "Viaje actualizado correctamente" });
+      toast({
+        title: "Éxito",
+        description: "Datos actualizados correctamente",
+      });
       await fetchTrips();
       return true;
     } catch (error) {
@@ -118,22 +134,34 @@ export const useTrips = () => {
     }
   };
 
-  const deleteTrip = async (id: string) => {
+  /**
+   * 🗑️ ELIMINACIÓN TOTAL
+   * Borra el viaje y todos sus tramos/fases.
+   */
+  const deleteTrip = async (id: string | number) => {
     try {
       await axiosClient.delete(`/trips/${id}`);
-      toast({ title: "Eliminado", description: "El viaje ha sido borrado." });
-      fetchTrips();
+      toast({
+        title: "Viaje Eliminado",
+        description: "El registro ha sido borrado del sistema.",
+      });
+      await fetchTrips();
     } catch (error) {
       toast({
-        variant: "destructive",
         title: "Error",
-        description: "No se pudo eliminar.",
+        description: "No se pudo eliminar el viaje.",
+        variant: "destructive",
       });
     }
   };
 
+  /**
+   * 📝 BITÁCORA (TIMELINE)
+   * Agrega eventos de rastreo o incidencias a la fase actual.
+   */
   const addTimelineEvent = async (
-    tripId: string,
+    tripId: string | number,
+    legId: string | number,
     data: {
       status: string;
       location: string;
@@ -142,75 +170,91 @@ export const useTrips = () => {
       lng?: string;
       notifyClient?: boolean;
     },
+    silent: boolean = false,
   ) => {
     try {
       const payload = {
+        trip_leg_id: legId, // Vínculo estricto al tramo actual
         status: data.status,
         event:
           data.comments ||
-          `Actualización de estatus a ${data.status.replace("_", " ").toUpperCase()}`,
-        location: data.location,
+          `Actualización: ${data.status.replace("_", " ").toUpperCase()}`,
+        location: data.location || "Administración / Patio",
         lat: data.lat || null,
         lng: data.lng || null,
         notifyClient: data.notifyClient || false,
         event_type: ["retraso", "accidente", "detenido"].includes(data.status)
           ? "alert"
-          : "checkpoint",
+          : "info",
       };
 
       await axiosClient.post(`/trips/${tripId}/timeline`, payload);
-      toast({
-        title: "Bitácora actualizada",
-        description: "El evento se guardó correctamente.",
-      });
+
+      if (!silent) {
+        toast({
+          title: "Bitácora actualizada",
+          description: "El evento se guardó correctamente.",
+        });
+      }
       await fetchTrips();
       return true;
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "No se pudo guardar en la bitácora.",
-      });
+      if (!silent) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "No se pudo guardar en la bitácora.",
+        });
+      }
       return false;
     }
   };
 
-  //  Las URLs de liquidación ahora apuntan a /leg/
-  const getTripSettlement = async (legId: string) => {
+  /**
+   * 💰 LIQUIDACIÓN Y CIERRE (El paso final de Gustavo)
+   * Al liquidar el último tramo ("entrega_vacio"), el sistema cierra el viaje y factura.
+   */
+  const getTripSettlement = async (legId: string | number) => {
     try {
       const response = await axiosClient.get(`/trips/leg/${legId}/settlement`);
       return response.data;
     } catch (error) {
       toast({
-        variant: "destructive",
         title: "Error",
-        description: "No se pudo cargar la liquidación de este tramo.",
+        description: "No se pudo cargar la liquidación del tramo.",
+        variant: "destructive",
       });
       return null;
     }
   };
 
-  
-
-  const closeTripSettlement = async (legId: string, payload: any) => {
+  const closeTripSettlement = async (legId: string | number, payload: any) => {
     try {
       await axiosClient.post(`/trips/leg/${legId}/close-settlement`, payload);
       toast({
         title: "Tramo Liquidado",
-        description: "El pago del operador ha sido cerrado exitosamente.",
+        description: "Ciclo de fase cerrado y registrado en finanzas.",
       });
-      await fetchTrips();
+      await fetchTrips(); // 🔄 Este es el que hace que el viaje desaparezca del planeador si ya terminó todo
       return true;
     } catch (error) {
       toast({
-        variant: "destructive",
         title: "Error al liquidar",
         description: "Hubo un problema cerrando el tramo.",
+        variant: "destructive",
       });
       return false;
     }
   };
 
+  /**
+   * 🔄 REFRESH MANUAL
+   */
+  const refreshTrips = useCallback(async () => {
+    await fetchTrips();
+  }, [fetchTrips]);
+
+  // Carga inicial al montar el hook
   useEffect(() => {
     fetchTrips();
   }, [fetchTrips]);
@@ -220,12 +264,13 @@ export const useTrips = () => {
     loading,
     fetchTrips,
     createTrip,
-    createNextLeg, // <- Nueva función expuesta
+    createNextLeg,
     updateTripStatus,
     editTrip,
     deleteTrip,
     addTimelineEvent,
     getTripSettlement,
     closeTripSettlement,
+    refreshTrips,
   };
 };

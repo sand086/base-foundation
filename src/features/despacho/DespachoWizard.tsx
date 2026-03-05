@@ -12,6 +12,9 @@ import {
   Clock,
   Gauge,
   Droplets,
+  User,
+  Info,
+  Box,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,7 +30,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Switch } from "@/components/ui/switch"; // <-- NUEVO IMPORT PARA LA MERCANCÍA PELIGROSA
+import { Switch } from "@/components/ui/switch";
 
 // Componentes para el Buscador (shadcn)
 import {
@@ -70,7 +73,7 @@ type WizardData = {
   origen: string;
   destino: string;
 
-  //  Datos de la Mercancía
+  // Datos de la Mercancía
   descripcion_mercancia: string;
   peso_toneladas: number;
   es_material_peligroso: boolean;
@@ -120,7 +123,7 @@ function SearchableSelect({
           className="w-full justify-between font-normal bg-white"
         >
           {selectedItem ? (
-            selectedItem.label
+            <span className="truncate">{selectedItem.label}</span>
           ) : (
             <span className="text-muted-foreground">{placeholder}</span>
           )}
@@ -195,7 +198,6 @@ export const DespachoWizard = () => {
     origen: "",
     destino: "",
 
-    // Inicializar Mercancía
     descripcion_mercancia: "Carga General",
     peso_toneladas: 0,
     es_material_peligroso: false,
@@ -207,7 +209,7 @@ export const DespachoWizard = () => {
     remolque2Id: "",
     driverId: "",
 
-    leg_type: "carga_muelle",
+    leg_type: "carga_muelle", // Por defecto inician yendo al patio/muelle
 
     odometro_inicial: 0,
     nivel_tanque_inicial: 100,
@@ -265,7 +267,7 @@ export const DespachoWizard = () => {
         );
       })
       .map((u: any) => {
-        //  LÓGICA GUSTAVO: Mostrar visualmente si el chasis tiene un "bote" arriba
+        // LÓGICA GUSTAVO: Mostrar visualmente si el chasis tiene un "bote" arriba
         const estadoCarga = u.is_loaded ? "📦 CARGADO" : "➖ ESQUELETO VACÍO";
         return {
           label: `${u.numero_economico} - ${u.placas || "S/P"} | ${estadoCarga}`,
@@ -281,7 +283,7 @@ export const DespachoWizard = () => {
 
   const availableDollies = useMemo(() => {
     const dolliesReales = arrUnidades
-      .filter((u: any) => true)
+      .filter((u: any) => normalizeStr(u.tipo_1).includes("dolly"))
       .map((u: any) => ({
         label: `${u.numero_economico} (${normalizeStr(u.tipo_1)})`,
         value: String(u.id),
@@ -324,6 +326,9 @@ export const DespachoWizard = () => {
     const tu = normalizeStr((selectedTariff as any)?.tipo_unidad);
     return tu === "full" || tu === "9ejes" || tu === "9 ejes" || tu === "doble";
   }, [selectedTariff]);
+
+  // 🚀 REGLA DE NEGOCIO: ¿Es fase de Carretera o de Patio?
+  const isRoadLeg = data.leg_type === "ruta_carretera";
 
   const infoTarifa = useMemo(() => {
     if (!selectedTariff)
@@ -368,18 +373,18 @@ export const DespachoWizard = () => {
       return isNaN(parsed) || parsed >= 9000 ? null : parsed;
     };
 
-    // Validación Básica
-    if (!data.odometro_inicial || data.odometro_inicial <= 0) {
+    // Validación Básica (Odómetro OBLIGATORIO solo para carretera)
+    if (isRoadLeg && (!data.odometro_inicial || data.odometro_inicial <= 0)) {
       toast({
         variant: "destructive",
         title: "Falta Odómetro",
-        description: "Por favor, ingresa el odómetro inicial de la unidad.",
+        description:
+          "Por favor, ingresa el odómetro inicial para este viaje en carretera.",
       });
       return;
     }
 
     try {
-      // Usamos `any` temporalmente para que TS no llore si no has actualizado api.types.ts
       const payload: any = {
         client_id: parseInt(data.clienteId, 10),
         sub_client_id: parseInt(data.subClienteId, 10),
@@ -388,34 +393,44 @@ export const DespachoWizard = () => {
         destination: data.destino || selectedSubClient?.ciudad || "Destino",
         route_name: data.routeNombre || "Ruta Estándar",
 
-        // 🚀 DATOS DE LA MERCANCÍA (Para Carta Porte)
+        // DATOS DE LA MERCANCÍA
         descripcion_mercancia: data.descripcion_mercancia,
         peso_toneladas: Number(data.peso_toneladas),
         es_material_peligroso: data.es_material_peligroso,
         clase_imo: data.es_material_peligroso ? data.clase_imo : null,
 
+        // RECURSOS FIJOS DEL VIAJE
         remolque_1_id: cleanId(data.remolque1Id),
         dolly_id: isFullTrip ? cleanId(data.dollyId) : null,
         remolque_2_id: isFullTrip ? cleanId(data.remolque2Id) : null,
 
-        // Finanzas Globales del Viaje
+        // Finanzas Globales
         tarifa_base: Number(infoTarifa.base || 0),
         costo_casetas: Number(infoTarifa.casetas || 0),
 
         status: status,
         start_date: new Date().toISOString(),
 
-        // El primer tramo envuelto
+        // 🚀 PRIMER TRAMO (Fase Inicial)
         initial_leg: {
-          // Por defecto, asume que el primer paso es ir al muelle
           unit_id: parseInt(data.unitId, 10),
           leg_type: data.leg_type,
           operator_id: parseInt(data.driverId, 10),
-          odometro_inicial: Number(data.odometro_inicial),
-          nivel_tanque_inicial: Number(data.nivel_tanque_inicial),
-          anticipo_casetas: Number(data.anticipo_casetas || 0),
-          anticipo_viaticos: Number(data.anticipo_viaticos || 0),
-          anticipo_combustible: Number(data.anticipo_combustible || 0),
+
+          // Si es patio, mandamos NULO para no ensuciar la base de datos de rendimiento
+          odometro_inicial: isRoadLeg ? Number(data.odometro_inicial) : null,
+          nivel_tanque_inicial: isRoadLeg
+            ? Number(data.nivel_tanque_inicial)
+            : null,
+
+          // Anticipos en Ceros si es movimiento de patio
+          anticipo_casetas: isRoadLeg ? Number(data.anticipo_casetas || 0) : 0,
+          anticipo_viaticos: isRoadLeg
+            ? Number(data.anticipo_viaticos || 0)
+            : 0,
+          anticipo_combustible: isRoadLeg
+            ? Number(data.anticipo_combustible || 0)
+            : 0,
         },
       };
 
@@ -443,37 +458,51 @@ export const DespachoWizard = () => {
   const isStep1Valid = Boolean(
     data.clienteId && data.subClienteId && data.routeId,
   );
+
   const isStep2Valid = useMemo(() => {
-    const baseValido = Boolean(
-      data.unitId &&
-      data.driverId &&
-      data.remolque1Id &&
-      data.odometro_inicial > 0,
+    const isBasicValid = Boolean(
+      data.unitId && data.driverId && data.remolque1Id,
     );
-    if (isFullTrip)
-      return Boolean(baseValido && data.dollyId && data.remolque2Id);
-    return baseValido;
-  }, [isFullTrip, data]);
+
+    // Si es ruta carretera, validamos odómetro. Si es patio, lo dejamos pasar.
+    const isOdometerValid = isRoadLeg ? data.odometro_inicial > 0 : true;
+
+    const isEquipValid = isFullTrip
+      ? Boolean(isBasicValid && data.dollyId && data.remolque2Id)
+      : isBasicValid;
+
+    return Boolean(isEquipValid && isOdometerValid);
+  }, [isFullTrip, data, isRoadLeg]);
 
   return (
-    <Card>
-      <CardContent className="pt-6 space-y-6">
-        <div className="flex gap-2 mb-6">
-          <Badge variant={currentStep >= 1 ? "default" : "outline"}>
+    <Card className="shadow-lg border-slate-200">
+      <CardContent className="pt-8 space-y-6">
+        {/* INDICADOR DE PASOS */}
+        <div className="flex gap-3 mb-8">
+          <Badge
+            className={`px-4 py-1.5 ${currentStep >= 1 ? "bg-brand-navy" : "bg-slate-100 text-slate-400"}`}
+          >
             1. Ruta y Mercancía
           </Badge>
-          <Badge variant={currentStep >= 2 ? "default" : "outline"}>
-            2. Recursos
+          <Badge
+            className={`px-4 py-1.5 ${currentStep >= 2 ? "bg-brand-navy" : "bg-slate-100 text-slate-400"}`}
+          >
+            2. Asignación Física
           </Badge>
-          <Badge variant={currentStep === 3 ? "default" : "outline"}>
-            3. Finanzas
+          <Badge
+            className={`px-4 py-1.5 ${currentStep === 3 ? "bg-brand-navy" : "bg-slate-100 text-slate-400"}`}
+          >
+            3. Finanzas y Egresos
           </Badge>
         </div>
 
+        {/* =========================================
+            PASO 1: RUTA Y MERCANCÍA
+            ========================================= */}
         {currentStep === 1 && (
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-2">
             <div className="space-y-2">
-              <Label>Cliente</Label>
+              <Label className="font-bold text-slate-700">Cliente *</Label>
               <Select
                 value={data.clienteId}
                 onValueChange={(v) =>
@@ -493,7 +522,7 @@ export const DespachoWizard = () => {
                   }))
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger className="h-12 border-slate-300">
                   <SelectValue placeholder="Seleccionar..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -507,7 +536,9 @@ export const DespachoWizard = () => {
             </div>
 
             <div className="space-y-2">
-              <Label>Destino</Label>
+              <Label className="font-bold text-slate-700">
+                Destino (Subcliente) *
+              </Label>
               <Select
                 disabled={!data.clienteId}
                 value={data.subClienteId}
@@ -531,7 +562,7 @@ export const DespachoWizard = () => {
                   }));
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger className="h-12 border-slate-300">
                   <SelectValue placeholder="Seleccionar..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -545,7 +576,9 @@ export const DespachoWizard = () => {
             </div>
 
             <div className="space-y-2 col-span-2">
-              <Label>Ruta y Tarifa</Label>
+              <Label className="font-bold text-slate-700">
+                Ruta y Tarifa Negociada *
+              </Label>
               <Select
                 disabled={!data.subClienteId}
                 value={data.routeId}
@@ -568,7 +601,7 @@ export const DespachoWizard = () => {
                   resetRecursosFull(nextIsFull);
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger className="h-12 border-slate-300 font-medium text-brand-navy">
                   <SelectValue placeholder="Seleccionar ruta autorizada..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -592,16 +625,30 @@ export const DespachoWizard = () => {
                       const total =
                         subtotal + subtotal * ivaPct - subtotal * retPct;
                       return (
-                        <SelectItem key={t.id} value={String(t.id)}>
-                          {t.nombre_ruta} — Base: $
+                        <SelectItem
+                          key={t.id}
+                          value={String(t.id)}
+                          className="py-3"
+                        >
+                          <span className="font-bold">{t.nombre_ruta}</span> —
+                          Base: $
                           {base.toLocaleString("es-MX", {
                             minimumFractionDigits: 2,
                           })}{" "}
-                          | Total Neto: $
-                          {total.toLocaleString("es-MX", {
-                            minimumFractionDigits: 2,
-                          })}{" "}
-                          {t.moneda} ({labelTipo})
+                          | Total Neto:{" "}
+                          <span className="text-emerald-700 font-bold">
+                            $
+                            {total.toLocaleString("es-MX", {
+                              minimumFractionDigits: 2,
+                            })}
+                          </span>{" "}
+                          {t.moneda}{" "}
+                          <Badge
+                            variant="outline"
+                            className="ml-2 bg-slate-100"
+                          >
+                            {labelTipo}
+                          </Badge>
                         </SelectItem>
                       );
                     })
@@ -610,20 +657,20 @@ export const DespachoWizard = () => {
               </Select>
             </div>
 
-            {/* 🚀 NUEVA SECCIÓN: DATOS DE LA MERCANCÍA */}
-            <div className="col-span-2 mt-4 space-y-4 bg-slate-50 p-4 rounded-lg border border-slate-200">
-              <h4 className="text-sm font-bold text-brand-navy flex items-center gap-2">
-                Datos de la Mercancía (Para Carta Porte)
+            {/* 🚀 DATOS DE LA MERCANCÍA (Para Carta Porte) */}
+            <div className="col-span-2 mt-4 space-y-4 bg-slate-50 p-6 rounded-xl border border-slate-200">
+              <h4 className="text-sm font-black text-brand-navy uppercase tracking-widest flex items-center gap-2 mb-2">
+                <Box className="h-4 w-4" /> Datos de la Mercancía (Para Carta
+                Porte)
               </h4>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label>Descripción de la Carga (Catálogo SAT) *</Label>
                   <SearchableSelect
                     items={availableSatProducts}
                     value={data.descripcion_mercancia.split(" ")[0]} // Tomar solo la clave si ya está guardada
                     onSelect={(val) => {
-                      // Buscar el producto original para auto-completar si es peligroso
                       const selectedProd = availableSatProducts.find(
                         (p) => p.value === val,
                       );
@@ -632,7 +679,6 @@ export const DespachoWizard = () => {
                           selectedProd.es_material_peligroso === "1";
                         setData((p) => ({
                           ...p,
-                          // Guardamos la cadena combinada para el PDF: "Clave - Descripción"
                           descripcion_mercancia: selectedProd.label,
                           es_material_peligroso: esPeligroso,
                           clase_imo: esPeligroso ? p.clase_imo : "",
@@ -659,8 +705,8 @@ export const DespachoWizard = () => {
                 </div>
               </div>
 
-              <div className="flex items-center gap-6 pt-2">
-                <div className="flex items-center space-x-2">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 pt-4 border-t border-slate-200 mt-4">
+                <div className="flex items-center space-x-3 bg-white p-3 rounded-lg border shadow-sm">
                   <Switch
                     id="peligroso"
                     checked={data.es_material_peligroso}
@@ -674,24 +720,24 @@ export const DespachoWizard = () => {
                   />
                   <Label
                     htmlFor="peligroso"
-                    className={
+                    className={`cursor-pointer ${
                       data.es_material_peligroso
                         ? "text-rose-600 font-bold"
-                        : ""
-                    }
+                        : "text-slate-600 font-medium"
+                    }`}
                   >
                     ¿Es Material Peligroso?
                   </Label>
                 </div>
 
                 {data.es_material_peligroso && (
-                  <div className="flex-1 space-y-1">
-                    <Label className="text-xs text-rose-600">
-                      Clase IMO (Ej: 8 - Corrosivos)
+                  <div className="flex-1 space-y-2 w-full">
+                    <Label className="text-xs font-bold text-rose-600 uppercase tracking-wider">
+                      Clase IMO (Requerido para Hazmat)
                     </Label>
                     <Input
-                      className="h-8 border-rose-200"
-                      placeholder="Indique la clase IMO..."
+                      className="border-rose-300 focus-visible:ring-rose-500 bg-white"
+                      placeholder="Ej: 8 - Corrosivos"
                       value={data.clase_imo}
                       onChange={(e) =>
                         setData((p) => ({ ...p, clase_imo: e.target.value }))
@@ -704,19 +750,31 @@ export const DespachoWizard = () => {
           </div>
         )}
 
+        {/* =========================================
+            PASO 2: ASIGNACIÓN FÍSICA Y TELEMETRÍA
+            ========================================= */}
         {currentStep === 2 && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between pb-2 border-b">
-              <Badge variant={isFullTrip ? "destructive" : "secondary"}>
-                MODO: {isFullTrip ? "FULL / DOBLE ARTICULADO" : "SENCILLO"}
-              </Badge>
-              <span className="text-xs text-muted-foreground flex items-center gap-1">
-                <Gauge className="h-3 w-3" /> El odómetro es obligatorio
-              </span>
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
+            <div className="flex items-center justify-between pb-4 border-b">
+              <div className="flex items-center gap-3">
+                <h3 className="text-lg font-black text-slate-800">
+                  Preparación del Viaje
+                </h3>
+                <Badge
+                  variant={isFullTrip ? "destructive" : "secondary"}
+                  className="uppercase font-black"
+                >
+                  {isFullTrip
+                    ? "MODO: FULL / DOBLE ARTICULADO"
+                    : "MODO: SENCILLO"}
+                </Badge>
+              </div>
             </div>
-            <div className="flex items-center gap-3 bg-indigo-50 p-2 rounded-lg border border-indigo-100">
-              <Label className="text-xs font-bold text-indigo-800 uppercase tracking-wider whitespace-nowrap">
-                Fase Inicial:
+
+            {/* SELECCIÓN DE FASE (Define el comportamiento de Gustavo) */}
+            <div className="flex items-center gap-4 bg-indigo-50 p-4 rounded-xl border border-indigo-100 shadow-sm">
+              <Label className="text-sm font-black text-indigo-900 uppercase tracking-widest whitespace-nowrap flex items-center gap-2">
+                <Clock className="h-5 w-5" /> Fase Inicial del Viaje:
               </Label>
               <Select
                 value={data.leg_type}
@@ -724,180 +782,250 @@ export const DespachoWizard = () => {
                   setData((p) => ({ ...p, leg_type: val }))
                 }
               >
-                <SelectTrigger className="h-8 text-xs bg-white border-indigo-200 w-[200px]">
+                <SelectTrigger className="h-12 text-sm font-bold bg-white border-indigo-200 w-full max-w-[400px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem
                     value="carga_muelle"
-                    className="font-medium text-indigo-900"
+                    className="font-bold text-indigo-900 py-3"
                   >
-                    1. Carga (Muelle / Patio)
+                    1. Carga Inicial (Movimiento en Puerto / Patio)
                   </SelectItem>
                   <SelectItem
                     value="ruta_carretera"
-                    className="font-medium text-emerald-900"
+                    className="font-bold text-emerald-900 py-3"
                   >
-                    2. Ruta Directa (Carretera)
+                    2. Ruta Directa (Viaje a Destino por Carretera)
                   </SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Tractocamión ({availableTractos.length}) *</Label>
-                <SearchableSelect
-                  items={availableTractos}
-                  value={data.unitId}
-                  onSelect={(v) => setData((p) => ({ ...p, unitId: v }))}
-                  placeholder="Buscar económico o placa..."
-                />
-              </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* ASIGNACIÓN DE CHASIS (Fijos para todo el viaje) */}
+              <div className="space-y-4 bg-slate-50 p-5 rounded-2xl border border-slate-200">
+                <div>
+                  <h4 className="text-sm font-black text-brand-navy uppercase tracking-widest flex items-center gap-2">
+                    <Box className="h-4 w-4" /> Equipos de Arrastre
+                  </h4>
+                  <p className="text-[11px] text-slate-500 font-medium mt-1">
+                    Estos chasis amparan la carga durante TODO el viaje.
+                  </p>
+                </div>
 
-              <div className="space-y-2">
-                <Label>Operador *</Label>
-                <SearchableSelect
-                  items={availableOperators}
-                  value={data.driverId}
-                  onSelect={(v) => setData((p) => ({ ...p, driverId: v }))}
-                  placeholder="Buscar operador por nombre..."
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <LinkIcon className="h-3 w-3" /> Remolque 1 *
-                </Label>
-                <SearchableSelect
-                  items={availableRemolques}
-                  value={data.remolque1Id}
-                  onSelect={(v) => setData((p) => ({ ...p, remolque1Id: v }))}
-                  placeholder="Buscar económico de remolque..."
-                />
-              </div>
-
-              {isFullTrip && (
-                <>
+                <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label className="flex items-center gap-2 text-rose-600">
-                      <LinkIcon className="h-3 w-3" /> Dolly (Convertidor) *
-                    </Label>
-                    <SearchableSelect
-                      items={availableDollies}
-                      value={data.dollyId}
-                      onSelect={(v) => setData((p) => ({ ...p, dollyId: v }))}
-                      placeholder="Buscar económico del dolly..."
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="flex items-center gap-2 text-rose-600">
-                      <LinkIcon className="h-3 w-3" /> Remolque 2 (Trasero) *
+                    <Label className="flex items-center gap-2 font-bold text-slate-700">
+                      <LinkIcon className="h-3.5 w-3.5" /> Remolque / Chasis 1 *
                     </Label>
                     <SearchableSelect
                       items={availableRemolques}
-                      value={data.remolque2Id}
+                      value={data.remolque1Id}
                       onSelect={(v) =>
-                        setData((p) => ({ ...p, remolque2Id: v }))
+                        setData((p) => ({ ...p, remolque1Id: v }))
                       }
-                      placeholder="Buscar económico de remolque..."
+                      placeholder="Buscar económico..."
                     />
                   </div>
-                </>
-              )}
-            </div>
 
-            {/* 🚀 LECTURAS INICIALES (ODÓMETRO Y COMBUSTIBLE) */}
-            <div className="grid grid-cols-2 gap-4 pt-4 border-t bg-slate-50 p-4 rounded-lg">
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2 font-bold text-brand-navy">
-                  <Gauge className="h-4 w-4" /> Odómetro Inicial (km) *
-                </Label>
-                <Input
-                  type="number"
-                  value={data.odometro_inicial || ""}
-                  onChange={(e) =>
-                    setData((p) => ({
-                      ...p,
-                      odometro_inicial: Number(e.target.value),
-                    }))
-                  }
-                  placeholder="Ej: 250400"
-                  className="font-mono text-lg"
-                  required
-                />
+                  {isFullTrip && (
+                    <>
+                      <div className="space-y-2 pt-2 border-t border-slate-200">
+                        <Label className="flex items-center gap-2 font-bold text-rose-600">
+                          <LinkIcon className="h-3.5 w-3.5" /> Dolly
+                          (Convertidor) *
+                        </Label>
+                        <SearchableSelect
+                          items={availableDollies}
+                          value={data.dollyId}
+                          onSelect={(v) =>
+                            setData((p) => ({ ...p, dollyId: v }))
+                          }
+                          placeholder="Buscar económico del dolly..."
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="flex items-center gap-2 font-bold text-rose-600">
+                          <LinkIcon className="h-3.5 w-3.5" /> Remolque / Chasis
+                          2 *
+                        </Label>
+                        <SearchableSelect
+                          items={availableRemolques}
+                          value={data.remolque2Id}
+                          onSelect={(v) =>
+                            setData((p) => ({ ...p, remolque2Id: v }))
+                          }
+                          placeholder="Buscar económico..."
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2 font-bold text-brand-navy">
-                  <Droplets className="h-4 w-4" /> Nivel Tanque Inicial (%) *
-                </Label>
-                <div className="relative">
-                  <Input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={data.nivel_tanque_inicial}
-                    onChange={(e) =>
-                      setData((p) => ({
-                        ...p,
-                        nivel_tanque_inicial: Number(e.target.value),
-                      }))
-                    }
-                    className="font-mono text-lg pr-8"
-                    required
-                  />
-                  <span className="absolute right-3 top-3 font-bold text-muted-foreground">
-                    %
-                  </span>
+
+              {/* ASIGNACIÓN DEL TRACTO Y OPERADOR (Solo para esta fase) */}
+              <div className="space-y-6">
+                <div className="space-y-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                  <div>
+                    <h4 className="text-sm font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
+                      <User className="h-4 w-4" /> Ejecutor de la Fase Inicial
+                    </h4>
+                    <p className="text-[11px] text-slate-500 font-medium mt-1">
+                      Este operador y tractor pueden ser relevados más adelante.
+                    </p>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label className="font-bold text-slate-700">
+                        Tractocamión Asignado *
+                      </Label>
+                      <SearchableSelect
+                        items={availableTractos}
+                        value={data.unitId}
+                        onSelect={(v) => setData((p) => ({ ...p, unitId: v }))}
+                        placeholder="Buscar económico o placa..."
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="font-bold text-slate-700">
+                        Operador / Chófer *
+                      </Label>
+                      <SearchableSelect
+                        items={availableOperators}
+                        value={data.driverId}
+                        onSelect={(v) =>
+                          setData((p) => ({ ...p, driverId: v }))
+                        }
+                        placeholder="Buscar por nombre..."
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 🚀 TELEMETRÍA CONDICIONAL */}
+                <div
+                  className={`p-5 rounded-2xl border-2 transition-colors ${isRoadLeg ? "bg-amber-50 border-amber-200 shadow-inner" : "bg-slate-50 border-slate-200 opacity-80"}`}
+                >
+                  <div className="mb-4 flex items-start justify-between">
+                    <div>
+                      <p className="text-sm font-black flex items-center gap-2 text-slate-700 uppercase tracking-widest">
+                        <Gauge className="h-4 w-4" /> Telemetría Inicial
+                      </p>
+                      {isRoadLeg ? (
+                        <p className="text-[11px] text-amber-700 font-bold mt-1">
+                          Obligatorio para control de rendimiento en ruta.
+                        </p>
+                      ) : (
+                        <p className="text-[11px] text-slate-500 mt-1 italic">
+                          No requerido para operadores de maniobras locales.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="font-bold text-slate-600">
+                        Odómetro (km){" "}
+                        {isRoadLeg && <span className="text-red-500">*</span>}
+                      </Label>
+                      <Input
+                        type="number"
+                        value={data.odometro_inicial || ""}
+                        onChange={(e) =>
+                          setData((p) => ({
+                            ...p,
+                            odometro_inicial: Number(e.target.value),
+                          }))
+                        }
+                        placeholder={isRoadLeg ? "Ej: 250400" : "Opcional"}
+                        className="font-mono bg-white"
+                        disabled={!isRoadLeg} // Bloqueado en patio
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="font-bold text-slate-600">
+                        Tanque (%){" "}
+                        {isRoadLeg && <span className="text-red-500">*</span>}
+                      </Label>
+                      <div className="relative">
+                        <Input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={data.nivel_tanque_inicial || ""}
+                          onChange={(e) =>
+                            setData((p) => ({
+                              ...p,
+                              nivel_tanque_inicial: Number(e.target.value),
+                            }))
+                          }
+                          placeholder={isRoadLeg ? "100" : ""}
+                          className="font-mono pr-8 bg-white"
+                          disabled={!isRoadLeg} // Bloqueado en patio
+                        />
+                        <span className="absolute right-3 top-2.5 font-bold text-slate-400">
+                          %
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         )}
 
+        {/* =========================================
+            PASO 3: FINANZAS Y EGRESOS
+            ========================================= */}
         {currentStep === 3 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card className="bg-slate-50 border-dashed border-2">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <DollarSign className="h-4 w-4 text-emerald-600" /> Ingreso (A
-                  Facturar)
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-2">
+            {/* INGRESOS DEL VIAJE */}
+            <Card className="bg-slate-50 border-2 border-emerald-100 shadow-sm h-fit">
+              <CardHeader className="pb-4 bg-white border-b rounded-t-xl">
+                <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2 text-emerald-800">
+                  <DollarSign className="h-5 w-5" /> Ingreso Global (A Facturar)
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Flete Base:</span>
-                  <span className="font-medium text-slate-700">
+              <CardContent className="space-y-4 pt-6 text-sm">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-600 font-bold">Flete Base:</span>
+                  <span className="font-black text-slate-800 font-mono text-lg">
                     $
                     {infoTarifa.base.toLocaleString("es-MX", {
                       minimumFractionDigits: 2,
                     })}
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-600 font-bold">
                     Casetas (Cobro a Cliente):
                   </span>
-                  <span className="font-medium text-slate-700">
+                  <span className="font-black text-slate-800 font-mono text-lg">
                     $
                     {infoTarifa.casetas.toLocaleString("es-MX", {
                       minimumFractionDigits: 2,
                     })}
                   </span>
                 </div>
-                <Separator className="my-2" />
-                <div className="flex justify-between font-semibold">
-                  <span>Subtotal:</span>
-                  <span>
+                <Separator className="my-4 bg-emerald-200" />
+                <div className="flex justify-between font-black text-slate-600">
+                  <span>Subtotal Antes de Impuestos:</span>
+                  <span className="font-mono">
                     $
                     {infoTarifa.subtotal.toLocaleString("es-MX", {
                       minimumFractionDigits: 2,
                     })}
                   </span>
                 </div>
-                <div className="flex justify-between items-center mt-3 bg-emerald-100 p-3 rounded-lg text-emerald-800 font-bold">
-                  <span>TOTAL NETO:</span>
-                  <span className="text-lg">
+                <div className="flex justify-between items-center mt-6 bg-emerald-500 p-5 rounded-2xl text-white shadow-lg">
+                  <span className="font-black uppercase tracking-widest">
+                    TOTAL NETO:
+                  </span>
+                  <span className="text-2xl font-black font-mono tracking-tighter">
                     $
                     {infoTarifa.total.toLocaleString("es-MX", {
                       minimumFractionDigits: 2,
@@ -907,97 +1035,145 @@ export const DespachoWizard = () => {
               </CardContent>
             </Card>
 
-            <Card className="border-slate-200">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <Truck className="h-4 w-4 text-blue-600" /> Egresos (Operador)
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4 pt-2">
-                <div className="space-y-2">
-                  <Label>Anticipo Casetas</Label>
-                  <Input
-                    type="number"
-                    value={data.anticipo_casetas}
-                    onChange={(e) =>
-                      setData((p) => ({
-                        ...p,
-                        anticipo_casetas: parseFloat(e.target.value) || 0,
-                      }))
-                    }
-                  />
+            {/* 🚀 EGRESOS CONDICIONALES */}
+            {isRoadLeg ? (
+              <Card className="border-2 border-amber-200 bg-amber-50/50 shadow-sm h-fit">
+                <CardHeader className="pb-4 bg-white border-b border-amber-100 rounded-t-xl">
+                  <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2 text-amber-700">
+                    <Truck className="h-5 w-5" /> Anticipos para la Fase Inicial
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6 pt-6">
+                  <div className="space-y-2">
+                    <Label className="font-bold text-slate-700">
+                      Adelanto para Casetas
+                    </Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-3 text-slate-400 font-bold">
+                        $
+                      </span>
+                      <Input
+                        type="number"
+                        className="pl-8 font-mono text-lg bg-white"
+                        value={data.anticipo_casetas || ""}
+                        onChange={(e) =>
+                          setData((p) => ({
+                            ...p,
+                            anticipo_casetas: parseFloat(e.target.value) || 0,
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-bold text-slate-700">
+                      Vale de Diésel
+                    </Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-3 text-slate-400 font-bold">
+                        $
+                      </span>
+                      <Input
+                        type="number"
+                        className="pl-8 font-mono text-lg bg-white"
+                        value={data.anticipo_combustible || ""}
+                        onChange={(e) =>
+                          setData((p) => ({
+                            ...p,
+                            anticipo_combustible:
+                              parseFloat(e.target.value) || 0,
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-bold text-slate-700">
+                      Viáticos Operador
+                    </Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-3 text-slate-400 font-bold">
+                        $
+                      </span>
+                      <Input
+                        type="number"
+                        className="pl-8 font-mono text-lg bg-white"
+                        value={data.anticipo_viaticos || ""}
+                        onChange={(e) =>
+                          setData((p) => ({
+                            ...p,
+                            anticipo_viaticos: parseFloat(e.target.value) || 0,
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card className="border-2 border-dashed border-slate-300 bg-slate-50 flex flex-col justify-center items-center text-center p-10 h-full min-h-[300px]">
+                <div className="h-16 w-16 bg-white rounded-full flex items-center justify-center shadow-sm mb-4">
+                  <Info className="h-8 w-8 text-brand-navy" />
                 </div>
-                <div className="space-y-2">
-                  <Label>Anticipo Diésel</Label>
-                  <Input
-                    type="number"
-                    value={data.anticipo_combustible}
-                    onChange={(e) =>
-                      setData((p) => ({
-                        ...p,
-                        anticipo_combustible: parseFloat(e.target.value) || 0,
-                      }))
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Viáticos</Label>
-                  <Input
-                    type="number"
-                    value={data.anticipo_viaticos}
-                    onChange={(e) =>
-                      setData((p) => ({
-                        ...p,
-                        anticipo_viaticos: parseFloat(e.target.value) || 0,
-                      }))
-                    }
-                  />
-                </div>
-              </CardContent>
-            </Card>
+                <h3 className="text-lg font-black text-brand-navy uppercase tracking-widest">
+                  Sin Anticipos
+                </h3>
+                <p className="text-sm font-medium text-slate-500 mt-2 max-w-xs leading-relaxed">
+                  Has seleccionado una fase de movimiento local en patio/muelle.
+                  Por políticas operativas, no se requieren registros de
+                  anticipos por viaje para estos operadores.
+                </p>
+              </Card>
+            )}
           </div>
         )}
 
-        <div className="flex justify-between pt-6 border-t mt-4">
+        {/* NAVEGACIÓN INFERIOR */}
+        <div className="flex justify-between pt-8 border-t mt-8">
           <Button
             variant="outline"
+            size="lg"
+            className="font-bold w-32"
             onClick={() => setCurrentStep((p) => (p - 1) as Step)}
             disabled={currentStep === 1}
           >
             Atrás
           </Button>
+
           {currentStep < 3 ? (
             <ActionButton
+              className="font-black px-8"
               onClick={() => setCurrentStep((p) => (p + 1) as Step)}
               disabled={
                 (currentStep === 1 && !isStep1Valid) ||
                 (currentStep === 2 && !isStep2Valid)
               }
             >
-              Siguiente <ChevronRight className="h-4 w-4 ml-1" />
+              Continuar <ChevronRight className="h-5 w-5 ml-2" />
             </ActionButton>
           ) : (
-            <div className="flex gap-3">
+            <div className="flex gap-4">
               <Button
                 type="button"
                 variant="secondary"
+                size="lg"
                 onClick={(e) => {
                   e.preventDefault();
                   handleCreate("creado");
                 }}
-                className="bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200"
+                className="bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 font-bold"
               >
-                <Clock className="h-4 w-4 mr-2" /> Guardar en Stand-By
+                <Clock className="h-5 w-5 mr-2" /> Guardar en Stand-By
               </Button>
               <ActionButton
                 type="button"
+                className="bg-emerald-600 hover:bg-emerald-700 shadow-xl shadow-emerald-600/20 font-black px-8 text-white"
                 onClick={(e) => {
                   e.preventDefault();
                   handleCreate("en_transito");
                 }}
-                className="bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-100"
               >
-                <Check className="h-4 w-4 mr-2" /> Despachar Ahora
+                <Check className="h-5 w-5 mr-2" /> DESPACHAR AHORA
               </ActionButton>
             </div>
           )}

@@ -18,6 +18,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import {
   Link as LinkIcon,
@@ -25,8 +27,9 @@ import {
   User,
   Gauge,
   Droplets,
-  MapPin,
   Loader2,
+  Info,
+  CheckCircle2,
 } from "lucide-react";
 import { useUnits } from "@/hooks/useUnits";
 import { useOperators } from "@/hooks/useOperators";
@@ -45,7 +48,7 @@ export function NextLegModal({
   tripPadre,
   onSubmit,
 }: NextLegModalProps) {
-  const { unidades } = useUnits();
+  const { unidades, updateLoadStatus } = useUnits();
   const { operadores } = useOperators();
   const [loading, setLoading] = useState(false);
 
@@ -60,11 +63,11 @@ export function NextLegModal({
     anticipo_combustible: 0,
   });
 
-  // Reset form when opened
+  // Limpiar el form siempre que se abre
   useEffect(() => {
     if (open) {
       setFormData({
-        leg_type: "ruta_carretera",
+        leg_type: "ruta_carretera", // Generalmente, después de cargar en muelle, la siguiente es carretera
         unit_id: null,
         operator_id: null,
         odometro_inicial: 0,
@@ -76,7 +79,9 @@ export function NextLegModal({
     }
   }, [open]);
 
-  // Filtramos tractocamiones disponibles
+  // 🚀 LÓGICA DE NEGOCIO: ¿Es una fase de carretera?
+  const isRoadLeg = formData.leg_type === "ruta_carretera";
+
   const availableTractos = useMemo(() => {
     if (!unidades) return [];
     return unidades.filter(
@@ -102,22 +107,62 @@ export function NextLegModal({
     if (!tripPadre) return;
 
     if (!formData.unit_id || !formData.operator_id) {
-      return toast.error("Debes seleccionar una Unidad y un Operador");
+      return toast.error("Debes asignar una Unidad y un Operador.");
     }
-    if (!formData.odometro_inicial || formData.odometro_inicial <= 0) {
-      return toast.error("El odómetro inicial es obligatorio");
+
+    if (
+      isRoadLeg &&
+      (!formData.odometro_inicial || formData.odometro_inicial <= 0)
+    ) {
+      return toast.error(
+        "El odómetro inicial es obligatorio para viajes en carretera.",
+      );
     }
 
     setLoading(true);
-    const success = await onSubmit(
-      String(tripPadre.id),
-      formData as TripLegCreatePayload,
-    );
-    setLoading(false);
 
+    const payload: TripLegCreatePayload = {
+      leg_type: formData.leg_type!,
+      unit_id: Number(formData.unit_id),
+      operator_id: Number(formData.operator_id),
+      odometro_inicial: isRoadLeg ? Number(formData.odometro_inicial) : null,
+      nivel_tanque_inicial: isRoadLeg
+        ? Number(formData.nivel_tanque_inicial)
+        : null,
+      anticipo_casetas: isRoadLeg ? Number(formData.anticipo_casetas || 0) : 0,
+      anticipo_viaticos: isRoadLeg
+        ? Number(formData.anticipo_viaticos || 0)
+        : 0,
+      anticipo_combustible: isRoadLeg
+        ? Number(formData.anticipo_combustible || 0)
+        : 0,
+    };
+
+    const success = await onSubmit(String(tripPadre.id), payload);
+
+    // 🚀 MAGIA AUTOMÁTICA: Actualizamos el Remolque según lo que acaba de pasar
     if (success) {
+      const lastLeg =
+        tripPadre.legs?.find((l) => l.status === "en_transito") ||
+        tripPadre.legs?.[tripPadre.legs.length - 1];
+
+      // Si la fase que acaba de terminar fue "Carga Muelle", ¡entonces el remolque está cargado!
+      if (
+        lastLeg &&
+        lastLeg.leg_type === "carga_muelle" &&
+        tripPadre.remolque_1_id
+      ) {
+        await updateLoadStatus(tripPadre.remolque_1_id, true); // True = Cargado
+        if (tripPadre.remolque_2_id) {
+          await updateLoadStatus(tripPadre.remolque_2_id, true);
+        }
+        toast.success("Remolque(s) marcado(s) como CARGADOS automáticamente.");
+      }
+
       onOpenChange(false);
     }
+
+    setLoading(false);
   };
 
   if (!tripPadre) return null;
@@ -127,20 +172,19 @@ export function NextLegModal({
       <DialogContent className="sm:max-w-[600px] bg-slate-50">
         <DialogHeader>
           <DialogTitle className="text-xl flex items-center gap-2 text-brand-navy">
-            <LinkIcon className="h-5 w-5" /> Desenganche y Relevo
+            <LinkIcon className="h-5 w-5" /> Asignar Siguiente Fase
           </DialogTitle>
           <DialogDescription>
             Viaje <strong>#{tripPadre.public_id || tripPadre.id}</strong> hacia{" "}
             <strong>{tripPadre.destination}</strong>.<br />
-            Se cerrará el tramo actual y se asignará el remolque a la nueva
-            unidad.
+            Configura qué sucederá a continuación con el contenedor.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5 py-4">
-          <div className="space-y-2">
-            <Label className="font-bold text-brand-navy">
-              1. Siguiente Fase (Tramo) *
+          <div className="space-y-2 bg-indigo-50 border border-indigo-100 p-3 rounded-lg">
+            <Label className="font-bold text-indigo-900 uppercase tracking-wider text-xs">
+              1. Selecciona la Próxima Fase *
             </Label>
             <Select
               value={formData.leg_type}
@@ -148,15 +192,18 @@ export function NextLegModal({
                 setFormData((p) => ({ ...p, leg_type: v }))
               }
             >
-              <SelectTrigger className="bg-white">
+              <SelectTrigger className="bg-white border-indigo-200">
                 <SelectValue placeholder="Selecciona la fase" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="carga_muelle">
+                  1. Carga Muelle (Patio Base)
+                </SelectItem>
                 <SelectItem value="ruta_carretera">
-                  Ruta Carretera (Viaje a Destino)
+                  2. Ruta Directa (Viaje a Destino)
                 </SelectItem>
                 <SelectItem value="entrega_vacio">
-                  Entrega de Vacío (Regreso al Puerto)
+                  3. Retorno de Vacío (Regreso a Puerto/Patio)
                 </SelectItem>
               </SelectContent>
             </Select>
@@ -165,7 +212,7 @@ export function NextLegModal({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
-                <Truck className="h-4 w-4" /> Tractocamión Nuevo *
+                <Truck className="h-4 w-4" /> Tractocamión Asignado *
               </Label>
               <Select
                 value={formData.unit_id ? String(formData.unit_id) : ""}
@@ -188,7 +235,7 @@ export function NextLegModal({
 
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
-                <User className="h-4 w-4" /> Operador Nuevo *
+                <User className="h-4 w-4" /> Operador *
               </Label>
               <Select
                 value={formData.operator_id ? String(formData.operator_id) : ""}
@@ -210,11 +257,26 @@ export function NextLegModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 bg-white p-4 rounded-lg border border-slate-200">
+          {/* 🚀 TELEMETRÍA CONDICIONAL */}
+          <div
+            className={`grid grid-cols-2 gap-4 p-4 rounded-lg border ${isRoadLeg ? "bg-amber-50 border-amber-200" : "bg-slate-100 border-slate-200 opacity-80"}`}
+          >
+            <div className="col-span-2">
+              <p className="text-xs font-bold flex items-center gap-2 mb-1 text-slate-500">
+                <Gauge className="h-4 w-4" /> Telemetría Inicial
+                {isRoadLeg ? (
+                  <Badge className="bg-amber-500 hover:bg-amber-600 text-white ml-2 border-0">
+                    Obligatorio
+                  </Badge>
+                ) : (
+                  <span className="font-normal italic ml-2">
+                    (Opcional en Patio)
+                  </span>
+                )}
+              </p>
+            </div>
             <div className="space-y-2">
-              <Label className="flex items-center gap-2 text-brand-navy">
-                <Gauge className="h-4 w-4" /> Odómetro Arranque *
-              </Label>
+              <Label>Odómetro Arranque {isRoadLeg && "*"}</Label>
               <Input
                 type="number"
                 value={formData.odometro_inicial || ""}
@@ -224,89 +286,109 @@ export function NextLegModal({
                     odometro_inicial: Number(e.target.value),
                   }))
                 }
-                placeholder="Ej: 154000"
-                className="font-mono text-lg"
+                placeholder={isRoadLeg ? "Ej: 154000" : "No requerido"}
+                className="font-mono"
+                disabled={!isRoadLeg} // Opcional: Bloquear input si no es carretera
               />
             </div>
             <div className="space-y-2">
-              <Label className="flex items-center gap-2 text-brand-navy">
-                <Droplets className="h-4 w-4" /> Tanque Arranque (%) *
-              </Label>
-              <Input
-                type="number"
-                min="0"
-                max="100"
-                value={formData.nivel_tanque_inicial || ""}
-                onChange={(e) =>
-                  setFormData((p) => ({
-                    ...p,
-                    nivel_tanque_inicial: Number(e.target.value),
-                  }))
-                }
-                placeholder="100"
-                className="font-mono text-lg"
-              />
+              <Label>Tanque Arranque (%) {isRoadLeg && "*"}</Label>
+              <div className="relative">
+                <Input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={formData.nivel_tanque_inicial || ""}
+                  onChange={(e) =>
+                    setFormData((p) => ({
+                      ...p,
+                      nivel_tanque_inicial: Number(e.target.value),
+                    }))
+                  }
+                  placeholder={isRoadLeg ? "100" : ""}
+                  className="font-mono pr-8"
+                  disabled={!isRoadLeg} // Opcional: Bloquear input si no es carretera
+                />
+                <span className="absolute right-3 top-2.5 font-bold text-slate-400">
+                  %
+                </span>
+              </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3 border-t pt-4">
-            <div className="space-y-2">
-              <Label className="text-xs">Anticipo Casetas</Label>
-              <Input
-                type="number"
-                value={formData.anticipo_casetas || ""}
-                onChange={(e) =>
-                  setFormData((p) => ({
-                    ...p,
-                    anticipo_casetas: Number(e.target.value),
-                  }))
-                }
-              />
+          {/* 🚀 ANTICIPOS CONDICIONALES */}
+          {isRoadLeg ? (
+            <div className="grid grid-cols-3 gap-3 border-t pt-4">
+              <div className="col-span-3">
+                <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                  Anticipos Entregados (Operación)
+                </Label>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs">Casetas</Label>
+                <Input
+                  type="number"
+                  value={formData.anticipo_casetas || ""}
+                  onChange={(e) =>
+                    setFormData((p) => ({
+                      ...p,
+                      anticipo_casetas: Number(e.target.value),
+                    }))
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs">Diésel</Label>
+                <Input
+                  type="number"
+                  value={formData.anticipo_combustible || ""}
+                  onChange={(e) =>
+                    setFormData((p) => ({
+                      ...p,
+                      anticipo_combustible: Number(e.target.value),
+                    }))
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs">Viáticos</Label>
+                <Input
+                  type="number"
+                  value={formData.anticipo_viaticos || ""}
+                  onChange={(e) =>
+                    setFormData((p) => ({
+                      ...p,
+                      anticipo_viaticos: Number(e.target.value),
+                    }))
+                  }
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label className="text-xs">Anticipo Diésel</Label>
-              <Input
-                type="number"
-                value={formData.anticipo_combustible || ""}
-                onChange={(e) =>
-                  setFormData((p) => ({
-                    ...p,
-                    anticipo_combustible: Number(e.target.value),
-                  }))
-                }
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs">Viáticos</Label>
-              <Input
-                type="number"
-                value={formData.anticipo_viaticos || ""}
-                onChange={(e) =>
-                  setFormData((p) => ({
-                    ...p,
-                    anticipo_viaticos: Number(e.target.value),
-                  }))
-                }
-              />
-            </div>
-          </div>
+          ) : (
+            <Card className="border-slate-200 bg-transparent flex flex-col justify-center items-center text-center p-4">
+              <p className="text-xs text-slate-400 font-medium flex items-center gap-2">
+                <Info className="h-4 w-4" /> Los movimientos de patio no
+                requieren registro de anticipos por viaje.
+              </p>
+            </Card>
+          )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="bg-slate-100 p-4 -m-6 mt-2 rounded-b-lg border-t">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
           <Button
             onClick={handleSubmit}
             disabled={loading}
-            className="bg-brand-navy hover:bg-brand-navy/90 text-white gap-2"
+            className="bg-brand-navy hover:bg-brand-navy/90 text-white font-bold gap-2"
           >
             {loading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              <LinkIcon className="h-4 w-4" />
+              <CheckCircle2 className="h-4 w-4" />
             )}
-            Confirmar Relevo
+            Guardar Siguiente Fase
           </Button>
         </DialogFooter>
       </DialogContent>

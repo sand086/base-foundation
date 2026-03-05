@@ -390,3 +390,18 @@ async def upload_unit_document(
         "filename": unique_name,
         "message": "Archivo subido y versionado correctamente",
     }
+
+
+@router.patch("/units/{unit_id}/load-status", response_model=schemas.UnitResponse)
+def update_unit_load_status(
+    unit_id: int, load_status: bool, db: Session = Depends(get_db)
+):
+    """Endpoint específico para el cambio rápido de 'Cargado/Vacío'"""
+    db_unit = crud.get_unit(db, unit_id=unit_id)
+    if not db_unit:
+        raise HTTPException(status_code=404, detail="Unidad no encontrada")
+
+    db_unit.is_loaded = load_status
+    db.commit()
+    db.refresh(db_unit)
+    return db_unit
