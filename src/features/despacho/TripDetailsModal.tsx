@@ -54,11 +54,10 @@ interface TripDetailsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   trip: Trip | null;
-  // 🚀 PROPS UNIFICADAS PARA EL CENTRO DE MANDO
   onRelayClick?: (leg: TripLeg, trip: Trip) => void;
   onSettleClick?: (leg: TripLeg, trip: Trip) => void;
   onIncidentClick?: (trip: Trip) => void;
-  onUpdateStatusClick?: (trip: Trip) => void; // Para agregar novedades a la bitácora
+  onUpdateStatusClick?: (trip: Trip) => void;
 }
 
 export function TripDetailsModal({
@@ -79,7 +78,6 @@ export function TripDetailsModal({
   const [costoCasetas, setCostoCasetas] = useState(0);
   const [mantenerPreciosManuales, setMantenerPreciosManuales] = useState(true);
 
-  // Reiniciar estado al abrir
   useEffect(() => {
     if (trip && open) {
       setTarifaBase(trip.tarifa_base || 0);
@@ -137,7 +135,6 @@ export function TripDetailsModal({
     ? tarifaBase - totalAnticiposGlobales
     : trip.tarifa_base - totalAnticiposGlobales;
 
-  // Extraer y ordenar todos los eventos para la pestaña de Bitácora
   const allEvents =
     trip.legs
       ?.flatMap((leg) =>
@@ -153,7 +150,6 @@ export function TripDetailsModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-6xl bg-white h-[90vh] flex flex-col p-0 overflow-hidden rounded-2xl shadow-2xl">
-        {/* HEADER UNIFICADO */}
         <DialogHeader className="p-6 pb-4 bg-slate-50 border-b border-slate-200 shrink-0">
           <div className="flex justify-between items-start">
             <div className="flex items-center gap-4">
@@ -192,9 +188,8 @@ export function TripDetailsModal({
           </div>
         </DialogHeader>
 
-        {/* LAYOUT PRINCIPAL: PANEL IZQUIERDO (FIJO) + PANEL DERECHO (TABS) */}
         <div className="flex flex-1 overflow-hidden flex-col lg:flex-row">
-          {/* PANEL IZQUIERDO: RUTA Y EQUIPOS */}
+          {/* PANEL IZQUIERDO (Ruta) */}
           <div className="w-full lg:w-[30%] bg-slate-50 border-r border-slate-200 flex flex-col">
             <ScrollArea className="flex-1 p-6">
               <div className="space-y-6">
@@ -272,7 +267,7 @@ export function TripDetailsModal({
             </ScrollArea>
           </div>
 
-          {/* PANEL DERECHO: TABS (FASES / FINANZAS / BITÁCORA) */}
+          {/* PANEL DERECHO (TABS) */}
           <div className="w-full lg:w-[70%] flex flex-col bg-white">
             <Tabs
               value={activeTab}
@@ -304,7 +299,7 @@ export function TripDetailsModal({
 
               <ScrollArea className="flex-1">
                 <div className="p-6">
-                  {/* 🚀 TAB 1: FASES OPERATIVAS (UX GUSTAVO) */}
+                  {/* 🚀 TAB 1: FASES OPERATIVAS */}
                   <TabsContent
                     value="fases"
                     className="m-0 focus-visible:outline-none"
@@ -317,7 +312,8 @@ export function TripDetailsModal({
                         </p>
                       </div>
                     ) : (
-                      <div className="relative pl-4 md:pl-0 before:absolute before:inset-0 before:ml-[28px] md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-slate-200 before:via-slate-200 before:to-transparent space-y-8">
+                      // CONTENEDOR DEL TIMELINE (Alineado a la Izquierda)
+                      <div className="relative pl-12 space-y-8 before:absolute before:inset-0 before:left-5 before:h-full before:w-0.5 before:bg-slate-200">
                         {trip.legs.map((leg: TripLeg, index: number) => {
                           const isCompleted =
                             leg.status === "entregado" ||
@@ -329,30 +325,27 @@ export function TripDetailsModal({
                           ].includes(leg.status);
 
                           return (
-                            <div
-                              key={leg.id}
-                              className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group"
-                            >
-                              {/* MARCADOR DEL TIMELINE */}
+                            <div key={leg.id} className="relative w-full">
+                              {/* MARCADOR CIRCULAR (Izquierda) */}
                               <div
-                                className={`flex items-center justify-center w-12 h-12 rounded-full border-4 border-white shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 shadow-md z-10 
+                                className={`absolute -left-12 flex items-center justify-center w-10 h-10 rounded-full border-4 border-white shadow-md z-10 
                                 ${isCompleted ? "bg-emerald-100 ring-2 ring-emerald-500" : isIncident ? "bg-red-100 ring-2 ring-red-500 animate-pulse" : "bg-slate-50 ring-2 ring-brand-navy"}`}
                               >
                                 {isCompleted ? (
-                                  <CheckCircle2 className="h-6 w-6 text-emerald-600" />
+                                  <CheckCircle2 className="h-5 w-5 text-emerald-600" />
                                 ) : (
                                   <span
-                                    className={`text-lg font-black ${isIncident ? "text-red-600" : "text-brand-navy"}`}
+                                    className={`text-base font-black ${isIncident ? "text-red-600" : "text-brand-navy"}`}
                                   >
                                     {index + 1}
                                   </span>
                                 )}
                               </div>
 
-                              {/* TARJETA DE LA FASE */}
+                              {/* TARJETA DE LA FASE (Ancha, ocupando el resto del espacio) */}
                               <Card
-                                className={`w-[calc(100%-4rem)] md:w-[calc(50%-3rem)] shadow-lg transition-all border-t-4 
-                                ${isCompleted ? "border-t-emerald-500 bg-slate-50/50" : isIncident ? "border-t-red-500 bg-red-50/30 ring-1 ring-red-200" : "border-t-brand-navy bg-white"}`}
+                                className={`w-full shadow-md transition-all border-t-4 
+                                ${isCompleted ? "border-t-emerald-500 bg-slate-50/50" : isIncident ? "border-t-red-500 bg-red-50/30 ring-1 ring-red-200" : "border-t-brand-navy bg-white hover:shadow-lg"}`}
                               >
                                 <CardHeader className="p-4 pb-3 border-b border-slate-100">
                                   <div className="flex justify-between items-start">
@@ -365,45 +358,48 @@ export function TripDetailsModal({
                                       </CardTitle>
                                     </div>
                                     <Badge
-                                      className={`${isCompleted ? "bg-emerald-100 text-emerald-700" : isIncident ? "bg-red-500 text-white" : "bg-blue-100 text-blue-700"} border-0 uppercase font-bold shadow-sm`}
+                                      className={`${isCompleted ? "bg-emerald-100 text-emerald-700" : isIncident ? "bg-red-500 text-white" : "bg-blue-100 text-blue-700"} border-0 uppercase font-bold shadow-sm px-3 py-1`}
                                     >
                                       {leg.status.replace("_", " ")}
                                     </Badge>
                                   </div>
                                 </CardHeader>
 
-                                <CardContent className="p-4 pt-4">
-                                  <div className="grid grid-cols-1 gap-4">
-                                    {/* Recursos */}
-                                    <div className="flex flex-col gap-2 bg-white p-3 rounded-lg border shadow-sm">
-                                      <div className="flex items-center gap-3">
-                                        <Truck className="h-4 w-4 text-slate-400" />
-                                        <div className="flex-1 flex justify-between items-center">
-                                          <p className="text-xs text-slate-500 font-bold uppercase">
-                                            Tractocamión
-                                          </p>
-                                          <p className="text-sm font-black text-slate-800">
-                                            ECO-
-                                            {leg.unit?.numero_economico ||
-                                              "N/A"}
-                                          </p>
+                                {/* 🚀 CONTENIDO DE LA TARJETA (Lado a Lado y de la misma altura) */}
+                                <CardContent className="p-4">
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-stretch">
+                                    {/* Izquierda: Recursos */}
+                                    <div className="flex flex-col justify-between gap-3 bg-white p-4 rounded-lg border border-slate-200 shadow-sm h-full">
+                                      <div className="space-y-4">
+                                        <div className="flex items-center gap-3">
+                                          <Truck className="h-5 w-5 text-slate-400" />
+                                          <div className="flex-1 flex justify-between items-center">
+                                            <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">
+                                              Tractocamión
+                                            </p>
+                                            <p className="text-sm font-black text-slate-800">
+                                              ECO-
+                                              {leg.unit?.numero_economico ||
+                                                "N/A"}
+                                            </p>
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                          <User className="h-5 w-5 text-slate-400" />
+                                          <div className="flex-1 flex justify-between items-center">
+                                            <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">
+                                              Operador
+                                            </p>
+                                            <p className="text-sm font-black text-slate-800 truncate max-w-[150px]">
+                                              {leg.operator?.name || "N/A"}
+                                            </p>
+                                          </div>
                                         </div>
                                       </div>
-                                      <div className="flex items-center gap-3">
-                                        <User className="h-4 w-4 text-slate-400" />
+                                      <div className="flex items-center gap-3 pt-3 border-t border-slate-100 mt-2">
+                                        <CalendarClock className="h-5 w-5 text-slate-400" />
                                         <div className="flex-1 flex justify-between items-center">
-                                          <p className="text-xs text-slate-500 font-bold uppercase">
-                                            Operador
-                                          </p>
-                                          <p className="text-sm font-black text-slate-800 truncate max-w-[150px]">
-                                            {leg.operator?.name || "N/A"}
-                                          </p>
-                                        </div>
-                                      </div>
-                                      <div className="flex items-center gap-3 pt-2 border-t border-slate-100 mt-1">
-                                        <CalendarClock className="h-4 w-4 text-slate-400" />
-                                        <div className="flex-1 flex justify-between items-center">
-                                          <p className="text-xs text-slate-500 font-bold uppercase">
+                                          <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">
                                             Inicio Fase
                                           </p>
                                           <p className="text-xs font-medium text-slate-600">
@@ -419,91 +415,95 @@ export function TripDetailsModal({
                                       </div>
                                     </div>
 
-                                    {/* Anticipos (Formato Solicitado) */}
-                                    <div className="space-y-2 bg-rose-50/60 p-3 rounded-lg border border-rose-100">
-                                      <p className="text-[10px] text-rose-600 font-black uppercase tracking-widest flex items-center gap-1.5 mb-2.5">
-                                        <Wallet className="h-3.5 w-3.5" />{" "}
-                                        Anticipos Entregados
-                                      </p>
-                                      <div className="space-y-1.5">
-                                        <div className="flex justify-between text-xs text-slate-700">
-                                          <span>Casetas:</span>
-                                          <span className="font-bold font-mono text-slate-900">
-                                            $
-                                            {leg.anticipo_casetas.toLocaleString()}
-                                          </span>
-                                        </div>
-                                        <div className="flex justify-between text-xs text-slate-700">
-                                          <span>Diésel:</span>
-                                          <span className="font-bold font-mono text-slate-900">
-                                            $
-                                            {leg.anticipo_combustible.toLocaleString()}
-                                          </span>
-                                        </div>
-                                        <div className="flex justify-between text-xs text-slate-700">
-                                          <span>Viáticos:</span>
-                                          <span className="font-bold font-mono text-slate-900">
-                                            $
-                                            {leg.anticipo_viaticos.toLocaleString()}
-                                          </span>
+                                    {/* Derecha: Anticipos */}
+                                    <div className="flex flex-col justify-between space-y-2 bg-rose-50/60 p-4 rounded-lg border border-rose-100 h-full">
+                                      <div>
+                                        <p className="text-xs text-rose-600 font-black uppercase tracking-widest flex items-center gap-2 mb-3">
+                                          <Wallet className="h-4 w-4" />{" "}
+                                          Anticipos Entregados
+                                        </p>
+                                        <div className="space-y-2.5">
+                                          <div className="flex justify-between text-sm text-slate-700">
+                                            <span>Casetas:</span>
+                                            <span className="font-bold font-mono text-slate-900">
+                                              $
+                                              {leg.anticipo_casetas.toLocaleString()}
+                                            </span>
+                                          </div>
+                                          <div className="flex justify-between text-sm text-slate-700">
+                                            <span>Diésel:</span>
+                                            <span className="font-bold font-mono text-slate-900">
+                                              $
+                                              {leg.anticipo_combustible.toLocaleString()}
+                                            </span>
+                                          </div>
+                                          <div className="flex justify-between text-sm text-slate-700">
+                                            <span>Viáticos:</span>
+                                            <span className="font-bold font-mono text-slate-900">
+                                              $
+                                              {leg.anticipo_viaticos.toLocaleString()}
+                                            </span>
+                                          </div>
                                         </div>
                                       </div>
-                                      <Separator className="bg-rose-200 my-2" />
-                                      <div className="flex justify-between items-center text-sm text-rose-800 font-black">
-                                        <span>Total Tramo:</span>
-                                        <span className="font-mono text-base bg-white px-2 py-0.5 rounded shadow-sm border border-rose-100">
-                                          $
-                                          {(
-                                            leg.anticipo_casetas +
-                                            leg.anticipo_combustible +
-                                            leg.anticipo_viaticos
-                                          ).toLocaleString()}
-                                        </span>
+                                      <div>
+                                        <Separator className="bg-rose-200 my-3" />
+                                        <div className="flex justify-between items-center text-sm text-rose-800 font-black">
+                                          <span>TOTAL TRAMO:</span>
+                                          <span className="font-mono text-lg bg-white px-3 py-1 rounded shadow-sm border border-rose-200">
+                                            $
+                                            {(
+                                              leg.anticipo_casetas +
+                                              leg.anticipo_combustible +
+                                              leg.anticipo_viaticos
+                                            ).toLocaleString()}
+                                          </span>
+                                        </div>
                                       </div>
                                     </div>
                                   </div>
                                 </CardContent>
 
                                 {/* BOTONES DE ACCIÓN DIRECTOS */}
-                                <CardFooter className="p-4 pt-0 flex gap-2 mt-2">
+                                <CardFooter className="p-4 pt-0 flex gap-3 mt-2">
                                   {!isCompleted ? (
                                     <>
                                       <Button
                                         size="sm"
                                         variant="outline"
-                                        className="flex-1 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 bg-white"
+                                        className="w-1/3 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 bg-white h-10"
                                         onClick={() =>
                                           onIncidentClick &&
                                           onIncidentClick(trip)
                                         }
                                       >
-                                        <AlertTriangle className="h-4 w-4 mr-1.5" />{" "}
-                                        Falla
+                                        <AlertTriangle className="h-4 w-4 mr-2" />{" "}
+                                        Reportar Falla
                                       </Button>
                                       <Button
                                         size="sm"
-                                        className="flex-[2] bg-brand-navy hover:bg-brand-navy/90 text-white shadow-md font-bold"
+                                        className="w-2/3 bg-brand-navy hover:bg-brand-navy/90 text-white shadow-md font-bold h-10"
                                         onClick={() =>
                                           onRelayClick &&
                                           onRelayClick(leg, trip)
                                         }
                                       >
                                         <LinkIcon className="h-4 w-4 mr-2" />{" "}
-                                        Desenganchar
+                                        Concluir y Desenganchar
                                       </Button>
                                     </>
                                   ) : (
                                     <Button
                                       size="lg"
-                                      className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black shadow-md tracking-wide"
+                                      className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black shadow-md tracking-wide h-12 text-base"
                                       onClick={() =>
                                         onSettleClick &&
                                         onSettleClick(leg, trip)
                                       }
                                     >
-                                      <Banknote className="h-5 w-5 mr-2" />{" "}
-                                      Liquidar (
-                                      {leg.operator?.name?.split(" ")[0]})
+                                      <Banknote className="h-5 w-5 mr-3" />{" "}
+                                      Liquidar a{" "}
+                                      {leg.operator?.name?.split(" ")[0]}
                                     </Button>
                                   )}
                                 </CardFooter>

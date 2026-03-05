@@ -40,6 +40,7 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 import type { Trip, TripLeg } from "@/types/api.types";
+import axiosClient from "@/api/axiosClient";
 
 interface ConceptoExtra {
   id: string;
@@ -169,16 +170,38 @@ export function TripSettlementModal({
     );
   };
 
-  const handleLiquidate = () => {
+  const handleLiquidate = async () => {
     setIsAnimating(true);
-    // TODO: Conectar con endpoint backend para guardar el pago real
-    setTimeout(() => {
-      setIsAnimating(false);
-      toast.success("Liquidación Autorizada", {
+
+    try {
+      // 1. Aquí idealmente llamarías a tu endpoint financiero para guardar los montos:
+      await axiosClient.post(`/trips/legs/${leg.id}/settle`, liquidacion);
+
+      // 2. Actualizamos el viaje en la Base de Datos para pasarlo a CERRADO
+      // Esto hace que la tarjeta por fin salga del tablero de operaciones.
+      await axiosClient.put(`/trips/${tripPadre.id}`, {
+        status: "cerrado",
+      });
+
+      toast.success("Liquidación Autorizada y Guardada", {
         description: `Se registró un saldo de ${formatCurrency(liquidacion?.netoAPagar || 0)} a favor del operador.`,
       });
+
+      // 3. Cerramos el modal
       onOpenChange(false);
-    }, 1500);
+
+      // 4. Forzamos una recarga rápida para que el Kanban/Tabla se actualice y la tarjeta desaparezca
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
+    } catch (error) {
+      console.error(error);
+      toast.error(
+        "Hubo un error al intentar guardar la liquidación en la base de datos.",
+      );
+    } finally {
+      setIsAnimating(false);
+    }
   };
 
   const legTypeLabels: Record<string, string> = {
