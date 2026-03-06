@@ -135,7 +135,7 @@ class OperatorResponse(OperatorBase):
 
     # AuditMixin
     record_status: RecordStatus
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     created_by_id: Optional[int] = None
     updated_by_id: Optional[int] = None

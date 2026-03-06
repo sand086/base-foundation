@@ -217,8 +217,8 @@ class ClientUpdate(ORMBase):
 
 class ClientResponse(ClientBase):
     id: int
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     sub_clients: List[SubClientResponse] = Field(default_factory=list)
 
 
