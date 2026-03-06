@@ -35,7 +35,8 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 import { TruckChassisSVG } from "@/features/flota/TruckChassisSVG";
 import { toast } from "@/hooks/use-toast";
-import { unitService, UnidadDetalle, UnitTire } from "@/services/unitService";
+import { unitService, UnidadDetalle } from "@/services/unitService";
+import { UnitDocument, UnitTire } from "@/types/api.types";
 import { DocumentUploadManager } from "@/features/flota/DocumentUploadManager";
 
 // MODALES / SHEETS DE LLANTAS (ajusta rutas si aplica)

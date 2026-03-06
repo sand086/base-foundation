@@ -523,9 +523,9 @@ export const ArmadorRutas: React.FC = () => {
   };
 
   const handleSave = async () => {
-    if (!nombreRuta || !tipoUnidadId) {
+    /* if (!nombreRuta || !tipoUnidadId) {
       return toast.error("El Nombre de la Ruta y la Unidad son obligatorios");
-    }
+    } */
 
     const payload: any = {
       client_id:
