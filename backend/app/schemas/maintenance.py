@@ -67,8 +67,8 @@ class InventoryItemResponse(InventoryItemBase):
 
     # AuditMixin
     record_status: RecordStatus
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     created_by_id: Optional[int] = None
     updated_by_id: Optional[int] = None
 
@@ -115,8 +115,8 @@ class MechanicDocumentResponse(MechanicDocumentBase):
 
     # AuditMixin
     record_status: RecordStatus
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     created_by_id: Optional[int] = None
     updated_by_id: Optional[int] = None
 
@@ -179,8 +179,8 @@ class MechanicResponse(MechanicBase):
 
     # AuditMixin
     record_status: RecordStatus
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     created_by_id: Optional[int] = None
     updated_by_id: Optional[int] = None
 
@@ -222,8 +222,8 @@ class WorkOrderPartResponse(ORMBase):
 
     # AuditMixin
     record_status: RecordStatus
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     created_by_id: Optional[int] = None
     updated_by_id: Optional[int] = None
 
@@ -278,8 +278,8 @@ class WorkOrderResponse(ORMBase):
     # AuditMixin
     record_status: RecordStatus
     # 2. ELIMINAMOS AQUI LAS LINEAS DUPLICADAS DE fecha_apertura y fecha_cierre
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     created_by_id: Optional[int] = None
     updated_by_id: Optional[int] = None
 

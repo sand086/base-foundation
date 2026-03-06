@@ -61,8 +61,8 @@ class InvoicePaymentResponse(ORMBase):
     complemento_uuid: Optional[str] = None
 
     record_status: RecordStatus
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     created_by_id: Optional[int] = None
     updated_by_id: Optional[int] = None
 
@@ -170,8 +170,8 @@ class PayableInvoiceResponse(ORMBase):
     payments: List[InvoicePaymentResponse] = Field(default_factory=list)
 
     record_status: RecordStatus
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     created_by_id: Optional[int] = None
     updated_by_id: Optional[int] = None
 
@@ -303,7 +303,7 @@ class SupplierResponse(SupplierBase):
     tariffs: List[SupplierTariffResponse] = Field(default_factory=list)
 
     record_status: RecordStatus
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     created_by_id: Optional[int] = None
     updated_by_id: Optional[int] = None

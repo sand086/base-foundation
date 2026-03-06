@@ -89,8 +89,8 @@ class TripLegResponse(TripLegBase):
     timeline_events: List[TripTimelineEventResponse] = Field(default_factory=list)
 
     record_status: RecordStatus
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     @computed_field
     @property
@@ -159,8 +159,8 @@ class TripResponse(TripBase):
     legs: List[TripLegResponse] = Field(default_factory=list)
 
     record_status: RecordStatus
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 
 class TripTimelineEventUpdate(ORMBase):
