@@ -77,6 +77,22 @@ export const useUnits = () => {
     }
   };
 
+  const updateLoadStatus = async (id: number, isLoaded: boolean) => {
+    try {
+      // Actualización optimista: cambiamos el estado local antes de la respuesta del servidor
+      setUnidades((prev) =>
+        prev.map((u) => (u.id === id ? { ...u, is_loaded: isLoaded } : u)),
+      );
+
+      await unitService.updateLoadStatus(id, isLoaded);
+      return true;
+    } catch (error) {
+      toast.error("Error al actualizar estado en el servidor");
+      fetchUnits(); // Revertimos en caso de error
+      return false;
+    }
+  };
+
   // --- CARGA MASIVA ---
 
   const importBulkUnits = async (file: File) => {
@@ -109,6 +125,7 @@ export const useUnits = () => {
     updateUnit,
     deleteUnit,
     importBulkUnits,
+    updateLoadStatus,
     refreshUnits: fetchUnits,
   };
 };

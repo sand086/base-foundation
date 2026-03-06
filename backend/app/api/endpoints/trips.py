@@ -1,6 +1,6 @@
 # src/api/endpoints/trips.py
 import os
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
@@ -235,6 +235,43 @@ def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(g
         "viaje_cerrado_globalmente": all_completed,
         "cxc_generada_automaticamente": cxc_creada,
     }
+
+
+@router.post("/trips/legs/{leg_id}/reopen")
+def reopen_trip_leg(leg_id: int, db: Session = Depends(get_db)):
+    # 1. Buscar el tramo
+    leg = db.query(models.TripLeg).filter(models.TripLeg.id == leg_id).first()
+    if not leg:
+        raise HTTPException(status_code=404, detail="Tramo no encontrado")
+
+    # 2. Resetear el tramo a "En Tránsito" y borrar el saldo guardado
+    leg.status = "en_transito"
+    leg.saldo_operador = 0.0
+
+    trip = leg.trip
+
+    # 3. Si el viaje padre se había cerrado por error, lo reabrimos
+    if trip.status == "cerrado":
+        trip.status = "en_transito"
+        trip.closed_at = None
+
+        # 4. Magia de Reversa: Buscar la factura generada y destruirla (si no la han cobrado)
+        cxc = (
+            db.query(models.ReceivableInvoice)
+            .filter(models.ReceivableInvoice.viaje_id == trip.id)
+            .first()
+        )
+        if cxc:
+            # Regla de negocio: Si Tesorería ya le registró un pago, prohibimos deshacer
+            if cxc.saldo_pendiente < cxc.monto_total:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No se puede reabrir la fase. Tesorería ya registró cobros para este viaje. Cancela los pagos primero.",
+                )
+            db.delete(cxc)
+
+    db.commit()
+    return {"message": "Fase reabierta exitosamente. Facturas anuladas."}
 
 
 @router.get("/trips/{trip_id}/carta-porte-ciega")

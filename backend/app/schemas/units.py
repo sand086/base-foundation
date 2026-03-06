@@ -48,7 +48,7 @@ class UnitBase(ORMBase):
     ignore_blocking: bool = False
     documentos_vencidos: int = 0
     llantas_criticas: int = 0
-
+    is_loaded: bool = False
     seguro_vence: Optional[date] = None
     verificacion_humo_vence: Optional[date] = None
     verificacion_fisico_mecanica_vence: Optional[date] = None
@@ -150,6 +150,7 @@ class UnitUpdate(ORMBase):
     numero_serie_motor: Optional[str] = None
     marca_motor: Optional[str] = None
     capacidad_carga: Optional[float] = None
+    is_loaded: Optional[bool] = None
 
     status: Optional[UnitStatus] = None
     razon_bloqueo: Optional[str] = Field(default=None, max_length=255)

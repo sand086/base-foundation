@@ -106,8 +106,14 @@ export default function FlotaUnidades() {
   const navigate = useNavigate();
 
   // Hook de gestión de datos
-  const { unidades, isLoading, createUnit, updateUnit, deleteUnit } =
-    useUnits();
+  const {
+    unidades,
+    isLoading,
+    createUnit,
+    updateUnit,
+    deleteUnit,
+    updateLoadStatus,
+  } = useUnits();
 
   // Estados locales
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -291,6 +297,46 @@ export default function FlotaUnidades() {
         ),
       },
       {
+        key: "is_loaded",
+        header: "Estado Físico (Patio)",
+        render: (_, row) => {
+          const esChasis = ["remolque", "chasis", "caja"].some(
+            (t) =>
+              row.tipo?.toLowerCase().includes(t) ||
+              row.tipo_1?.toLowerCase().includes(t),
+          );
+
+          if (!esChasis)
+            return (
+              <span className="text-xs text-slate-400 italic">Tracto</span>
+            );
+
+          return (
+            <div className="flex items-center gap-3">
+              <Switch
+                checked={row.is_loaded}
+                onCheckedChange={async (checked) => {
+                  const success = await updateLoadStatus(row.id, checked); // 🚀 Uso directo
+                  if (success) {
+                    toast.success(
+                      `Unidad ${row.numero_economico} actualizada`,
+                      {
+                        description: checked
+                          ? "Chasis Cargado"
+                          : "Chasis Vacío",
+                      },
+                    );
+                  }
+                }}
+              />
+              <Badge variant={row.is_loaded ? "default" : "secondary"}>
+                {row.is_loaded ? "📦 CARGADO" : "➖ VACÍO"}
+              </Badge>
+            </div>
+          );
+        },
+      },
+      {
         key: "id",
         header: "Acciones",
         sortable: false,
@@ -337,7 +383,7 @@ export default function FlotaUnidades() {
         ),
       },
     ],
-    [navigate, updateUnit],
+    [updateLoadStatus, navigate],
   );
 
   if (isLoading)

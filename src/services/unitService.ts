@@ -1,40 +1,6 @@
 import axiosClient from "@/api/axiosClient";
 // Asegúrate de importar la interfaz base correcta
-import { Unit } from "@/types/api.types";
-
-// --- Interfaces Extendidas ---
-// Definimos los tipos para las llantas y documentos aquí para reutilizarlos
-export interface UnitDocument {
-  key: string;
-  name: string;
-  url?: string;
-  estatus: "vigente" | "próximo" | "vencido";
-  vencimiento: string;
-  obligatorio: boolean;
-}
-
-export interface UnitTire {
-  id: number;
-  codigo_interno: string;
-  marca?: string;
-  modelo?: string;
-  medida?: string;
-  dot?: string;
-  unit_id?: number | null;
-  posicion?: string;
-  estado: string;
-  estado_fisico: string;
-  profundidad_actual: number;
-  profundidad_original: number;
-  km_recorridos: number;
-  fecha_compra?: string;
-  precio_compra?: number;
-  costo_acumulado?: number;
-  proveedor?: string;
-  unidad_actual_id?: number | null;
-  unidad_actual_economico?: string | null;
-  historial?: any[];
-}
+import { Unit, UnitDocument, UnitTire } from "@/types/api.types";
 
 export interface UnidadDetalle extends Unit {
   documents: UnitDocument[];
@@ -113,6 +79,17 @@ export const unitService = {
   // CAMBIO: Usamos 'id' y tipamos el array de llantas
   updateTires: async (id: number, tires: UnitTire[]) => {
     const response = await axiosClient.put(`/units/${id}/tires`, tires);
+    return response.data;
+  },
+
+  updateLoadStatus: async (id: number, isLoaded: boolean) => {
+    const response = await axiosClient.patch<Unit>(
+      `/units/${id}/load-status`,
+      null,
+      {
+        params: { load_status: isLoaded },
+      },
+    );
     return response.data;
   },
 };

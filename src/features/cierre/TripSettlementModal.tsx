@@ -10,11 +10,11 @@ import {
   ArrowDownCircle,
   ArrowUpCircle,
   Plus,
-  Award,
   Calculator,
   Percent,
   Loader2,
   CheckCircle,
+  Gauge,
 } from "lucide-react";
 
 import {
@@ -41,6 +41,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 import type { Trip, TripLeg } from "@/types/api.types";
 import axiosClient from "@/api/axiosClient";
+import { useTrips } from "@/hooks/useTrips"; // 🚀 Importar Hook de bitácora
 
 interface ConceptoExtra {
   id: string;
@@ -62,17 +63,25 @@ export function TripSettlementModal({
   leg,
   tripPadre,
 }: TripSettlementModalProps) {
+  const { addTimelineEvent } = useTrips();
+
   // ==========================================
-  // ESTADOS DE CÁLCULO (Opción A y B)
+  // ESTADOS DE CÁLCULO
   // ==========================================
   const [calcMode, setCalcMode] = useState<"percentage" | "fixed">(
     "percentage",
   );
-  const [porcentajeFlete, setPorcentajeFlete] = useState<number>(15); // Default 15%
+  const [porcentajeFlete, setPorcentajeFlete] = useState<number>(15);
   const [montoFijo, setMontoFijo] = useState<number>(0);
 
   // ==========================================
-  // ESTADOS DE CONCEPTOS MANUALES
+  // 🚀 LÓGICA DE GUSTAVO: ODÓMETRO
+  // ==========================================
+  const [odometroFinal, setOdometroFinal] = useState<string>("");
+  const isRoadLeg = leg?.leg_type === "ruta_carretera";
+
+  // ==========================================
+  // CONCEPTOS MANUALES
   // ==========================================
   const [conceptosExtra, setConceptosExtra] = useState<ConceptoExtra[]>([]);
   const [showAddConceptoDialog, setShowAddConceptoDialog] = useState(false);
@@ -81,49 +90,41 @@ export function TripSettlementModal({
   >("ingreso");
   const [newConceptoDesc, setNewConceptoDesc] = useState("");
   const [newConceptoAmount, setNewConceptoAmount] = useState("");
-
   const [isAnimating, setIsAnimating] = useState(false);
 
-  // Limpiar el modal cada vez que se abre con un tramo nuevo
   useEffect(() => {
     if (open) {
       setConceptosExtra([]);
       setPorcentajeFlete(15);
       setMontoFijo(0);
       setCalcMode("percentage");
+      setOdometroFinal(""); // Limpiar siempre al abrir
     }
   }, [open, leg]);
 
-  // ==========================================
-  // CÁLCULOS FINANCIEROS
-  // ==========================================
   const liquidacion = useMemo(() => {
     if (!tripPadre || !leg) return null;
 
-    // a) PAGO BASE
     let pagoBaseBruto = 0;
     if (calcMode === "percentage") {
-      pagoBaseBruto = (tripPadre.tarifa_base * porcentajeFlete) / 100;
+      pagoBaseBruto = ((tripPadre.tarifa_base || 0) * porcentajeFlete) / 100;
     } else {
       pagoBaseBruto = montoFijo;
     }
 
-    // b) INGRESOS
     const bonosAdicionales = conceptosExtra
       .filter((c) => c.tipo === "ingreso")
       .reduce((sum, c) => sum + c.monto, 0);
     const totalIngresos = pagoBaseBruto + bonosAdicionales;
 
-    // c) DEDUCCIONES (Descuenta Viáticos Automáticamente)
     const deduccionViaticos = leg.anticipo_viaticos || 0;
     const otrosAnticipos = leg.otros_anticipos || 0;
     const deduccionesManuales = conceptosExtra
       .filter((c) => c.tipo === "deduccion")
       .reduce((sum, c) => sum + c.monto, 0);
+
     const totalDeducciones =
       deduccionViaticos + otrosAnticipos + deduccionesManuales;
-
-    // d) NETO
     const netoAPagar = totalIngresos - totalDeducciones;
 
     return {
@@ -138,9 +139,6 @@ export function TripSettlementModal({
     };
   }, [tripPadre, leg, calcMode, porcentajeFlete, montoFijo, conceptosExtra]);
 
-  // ==========================================
-  // HANDLERS
-  // ==========================================
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat("es-MX", {
       style: "currency",
@@ -150,7 +148,7 @@ export function TripSettlementModal({
   const handleAddConcepto = () => {
     const amount = parseFloat(newConceptoAmount);
     if (isNaN(amount) || amount <= 0) {
-      toast.error("Ingresa un monto válido mayor a 0");
+      toast.error("Ingresa un monto válido");
       return;
     }
     const newConcepto: ConceptoExtra = {
@@ -158,56 +156,72 @@ export function TripSettlementModal({
       tipo: newConceptoType,
       descripcion:
         newConceptoDesc.trim() ||
-        (newConceptoType === "ingreso" ? "Bono Extra" : "Descuento Extra"),
+        (newConceptoType === "ingreso" ? "Bono" : "Cargo"),
       monto: amount,
     };
     setConceptosExtra([...conceptosExtra, newConcepto]);
     setShowAddConceptoDialog(false);
     setNewConceptoDesc("");
     setNewConceptoAmount("");
-    toast.success(
-      `${newConceptoType === "ingreso" ? "Bono" : "Descuento"} agregado`,
-    );
   };
 
   const handleLiquidate = async () => {
+    // 🚀 VALIDACIÓN CRÍTICA GUSTAVO: ODÓMETRO
+    if (isRoadLeg) {
+      if (
+        !odometroFinal ||
+        Number(odometroFinal) <= (leg?.odometro_inicial || 0)
+      ) {
+        toast.error("Validación Requerida", {
+          description:
+            "Para viajes de carretera, el odómetro final es obligatorio y debe ser mayor al inicial.",
+        });
+        return;
+      }
+    }
+
     setIsAnimating(true);
 
     try {
-      // 1. Aquí idealmente llamarías a tu endpoint financiero para guardar los montos:
-      await axiosClient.post(`/trips/legs/${leg.id}/settle`, liquidacion);
+      const payload = {
+        ...liquidacion,
+        odometro_final: odometroFinal ? Number(odometroFinal) : null,
+      };
 
-      // 2. Actualizamos el viaje en la Base de Datos para pasarlo a CERRADO
-      // Esto hace que la tarjeta por fin salga del tablero de operaciones.
-      await axiosClient.put(`/trips/${tripPadre.id}`, {
-        status: "cerrado",
-      });
+      await axiosClient.post(`/trips/legs/${leg!.id}/settle`, payload);
+
+      const isLastStep = leg?.leg_type === "entrega_vacio";
+
+      if (isLastStep) {
+        await axiosClient.put(`/trips/${tripPadre!.id}`, { status: "cerrado" });
+      }
+
+      // 🚀 CORRECCIÓN: Mandamos el estatus válido en lugar de "info"
+      await addTimelineEvent(
+        tripPadre!.id,
+        leg!.id,
+        {
+          status: isLastStep ? "cerrado" : tripPadre!.status,
+          location: "Caja General",
+          comments: `LIQUIDACIÓN CERRADA: Fase concluida comercialmente. Se liquidó a ${leg!.operator?.name?.split(" ")[0]} por la cantidad neta de ${formatCurrency(liquidacion?.netoAPagar || 0)}. Odómetro final: ${odometroFinal || "N/A"} km.`,
+        },
+        true,
+      );
 
       toast.success("Liquidación Autorizada y Guardada", {
-        description: `Se registró un saldo de ${formatCurrency(liquidacion?.netoAPagar || 0)} a favor del operador.`,
+        description: `Se registró un saldo a favor de ${leg?.operator?.name}.`,
       });
 
-      // 3. Cerramos el modal
       onOpenChange(false);
-
-      // 4. Forzamos una recarga rápida para que el Kanban/Tabla se actualice y la tarjeta desaparezca
-      setTimeout(() => {
-        window.location.reload();
-      }, 500);
-    } catch (error) {
-      console.error(error);
+      setTimeout(() => window.location.reload(), 500);
+    } catch (error: any) {
       toast.error(
-        "Hubo un error al intentar guardar la liquidación en la base de datos.",
+        error.response?.data?.detail ||
+          "Error al intentar guardar la liquidación.",
       );
     } finally {
       setIsAnimating(false);
     }
-  };
-
-  const legTypeLabels: Record<string, string> = {
-    carga_muelle: "1. Movimiento a Muelle/Carga",
-    ruta_carretera: "2. Ruta en Carretera",
-    entrega_vacio: "3. Retorno de Vacío",
   };
 
   if (!leg || !tripPadre || !liquidacion) return null;
@@ -217,23 +231,67 @@ export function TripSettlementModal({
       <DialogContent className="max-w-5xl p-0 bg-slate-50/80 overflow-hidden">
         <DialogHeader className="p-6 bg-white border-b shadow-sm">
           <DialogTitle className="text-xl font-black text-brand-navy flex items-center gap-2">
-            <FileCheck className="h-6 w-6 text-emerald-600" /> Liquidación de
-            Tramo
+            <FileCheck className="h-6 w-6 text-emerald-600" /> Liquidación
+            Operativa
           </DialogTitle>
           <DialogDescription>
             Calcula el pago de <strong>{leg.operator?.name}</strong> por la fase
-            de <strong>{legTypeLabels[leg.leg_type] || leg.leg_type}</strong>{" "}
-            del viaje <strong>#{tripPadre.public_id || tripPadre.id}</strong>.
+            de <strong>{leg.leg_type.replace("_", " ")}</strong> del viaje{" "}
+            <strong>#{tripPadre.public_id || tripPadre.id}</strong>.
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 p-6 max-h-[80vh] overflow-y-auto">
-          {/* COLUMNA IZQUIERDA: CONFIGURACIÓN DE TARIFA */}
+          {/* COLUMNA IZQUIERDA */}
           <div className="lg:col-span-5 space-y-4">
+            {/* 🚀 CAPTURA DE ODÓMETRO CONDICIONAL */}
+            <Card
+              className={`border-2 shadow-sm ${isRoadLeg ? "border-amber-200 bg-amber-50/30" : "border-slate-200 bg-white"}`}
+            >
+              <CardHeader className="pb-2 pt-4 px-4">
+                <CardTitle className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2">
+                  <Gauge className="h-4 w-4" /> Telemetría de Cierre
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 pb-4">
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-slate-600 flex items-center gap-1">
+                    Odómetro Final del Tramo
+                    {isRoadLeg ? (
+                      <span className="text-red-500 text-lg leading-none">
+                        *
+                      </span>
+                    ) : (
+                      <span className="text-slate-400 font-normal italic">
+                        (Opcional en Patio)
+                      </span>
+                    )}
+                  </Label>
+                  <Input
+                    type="number"
+                    value={odometroFinal}
+                    onChange={(e) => setOdometroFinal(e.target.value)}
+                    placeholder={
+                      isRoadLeg
+                        ? "Ej: 154200"
+                        : "Dejar en blanco si es de patio..."
+                    }
+                    className="font-mono font-bold text-lg"
+                  />
+                  <p className="text-[11px] text-slate-500 font-medium">
+                    Odómetro inicial registrado:{" "}
+                    <strong className="text-brand-navy font-mono">
+                      {leg.odometro_inicial?.toLocaleString() || 0} km
+                    </strong>
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
             <Card className="border-slate-200 shadow-sm">
               <CardHeader className="pb-4">
                 <CardTitle className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2">
-                  <Calculator className="h-4 w-4" /> Esquema de Pago
+                  <Calculator className="h-4 w-4" /> Esquema de Pago al Operador
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -269,7 +327,7 @@ export function TripSettlementModal({
                       </div>
                       <p className="text-xs text-slate-500">
                         {porcentajeFlete}% de{" "}
-                        {formatCurrency(tripPadre.tarifa_base)} ={" "}
+                        {formatCurrency(tripPadre.tarifa_base || 0)} ={" "}
                         <span className="font-bold text-emerald-600">
                           {formatCurrency(liquidacion.pagoBaseBruto)}
                         </span>
@@ -292,32 +350,9 @@ export function TripSettlementModal({
                         />
                         <DollarSign className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
                       </div>
-                      <p className="text-xs text-slate-500">
-                        Ideal para movimientos locales o maniobras de patio.
-                      </p>
                     </div>
                   </TabsContent>
                 </Tabs>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white border-dashed border-2">
-              <CardContent className="p-4 flex items-center gap-3">
-                <div className="h-10 w-10 bg-slate-100 rounded-full flex items-center justify-center shadow-sm">
-                  <User className="h-5 w-5 text-brand-navy" />
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-slate-500 uppercase">
-                    Operador
-                  </p>
-                  <p className="font-black text-brand-navy">
-                    {leg.operator?.name}
-                  </p>
-                  <p className="text-xs text-slate-500 flex items-center gap-1">
-                    <Truck className="h-3 w-3" /> Eco:{" "}
-                    {leg.unit?.numero_economico}
-                  </p>
-                </div>
               </CardContent>
             </Card>
           </div>
@@ -328,7 +363,7 @@ export function TripSettlementModal({
               <CardHeader className="bg-slate-50 border-b pb-4 flex flex-row items-center justify-between">
                 <div>
                   <CardTitle className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2">
-                    <Banknote className="h-4 w-4" /> Resumen de Liquidación
+                    <Banknote className="h-4 w-4" /> Recibo de Nómina
                   </CardTitle>
                 </div>
                 <div className="flex gap-2">
@@ -432,7 +467,7 @@ export function TripSettlementModal({
                   </div>
                   <Button
                     size="lg"
-                    className="bg-emerald-500 hover:bg-emerald-400 text-brand-navy font-bold"
+                    className="bg-emerald-500 hover:bg-emerald-400 text-brand-navy font-bold shadow-md"
                     disabled={isAnimating}
                     onClick={handleLiquidate}
                   >
@@ -441,7 +476,7 @@ export function TripSettlementModal({
                     ) : (
                       <CheckCircle className="h-4 w-4 mr-2" />
                     )}
-                    {isAnimating ? "Guardando..." : "Cerrar Pago"}
+                    {isAnimating ? "Procesando..." : "AUTORIZAR Y CERRAR"}
                   </Button>
                 </div>
               </CardContent>
@@ -450,7 +485,6 @@ export function TripSettlementModal({
         </div>
       </DialogContent>
 
-      {/* Sub-modal de Conceptos */}
       <Dialog
         open={showAddConceptoDialog}
         onOpenChange={setShowAddConceptoDialog}
@@ -495,11 +529,11 @@ export function TripSettlementModal({
               onClick={handleAddConcepto}
               className={
                 newConceptoType === "ingreso"
-                  ? "bg-emerald-600 hover:bg-emerald-700"
-                  : "bg-rose-600 hover:bg-rose-700"
+                  ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                  : "bg-rose-600 hover:bg-rose-700 text-white"
               }
             >
-              Guardar
+              Agregar Concepto
             </Button>
           </DialogFooter>
         </DialogContent>

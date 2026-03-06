@@ -71,6 +71,39 @@ export interface Unit {
   tarjeta_circulacion_folio?: string | null;
   created_at?: string;
   updated_at?: string;
+  is_loaded?: boolean;
+}
+
+export interface UnitDocument {
+  key: string;
+  name: string;
+  url?: string;
+  estatus: "vigente" | "próximo" | "vencido";
+  vencimiento: string;
+  obligatorio: boolean;
+}
+
+export interface UnitTire {
+  id: number;
+  codigo_interno: string;
+  marca?: string;
+  modelo?: string;
+  medida?: string;
+  dot?: string;
+  unit_id?: number | null;
+  posicion?: string;
+  estado: string;
+  estado_fisico: string;
+  profundidad_actual: number;
+  profundidad_original: number;
+  km_recorridos: number;
+  fecha_compra?: string;
+  precio_compra?: number;
+  costo_acumulado?: number;
+  proveedor?: string;
+  unidad_actual_id?: number | null;
+  unidad_actual_economico?: string | null;
+  historial?: any[];
 }
 
 export interface Operator {
@@ -463,6 +496,11 @@ export interface Trip {
 
   tarifa_base: number;
   costo_casetas: number;
+
+  descripcion_mercancia: string; // "Clave - Descripción" del SAT
+  peso_toneladas: number;
+  es_material_peligroso: boolean;
+  clase_imo?: string | null;
 
   start_date: string;
   closed_at?: string | null;

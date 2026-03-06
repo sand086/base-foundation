@@ -54,6 +54,7 @@ import {
 } from "@/components/ui/data-table";
 
 import { useTrips } from "@/hooks/useTrips";
+import { useUnits } from "@/hooks/useUnits";
 import { Trip, TripLeg, TripStatus } from "@/types/api.types";
 
 import {
@@ -63,12 +64,12 @@ import {
 import { TripSettlementModal } from "@/features/cierre/TripSettlementModal";
 import { NextLegModal } from "@/features/despacho/NextLegModal";
 import { TripDetailsModal } from "@/features/despacho/TripDetailsModal";
+import { toast } from "sonner";
 
 // =====================
 // Interfaces & Helpers
 // =====================
 
-// 🚀 LÓGICA GUSTAVO: Solo 3 columnas. Las incidencias viven dentro de "en_transito".
 type KanbanColumnId = "creado" | "en_transito" | "entregado";
 
 interface KanbanItem {
@@ -89,32 +90,80 @@ const isColumnId = (id: unknown): id is KanbanColumnId =>
 const groupKeyFromStatus = (rawStatus: unknown): KanbanColumnId | null => {
   const s = normalizeStatus(rawStatus);
   if (s === "creado") return "creado";
-  // 🚨 GUSTAVO UX: Retrasos y detenidos NO tienen columna propia. Se quedan en tránsito.
   if (["en_transito", "detenido", "retraso", "accidente"].includes(s))
     return "en_transito";
   if (["entregado", "cerrado"].includes(s)) return "entregado";
   return null;
 };
 
-const getStatusColor = (status: unknown) => {
-  const s = normalizeStatus(status);
-  switch (s) {
-    case "creado":
-      return "bg-slate-100 text-slate-700";
-    case "en_transito":
-      return "bg-blue-100 text-blue-700";
-    case "detenido":
-    case "retraso":
-    case "accidente":
-      return "bg-red-100 text-red-700 border-red-200"; // Rojo para incidencias
-    case "entregado":
-    case "cerrado":
-      return "bg-emerald-100 text-emerald-700";
-    default:
-      return "bg-gray-100 text-gray-700";
-  }
-};
+// 🚀 Helper: Estatus Operativos Reales (Inteligente por Fase)
+const getOperationalStatusBadge = (leg: TripLeg) => {
+  const status = normalizeStatus(leg.status);
 
+  // 1. CASOS CUANDO YA LLEGARON (ENTREGADO)
+  if (status === "entregado" && leg.leg_type === "carga_muelle") {
+    return (
+      <Badge className="bg-orange-500 text-white shadow-sm border-0">
+        📦 CARGADO EN PATIO
+      </Badge>
+    );
+  }
+  if (status === "entregado" && leg.leg_type === "ruta_carretera") {
+    return (
+      <Badge className="bg-blue-400 text-white shadow-sm border-0">
+        ⏳ VACÍO EN PATIO
+      </Badge>
+    );
+  }
+  if (status === "entregado" && leg.leg_type === "entrega_vacio") {
+    return (
+      <Badge className="bg-emerald-600 text-white shadow-sm border-0">
+        🏁 FINALIZADO
+      </Badge>
+    );
+  }
+
+  // 2. CASOS CUANDO ESTÁN EN MOVIMIENTO (EN TRÁNSITO)
+  if (status === "en_transito") {
+    if (leg.leg_type === "carga_muelle") {
+      return (
+        <Badge className="bg-sky-600 text-white shadow-sm border-0">
+          🚜 OPERANDO EN MUELLE
+        </Badge>
+      );
+    }
+    if (leg.leg_type === "ruta_carretera") {
+      return (
+        <Badge className="bg-blue-600 text-white shadow-sm border-0">
+          🚚 EN CARRETERA
+        </Badge>
+      );
+    }
+    if (leg.leg_type === "entrega_vacio") {
+      return (
+        <Badge className="bg-indigo-500 text-white shadow-sm border-0">
+          🔄 RETORNANDO VACÍO
+        </Badge>
+      );
+    }
+  }
+
+  // 3. INCIDENCIAS
+  if (["detenido", "retraso", "accidente"].includes(status)) {
+    return (
+      <Badge className="bg-red-600 text-white shadow-sm border-0 uppercase animate-pulse">
+        <AlertCircle className="h-3 w-3 mr-1" /> {status}
+      </Badge>
+    );
+  }
+
+  // 4. OTROS (Creado, Cerrado, etc)
+  return (
+    <Badge variant="outline" className="uppercase">
+      {status.replace("_", " ")}
+    </Badge>
+  );
+};
 const isIncidentStatus = (status: unknown) => {
   const s = normalizeStatus(status);
   return ["detenido", "retraso", "accidente"].includes(s);
@@ -157,12 +206,6 @@ const KANBAN_COLUMNS: Array<{
     text: "text-emerald-700",
   },
 ];
-
-const legTypeLabels: Record<string, string> = {
-  carga_muelle: "1. CARGA EN MUELLE",
-  ruta_carretera: "2. RUTA CARRETERA",
-  entrega_vacio: "3. RETORNO VACÍO",
-};
 
 const legTypeShort: Record<string, string> = {
   carga_muelle: "F1: CARGA",
@@ -212,7 +255,6 @@ function KanbanCard({
       {...attributes}
       className="cursor-grab active:cursor-grabbing group relative"
     >
-      {/* BOTONERA FLOTANTE (REDUCIDA Y ENFOCADA) */}
       <div className="absolute -top-3 -right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all duration-200 bg-white shadow-md border border-slate-200 rounded-lg p-1 z-10 translate-y-1 group-hover:translate-y-0">
         <button
           type="button"
@@ -289,7 +331,7 @@ function KanbanCard({
                 {legTypeShort[leg.leg_type] || "TRAMO"}
               </span>
               {isIncident && (
-                <span className="text-[9px] font-bold text-red-600 flex items-center gap-1 animate-pulse">
+                <span className="text-[9px] font-bold text-red-600 flex items-center gap-1 ">
                   <AlertCircle className="h-3 w-3" /> INCIDENCIA
                 </span>
               )}
@@ -326,7 +368,6 @@ function KanbanCard({
             </div>
           </div>
 
-          {/* BADGES EQUIPOS GLOBALES */}
           {(tripPadre.remolque_1_id ||
             tripPadre.dolly_id ||
             tripPadre.remolque_2_id) && (
@@ -427,50 +468,63 @@ function KanbanColumn({
 // MAIN COMPONENT
 // =====================
 export const TripPlanner = () => {
-  const { trips, loading, updateTripStatus, addTimelineEvent, deleteTrip } =
-    useTrips();
+  const {
+    trips,
+    loading,
+    updateTripStatus,
+    addTimelineEvent,
+    deleteTrip,
+    createNextLeg,
+  } = useTrips();
 
-  // 🚀 VISTA PRINCIPAL ES TABLA AHORA
   const [viewMode, setViewMode] = useState<"table" | "kanban">("table");
 
-  // El ÚNICO modal principal es el Centro de Mando
+  // Modales Principales
   const [tripToView, setTripToView] = useState<Trip | null>(null);
 
-  // Modales Secundarios (Acciones directas)
-  const [selectedTripPadre, setSelectedTripPadre] = useState<Trip | null>(null);
-  const [updateModalOpen, setUpdateModalOpen] = useState(false);
-  const [tripToDelete, setTripToDelete] = useState<Trip | null>(null);
+  const { updateLoadStatus } = useUnits();
 
+  // Modal Bitácora
+  const [selectedTripPadre, setSelectedTripPadre] = useState<Trip | null>(null);
+  const [selectedLegToUpdate, setSelectedLegToUpdate] =
+    useState<TripLeg | null>(null);
+  const [updateModalOpen, setUpdateModalOpen] = useState(false);
+
+  // Otros Modales
+
+  const [tripToDelete, setTripToDelete] = useState<Trip | null>(null);
   const [legToSettle, setLegToSettle] = useState<{
     leg: TripLeg;
     tripPadre: Trip;
   } | null>(null);
-
   const [legToRelay, setLegToRelay] = useState<{
     leg: TripLeg;
     tripPadre: Trip;
   } | null>(null);
-
-  const { createNextLeg } = useTrips();
-
   const handleNextLegSubmit = async (tripId: string, payload: any) => {
     const res = await createNextLeg(tripId, payload);
     return !!res;
   };
+
+  React.useEffect(() => {
+    if (tripToView) {
+      // Cuando trips cambia (porque liquidaste o reabriste), busca la nueva versión
+      const updatedTrip = trips.find((t) => t.id === tripToView.id);
+      if (updatedTrip) {
+        setTripToView(updatedTrip); // Le inyecta los datos nuevos al modal abierto
+      }
+    }
+  }, [trips]);
 
   const safeTrips = Array.isArray(trips) ? trips : [];
 
   const allActiveLegs = useMemo(() => {
     const items: KanbanItem[] = [];
     for (const trip of safeTrips) {
+      if (trip.status === "cerrado") continue;
+
       if (trip.legs && trip.legs.length > 0) {
-        let activeLeg = trip.legs.find(
-          (leg) => leg.status !== "entregado" && leg.status !== "cerrado",
-        );
-        if (!activeLeg) {
-          const sortedLegs = [...trip.legs].sort((a, b) => b.id - a.id);
-          activeLeg = sortedLegs[0];
-        }
+        const activeLeg = trip.legs.find((leg) => leg.status !== "cerrado");
         if (activeLeg) {
           items.push({ leg: activeLeg, tripPadre: trip });
         }
@@ -483,7 +537,7 @@ export const TripPlanner = () => {
     const groups: Record<KanbanColumnId, KanbanItem[]> = {
       creado: [],
       en_transito: [],
-      entregado: [], // 🚀 Adiós columna de detenidos
+      entregado: [],
     };
     for (const item of allActiveLegs) {
       const key = groupKeyFromStatus(item.leg.status);
@@ -526,17 +580,62 @@ export const TripPlanner = () => {
     );
   };
 
+  // 🚀 FUNCIÓN QUE GUARDA EN LA BITÁCORA DEL TRAMO
   const handleSaveStatusEvent = async (data: StatusUpdateData) => {
     if (!selectedTripPadre) return;
-    const ok = await addTimelineEvent(String(selectedTripPadre.id), {
-      status: data.status,
-      location: data.location,
-      comments: data.comments,
-      lat: data.lat,
-      lng: data.lng,
-      notifyClient: data.notifyClient,
-    });
-    if (ok) setUpdateModalOpen(false);
+
+    const activeLeg =
+      selectedLegToUpdate ||
+      selectedTripPadre.legs?.find((l) => l.status !== "cerrado") ||
+      selectedTripPadre.legs?.[selectedTripPadre.legs.length - 1];
+
+    if (!activeLeg) {
+      toast.error(
+        "Error: No se encontró una fase activa para registrar la novedad.",
+      );
+      return;
+    }
+
+    const ok = await addTimelineEvent(
+      String(selectedTripPadre.id),
+      activeLeg.id,
+      {
+        status: data.status,
+        location: data.location,
+        comments: data.comments,
+        lat: data.lat,
+        lng: data.lng,
+        notifyClient: data.notifyClient,
+      },
+    );
+    if (ok) {
+      setUpdateModalOpen(false);
+
+      if (data.status === "entregado") {
+        toast.success(
+          "Viaje reportado como Entregado. Ya puedes liquidar esta fase.",
+        );
+
+        // 🚀 MAGIA AUTOMÁTICA: Si es el fin del viaje (Entrega de vacío), el chasis se vacía automáticamente
+        if (activeLeg.leg_type === "entrega_vacio") {
+          if (selectedTripPadre.remolque_1_id) {
+            await updateLoadStatus(selectedTripPadre.remolque_1_id, false); // False = Vacío
+          }
+          if (selectedTripPadre.remolque_2_id) {
+            await updateLoadStatus(selectedTripPadre.remolque_2_id, false);
+          }
+          toast.success(
+            "El viaje concluyó. Remolques marcados como VACÍOS automáticamente.",
+          );
+        }
+      }
+    }
+  };
+
+  const openUpdateStatusModal = (trip: Trip, leg?: TripLeg) => {
+    setSelectedTripPadre(trip);
+    setSelectedLegToUpdate(leg || null);
+    setUpdateModalOpen(true);
   };
 
   if (loading)
@@ -590,18 +689,19 @@ export const TripPlanner = () => {
                 items={groupedLegs[column.id] || []}
                 onOpenCommandCenter={setTripToView}
                 onDeleteClick={setTripToDelete}
-                onSettleClick={(leg: TripLeg, trip: Trip) =>
-                  setLegToSettle({ leg, tripPadre: trip })
-                }
-                onRelayClick={(leg: TripLeg, trip: Trip) =>
-                  setLegToRelay({ leg, tripPadre: trip })
-                }
+                onRelayClick={(leg, tripPadre) => {
+                  setLegToRelay({ leg, tripPadre });
+                  // setTripToView(null); 🚀 BORRAMOS ESTO PARA NO CERRAR EL MODAL
+                }}
+                onSettleClick={(leg, tripPadre) => {
+                  setLegToSettle({ leg, tripPadre });
+                  // setTripToView(null); 🚀 BORRAMOS ESTO PARA NO CERRAR EL MODAL
+                }}
               />
             ))}
           </div>
         </DndContext>
       ) : (
-        /* 🚀 VISTA DE TABLA DETALLADA */
         <Card className="border-none shadow-lg rounded-2xl overflow-hidden bg-white">
           <CardContent className="p-0">
             <DataTable>
@@ -662,14 +762,14 @@ export const TripPlanner = () => {
                           </div>
                         </DataTableCell>
                         <DataTableCell>
-                          <div className="flex flex-col">
+                          <div className="flex flex-col items-start">
                             <Badge
                               variant="outline"
-                              className="w-fit bg-white text-primary border-primary/20 font-bold mb-1"
+                              className="w-fit bg-white text-brand-navy border-brand-navy/20 font-black mb-1 text-[10px]"
                             >
-                              {legTypeLabels[leg.leg_type] || leg.leg_type}
+                              {legTypeShort[leg.leg_type] || leg.leg_type}
                             </Badge>
-                            <span className="text-xs text-slate-500 font-medium ml-1">
+                            <span className="text-[11px] text-slate-500 font-bold uppercase">
                               {tripPadre.route_name || "Ruta Estándar"}
                             </span>
                           </div>
@@ -695,26 +795,6 @@ export const TripPlanner = () => {
                             <div className="flex items-center gap-1.5 text-xs font-bold text-brand-navy">
                               <Truck className="h-3.5 w-3.5 text-slate-400" />{" "}
                               {leg.unit?.numero_economico || "Sin Unidad"}
-                              {(tripPadre.remolque_1_id ||
-                                tripPadre.remolque_2_id) && (
-                                <div className="flex gap-1 ml-2">
-                                  {tripPadre.remolque_1_id && (
-                                    <span className="bg-slate-100 text-slate-500 px-1 rounded text-[9px] border">
-                                      R1
-                                    </span>
-                                  )}
-                                  {tripPadre.dolly_id && (
-                                    <span className="bg-blue-50 text-blue-600 px-1 rounded text-[9px] border border-blue-200">
-                                      D
-                                    </span>
-                                  )}
-                                  {tripPadre.remolque_2_id && (
-                                    <span className="bg-slate-100 text-slate-500 px-1 rounded text-[9px] border">
-                                      R2
-                                    </span>
-                                  )}
-                                </div>
-                              )}
                             </div>
                             <div className="flex items-center gap-1.5 text-xs font-medium text-slate-600">
                               <User className="h-3.5 w-3.5 text-slate-400" />{" "}
@@ -724,17 +804,8 @@ export const TripPlanner = () => {
                         </DataTableCell>
                         <DataTableCell className="text-center">
                           <div className="flex flex-col items-center justify-center gap-1">
-                            <Badge
-                              className={`${getStatusColor(leg.status)} border border-black/5 uppercase text-[10px] tracking-wider px-3 py-1 shadow-sm`}
-                            >
-                              {normalizeStatus(leg.status).replace("_", " ")}
-                            </Badge>
-                            {isIncident && (
-                              <span className="text-[9px] font-bold text-red-600 flex items-center gap-1 animate-pulse mt-1">
-                                <AlertCircle className="h-3 w-3" /> ATENCIÓN
-                                REQUERIDA
-                              </span>
-                            )}
+                            {/* 🚀 EL BADGE OPERATIVO (Cargado en Patio, etc) */}
+                            {getOperationalStatusBadge(leg)}
                           </div>
                         </DataTableCell>
                         <DataTableCell className="text-right pr-4">
@@ -752,7 +823,6 @@ export const TripPlanner = () => {
                               align="end"
                               className="w-56 rounded-xl p-1 shadow-xl"
                             >
-                              {/* 🚀 EL ÚNICO BOTÓN MAESTRO DE NAVEGACIÓN */}
                               <DropdownMenuItem
                                 onClick={() => setTripToView(tripPadre)}
                                 className="rounded-lg cursor-pointer py-2"
@@ -762,9 +832,7 @@ export const TripPlanner = () => {
                                   Abrir Centro de Mando
                                 </span>
                               </DropdownMenuItem>
-
                               <DropdownMenuSeparator className="my-1" />
-
                               <DropdownMenuItem
                                 onClick={() =>
                                   setLegToRelay({ leg, tripPadre })
@@ -776,7 +844,6 @@ export const TripPlanner = () => {
                                   Desenganchar / Relevo
                                 </span>
                               </DropdownMenuItem>
-
                               {leg.status === "entregado" && (
                                 <DropdownMenuItem
                                   onClick={() =>
@@ -790,7 +857,6 @@ export const TripPlanner = () => {
                                   </span>
                                 </DropdownMenuItem>
                               )}
-
                               <DropdownMenuSeparator className="my-1" />
                               <DropdownMenuItem
                                 onClick={() => setTripToDelete(tripPadre)}
@@ -815,10 +881,9 @@ export const TripPlanner = () => {
       )}
 
       {/* ======================================= */}
-      {/* 🚀 MODALES GLOBALES (Solo los necesarios) */}
+      {/* MODALES GLOBALES */}
       {/* ======================================= */}
 
-      {/* MODAL 1: ACTUALIZACIÓN DE ESTATUS (Llamado desde el Centro de Mando) */}
       {selectedTripPadre && (
         <UpdateStatusModal
           open={updateModalOpen}
@@ -826,11 +891,11 @@ export const TripPlanner = () => {
           serviceId={
             selectedTripPadre.public_id || String(selectedTripPadre.id)
           }
+          activeLeg={selectedLegToUpdate || undefined} // 🚀 Pasamos el tramo activo
           onSubmit={handleSaveStatusEvent}
         />
       )}
 
-      {/* MODAL 2: ELIMINAR */}
       <Dialog
         open={!!tripToDelete}
         onOpenChange={(open) => !open && setTripToDelete(null)}
@@ -870,7 +935,6 @@ export const TripPlanner = () => {
         </DialogContent>
       </Dialog>
 
-      {/* MODAL 3: DESENGANCHE RÁPIDO */}
       <NextLegModal
         open={!!legToRelay}
         onOpenChange={(open) => !open && setLegToRelay(null)}
@@ -878,7 +942,6 @@ export const TripPlanner = () => {
         onSubmit={handleNextLegSubmit}
       />
 
-      {/* MODAL 4: LIQUIDACIÓN */}
       <TripSettlementModal
         open={!!legToSettle}
         onOpenChange={(open) => !open && setLegToSettle(null)}
@@ -886,28 +949,21 @@ export const TripPlanner = () => {
         tripPadre={legToSettle?.tripPadre || null}
       />
 
-      {/* 🚀 MODAL MAESTRO: CENTRO DE MANDO */}
+      {/* MODAL MAESTRO */}
       <TripDetailsModal
         open={!!tripToView}
         onOpenChange={(open) => !open && setTripToView(null)}
         trip={tripToView}
-        onIncidentClick={(trip) => {
-          setSelectedTripPadre(trip);
-          setUpdateModalOpen(true);
-          setTripToView(null);
-        }}
+        onIncidentClick={(trip) => openUpdateStatusModal(trip)}
         onRelayClick={(leg, tripPadre) => {
           setLegToRelay({ leg, tripPadre });
-          setTripToView(null);
+          // setTripToView(null); 🚀 BORRAMOS ESTO PARA NO CERRAR EL MODAL
         }}
         onSettleClick={(leg, tripPadre) => {
           setLegToSettle({ leg, tripPadre });
-          setTripToView(null);
+          // setTripToView(null); 🚀 BORRAMOS ESTO PARA NO CERRAR EL MODAL
         }}
-        onUpdateStatusClick={(trip) => {
-          setSelectedTripPadre(trip);
-          setUpdateModalOpen(true);
-        }}
+        onUpdateStatusClick={(trip, leg) => openUpdateStatusModal(trip, leg)}
       />
     </div>
   );
