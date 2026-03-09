@@ -60,17 +60,44 @@ export const getEstadoBadge = (
   }
 };
 
-// Tire positions for trucks (Esto se mantiene igual)
+// 🚀 ACTUALIZADO: Posiciones numéricas para mapear directamente con el diagrama SVG y la BD
 export const TIRE_POSITIONS = [
-  { id: "e1-izq", label: "Eje 1 Izquierda", eje: 1, lado: "izquierda" },
-  { id: "e1-der", label: "Eje 1 Derecha", eje: 1, lado: "derecha" },
-  { id: "e2-izq", label: "Eje 2 Izquierda", eje: 2, lado: "izquierda" },
-  { id: "e2-der", label: "Eje 2 Derecha", eje: 2, lado: "derecha" },
-  { id: "e3-izq-ext", label: "Eje 3 Izquierda Ext", eje: 3, lado: "izquierda" },
-  { id: "e3-izq-int", label: "Eje 3 Izquierda Int", eje: 3, lado: "izquierda" },
-  { id: "e3-der-int", label: "Eje 3 Derecha Int", eje: 3, lado: "derecha" },
-  { id: "e3-der-ext", label: "Eje 3 Derecha Ext", eje: 3, lado: "derecha" },
-  { id: "repuesto", label: "Repuesto", eje: 0, lado: "repuesto" },
+  { id: 1, label: "Posición 1 (Direccional Izq)", eje: 1, lado: "izquierda" },
+  { id: 2, label: "Posición 2 (Direccional Der)", eje: 1, lado: "derecha" },
+  {
+    id: 3,
+    label: "Posición 3 (Tracción 1 Izq Ext)",
+    eje: 2,
+    lado: "izquierda",
+  },
+  {
+    id: 4,
+    label: "Posición 4 (Tracción 1 Izq Int)",
+    eje: 2,
+    lado: "izquierda",
+  },
+  { id: 5, label: "Posición 5 (Tracción 1 Der Int)", eje: 2, lado: "derecha" },
+  { id: 6, label: "Posición 6 (Tracción 1 Der Ext)", eje: 2, lado: "derecha" },
+  {
+    id: 7,
+    label: "Posición 7 (Tracción 2 Izq Ext)",
+    eje: 3,
+    lado: "izquierda",
+  },
+  {
+    id: 8,
+    label: "Posición 8 (Tracción 2 Izq Int)",
+    eje: 3,
+    lado: "izquierda",
+  },
+  { id: 9, label: "Posición 9 (Tracción 2 Der Int)", eje: 3, lado: "derecha" },
+  {
+    id: 10,
+    label: "Posición 10 (Tracción 2 Der Ext)",
+    eje: 3,
+    lado: "derecha",
+  },
+  { id: 0, label: "Repuesto", eje: 0, lado: "repuesto" }, // 0 para llanta de refacción
 ];
 
 export type TireHistoryEventType =
@@ -91,7 +118,7 @@ export interface TireHistoryEvent {
   descripcion: string;
   unidad?: string;
   unidad_economico?: string;
-  posicion?: string;
+  posicion?: number | null; // 🚀 CAMBIO: Ahora es number
   km?: number;
   costo?: number;
   responsable?: string;
@@ -108,7 +135,7 @@ export interface GlobalTire {
   // Ubicación
   unidad_actual_id?: number | null;
   unidad_actual_economico?: string | null;
-  posicion?: string | null;
+  posicion?: number | null; // 🚀 CAMBIO: Ahora es number
 
   // Estado
   estado: "nuevo" | "usado" | "renovado" | "desecho";
@@ -128,7 +155,7 @@ export interface GlobalTire {
 
 export interface AssignTirePayload {
   unit_id: number | null;
-  posicion: string | null;
+  posicion: number | null; // 🚀 CAMBIO: Ahora es number
   notas?: string;
 }
 
@@ -171,8 +198,6 @@ export const tireService = {
   ): Promise<void> => {
     await axiosClient.post(`/tires/${id}/maintenance`, payload);
   },
-
-  // --- NUEVOS MÉTODOS ---
 
   // Actualizar (Editar)
   update: async (id: number, data: any): Promise<GlobalTire> => {

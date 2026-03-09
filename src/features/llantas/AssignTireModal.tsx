@@ -20,8 +20,22 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { ArrowRightLeft, Truck, MapPin, Loader2 } from "lucide-react";
 
-import { GlobalTire, TIRE_POSITIONS } from "@/services/tireService";
-import { useUnits } from "@/hooks/useUnits"; // <--- TU HOOK REAL
+import { GlobalTire } from "@/services/tireService";
+import { useUnits } from "@/hooks/useUnits";
+
+// 🚀 NUEVO MAPEO: IDs numéricos directos para la BD
+const TIRE_POSITIONS = [
+  { id: "1", label: "Posición 1 (Direccional Izq)" },
+  { id: "2", label: "Posición 2 (Direccional Der)" },
+  { id: "3", label: "Posición 3 (Tracción Izq Ext)" },
+  { id: "4", label: "Posición 4 (Tracción Izq Int)" },
+  { id: "5", label: "Posición 5 (Tracción Der Int)" },
+  { id: "6", label: "Posición 6 (Tracción Der Ext)" },
+  { id: "7", label: "Posición 7 (Tracción 2 Izq Ext)" },
+  { id: "8", label: "Posición 8 (Tracción 2 Izq Int)" },
+  { id: "9", label: "Posición 9 (Tracción 2 Der Int)" },
+  { id: "10", label: "Posición 10 (Tracción 2 Der Ext)" },
+];
 
 interface AssignTireModalProps {
   tire: GlobalTire | null;
@@ -30,9 +44,20 @@ interface AssignTireModalProps {
   onAssign: (
     tireId: string,
     unidad: string | null,
-    posicion: string | null,
+    // Ahora es un número (o null si va a almacén)
+    posicion: number | null,
     notas: string,
   ) => void;
+}
+
+function Badge({ className, variant, children }: any) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${className} ${variant === "secondary" ? "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80" : ""}`}
+    >
+      {children}
+    </span>
+  );
 }
 
 export function AssignTireModal({
@@ -41,7 +66,6 @@ export function AssignTireModal({
   onOpenChange,
   onAssign,
 }: AssignTireModalProps) {
-  // 1. Consumir hook de unidades
   const { unidades, isLoading: loadingUnits } = useUnits();
 
   const [selectedUnit, setSelectedUnit] = useState<string>("");
@@ -49,12 +73,10 @@ export function AssignTireModal({
   const [notas, setNotas] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Filtramos unidades (opcional: solo mostrar activas si quisieras)
   const unidadesList = useMemo(() => {
     return unidades || [];
   }, [unidades]);
 
-  // Reset al abrir
   useEffect(() => {
     if (open) {
       setSelectedUnit("");
@@ -70,26 +92,25 @@ export function AssignTireModal({
 
   const handleSubmit = async () => {
     if (selectedUnit === "almacen") {
-      // Enviar a Stock
+      // Desmontaje: Enviar a Stock
       setIsSubmitting(true);
       await onAssign(tire.id.toString(), null, null, notas);
       setIsSubmitting(false);
       onOpenChange(false);
     } else if (selectedUnit && selectedPosition) {
-      // Montar en Unidad
+      // Montaje: Asignar a Unidad
       const unit = unidadesList.find((u) => u.id.toString() === selectedUnit);
-      const position = TIRE_POSITIONS.find((p) => p.id === selectedPosition);
 
       setIsSubmitting(true);
       await onAssign(
         tire.id.toString(),
-        selectedUnit, // Enviamos ID como string, el padre lo parsea
-        position?.label || selectedPosition, // Enviamos el Label ("Eje 1 Izq")
+        selectedUnit,
+        Number(selectedPosition), // 🚀 Enviamos el NÚMERO directo
         notas,
       );
 
       toast.success(
-        `Llanta asignada a ${unit?.numero_economico} en ${position?.label}`,
+        `Llanta asignada a ${unit?.numero_economico} en Posición ${selectedPosition}`,
       );
       setIsSubmitting(false);
       onOpenChange(false);
@@ -120,7 +141,7 @@ export function AssignTireModal({
               </p>
               <p className="text-sm font-medium mt-1">
                 {isCurrentlyMounted
-                  ? `${tire.unidad_actual_economico} - ${tire.posicion}`
+                  ? `${tire.unidad_actual_economico} - Posición ${tire.posicion}` // 🚀 Simplificado
                   : "📦 En Almacén"}
               </p>
             </div>
@@ -164,7 +185,6 @@ export function AssignTireModal({
                   📦 Desmontar / Enviar a Almacén
                 </SelectItem>
 
-                {/* Separador visual */}
                 <div className="h-px bg-muted my-1 mx-2" />
 
                 {unidadesList.map((u) => (
@@ -179,7 +199,7 @@ export function AssignTireModal({
             </Select>
           </div>
 
-          {/* Selector de Posición (Solo si se elige unidad) */}
+          {/* Selector de Posición Numérica */}
           {selectedUnit && selectedUnit !== "almacen" && (
             <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
               <Label className="flex items-center gap-2">
@@ -192,7 +212,7 @@ export function AssignTireModal({
                 disabled={isSubmitting}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar posición..." />
+                  <SelectValue placeholder="Seleccionar posición (1 al 10)..." />
                 </SelectTrigger>
                 <SelectContent>
                   {TIRE_POSITIONS.map((pos) => (
@@ -233,16 +253,5 @@ export function AssignTireModal({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-// Importar Badge localmente si no está global
-function Badge({ className, variant, children }: any) {
-  return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${className} ${variant === "secondary" ? "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80" : ""}`}
-    >
-      {children}
-    </span>
   );
 }

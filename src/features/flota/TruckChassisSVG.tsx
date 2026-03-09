@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Tooltip,
   TooltipContent,
@@ -6,13 +6,15 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-// Interfaz actualizada para coincidir con el JSON de tu API
+// =====================
+// Interfaces
+// =====================
 export interface Tire {
   id?: number | string;
-  posicion?: string; // Ej: "Eje 1 Izq"
+  posicion?: number | string;
   marca?: string;
   modelo?: string;
-  profundidad_actual?: number; // Ej: 15.5
+  profundidad_actual?: number;
   estado?: string;
   estado_fisico?: string;
   codigo_interno?: string;
@@ -20,312 +22,265 @@ export interface Tire {
 
 interface TruckChassisSVGProps {
   tires: Tire[];
-  unitType?: "sencillo" | "full";
+  unitType?: string; // T3, R2, D2, etc.
 }
 
-// Mapeo: Convierte el texto de la BD ("Eje 1 Izq") al ID numérico del SVG (1)
-const POSITION_MAP: Record<string, number> = {
-  "e1-izq": 1,
-  "Eje 1 Izq": 1,
-  "Eje 1 Izquierda": 1,
+// =====================
+// Helpers de Lógica
+// =====================
 
-  "e1-der": 2,
-  "Eje 1 Der": 2,
-  "Eje 1 Derecha": 2,
+// 🚀 Criterio del Mecánico (Opción B): Colores basados en el texto del estado
+const getTireStatusByCondition = (condition: string) => {
+  const cond = condition?.toLowerCase() || "desconocido";
 
-  "e2-izq": 3,
-  "Eje 2 Izq": 3,
-  "Eje 2 Izquierda": 3,
-
-  "e2-der": 4,
-  "Eje 2 Der": 4,
-  "Eje 2 Derecha": 4,
-
-  "e3-izq-ext": 5,
-  "Eje 3 Izq Ext": 5,
-  "Eje 3 Izquierda Ext": 5,
-
-  "e3-izq-int": 6,
-  "Eje 3 Izq Int": 6,
-  "Eje 3 Izquierda Int": 6,
-
-  "e3-der-int": 7,
-  "Eje 3 Der Int": 7,
-  "Eje 3 Derecha Int": 7,
-
-  "e3-der-ext": 8,
-  "Eje 3 Der Ext": 8,
-  "Eje 3 Derecha Ext": 8,
-};
-
-const getTireStatus = (depth: number) => {
-  if (depth < 5) {
-    // Ajustado a tu lógica (antes era 3)
+  if (cond === "mala") {
     return {
       fill: "fill-red-950/50",
       stroke: "stroke-red-500",
       glow: "drop-shadow-[0_0_12px_rgba(239,68,68,0.8)]",
       pulse: "animate-pulse",
-      label: "CRÍTICO",
+      label: "MALA",
       labelColor: "text-red-400",
     };
   }
-  if (depth <= 10) {
-    // Ajustado a tu lógica (antes era 6)
+  if (cond === "regular") {
     return {
       fill: "fill-amber-950/50",
       stroke: "stroke-amber-500",
       glow: "drop-shadow-[0_0_10px_rgba(245,158,11,0.6)]",
       pulse: "",
-      label: "ALERTA",
+      label: "REGULAR",
       labelColor: "text-amber-400",
     };
   }
+  // "buena" u óptima
   return {
     fill: "fill-emerald-950/50",
     stroke: "stroke-emerald-500",
     glow: "drop-shadow-[0_0_8px_rgba(16,185,129,0.5)]",
     pulse: "",
-    label: "ÓPTIMO",
+    label: "BUENA",
     labelColor: "text-emerald-400",
   };
 };
 
+// Limpieza de datos de posición que vienen de la DB
+const getCleanPosition = (pos: any): number | null => {
+  if (pos == null) return null;
+  const strPos = String(pos).trim().toLowerCase();
+  const num = Number(strPos);
+  if (!isNaN(num) && num >= 1 && num <= 12) return num;
+  if (strPos.includes("e1-izq") || strPos.includes("eje 1 izq")) return 1;
+  if (strPos.includes("e1-der") || strPos.includes("eje 1 der")) return 2;
+  return null;
+};
+
+// =====================
+// Componente Principal
+// =====================
 export function TruckChassisSVG({
   tires = [],
-  unitType = "sencillo",
+  unitType = "T3",
 }: TruckChassisSVGProps) {
   const [hoveredTire, setHoveredTire] = useState<string | number | null>(null);
 
-  // Tire positions for the SVG (worm's-eye view - from below)
-  const tirePositions = [
-    { x: 80, y: 60, position: 1 },
-    { x: 220, y: 60, position: 2 },
-    { x: 80, y: 180, position: 3 },
-    { x: 220, y: 180, position: 4 },
-    { x: 65, y: 280, position: 5 },
-    { x: 95, y: 280, position: 6 },
-    { x: 205, y: 280, position: 7 },
-    { x: 235, y: 280, position: 8 },
+  // 🚀 Lógica de Layout Automático
+  // T3 = Tracto (10 llantas), R2/D2 = Remolque/Dolly (8 llantas, sin dirección)
+  const isTrailerOrDolly = unitType === "R2" || unitType === "D2";
+
+  const allPossiblePositions = [
+    { x: 80, y: 60, position: 1, isDirectional: true },
+    { x: 220, y: 60, position: 2, isDirectional: true },
+    { x: 65, y: 180, position: 3 },
+    { x: 95, y: 180, position: 4 },
+    { x: 205, y: 180, position: 5 },
+    { x: 235, y: 180, position: 6 },
+    { x: 65, y: 280, position: 7 },
+    { x: 95, y: 280, position: 8 },
+    { x: 205, y: 280, position: 9 },
+    { x: 235, y: 280, position: 10 },
   ];
 
-  const fullTirePositions =
-    unitType === "full"
-      ? [
-          { x: 65, y: 360, position: 9 },
-          { x: 95, y: 360, position: 10 },
-          { x: 205, y: 360, position: 11 },
-          { x: 235, y: 360, position: 12 },
-        ]
-      : [];
+  // Filtramos las posiciones que realmente se deben dibujar según el tipo de unidad
+  const activePositions = useMemo(() => {
+    if (isTrailerOrDolly) {
+      return allPossiblePositions.filter((p) => !p.isDirectional);
+    }
+    return allPossiblePositions;
+  }, [isTrailerOrDolly]);
 
-  const allTirePositions = [...tirePositions, ...fullTirePositions];
-  const svgHeight = unitType === "full" ? 440 : 360;
+  // Evitamos el "empalme": 1 llanta por hueco físico
+  const drawnTires = useMemo(() => {
+    return activePositions
+      .map((posBox) => {
+        return tires.find(
+          (t) => getCleanPosition(t.posicion) === posBox.position,
+        );
+      })
+      .filter(Boolean) as Tire[];
+  }, [activePositions, tires]);
 
-  // Filtrado seguro para las estadísticas usando profundidad_actual
-  const getDepth = (t: Tire) => t.profundidad_actual ?? 0;
-  const criticalCount = tires.filter(
-    (t) => getDepth(t) > 0 && getDepth(t) < 5,
-  ).length;
-  const alertCount = tires.filter(
-    (t) => getDepth(t) >= 5 && getDepth(t) <= 10,
-  ).length;
-  const optimalCount = tires.filter((t) => getDepth(t) > 10).length;
+  // Contadores basados exclusivamente en lo que se dibujó y en el reporte del mecánico
+  const stats = useMemo(() => {
+    return {
+      mala: drawnTires.filter((t) => t.estado_fisico?.toLowerCase() === "mala")
+        .length,
+      regular: drawnTires.filter(
+        (t) => t.estado_fisico?.toLowerCase() === "regular",
+      ).length,
+      buena: drawnTires.filter(
+        (t) => t.estado_fisico?.toLowerCase() === "buena",
+      ).length,
+    };
+  }, [drawnTires]);
 
   return (
     <TooltipProvider>
       <div className="relative w-full flex flex-col items-center">
-        {/* Legend */}
-        <div className="flex gap-6 mb-6">
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-red-500/50 border border-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]" />
-            <span className="text-xs text-muted-foreground">
-              {"<5mm Crítico"}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-amber-500/50 border border-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
-            <span className="text-xs text-muted-foreground">5-10mm Alerta</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-emerald-500/50 border border-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]" />
-            <span className="text-xs text-muted-foreground">
-              {">10mm Óptimo"}
-            </span>
-          </div>
+        {/* Leyenda Visual */}
+        <div className="flex gap-6 mb-8">
+          <LegendItem color="bg-red-500" label="Mala" />
+          <LegendItem color="bg-amber-500" label="Regular" />
+          <LegendItem color="bg-emerald-500" label="Buena" />
         </div>
 
-        {/* SVG Chassis */}
+        {/* SVG Dinámico */}
         <svg
-          viewBox={`0 0 300 ${svgHeight}`}
+          viewBox="0 0 300 360"
           className="w-full max-w-md"
-          style={{ filter: "drop-shadow(0 4px 20px rgba(0,0,0,0.3))" }}
+          style={{ filter: "drop-shadow(0 10px 30px rgba(0,0,0,0.4))" }}
         >
           <defs>
-            <radialGradient id="chassisGlow" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor="rgba(255,255,255,0.05)" />
-              <stop offset="100%" stopColor="rgba(0,0,0,0)" />
-            </radialGradient>
-            <filter id="neonGlow" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="3" result="coloredBlur" />
-              <feMerge>
-                <feMergeNode in="coloredBlur" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
+            <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="3" result="blur" />
+              <feComposite in="SourceGraphic" in2="blur" operator="over" />
             </filter>
           </defs>
 
-          {/* Chassis frame */}
+          {/* Chasis fierros principales */}
           <rect
-            x="120"
+            x="125"
             y="40"
-            width="60"
-            height={svgHeight - 80}
-            rx="4"
-            className="fill-muted/20 stroke-muted-foreground/30"
-            strokeWidth="1"
-          />
-          <line
-            x1="150"
-            y1="80"
-            x2="150"
-            y2={svgHeight - 60}
-            className="stroke-muted-foreground/40"
-            strokeWidth="3"
-            strokeDasharray="8 4"
+            width="50"
+            height="280"
+            rx="2"
+            className="fill-muted/10 stroke-muted-foreground/20"
           />
 
-          {/* Ejes y diferenciales (se mantienen igual) */}
+          {/* EJE 1 (Solo si es Tracto) */}
+          {!isTrailerOrDolly && (
+            <>
+              <line
+                x1="60"
+                y1="60"
+                x2="240"
+                y2="60"
+                className="stroke-muted-foreground/40"
+                strokeWidth="3"
+              />
+              <text
+                x="15"
+                y="65"
+                className="text-[8px] fill-muted-foreground/50 font-bold uppercase"
+              >
+                Dir.
+              </text>
+            </>
+          )}
+
+          {/* EJES TRASEROS (Siempre van) */}
           <line
-            x1="60"
-            y1="60"
-            x2="240"
-            y2="60"
-            className="stroke-muted-foreground/50"
-            strokeWidth="4"
-          />
-          <circle cx="150" cy="60" r="6" className="fill-muted-foreground/30" />
-          <line
-            x1="60"
+            x1="45"
             y1="180"
-            x2="240"
+            x2="255"
             y2="180"
-            className="stroke-muted-foreground/50"
+            className="stroke-muted-foreground/40"
             strokeWidth="4"
-          />
-          <circle
-            cx="150"
-            cy="180"
-            r="8"
-            className="fill-muted-foreground/40"
-          />
-          <ellipse
-            cx="150"
-            cy="280"
-            rx="30"
-            ry="15"
-            className="fill-muted/30 stroke-muted-foreground/40"
-            strokeWidth="2"
           />
           <line
             x1="45"
             y1="280"
             x2="255"
             y2="280"
-            className="stroke-muted-foreground/50"
+            className="stroke-muted-foreground/40"
             strokeWidth="4"
           />
+          <text
+            x="15"
+            y="185"
+            className="text-[8px] fill-muted-foreground/50 font-bold uppercase"
+          >
+            Eje 2
+          </text>
+          <text
+            x="15"
+            y="285"
+            className="text-[8px] fill-muted-foreground/50 font-bold uppercase"
+          >
+            Eje 3
+          </text>
 
-          {unitType === "full" && (
-            <>
-              <ellipse
-                cx="150"
-                cy="360"
-                rx="30"
-                ry="15"
-                className="fill-muted/30 stroke-muted-foreground/40"
-                strokeWidth="2"
-              />
-              <line
-                x1="45"
-                y1="360"
-                x2="255"
-                y2="360"
-                className="stroke-muted-foreground/50"
-                strokeWidth="4"
-              />
-            </>
-          )}
+          {/* Renderizado de Llantas */}
+          {activePositions.map((pos) => {
+            const tire = drawnTires.find(
+              (t) => getCleanPosition(t.posicion) === pos.position,
+            );
+            if (!tire) {
+              // Dibujar hueco vacío
+              return (
+                <rect
+                  key={`empty-${pos.position}`}
+                  x={pos.x - 10}
+                  y={pos.y - 25}
+                  width="20"
+                  height="50"
+                  rx="2"
+                  className="fill-muted/5 stroke-muted-foreground/10 stroke-dashed"
+                  strokeDasharray="2,2"
+                />
+              );
+            }
 
-          {/* Tires with neon effect */}
-          {allTirePositions.map((pos) => {
-            // CORRECCIÓN MAGISTRAL: Buscar la llanta usando el mapa de traducción de posiciones
-            const tire = tires.find((t) => {
-              if (!t.posicion) return false;
-              // Buscamos si el string ("Eje 1 Izq") mapea al número de esta posición SVG (1)
-              return POSITION_MAP[t.posicion] === pos.position;
-            });
-
-            if (!tire) return null;
-
-            const tireId = tire.id || `pos-${pos.position}`;
-            const depth = tire.profundidad_actual ?? 0;
-            const status = getTireStatus(depth);
-            const isHovered = hoveredTire === tireId;
-            const isDualTire = pos.position >= 5;
-            const tireWidth = isDualTire ? 22 : 28;
-            const tireHeight = isDualTire ? 50 : 60;
+            const status = getTireStatusByCondition(tire.estado_fisico || "");
+            const isHovered = hoveredTire === tire.id;
+            const isDual = pos.position > 2;
 
             return (
-              <Tooltip key={tireId}>
+              <Tooltip key={tire.id || pos.position}>
                 <TooltipTrigger asChild>
                   <g
-                    onMouseEnter={() => setHoveredTire(tireId)}
+                    className="cursor-pointer transition-all duration-300"
+                    onMouseEnter={() => setHoveredTire(tire.id || null)}
                     onMouseLeave={() => setHoveredTire(null)}
-                    className="cursor-pointer"
                     style={{
-                      transform: isHovered ? "scale(1.1)" : "scale(1)",
+                      transform: isHovered ? "scale(1.05)" : "scale(1)",
                       transformOrigin: `${pos.x}px ${pos.y}px`,
-                      transition: "transform 0.2s ease-out",
                     }}
                   >
-                    {/* Tire glow effect */}
+                    {/* Brillo de fondo */}
                     <rect
-                      x={pos.x - tireWidth / 2 - 4}
-                      y={pos.y - tireHeight / 2 - 4}
-                      width={tireWidth + 8}
-                      height={tireHeight + 8}
+                      x={pos.x - (isDual ? 14 : 17)}
+                      y={pos.y - (isDual ? 28 : 33)}
+                      width={isDual ? 28 : 34}
+                      height={isDual ? 56 : 66}
                       rx="6"
-                      className={`${status.fill} ${status.glow} ${status.pulse}`}
-                      filter="url(#neonGlow)"
+                      className={`${status.fill} opacity-20`}
+                      filter="url(#glow)"
                     />
-                    {/* Tire body */}
+                    {/* Llanta principal */}
                     <rect
-                      x={pos.x - tireWidth / 2}
-                      y={pos.y - tireHeight / 2}
-                      width={tireWidth}
-                      height={tireHeight}
+                      x={pos.x - (isDual ? 11 : 14)}
+                      y={pos.y - (isDual ? 25 : 30)}
+                      width={isDual ? 22 : 28}
+                      height={isDual ? 50 : 60}
                       rx="4"
                       className={`${status.fill} ${status.stroke} stroke-2 ${status.pulse}`}
                     />
-                    {/* Tire tread pattern */}
-                    {[...Array(5)].map((_, i) => (
-                      <line
-                        key={i}
-                        x1={pos.x - tireWidth / 2 + 3}
-                        y1={pos.y - tireHeight / 2 + 8 + i * 10}
-                        x2={pos.x + tireWidth / 2 - 3}
-                        y2={pos.y - tireHeight / 2 + 8 + i * 10}
-                        className={`${status.stroke} opacity-50`}
-                        strokeWidth="1"
-                      />
-                    ))}
-                    {/* Position label */}
                     <text
                       x={pos.x}
-                      y={pos.y + 3}
+                      y={pos.y + 4}
                       textAnchor="middle"
-                      className={` font-bold ${status.labelColor} fill-current`}
+                      className={`font-bold text-[10px] ${status.labelColor} fill-current`}
                     >
                       {pos.position}
                     </text>
@@ -333,105 +288,96 @@ export function TruckChassisSVG({
                 </TooltipTrigger>
                 <TooltipContent
                   side="right"
-                  className="backdrop-blur-xl bg-black/80 border-white/20 shadow-2xl"
+                  className="bg-slate-900 border-slate-700 text-white p-3 shadow-2xl backdrop-blur-md"
                 >
                   <div className="space-y-1">
-                    <p className="font-bold text-foreground">{tire.posicion}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {tire.marca || "Marca N/A"}{" "}
-                      {tire.modelo ? `- ${tire.modelo}` : ""}
+                    <p className="font-black text-blue-400">
+                      POSICIÓN {pos.position}
                     </p>
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`text-lg font-bold ${status.labelColor}`}
-                      >
-                        {depth}mm
+                    <p className="text-xs font-bold uppercase">
+                      {tire.marca} {tire.modelo}
+                    </p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-lg font-black">
+                        {tire.profundidad_actual}mm
                       </span>
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded-full ${
-                          depth < 5
-                            ? "bg-red-500/20 text-red-400"
-                            : depth <= 10
-                              ? "bg-amber-500/20 text-amber-400"
-                              : "bg-emerald-500/20 text-emerald-400"
-                        }`}
-                      >
+                      <LocalBadge color={status.labelColor}>
                         {status.label}
-                      </span>
+                      </LocalBadge>
                     </div>
-                    <p className="text-xs text-muted-foreground/70">
-                      ID: {tire.codigo_interno || "S/N"}
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      ID: {tire.codigo_interno}
                     </p>
                   </div>
                 </TooltipContent>
               </Tooltip>
             );
           })}
-
-          {/* Labels y flecha de dirección (se mantienen) */}
-          <text
-            x="20"
-            y="65"
-            className="text-[9px] fill-muted-foreground/60 font-medium"
-          >
-            EJE 1
-          </text>
-          <text
-            x="20"
-            y="185"
-            className="text-[9px] fill-muted-foreground/60 font-medium"
-          >
-            EJE 2
-          </text>
-          <text
-            x="20"
-            y="285"
-            className="text-[9px] fill-muted-foreground/60 font-medium"
-          >
-            EJE 3
-          </text>
-          {unitType === "full" && (
-            <text
-              x="20"
-              y="365"
-              className="text-[9px] fill-muted-foreground/60 font-medium"
-            >
-              EJE 4
-            </text>
-          )}
-
-          <polygon
-            points="150,15 145,30 155,30"
-            className="fill-muted-foreground/40"
-          />
-          <text
-            x="150"
-            y="10"
-            textAnchor="middle"
-            className="text-[8px] fill-muted-foreground/50 uppercase tracking-wider"
-          >
-            Frente
-          </text>
         </svg>
 
-        {/* Stats summary */}
-        <div className="grid grid-cols-3 gap-4 mt-8 w-full max-w-md">
-          <div className="backdrop-blur-xl bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-center">
-            <p className="text-2xl font-bold text-red-400">{criticalCount}</p>
-            <p className="text-xs text-muted-foreground">Críticas</p>
-          </div>
-          <div className="backdrop-blur-xl bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 text-center">
-            <p className="text-2xl font-bold text-amber-400">{alertCount}</p>
-            <p className="text-xs text-muted-foreground">Alerta</p>
-          </div>
-          <div className="backdrop-blur-xl bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 text-center">
-            <p className="text-2xl font-bold text-emerald-400">
-              {optimalCount}
-            </p>
-            <p className="text-xs text-muted-foreground">Óptimas</p>
-          </div>
+        {/* 🚀 TARJETAS DE CONTEO FINAL */}
+        <div className="grid grid-cols-3 gap-4 mt-10 w-full max-w-md">
+          <StatCard
+            count={stats.mala}
+            label="Malas"
+            color="text-red-500"
+            bg="bg-red-500/10"
+            border="border-red-500/20"
+          />
+          <StatCard
+            count={stats.regular}
+            label="Regulares"
+            color="text-amber-500"
+            bg="bg-amber-500/10"
+            border="border-amber-500/20"
+          />
+          <StatCard
+            count={stats.buena}
+            label="Buenas"
+            color="text-emerald-500"
+            bg="bg-emerald-500/10"
+            border="border-emerald-500/20"
+          />
         </div>
       </div>
     </TooltipProvider>
+  );
+}
+
+// =====================
+// Sub-componentes UI
+// =====================
+
+function LegendItem({ color, label }: { color: string; label: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <div className={`w-3 h-3 rounded-full ${color} shadow-sm`} />
+      <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+        {label}
+      </span>
+    </div>
+  );
+}
+
+function StatCard({ count, label, color, bg, border }: any) {
+  return (
+    <div
+      className={`p-4 rounded-2xl border ${bg} ${border} text-center transition-all hover:scale-105`}
+    >
+      <p className={`text-3xl font-black ${color}`}>{count}</p>
+      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-1">
+        {label}
+      </p>
+    </div>
+  );
+}
+
+function LocalBadge({ children, color }: any) {
+  return (
+    <span
+      className={`px-2 py-0.5 rounded-full text-[9px] font-black border border-current ${color} bg-current/10 uppercase`}
+    >
+      {children}
+    </span>
   );
 }

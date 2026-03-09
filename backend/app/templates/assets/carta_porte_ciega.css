@@ -1,0 +1,184 @@
+/* backend/app/templates/assets/carta_porte_ciega.css */
+@page {
+  size: Letter;
+  margin: 10mm 10mm 12mm 10mm;
+}
+
+body {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 10px;
+  color: #111;
+}
+
+.small {
+  font-size: 9px;
+}
+.xs {
+  font-size: 8px;
+}
+.bold {
+  font-weight: 700;
+}
+.mono {
+  font-family: "Courier New", monospace;
+}
+.right {
+  text-align: right;
+}
+.center {
+  text-align: center;
+}
+
+.muted {
+  color: #444;
+}
+
+.hr {
+  border-top: 1px solid #222;
+  margin: 6px 0;
+}
+.hr-thick {
+  border-top: 2px solid #222;
+  margin: 6px 0;
+}
+
+/* Layout */
+.row {
+  display: table;
+  width: 100%;
+  table-layout: fixed;
+}
+.col {
+  display: table-cell;
+  vertical-align: top;
+}
+.col-60 {
+  width: 60%;
+}
+.col-40 {
+  width: 40%;
+}
+.col-50 {
+  width: 50%;
+}
+
+.pb-avoid {
+  page-break-inside: avoid;
+}
+
+.brand {
+  display: table;
+  width: 100%;
+  page-break-inside: avoid;
+}
+.brand-logo {
+  display: table-cell;
+  width: 35%;
+  vertical-align: middle;
+}
+.brand-logo img {
+  max-width: 220px;
+  max-height: 55px;
+  height: auto;
+}
+.brand-info {
+  display: table-cell;
+  width: 65%;
+  vertical-align: top;
+  padding-left: 8px;
+}
+
+.top-meta {
+  font-size: 8.8px;
+  line-height: 1.25;
+}
+.top-meta .label {
+  display: inline-block;
+  width: 110px;
+  color: #444;
+}
+.top-meta .value {
+  font-weight: 700;
+}
+
+.block-title {
+  font-weight: 700;
+  margin: 6px 0 4px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-size: 10px;
+}
+
+.kv {
+  line-height: 1.5;
+}
+.kv .k {
+  color: #444;
+  width: 120px;
+  display: inline-block;
+}
+.kv .v {
+  font-weight: 700;
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 4px;
+  page-break-inside: avoid;
+}
+
+th,
+td {
+  border: 1px solid #222;
+  padding: 4px 5px;
+  vertical-align: top;
+}
+
+th {
+  background: #f3f3f3;
+  font-weight: 700;
+  font-size: 9px;
+}
+
+.tight td,
+.tight th {
+  padding: 3px 4px;
+}
+
+.money {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  font-family: "Courier New", monospace;
+}
+
+.no-border td,
+.no-border th {
+  border: none;
+}
+
+/* Footer */
+.footer {
+  margin-top: 10px;
+  page-break-inside: avoid;
+}
+.qr {
+  width: 120px;
+  height: 120px;
+  border: 1px solid #222;
+  display: inline-block;
+}
+
+.seal-box {
+  border-top: 1px solid #222;
+  margin-top: 6px;
+  padding-top: 6px;
+}
+.seal-line {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-size: 7.7px;
+  line-height: 1.25;
+}

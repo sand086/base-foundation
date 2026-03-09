@@ -13,7 +13,7 @@ from app.api.endpoints.auth import (
 )
 
 from sqlalchemy import func
-
+from pathlib import Path
 from fastapi.responses import Response
 from jinja2 import Environment, FileSystemLoader
 
@@ -286,10 +286,8 @@ def generate_carta_porte_ciega(trip_id: int, db: Session = Depends(get_db)):
     if not trip:
         raise HTTPException(status_code=404, detail="Viaje no encontrado")
 
-    # Extraer el tramo activo para saber quién va manejando
     active_leg = None
     if trip.legs:
-        # Buscamos el tramo que no esté cerrado, o tomamos el último
         active_leg = next(
             (
                 leg
@@ -300,7 +298,6 @@ def generate_carta_porte_ciega(trip_id: int, db: Session = Depends(get_db)):
             trip.legs[-1],
         )
 
-    # Cargar plantilla y renderizar
     template = jinja_env.get_template("carta_porte_ciega.html")
     html_content = template.render(
         trip=trip,
@@ -308,10 +305,8 @@ def generate_carta_porte_ciega(trip_id: int, db: Session = Depends(get_db)):
         fecha_impresion=datetime.now().strftime("%d/%m/%Y %H:%M"),
     )
 
-    # Generar el PDF en memoria
-    pdf_file = HTML(string=html_content).write_pdf()
+    pdf_file = HTML(string=html_content, base_url=TEMPLATE_DIR).write_pdf()
 
-    # Devolver el archivo PDF para descarga/visualización
     return Response(
         content=pdf_file,
         media_type="application/pdf",

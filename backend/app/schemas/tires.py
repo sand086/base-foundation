@@ -29,7 +29,7 @@ class AssignTirePayload(BaseModel):
     """
 
     unit_id: Optional[int] = Field(default=None, description="FK a units.id")
-    posicion: Optional[str] = Field(default=None, max_length=50)
+    posicion: Optional[int] = None
     notas: Optional[str] = Field(default=None, max_length=255)
 
     model_config = ConfigDict(extra="ignore")
@@ -68,7 +68,7 @@ class TireHistoryBase(ORMBase):
 
     unit_id: Optional[int] = None
     unidad_economico: Optional[str] = Field(default=None, max_length=50)
-    posicion: Optional[str] = Field(default=None, max_length=50)
+    posicion: Optional[int] = None
 
     km: float = 0.0
     costo: float = 0.0
@@ -132,7 +132,7 @@ class TireBase(ORMBase):
     dot: Optional[str] = Field(default=None, max_length=10)
 
     unit_id: Optional[int] = None
-    posicion: Optional[str] = Field(default=None, max_length=50)
+    posicion: Optional[int] = None
 
     estado: TireStatus = TireStatus.NUEVO
     estado_fisico: TireCondition = TireCondition.BUENA

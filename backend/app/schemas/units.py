@@ -79,7 +79,7 @@ class UnitCreate(ORMBase):
     Si luego decides generarlo server-side, cambia public_id a Optional en Create y en el service.
     """
 
-    public_id: str = Field(..., min_length=1, max_length=50)
+    public_id: Optional[str] = Field(default=None, max_length=50)
 
     numero_economico: str = Field(..., min_length=1, max_length=20)
     placas: str = Field(..., min_length=1, max_length=15)

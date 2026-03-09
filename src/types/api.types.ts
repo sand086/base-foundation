@@ -545,3 +545,9 @@ export interface TripCreatePayload {
 
   initial_leg: TripLegCreatePayload; // ✅ Requisito de tu backend
 }
+
+export interface Brand {
+  id: number;
+  nombre: string;
+  tipo_activo: string;
+}

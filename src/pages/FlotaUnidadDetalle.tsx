@@ -13,6 +13,7 @@ import {
   History,
   ArrowRightLeft,
   Settings,
+  ArrowDownToLine,
   Pencil,
 } from "lucide-react";
 
@@ -39,12 +40,13 @@ import { unitService, UnidadDetalle } from "@/services/unitService";
 import { UnitDocument, UnitTire } from "@/types/api.types";
 import { DocumentUploadManager } from "@/features/flota/DocumentUploadManager";
 
-// MODALES / SHEETS DE LLANTAS (ajusta rutas si aplica)
+// MODALES / SHEETS DE LLANTAS
 import { AssignTireModal } from "@/features/llantas/AssignTireModal";
 import { MaintenanceTireModal } from "@/features/llantas/MaintenanceTireModal";
 import { TireHistorySheet } from "@/features/llantas/TireHistorySheet";
 import { CreateTireModal } from "@/features/llantas/CreateTireModal";
-import { tireService } from "@/services/tireService";
+import { MountTireModal } from "@/features/llantas/MountTireModal"; // Añade esta importación
+import { tireService, TIRE_POSITIONS } from "@/services/tireService"; // 🚀 Importamos TIRE_POSITIONS para la tabla
 
 /**
  * Helper para badges de fecha
@@ -60,7 +62,6 @@ const getDateBadge = (dateStr: string | null | undefined) => {
   const today = new Date();
   const expDate = new Date(dateStr);
 
-  // Ajuste para evitar brincos por timezone cuando viene ISO
   expDate.setMinutes(expDate.getMinutes() + expDate.getTimezoneOffset());
 
   const days = Math.ceil(
@@ -102,7 +103,6 @@ const getEstatusFecha = (
   return "vigente";
 };
 
-// Normaliza cualquier fecha (YYYY-MM-DD o ISO) a formato input date (YYYY-MM-DD)
 const toInputDate = (value: string | null | undefined) => {
   if (!value) return "";
   if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
@@ -122,14 +122,10 @@ type FormState = {
   marca: string;
   modelo: string;
   year: string;
-
-  // vigencias
   seguro_vence: string;
   verificacion_humo_vence: string;
   verificacion_fisico_mecanica_vence: string;
   caat_vence: string;
-
-  // folios
   permiso_sct_folio: string;
   caat_folio: string;
   tarjeta_circulacion_folio: string;
@@ -142,12 +138,10 @@ const emptyForm: FormState = {
   marca: "",
   modelo: "",
   year: "",
-
   seguro_vence: "",
   verificacion_humo_vence: "",
   verificacion_fisico_mecanica_vence: "",
   caat_vence: "",
-
   permiso_sct_folio: "",
   caat_folio: "",
   tarjeta_circulacion_folio: "",
@@ -160,10 +154,9 @@ export default function FlotaUnidadDetalle() {
   const [unit, setUnit] = useState<UnidadDetalle | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
-
   const [formData, setFormData] = useState<FormState>(emptyForm);
+  const [mountModalOpen, setMountModalOpen] = useState(false); // 🚀 NUEVO ESTADO
 
-  // ✅ ESTADOS PARA MODALES DE LLANTAS
   const [selectedTire, setSelectedTire] = useState<UnitTire | null>(null);
   const [modals, setModals] = useState({
     history: false,
@@ -184,15 +177,10 @@ export default function FlotaUnidadDetalle() {
       assign: false,
       maintenance: false,
     });
-    // setTimeout(() => setSelectedTire(null), 250); // opcional si quieres limpiar después de cerrar animación
   };
 
-  /**
-   * Carga de datos
-   */
   const loadUnit = async () => {
     if (!id) return;
-
     setIsLoading(true);
     try {
       const apiData: any = await unitService.getById(id as string);
@@ -256,7 +244,6 @@ export default function FlotaUnidadDetalle() {
 
       setUnit(enrichedUnit);
 
-      // ✅ inicializa TODO el formulario (incluye folios)
       setFormData({
         numero_economico: apiData.numero_economico || "",
         placas: apiData.placas || "",
@@ -264,14 +251,12 @@ export default function FlotaUnidadDetalle() {
         marca: apiData.marca || "",
         modelo: apiData.modelo || "",
         year: apiData.year?.toString?.() || "",
-
         seguro_vence: toInputDate(apiData.seguro_vence),
         verificacion_humo_vence: toInputDate(apiData.verificacion_humo_vence),
         verificacion_fisico_mecanica_vence: toInputDate(
           apiData.verificacion_fisico_mecanica_vence,
         ),
         caat_vence: toInputDate(apiData.caat_vence),
-
         permiso_sct_folio: apiData.permiso_sct_folio || "",
         caat_folio: apiData.caat_folio || "",
         tarjeta_circulacion_folio: apiData.tarjeta_circulacion_folio || "",
@@ -293,41 +278,35 @@ export default function FlotaUnidadDetalle() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  /**
-   * Handlers de acciones de llantas (hooks para tus servicios reales)
-   */
   const handleEditTireSubmit = async (data: any) => {
     if (!selectedTire) return false;
     try {
-      // 1. Llamada a la API real
       await tireService.update(selectedTire.id, data);
       toast({ title: "Éxito", description: "Llanta editada correctamente." });
-
-      // 2. Recargar datos de la unidad para reflejar cambios
       await loadUnit();
       return true;
     } catch (error) {
       console.error("Error editando llanta:", error);
       toast({
         title: "Error",
-        description: "No se pudo editar la llanta. Verifica la consola.",
+        description: "No se pudo editar la llanta.",
         variant: "destructive",
       });
       return false;
     }
   };
 
+  // 🚀 CAMBIO AQUI: La posicion ahora llega como number | null
   const handleAssignTireSubmit = async (
     tireId: string,
     unidadId: string | null,
-    posicion: string | null,
+    posicion: number | null,
     notas: string,
   ) => {
     try {
-      // 1. Llamada a la API real
       await tireService.assign(Number(tireId), {
         unit_id: unidadId ? Number(unidadId) : null,
-        posicion: posicion,
+        posicion: posicion, // Pasamos el número directamente
         notas: notas,
       });
 
@@ -336,7 +315,6 @@ export default function FlotaUnidadDetalle() {
         description: "Movimiento registrado correctamente.",
       });
 
-      // 2. Recargar datos y cerrar modales
       await loadUnit();
       closeModals();
     } catch (error) {
@@ -356,19 +334,15 @@ export default function FlotaUnidadDetalle() {
     descripcion: string,
   ) => {
     try {
-      // 1. Llamada a la API real
       await tireService.maintenance(Number(tireId), {
         tipo: tipo,
         costo: costo,
         descripcion: descripcion,
       });
-
       toast({
         title: "Éxito",
         description: `Mantenimiento (${tipo}) registrado.`,
       });
-
-      // 2. Recargar datos y cerrar modales
       await loadUnit();
       closeModals();
     } catch (error) {
@@ -381,10 +355,6 @@ export default function FlotaUnidadDetalle() {
     }
   };
 
-  /**
-   * Helper: sincroniza en UI los estatus/vencimientos de unit.documents con el form
-   * (solo para refrescar badges sin recargar)
-   */
   const syncUnitDocumentsWithFormDates = (
     currentUnit: UnidadDetalle,
     fd: FormState,
@@ -434,8 +404,6 @@ export default function FlotaUnidadDetalle() {
         marca: formData.marca,
         modelo: formData.modelo,
         year: yearInt,
-
-        // vigencias (vacío -> null)
         seguro_vence: formData.seguro_vence ? formData.seguro_vence : null,
         verificacion_humo_vence: formData.verificacion_humo_vence
           ? formData.verificacion_humo_vence
@@ -445,8 +413,6 @@ export default function FlotaUnidadDetalle() {
             ? formData.verificacion_fisico_mecanica_vence
             : null,
         caat_vence: formData.caat_vence ? formData.caat_vence : null,
-
-        // folios (vacío -> null)
         permiso_sct_folio: formData.permiso_sct_folio
           ? formData.permiso_sct_folio
           : null,
@@ -487,20 +453,25 @@ export default function FlotaUnidadDetalle() {
       marca: u.marca || "",
       modelo: u.modelo || "",
       year: u.year?.toString?.() || "",
-
       seguro_vence: toInputDate(u.seguro_vence),
       verificacion_humo_vence: toInputDate(u.verificacion_humo_vence),
       verificacion_fisico_mecanica_vence: toInputDate(
         u.verificacion_fisico_mecanica_vence,
       ),
       caat_vence: toInputDate(u.caat_vence),
-
       permiso_sct_folio: u.permiso_sct_folio || "",
       caat_folio: u.caat_folio || "",
       tarjeta_circulacion_folio: u.tarjeta_circulacion_folio || "",
     });
 
     setIsEditing(false);
+  };
+
+  // 🚀 Función Helper para encontrar la etiqueta bonita de la posición
+  const getPositionLabel = (pos: string | number | undefined | null) => {
+    if (!pos) return "Sin asignar";
+    const found = TIRE_POSITIONS.find((p) => p.id === Number(pos));
+    return found ? found.label : `Posición ${pos}`;
   };
 
   if (isLoading || !unit) {
@@ -977,15 +948,18 @@ export default function FlotaUnidadDetalle() {
             </Card>
           </div>
 
-          {/* Tabla de Llantas (actualizada con Acciones) */}
+          {/* Tabla de Llantas */}
           <Card className="backdrop-blur-xl bg-white/10 dark:bg-black/40 border-white/20 shadow-2xl">
             <CardHeader className="flex flex-row items-center justify-between gap-3">
               <CardTitle>Detalle de Llantas</CardTitle>
-
-              {/* opcional: botón crear llanta (si tu modal CreateTireModal soporta modo "crear") */}
-              {/* <Button size="sm" variant="outline" onClick={() => setModals(p => ({...p, edit: true}))} className="gap-2">
-                <Pencil className="h-4 w-4" /> Nueva Llanta
-              </Button> */}
+              {/* 🚀 EL NUEVO BOTÓN */}
+              <Button
+                size="sm"
+                onClick={() => setMountModalOpen(true)}
+                className="gap-2 bg-brand-navy text-white"
+              >
+                <ArrowDownToLine className="h-4 w-4" /> Montar Llanta
+              </Button>
             </CardHeader>
 
             <CardContent>
@@ -1022,13 +996,14 @@ export default function FlotaUnidadDetalle() {
                           className="border-b border-white/5 hover:bg-white/5 transition-colors"
                         >
                           <td className="p-3 font-medium">
-                            {tire.posicion || "Sin asignar"}
+                            {/* 🚀 CAMBIO: Usar getPositionLabel para que se vea "Posición 3" en lugar de "3" */}
+                            {getPositionLabel(tire.posicion)}
                           </td>
 
                           <td className="p-3">
                             {tire.marca || "Desconocida"}
                             {tire.modelo && (
-                              <span className="block  text-muted-foreground">
+                              <span className="block text-muted-foreground">
                                 {tire.modelo}
                               </span>
                             )}
@@ -1156,7 +1131,7 @@ export default function FlotaUnidadDetalle() {
               </CardTitle>
             </CardHeader>
             <CardContent className="py-8">
-              <TruckChassisSVG tires={unit.tires as any} unitType="sencillo" />
+              <TruckChassisSVG tires={unit.tires as any} unitType={unit.tipo} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -1204,7 +1179,7 @@ export default function FlotaUnidadDetalle() {
         tire={selectedTire as any}
         open={modals.assign}
         onOpenChange={(val) => setModals((p) => ({ ...p, assign: val }))}
-        onAssign={handleAssignTireSubmit}
+        onAssign={handleAssignTireSubmit as any}
       />
 
       <MaintenanceTireModal
@@ -1212,6 +1187,12 @@ export default function FlotaUnidadDetalle() {
         open={modals.maintenance}
         onOpenChange={(val) => setModals((p) => ({ ...p, maintenance: val }))}
         onSubmit={handleMaintenanceTireSubmit as any}
+      />
+      <MountTireModal
+        unitId={unit.id}
+        open={mountModalOpen}
+        onOpenChange={setMountModalOpen}
+        onSuccess={loadUnit} // Recarga la unidad automáticamente cuando termine
       />
     </div>
   );

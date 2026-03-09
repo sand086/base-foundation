@@ -16,6 +16,7 @@ from app.api.endpoints import (
     fuel,
     catalogs_sat,
     receivables,
+    brands,
 )
 
 api_router = APIRouter()
@@ -48,3 +49,5 @@ api_router.include_router(
 
 api_router.include_router(catalogs_sat.router, prefix="/catalogs", tags=["Catalogs"])
 api_router.include_router(receivables.router, tags=["Cuentas por Cobrar"])
+
+api_router.include_router(brands.router, tags=["Marcas"])

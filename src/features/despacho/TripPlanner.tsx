@@ -256,7 +256,7 @@ function KanbanCard({
       className="cursor-grab active:cursor-grabbing group relative"
     >
       <div className="absolute -top-3 -right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all duration-200 bg-white shadow-md border border-slate-200 rounded-lg p-1 z-10 translate-y-1 group-hover:translate-y-0">
-        <button
+        {/*         <button
           type="button"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
@@ -267,7 +267,7 @@ function KanbanCard({
           title="Desenganchar / Relevo"
         >
           <LinkIcon className="h-3.5 w-3.5" />
-        </button>
+        </button> */}
 
         <button
           type="button"
@@ -832,7 +832,7 @@ export const TripPlanner = () => {
                                   Abrir Centro de Mando
                                 </span>
                               </DropdownMenuItem>
-                              <DropdownMenuSeparator className="my-1" />
+                              {/*                               <DropdownMenuSeparator className="my-1" />
                               <DropdownMenuItem
                                 onClick={() =>
                                   setLegToRelay({ leg, tripPadre })
@@ -843,7 +843,7 @@ export const TripPlanner = () => {
                                 <span className="font-bold">
                                   Desenganchar / Relevo
                                 </span>
-                              </DropdownMenuItem>
+                              </DropdownMenuItem> */}
                               {leg.status === "entregado" && (
                                 <DropdownMenuItem
                                   onClick={() =>
