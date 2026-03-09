@@ -283,11 +283,11 @@ export function TripDetailsModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-6xl bg-white h-[90vh] flex flex-col p-0 overflow-hidden rounded-2xl shadow-2xl">
-        <DialogHeader className="p-6 pb-4 bg-slate-50 border-b border-slate-200 shrink-0">
+        <DialogHeader className="p-6 pb-4 bg-slate-100 border-b border-slate-300 shrink-0">
           <div className="flex justify-between items-start">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-xl bg-brand-navy flex items-center justify-center shadow-inner">
-                <Navigation className="h-6 w-6 text-white" />
+                <Navigation className="h-6 w-6 text-black" />
               </div>
               <div>
                 <DialogTitle className="text-2xl font-black text-brand-navy flex items-center gap-2">

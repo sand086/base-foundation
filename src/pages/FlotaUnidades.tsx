@@ -448,7 +448,7 @@ export default function FlotaUnidades() {
           </div>
 
           <Card className="shadow-lg border-slate-200 overflow-hidden rounded-2xl">
-            <CardContent className="p-0">
+            <CardContent className="p-8">
               <EnhancedDataTable
                 data={unidades}
                 columns={columns}

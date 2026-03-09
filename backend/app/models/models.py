@@ -182,6 +182,13 @@ class TollUnitType(str, PyEnum):
     EJES_9 = "9ejes"
 
 
+class UnitAxleConfig(str, PyEnum):
+    TRACTO = "TRACTO_10"  # Tractocamión (10 llantas)
+    RABON = "RABON_6"  # Rabón (6 llantas)
+    REMOLQUE = "REMOLQUE_8"  # Remolque (8 llantas)
+    DOLLY = "DOLLY_8"  # Dolly (8 llantas)
+
+
 # =========================================================
 # MIXINS
 # =========================================================
@@ -227,6 +234,14 @@ class AuditMixin:
 # =========================================================
 # MODELS
 # =========================================================
+
+
+class Brand(AuditMixin, Base):
+    __tablename__ = "brands"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nombre = Column(String(100), unique=True, nullable=False)
+    tipo_activo = Column(String(50), nullable=True)  # TRACTO, REMOLQUE, AMBOS
 
 
 class Client(AuditMixin, Base):
@@ -375,8 +390,11 @@ class Unit(AuditMixin, Base):
     caat_url = Column(String(500), nullable=True)
     tarjeta_circulacion_folio = Column(String(50), nullable=True)
     is_loaded = Column(Boolean, nullable=False, server_default="false", default=False)
+    configuracion_ejes = Column(
+        pg_enum(UnitAxleConfig, "unitaxleconfig"), nullable=True
+    )
 
-    # ✅ RELACIONES CORREGIDAS
+    # RELACIONES CORREGIDAS
     operators = relationship("Operator", back_populates="assigned_unit")
     tires = relationship("Tire", back_populates="unit")
     work_orders = relationship("WorkOrder", back_populates="unit")
@@ -434,7 +452,7 @@ class Tire(AuditMixin, Base):
     unit_id = Column(
         Integer, ForeignKey("units.id", ondelete="SET NULL"), nullable=True
     )
-    posicion = Column(String(50), nullable=True)
+    posicion = Column(Integer, nullable=True)
 
     estado = Column(
         pg_enum(TireStatus, "tirestatus"),
@@ -454,6 +472,7 @@ class Tire(AuditMixin, Base):
     precio_compra = Column(Float, default=0.0)
     costo_acumulado = Column(Float, default=0.0)
     proveedor = Column(String(100))
+    posicion = Column(Integer, nullable=True)
 
     unit = relationship("Unit", back_populates="tires")
     history = relationship(
@@ -480,7 +499,7 @@ class TireHistory(AuditMixin, Base):
         Integer, ForeignKey("units.id", ondelete="SET NULL"), nullable=True
     )
     unidad_economico = Column(String(50), nullable=True)
-    posicion = Column(String(50))
+    posicion = Column(Integer, nullable=True)
 
     km = Column(Float, default=0.0)
     costo = Column(Float, default=0.0)
@@ -519,7 +538,7 @@ class Operator(AuditMixin, Base):
     apto_medico_url = Column(String(500), nullable=True)
     comprobante_domicilio_url = Column(String(500), nullable=True)
 
-    # ✅ RELACIONES CORREGIDAS
+    # RELACIONES CORREGIDAS
     assigned_unit = relationship("Unit", back_populates="operators")
     trip_legs = relationship("TripLeg", back_populates="operator")
     document_history = relationship(
@@ -551,7 +570,7 @@ class Trip(AuditMixin, Base):
         Integer, ForeignKey("tariffs.id", ondelete="SET NULL"), nullable=True
     )
 
-    # ✅ EQUIPOS FIJOS (Los remolques/contenedores viajan en todo el ciclo)
+    # EQUIPOS FIJOS (Los remolques/contenedores viajan en todo el ciclo)
     remolque_1_id = Column(
         Integer, ForeignKey("units.id", ondelete="SET NULL"), nullable=True
     )
@@ -600,7 +619,7 @@ class Trip(AuditMixin, Base):
         "Unit", foreign_keys=[remolque_2_id], back_populates="trips_as_remolque_2"
     )
 
-    # ✅ Relación con los Tramos
+    # Relación con los Tramos
     legs = relationship(
         "TripLeg",
         back_populates="trip",
@@ -609,7 +628,7 @@ class Trip(AuditMixin, Base):
     )
 
 
-# ✅ NUEVO MODELO: EL TRAMO O DESENGANCHE
+# NUEVO MODELO: EL TRAMO O DESENGANCHE
 class TripLeg(AuditMixin, Base):
     __tablename__ = "trip_legs"
 

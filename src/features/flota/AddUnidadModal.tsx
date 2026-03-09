@@ -17,11 +17,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
-import { Lock, Unlock, Truck, Loader2, Info, Settings } from "lucide-react";
-
+import {
+  Lock,
+  Truck,
+  Loader2,
+  Info,
+  Settings,
+  ShieldAlert,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useTiposUnidad } from "@/hooks/useTiposUnidad";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Unit } from "@/types/api.types";
@@ -30,8 +34,12 @@ import { Unit } from "@/types/api.types";
 // Types
 // =====================
 interface UnidadFormData {
-  // UI-only
-  categoriaActivo: string; // UI category selector (tractocamion / remolque_dolly / utilitario / custom)
+  /**
+   * UI-only:
+   * Naturaleza física del activo
+   * TRACTOCAMION | REMOLQUE | DOLLY
+   */
+  categoriaFisica: string;
 
   // Core
   numero_economico: string;
@@ -41,10 +49,12 @@ interface UnidadFormData {
   modelo: string;
   year: string;
 
-  // IMPORTANT:
-  // tipo = configuracion (enum backend: SENCILLO/FULL/RABON/...)
-  // tipo_1 = categoria backend (TRACTOCAMION/REMOLQUE/UTILITARIO/custom)
-  tipo: Unit["tipo"] | "";
+  /**
+   * Lógica nueva:
+   * tipo   = layout físico para SVG/UI
+   * tipo_1 = naturaleza física backend
+   */
+  tipo: string;
   tipo_1: string;
 
   // Tech
@@ -69,8 +79,58 @@ interface UnidadFormData {
   status: string;
 }
 
+interface AddUnidadModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  unidadToEdit?: Unit | null;
+  onSave?: (unidad: any) => void;
+  isSaving?: boolean;
+}
+
+// =====================
+// Configuración
+// =====================
+const MARCAS_SUGERIDAS = [
+  "Freightliner",
+  "Kenworth",
+  "International",
+  "Volvo",
+  "Mercedes-Benz",
+  "Scania",
+  "Mack",
+  "Peterbilt",
+  "Utility",
+  "Great Dane",
+  "Fruehauf",
+  "Hendrickson",
+];
+
+const NATURALEZA_OPTIONS = [
+  { value: "TRACTOCAMION", label: "🚛 Tractocamión" },
+  { value: "REMOLQUE", label: "📦 Remolque / Caja" },
+  { value: "DOLLY", label: "🔗 Dolly" },
+] as const;
+
+/**
+ * Mapeo automático:
+ * TRACTOCAMION -> T3
+ * REMOLQUE     -> R2
+ * DOLLY        -> D2
+ */
+const AUTOMATIC_LAYOUT_MAPPING: Record<string, string> = {
+  TRACTOCAMION: "T3",
+  REMOLQUE: "R2",
+  DOLLY: "D2",
+};
+
+const LAYOUT_LABELS: Record<string, string> = {
+  T3: "T3 (10 llantas)",
+  R2: "R2 (8 llantas)",
+  D2: "D2 (8 llantas)",
+};
+
 const emptyFormData: UnidadFormData = {
-  categoriaActivo: "",
+  categoriaFisica: "TRACTOCAMION",
 
   numero_economico: "",
   placas: "",
@@ -79,13 +139,13 @@ const emptyFormData: UnidadFormData = {
   modelo: "",
   year: new Date().getFullYear().toString(),
 
-  tipo: "",
-  tipo_1: "",
+  tipo: "T3",
+  tipo_1: "TRACTOCAMION",
 
   numero_serie_motor: "",
   marca_motor: "",
   capacidad_carga: "",
-  tipo_carga: "",
+  tipo_carga: "General",
 
   tarjeta_circulacion_url: "",
   tarjeta_circulacion_folio: "",
@@ -107,7 +167,7 @@ const emptyFormData: UnidadFormData = {
 const getStatusBadge = (dateStr: string) => {
   if (!dateStr) {
     return (
-      <Badge variant="outline" className="text-muted-foreground ">
+      <Badge variant="outline" className="text-muted-foreground">
         PENDIENTE
       </Badge>
     );
@@ -115,83 +175,69 @@ const getStatusBadge = (dateStr: string) => {
 
   const today = new Date();
   const exp = new Date(dateStr);
-  exp.setMinutes(exp.getMinutes() + exp.getTimezoneOffset()); // Ajuste UTC
+  exp.setMinutes(exp.getMinutes() + exp.getTimezoneOffset());
 
   const days = Math.ceil(
     (exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
   );
 
-  if (days < 0)
+  if (days < 0) {
     return (
-      <Badge className="bg-red-100 text-red-700 hover:bg-red-100 ">
+      <Badge className="bg-red-100 text-red-700 hover:bg-red-100">
         VENCIDO
       </Badge>
     );
-  if (days <= 30)
+  }
+
+  if (days <= 30) {
     return (
-      <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 ">
+      <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">
         POR VENCER ({days}d)
       </Badge>
     );
+  }
 
   return (
-    <Badge className="bg-green-100 text-green-700 hover:bg-green-100 ">
+    <Badge className="bg-green-100 text-green-700 hover:bg-green-100">
       VIGENTE
     </Badge>
   );
 };
 
-const normalizeCategoriaUI = (tipo1?: string | null) => {
-  const cat_ = (tipo1 || "TRACTOCAMION")
-    .toString()
+const normalizeText = (value: unknown): string => {
+  return String(value ?? "")
     .trim()
     .toUpperCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
-
-  if (cat_ === "TRACTOCAMION") return "tractocamion";
-  if (cat_ === "REMOLQUE") return "remolque_dolly";
-  if (cat_ === "UTILITARIO") return "utilitario";
-
-  return cat_.toLowerCase();
 };
 
-const mapCategoriaToBackend = (categoriaActivo: string) => {
-  // UI -> backend tipo_1
-  if (categoriaActivo === "tractocamion") return "TRACTOCAMION";
-  if (categoriaActivo === "remolque_dolly") return "REMOLQUE";
-  if (categoriaActivo === "utilitario") return "UTILITARIO";
-
-  return (categoriaActivo || "").trim().toUpperCase();
+const normalizeTipoLayout = (value: unknown): string => {
+  return normalizeText(value);
 };
 
-/**
- * Normaliza cualquier input (UI / backend / catálogo) al formato
- * que "debe guardar": MAYÚSCULAS + sin acentos.
- * Ej:
- *  - "rabón" -> "RABON"
- *  - "Rabon" -> "RABON"
- *  - "full"  -> "FULL"
- */
-const normalizeTipoToSave = (value: unknown): Unit["tipo"] | "" => {
-  const raw = String(value ?? "").trim();
-  if (!raw) return "";
+const normalizeCategoriaFisica = (tipo1?: string | null): string => {
+  const normalized = normalizeText(tipo1);
 
-  const noAccents = raw.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  return noAccents.toUpperCase() as Unit["tipo"];
+  if (normalized === "TRACTOCAMION") return "TRACTOCAMION";
+  if (normalized === "REMOLQUE") return "REMOLQUE";
+  if (normalized === "DOLLY") return "DOLLY";
+
+  return "TRACTOCAMION";
+};
+
+const getAutoLayoutByCategoria = (categoriaFisica: string): string => {
+  return AUTOMATIC_LAYOUT_MAPPING[normalizeText(categoriaFisica)] || "T3";
+};
+
+const getLayoutDescription = (categoriaFisica: string): string => {
+  const layout = getAutoLayoutByCategoria(categoriaFisica);
+  return LAYOUT_LABELS[layout] || layout;
 };
 
 // =====================
 // Component
 // =====================
-interface AddUnidadModalProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  unidadToEdit?: Unit | null;
-  onSave?: (unidad: any) => void;
-  isSaving?: boolean;
-}
-
 export function AddUnidadModal({
   open,
   onOpenChange,
@@ -200,39 +246,37 @@ export function AddUnidadModal({
   isSaving = false,
 }: AddUnidadModalProps) {
   const { toast } = useToast();
-  const { tiposActivos } = useTiposUnidad();
 
   const [formData, setFormData] = useState<UnidadFormData>(emptyFormData);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [customCategoryMode, setCustomCategoryMode] = useState(false);
+  const [masterPassword, setMasterPassword] = useState("");
+  const [showOverride, setShowOverride] = useState(false);
 
   const isEditMode = !!unidadToEdit;
 
-  // Ocultar sencillo/full del listado, pero permitir que se muestren si ya vienen en la unidad
-  // (en tu backend probablemente es MAYÚSCULAS, pero aquí lo normalizamos para comparar)
-  const hiddenTipos = useMemo(() => ["SENCILLO", "FULL"], []);
-  const currentTipoIsHidden = hiddenTipos.includes(
-    normalizeTipoToSave(formData.tipo),
+  const currentYear = new Date().getFullYear();
+  const yearOptions = Array.from({ length: 25 }, (_, i) =>
+    (currentYear - i + 1).toString(),
   );
 
-  const [masterPassword, setMasterPassword] = useState("");
-  const [showOverride, setShowOverride] = useState(false);
+  const calculatedLayout = useMemo(() => {
+    return getAutoLayoutByCategoria(formData.categoriaFisica);
+  }, [formData.categoriaFisica]);
 
   // =====================
   // Load edit data
   // =====================
   useEffect(() => {
     if (open && unidadToEdit) {
-      const catUI = normalizeCategoriaUI(unidadToEdit.tipo_1);
+      const categoriaFisica = normalizeCategoriaFisica(unidadToEdit.tipo_1);
+      const autoLayout = getAutoLayoutByCategoria(categoriaFisica);
 
-      // Si no es de las 3 categorías predefinidas -> custom input
-      const isKnown = ["tractocamion", "remolque_dolly", "utilitario"].includes(
-        catUI,
-      );
-      setCustomCategoryMode(!isKnown);
+      setShowOverride(false);
+      setMasterPassword("");
+      setErrors({});
 
       setFormData({
-        categoriaActivo: isKnown ? catUI : unidadToEdit.tipo_1 || catUI,
+        categoriaFisica,
 
         numero_economico: unidadToEdit.numero_economico || "",
         placas: unidadToEdit.placas || "",
@@ -242,58 +286,92 @@ export function AddUnidadModal({
         year:
           unidadToEdit.year?.toString() || new Date().getFullYear().toString(),
 
-        // IMPORTANT: guardamos ya normalizado para que el SELECT lo refleje y se guarde bien
-        tipo: normalizeTipoToSave(unidadToEdit.tipo),
-        // tipo_1 backend (solo para referencia; se recalcula al guardar)
-        tipo_1: (unidadToEdit.tipo_1 || "").toString(),
+        // Siempre alineados a la nueva lógica
+        tipo: autoLayout,
+        tipo_1: categoriaFisica,
 
         numero_serie_motor: unidadToEdit.numero_serie_motor || "",
         marca_motor: unidadToEdit.marca_motor || "",
         capacidad_carga: unidadToEdit.capacidad_carga?.toString() || "",
-        tipo_carga: unidadToEdit.tipo_carga || "",
+        tipo_carga: unidadToEdit.tipo_carga || "General",
 
-        tarjeta_circulacion_folio: unidadToEdit.tarjeta_circulacion_folio || "",
         tarjeta_circulacion_url: unidadToEdit.tarjeta_circulacion_url || "",
-
+        tarjeta_circulacion_folio: unidadToEdit.tarjeta_circulacion_folio || "",
         permiso_sct_folio: unidadToEdit.permiso_sct_folio || "",
         caat_folio: unidadToEdit.caat_folio || "",
         caat_vence: unidadToEdit.caat_vence || "",
-        permiso_sct_vence: unidadToEdit.permiso_sct_vence || "",
 
         seguro_vence: unidadToEdit.seguro_vence || "",
         verificacion_humo_vence: unidadToEdit.verificacion_humo_vence || "",
         verificacion_fisico_mecanica_vence:
           unidadToEdit.verificacion_fisico_mecanica_vence || "",
+        permiso_sct_vence: unidadToEdit.permiso_sct_vence || "",
 
-        status: (unidadToEdit.status || "disponible") as any,
+        status: (unidadToEdit.status || "disponible") as string,
       });
 
-      setErrors({});
       return;
     }
 
     if (!open) {
       setFormData(emptyFormData);
       setErrors({});
-      setCustomCategoryMode(false);
+      setShowOverride(false);
+      setMasterPassword("");
     }
   }, [unidadToEdit, open]);
+
+  // Mantener tipo y tipo_1 sincronizados siempre que cambie la naturaleza
+  useEffect(() => {
+    const categoriaNormalizada = normalizeCategoriaFisica(
+      formData.categoriaFisica,
+    );
+    const layoutAutomatico = getAutoLayoutByCategoria(categoriaNormalizada);
+
+    setFormData((prev) => {
+      if (
+        prev.tipo === layoutAutomatico &&
+        prev.tipo_1 === categoriaNormalizada &&
+        prev.categoriaFisica === categoriaNormalizada
+      ) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        categoriaFisica: categoriaNormalizada,
+        tipo_1: categoriaNormalizada,
+        tipo: layoutAutomatico,
+      };
+    });
+  }, [formData.categoriaFisica]);
 
   // =====================
   // Validation
   // =====================
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
-    if (!formData.categoriaActivo) newErrors.categoriaActivo = "Requerido";
-    if (!formData.numero_economico.trim())
-      newErrors.numero_economico = "Requerido";
 
-    // Condicionales
-    if (formData.categoriaActivo === "tractocamion") {
-      if (!formData.placas.trim()) newErrors.placas = "Requerido";
-      if (!formData.marca.trim()) newErrors.marca = "Requerido";
-      // Si quieres obligar configuración:
-      // if (!formData.tipo) newErrors.tipo = "Requerido";
+    if (!formData.categoriaFisica.trim()) {
+      newErrors.categoriaFisica = "Requerido";
+    }
+
+    if (!formData.numero_economico.trim()) {
+      newErrors.numero_economico = "Requerido";
+    }
+
+    if (!formData.marca.trim()) {
+      newErrors.marca = "Requerido";
+    }
+
+    if (!formData.year.trim()) {
+      newErrors.year = "Requerido";
+    }
+
+    if (normalizeCategoriaFisica(formData.categoriaFisica) === "TRACTOCAMION") {
+      if (!formData.placas.trim()) {
+        newErrors.placas = "Requerido";
+      }
     }
 
     setErrors(newErrors);
@@ -315,48 +393,48 @@ export function AddUnidadModal({
       return;
     }
 
-    // Limpieza (Empty strings -> null)
     const cleanDate = (dateStr: string) =>
       dateStr && dateStr.trim() !== "" ? dateStr : null;
+
     const cleanString = (str: string) =>
-      str && str.trim() !== "" ? str : null;
+      str && str.trim() !== "" ? str.trim() : null;
+
     const cleanNumber = (numStr: string) =>
-      numStr && !isNaN(parseFloat(numStr)) ? parseFloat(numStr) : null;
+      numStr && !Number.isNaN(parseFloat(numStr)) ? parseFloat(numStr) : null;
 
     let ignoreBlocking = false;
 
     if (showOverride) {
       if (masterPassword === "ADMIN123") {
-        // <--- TU CONTRASEÑA MAESTRA
         ignoreBlocking = true;
       } else {
-        toast({ title: "Contraseña incorrecta", variant: "destructive" });
+        toast({
+          title: "Contraseña incorrecta",
+          description: "No se pudo aplicar la habilitación forzada.",
+          variant: "destructive",
+        });
         return;
       }
     }
 
-    const tipo1Backend = mapCategoriaToBackend(formData.categoriaActivo);
+    const categoriaFisica = normalizeCategoriaFisica(formData.categoriaFisica);
+    const layoutCalculado = normalizeTipoLayout(
+      getAutoLayoutByCategoria(categoriaFisica),
+    );
 
-    // tipo = "configuración" -> SIEMPRE normalizada para guardar
-    const tipoPayload: Unit["tipo"] =
-      formData.categoriaActivo === "tractocamion" && formData.tipo
-        ? (normalizeTipoToSave(formData.tipo) as Unit["tipo"])
-        : ((normalizeTipoToSave(unidadToEdit?.tipo) || "FULL") as Unit["tipo"]);
-
-    const payload: Partial<Unit> = {
+    const payload: Partial<Unit> & { ignore_blocking?: boolean } = {
       ...(isEditMode && unidadToEdit ? { id: unidadToEdit.id } : {}),
 
-      numero_economico: formData.numero_economico,
-      placas: formData.placas || "S/P",
-      marca: formData.marca,
-      modelo: formData.modelo,
-      year: parseInt(formData.year) || new Date().getFullYear(),
+      numero_economico: formData.numero_economico.trim().toUpperCase(),
+      placas: formData.placas.trim().toUpperCase() || "S/P",
+      vin: cleanString(formData.vin?.toUpperCase?.() ?? formData.vin),
+      marca: formData.marca.trim(),
+      modelo: cleanString(formData.modelo),
+      year: parseInt(formData.year, 10) || new Date().getFullYear(),
 
-      ignore_blocking: ignoreBlocking,
-
-      tipo: tipoPayload as any,
-      tipo_1: tipo1Backend,
-      vin: cleanString(formData.vin),
+      // Nueva lógica oficial
+      tipo: layoutCalculado as any,
+      tipo_1: categoriaFisica as any,
 
       numero_serie_motor: cleanString(formData.numero_serie_motor),
       marca_motor: cleanString(formData.marca_motor),
@@ -367,19 +445,19 @@ export function AddUnidadModal({
       tarjeta_circulacion_folio: cleanString(
         formData.tarjeta_circulacion_folio,
       ),
+      permiso_sct_folio: cleanString(formData.permiso_sct_folio),
+      caat_folio: cleanString(formData.caat_folio),
 
       seguro_vence: cleanDate(formData.seguro_vence),
       verificacion_humo_vence: cleanDate(formData.verificacion_humo_vence),
       verificacion_fisico_mecanica_vence: cleanDate(
         formData.verificacion_fisico_mecanica_vence,
       ),
-
-      permiso_sct_folio: cleanString(formData.permiso_sct_folio),
-      caat_folio: cleanString(formData.caat_folio),
-      caat_vence: cleanDate(formData.caat_vence),
       permiso_sct_vence: cleanDate(formData.permiso_sct_vence),
+      caat_vence: cleanDate(formData.caat_vence),
 
-      status: (unidadToEdit?.status || "disponible") as any,
+      status: (formData.status || unidadToEdit?.status || "disponible") as any,
+      ignore_blocking: ignoreBlocking,
     };
 
     onSave?.(payload);
@@ -389,11 +467,9 @@ export function AddUnidadModal({
     onOpenChange(false);
     setFormData(emptyFormData);
     setErrors({});
-    setCustomCategoryMode(false);
+    setShowOverride(false);
+    setMasterPassword("");
   };
-
-  const currentYear = new Date().getFullYear();
-  const yearOptions = Array.from({ length: 25 }, (_, i) => currentYear - i + 1);
 
   return (
     <Dialog
@@ -408,96 +484,93 @@ export function AddUnidadModal({
             <Truck className="h-5 w-5" />
             {isEditMode
               ? `Editar ${formData.numero_economico}`
-              : "Registrar Nueva Unidad"}
+              : "Registrar Nuevo Activo"}
           </DialogTitle>
           <DialogDescription className="text-primary-foreground/80">
-            Gestión completa del expediente vehicular.
+            Gestión del activo físico y su expediente documental.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="px-6 py-6 space-y-6">
-          {/* SELECCIÓN DE CATEGORÍA */}
-          <div className="bg-muted/30 p-4 rounded-lg border mb-4">
-            <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <Label>Categoría de Activo *</Label>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 text-xs text-blue-600"
-                  onClick={() => {
-                    setCustomCategoryMode((prev) => !prev);
-                    if (!customCategoryMode) {
-                      setFormData((prev) => ({ ...prev, categoriaActivo: "" }));
-                    }
-                  }}
-                >
-                  {customCategoryMode ? "Volver a lista" : "+ Otra categoría"}
-                </Button>
-              </div>
+          {/* NATURALEZA + LAYOUT AUTOMÁTICO */}
+          <div className="bg-blue-50/50 p-4 rounded-lg border border-blue-100 space-y-4">
+            <div className="flex items-center justify-between">
+              <Label className="font-semibold text-blue-900">
+                Clasificación Física del Activo
+              </Label>
+              <Badge
+                variant="outline"
+                className="bg-white border-blue-300 text-blue-800"
+              >
+                Layout automático:{" "}
+                {getLayoutDescription(formData.categoriaFisica)}
+              </Badge>
+            </div>
 
-              {customCategoryMode ? (
-                <Input
-                  placeholder="Ej: Montacargas"
-                  value={formData.categoriaActivo}
-                  onChange={(e) =>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Tipo de Activo (Físico) *</Label>
+                <Select
+                  value={formData.categoriaFisica}
+                  onValueChange={(val) =>
                     setFormData((prev) => ({
                       ...prev,
-                      categoriaActivo: e.target.value,
+                      categoriaFisica: val,
                     }))
-                  }
-                  className={errors.categoriaActivo ? "border-destructive" : ""}
-                  autoFocus
-                />
-              ) : (
-                <Select
-                  value={formData.categoriaActivo}
-                  onValueChange={(val) =>
-                    setFormData((prev) => ({ ...prev, categoriaActivo: val }))
                   }
                 >
                   <SelectTrigger
                     className={
-                      errors.categoriaActivo ? "border-destructive" : ""
+                      errors.categoriaFisica ? "border-destructive" : ""
                     }
                   >
                     <SelectValue placeholder="Seleccione..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="tractocamion">
-                      🚛 Tractocamión
-                    </SelectItem>
-                    <SelectItem value="remolque_dolly">
-                      📦 Remolque / Dolly
-                    </SelectItem>
-                    <SelectItem value="utilitario">
-                      🔧 Utilitario / Otro
-                    </SelectItem>
+                    {NATURALEZA_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
-              )}
 
-              {errors.categoriaActivo && (
-                <p className="text-xs text-destructive">
-                  {errors.categoriaActivo}
+                {errors.categoriaFisica && (
+                  <p className="text-xs text-destructive">
+                    {errors.categoriaFisica}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label>Configuración de Ejes (Layout)</Label>
+                <div className="h-10 rounded-md border bg-white px-3 flex items-center">
+                  <span className="text-sm font-medium text-slate-800">
+                    {getLayoutDescription(formData.categoriaFisica)}
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground italic">
+                  El sistema lo asigna automáticamente según la naturaleza del
+                  activo.
                 </p>
-              )}
+              </div>
             </div>
           </div>
 
-          <div className="p-4 border rounded-lg bg-slate-50 space-y-4 mt-4">
+          {/* CONTROL DE ESTATUS */}
+          <div className="p-4 border rounded-lg bg-slate-50 space-y-4">
             <h3 className="font-medium text-sm flex items-center gap-2">
-              <Settings className="h-4 w-4" /> Control de Estatus
+              <Settings className="h-4 w-4" />
+              Control de Estatus
             </h3>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Estatus Operativo</Label>
                 <Select
                   value={formData.status || "disponible"}
                   onValueChange={(v) =>
-                    setFormData((p) => ({ ...p, status: v }))
+                    setFormData((prev) => ({ ...prev, status: v }))
                   }
                 >
                   <SelectTrigger>
@@ -515,20 +588,18 @@ export function AddUnidadModal({
                 </Select>
               </div>
 
-              {/* BOTÓN DE DESBLOQUEO DE EMERGENCIA */}
               <div className="flex items-end">
                 <Button
                   type="button"
                   variant={showOverride ? "destructive" : "outline"}
                   className="w-full"
-                  onClick={() => setShowOverride(!showOverride)}
+                  onClick={() => setShowOverride((prev) => !prev)}
                 >
                   {showOverride ? "Cancelar Desbloqueo" : "Forzar Habilitación"}
                 </Button>
               </div>
             </div>
 
-            {/* INPUT DE CONTRASEÑA MAESTRA (Solo si se activa override) */}
             {showOverride && (
               <div className="animate-in fade-in slide-in-from-top-2 p-3 bg-red-50 border border-red-200 rounded text-red-800">
                 <div className="flex items-start gap-2">
@@ -536,9 +607,9 @@ export function AddUnidadModal({
                   <div className="flex-1 space-y-2">
                     <p className="text-xs font-bold">ZONA DE PELIGRO</p>
                     <p className="text-xs">
-                      Estás a punto de habilitar una unidad que el sistema ha
-                      marcado como insegura. La data quedará incompleta pero la
-                      unidad podrá asignarse.
+                      Estás habilitando una unidad que el sistema podría
+                      considerar incompleta o insegura. La operación quedará
+                      bajo excepción.
                     </p>
                     <div className="space-y-1">
                       <Label className="text-xs">Contraseña Maestra</Label>
@@ -563,7 +634,7 @@ export function AddUnidadModal({
               <TabsTrigger value="documentacion">Documentación</TabsTrigger>
             </TabsList>
 
-            {/* TAB 1: DATOS GENERALES */}
+            {/* TAB GENERAL */}
             <TabsContent value="general" className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -590,7 +661,7 @@ export function AddUnidadModal({
 
                 <div className="space-y-2">
                   <Label>
-                    Placas {formData.categoriaActivo === "tractocamion" && "*"}
+                    Placas {formData.categoriaFisica === "TRACTOCAMION" && "*"}
                   </Label>
                   <Input
                     value={formData.placas}
@@ -622,11 +693,9 @@ export function AddUnidadModal({
                     className={errors.marca ? "border-destructive" : ""}
                   />
                   <datalist id="marcas-list">
-                    <option value="Freightliner" />
-                    <option value="Kenworth" />
-                    <option value="International" />
-                    <option value="Volvo" />
-                    <option value="Mercedes-Benz" />
+                    {MARCAS_SUGERIDAS.map((marca) => (
+                      <option key={marca} value={marca} />
+                    ))}
                   </datalist>
                   {errors.marca && (
                     <p className="text-xs text-destructive">{errors.marca}</p>
@@ -657,75 +726,27 @@ export function AddUnidadModal({
                     <SelectTrigger
                       className={errors.year ? "border-destructive" : ""}
                     >
-                      <SelectValue />
+                      <SelectValue placeholder="Seleccione año" />
                     </SelectTrigger>
                     <SelectContent>
                       {yearOptions.map((y) => (
-                        <SelectItem key={y} value={y.toString()}>
+                        <SelectItem key={y} value={y}>
                           {y}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  {errors.year && (
+                    <p className="text-xs text-destructive">{errors.year}</p>
+                  )}
                 </div>
-
-                {/* CONFIGURACIÓN (usa tipo, NO tipo_1) */}
-                {formData.categoriaActivo === "tractocamion" && (
-                  <div className="space-y-2">
-                    <Label>Configuración</Label>
-                    <Select
-                      value={formData.tipo}
-                      onValueChange={(val) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          tipo: normalizeTipoToSave(val),
-                        }))
-                      }
-                    >
-                      <SelectTrigger
-                        className={errors.tipo ? "border-destructive" : ""}
-                      >
-                        <SelectValue placeholder="Seleccione..." />
-                      </SelectTrigger>
-
-                      <SelectContent>
-                        {/* Mostrar valor oculto si ya viene (SENCILLO/FULL) */}
-                        {currentTipoIsHidden && formData.tipo && (
-                          <SelectItem value={formData.tipo}>
-                            {String(formData.tipo).toUpperCase()} (oculto)
-                          </SelectItem>
-                        )}
-
-                        {tiposActivos
-                          .filter(
-                            (t) =>
-                              !hiddenTipos.includes(
-                                normalizeTipoToSave(t.nombre) || "",
-                              ),
-                          )
-                          .map((t) => {
-                            const normalizedValue =
-                              normalizeTipoToSave(t.nombre) || "";
-                            return (
-                              <SelectItem key={t.id} value={normalizedValue}>
-                                {t.nombre}
-                              </SelectItem>
-                            );
-                          })}
-                      </SelectContent>
-                    </Select>
-                    {errors.tipo && (
-                      <p className="text-xs text-destructive">{errors.tipo}</p>
-                    )}
-                  </div>
-                )}
               </div>
             </TabsContent>
 
-            {/* TAB 2: FICHA TÉCNICA */}
+            {/* TAB TÉCNICA */}
             <TabsContent value="tecnica" className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2 col-span-2">
+                <div className="space-y-2 md:col-span-2">
                   <Label>VIN / Número de Serie</Label>
                   <Input
                     value={formData.vin}
@@ -739,31 +760,35 @@ export function AddUnidadModal({
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Número de Motor</Label>
-                  <Input
-                    value={formData.numero_serie_motor}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        numero_serie_motor: e.target.value,
-                      }))
-                    }
-                  />
-                </div>
+                {formData.categoriaFisica === "TRACTOCAMION" && (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Número de Motor</Label>
+                      <Input
+                        value={formData.numero_serie_motor}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            numero_serie_motor: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
 
-                <div className="space-y-2">
-                  <Label>Marca de Motor</Label>
-                  <Input
-                    value={formData.marca_motor}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        marca_motor: e.target.value,
-                      }))
-                    }
-                  />
-                </div>
+                    <div className="space-y-2">
+                      <Label>Marca de Motor</Label>
+                      <Input
+                        value={formData.marca_motor}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            marca_motor: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                  </>
+                )}
 
                 <div className="space-y-2">
                   <Label>Capacidad de Carga (Ton)</Label>
@@ -777,11 +802,15 @@ export function AddUnidadModal({
                         capacidad_carga: e.target.value,
                       }))
                     }
+                    placeholder="0.0"
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Tipo de Carga</Label>
+                <div className="space-y-2 border-l-4 border-amber-500 pl-4 bg-amber-50/30 p-2 rounded">
+                  <Label className="flex items-center gap-2 text-amber-800 font-bold">
+                    <ShieldAlert className="h-4 w-4" />
+                    Tipo de Carga / Clasificación
+                  </Label>
                   <Select
                     value={formData.tipo_carga}
                     onValueChange={(val) =>
@@ -789,28 +818,37 @@ export function AddUnidadModal({
                     }
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="General, IMO, etc." />
+                      <SelectValue placeholder="Seleccione..." />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="General">Carga General</SelectItem>
-                      <SelectItem value="Refrigerada">Refrigerada</SelectItem>
                       <SelectItem value="Peligrosa">
-                        Material Peligroso (IMO)
+                        ⚠️ Material Peligroso (IMO)
                       </SelectItem>
-                      <SelectItem value="Granel">Granel</SelectItem>
+                      <SelectItem value="Refrigerada">
+                        ❄️ Refrigerada
+                      </SelectItem>
+                      <SelectItem value="Granel">🌾 Granel</SelectItem>
                     </SelectContent>
                   </Select>
+
+                  {formData.tipo_carga === "Peligrosa" && (
+                    <p className="text-[11px] text-amber-700 font-medium">
+                      La unidad debe contar con equipamiento, permisos y
+                      señalización para materiales peligrosos.
+                    </p>
+                  )}
                 </div>
               </div>
             </TabsContent>
 
-            {/* TAB 3: DOCUMENTACIÓN */}
+            {/* TAB DOCUMENTACIÓN */}
             <TabsContent value="documentacion" className="space-y-4">
               <div className="p-3 bg-blue-50 text-blue-700 text-sm rounded-md flex items-start gap-2 mb-4 border border-blue-100">
                 <Info className="h-4 w-4 mt-0.5 shrink-0" />
                 <p>
-                  Aquí registramos los vencimientos. La carga de archivos PDF se
-                  realiza en el detalle de la unidad.
+                  Aquí se registran folios y vencimientos. La carga de archivos
+                  PDF puede mantenerse en el detalle de la unidad.
                 </p>
               </div>
 
@@ -852,7 +890,6 @@ export function AddUnidadModal({
                   </div>
                 ))}
 
-                {/* CAAT */}
                 <div className="flex items-end gap-3 p-3 border rounded-lg bg-blue-50/20 border-blue-100">
                   <div className="flex-1 space-y-1">
                     <Label className="text-xs font-semibold uppercase text-blue-700">
@@ -888,7 +925,6 @@ export function AddUnidadModal({
                   </div>
                 </div>
 
-                {/* Permiso SCT Folio */}
                 <div className="flex items-end gap-3 p-3 border rounded-lg bg-gray-50/50">
                   <div className="flex-1 space-y-1">
                     <Label className="text-xs font-semibold uppercase text-muted-foreground">
@@ -907,17 +943,16 @@ export function AddUnidadModal({
                     />
                   </div>
                   <div className="w-[140px] flex justify-center pb-1">
-                    <Badge variant="outline" className="text-muted-foreground ">
+                    <Badge variant="outline" className="text-muted-foreground">
                       PERMANENTE
                     </Badge>
                   </div>
                 </div>
 
-                {/* Tarjeta Circulación Folio */}
                 <div className="flex items-end gap-3 p-3 border rounded-lg bg-gray-50/50">
                   <div className="flex-1 space-y-1">
                     <Label className="text-xs font-semibold uppercase text-muted-foreground">
-                      Folio Tarjeta Circulación
+                      Folio Tarjeta de Circulación
                     </Label>
                     <Input
                       value={formData.tarjeta_circulacion_folio}
@@ -932,7 +967,7 @@ export function AddUnidadModal({
                     />
                   </div>
                   <div className="w-[140px] flex justify-center pb-1">
-                    <Badge variant="outline" className="text-muted-foreground ">
+                    <Badge variant="outline" className="text-muted-foreground">
                       INFO
                     </Badge>
                   </div>
@@ -941,7 +976,7 @@ export function AddUnidadModal({
             </TabsContent>
           </Tabs>
 
-          <DialogFooter className="border-t pt-4 sticky bottom-0 pb-2">
+          <DialogFooter className="border-t pt-4 sticky bottom-0 pb-2 bg-white">
             <Button
               type="button"
               variant="outline"
@@ -956,7 +991,7 @@ export function AddUnidadModal({
               className="bg-primary hover:bg-primary/90"
             >
               {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isEditMode ? "Actualizar Unidad" : "Guardar Unidad"}
+              {isEditMode ? "Actualizar Activo" : "Guardar Activo"}
             </Button>
           </DialogFooter>
         </form>

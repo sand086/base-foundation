@@ -46,6 +46,7 @@ from fastapi.responses import FileResponse
 from app.api.endpoints.auth import get_current_user
 from app.models.models import User, Unit, BulkUploadHistory, UnitDocumentHistory
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.exc import IntegrityError
 
 router = APIRouter()
 # Directorios
@@ -77,46 +78,88 @@ def read_units(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return crud.get_units(db, skip=skip, limit=limit)
 
 
+# ... (tus otros imports se mantienen)
+from sqlalchemy.exc import IntegrityError  # 🚀 IMPORTANTE: Añade este import
+
+
 @router.post("/units", response_model=schemas.UnitResponse)
 def create_unit(unit: schemas.UnitCreate, db: Session = Depends(get_db)):
-    # 1. Validar duplicados
+    # 1. Validación manual previa (Número Económico)
     if (
         db.query(models.Unit)
         .filter(models.Unit.numero_economico == unit.numero_economico)
         .first()
     ):
-        raise HTTPException(status_code=400, detail="El número económico ya existe")
+        raise HTTPException(
+            status_code=400,
+            detail="El número económico ya está registrado en el sistema.",
+        )
 
-    # 2. Convertir el schema a diccionario
-    unit_data = unit.model_dump()
+    try:
+        # 2. Convertir el schema a diccionario y limpiar public_id
+        unit_data = unit.model_dump()
+        unit_data.pop("public_id", None)
 
-    # 3. ✅ LA SOLUCIÓN DE RAÍZ:
-    # Extraemos el public_id si existe en el diccionario para que no choque
-    # y generamos uno nuevo de forma segura.
-    unit_data.pop("public_id", None)
+        # 3. Crear instancia con ID único
+        db_unit = models.Unit(
+            **unit_data, public_id=f"UNT-{uuid.uuid4().hex[:8].upper()}"
+        )
 
-    # Creamos la instancia pasando el ID generado explícitamente
-    db_unit = models.Unit(**unit_data, public_id=f"UNT-{uuid.uuid4().hex[:8].upper()}")
+        db.add(db_unit)
+        db.commit()  # 🚩 Aquí es donde suele saltar el error de base de datos
+        db.refresh(db_unit)
 
-    # 4. Guardar y refrescar
-    db.add(db_unit)
-    db.commit()
-    db.refresh(db_unit)
+        # Recalcular estatus inicial
+        crud._update_unit_status(db, db_unit)
+        db.commit()
+        db.refresh(db_unit)
 
-    # Recalcular estatus inicial (documentos, llantas, etc.)
-    crud._update_unit_status(db, db_unit)
-    db.commit()
-    db.refresh(db_unit)
+        return db_unit
 
-    return db_unit
+    except IntegrityError as e:
+        db.rollback()  # 🧼 Limpiamos la transacción fallida (Obligatorio)
+        error_msg = str(e.orig)
+
+        # Analizamos qué llave duplicada falló
+        if "units_placas_key" in error_msg:
+            raise HTTPException(
+                status_code=400,
+                detail="Error: Esas placas ya pertenecen a otra unidad registrada.",
+            )
+        if "units_numero_economico_key" in error_msg:
+            raise HTTPException(
+                status_code=400, detail="Error: El número económico ya está en uso."
+            )
+        if "units_vin_key" in error_msg:
+            raise HTTPException(
+                status_code=400, detail="Error: El número de serie (VIN) ya existe."
+            )
+
+        raise HTTPException(
+            status_code=400,
+            detail="Error de integridad: Verifique que no haya datos duplicados.",
+        )
 
 
 @router.put("/units/{unit_id}", response_model=schemas.UnitResponse)
 def update_unit(unit_id: str, unit: schemas.UnitUpdate, db: Session = Depends(get_db)):
-    db_unit = crud.update_unit(db, unit_id, unit)
-    if not db_unit:
-        raise HTTPException(status_code=404, detail="Unidad no encontrada")
-    return db_unit
+    try:
+        db_unit = crud.update_unit(db, unit_id, unit)
+        if not db_unit:
+            raise HTTPException(status_code=404, detail="Unidad no encontrada")
+        return db_unit
+
+    except IntegrityError as e:
+        db.rollback()
+        error_msg = str(e.orig)
+        if "units_placas_key" in error_msg:
+            raise HTTPException(
+                status_code=400,
+                detail="No se pudo actualizar: Esas placas ya están asignadas a otra unidad.",
+            )
+        raise HTTPException(
+            status_code=400, detail="Error al actualizar: Posible dato duplicado."
+        )
 
 
 @router.delete("/units/{unit_id}")

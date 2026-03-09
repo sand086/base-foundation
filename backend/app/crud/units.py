@@ -11,28 +11,21 @@ import uuid
 # Configuración de llantas esperadas por tipo
 EXPECTED_TIRES = {
     "TRACTOCAMION": 10,
+    "REMOLQUE": 8,
+    "DOLLY": 8,
     "RABON": 6,
     "CAMIONETA": 4,
-    "REMOLQUE": 8,
-    "FULL": 18,  # Ejemplo
 }
 
 
 def _update_unit_status(db: Session, unit: models.Unit) -> None:
-    """
-    Calcula alertas, actualiza contadores y BLOQUEA la unidad si es necesario.
-
-    Reglas:
-    - Si hay documentos vencidos o llantas críticas o faltantes => status = BLOQUEADO (salvo ignore_blocking=True)
-    - Si no hay razones y estaba bloqueado => regresa a DISPONIBLE y limpia razon_bloqueo
-    """
     if not unit:
         return
 
     today = date.today()
     razones_bloqueo: list[str] = []
 
-    # 1) Documentos vencidos
+    # 1) Documentos vencidos (Se mantiene igual)
     expired_count = 0
     date_fields = [
         "seguro_vence",
@@ -54,31 +47,37 @@ def _update_unit_status(db: Session, unit: models.Unit) -> None:
     # 2) Llantas
     unit_tires = unit.tires or []
 
-    # 2a) Llantas críticas
+    # 2a) Llantas críticas (Ajustado a la "Opción B" del mecánico)
     critical_tires = 0
     for t in unit_tires:
-        # Nota: si tus enums llegan como Enum, str(t.estado_fisico) puede incluir "TireCondition.BUENA"
-        # Por eso normalizamos con split.
         estado_fisico = str(getattr(t, "estado_fisico", "")).lower()
         if "." in estado_fisico:
             estado_fisico = estado_fisico.split(".")[-1]
 
         profundidad = getattr(t, "profundidad_actual", 0) or 0
-        if profundidad < 3 or estado_fisico in ["mala", "regular"]:
+
+        # Una llanta es crítica si el mecánico dice "Mala"
+        # o si físicamente es peligrosa (<= 3mm)
+        if profundidad <= 3 or estado_fisico == "mala":
             critical_tires += 1
 
     if critical_tires > 0:
         razones_bloqueo.append(f"{critical_tires} llantas críticas")
 
     # 2b) Llantas incompletas
-    tipo_unidad = str(unit.tipo_1).upper() if unit.tipo_1 else str(unit.tipo).upper()
-    llantas_esperadas = EXPECTED_TIRES.get(tipo_unidad, 0)
+    # 🚀 CAMBIO CLAVE: Usamos tipo_1 (Naturaleza) para saber cuántas llantas pedir
+    tipo_fisico = str(unit.tipo_1).upper() if unit.tipo_1 else "TRACTOCAMION"
+    llantas_esperadas = EXPECTED_TIRES.get(tipo_fisico, 0)
 
     if llantas_esperadas > 0 and len(unit_tires) < llantas_esperadas:
         faltantes = llantas_esperadas - len(unit_tires)
         razones_bloqueo.append(f"Faltan {faltantes} llantas")
 
-    # --- Aplicar cambios (sin commit aquí) ---
+    # 3) Validación de Material Peligroso (IMO)
+    # Si la carga es peligrosa, podrías agregar validaciones extra aquí en el futuro
+    # Por ahora el campo tipo_carga ya viaja en el objeto unit.
+
+    # --- Aplicar cambios ---
     unit.documentos_vencidos = expired_count
     unit.llantas_criticas = critical_tires
 
@@ -92,10 +91,10 @@ def _update_unit_status(db: Session, unit: models.Unit) -> None:
 
     if should_block:
         new_reason = ", ".join(razones_bloqueo)
-        if current_status != "bloqueado" or unit.razon_bloqueo != new_reason:
-            unit.status = "bloqueado"
-            unit.razon_bloqueo = new_reason
+        unit.status = "bloqueado"
+        unit.razon_bloqueo = new_reason
     else:
+        # Si ya no hay razones de bloqueo y el estatus era "bloqueado", lo liberamos
         if current_status == "bloqueado":
             unit.status = "disponible"
             unit.razon_bloqueo = None
@@ -219,13 +218,11 @@ def get_unit_by_eco(db: Session, numero_economico: str):
 
 
 def create_unit(db: Session, unit: schemas.UnitCreate):
-    """
-    Crea unidad (record_status default A por AuditMixin).
-    """
+    # Convertimos el esquema a diccionario
     data = unit.model_dump()
 
+    # 🚀 AUTO-GENERACIÓN DE ID SI NO VIENE DEL FRONTEND
     if not data.get("public_id"):
-        # Formato: UNT-XXXXXX (ej: UNT-A1B2C3D4)
         data["public_id"] = f"UNT-{uuid.uuid4().hex[:8].upper()}"
 
     db_unit = models.Unit(**data)
@@ -233,24 +230,10 @@ def create_unit(db: Session, unit: schemas.UnitCreate):
     db.commit()
     db.refresh(db_unit)
 
-    # Recalcular estatus y persistir si cambia
-    before = (
-        db_unit.status,
-        db_unit.razon_bloqueo,
-        db_unit.documentos_vencidos,
-        db_unit.llantas_criticas,
-    )
+    # Forzamos la primera evaluación de estatus
     _update_unit_status(db, db_unit)
-    after = (
-        db_unit.status,
-        db_unit.razon_bloqueo,
-        db_unit.documentos_vencidos,
-        db_unit.llantas_criticas,
-    )
-    if before != after:
-        db.add(db_unit)
-        db.commit()
-        db.refresh(db_unit)
+    db.commit()
+    db.refresh(db_unit)
 
     return db_unit
 
