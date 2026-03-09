@@ -276,16 +276,19 @@ def reopen_trip_leg(leg_id: int, db: Session = Depends(get_db)):
 
 @router.get("/trips/{trip_id}/carta-porte-ciega")
 def generate_carta_porte_ciega(trip_id: int, db: Session = Depends(get_db)):
+    # 1. Verificar si WeasyPrint cargó
     if HTML is None:
         raise HTTPException(
             status_code=500,
-            detail="WeasyPrint no está instalado correctamente en el servidor.",
+            detail="WeasyPrint no está instalado o faltan dependencias del sistema (pango, cairo).",
         )
 
+    # 2. Buscar el viaje
     trip = db.query(models.Trip).filter(models.Trip.id == trip_id).first()
     if not trip:
         raise HTTPException(status_code=404, detail="Viaje no encontrado")
 
+    # 3. Determinar el tramo activo
     active_leg = None
     if trip.legs:
         active_leg = next(
@@ -298,15 +301,36 @@ def generate_carta_porte_ciega(trip_id: int, db: Session = Depends(get_db)):
             trip.legs[-1],
         )
 
-    template = jinja_env.get_template("carta_porte_ciega.html")
-    html_content = template.render(
-        trip=trip,
-        leg=active_leg,
-        fecha_impresion=datetime.now().strftime("%d/%m/%Y %H:%M"),
-    )
+    # 4. Renderizar HTML con Jinja2
+    try:
+        template = jinja_env.get_template("carta_porte_ciega.html")
+        html_content = template.render(
+            trip=trip,
+            leg=active_leg,
+            fecha_impresion=datetime.now().strftime("%d/%m/%Y %H:%M"),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error en el template HTML: {str(e)}"
+        )
 
-    pdf_file = HTML(string=html_content, base_url=TEMPLATE_DIR).write_pdf()
+    # 5. Generar PDF con manejo de errores específico 🚀
+    try:
+        # El base_url es clave para que encuentre imágenes y CSS
+        pdf_file = HTML(string=html_content, base_url=TEMPLATE_DIR).write_pdf()
+    except TypeError as e:
+        # Este captura el error específico de pydyf que tienes actualmente
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error de compatibilidad en WeasyPrint (pydyf): {str(e)}. Intente actualizar las librerías en el servidor.",
+        )
+    except Exception as e:
+        # Captura cualquier otro error (memoria, permisos, CSS corrupto)
+        raise HTTPException(
+            status_code=500, detail=f"Error al generar el PDF: {str(e)}"
+        )
 
+    # 6. Retornar respuesta exitosa
     return Response(
         content=pdf_file,
         media_type="application/pdf",
