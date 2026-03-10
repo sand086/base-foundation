@@ -338,3 +338,7 @@ def generate_carta_porte_ciega(trip_id: int, db: Session = Depends(get_db)):
             "Content-Disposition": f"inline; filename=Carta_Porte_{trip.public_id or trip.id}.pdf"
         },
     )
+
+
+# $2y$12$y3vy.iw/pjjr67cPO5/LgOQPFlKJBvlHQrsbinE3EVm6pkg3l9gSu
+# LLMHA623KLARIHCO

@@ -516,9 +516,9 @@ export default function CierreViaje() {
                 </div>
 
                 {/* GRAN TOTAL */}
-                <div className="mt-8 bg-brand-navy rounded-xl p-6 flex items-center justify-between text-white shadow-xl">
+                <div className="mt-8 bg-brand-navy rounded-xl p-6 flex items-center justify-between shadow-xl">
                   <div>
-                    <p className="text-sm text-slate-300 font-medium uppercase tracking-widest">
+                    <p className="text-sm text-slate-500 font-medium uppercase tracking-widest">
                       Saldo a favor del operador
                     </p>
                     <p className="text-4xl font-black font-mono mt-1">
