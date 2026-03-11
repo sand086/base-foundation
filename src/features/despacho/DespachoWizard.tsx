@@ -10,8 +10,6 @@ import {
   Truck,
   ChevronsUpDown,
   Clock,
-  Gauge,
-  Droplets,
   User,
   Info,
   Box,
@@ -87,10 +85,6 @@ type WizardData = {
   driverId: string;
 
   leg_type: string;
-
-  // Lecturas Iniciales (Vital para liquidación)
-  odometro_inicial: number;
-  nivel_tanque_inicial: number;
 
   // Finanzas
   anticipo_casetas: number;
@@ -210,9 +204,6 @@ export const DespachoWizard = () => {
     driverId: "",
 
     leg_type: "carga_muelle", // Por defecto inician yendo al patio/muelle
-
-    odometro_inicial: 0,
-    nivel_tanque_inicial: 100,
 
     anticipo_casetas: 0,
     anticipo_viaticos: 0,
@@ -373,17 +364,6 @@ export const DespachoWizard = () => {
       return isNaN(parsed) || parsed >= 9000 ? null : parsed;
     };
 
-    // Validación Básica (Odómetro OBLIGATORIO solo para carretera)
-    if (isRoadLeg && (!data.odometro_inicial || data.odometro_inicial <= 0)) {
-      toast({
-        variant: "destructive",
-        title: "Falta Odómetro",
-        description:
-          "Por favor, ingresa el odómetro inicial para este viaje en carretera.",
-      });
-      return;
-    }
-
     try {
       const payload: any = {
         client_id: parseInt(data.clienteId, 10),
@@ -417,11 +397,9 @@ export const DespachoWizard = () => {
           leg_type: data.leg_type,
           operator_id: parseInt(data.driverId, 10),
 
-          // Si es patio, mandamos NULO para no ensuciar la base de datos de rendimiento
-          odometro_inicial: isRoadLeg ? Number(data.odometro_inicial) : null,
-          nivel_tanque_inicial: isRoadLeg
-            ? Number(data.nivel_tanque_inicial)
-            : null,
+          // Odómetros y Telemetría ahora son null (Se manejarán en el módulo Diésel)
+          odometro_inicial: null,
+          nivel_tanque_inicial: null,
 
           // Anticipos en Ceros si es movimiento de patio
           anticipo_casetas: isRoadLeg ? Number(data.anticipo_casetas || 0) : 0,
@@ -464,15 +442,12 @@ export const DespachoWizard = () => {
       data.unitId && data.driverId && data.remolque1Id,
     );
 
-    // Si es ruta carretera, validamos odómetro. Si es patio, lo dejamos pasar.
-    const isOdometerValid = isRoadLeg ? data.odometro_inicial > 0 : true;
-
     const isEquipValid = isFullTrip
       ? Boolean(isBasicValid && data.dollyId && data.remolque2Id)
       : isBasicValid;
 
-    return Boolean(isEquipValid && isOdometerValid);
-  }, [isFullTrip, data, isRoadLeg]);
+    return Boolean(isEquipValid);
+  }, [isFullTrip, data]);
 
   return (
     <Card className="shadow-lg border-slate-200">
@@ -480,17 +455,22 @@ export const DespachoWizard = () => {
         {/* INDICADOR DE PASOS */}
         <div className="flex gap-3 mb-8">
           <Badge
-            className={`px-4 py-1.5 ${currentStep >= 1 ? "bg-brand-navy" : "bg-slate-100 text-slate-400"}`}
+            variant={currentStep >= 1 ? "info" : "neutralSoft"}
+            className="px-4 py-1.5"
           >
             1. Ruta y Mercancía
           </Badge>
+
           <Badge
-            className={`px-4 py-1.5 ${currentStep >= 2 ? "bg-brand-navy" : "bg-slate-100 text-slate-400"}`}
+            variant={currentStep >= 2 ? "info" : "neutralSoft"}
+            className="px-4 py-1.5"
           >
             2. Asignación Física
           </Badge>
+
           <Badge
-            className={`px-4 py-1.5 ${currentStep === 3 ? "bg-brand-navy" : "bg-slate-100 text-slate-400"}`}
+            variant={currentStep === 3 ? "info" : "neutralSoft"}
+            className="px-4 py-1.5"
           >
             3. Finanzas y Egresos
           </Badge>
@@ -751,7 +731,7 @@ export const DespachoWizard = () => {
         )}
 
         {/* =========================================
-            PASO 2: ASIGNACIÓN FÍSICA Y TELEMETRÍA
+            PASO 2: ASIGNACIÓN FÍSICA
             ========================================= */}
         {currentStep === 2 && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
@@ -771,7 +751,7 @@ export const DespachoWizard = () => {
               </div>
             </div>
 
-            {/* SELECCIÓN DE FASE (Define el comportamiento de Gustavo) */}
+            {/* SELECCIÓN DE FASE */}
             <div className="flex items-center gap-4 bg-indigo-50 p-4 rounded-xl border border-indigo-100 shadow-sm">
               <Label className="text-sm font-black text-indigo-900 uppercase tracking-widest whitespace-nowrap flex items-center gap-2">
                 <Clock className="h-5 w-5" /> Fase Inicial del Viaje:
@@ -904,74 +884,17 @@ export const DespachoWizard = () => {
                   </div>
                 </div>
 
-                {/* 🚀 TELEMETRÍA CONDICIONAL */}
-                <div
-                  className={`p-5 rounded-2xl border-2 transition-colors ${isRoadLeg ? "bg-amber-50 border-amber-200 shadow-inner" : "bg-slate-50 border-slate-200 opacity-80"}`}
-                >
-                  <div className="mb-4 flex items-start justify-between">
-                    <div>
-                      <p className="text-sm font-black flex items-center gap-2 text-slate-700 uppercase tracking-widest">
-                        <Gauge className="h-4 w-4" /> Telemetría Inicial
-                      </p>
-                      {isRoadLeg ? (
-                        <p className="text-[11px] text-amber-700 font-bold mt-1">
-                          Obligatorio para control de rendimiento en ruta.
-                        </p>
-                      ) : (
-                        <p className="text-[11px] text-slate-500 mt-1 italic">
-                          No requerido para operadores de maniobras locales.
-                        </p>
-                      )}
-                    </div>
+                {/* 🚀 ELIMINAMOS TELEMETRÍA (Odómetro/Combustible se van al Módulo de Combustible) */}
+                <div className="p-5 rounded-2xl border border-slate-200 opacity-70 bg-slate-50 flex items-center gap-3">
+                  <div className="h-10 w-10 bg-slate-200 rounded-full flex justify-center items-center shrink-0">
+                    <Info className="h-5 w-5 text-slate-500" />
                   </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label className="font-bold text-slate-600">
-                        Odómetro (km){" "}
-                        {isRoadLeg && <span className="text-red-500">*</span>}
-                      </Label>
-                      <Input
-                        type="number"
-                        value={data.odometro_inicial || ""}
-                        onChange={(e) =>
-                          setData((p) => ({
-                            ...p,
-                            odometro_inicial: Number(e.target.value),
-                          }))
-                        }
-                        placeholder={isRoadLeg ? "Ej: 250400" : "Opcional"}
-                        className="font-mono bg-white"
-                        disabled={!isRoadLeg} // Bloqueado en patio
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="font-bold text-slate-600">
-                        Tanque (%){" "}
-                        {isRoadLeg && <span className="text-red-500">*</span>}
-                      </Label>
-                      <div className="relative">
-                        <Input
-                          type="number"
-                          min="0"
-                          max="100"
-                          value={data.nivel_tanque_inicial || ""}
-                          onChange={(e) =>
-                            setData((p) => ({
-                              ...p,
-                              nivel_tanque_inicial: Number(e.target.value),
-                            }))
-                          }
-                          placeholder={isRoadLeg ? "100" : ""}
-                          className="font-mono pr-8 bg-white"
-                          disabled={!isRoadLeg} // Bloqueado en patio
-                        />
-                        <span className="absolute right-3 top-2.5 font-bold text-slate-400">
-                          %
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+                  <p className="text-xs text-slate-600">
+                    <strong>Nota Operativa:</strong> La telemetría (Odómetros y
+                    Niveles de Diésel) ya no se registra en el despacho. Se debe
+                    registrar directamente en el{" "}
+                    <strong>Módulo de Combustible</strong>.
+                  </p>
                 </div>
               </div>
             </div>

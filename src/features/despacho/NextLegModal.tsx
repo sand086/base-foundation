@@ -1,4 +1,3 @@
-// src/features/despacho/NextLegModal.tsx
 import { useState, useMemo, useEffect } from "react";
 import {
   Dialog,
@@ -25,8 +24,6 @@ import {
   Link as LinkIcon,
   Truck,
   User,
-  Gauge,
-  Droplets,
   Loader2,
   Info,
   CheckCircle2,
@@ -56,22 +53,17 @@ export function NextLegModal({
     leg_type: "ruta_carretera",
     unit_id: null,
     operator_id: null,
-    odometro_inicial: 0,
-    nivel_tanque_inicial: 100,
     anticipo_casetas: 0,
     anticipo_viaticos: 0,
     anticipo_combustible: 0,
   });
 
-  // Limpiar el form siempre que se abre
   useEffect(() => {
     if (open) {
       setFormData({
-        leg_type: "ruta_carretera", // Generalmente, después de cargar en muelle, la siguiente es carretera
+        leg_type: "ruta_carretera",
         unit_id: null,
         operator_id: null,
-        odometro_inicial: 0,
-        nivel_tanque_inicial: 100,
         anticipo_casetas: 0,
         anticipo_viaticos: 0,
         anticipo_combustible: 0,
@@ -79,7 +71,6 @@ export function NextLegModal({
     }
   }, [open]);
 
-  // 🚀 LÓGICA DE NEGOCIO: ¿Es una fase de carretera?
   const isRoadLeg = formData.leg_type === "ruta_carretera";
 
   const availableTractos = useMemo(() => {
@@ -110,25 +101,17 @@ export function NextLegModal({
       return toast.error("Debes asignar una Unidad y un Operador.");
     }
 
-    if (
-      isRoadLeg &&
-      (!formData.odometro_inicial || formData.odometro_inicial <= 0)
-    ) {
-      return toast.error(
-        "El odómetro inicial es obligatorio para viajes en carretera.",
-      );
-    }
-
     setLoading(true);
 
     const payload: TripLegCreatePayload = {
       leg_type: formData.leg_type!,
       unit_id: Number(formData.unit_id),
       operator_id: Number(formData.operator_id),
-      odometro_inicial: isRoadLeg ? Number(formData.odometro_inicial) : null,
-      nivel_tanque_inicial: isRoadLeg
-        ? Number(formData.nivel_tanque_inicial)
-        : null,
+
+      // Odómetros removidos, se controlan en el módulo de combustible
+      odometro_inicial: null,
+      nivel_tanque_inicial: null,
+
       anticipo_casetas: isRoadLeg ? Number(formData.anticipo_casetas || 0) : 0,
       anticipo_viaticos: isRoadLeg
         ? Number(formData.anticipo_viaticos || 0)
@@ -140,28 +123,24 @@ export function NextLegModal({
 
     const success = await onSubmit(String(tripPadre.id), payload);
 
-    // 🚀 MAGIA AUTOMÁTICA: Actualizamos el Remolque según lo que acaba de pasar
     if (success) {
       const lastLeg =
         tripPadre.legs?.find((l) => l.status === "en_transito") ||
         tripPadre.legs?.[tripPadre.legs.length - 1];
 
-      // Si la fase que acaba de terminar fue "Carga Muelle", ¡entonces el remolque está cargado!
       if (
         lastLeg &&
         lastLeg.leg_type === "carga_muelle" &&
         tripPadre.remolque_1_id
       ) {
-        await updateLoadStatus(tripPadre.remolque_1_id, true); // True = Cargado
+        await updateLoadStatus(tripPadre.remolque_1_id, true);
         if (tripPadre.remolque_2_id) {
           await updateLoadStatus(tripPadre.remolque_2_id, true);
         }
         toast.success("Remolque(s) marcado(s) como CARGADOS automáticamente.");
       }
-
       onOpenChange(false);
     }
-
     setLoading(false);
   };
 
@@ -232,7 +211,6 @@ export function NextLegModal({
                 </SelectContent>
               </Select>
             </div>
-
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
                 <User className="h-4 w-4" /> Operador *
@@ -254,65 +232,6 @@ export function NextLegModal({
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-          </div>
-
-          {/* 🚀 TELEMETRÍA CONDICIONAL */}
-          <div
-            className={`grid grid-cols-2 gap-4 p-4 rounded-lg border ${isRoadLeg ? "bg-amber-50 border-amber-200" : "bg-slate-100 border-slate-200 opacity-80"}`}
-          >
-            <div className="col-span-2">
-              <p className="text-xs font-bold flex items-center gap-2 mb-1 text-slate-500">
-                <Gauge className="h-4 w-4" /> Telemetría Inicial
-                {isRoadLeg ? (
-                  <Badge className="bg-amber-500 hover:bg-amber-600 text-white ml-2 border-0">
-                    Obligatorio
-                  </Badge>
-                ) : (
-                  <span className="font-normal italic ml-2">
-                    (Opcional en Patio)
-                  </span>
-                )}
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label>Odómetro Arranque {isRoadLeg && "*"}</Label>
-              <Input
-                type="number"
-                value={formData.odometro_inicial || ""}
-                onChange={(e) =>
-                  setFormData((p) => ({
-                    ...p,
-                    odometro_inicial: Number(e.target.value),
-                  }))
-                }
-                placeholder={isRoadLeg ? "Ej: 154000" : "No requerido"}
-                className="font-mono"
-                disabled={!isRoadLeg} // Opcional: Bloquear input si no es carretera
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Tanque Arranque (%) {isRoadLeg && "*"}</Label>
-              <div className="relative">
-                <Input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={formData.nivel_tanque_inicial || ""}
-                  onChange={(e) =>
-                    setFormData((p) => ({
-                      ...p,
-                      nivel_tanque_inicial: Number(e.target.value),
-                    }))
-                  }
-                  placeholder={isRoadLeg ? "100" : ""}
-                  className="font-mono pr-8"
-                  disabled={!isRoadLeg} // Opcional: Bloquear input si no es carretera
-                />
-                <span className="absolute right-3 top-2.5 font-bold text-slate-400">
-                  %
-                </span>
-              </div>
             </div>
           </div>
 
@@ -338,7 +257,7 @@ export function NextLegModal({
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-xs">Diésel</Label>
+                <Label className="text-xs">Diésel (Vale)</Label>
                 <Input
                   type="number"
                   value={formData.anticipo_combustible || ""}
@@ -368,7 +287,7 @@ export function NextLegModal({
             <Card className="border-slate-200 bg-transparent flex flex-col justify-center items-center text-center p-4">
               <p className="text-xs text-slate-400 font-medium flex items-center gap-2">
                 <Info className="h-4 w-4" /> Los movimientos de patio no
-                requieren registro de anticipos por viaje.
+                requieren registro de anticipos.
               </p>
             </Card>
           )}
