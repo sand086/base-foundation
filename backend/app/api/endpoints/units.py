@@ -1,55 +1,23 @@
-"""
-Module for handling unit-related API endpoints.
-This module provides REST API endpoints for managing units (vehicles) in the system,
-including CRUD operations and bulk upload functionality. It handles file uploads,
-database operations, and maintains a history of bulk upload transactions.
-Classes:
-    None
-Functions:
-    read_units: Retrieve a paginated list of units from the database.
-    create_unit: Create a new unit with validation for duplicate economic numbers.
-    update_unit: Update an existing unit by ID.
-    delete_unit: Delete a unit by ID.
-    upload_units_bulk: Upload and process multiple units from a CSV or Excel file.
-    download_upload: Download a previously uploaded file by upload history ID.
-Routes:
-    GET /units - List all units with pagination
-    POST /units - Create a new unit
-    PUT /units/{unit_id} - Update an existing unit
-    DELETE /units/{unit_id} - Delete a unit
-    POST /units/bulk-upload - Upload multiple units from file
-    GET /download-upload/{upload_id} - Download a previously uploaded file
-Dependencies:
-    - FastAPI: Web framework
-    - SQLAlchemy: ORM for database operations
-    - pandas: Data processing for file parsing
-    - UUID: Unique file identifier generation
-    - Authentication: Requires active user for bulk upload endpoint
-Constants:
-    UPLOAD_DIR (str): Directory path for storing uploaded files
-"""
-
 import os
 import uuid
 import pandas as pd
 import unicodedata
+import re  # 🚀 IMPORT PARA LIMPIAR EL "ECO-"
 from typing import List
-from fastapi import APIRouter, Depends, UploadFile, File, Depends, HTTPException
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from app.db.database import get_db
 from app.models import models
 from app.schemas import units as schemas
 from app.schemas import tires as tires_schemas
 from app.crud import units as crud
-from shutil import copyfileobj
 from fastapi.responses import FileResponse
 from app.api.endpoints.auth import get_current_user
 from app.models.models import User, Unit, BulkUploadHistory, UnitDocumentHistory
-from fastapi.staticfiles import StaticFiles
-from sqlalchemy.exc import IntegrityError
 
 router = APIRouter()
-# Directorios
+
 UPLOAD_DIR = "app/uploads/bulk_unidades"
 DOCS_DIR = "app/uploads/documents"
 
@@ -59,15 +27,20 @@ for directory in [UPLOAD_DIR, DOCS_DIR]:
 
 
 def normalize_header(header: str) -> str:
-    """Normaliza encabezados de Excel (ej: 'Número Económico' -> 'numero_economico')"""
     header = str(header).lower().strip()
     header = "".join(
         c
         for c in unicodedata.normalize("NFD", header)
         if unicodedata.category(c) != "Mn"
     )
-    header = header.replace(" ", "_").replace(".", "").replace("-", "_")
-    return header
+    return header.replace(" ", "_").replace(".", "").replace("-", "_")
+
+
+def clean_eco_prefix(eco_str: str) -> str:
+    if not eco_str:
+        return ""
+    eco_clean = eco_str.strip().upper()
+    return re.sub(r"^ECO[-\s]?", "", eco_clean)
 
 
 # --- RUTAS CRUD BÁSICAS ---
@@ -78,38 +51,30 @@ def read_units(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return crud.get_units(db, skip=skip, limit=limit)
 
 
-# ... (tus otros imports se mantienen)
-from sqlalchemy.exc import IntegrityError  # 🚀 IMPORTANTE: Añade este import
-
-
 @router.post("/units", response_model=schemas.UnitResponse)
 def create_unit(unit: schemas.UnitCreate, db: Session = Depends(get_db)):
-    # 1. Validación manual previa (Número Económico)
-    if (
-        db.query(models.Unit)
-        .filter(models.Unit.numero_economico == unit.numero_economico)
-        .first()
-    ):
+    # 🚀 LIMPIAMOS EL NÚMERO ANTES DE VALIDAR
+    clean_eco = clean_eco_prefix(unit.numero_economico)
+
+    if db.query(models.Unit).filter(models.Unit.numero_economico == clean_eco).first():
         raise HTTPException(
             status_code=400,
             detail="El número económico ya está registrado en el sistema.",
         )
 
     try:
-        # 2. Convertir el schema a diccionario y limpiar public_id
         unit_data = unit.model_dump()
         unit_data.pop("public_id", None)
+        unit_data["numero_economico"] = clean_eco  # 🚀 LO GUARDAMOS LIMPIO
 
-        # 3. Crear instancia con ID único
         db_unit = models.Unit(
             **unit_data, public_id=f"UNT-{uuid.uuid4().hex[:8].upper()}"
         )
 
         db.add(db_unit)
-        db.commit()  # 🚩 Aquí es donde suele saltar el error de base de datos
+        db.commit()
         db.refresh(db_unit)
 
-        # Recalcular estatus inicial
         crud._update_unit_status(db, db_unit)
         db.commit()
         db.refresh(db_unit)
@@ -117,10 +82,8 @@ def create_unit(unit: schemas.UnitCreate, db: Session = Depends(get_db)):
         return db_unit
 
     except IntegrityError as e:
-        db.rollback()  # 🧼 Limpiamos la transacción fallida (Obligatorio)
+        db.rollback()
         error_msg = str(e.orig)
-
-        # Analizamos qué llave duplicada falló
         if "units_placas_key" in error_msg:
             raise HTTPException(
                 status_code=400,
@@ -134,7 +97,6 @@ def create_unit(unit: schemas.UnitCreate, db: Session = Depends(get_db)):
             raise HTTPException(
                 status_code=400, detail="Error: El número de serie (VIN) ya existe."
             )
-
         raise HTTPException(
             status_code=400,
             detail="Error de integridad: Verifique que no haya datos duplicados.",
@@ -144,6 +106,10 @@ def create_unit(unit: schemas.UnitCreate, db: Session = Depends(get_db)):
 @router.put("/units/{unit_id}", response_model=schemas.UnitResponse)
 def update_unit(unit_id: str, unit: schemas.UnitUpdate, db: Session = Depends(get_db)):
     try:
+        # 🚀 LIMPIAMOS TAMBIÉN EN EDICIÓN
+        if unit.numero_economico:
+            unit.numero_economico = clean_eco_prefix(unit.numero_economico)
+
         db_unit = crud.update_unit(db, unit_id, unit)
         if not db_unit:
             raise HTTPException(status_code=404, detail="Unidad no encontrada")
@@ -175,52 +141,39 @@ async def upload_units_bulk(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-
-    print(f"Usuario que sube el archivo: {file.filename}")
-    # 1. Crear carpeta si no existe
     if not os.path.exists(UPLOAD_DIR):
         os.makedirs(UPLOAD_DIR)
 
-    # 2. Generar nombre único para el archivo
     file_extension = os.path.splitext(file.filename)[1]
     stored_filename = f"{uuid.uuid4()}{file_extension}"
     file_path = os.path.join(UPLOAD_DIR, stored_filename)
 
-    # 3. Guardar el archivo físicamente
     with open(file_path, "wb") as f:
         f.write(await file.read())
 
     try:
-        # 4. Leer el archivo (CSV o Excel) para procesar los datos
         if file_extension == ".csv":
             df = pd.read_csv(file_path)
         else:
             df = pd.read_excel(file_path)
 
-        # Esto convierte ['Número Económico', 'Año'] en ['numero_economico', 'ano']
         df.columns = [normalize_header(c) for c in df.columns]
-
-        # Depuración: Imprimir columnas encontradas (ver en la terminal donde corre uvicorn)
-        print(f"Columnas detectadas: {df.columns.tolist()}")
-
         units_inserted = 0
-        # Lógica de inserción en la base de datos (Unidades)
+
         for _, row in df.iterrows():
-            # Validar campo obligatorio clave
             eco = str(row.get("numero_economico", "")).strip()
             if not eco or eco == "nan":
                 continue
 
-            existing = db.query(Unit).filter(Unit.numero_economico == eco).first()
+            clean_eco = clean_eco_prefix(eco)
+
+            existing = db.query(Unit).filter(Unit.numero_economico == clean_eco).first()
             if existing:
                 continue
 
-            # --- CORRECCIÓN AQUÍ ---
-            # Forzamos .lower() y .strip() para limpiar espacios y mayúsculas
             tipo_limpio = str(row.get("tipo", "full")).strip().lower()
             status_limpio = str(row.get("status", "disponible")).strip().lower()
 
-            # Mapeo de seguridad por si el Excel trae "Sencillo" o "Tracto"
             if tipo_limpio not in [
                 "sencillo",
                 "full",
@@ -232,17 +185,16 @@ async def upload_units_bulk(
                 "camion",
                 "otro",
             ]:
-                tipo_limpio = "full"  # Valor por defecto seguro
+                tipo_limpio = "full"
 
             new_unit = Unit(
-                public_id=str(uuid.uuid4()),
-                numero_economico=eco,
+                public_id=f"UNT-{uuid.uuid4().hex[:8].upper()}",
+                numero_economico=clean_eco,
                 placas=str(row.get("placas", "SIN-PLACA")).strip(),
                 vin=str(row.get("vin", "")),
                 marca=str(row.get("marca", "GENERICO")),
                 modelo=str(row.get("modelo", "GENERICO")),
                 year=int(row["year"]) if pd.notnull(row.get("year")) else 2024,
-                # Usamos las variables limpias
                 tipo=tipo_limpio,
                 status=status_limpio,
                 tipo_1=str(row.get("tipo_1", "TRACTOCAMION")),
@@ -269,7 +221,7 @@ async def upload_units_bulk(
             )
             db.add(new_unit)
             units_inserted += 1
-        # 5. Registrar en el historial de cargas masivas
+
         history = BulkUploadHistory(
             filename=file.filename,
             stored_filename=stored_filename,
@@ -285,13 +237,11 @@ async def upload_units_bulk(
 
     except Exception as e:
         db.rollback()
-        # Si falla, marcamos como error en el historial (opcional)
         raise HTTPException(
             status_code=500, detail=f"Error procesando archivo: {str(e)}"
         )
 
 
-# Endpoint para descargar archivos antiguos
 @router.get("/download-upload/{upload_id}")
 async def download_upload(upload_id: int, db: Session = Depends(get_db)):
     record = db.query(BulkUploadHistory).get(upload_id)
@@ -302,29 +252,20 @@ async def download_upload(upload_id: int, db: Session = Depends(get_db)):
 
 @router.get("/units/{term}", response_model=schemas.UnitResponse)
 def read_unit(term: str, db: Session = Depends(get_db)):
-    """
-    Busca una unidad por ID (entero) o por Número Económico (texto).
-    """
-    # Intentamos buscar por ID numérico primero
     if term.isdigit():
         db_unit = crud.get_unit(db, unit_id=int(term))
         if db_unit:
             return db_unit
 
-    # Si no es ID o no se encontró, buscamos por Número Económico
-    # (Decodificamos URL por si viene con espacios como 'Eco%2002')
     from urllib.parse import unquote
 
     term_decoded = unquote(term)
-
     db_unit = crud.get_unit_by_eco(db, numero_economico=term_decoded)
     if db_unit:
         return db_unit
-
     raise HTTPException(status_code=404, detail="Unidad no encontrada")
 
 
-# Endpoint para obtener el historial
 @router.get("/units/{unit_id}/documents/{doc_type}/history")
 def get_document_history(unit_id: int, doc_type: str, db: Session = Depends(get_db)):
     history = (
@@ -339,24 +280,19 @@ def get_document_history(unit_id: int, doc_type: str, db: Session = Depends(get_
     return history
 
 
-# Guardar Llantas (Bulk Update)
 @router.put("/units/{unit_term}/tires", response_model=List[tires_schemas.TireResponse])
 def update_unit_tires(
     unit_term: str, tires: List[tires_schemas.TireCreate], db: Session = Depends(get_db)
 ):
-    # Resolver unidad
     unit = None
     if unit_term.isdigit():
         unit = crud.get_unit(db, int(unit_term))
     if not unit:
         unit = crud.get_unit_by_eco(db, unit_term)
-
     if not unit:
         raise HTTPException(status_code=404, detail="Unidad no encontrada")
 
-    # Reemplazar llantas
     db.query(models.Tire).filter(models.Tire.unit_id == unit.id).delete()
-
     new_tires = []
     for t in tires:
         tire_db = models.Tire(**t.dict(), unit_id=unit.id)
@@ -366,7 +302,6 @@ def update_unit_tires(
     db.commit()
     for t in new_tires:
         db.refresh(t)
-
     return new_tires
 
 
@@ -378,17 +313,14 @@ async def upload_unit_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # 1. Buscar unidad
     unit = None
     if unit_term.isdigit():
         unit = crud.get_unit(db, int(unit_term))
     if not unit:
         unit = crud.get_unit_by_eco(db, unit_term)
-
     if not unit:
         raise HTTPException(status_code=404, detail="Unidad no encontrada")
 
-    # 2. Guardar archivo físico
     file_ext = os.path.splitext(file.filename)[1]
     unique_name = f"{unit.numero_economico}_{doc_type}_{uuid.uuid4()}{file_ext}"
     file_path = os.path.join(DOCS_DIR, unique_name)
@@ -398,9 +330,6 @@ async def upload_unit_document(
         f.write(content)
 
     file_url = f"/static/documents/{unique_name}"
-
-    # 3. Guardar en Historial (VERSIONAMIENTO)
-    # Esta es la parte que te faltaba porque la función anterior la ocultaba
     history_record = UnitDocumentHistory(
         unit_id=unit.id,
         document_type=doc_type,
@@ -411,7 +340,6 @@ async def upload_unit_document(
     )
     db.add(history_record)
 
-    # 4. Actualizar registro principal
     if doc_type == "poliza_seguro":
         unit.poliza_seguro_url = file_url
     elif doc_type == "verificacion_humo":
@@ -427,7 +355,6 @@ async def upload_unit_document(
 
     db.commit()
     db.refresh(unit)
-
     return {
         "url": file_url,
         "filename": unique_name,
@@ -439,11 +366,9 @@ async def upload_unit_document(
 def update_unit_load_status(
     unit_id: int, load_status: bool, db: Session = Depends(get_db)
 ):
-    """Endpoint específico para el cambio rápido de 'Cargado/Vacío'"""
     db_unit = crud.get_unit(db, unit_id=unit_id)
     if not db_unit:
         raise HTTPException(status_code=404, detail="Unidad no encontrada")
-
     db_unit.is_loaded = load_status
     db.commit()
     db.refresh(db_unit)

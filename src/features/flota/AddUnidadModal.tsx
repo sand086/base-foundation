@@ -425,7 +425,10 @@ export function AddUnidadModal({
     const payload: Partial<Unit> & { ignore_blocking?: boolean } = {
       ...(isEditMode && unidadToEdit ? { id: unidadToEdit.id } : {}),
 
-      numero_economico: formData.numero_economico.trim().toUpperCase(),
+      numero_economico: formData.numero_economico
+        .trim()
+        .toUpperCase()
+        .replace(/^ECO[-\s]?/, ""),
       placas: formData.placas.trim().toUpperCase() || "S/P",
       vin: cleanString(formData.vin?.toUpperCase?.() ?? formData.vin),
       marca: formData.marca.trim(),

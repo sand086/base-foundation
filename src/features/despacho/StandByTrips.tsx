@@ -70,13 +70,15 @@ export const StandByTrips = () => {
                 <div className="flex items-center gap-1.5">
                   <Truck className="h-3 w-3 text-slate-400" />
                   <span className="font-semibold">
-                    {trip.unit?.numero_economico || "Sin unidad"}
+                    {trip.remolque_1?.numero_economico || "Sin unidad"}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <User className="h-3 w-3 text-slate-400" />
                   <span className="truncate">
-                    {trip.operator?.name.split(" ")[0] || "Sin asignar"}
+                    {trip.legs[0]?.operator_id
+                      ? trip.legs[0].operator_id
+                      : "Sin asignar"}
                   </span>
                 </div>
               </div>

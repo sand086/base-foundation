@@ -1,4 +1,4 @@
-// AddTicketModal.tsx
+// src/features/combustible/AddTicketModal.tsx
 import * as React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -17,13 +17,46 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { toast } from "sonner";
-import { Fuel, Camera, CheckCircle2, Upload, Droplets } from "lucide-react";
+import {
+  Fuel,
+  Camera,
+  CheckCircle2,
+  Upload,
+  Droplets,
+  MapPin,
+  ChevronsUpDown,
+  Check,
+  Gauge,
+  User,
+  Truck,
+  FilterX,
+  FileImage,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PRECIOS_PROMEDIO, type TipoCombustible } from "@/data/combustibleData";
 
+// 🚀 IMPORTAMOS TODOS LOS HOOKS REALES
+import { useClients } from "@/hooks/useClients";
+import { useTrips } from "@/hooks/useTrips";
+import { useOperators } from "@/hooks/useOperators";
+import { useUnits } from "@/hooks/useUnits";
+
 /** =========================
- * Types (ajusta a tu modelo real si ya lo tienes tipado)
+ * Types
  * ========================= */
 type ID = string | number;
 
@@ -31,12 +64,8 @@ export interface Unit {
   id: ID;
   numero_economico?: string | null;
   placas?: string | null;
-
-  // Si ya tienes campos reales, úsalos:
   capacidad_tanque_diesel?: number | null;
   capacidad_tanque_urea?: number | null;
-
-  // Compat/legacy opcional:
   capacidadTanqueDiesel?: number | null;
   capacidadTanqueUrea?: number | null;
 }
@@ -44,38 +73,131 @@ export interface Unit {
 export interface Operator {
   id: ID;
   name?: string | null;
-
-  // Compat/legacy opcional:
   nombre?: string | null;
 }
 
 export interface TicketFormData {
   unidadId: string;
   operadorId: string;
-  fechaHora: string; // datetime-local (YYYY-MM-DDTHH:mm)
+  viajeId: string;
+  fechaHora: string;
   estacion: string;
   tipoCombustible: TipoCombustible;
   litros: number;
   precioPorLitro: number;
-  odometro: number;
+  odometro: number | string; // Permitimos string vacío temporalmente
   evidencia: File | null;
 }
 
+// 🚀 AHORA EL MODAL YA NO PIDE LAS LISTAS POR PROPS, LAS SACA ÉL MISMO
 interface AddTicketModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: TicketFormData) => void;
-
-  // ✅ Real data (viene de API)
-  units: Unit[];
-  operators: Operator[];
 }
 
 /** =========================
- * Helpers
+ * Helpers & Componentes
  * ========================= */
+
+// COMPONENTE REUTILIZABLE: Buscador Inteligente a prueba de fallos
+function SearchableSelect({
+  items,
+  value,
+  onSelect,
+  placeholder,
+}: {
+  items: { label: string; value: string }[];
+  value: string;
+  onSelect: (val: string) => void;
+  placeholder: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const selectedItem = items.find((item) => item.value === value);
+
+  const filteredItems = useMemo(() => {
+    if (!searchQuery) return items;
+    const normalize = (str: string) =>
+      str
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+    const lowerSearch = normalize(searchQuery);
+    return items.filter((item) => normalize(item.label).includes(lowerSearch));
+  }, [items, searchQuery]);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-full justify-between font-normal bg-white h-11 text-sm border-slate-300 shadow-sm hover:bg-slate-50"
+        >
+          {selectedItem ? (
+            <span className="truncate font-bold text-slate-800">
+              {selectedItem.label}
+            </span>
+          ) : (
+            <span className="text-slate-400">{placeholder}</span>
+          )}
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+
+      <PopoverContent
+        className="w-full p-0 shadow-2xl border-slate-200 z-[9999]"
+        align="start"
+      >
+        <Command shouldFilter={false}>
+          <CommandInput
+            placeholder="Escribe para buscar..."
+            className="h-11 text-sm"
+            value={searchQuery}
+            onValueChange={setSearchQuery}
+          />
+          <CommandList className="max-h-[250px] overflow-y-auto">
+            {filteredItems.length === 0 ? (
+              <CommandEmpty className="p-4 text-center text-sm text-slate-500">
+                No se encontraron coincidencias.
+              </CommandEmpty>
+            ) : (
+              <CommandGroup>
+                {filteredItems.map((item) => (
+                  <CommandItem
+                    key={item.value}
+                    value={item.value}
+                    onSelect={() => {
+                      onSelect(item.value);
+                      setOpen(false);
+                      setSearchQuery("");
+                    }}
+                    className="cursor-pointer py-3 border-b border-slate-50 last:border-0"
+                  >
+                    <Check
+                      className={cn(
+                        "mr-3 h-4 w-4 flex-shrink-0 text-emerald-600",
+                        value === item.value ? "opacity-100" : "opacity-0",
+                      )}
+                    />
+                    <span className="truncate text-xs font-semibold text-slate-700">
+                      {item.label}
+                    </span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function toDatetimeLocalValue(date: Date) {
-  // "YYYY-MM-DDTHH:mm" local
   const pad = (n: number) => String(n).padStart(2, "0");
   const y = date.getFullYear();
   const m = pad(date.getMonth() + 1);
@@ -86,8 +208,7 @@ function toDatetimeLocalValue(date: Date) {
 }
 
 function clampFileSize(file: File, maxMB: number) {
-  const maxBytes = maxMB * 1024 * 1024;
-  return file.size <= maxBytes;
+  return file.size <= maxMB * 1024 * 1024;
 }
 
 function safeNumber(value: string, fallback = 0) {
@@ -100,36 +221,57 @@ function safeInt(value: string, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
-function getDieselCapacity(unit: Unit): number | null {
-  return unit.capacidad_tanque_diesel ?? unit.capacidadTanqueDiesel ?? null;
+function getDieselCapacity(unit: any): number | null {
+  return unit?.capacidad_tanque_diesel ?? unit?.capacidadTanqueDiesel ?? null;
 }
 
-function getUreaCapacity(unit: Unit): number | null {
-  return unit.capacidad_tanque_urea ?? unit.capacidadTanqueUrea ?? null;
+function getUreaCapacity(unit: any): number | null {
+  return unit?.capacidad_tanque_urea ?? unit?.capacidadTanqueUrea ?? null;
 }
 
 export function AddTicketModal({
   open,
   onOpenChange,
   onSubmit,
-  units = [],
-  operators = [],
 }: AddTicketModalProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // 🚀 1. USAMOS LOS HOOKS DIRECTAMENTE DENTRO DEL MODAL
+  const { clients = [] } = useClients();
+  const { trips = [] } = useTrips();
+  const { operadores = [] } = useOperators(); // Nota: En tu console log vi que devuelve `operadores` y no `operators`
+  const { unidades = [] } = useUnits(); // Nota: En tu console log vi que devuelve `unidades` y no `units`
+
+  // 🚀 2. CONSOLES DE DEBUG PARA VER QUÉ LLEGA REALMENTE
+  useEffect(() => {
+    if (open) {
+      console.log("=== DEBUG DATOS EN MODAL ===");
+      console.log("CLIENTES FETCHED:", clients);
+      console.log("VIAJES FETCHED:", trips);
+      console.log("OPERADORES FETCHED:", operadores);
+      console.log("UNIDADES FETCHED:", unidades);
+      console.log("============================");
+    }
+  }, [open, clients, trips, operadores, unidades]);
 
   const [formData, setFormData] = useState<TicketFormData>({
     unidadId: "",
     operadorId: "",
+    viajeId: "",
     fechaHora: toDatetimeLocalValue(new Date()),
     estacion: "",
     tipoCombustible: "diesel",
     litros: 0,
     precioPorLitro: PRECIOS_PROMEDIO.diesel,
-    odometro: 0,
+    odometro: "", // Inicializado vacío
     evidencia: null,
   });
 
-  /** Reset “limpio” cuando se abre el modal (opcional pero práctico) */
+  // Filtros Avanzados
+  const [filterClient, setFilterClient] = useState("ALL");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+
   useEffect(() => {
     if (!open) return;
     setFormData((prev) => ({
@@ -138,7 +280,6 @@ export function AddTicketModal({
     }));
   }, [open]);
 
-  /** Default price cuando cambia el tipo */
   useEffect(() => {
     setFormData((prev) => ({
       ...prev,
@@ -146,27 +287,157 @@ export function AddTicketModal({
     }));
   }, [formData.tipoCombustible]);
 
-  /** ✅ Unidad real para validar capacidad */
   const selectedUnit = useMemo(() => {
-    if (!formData.unidadId) return undefined;
-    return units.find((u) => String(u.id) === formData.unidadId);
-  }, [units, formData.unidadId]);
+    if (!formData.unidadId || !Array.isArray(unidades)) return undefined;
+    return unidades.find((u: any) => String(u.id) === formData.unidadId);
+  }, [unidades, formData.unidadId]);
 
-  /**
-   * Capacidad del tanque:
-   * - Si tu modelo ya trae capacidad_tanque_diesel / capacidad_tanque_urea, se usa.
-   * - Si no, fallback a 600/40 como indicaste.
-   */
-  const tankCapacity = useMemo(() => {
-    if (!selectedUnit) return 0;
+  // 1. Filtrar viajes (Excluir liquidados globalmente)
+  const activeTrips = useMemo(() => {
+    if (!Array.isArray(trips)) return [];
+    return trips.filter((t: any) => {
+      if (String(t.status).toLowerCase() === "liquidado") return false;
+      return true;
+    });
+  }, [trips]);
 
-    if (formData.tipoCombustible === "diesel") {
-      const real = getDieselCapacity(selectedUnit);
-      return typeof real === "number" && real > 0 ? real : 600;
+  // 2. Extraer clientes
+  const availableClientsForFilter = useMemo(() => {
+    if (!Array.isArray(clients) || !Array.isArray(activeTrips)) return [];
+    const activeClientIds = new Set(
+      activeTrips.map((t) => String(t.client_id)),
+    );
+    const matchingClients = clients.filter((c: any) =>
+      activeClientIds.has(String(c.id)),
+    );
+
+    return matchingClients.sort((a: any, b: any) => {
+      const nameA = a.razon_social || a.nombre || "";
+      const nameB = b.razon_social || b.nombre || "";
+      return nameA.localeCompare(nameB);
+    });
+  }, [activeTrips, clients]);
+
+  // 3. Aplicar Filtros (Cliente y Fecha)
+  const filteredTrips = useMemo(() => {
+    return activeTrips.filter((t: any) => {
+      // Filtro Cliente
+      const matchClient =
+        filterClient === "ALL" || String(t.client_id) === filterClient;
+
+      // Filtro Rango Fechas
+      let matchDate = true;
+      const tripDate = new Date(t.start_date || t.created_at);
+
+      if (dateFrom) {
+        const fromD = new Date(`${dateFrom}T00:00:00`);
+        if (tripDate < fromD) matchDate = false;
+      }
+
+      if (dateTo) {
+        const toD = new Date(`${dateTo}T23:59:59`);
+        if (tripDate > toD) matchDate = false;
+      }
+
+      return matchClient && matchDate;
+    });
+  }, [activeTrips, filterClient, dateFrom, dateTo]);
+
+  // 4. Formatear para el Buscador de Viajes
+  const searchableTrips = useMemo(() => {
+    const list = filteredTrips.map((t: any) => {
+      const foundClient = Array.isArray(clients)
+        ? clients.find((c: any) => String(c.id) === String(t.client_id))
+        : null;
+
+      const cName =
+        foundClient?.razon_social ||
+        foundClient?.rfc ||
+        t.client?.razon_social ||
+        t.client?.nombre ||
+        "Sin Cliente";
+
+      const dateStr = new Date(t.start_date || t.created_at).toLocaleDateString(
+        "es-MX",
+      );
+
+      const label = `FOLIO ${t.public_id || t.id} | ${cName} | ${t.origin} ➔ ${t.destination} | ${dateStr} (${t.status.toUpperCase()})`;
+      return { label, value: String(t.id) };
+    });
+
+    return [
+      {
+        label: "📍 Carga Local / Pendiente de Asignar (Sin Viaje)",
+        value: "none",
+      },
+      ...list,
+    ];
+  }, [filteredTrips, clients]);
+
+  // Transformar Unidades para el Select Inteligente
+  const searchableUnits = useMemo(() => {
+    if (!Array.isArray(unidades)) return [];
+    return unidades.map((u: any) => ({
+      label: `${u.numero_economico} - ${u.placas || "S/P"}`,
+      value: String(u.id),
+    }));
+  }, [unidades]);
+
+  // Transformar Operadores para el Select Inteligente
+  const searchableOperators = useMemo(() => {
+    if (!Array.isArray(operadores)) return [];
+    return operadores.map((o: any) => ({
+      label: o.name || o.nombre || `Operador #${o.id}`,
+      value: String(o.id),
+    }));
+  }, [operadores]);
+
+  // MANEJADOR SÚPER INTELIGENTE: Auto-Fill
+  const handleTripSelection = (selectedTripId: string) => {
+    if (selectedTripId === "none") {
+      setFormData((prev) => ({ ...prev, viajeId: "" }));
+      return;
     }
 
-    const real = getUreaCapacity(selectedUnit);
-    return typeof real === "number" && real > 0 ? real : 40;
+    const tripObj = activeTrips.find(
+      (t: any) => String(t.id) === selectedTripId,
+    );
+
+    if (tripObj) {
+      const activeLeg =
+        tripObj.legs?.find(
+          (l: any) =>
+            !["entregado", "cerrado", "liquidado"].includes(
+              String(l.status).toLowerCase(),
+            ),
+        ) || tripObj.legs?.[tripObj.legs?.length - 1];
+
+      setFormData((prev) => ({
+        ...prev,
+        viajeId: selectedTripId,
+        unidadId: activeLeg?.unit_id
+          ? String(activeLeg.unit_id)
+          : prev.unidadId,
+        operadorId: activeLeg?.operator_id
+          ? String(activeLeg.operator_id)
+          : prev.operadorId,
+      }));
+
+      toast.success("Viaje Vinculado", {
+        description:
+          "Se han cargado la unidad y el operador registrados en el viaje.",
+      });
+    } else {
+      setFormData((prev) => ({ ...prev, viajeId: selectedTripId }));
+    }
+  };
+
+  const tankCapacity = useMemo(() => {
+    if (!selectedUnit) return 0;
+    if (formData.tipoCombustible === "diesel") {
+      return (selectedUnit.capacidad_carga ?? 600) as number;
+    }
+    return (selectedUnit.capacidad_carga ?? 40) as number;
   }, [selectedUnit, formData.tipoCombustible]);
 
   const isOverCapacity =
@@ -178,28 +449,36 @@ export function AddTicketModal({
   );
 
   const getFuelTypeStyles = (type: TipoCombustible, isSelected: boolean) => {
-    if (type === "diesel") {
+    if (type === "diesel")
       return isSelected
         ? "bg-amber-500 text-white border-amber-500 shadow-md"
-        : "border-amber-300 text-amber-700 hover:bg-amber-50";
-    }
+        : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50";
     return isSelected
       ? "bg-sky-500 text-white border-sky-500 shadow-md"
-      : "border-sky-300 text-sky-700 hover:bg-sky-50";
+      : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50";
+  };
+
+  const clearFilters = () => {
+    setFilterClient("ALL");
+    setDateFrom("");
+    setDateTo("");
+    setFormData((prev) => ({ ...prev, viajeId: "" }));
   };
 
   const resetForm = () => {
     setFormData({
       unidadId: "",
       operadorId: "",
+      viajeId: "",
       fechaHora: toDatetimeLocalValue(new Date()),
       estacion: "",
       tipoCombustible: "diesel",
       litros: 0,
       precioPorLitro: PRECIOS_PROMEDIO.diesel,
-      odometro: 0,
+      odometro: "", // Limpio y sin ceros forzados
       evidencia: null,
     });
+    clearFilters();
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -207,34 +486,34 @@ export function AddTicketModal({
     if (!formData.unidadId) return "Selecciona una unidad.";
     if (!formData.operadorId) return "Selecciona un operador.";
     if (!formData.fechaHora) return "Selecciona fecha y hora.";
-    if (!formData.estacion.trim()) return "Escribe la estación.";
+    if (!formData.estacion.trim()) return "Escribe la estación de servicio.";
     if (!(formData.litros > 0)) return "Los litros deben ser mayor a 0.";
     if (!(formData.precioPorLitro > 0))
       return "El precio por litro debe ser mayor a 0.";
     if (isOverCapacity)
-      return `Excede capacidad del tanque (${tankCapacity}L).`;
-
-    if (formData.evidencia) {
-      const ok = clampFileSize(formData.evidencia, 5);
-      if (!ok) return "La imagen excede 5MB.";
-    }
+      return `Excede la capacidad técnica del tanque (${tankCapacity}L).`;
+    if (formData.evidencia && !clampFileSize(formData.evidencia, 5))
+      return "El archivo de imagen excede los 5MB.";
     return null;
   };
 
   const handleSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
     e.preventDefault();
-
     const error = validate();
     if (error) {
-      toast.error("Campos requeridos", { description: error });
+      toast.error("Datos Incompletos", { description: error });
       return;
     }
 
-    onSubmit(formData);
-    toast.success("Ticket registrado", {
-      description: "Se guardó el ticket de combustible correctamente.",
-    });
+    const finalData = {
+      ...formData,
+      odometro: safeInt(String(formData.odometro), 0),
+    };
 
+    onSubmit(finalData);
+    toast.success("Carga Exitosa", {
+      description: "Ticket de combustible registrado en el sistema.",
+    });
     resetForm();
     onOpenChange(false);
   };
@@ -246,403 +525,433 @@ export function AddTicketModal({
       return;
     }
     if (!file.type.startsWith("image/")) {
-      toast.error("Archivo inválido", {
-        description: "Solo se permiten imágenes.",
+      toast.error("Formato inválido", {
+        description: "Por favor suba una fotografía (JPG, PNG).",
       });
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
     if (!clampFileSize(file, 5)) {
-      toast.error("Archivo muy grande", { description: "Máximo 5MB." });
+      toast.error("Archivo muy pesado", {
+        description: "El límite de subida es de 5MB.",
+      });
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
     setFormData((p) => ({ ...p, evidencia: file }));
   };
 
-  const unitLabel = (u: Unit) => {
-    const ne = (u.numero_economico ?? "").trim();
-    const pl = (u.placas ?? "").trim();
-    if (ne && pl) return `${ne} (${pl})`;
-    if (ne) return ne;
-    if (pl) return pl;
-    return `Unidad ${String(u.id)}`;
-  };
-
-  const operatorLabel = (o: Operator) => {
-    const n = (o.name ?? o.nombre ?? "").trim();
-    return n || `Operador ${String(o.id)}`;
-  };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader className="pb-4 border-b">
-          <DialogTitle className="flex items-center gap-2 text-foreground">
+      <DialogContent className="sm:max-w-[850px] max-h-[90vh] overflow-y-auto p-0 gap-0 border-0 shadow-2xl rounded-2xl bg-slate-50">
+        {/* HEADER */}
+        <DialogHeader className="p-6 bg-white border-b border-slate-200 sticky top-0 z-10">
+          <DialogTitle className="flex items-center gap-3 text-slate-800 text-xl font-black">
             <div
               className={cn(
-                "w-8 h-8 rounded flex items-center justify-center transition-colors",
+                "w-12 h-12 rounded-xl flex items-center justify-center shadow-inner",
                 formData.tipoCombustible === "diesel"
                   ? "bg-amber-100"
                   : "bg-sky-100",
               )}
             >
               {formData.tipoCombustible === "diesel" ? (
-                <Fuel className="h-4 w-4 text-amber-600" />
+                <Fuel className="h-6 w-6 text-amber-600" />
               ) : (
-                <Droplets className="h-4 w-4 text-sky-600" />
+                <Droplets className="h-6 w-6 text-sky-600" />
               )}
             </div>
-            Agregar Ticket de Combustible
+            <div>
+              Registro de Inyección de Combustible
+              <p className="text-xs font-medium text-slate-500 font-normal mt-1 tracking-normal">
+                Capture los datos del ticket para la conciliación financiera.
+              </p>
+            </div>
           </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 pt-4">
-          {/* Fuel Type Selection - Visual Toggle */}
-          <div className="space-y-2">
-            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Tipo de Combustible *
-            </Label>
+        <form onSubmit={handleSubmit} className="p-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* LADO IZQUIERDO: VINCULACIÓN OPERATIVA */}
+            <div className="space-y-6">
+              <div className="space-y-4">
+                <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2 border-b pb-2">
+                  <MapPin className="h-4 w-4 text-brand-navy" /> 1. Vinculación
+                  Operativa
+                </h3>
 
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() =>
-                  setFormData((p) => ({
-                    ...p,
-                    tipoCombustible: "diesel",
-                    litros: 0,
-                  }))
-                }
-                className={cn(
-                  "flex items-center justify-center gap-2 py-3 px-4 rounded-lg border-2 transition-all duration-200",
-                  getFuelTypeStyles(
-                    "diesel",
-                    formData.tipoCombustible === "diesel",
-                  ),
-                )}
-              >
-                <Fuel className="h-5 w-5" />
-                <div className="text-left">
-                  <div className="font-semibold">Diesel</div>
-                  <div className="text-xs opacity-80">
-                    Tanque hasta{" "}
-                    {selectedUnit
-                      ? `${getDieselCapacity(selectedUnit) ?? 600}L`
-                      : "---"}
+                {/* Panel de Filtros y Búsqueda de Viajes */}
+                <div className="bg-blue-50/40 p-4 rounded-xl border border-blue-100 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-bold text-brand-navy uppercase tracking-widest">
+                      Asociar a un Viaje Activo
+                    </Label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={clearFilters}
+                      className="h-6 text-[10px] text-blue-600 hover:text-blue-800 px-2"
+                    >
+                      <FilterX className="h-3 w-3 mr-1" /> Limpiar Filtros
+                    </Button>
                   </div>
-                </div>
-              </button>
 
-              <button
-                type="button"
-                onClick={() =>
-                  setFormData((p) => ({
-                    ...p,
-                    tipoCombustible: "urea",
-                    litros: 0,
-                  }))
-                }
-                className={cn(
-                  "flex items-center justify-center gap-2 py-3 px-4 rounded-lg border-2 transition-all duration-200",
-                  getFuelTypeStyles(
-                    "urea",
-                    formData.tipoCombustible === "urea",
-                  ),
-                )}
-              >
-                <Droplets className="h-5 w-5" />
-                <div className="text-left">
-                  <div className="font-semibold">Urea/DEF</div>
-                  <div className="text-xs opacity-80">
-                    Tanque hasta{" "}
-                    {selectedUnit
-                      ? `${getUreaCapacity(selectedUnit) ?? 40}L`
-                      : "---"}
-                  </div>
-                </div>
-              </button>
-            </div>
-          </div>
-
-          {/* Unit Selection */}
-          <div className="space-y-2">
-            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Unidad *
-            </Label>
-
-            <Select
-              value={formData.unidadId}
-              onValueChange={(value) =>
-                setFormData((p) => ({ ...p, unidadId: value }))
-              }
-            >
-              <SelectTrigger className="h-11 text-sm">
-                <SelectValue placeholder="Seleccionar unidad" />
-              </SelectTrigger>
-
-              <SelectContent className="bg-popover border shadow-lg z-50">
-                {units?.map((unit) => (
-                  <SelectItem
-                    key={String(unit.id)}
-                    value={String(unit.id)}
-                    className="text-sm"
-                  >
-                    {unitLabel(unit)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {selectedUnit && (
-              <p className="text-xs text-muted-foreground">
-                Capacidad{" "}
-                {formData.tipoCombustible === "diesel" ? "Diesel" : "Urea"}:{" "}
-                <span className="font-medium">{tankCapacity}L</span>
-              </p>
-            )}
-          </div>
-
-          {/* Driver Selection */}
-          <div className="space-y-2">
-            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Operador *
-            </Label>
-
-            <Select
-              value={formData.operadorId}
-              onValueChange={(value) =>
-                setFormData((p) => ({ ...p, operadorId: value }))
-              }
-            >
-              <SelectTrigger className="h-11 text-sm">
-                <SelectValue placeholder="Seleccionar operador" />
-              </SelectTrigger>
-
-              <SelectContent className="bg-popover border shadow-lg z-50">
-                {operators.map((op) => (
-                  <SelectItem
-                    key={String(op.id)}
-                    value={String(op.id)}
-                    className="text-sm"
-                  >
-                    {operatorLabel(op)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Date/Time */}
-          <div className="space-y-2">
-            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Fecha y Hora *
-            </Label>
-            <Input
-              type="datetime-local"
-              value={formData.fechaHora}
-              onChange={(e) =>
-                setFormData((p) => ({ ...p, fechaHora: e.target.value }))
-              }
-              className="h-11 text-sm"
-            />
-          </div>
-
-          {/* Station Name */}
-          <div className="space-y-2">
-            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Estación *
-            </Label>
-            <Input
-              placeholder={
-                formData.tipoCombustible === "diesel"
-                  ? "Ej: OXXO Gas - Querétaro Norte"
-                  : "Ej: AdBlue Center - Querétaro"
-              }
-              value={formData.estacion}
-              onChange={(e) =>
-                setFormData((p) => ({ ...p, estacion: e.target.value }))
-              }
-              className="h-11 text-sm"
-            />
-          </div>
-
-          {/* Liters and Price */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Litros *
-              </Label>
-              <Input
-                type="number"
-                step="0.1"
-                placeholder="0.0"
-                value={formData.litros || ""}
-                onChange={(e) =>
-                  setFormData((p) => ({
-                    ...p,
-                    litros: safeNumber(e.target.value, 0),
-                  }))
-                }
-                className={cn(
-                  "h-11 text-sm",
-                  isOverCapacity &&
-                    "border-status-danger focus-visible:ring-status-danger",
-                )}
-              />
-              {isOverCapacity && (
-                <p className="text-xs text-status-danger">
-                  ⚠️ Excede capacidad del tanque ({tankCapacity}L)
-                </p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Precio/Litro (MXN) *
-              </Label>
-              <Input
-                type="number"
-                step="0.01"
-                placeholder="0.00"
-                value={formData.precioPorLitro || ""}
-                onChange={(e) =>
-                  setFormData((p) => ({
-                    ...p,
-                    precioPorLitro: safeNumber(e.target.value, 0),
-                  }))
-                }
-                className="h-11 text-sm"
-              />
-            </div>
-          </div>
-
-          {/* Total (Auto-calculated) */}
-          <div
-            className={cn(
-              "rounded-lg p-4 border transition-colors",
-              formData.tipoCombustible === "diesel"
-                ? "bg-amber-50 border-amber-200"
-                : "bg-sky-50 border-sky-200",
-            )}
-          >
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                {formData.tipoCombustible === "diesel" ? (
-                  <Fuel className="h-4 w-4 text-amber-600" />
-                ) : (
-                  <Droplets className="h-4 w-4 text-sky-600" />
-                )}
-                <span className="text-sm text-muted-foreground">
-                  Total{" "}
-                  {formData.tipoCombustible === "diesel" ? "Diesel" : "Urea"}:
-                </span>
-              </div>
-
-              <span
-                className={cn(
-                  "text-xl font-bold",
-                  formData.tipoCombustible === "diesel"
-                    ? "text-amber-700"
-                    : "text-sky-700",
-                )}
-              >
-                $
-                {total.toLocaleString("es-MX", {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
-              </span>
-            </div>
-          </div>
-
-          {/* Odometer */}
-          <div className="space-y-2">
-            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Lectura de Odómetro (km)
-            </Label>
-            <Input
-              type="number"
-              placeholder="Ej: 245890"
-              value={formData.odometro || ""}
-              onChange={(e) =>
-                setFormData((p) => ({
-                  ...p,
-                  odometro: safeInt(e.target.value, 0),
-                }))
-              }
-              className="h-11 text-sm"
-            />
-          </div>
-
-          {/* Photo Upload */}
-          <div className="space-y-2">
-            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Foto del Ticket
-            </Label>
-
-            <div className="border-2 border-dashed rounded-lg p-6 text-center hover:bg-muted/30 transition-colors cursor-pointer">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                id="ticket-photo-modal"
-                onChange={handleFileChange}
-              />
-
-              <label
-                htmlFor="ticket-photo-modal"
-                className="cursor-pointer block"
-              >
-                {formData.evidencia ? (
-                  <div className="flex items-center justify-center gap-2 text-status-success">
-                    <CheckCircle2 className="h-6 w-6" />
-                    <span className="font-medium text-sm">
-                      {formData.evidencia.name}
-                    </span>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                    <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
-                      <Camera className="h-6 w-6" />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-[10px] text-slate-500 font-bold uppercase">
+                        Cliente
+                      </Label>
+                      <Select
+                        value={filterClient}
+                        onValueChange={setFilterClient}
+                      >
+                        <SelectTrigger className="h-9 text-xs bg-white shadow-sm border-slate-300">
+                          <SelectValue placeholder="Todos..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ALL">
+                            Todos los clientes
+                          </SelectItem>
+                          {availableClientsForFilter.map((c: any) => (
+                            <SelectItem key={c.id} value={String(c.id)}>
+                              {c.razon_social || c.rfc || `Cliente #${c.id}`}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
-                    <span className="text-sm">
-                      Toca para tomar foto o seleccionar archivo
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      JPG, PNG hasta 5MB
-                    </span>
+
+                    <div className="space-y-1">
+                      <Label className="text-[10px] text-slate-500 font-bold uppercase">
+                        Rango de Fechas
+                      </Label>
+                      <div className="flex items-center gap-1">
+                        <Input
+                          type="date"
+                          className="h-9 text-xs bg-white shadow-sm border-slate-300 px-1"
+                          value={dateFrom}
+                          onChange={(e) => setDateFrom(e.target.value)}
+                          title="Desde"
+                        />
+                        <span className="text-[10px] text-slate-400">-</span>
+                        <Input
+                          type="date"
+                          className="h-9 text-xs bg-white shadow-sm border-slate-300 px-1"
+                          value={dateTo}
+                          onChange={(e) => setDateTo(e.target.value)}
+                          title="Hasta"
+                        />
+                      </div>
+                    </div>
                   </div>
-                )}
-              </label>
+
+                  <SearchableSelect
+                    items={searchableTrips}
+                    value={formData.viajeId}
+                    onSelect={handleTripSelection}
+                    placeholder="Escriba folio, ruta o seleccione..."
+                  />
+                </div>
+
+                {/* BUSCADORES INTELIGENTES EN UNIDAD Y OPERADOR */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-600 flex items-center gap-1">
+                      <Truck className="h-3.5 w-3.5" /> Unidad *
+                    </Label>
+                    <SearchableSelect
+                      items={searchableUnits}
+                      value={formData.unidadId}
+                      onSelect={(value) =>
+                        setFormData((p) => ({ ...p, unidadId: value }))
+                      }
+                      placeholder="Buscar unidad..."
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-600 flex items-center gap-1">
+                      <User className="h-3.5 w-3.5" /> Operador *
+                    </Label>
+                    <SearchableSelect
+                      items={searchableOperators}
+                      value={formData.operadorId}
+                      onSelect={(value) =>
+                        setFormData((p) => ({ ...p, operadorId: value }))
+                      }
+                      placeholder="Buscar operador..."
+                    />
+                  </div>
+                </div>
+
+                {/* ODÓMETRO OPCIONAL */}
+                <div className="space-y-1.5 pt-2">
+                  <Label className="text-xs font-bold text-slate-600 flex items-center gap-1">
+                    <Gauge className="h-3.5 w-3.5" /> Lectura de Odómetro (Km)
+                  </Label>
+                  <Input
+                    type="number"
+                    placeholder="Opcional. Ej: 245890"
+                    value={formData.odometro || ""}
+                    onChange={(e) =>
+                      setFormData((p) => ({
+                        ...p,
+                        odometro: e.target.value,
+                      }))
+                    }
+                    className="h-11 font-mono text-sm bg-white shadow-sm border-slate-300"
+                  />
+                  <p className="text-[10px] text-slate-400 italic">
+                    No es obligatorio, pero se recomienda para cálculo exacto de
+                    rendimiento.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* LADO DERECHO: DATOS DEL TICKET Y FOTO */}
+            <div className="space-y-6">
+              <div className="space-y-4">
+                <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2 border-b pb-2">
+                  <Fuel className="h-4 w-4 text-amber-500" /> 2. Carga Física y
+                  Evidencia
+                </h3>
+
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormData((p) => ({
+                        ...p,
+                        tipoCombustible: "diesel",
+                        litros: 0,
+                      }))
+                    }
+                    className={cn(
+                      "flex items-center justify-center gap-3 py-2.5 px-3 rounded-xl border-2 transition-all",
+                      formData.tipoCombustible === "diesel"
+                        ? "bg-amber-500 border-amber-500 text-white shadow-md"
+                        : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50",
+                    )}
+                  >
+                    <Fuel className="h-4 w-4" />
+                    <div className="text-left leading-tight">
+                      <div className="font-bold text-sm">Diésel</div>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormData((p) => ({
+                        ...p,
+                        tipoCombustible: "urea",
+                        litros: 0,
+                      }))
+                    }
+                    className={cn(
+                      "flex items-center justify-center gap-3 py-2.5 px-3 rounded-xl border-2 transition-all",
+                      formData.tipoCombustible === "urea"
+                        ? "bg-sky-500 border-sky-500 text-white shadow-md"
+                        : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50",
+                    )}
+                  >
+                    <Droplets className="h-4 w-4" />
+                    <div className="text-left leading-tight">
+                      <div className="font-bold text-sm">Urea (DEF)</div>
+                    </div>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-600">
+                      Fecha y Hora *
+                    </Label>
+                    <Input
+                      type="datetime-local"
+                      value={formData.fechaHora}
+                      onChange={(e) =>
+                        setFormData((p) => ({
+                          ...p,
+                          fechaHora: e.target.value,
+                        }))
+                      }
+                      className="h-11 text-sm bg-white shadow-sm border-slate-300"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-600">
+                      Estación de Servicio *
+                    </Label>
+                    <Input
+                      placeholder={
+                        formData.tipoCombustible === "diesel"
+                          ? "Ej: Parador San Marcos"
+                          : "Ej: AdBlue Center"
+                      }
+                      value={formData.estacion}
+                      onChange={(e) =>
+                        setFormData((p) => ({ ...p, estacion: e.target.value }))
+                      }
+                      className="h-11 text-sm bg-white shadow-sm border-slate-300"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-600">
+                      Litros Inyectados *
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        type="number"
+                        step="0.1"
+                        placeholder="0.0"
+                        value={formData.litros || ""}
+                        onChange={(e) =>
+                          setFormData((p) => ({
+                            ...p,
+                            litros: safeNumber(e.target.value, 0),
+                          }))
+                        }
+                        className={cn(
+                          "h-11 text-base font-mono pl-3 pr-8 bg-white shadow-sm",
+                          isOverCapacity
+                            ? "border-red-500 text-red-600 ring-1 ring-red-500"
+                            : "border-slate-300",
+                        )}
+                      />
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">
+                        L
+                      </span>
+                    </div>
+                    {isOverCapacity && (
+                      <p className="text-[10px] text-red-600 font-bold">
+                        ⚠️ Excede capacidad ({tankCapacity}L)
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-600">
+                      Precio Unitario *
+                    </Label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">
+                        $
+                      </span>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={formData.precioPorLitro || ""}
+                        onChange={(e) =>
+                          setFormData((p) => ({
+                            ...p,
+                            precioPorLitro: safeNumber(e.target.value, 0),
+                          }))
+                        }
+                        className="h-11 text-base font-mono pl-8 bg-white shadow-sm border-slate-300"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  className={cn(
+                    "mt-2 rounded-xl p-4 border flex justify-between items-center shadow-inner",
+                    formData.tipoCombustible === "diesel"
+                      ? "bg-amber-50 border-amber-200"
+                      : "bg-sky-50 border-sky-200",
+                  )}
+                >
+                  <span className="text-xs font-bold text-slate-600 uppercase tracking-widest">
+                    Total Calculado
+                  </span>
+                  <span
+                    className={cn(
+                      "text-2xl font-black font-mono tracking-tighter",
+                      formData.tipoCombustible === "diesel"
+                        ? "text-amber-700"
+                        : "text-sky-700",
+                    )}
+                  >
+                    $
+                    {total.toLocaleString("es-MX", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </span>
+                </div>
+
+                {/* FOTO CON DISEÑO ENTERPRISE (Dropzone Area) */}
+                <div className="space-y-1.5 pt-2">
+                  <Label className="text-xs font-bold text-slate-600 flex items-center gap-1">
+                    <FileImage className="h-3.5 w-3.5" /> Comprobante
+                    (Evidencia)
+                  </Label>
+                  <div className="relative group border-2 border-dashed border-slate-300 bg-white rounded-2xl p-6 hover:bg-blue-50/50 hover:border-blue-300 transition-all cursor-pointer flex flex-col items-center justify-center min-h-[130px] shadow-sm">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                      onChange={handleFileChange}
+                    />
+                    {formData.evidencia ? (
+                      <div className="flex flex-col items-center gap-2 text-emerald-600">
+                        <div className="h-12 w-12 bg-emerald-100 rounded-full flex items-center justify-center shadow-sm">
+                          <CheckCircle2 className="h-6 w-6" />
+                        </div>
+                        <span className="font-bold text-sm max-w-[250px] truncate">
+                          {formData.evidencia.name}
+                        </span>
+                        <span className="text-[10px] text-emerald-600/70 uppercase font-bold">
+                          Clic para cambiar archivo
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2 text-slate-400 group-hover:text-blue-500 transition-colors">
+                        <div className="h-12 w-12 bg-slate-100 rounded-full flex items-center justify-center group-hover:bg-blue-100 transition-colors">
+                          <Camera className="h-6 w-6" />
+                        </div>
+                        <span className="text-sm font-bold">
+                          Tomar foto o subir archivo
+                        </span>
+                        <span className="text-[10px] uppercase font-semibold">
+                          Máximo 5MB (JPG, PNG)
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t">
+          {/* BOTONERA INFERIOR */}
+          <div className="flex justify-end gap-4 pt-8 mt-6 border-t border-slate-200">
             <Button
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
-              className="h-11 text-sm flex-1"
+              className="h-12 w-32 text-sm font-bold"
             >
               Cancelar
             </Button>
-
             <Button
               type="submit"
               className={cn(
-                "h-11 text-sm flex-1 gap-2",
+                "h-12 px-8 text-sm font-black shadow-lg",
                 formData.tipoCombustible === "diesel"
                   ? "bg-amber-600 hover:bg-amber-700 text-white"
                   : "bg-sky-600 hover:bg-sky-700 text-white",
               )}
             >
-              <Upload className="h-4 w-4" />
-              Registrar{" "}
-              {formData.tipoCombustible === "diesel" ? "Diesel" : "Urea"}
+              <Upload className="h-4 w-4 mr-2" /> Guardar y Registrar
             </Button>
           </div>
         </form>
