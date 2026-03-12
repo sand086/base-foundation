@@ -64,6 +64,19 @@ export const tollService = {
     return data;
   },
 
+  updateTemplate: async (id: number, payload: any): Promise<RateTemplate> => {
+    const cleanPayload = {
+      ...payload,
+      origen: payload.origen?.trim().toUpperCase(),
+      destino: payload.destino?.trim().toUpperCase(),
+    };
+    const { data } = await axiosClient.put<RateTemplate>(
+      `/rate-templates/${id}`,
+      cleanPayload,
+    );
+    return data;
+  },
+
   //  Guardar nueva ruta autorizada
   saveTemplate: async (payload: RateTemplateCreate): Promise<RateTemplate> => {
     // Senior Tip: Limpiamos los strings antes de enviar
