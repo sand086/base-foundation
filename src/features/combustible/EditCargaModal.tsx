@@ -44,8 +44,8 @@ type Unit = {
   capacidad_tanque_urea?: number | null;
 
   // compat opcional
-  capacidadTanqueDiesel?: number | null;
-  capacidadTanqueUrea?: number | null;
+  capacidad_tanque_diesel?: number | null;
+  capacidad_tanque_urea?: number | null;
 };
 
 type Operator = {
@@ -112,13 +112,13 @@ function safeNumber(v: unknown, fallback = 0) {
 
 function getDieselCapacity(u?: Unit): number | null {
   if (!u) return null;
-  return (u.capacidad_tanque_diesel ?? u.capacidadTanqueDiesel ?? null) as
+  return (u.capacidad_tanque_diesel ?? u.capacidad_tanque_diesel ?? null) as
     | number
     | null;
 }
 function getUreaCapacity(u?: Unit): number | null {
   if (!u) return null;
-  return (u.capacidad_tanque_urea ?? u.capacidadTanqueUrea ?? null) as
+  return (u.capacidad_tanque_urea ?? u.capacidad_tanque_urea ?? null) as
     | number
     | null;
 }

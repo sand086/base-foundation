@@ -254,6 +254,36 @@ export const useTrips = () => {
     await fetchTrips();
   }, [fetchTrips]);
 
+  const liquidarLote = async (legIds: string[], netoAPagar: number) => {
+    try {
+      const response = await axiosClient.post("/trips/legs/settle-batch", {
+        leg_ids: legIds.map(Number),
+        netoAPagar,
+      });
+      // Recargamos los viajes para que se quiten de "Pendientes"
+      await fetchTrips();
+      return response.data;
+    } catch (error) {
+      console.error("Error al liquidar lote:", error);
+      throw error;
+    }
+  };
+
+  const getSettlementPreview = async (legIds: string[]) => {
+    try {
+      const response = await axiosClient.post(
+        "/trips/legs/settlement-preview",
+        {
+          leg_ids: legIds.map(Number),
+        },
+      );
+      return response.data;
+    } catch (error) {
+      console.error("Error al obtener la pre-liquidación:", error);
+      throw error;
+    }
+  };
+
   // Carga inicial al montar el hook
   useEffect(() => {
     fetchTrips();
@@ -272,5 +302,7 @@ export const useTrips = () => {
     getTripSettlement,
     closeTripSettlement,
     refreshTrips,
+    liquidarLote,
+    getSettlementPreview,
   };
 };

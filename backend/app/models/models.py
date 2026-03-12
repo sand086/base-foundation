@@ -84,6 +84,7 @@ class TripStatus(str, PyEnum):
     RETRASO = "retraso"
     ENTREGADO = "entregado"
     CERRADO = "cerrado"
+    LIQUIDADO = "liquidado"
     ACCIDENTE = "accidente"
     BLOQUEADO = "bloqueado"
 
@@ -361,6 +362,8 @@ class Unit(AuditMixin, Base):
     numero_serie_motor = Column(String, nullable=True)
     marca_motor = Column(String, nullable=True)
     capacidad_carga = Column(Float, nullable=True)
+    capacidad_tanque_diesel = Column(String(50), nullable=True, default="600.0")
+    capacidad_tanque_urea = Column(String(50), nullable=True, default="40.0")
 
     status = Column(pg_enum(UnitStatus, "unitstatus"), default=UnitStatus.DISPONIBLE)
 

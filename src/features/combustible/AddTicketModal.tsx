@@ -55,26 +55,12 @@ import { useTrips } from "@/hooks/useTrips";
 import { useOperators } from "@/hooks/useOperators";
 import { useUnits } from "@/hooks/useUnits";
 
+import { Client, Trip, Operator, Unit } from "@/types/api.types";
+
 /** =========================
  * Types
  * ========================= */
 type ID = string | number;
-
-export interface Unit {
-  id: ID;
-  numero_economico?: string | null;
-  placas?: string | null;
-  capacidad_tanque_diesel?: number | null;
-  capacidad_tanque_urea?: number | null;
-  capacidadTanqueDiesel?: number | null;
-  capacidadTanqueUrea?: number | null;
-}
-
-export interface Operator {
-  id: ID;
-  name?: string | null;
-  nombre?: string | null;
-}
 
 export interface TicketFormData {
   unidadId: string;
@@ -222,11 +208,11 @@ function safeInt(value: string, fallback = 0) {
 }
 
 function getDieselCapacity(unit: any): number | null {
-  return unit?.capacidad_tanque_diesel ?? unit?.capacidadTanqueDiesel ?? null;
+  return unit?.capacidad_tanque_diesel ?? unit?.capacidad_tanque_diesel ?? null;
 }
 
 function getUreaCapacity(unit: any): number | null {
-  return unit?.capacidad_tanque_urea ?? unit?.capacidadTanqueUrea ?? null;
+  return unit?.capacidad_tanque_urea ?? unit?.capacidad_tanque_urea ?? null;
 }
 
 export function AddTicketModal({
