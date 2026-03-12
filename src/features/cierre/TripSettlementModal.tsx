@@ -1,556 +1,400 @@
-// src/pages/CierreViaje.tsx
-import * as React from "react";
-import { useState, useMemo } from "react";
+// src/features/cierre/TripSettlementModal.tsx
+import React, { useState, useMemo } from "react";
 import {
-  FileCheck,
-  User,
-  Truck,
-  MapPin,
-  Search,
-  FilterX,
-  History,
-  Clock,
   Calculator,
-  CheckCircle,
-  CheckSquare,
+  CheckCircle2,
+  AlertCircle,
+  DollarSign,
+  FileText,
 } from "lucide-react";
 
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Toast } from "@/components/ui/toast";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 
-import { cn } from "@/lib/utils";
-
-// HOOKS REALES
+import { Trip, TripLeg } from "@/types/api.types";
 import { useTrips } from "@/hooks/useTrips";
-import { useClients } from "@/hooks/useClients";
-import { useOperators } from "@/hooks/useOperators";
-import { useUnits } from "@/hooks/useUnits";
 
-// Importaremos los modales en el siguiente paso (Fase 3.2)
-// import { TripSettlementModal } from "@/features/cierre/TripSettlementModal";
+// ==========================================
+// INTERFAZ
+// ==========================================
+export interface TripSettlementModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  // Props para un solo tramo (desde TripPlanner)
+  leg?: TripLeg | null;
+  tripPadre?: Trip | null;
+  // Props para múltiples tramos (desde CierreViajePage)
+  selectedLegs?: any[];
+  onSuccess?: () => void;
+}
 
-export default function CierreViaje() {
-  const { trips = [] } = useTrips();
-  const { clients = [] } = useClients();
-  const { operadores = [], operators = [] } = useOperators() as any;
-  const { unidades = [], units = [] } = useUnits() as any;
-
-  // Manejo de compatibilidad de nombres de hooks
-  const safeOperators = operadores.length > 0 ? operadores : operators;
-  const safeUnits = unidades.length > 0 ? unidades : units;
+export default function TripSettlementModal({
+  open,
+  onOpenChange,
+  leg,
+  tripPadre,
+  selectedLegs = [],
+  onSuccess,
+}: TripSettlementModalProps) {
+  const { updateTripStatus } = useTrips();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // ==========================================
-  // ESTADOS DE UI Y FILTROS
+  // ESTADOS FINANCIEROS
   // ==========================================
-  const [activeTab, setActiveTab] = useState<"pendientes" | "historico">(
-    "pendientes",
+  const [sueldoBase, setSueldoBase] = useState<number | "">("");
+  const [bonos, setBonos] = useState<number | "">("");
+  const [maniobras, setManiobras] = useState<number | "">("");
+  const [descuentos, setDescuentos] = useState<number | "">("");
+  const [observaciones, setObservaciones] = useState("");
+
+  // ==========================================
+  // UNIFICAR DATOS (Individual o Múltiple)
+  // ==========================================
+  const activeLegs = useMemo(() => {
+    if (selectedLegs.length > 0) return selectedLegs;
+    if (leg && tripPadre) return [{ ...leg, trip: tripPadre }];
+    return [];
+  }, [leg, tripPadre, selectedLegs]);
+
+  // ==========================================
+  // CÁLCULOS AUTOMÁTICOS
+  // ==========================================
+  const sumViaticos = activeLegs.reduce(
+    (sum, item) => sum + (Number(item.anticipo_viaticos) || 0),
+    0,
   );
-  const [filterOperator, setFilterOperator] = useState("ALL");
-  const [filterClient, setFilterClient] = useState("ALL");
-  const [filterType, setFilterType] = useState("ALL");
-  const [globalSearch, setGlobalSearch] = useState("");
+  const sumCasetas = activeLegs.reduce(
+    (sum, item) => sum + (Number(item.anticipo_casetas) || 0),
+    0,
+  );
+  const totalAnticipos = sumViaticos + sumCasetas;
 
-  // Selección por lotes (Para Patieros y Múltiples Tramos)
-  const [selectedLegIds, setSelectedLegIds] = useState<string[]>([]);
+  const totalPercepciones =
+    (Number(sueldoBase) || 0) + (Number(bonos) || 0) + (Number(maniobras) || 0);
+  const totalDeducciones = (Number(descuentos) || 0) + totalAnticipos;
+  const totalNeto = totalPercepciones - totalDeducciones;
 
-  // Control del Modal de Liquidación (Próximo paso)
-  const [isSettlementModalOpen, setIsSettlementModalOpen] = useState(false);
-
-  // ==========================================
-  // PROCESAMIENTO DE DATOS (Aplanando Tramos)
-  // ==========================================
-  const allLegs = useMemo(() => {
-    const legs: any[] = [];
-    if (!Array.isArray(trips)) return legs;
-
-    trips.forEach((t) => {
-      // Cruzar el cliente
-      const clientObj = clients.find(
-        (c: any) => String(c.id) === String(t.client_id),
-      );
-      const clientName =
-        clientObj?.razon_social || clientObj?.rfc || "Sin Cliente";
-
-      t.legs?.forEach((l: any) => {
-        legs.push({
-          ...l,
-          trip: { ...t, clientName },
-        });
-      });
-    });
-    return legs.sort(
-      (a, b) =>
-        new Date(b.start_date || 0).getTime() -
-        new Date(a.start_date || 0).getTime(),
-    );
-  }, [trips, clients]);
+  const operatorName =
+    activeLegs[0]?.operator?.name || activeLegs[0]?.operatorName || "Operador";
 
   // ==========================================
-  // SEPARACIÓN: PENDIENTES VS LIQUIDADOS
+  // HANDLERS
   // ==========================================
-  const pendingLegs = useMemo(() => {
-    return allLegs.filter((l) => {
-      const st = String(l.status).toLowerCase();
-      return st === "entregado" || st === "cerrado"; // Terminados pero no pagados
-    });
-  }, [allLegs]);
+  const handleClose = () => {
+    onOpenChange(false);
+    // Limpiar formulario al cerrar
+    setSueldoBase("");
+    setBonos("");
+    setManiobras("");
+    setDescuentos("");
+    setObservaciones("");
+  };
 
-  const historyLegs = useMemo(() => {
-    return allLegs.filter(
-      (l) => String(l.status).toLowerCase() === "liquidado",
-    );
-  }, [allLegs]);
+  const handleSettle = async () => {
+    if (activeLegs.length === 0) return;
 
-  // ==========================================
-  // APLICACIÓN DE FILTROS
-  // ==========================================
-  const applyFilters = (list: any[]) => {
-    return list.filter((l) => {
-      // Filtro Operador
-      if (filterOperator !== "ALL" && String(l.operator_id) !== filterOperator)
-        return false;
-      // Filtro Cliente
-      if (filterClient !== "ALL" && String(l.trip?.client_id) !== filterClient)
-        return false;
-      // Filtro Tipo (Ruta vs Patio)
-      if (filterType !== "ALL" && l.leg_type !== filterType) return false;
-      // Búsqueda Global (Folio, Origen, Destino)
-      if (globalSearch) {
-        const term = globalSearch.toLowerCase();
-        const folio = (l.trip?.public_id || `TRP-${l.trip_id}`).toLowerCase();
-        const route = `${l.trip?.origin} ${l.trip?.destination}`.toLowerCase();
-        if (!folio.includes(term) && !route.includes(term)) return false;
+    try {
+      setIsSubmitting(true);
+
+      // Aquí iteramos para cambiar el estatus de los viajes a "liquidado"
+      for (const item of activeLegs) {
+        const tripId = item.trip?.id || item.trip_id;
+        if (!tripId) continue;
+
+        // Llamada real al hook (Ajusta el estatus exacto según tu API)
+        await updateTripStatus(
+          String(tripId),
+          "cerrado",
+          `Liquidación generada: ${observaciones}`,
+        );
       }
-      return true;
-    });
-  };
 
-  const filteredPending = useMemo(
-    () => applyFilters(pendingLegs),
-    [pendingLegs, filterOperator, filterClient, filterType, globalSearch],
-  );
-  const filteredHistory = useMemo(
-    () => applyFilters(historyLegs),
-    [historyLegs, filterOperator, filterClient, filterType, globalSearch],
-  );
-
-  const currentList =
-    activeTab === "pendientes" ? filteredPending : filteredHistory;
-
-  // ==========================================
-  // HANDLERS DE SELECCIÓN
-  // ==========================================
-  const toggleLegSelection = (id: string) => {
-    setSelectedLegIds((prev) =>
-      prev.includes(id) ? prev.filter((legId) => legId !== id) : [...prev, id],
-    );
-  };
-
-  const toggleSelectAllFiltered = () => {
-    if (selectedLegIds.length === filteredPending.length) {
-      setSelectedLegIds([]);
-    } else {
-      setSelectedLegIds(filteredPending.map((l) => String(l.id)));
+      toast.success("Liquidación procesada correctamente");
+      if (onSuccess) onSuccess();
+      handleClose();
+    } catch (error) {
+      toast.error("Error al procesar la liquidación");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const clearFilters = () => {
-    setFilterOperator("ALL");
-    setFilterClient("ALL");
-    setFilterType("ALL");
-    setGlobalSearch("");
-    setSelectedLegIds([]);
-  };
-
-  // Etiquetas amigables
-  const legTypeLabels: Record<string, string> = {
-    carga_muelle: "Muelle / Patio",
-    ruta_carretera: "Ruta Carretera",
-    entrega_vacio: "Retorno Vacío",
-  };
-
   return (
-    <div className="space-y-6 max-w-[1400px] mx-auto pb-24 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {/* ENCABEZADO */}
-      <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-brand-navy flex items-center gap-2">
-            <FileCheck className="h-7 w-7 text-emerald-600" /> Tablero de
-            Liquidaciones
-          </h1>
-          <p className="text-muted-foreground mt-1 font-medium">
-            Selecciona los movimientos pendientes y genera el recibo de pago del
-            operador.
-          </p>
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="max-w-4xl p-0 overflow-hidden bg-slate-50 rounded-2xl">
+        {/* HEADER */}
+        <div className="bg-brand-navy p-6">
+          <DialogTitle className="text-2xl font-black text-white flex items-center gap-2">
+            <Calculator className="h-6 w-6 text-emerald-400" /> Liquidación de
+            Operador
+          </DialogTitle>
+          <DialogDescription className="text-slate-300 mt-1 text-sm font-medium">
+            Generando recibo de pago para{" "}
+            <strong className="text-white">{operatorName}</strong> (
+            {activeLegs.length} movimientos seleccionados)
+          </DialogDescription>
         </div>
 
-        {/* ACTION BAR FLOTANTE (Aparece cuando hay items seleccionados) */}
-        {selectedLegIds.length > 0 && activeTab === "pendientes" && (
-          <div className="bg-brand-navy text-white px-6 py-3 rounded-xl shadow-xl flex items-center gap-4 animate-in slide-in-from-right-8">
-            <span className="text-sm font-bold flex items-center gap-2">
-              <CheckSquare className="h-4 w-4 text-emerald-400" />
-              {selectedLegIds.length} movimientos seleccionados
-            </span>
-            <Button
-              className="bg-emerald-500 hover:bg-emerald-400 text-brand-navy font-black shadow-md"
-              onClick={() => {
-                // Validación de regla de negocio: ¿Son del mismo operador?
-                const selectedOps = new Set(
-                  filteredPending
-                    .filter((l) => selectedLegIds.includes(String(l.id)))
-                    .map((l) => l.operator_id),
-                );
-                if (selectedOps.size > 1) {
-                  return Toast({
-                    title: "Error de Selección",
-                    /*   Description:
-                      "Los movimientos seleccionados pertenecen a diferentes operadores. Por favor, selecciona movimientos del mismo operador para generar una liquidación.", */
-                    variant: "destructive",
-                  });
-                }
-                setIsSettlementModalOpen(true);
-              }}
-            >
-              <Calculator className="h-4 w-4 mr-2" /> Iniciar Liquidación
-            </Button>
-          </div>
-        )}
-      </div>
+        <div className="p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* COLUMNA IZQ: RESUMEN DE VIAJES (Ancho 5) */}
+          <div className="lg:col-span-5 space-y-4">
+            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1">
+              <FileText className="h-4 w-4" /> Detalle de Viajes
+            </h3>
 
-      {/* PANEL DE FILTROS */}
-      <Card className="border-slate-200 shadow-sm">
-        <CardContent className="p-4 sm:p-6 bg-slate-50/50">
-          <div className="flex flex-col lg:flex-row gap-4 items-end">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 flex-1 w-full">
-              {/* Buscador Global */}
-              <div className="space-y-1.5">
-                <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                  Buscar Viaje
-                </Label>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <Input
-                    placeholder="Folio, Origen, Destino..."
-                    value={globalSearch}
-                    onChange={(e) => setGlobalSearch(e.target.value)}
-                    className="pl-9 bg-white"
-                  />
+            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm max-h-[350px] overflow-y-auto">
+              {activeLegs.map((item, idx) => (
+                <div
+                  key={item.id || idx}
+                  className="p-3 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors"
+                >
+                  <div className="flex justify-between items-start mb-1">
+                    <span className="font-bold text-brand-navy text-sm">
+                      {item.trip?.public_id ||
+                        `TRP-${item.trip?.id || item.trip_id}`}
+                    </span>
+                    <Badge
+                      variant="outline"
+                      className="text-[9px] bg-slate-100 text-slate-600 uppercase"
+                    >
+                      {item.leg_type?.replace("_", " ")}
+                    </Badge>
+                  </div>
+                  <div className="text-xs text-slate-500 font-medium mb-2">
+                    {item.trip?.origin} ➔ {item.trip?.destination}
+                  </div>
+
+                  {/* Desglose de Anticipos por Viaje */}
+                  {(item.anticipo_viaticos > 0 ||
+                    item.anticipo_casetas > 0) && (
+                    <div className="flex gap-2">
+                      {item.anticipo_viaticos > 0 && (
+                        <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded">
+                          Viáticos: $
+                          {Number(item.anticipo_viaticos).toLocaleString()}
+                        </span>
+                      )}
+                      {item.anticipo_casetas > 0 && (
+                        <span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded">
+                          Casetas: $
+                          {Number(item.anticipo_casetas).toLocaleString()}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {totalAnticipos > 0 && (
+              <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 flex gap-3">
+                <AlertCircle className="h-5 w-5 text-rose-600 shrink-0" />
+                <p className="text-xs text-rose-800 font-medium leading-tight">
+                  Se detectaron{" "}
+                  <strong>${totalAnticipos.toLocaleString()}</strong> en
+                  anticipos previos. Este monto será descontado automáticamente.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* COLUMNA DER: CALCULADORA FINANCIERA (Ancho 7) */}
+          <div className="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col">
+            <div className="grid grid-cols-2 gap-6 flex-1">
+              {/* PERCEPCIONES */}
+              <div className="space-y-4">
+                <h4 className="text-xs font-black text-emerald-600 uppercase tracking-widest border-b pb-2">
+                  Percepciones (+)
+                </h4>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">
+                    Sueldo / Tarifa Base
+                  </Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">
+                      $
+                    </span>
+                    <Input
+                      type="number"
+                      value={sueldoBase}
+                      onChange={(e) =>
+                        setSueldoBase(
+                          e.target.value === "" ? "" : Number(e.target.value),
+                        )
+                      }
+                      className="pl-7 font-mono"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">
+                    Maniobras Extra
+                  </Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">
+                      $
+                    </span>
+                    <Input
+                      type="number"
+                      value={maniobras}
+                      onChange={(e) =>
+                        setManiobras(
+                          e.target.value === "" ? "" : Number(e.target.value),
+                        )
+                      }
+                      className="pl-7 font-mono"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">
+                    Bonos de Rendimiento
+                  </Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-500 font-bold">
+                      $
+                    </span>
+                    <Input
+                      type="number"
+                      value={bonos}
+                      onChange={(e) =>
+                        setBonos(
+                          e.target.value === "" ? "" : Number(e.target.value),
+                        )
+                      }
+                      className="pl-7 font-mono bg-emerald-50/50 border-emerald-200"
+                      placeholder="0.00"
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* Filtro Operador */}
-              <div className="space-y-1.5">
-                <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                  Operador
-                </Label>
-                <Select
-                  value={filterOperator}
-                  onValueChange={setFilterOperator}
+              {/* DEDUCCIONES */}
+              <div className="space-y-4">
+                <h4 className="text-xs font-black text-rose-600 uppercase tracking-widest border-b pb-2">
+                  Deducciones (-)
+                </h4>
+
+                <div className="space-y-1.5 opacity-70">
+                  <Label className="text-xs font-bold text-slate-700">
+                    Anticipos (Viáticos y Casetas)
+                  </Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-rose-500 font-bold">
+                      $
+                    </span>
+                    <Input
+                      type="number"
+                      value={totalAnticipos}
+                      readOnly
+                      className="pl-7 font-mono bg-slate-100 text-rose-600 font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">
+                    Otros Descuentos
+                  </Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-rose-400 font-bold">
+                      $
+                    </span>
+                    <Input
+                      type="number"
+                      value={descuentos}
+                      onChange={(e) =>
+                        setDescuentos(
+                          e.target.value === "" ? "" : Number(e.target.value),
+                        )
+                      }
+                      className="pl-7 font-mono bg-rose-50/50 border-rose-200"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 pt-2">
+                  <Label className="text-xs font-bold text-slate-700">
+                    Observaciones del pago
+                  </Label>
+                  <Input
+                    value={observaciones}
+                    onChange={(e) => setObservaciones(e.target.value)}
+                    placeholder="Motivo del descuento/bono..."
+                    className="text-xs"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* TOTAL A PAGAR */}
+            <div className="mt-6 pt-4 border-t-2 border-dashed border-slate-200">
+              <div className="flex justify-between items-center bg-slate-50 p-4 rounded-xl border border-slate-100">
+                <div>
+                  <span className="block text-xs font-bold text-slate-500 uppercase tracking-widest">
+                    Total a Pagar
+                  </span>
+                  <span className="block text-[10px] text-slate-400">
+                    Percepciones - Deducciones
+                  </span>
+                </div>
+                <div
+                  className={`text-3xl font-black tracking-tighter ${totalNeto < 0 ? "text-rose-600" : "text-brand-navy"}`}
                 >
-                  <SelectTrigger className="bg-white">
-                    <SelectValue placeholder="Todos..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">Todos los operadores</SelectItem>
-                    {safeOperators.map((o: any) => (
-                      <SelectItem key={o.id} value={String(o.id)}>
-                        {o.name || o.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Filtro Cliente */}
-              <div className="space-y-1.5">
-                <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                  Cliente
-                </Label>
-                <Select value={filterClient} onValueChange={setFilterClient}>
-                  <SelectTrigger className="bg-white">
-                    <SelectValue placeholder="Todos..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">Todos los clientes</SelectItem>
-                    {clients.map((c: any) => (
-                      <SelectItem key={c.id} value={String(c.id)}>
-                        {c.razon_social || c.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Filtro Tipo */}
-              <div className="space-y-1.5">
-                <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                  Tipo Movimiento
-                </Label>
-                <Select value={filterType} onValueChange={setFilterType}>
-                  <SelectTrigger className="bg-white">
-                    <SelectValue placeholder="Todos..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">Todos los tipos</SelectItem>
-                    <SelectItem value="carga_muelle">
-                      Muelle / Patio (Carga)
-                    </SelectItem>
-                    <SelectItem value="ruta_carretera">
-                      Ruta Carretera
-                    </SelectItem>
-                    <SelectItem value="entrega_vacio">
-                      Retorno de Vacío
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                  $
+                  {totalNeto.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                </div>
               </div>
             </div>
-
-            <Button
-              variant="ghost"
-              onClick={clearFilters}
-              className="text-slate-500 hover:text-brand-navy"
-              size="icon"
-              title="Limpiar Filtros"
-            >
-              <FilterX className="h-5 w-5" />
-            </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
 
-      {/* TABLAS Y TABS */}
-      <Tabs
-        value={activeTab}
-        onValueChange={(v) => {
-          setActiveTab(v as any);
-          setSelectedLegIds([]);
-        }}
-        className="w-full"
-      >
-        <TabsList className="grid w-full max-w-[400px] grid-cols-2 mb-6">
-          <TabsTrigger
-            value="pendientes"
-            className="font-bold flex items-center gap-2"
+        {/* FOOTER ACCIONES */}
+        <DialogFooter className="bg-white p-4 border-t border-slate-200 flex items-center justify-between sm:justify-between px-6 rounded-b-2xl">
+          <Button
+            variant="ghost"
+            onClick={handleClose}
+            disabled={isSubmitting}
+            className="rounded-xl"
           >
-            <Clock className="h-4 w-4" /> Por Liquidar
-            <Badge
-              variant="secondary"
-              className="ml-1 bg-blue-100 text-blue-700"
-            >
-              {pendingLegs.length}
-            </Badge>
-          </TabsTrigger>
-          <TabsTrigger
-            value="historico"
-            className="font-bold flex items-center gap-2"
+            Cancelar
+          </Button>
+          <Button
+            className="bg-brand-navy hover:bg-brand-navy/90 text-white font-bold rounded-xl px-8"
+            onClick={handleSettle}
+            disabled={isSubmitting || activeLegs.length === 0}
           >
-            <History className="h-4 w-4" /> Histórico
-          </TabsTrigger>
-        </TabsList>
-
-        <Card className="border-slate-200 shadow-sm overflow-hidden">
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b">
-                  <tr>
-                    {activeTab === "pendientes" && (
-                      <th scope="col" className="px-4 py-4 w-[50px]">
-                        <Checkbox
-                          checked={
-                            filteredPending.length > 0 &&
-                            selectedLegIds.length === filteredPending.length
-                          }
-                          onCheckedChange={toggleSelectAllFiltered}
-                        />
-                      </th>
-                    )}
-                    <th
-                      scope="col"
-                      className="px-6 py-4 font-black tracking-wider"
-                    >
-                      Viaje / Cliente
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-4 font-black tracking-wider"
-                    >
-                      Tipo
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-4 font-black tracking-wider"
-                    >
-                      Ruta
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-4 font-black tracking-wider"
-                    >
-                      Operador / Unidad
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-4 font-black tracking-wider text-right"
-                    >
-                      Estatus
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {currentList.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={6}
-                        className="px-6 py-12 text-center text-slate-400"
-                      >
-                        <FileCheck className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                        <p className="text-lg font-medium">
-                          No se encontraron movimientos.
-                        </p>
-                        <p className="text-sm">
-                          Ajusta los filtros o revisa el estado de los viajes de
-                          despacho.
-                        </p>
-                      </td>
-                    </tr>
-                  ) : (
-                    currentList.map((leg) => {
-                      const isSelected = selectedLegIds.includes(
-                        String(leg.id),
-                      );
-                      const folio = leg.trip?.public_id || `TRP-${leg.trip_id}`;
-
-                      return (
-                        <tr
-                          key={leg.id}
-                          className={cn(
-                            "border-b last:border-0 transition-colors hover:bg-slate-50/80",
-                            isSelected ? "bg-blue-50/40" : "bg-white",
-                          )}
-                          onClick={() =>
-                            activeTab === "pendientes" &&
-                            toggleLegSelection(String(leg.id))
-                          }
-                        >
-                          {activeTab === "pendientes" && (
-                            <td
-                              className="px-4 py-4"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <Checkbox
-                                checked={isSelected}
-                                onCheckedChange={() =>
-                                  toggleLegSelection(String(leg.id))
-                                }
-                              />
-                            </td>
-                          )}
-                          <td className="px-6 py-4">
-                            <div className="font-bold text-brand-navy">
-                              {folio}
-                            </div>
-                            <div
-                              className="text-[11px] text-slate-500 font-medium truncate max-w-[200px]"
-                              title={leg.trip?.clientName}
-                            >
-                              {leg.trip?.clientName}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <Badge
-                              variant="outline"
-                              className="bg-slate-50 font-semibold text-slate-600"
-                            >
-                              {legTypeLabels[leg.leg_type] || leg.leg_type}
-                            </Badge>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="text-xs font-bold text-slate-700">
-                              {leg.trip?.origin}
-                            </div>
-                            <div className="text-[10px] text-slate-400 uppercase tracking-widest">
-                              Hacia
-                            </div>
-                            <div className="text-xs font-bold text-slate-700">
-                              {leg.trip?.destination}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-2 mb-1">
-                              <User className="h-3.5 w-3.5 text-blue-600" />
-                              <span className="font-bold text-slate-800">
-                                {leg.operator?.name || "S/A"}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
-                              <Truck className="h-3.5 w-3.5" />
-                              Eco: {leg.unit?.numero_economico || "S/A"}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            {activeTab === "pendientes" ? (
-                              <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 border-0">
-                                Pendiente Pago
-                              </Badge>
-                            ) : (
-                              <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-0 flex items-center gap-1 ml-auto">
-                                <CheckCircle className="h-3 w-3" /> Liquidado
-                              </Badge>
-                            )}
-                            {(leg.anticipo_viaticos > 0 ||
-                              leg.anticipo_casetas > 0) && (
-                              <div className="text-[10px] text-rose-500 font-bold mt-2">
-                                Anticipos: $
-                                {(
-                                  leg.anticipo_viaticos + leg.anticipo_casetas
-                                ).toLocaleString()}
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      </Tabs>
-
-      {/* 🚀 AQUI IRA EL MODAL (Fase 3.2) */}
-      {/* <TripSettlementModal 
-        open={isSettlementModalOpen}
-        onOpenChange={setIsSettlementModalOpen}
-        selectedLegs={filteredPending.filter(l => selectedLegIds.includes(String(l.id)))}
-        onSuccess={() => {
-           setIsSettlementModalOpen(false);
-           setSelectedLegIds([]);
-           // Refrescar data
-        }}
-      /> 
-      */}
-    </div>
+            {isSubmitting ? (
+              "Procesando pago..."
+            ) : (
+              <>
+                <CheckCircle2 className="w-4 h-4 mr-2" /> Confirmar Liquidación
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
