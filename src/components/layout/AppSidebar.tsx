@@ -71,7 +71,7 @@ const menuItems: MenuItem[] = [
     ],
   },
   {
-    title: "Monitoreo",
+    title: "Historico",
     icon: Radar,
     iconName: "Monitoreo",
     path: "/monitoreo",
