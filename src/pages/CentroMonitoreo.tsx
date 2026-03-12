@@ -522,7 +522,6 @@ export default function CentroMonitoreo() {
         <div>
           <h1 className="text-2xl font-black tracking-tight text-brand-navy flex items-center gap-2">
             <Activity className="h-6 w-6 text-brand-navy" /> Historial de Viajes
-            y Finanzas
           </h1>
           <p className="text-sm text-slate-500 mt-1">
             Torre de control para despachos, rutas y liquidaciones.

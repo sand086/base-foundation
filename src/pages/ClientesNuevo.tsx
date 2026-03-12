@@ -1318,10 +1318,11 @@ export default function ClientsNew() {
                                   <SelectItem value="nacional">
                                     Nacional
                                   </SelectItem>
-                                  <SelectItem value="importación">
+                                  {/* Cambiamos el value a sin acento para que la DB lo acepte */}
+                                  <SelectItem value="importacion">
                                     Importación
                                   </SelectItem>
-                                  <SelectItem value="exportación">
+                                  <SelectItem value="exportacion">
                                     Exportación
                                   </SelectItem>
                                 </SelectContent>
