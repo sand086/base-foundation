@@ -506,6 +506,7 @@ export interface Trip {
 
   start_date: string;
   closed_at?: string | null;
+  fecha_programada?: string | null;
 
   // Relaciones
   client?: Client;

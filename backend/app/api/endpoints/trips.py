@@ -38,7 +38,7 @@ def create_trip(
     trip: schemas.TripCreate,
     db: Session = Depends(get_db),
 ):
-    # 1. Validar que la unidad del primer tramo exista
+    # 1. Validar que la unidad del primer tramo exista (SOLO SI MANDAN TRAMO)
     if trip.initial_leg and trip.initial_leg.unit_id:
         unit = (
             db.query(models.Unit)
@@ -48,7 +48,7 @@ def create_trip(
         if not unit:
             raise HTTPException(status_code=404, detail="La unidad principal no existe")
 
-        # 2. Validar estatus (Permitimos bloqueado para que puedas trabajar)
+        # 2. Validar estatus
         estatus_permitidos = ["disponible", "bloqueado"]
         if unit.status.lower() not in estatus_permitidos:
             raise HTTPException(
@@ -56,7 +56,7 @@ def create_trip(
                 detail=f"La unidad {unit.numero_economico} no puede ser despachada. Estatus actual: {unit.status}",
             )
 
-    # 3. Crear el objeto en BD (El CRUD ahora separa Viaje Padre y Tramo)
+    # 3. Crear el objeto en BD
     db_trip = crud.create_trip(db, trip)
     return db_trip
 

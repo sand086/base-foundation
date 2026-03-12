@@ -455,7 +455,7 @@ export default function ClientsNew() {
             telefono: sub.telefono || "",
             horarioRecepcion: sub.horario_recepcion || "",
             horarioCita: sub.horario_cita || "", // si existe, si no queda ""
-            diasCredito: sub.dias_credito || "0",
+            diasCredito: Number(sub.dias_credito || 0),
             requiereContrato: Boolean(sub.requiere_contrato),
             convenioEspecial: Boolean(sub.convenio_especial),
             contratoAdjunto: sub.contrato_adjunto || "",
@@ -1807,18 +1807,36 @@ export default function ClientsNew() {
                                 <Button
                                   size="sm"
                                   className="h-7  uppercase font-black shadow-sm"
-                                  onClick={() => {
-                                    const { subIdx, tarIdx } =
-                                      activePickerIndex!;
+                                  // src/pages/clients/ClientsNew.tsx
 
-                                    // Determinamos costo según el tipo de unidad del convenio
+                                  onClick={() => {
+                                    if (!activePickerIndex) return;
+                                    const { subIdx, tarIdx } =
+                                      activePickerIndex;
+
+                                    // Acceso seguro al subcliente y su tarifa
+                                    const currentSub = subClientes[subIdx];
+                                    const currentTarifa =
+                                      currentSub?.tarifas?.[tarIdx];
+
+                                    if (!currentTarifa) {
+                                      console.error(
+                                        "No se encontró la tarifa en el índice especificado:",
+                                        { subIdx, tarIdx },
+                                      );
+                                      toast.error(
+                                        "Error al vincular: No se encontró la fila seleccionada.",
+                                      );
+                                      return;
+                                    }
+
+                                    // Determinamos costo según el tipo de unidad del convenio (acceso seguro)
                                     const costo =
-                                      subClientes[subIdx].tarifas[tarIdx]
-                                        .tipoUnidad === "full"
+                                      currentTarifa.tipoUnidad === "full"
                                         ? r.costo_total_full
                                         : r.costo_total_sencillo;
 
-                                    // Actualizamos los campos en la tabla de convenios
+                                    // Actualizamos los campos usando los índices validados
                                     updateTarifa(
                                       subIdx,
                                       tarIdx,
@@ -1830,7 +1848,7 @@ export default function ClientsNew() {
                                       tarIdx,
                                       "nombreRuta",
                                       r.origen,
-                                    ); // Guardamos el Nombre de la Ruta
+                                    );
                                     updateTarifa(
                                       subIdx,
                                       tarIdx,
