@@ -28,6 +28,7 @@ def get_fuel_logs(
         .options(
             joinedload(models.FuelLog.unit),
             joinedload(models.FuelLog.operator),
+            joinedload(models.FuelLog.created_by),  # 🚀 NUEVO: Cargar el usuario
         )
         .where(models.FuelLog.record_status == "A")
     )
@@ -44,7 +45,7 @@ def get_fuel_logs(
 async def create_fuel_log(
     unidadId: int = Form(...),
     operadorId: int = Form(...),
-    viajeId: Optional[int] = Form(None),  # 🚀 NUEVO: Conexión con el Viaje
+    viajeId: Optional[int] = Form(None),
     fechaHora: str = Form(...),
     estacion: str = Form(...),
     tipoCombustible: str = Form(...),
@@ -67,7 +68,7 @@ async def create_fuel_log(
     new_log = models.FuelLog(
         unit_id=unidadId,
         operator_id=operadorId,
-        trip_id=viajeId,  # 🚀 GUARDAMOS EL VIAJE
+        trip_leg_id=viajeId,  # 🚀 CORRECCIÓN: Era trip_id, debe ser trip_leg_id
         fecha_hora=fechaHora,
         estacion=estacion,
         tipo_combustible=tipoCombustible,
@@ -121,8 +122,12 @@ async def update_fuel_log(
     log.capacidad_tanque_snapshot = data.capacidad_tanque_snapshot
 
     # Si tu schema lo soporta, actualizamos viaje también
-    if hasattr(data, "trip_id"):
-        log.trip_id = data.trip_id
+    if hasattr(data, "trip_leg_id"):
+        log.trip_leg_id = data.trip_leg_id
+    elif hasattr(
+        data, "trip_id"
+    ):  # Por si el frontend sigue mandando trip_id en el JSON
+        log.trip_leg_id = data.trip_id
 
     log.updated_by_id = current_user.id
 
