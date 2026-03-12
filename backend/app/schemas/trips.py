@@ -253,3 +253,20 @@ class CloseSettlementPayload(BaseModel):
     totalIngresos: float
     totalDeducciones: float
     netoAPagar: float
+
+
+# ==========================================
+# SCHEMAS PARA PRE-LIQUIDACIÓN POR LOTE
+# ==========================================
+class BatchSettlementPreviewRequest(BaseModel):
+    leg_ids: List[int]
+
+
+class BatchSettlementPreviewResponse(BaseModel):
+    total_kms: float
+    consumo_esperado: float
+    consumo_real: float
+    diferencia_litros: float
+    precio_promedio: float
+    deduccion_combustible: float
+    alertas: List[str]

@@ -56,6 +56,8 @@ export interface Unit {
   numero_serie_motor?: string | null;
   marca_motor?: string | null;
   capacidad_carga?: number | null;
+  capacidad_tanque_diesel?: number | string | null;
+  capacidad_tanque_urea?: number | string | null;
   documentos_vencidos: number;
   llantas_criticas: number;
   seguro_vence?: string | null;

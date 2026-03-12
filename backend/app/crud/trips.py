@@ -3,7 +3,9 @@ from __future__ import annotations
 from datetime import datetime
 import uuid
 
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, contains_eager
+from sqlalchemy import func, and_, or_
+from datetime import date, timedelta
 
 from app.models import models
 from app.models.models import RecordStatus, TripLegType
@@ -581,3 +583,148 @@ def create_next_leg(db: Session, trip_id: str, payload: schemas.TripLegCreate):
     db.commit()
     db.refresh(trip)
     return trip
+
+
+def settle_trip_legs_batch(db: Session, leg_ids: list[int], total_pago: float):
+    legs = db.query(models.TripLeg).filter(models.TripLeg.id.in_(leg_ids)).all()
+    if not legs:
+        return None
+
+    trips_to_check = set()
+
+    for leg in legs:
+        # 1. Marcar el tramo como liquidado
+        leg.status = "liquidado"
+        # Dividimos el pago total entre los movimientos para el historial financiero
+        leg.saldo_operador = total_pago / len(legs)
+        leg.actual_arrival = datetime.utcnow()
+
+        event = models.TripTimelineEvent(
+            trip_leg_id=leg.id,
+            time=datetime.utcnow(),
+            event=f"Tramo Liquidado en Lote. Saldo acreditado: ${(total_pago/len(legs)):,.2f}",
+            event_type="success",
+        )
+        db.add(event)
+        trips_to_check.add(leg.trip)
+
+    cxc_creadas = 0
+
+    # 2. Verificar los viajes padre
+    for trip in trips_to_check:
+        # Si TODOS los tramos de este viaje ya acabaron, cerramos el viaje general
+        all_completed = all(
+            l.status in ["entregado", "cerrado", "liquidado"] for l in trip.legs
+        )
+
+        if all_completed and trip.status not in ["cerrado", "liquidado"]:
+            trip.status = "cerrado"
+            trip.closed_at = func.now()
+
+            # Generar CxC (Cuentas por Cobrar) si no existe
+            existing_cxc = (
+                db.query(models.ReceivableInvoice)
+                .filter(models.ReceivableInvoice.viaje_id == trip.id)
+                .first()
+            )
+            if not existing_cxc:
+                base = trip.tarifa_base or 0.0
+                casetas = trip.costo_casetas or 0.0
+                subtotal = base + casetas
+                iva = subtotal * 0.16
+                retencion = subtotal * 0.04
+                monto_total = subtotal + iva - retencion
+
+                dias_credito = 15
+                if trip.client and trip.client.dias_credito:
+                    dias_credito = trip.client.dias_credito
+
+                nueva_cxc = models.ReceivableInvoice(
+                    client_id=trip.client_id,
+                    sub_client_id=trip.sub_client_id,
+                    viaje_id=trip.id,
+                    folio_interno=f"CXC-VIAJE-{trip.public_id or trip.id}",
+                    concepto=f"Servicio de Flete: {trip.origin} a {trip.destination}",
+                    subtotal=subtotal,
+                    iva=iva,
+                    retenciones=retencion,
+                    monto_total=monto_total,
+                    saldo_pendiente=monto_total,
+                    fecha_emision=date.today(),
+                    fecha_vencimiento=date.today() + timedelta(days=dias_credito),
+                    estatus=models.InvoiceStatus.PENDIENTE,
+                )
+                db.add(nueva_cxc)
+                cxc_creadas += 1
+
+    db.commit()
+    return {
+        "message": "Liquidación completada",
+        "legs_procesados": len(legs),
+        "cxc_generadas": cxc_creadas,
+    }
+
+
+def preview_batch_settlement(db: Session, leg_ids: list[int]):
+    # Buscamos los tramos e incluimos sus viajes, tarifas y vales de combustible
+    legs = (
+        db.query(models.TripLeg)
+        .options(
+            joinedload(models.TripLeg.trip).joinedload(models.Trip.tariff),
+            joinedload(models.TripLeg.fuel_logs),
+        )
+        .filter(models.TripLeg.id.in_(leg_ids))
+        .all()
+    )
+
+    if not legs:
+        return None
+
+    total_kms = 0.0
+    total_real_liters = 0.0
+    total_fuel_cost = 0.0
+    alertas = []
+
+    for leg in legs:
+        trip = leg.trip
+
+        # 1. Sumar Kilómetros
+        kms = trip.tariff.distancia_km if trip and trip.tariff else 0
+        total_kms += kms
+
+        # 2. Candado de Combustible (Regla Gustavo)
+        if not leg.fuel_logs:
+            alertas.append(
+                f"⚠️ El viaje {trip.public_id or trip.id} ({trip.origin} a {trip.destination}) NO tiene vales de combustible registrados."
+            )
+
+        # 3. Sumar Vales
+        for f in leg.fuel_logs:
+            total_real_liters += f.litros
+            total_fuel_cost += f.litros * f.precio_por_litro
+
+    # 4. Matemáticas de Rendimiento
+    RENDIMIENTO_ESPERADO = 3.2  # km por litro (puedes ajustarlo o traerlo de BD)
+    consumo_esperado = total_kms / RENDIMIENTO_ESPERADO if total_kms > 0 else 0.0
+
+    precio_promedio = (
+        (total_fuel_cost / total_real_liters) if total_real_liters > 0 else 24.50
+    )
+
+    diferencia = total_real_liters - consumo_esperado
+    deduccion = 0.0
+
+    # Tolerancia del 5% (Si gasta 5% más de lo esperado, se le cobra)
+    TOLERANCIA_PCT = 0.05
+    if diferencia > (consumo_esperado * TOLERANCIA_PCT):
+        deduccion = diferencia * precio_promedio
+
+    return {
+        "total_kms": round(total_kms, 2),
+        "consumo_esperado": round(consumo_esperado, 2),
+        "consumo_real": round(total_real_liters, 2),
+        "diferencia_litros": round(diferencia, 2),
+        "precio_promedio": round(precio_promedio, 2),
+        "deduccion_combustible": round(deduccion, 2),
+        "alertas": alertas,
+    }

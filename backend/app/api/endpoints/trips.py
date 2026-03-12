@@ -17,6 +17,8 @@ from pathlib import Path
 from fastapi.responses import Response
 from jinja2 import Environment, FileSystemLoader
 
+from pydantic import BaseModel
+
 try:
     from weasyprint import HTML
 except Exception as e:
@@ -338,6 +340,39 @@ def generate_carta_porte_ciega(trip_id: int, db: Session = Depends(get_db)):
             "Content-Disposition": f"inline; filename=Carta_Porte_{trip.public_id or trip.id}.pdf"
         },
     )
+
+
+# =========================================================
+# LIQUIDACIÓN POR LOTE (MULTIPLE LEGS)
+# =========================================================
+
+
+class BatchSettlementPayload(BaseModel):
+    leg_ids: List[int]
+    netoAPagar: float
+
+
+@router.post("/trips/legs/settle-batch")
+def settle_trip_legs_batch(
+    payload: BatchSettlementPayload, db: Session = Depends(get_db)
+):
+    result = crud.settle_trip_legs_batch(db, payload.leg_ids, payload.netoAPagar)
+    if not result:
+        raise HTTPException(status_code=404, detail="No se encontraron los tramos")
+    return result
+
+
+@router.post(
+    "/trips/legs/settlement-preview",
+    response_model=schemas.BatchSettlementPreviewResponse,
+)
+def preview_batch_settlement_endpoint(
+    payload: schemas.BatchSettlementPreviewRequest, db: Session = Depends(get_db)
+):
+    result = crud.preview_batch_settlement(db, payload.leg_ids)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Error al generar pre-liquidación")
+    return result
 
 
 # $2y$12$y3vy.iw/pjjr67cPO5/LgOQPFlKJBvlHQrsbinE3EVm6pkg3l9gSu
