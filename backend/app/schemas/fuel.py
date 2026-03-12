@@ -28,6 +28,14 @@ class OperatorFuelInfo(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class UserFuelInfo(BaseModel):
+    id: int
+    nombre: str
+    apellido: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 # =========================================================
 # DOCUMENTOS (FuelDocumentHistory)
 # =========================================================
@@ -65,6 +73,7 @@ class FuelDocumentResponse(FuelDocumentBase):
 class FuelLogBase(BaseModel):
     unit_id: int
     operator_id: int
+    trip_leg_id: Optional[int] = None
 
     estacion: str = Field(..., min_length=3, max_length=200)
     tipo_combustible: str  # 'diesel' | 'urea'
@@ -72,7 +81,7 @@ class FuelLogBase(BaseModel):
     litros: float = Field(..., gt=0)
     precio_por_litro: float = Field(..., gt=0)
     total: float = Field(..., gt=0)
-    odometro: int = Field(..., gt=0)
+    odometro: int = Field(..., ge=0)
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -113,7 +122,7 @@ class FuelLogUpdate(BaseModel):
     litros: Optional[float] = Field(default=None, gt=0)
     precio_por_litro: Optional[float] = Field(default=None, gt=0)
     total: Optional[float] = Field(default=None, gt=0)
-    odometro: Optional[int] = Field(default=None, gt=0)
+    odometro: Optional[int] = Field(default=None, ge=0)
 
     fecha_hora: Optional[datetime] = None
     evidencia_url: Optional[str] = Field(default=None, max_length=500)
@@ -149,8 +158,9 @@ class FuelLogResponse(FuelLogBase):
     updated_by_id: Optional[int] = None
 
     # Relaciones (opcional: para tabla sin queries extra)
-    unit: Optional[UnitFuelInfo] = Field(default=None, exclude=True)
-    operator: Optional[OperatorFuelInfo] = Field(default=None, exclude=True)
+    unit: Optional[UnitFuelInfo] = Field(default=None)
+    operator: Optional[OperatorFuelInfo] = Field(default=None)
+    created_by: Optional[UserFuelInfo] = Field(default=None)
 
     # Historial de documentos (relación FuelDocumentHistory)
     document_history: List[FuelDocumentResponse] = Field(default_factory=list)
@@ -170,5 +180,13 @@ class FuelLogResponse(FuelLogBase):
     @property
     def operadorNombre(self) -> str:
         return self.operator.name if self.operator else "N/A"
+
+    # 🚀 NUEVO: Exponer el nombre de quien lo registró al Frontend
+    @computed_field
+    @property
+    def registradoPor(self) -> str:
+        if self.created_by:
+            return f"{self.created_by.nombre} {self.created_by.apellido or ''}".strip()
+        return "N/A"
 
     model_config = ConfigDict(from_attributes=True)
