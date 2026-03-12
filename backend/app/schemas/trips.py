@@ -1,5 +1,5 @@
 from __future__ import annotations
-from datetime import datetime
+from datetime import datetime, date
 from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 from app.models.models import RecordStatus, TripStatus, TripLegType
@@ -130,6 +130,7 @@ class TripBase(ORMBase):
 
     tarifa_base: float
     costo_casetas: float = 0.0
+    fecha_programada: Optional[date] = None
 
     start_date: datetime
     closed_at: Optional[datetime] = None
@@ -141,7 +142,7 @@ class TripCreate(TripBase):
     El Frontend enviará 'initial_leg' con el camión y chofer asignados.
     """
 
-    initial_leg: TripLegCreate
+    initial_leg: Optional[TripLegCreate] = None
 
     model_config = ConfigDict(extra="ignore")
 

@@ -65,9 +65,8 @@ def get_trip(db: Session, trip_id: str):
 
 def create_trip(db: Session, trip: schemas.TripCreate):
     """
-    1. Crea el Viaje Padre (con remolques y tarifa).
-    2. Crea el Primer Tramo (TripLeg) usando `initial_leg` (con Tracto, Operador, Anticipos y Odómetro).
-    3. Bloquea las unidades y al operador asignados a este primer tramo.
+    1. Crea el Viaje Padre (con remolques, tarifa y fecha programada).
+    2. Si trae un Tramo Inicial (No es Standby), crea el TripLeg y bloquea recursos.
     """
     # 1. Crear el Viaje Padre
     db_trip = models.Trip(
@@ -84,69 +83,74 @@ def create_trip(db: Session, trip: schemas.TripCreate):
         tarifa_base=trip.tarifa_base,
         costo_casetas=trip.costo_casetas,
         start_date=trip.start_date,
+        fecha_programada=trip.fecha_programada,  # 🚀 Se guarda la fecha del viaje
     )
     db.add(db_trip)
     db.flush()  # Para obtener el db_trip.id
 
-    # 2. Calcular saldo estimado para el primer tramo
-    leg_data = trip.initial_leg
-    total_anticipos = (
-        (leg_data.anticipo_casetas or 0)
-        + (leg_data.anticipo_viaticos or 0)
-        + (leg_data.anticipo_combustible or 0)
-    )
-    saldo_estimado = (trip.tarifa_base or 0) - total_anticipos
+    # 2. Solo si trae initial_leg (Si se le dio click a DESPACHAR AHORA)
+    if trip.initial_leg:
+        leg_data = trip.initial_leg
 
-    # 3. Crear el Primer Tramo (Leg)
-    db_leg = models.TripLeg(
-        trip_id=db_trip.id,
-        leg_type=leg_data.leg_type,
-        status=trip.status,
-        unit_id=leg_data.unit_id,
-        operator_id=leg_data.operator_id,
-        anticipo_casetas=leg_data.anticipo_casetas,
-        anticipo_viaticos=leg_data.anticipo_viaticos,
-        anticipo_combustible=leg_data.anticipo_combustible,
-        saldo_operador=saldo_estimado,
-        odometro_inicial=leg_data.odometro_inicial,
-        nivel_tanque_inicial=leg_data.nivel_tanque_inicial,
-        start_date=trip.start_date,
-    )
-    db.add(db_leg)
+        # Calcular saldo estimado para el primer tramo
+        total_anticipos = (
+            (leg_data.anticipo_casetas or 0)
+            + (leg_data.anticipo_viaticos or 0)
+            + (leg_data.anticipo_combustible or 0)
+        )
+        saldo_estimado = (trip.tarifa_base or 0) - total_anticipos
 
-    # 4. Bloquear Unidades (Tracto del tramo + Remolques del viaje)
-    unit_ids_to_block = [
-        leg_data.unit_id,
-        trip.remolque_1_id,
-        trip.dolly_id,
-        trip.remolque_2_id,
-    ]
-    valid_unit_ids = [uid for uid in unit_ids_to_block if uid is not None]
+        # 3. Crear el Primer Tramo (Leg)
+        db_leg = models.TripLeg(
+            trip_id=db_trip.id,
+            leg_type=leg_data.leg_type,
+            status=trip.status,
+            unit_id=leg_data.unit_id,
+            operator_id=leg_data.operator_id,
+            anticipo_casetas=leg_data.anticipo_casetas,
+            anticipo_viaticos=leg_data.anticipo_viaticos,
+            anticipo_combustible=leg_data.anticipo_combustible,
+            saldo_operador=saldo_estimado,
+            odometro_inicial=leg_data.odometro_inicial,
+            nivel_tanque_inicial=leg_data.nivel_tanque_inicial,
+            start_date=trip.start_date,
+        )
+        db.add(db_leg)
 
-    if valid_unit_ids:
-        units = (
-            db.query(models.Unit)
-            .filter(
-                models.Unit.id.in_(valid_unit_ids),
-                models.Unit.record_status != RecordStatus.ELIMINADO,
+        # 4. Bloquear Unidades (Tracto del tramo + Remolques del viaje)
+        unit_ids_to_block = [
+            leg_data.unit_id,
+            trip.remolque_1_id,
+            trip.dolly_id,
+            trip.remolque_2_id,
+        ]
+        valid_unit_ids = [uid for uid in unit_ids_to_block if uid is not None]
+
+        if valid_unit_ids:
+            units = (
+                db.query(models.Unit)
+                .filter(
+                    models.Unit.id.in_(valid_unit_ids),
+                    models.Unit.record_status != RecordStatus.ELIMINADO,
+                )
+                .all()
             )
-            .all()
-        )
-        for u in units:
-            u.status = models.UnitStatus.EN_RUTA
-            db.add(u)
+            for u in units:
+                u.status = models.UnitStatus.EN_RUTA
+                db.add(u)
 
-    # 5. Bloquear al Operador
-    if leg_data.operator_id:
-        operator = (
-            db.query(models.Operator)
-            .filter(models.Operator.id == leg_data.operator_id)
-            .first()
-        )
-        if operator:
-            operator.status = models.OperatorStatus.INACTIVO  # o EN_RUTA
-            db.add(operator)
+        # 5. Bloquear al Operador
+        if leg_data.operator_id:
+            operator = (
+                db.query(models.Operator)
+                .filter(models.Operator.id == leg_data.operator_id)
+                .first()
+            )
+            if operator:
+                operator.status = models.OperatorStatus.INACTIVO  # o EN_RUTA
+                db.add(operator)
 
+    # Si fue Standby, brinca todo lo anterior y solo guarda el viaje padre
     db.commit()
     db.refresh(db_trip)
     return db_trip

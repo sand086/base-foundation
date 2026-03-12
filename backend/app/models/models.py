@@ -602,6 +602,7 @@ class Trip(AuditMixin, Base):
     costo_casetas = Column(Float, default=0.0)
 
     # Fechas Globales
+    fecha_programada = Column(Date, nullable=True)
     start_date = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
