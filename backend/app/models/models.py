@@ -73,6 +73,7 @@ class UnitStatus(str, PyEnum):
 class OperatorStatus(str, PyEnum):
     ACTIVO = "activo"
     INACTIVO = "inactivo"
+    EN_RUTA = "en_ruta"
     VACACIONES = "vacaciones"
     INCAPACIDAD = "incapacidad"
 

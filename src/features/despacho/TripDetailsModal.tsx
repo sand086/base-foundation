@@ -82,6 +82,7 @@ export function TripDetailsModal({
   const [tarifaBase, setTarifaBase] = useState(0);
   const [costoCasetas, setCostoCasetas] = useState(0);
   const [mantenerPreciosManuales, setMantenerPreciosManuales] = useState(true);
+  const [isUndoing, setIsUndoing] = useState(false); // Estado de carga para el botón de deshacer
 
   // 🚀 Lógica de Tramo Activo
   const activeLeg = useMemo(() => {
@@ -123,6 +124,9 @@ export function TripDetailsModal({
           (leg.timeline_events || []).map((ev) => ({
             ...ev,
             legName: leg.leg_type.replace("_", " ").toUpperCase(),
+            operatorName: leg.operator?.name?.split(" ")[0] || "S/A",
+            unitEco: leg.unit?.numero_economico || "S/A",
+            unitPlacas: leg.unit?.placas || "S/P",
           })),
         )
         .sort(
@@ -198,7 +202,7 @@ export function TripDetailsModal({
           trip.id,
           activeLeg.id,
           {
-            status: trip.status, // 🚀 CORRECCIÓN: Mandamos el estatus actual del viaje
+            status: trip.status,
             location: "Patio Base",
             comments: `Operación de Patio: Chasis ECO-${eco} fue marcado físicamente como ${checked ? "CARGADO" : "VACÍO"}.`,
           },
@@ -225,7 +229,7 @@ export function TripDetailsModal({
           trip.id,
           activeLeg.id,
           {
-            status: trip.status, // 🚀 CORRECCIÓN: Mandamos el estatus actual del viaje
+            status: trip.status,
             location: "Administración",
             comments: `Ajuste comercial manual: Flete Base $${tarifaBase}, Casetas $${costoCasetas}.`,
           },
@@ -237,31 +241,28 @@ export function TripDetailsModal({
     }
   };
 
-  const handleReopenLeg = async (leg: TripLeg) => {
+  // 🚀 LÓGICA CORREGIDA PARA "ME EQUIVOQUÉ"
+  const handleUndoLeg = async () => {
     const ok = confirm(
-      "¿Estás seguro de reabrir esta fase? Se anulará la liquidación y la factura del cliente.",
+      "¿Estás seguro de deshacer el último movimiento? Esto eliminará la fase actual y restaurará la anterior.",
     );
     if (!ok) return;
 
+    setIsUndoing(true);
     try {
-      await axiosClient.post(`/trips/legs/${leg.id}/reopen`);
-      toast.success("Fase reabierta exitosamente");
+      // Llamamos al nuevo endpoint de backend
+      await axiosClient.post(`/trips/${trip.id}/undo-leg`);
 
-      await addTimelineEvent(
-        trip.id,
-        leg.id,
-        {
-          status: trip.status, // 🚀 CORRECCIÓN: EVITA EL ERROR 500
-          location: "Administración",
-          comments: `Fase ${leg.leg_type.replace("_", " ").toUpperCase()} reabierta manualmente. Liquidación anulada.`,
-        },
-        true,
-      );
+      toast.success("Movimiento deshecho correctamente.");
 
-      // 🚀 FORZAMOS LA ACTUALIZACIÓN AQUÍ PARA QUE LA UI CAMBIE AL INSTANTE
+      // Forzamos actualización para reflejar el cambio en la UI inmediatamente
       await refreshTrips();
     } catch (error: any) {
-      toast.error(error?.response?.data?.detail || "Error al reabrir la fase");
+      toast.error(
+        error?.response?.data?.detail || "No se pudo deshacer la fase.",
+      );
+    } finally {
+      setIsUndoing(false);
     }
   };
 
@@ -302,19 +303,6 @@ export function TripDetailsModal({
               </div>
             </div>
             <div className="flex flex-col items-end gap-2">
-              {/* <Badge
-                className={`uppercase px-4 py-1.5 font-black tracking-widest shadow-sm border-0 ${
-                  globalOperationalStatus.includes("INCIDENCIA")
-                    ? "bg-red-600 text-white animate-pulse"
-                    : globalOperationalStatus.includes("FINALIZADO")
-                      ? "bg-slate-800 text-white"
-                      : globalOperationalStatus.includes("PATIO")
-                        ? "bg-amber-100 text-amber-800"
-                        : "bg-brand-navy text-white"
-                }`}
-              >
-                ESTATUS: {globalOperationalStatus}
-              </Badge> */}
               <Button
                 variant="outline"
                 size="sm"
@@ -361,7 +349,7 @@ export function TripDetailsModal({
                         <div className="flex flex-col items-end gap-1">
                           <Switch
                             checked={Boolean(trip.remolque_1.is_loaded)}
-                            disabled // 🚀 AHORA ES DE SOLO LECTURA, EL SISTEMA LO HACE SOLO
+                            disabled // 🚀 AHORA ES DE SOLO LECTURA
                           />
                           <Badge
                             variant={
@@ -399,13 +387,7 @@ export function TripDetailsModal({
                         <div className="flex flex-col items-end gap-1">
                           <Switch
                             checked={Boolean(trip.remolque_2.is_loaded)}
-                            onCheckedChange={(c) =>
-                              handleChassisToggle(
-                                trip.remolque_2!.id,
-                                trip.remolque_2!.numero_economico,
-                                c,
-                              )
-                            }
+                            disabled
                           />
                           <Badge
                             variant={
@@ -528,6 +510,10 @@ export function TripDetailsModal({
                             "retraso",
                             "accidente",
                           ].includes(leg.status);
+
+                          // Mostrar el botón de Me equivoqué SOLO si es el último tramo (fase actual)
+                          const isLastLeg = index === trip.legs!.length - 1;
+
                           return (
                             <div key={leg.id} className="relative w-full">
                               <div
@@ -713,7 +699,6 @@ export function TripDetailsModal({
                                             );
                                             if (!confirmacion) return;
 
-                                            // 🚀 Inyección automática a la Bitácora (Se salta el Modal)
                                             await addTimelineEvent(
                                               String(trip.id),
                                               leg.id,
@@ -727,7 +712,6 @@ export function TripDetailsModal({
                                               true,
                                             );
 
-                                            // 🚀 Actualizamos el chasis a vacío
                                             if (trip.remolque_1_id)
                                               await updateLoadStatus(
                                                 trip.remolque_1_id,
@@ -770,52 +754,30 @@ export function TripDetailsModal({
                                           onSettleClick?.(leg, trip)
                                         }
                                       >
-                                        {/*  <Banknote className="mr-2 h-5 w-5" /> */}{" "}
                                         PASAR A LIQUIDAR FASE A{" "}
                                         {leg.operator?.name
                                           ?.split(" ")[0]
                                           .toUpperCase()}
                                       </Button>
-                                      {/* 🚀 BOTÓN DE RESCATE: Por si se equivocaron al darle concluir */}
+                                    </div>
+                                  )}
+
+                                  {/* BOTÓN DESHACER (Visible si está en tránsito, entregado o cerrado, PERO SOLO EN EL ÚLTIMO TRAMO) */}
+                                  {isLastLeg && index > 0 && (
+                                    <div className="flex w-full justify-end mt-2">
                                       <Button
                                         variant="ghost"
                                         size="sm"
                                         className="text-amber-600 hover:text-amber-700 hover:bg-amber-50 font-bold"
-                                        onClick={() => handleReopenLeg(leg)}
+                                        onClick={handleUndoLeg}
+                                        disabled={isUndoing}
                                       >
-                                        <Undo className="h-4 w-4 mr-2" /> Me
-                                        equivoqué, Reabrir Fase
-                                      </Button>
-                                    </div>
-                                  )}
-
-                                  {/* CASO 3: YA SE PAGÓ (cerrado) */}
-                                  {isClosed && (
-                                    <div className="flex w-full gap-2 items-center bg-slate-100/50 p-1.5 rounded-lg border border-slate-200 mt-2">
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="flex-1 text-amber-600 hover:text-amber-700 hover:bg-amber-50 font-bold text-xs px-2"
-                                        onClick={() => handleReopenLeg(leg)}
-                                      >
-                                        <Undo className="h-3.5 w-3.5 mr-1.5 shrink-0" />
-                                        <span className="truncate">
-                                          Reabrir Fase
-                                        </span>
-                                      </Button>
-
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() =>
-                                          onSettleClick?.(leg, trip)
-                                        }
-                                        className="flex-[1.5] font-bold text-slate-700 border-slate-300 bg-white text-xs px-2 shadow-sm"
-                                      >
-                                        <Eye className="h-3.5 w-3.5 mr-1.5 shrink-0" />
-                                        <span className="truncate">
-                                          Ver Liquidación
-                                        </span>
+                                        {isUndoing ? (
+                                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                        ) : (
+                                          <Undo className="h-4 w-4 mr-2" />
+                                        )}
+                                        Me equivoqué, deshacer último movimiento
                                       </Button>
                                     </div>
                                   )}
@@ -1013,7 +975,7 @@ export function TripDetailsModal({
                             );
                             const isCheckpoint = ["punto_control"].includes(
                               event.status,
-                            ); // 🚀 NUEVO ESTADO
+                            );
 
                             // Colores de la viñeta
                             const dotColor = isAlert
@@ -1024,31 +986,12 @@ export function TripDetailsModal({
                                   ? "bg-sky-500"
                                   : "bg-brand-navy";
 
-                            // 🚀 EXTRACCIÓN DE METADATA (TRAFFIC LOG)
-                            // Buscar la fase a la que pertenece el evento para sacar al Operador y la Unidad
-                            const legOfEvent = trip.legs?.find(
-                              (l) => l.id === event.trip_leg_id,
-                            );
-
-                            const operatorName =
-                              legOfEvent?.operator?.name?.split(" ")[0] ||
-                              "Operador N/A";
-                            const unitEco =
-                              legOfEvent?.unit?.numero_economico ||
-                              "Tracto N/A";
-                            const unitPlacas =
-                              legOfEvent?.unit?.placas || "S/P";
-
-                            // Extraer remolques del viaje (son fijos, pero es vital saber cuáles llevaba)
-                            const r1Eco = trip.remolque_1?.numero_economico;
-                            const r2Eco = trip.remolque_2?.numero_economico;
-
                             return (
                               <div
                                 key={event.id || idx}
                                 className="relative flex gap-3 items-start group"
                               >
-                                {/* PUNTO DEL TIMELINE CON ÍCONOS ARREGLADOS */}
+                                {/* PUNTO DEL TIMELINE CON ÍCONOS */}
                                 <div
                                   className={`w-6 h-6 rounded-full mt-1 ring-4 ring-white shadow-sm shrink-0 z-10 flex items-center justify-center ${dotColor}`}
                                 >
@@ -1066,7 +1009,7 @@ export function TripDetailsModal({
                                   )}
                                 </div>
 
-                                {/* TARJETA DEL EVENTO (DISEÑO COMPACTO Y DENSO) */}
+                                {/* TARJETA DEL EVENTO */}
                                 <div className="flex-1 pb-1">
                                   <div
                                     className={`p-3 rounded-lg border transition-all ${isAlert ? "bg-red-50/50 border-red-200" : "bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm"}`}
@@ -1080,7 +1023,7 @@ export function TripDetailsModal({
                                           {event.status?.replace("_", " ")}
                                         </Badge>
                                         <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                          | {event.legName}
+                                          | {event.legName || "GENERAL"}
                                         </span>
                                       </div>
                                       <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded shrink-0 border border-slate-200">
@@ -1102,7 +1045,6 @@ export function TripDetailsModal({
 
                                     {/* Pie: Ubicación y Recursos Involucrados */}
                                     <div className="bg-slate-50/80 rounded border border-slate-100 p-2 space-y-1.5">
-                                      {/* Ubicación */}
                                       <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600">
                                         <MapPin className="h-3 w-3 text-brand-navy" />
                                         <span className="truncate uppercase">
@@ -1111,37 +1053,47 @@ export function TripDetailsModal({
                                         </span>
                                       </div>
 
-                                      {/* Fila de Recursos Físicos */}
                                       <div className="flex flex-wrap items-center gap-2 pt-1.5 border-t border-slate-200 mt-1">
                                         <div className="flex items-center gap-1 text-[9px] font-semibold text-slate-600 bg-white px-1.5 py-0.5 rounded shadow-sm border border-slate-100">
                                           <User className="h-2.5 w-2.5 text-slate-400" />
                                           <span className="truncate max-w-[80px]">
-                                            {operatorName}
+                                            {event.operatorName}
                                           </span>
                                         </div>
                                         <div
                                           className="flex items-center gap-1 text-[9px] font-semibold text-slate-600 bg-white px-1.5 py-0.5 rounded shadow-sm border border-slate-100"
-                                          title={`Placas: ${unitPlacas}`}
+                                          title={`Placas: ${event.unitPlacas}`}
                                         >
                                           <Truck className="h-2.5 w-2.5 text-slate-400" />
-                                          {unitEco}{" "}
+                                          {event.unitEco}{" "}
                                           <span className="text-slate-400 font-normal">
-                                            ({unitPlacas})
+                                            ({event.unitPlacas})
                                           </span>
                                         </div>
 
-                                        {/* Remolques (Si existen) */}
-                                        {(r1Eco || r2Eco) && (
+                                        {(trip.remolque_1?.numero_economico ||
+                                          trip.remolque_2
+                                            ?.numero_economico) && (
                                           <div className="flex items-center gap-1 text-[9px] font-medium text-slate-500 ml-auto">
                                             <LinkIcon className="h-2.5 w-2.5 text-slate-400" />
-                                            {r1Eco && (
+                                            {trip.remolque_1
+                                              ?.numero_economico && (
                                               <span className="bg-slate-200 px-1 rounded text-slate-700 border border-slate-300">
-                                                R1: {r1Eco}
+                                                R1:{" "}
+                                                {
+                                                  trip.remolque_1
+                                                    .numero_economico
+                                                }
                                               </span>
                                             )}
-                                            {r2Eco && (
+                                            {trip.remolque_2
+                                              ?.numero_economico && (
                                               <span className="bg-slate-200 px-1 rounded text-slate-700 border border-slate-300">
-                                                R2: {r2Eco}
+                                                R2:{" "}
+                                                {
+                                                  trip.remolque_2
+                                                    .numero_economico
+                                                }
                                               </span>
                                             )}
                                           </div>
