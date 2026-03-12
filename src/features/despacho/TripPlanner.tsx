@@ -498,6 +498,7 @@ export const TripPlanner = () => {
   const [tripToView, setTripToView] = useState<Trip | null>(null);
   const { updateLoadStatus } = useUnits();
   const [selectedTripPadre, setSelectedTripPadre] = useState<Trip | null>(null);
+  const [selectedDayTrips, setSelectedDayTrips] = useState<Trip[] | null>(null);
   const [selectedLegToUpdate, setSelectedLegToUpdate] =
     useState<TripLeg | null>(null);
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
@@ -1023,8 +1024,9 @@ export const TripPlanner = () => {
                         </button>
                       </div>
                       {/* Contenido (Viajes) */}
-                      <div className="flex-1 p-1.5 overflow-y-auto max-h-[120px] custom-scrollbar space-y-1.5">
-                        {tripsOnDay.map((v) => (
+                      {/* Contenido (Viajes) - Actualizado con límite y modal */}
+                      <div className="flex-1 p-1.5 overflow-y-auto max-h-[120px] custom-scrollbar space-y-1">
+                        {tripsOnDay.slice(0, 2).map((v) => (
                           <div
                             key={v.id}
                             onClick={() =>
@@ -1033,7 +1035,7 @@ export const TripPlanner = () => {
                                 tripPadre: v,
                               })
                             }
-                            className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] p-1.5 rounded cursor-pointer hover:bg-emerald-100 hover:shadow-sm transition-all relative group"
+                            className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-[9px] p-1.5 rounded cursor-pointer hover:bg-emerald-100 hover:shadow-sm transition-all relative group"
                           >
                             <div className="font-bold truncate pr-4">
                               {v.client?.razon_social}
@@ -1041,9 +1043,22 @@ export const TripPlanner = () => {
                             <div className="text-emerald-600 truncate">
                               {v.destination}
                             </div>
-                            <PlayCircle className="h-3 w-3 absolute right-1.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100" />
+                            <PlayCircle className="h-3 w-3 absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100" />
                           </div>
                         ))}
+
+                        {/* 🚀 Opción "Ver todos" si hay más de 2 viajes */}
+                        {tripsOnDay.length > 2 && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedDayTrips(tripsOnDay);
+                            }}
+                            className="w-full text-center text-[10px] font-black text-blue-600 hover:text-blue-800 hover:underline py-1"
+                          >
+                            + {tripsOnDay.length - 2} más...
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -1185,6 +1200,58 @@ export const TripPlanner = () => {
         onSettleClick={(l, t) => setLegToSettle({ leg: l, tripPadre: t })}
         onUpdateStatusClick={(t, l) => openUpdateStatusModal(t, l)}
       />
+
+      {/* 🚀 MODAL PARA SELECCIONAR UN VIAJE CUANDO HAY MUCHOS EN EL MISMO DÍA */}
+      <Dialog
+        open={!!selectedDayTrips}
+        onOpenChange={() => setSelectedDayTrips(null)}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarDays className="h-5 w-5 text-brand-navy" />
+              Viajes Programados
+            </DialogTitle>
+            <DialogDescription>
+              Selecciona el servicio que deseas asignar para el día{" "}
+              {selectedDayTrips?.[0]?.fecha_programada &&
+                format(
+                  parseISO(selectedDayTrips[0].fecha_programada as string),
+                  "dd 'de' MMMM",
+                  { locale: es },
+                )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 mt-2 max-h-[50vh] overflow-y-auto p-1 custom-scrollbar">
+            {selectedDayTrips?.map((v) => (
+              <div
+                key={v.id}
+                className="flex items-center justify-between p-3 border rounded-xl hover:bg-slate-50 transition-colors group"
+              >
+                <div className="flex-1 min-w-0 pr-4">
+                  <p className="font-black text-xs text-brand-navy uppercase truncate">
+                    {v.client?.razon_social}
+                  </p>
+                  <p className="text-[10px] text-slate-500 truncate">
+                    {v.origin} ➔ {v.destination}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  className="bg-brand-navy hover:bg-brand-navy/90 h-8 text-[10px] font-bold"
+                  onClick={() => {
+                    setSelectedDayTrips(null);
+                    setLegToRelay({ leg: {} as TripLeg, tripPadre: v });
+                  }}
+                >
+                  Asignar Fase 1
+                </Button>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

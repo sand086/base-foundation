@@ -1,4 +1,5 @@
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, contains_eager
+from sqlalchemy import and_
 from app.models import models
 from app.models.models import RecordStatus
 from app.schemas import clients as schemas
@@ -6,15 +7,26 @@ from app.schemas import clients as schemas
 
 def get_clients(db: Session, skip: int = 0, limit: int = 100):
     """
-    Lista clientes visibles (A e I). Oculta eliminados (E).
+    Lista clientes filtrando eliminados en todos los niveles para ser consistente con el detalle.
     """
     return (
         db.query(models.Client)
-        .options(
-            joinedload(models.Client.sub_clients).joinedload(models.SubClient.tariffs)
+        .outerjoin(models.SubClient)
+        .outerjoin(models.Tariff)
+        .filter(
+            models.Client.record_status != RecordStatus.ELIMINADO,
+            # Filtro para subclientes y tarifas activos
+            (models.SubClient.id == None)
+            | (models.SubClient.record_status != RecordStatus.ELIMINADO),
+            (models.Tariff.id == None)
+            | (models.Tariff.record_status != RecordStatus.ELIMINADO),
         )
-        .filter(models.Client.record_status != RecordStatus.ELIMINADO)
-        .order_by(models.Client.id.asc())
+        .options(
+            contains_eager(models.Client.sub_clients).contains_eager(
+                models.SubClient.tariffs
+            )
+        )
+        .order_by(models.Client.razon_social.asc())
         .offset(skip)
         .limit(limit)
         .all()
@@ -23,19 +35,40 @@ def get_clients(db: Session, skip: int = 0, limit: int = 100):
 
 def get_client(db: Session, client_id: int):
     """
-    Obtiene un cliente visible (A e I). Oculta eliminados (E).
+    Obtiene un cliente cargando TODOS sus subclientes y tarifas activos.
     """
-    return (
+    # 1. Usamos .all() en lugar de .first() para evitar que el LIMIT 1
+    # corte la lista de tarifas antes de tiempo.
+    results = (
         db.query(models.Client)
-        .options(
-            joinedload(models.Client.sub_clients).joinedload(models.SubClient.tariffs)
+        .outerjoin(
+            models.SubClient,
+            and_(
+                models.SubClient.client_id == models.Client.id,
+                models.SubClient.record_status != RecordStatus.ELIMINADO,
+            ),
+        )
+        .outerjoin(
+            models.Tariff,
+            and_(
+                models.Tariff.sub_client_id == models.SubClient.id,
+                models.Tariff.record_status != RecordStatus.ELIMINADO,
+            ),
         )
         .filter(
             models.Client.id == client_id,
             models.Client.record_status != RecordStatus.ELIMINADO,
         )
-        .first()
+        .options(
+            contains_eager(models.Client.sub_clients).contains_eager(
+                models.SubClient.tariffs
+            )
+        )
+        .all()  # <--- IMPORTANTE: Traer todo para que SQLAlchemy agrupe los hijos
     )
+
+    # 2. Retornamos el primer objeto de la lista (el cliente con sus hijos ya agrupados)
+    return results[0] if results else None
 
 
 def create_client(db: Session, client: schemas.ClientCreate):

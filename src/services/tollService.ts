@@ -50,8 +50,14 @@ export const tollService = {
   // --- GESTIÓN DE TARIFAS AUTORIZADAS (ARMADOR) ---
 
   //  Obtener todas las plantillas (Incluye los segments por defecto)
-  getTemplates: async (search?: string): Promise<RateTemplate[]> => {
-    const params = search ? { search } : {};
+  getTemplates: async (
+    search?: string,
+    clientId?: number,
+  ): Promise<RateTemplate[]> => {
+    const params: any = {};
+    if (search) params.search = search;
+    if (clientId) params.client_id = clientId; // Enviar el ID del cliente al backend
+
     const { data } = await axiosClient.get<RateTemplate[]>("/rate-templates", {
       params,
     });
