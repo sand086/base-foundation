@@ -320,6 +320,8 @@ export const ArmadorRutas: React.FC = () => {
 
   const [showAdditional, setShowAdditional] = useState(false);
 
+  const [editingRouteId, setEditingRouteId] = useState<number | null>(null);
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, {
@@ -523,42 +525,65 @@ export const ArmadorRutas: React.FC = () => {
   };
 
   const handleSave = async () => {
-    /* if (!nombreRuta || !tipoUnidadId) {
-      return toast.error("El Nombre de la Ruta y la Unidad son obligatorios");
-    } */
+    // Mapeamos los campos del frontend a lo que el backend espera (costo_momento_*)
+    const mappedSegments = segments.map((s, idx) => ({
+      nombre_segmento: s.nombre_segmento,
+      estado: s.estado,
+      carretera: s.carretera,
+      distancia_km: s.distancia_km,
+      tiempo_minutos: s.tiempo_minutos,
+      toll_booth_id: s.toll_booth_id,
+      orden: idx + 1,
+      costo_momento_sencillo: s.costo_s,
+      costo_momento_full: s.costo_f,
+    }));
 
-    const payload: any = {
+    const payload = {
       client_id:
         selectedCliente && selectedCliente !== "none"
           ? parseInt(selectedCliente, 10)
           : 6,
-
       origen: nombreRuta,
       destino: destino || "N/A",
       tipo_unidad: isFullUnit ? "9ejes" : "5ejes",
-      segments: segments.map((s, idx) => ({ ...s, orden: idx + 1 })),
+      segments: mappedSegments,
     };
 
     try {
-      const res = await tollService.saveTemplate(payload as any);
-      setSavedRoutes((prev) => [res, ...prev]);
+      let res: RateTemplate;
 
-      // reset
+      if (editingRouteId) {
+        // MODO EDICIÓN: PUT
+        res = await tollService.updateTemplate(editingRouteId, payload);
+        setSavedRoutes((prev) =>
+          prev.map((r) => (r.id === editingRouteId ? res : r)),
+        );
+        toast.success("Ruta actualizada correctamente");
+      } else {
+        // MODO CREACIÓN: POST
+        res = await tollService.saveTemplate(payload as any);
+        setSavedRoutes((prev) => [res, ...prev]);
+        toast.success("Nueva ruta guardada exitosamente");
+      }
+
+      // RESET COMPLETO DEL FORMULARIO
+      setEditingRouteId(null);
       setSegments([]);
       setNombreRuta("");
       setTipoUnidadId("");
       setSelectedCliente("");
       setOrigen("");
       setDestino("");
-
-      toast.success("Ruta Guardada Exitosamente");
-    } catch {
-      toast.error("Error al guardar la ruta");
+      setShowAdditional(false);
+    } catch (error) {
+      console.error(error);
+      toast.error("Error al procesar la ruta");
     }
   };
 
   const handleEditRoute = (route: RateTemplate) => {
     // Nombre principal ahora vive en "origen" del template
+    setEditingRouteId(route.id);
     setNombreRuta(route.origen || "");
 
     // Opcionales
@@ -1076,12 +1101,36 @@ export const ArmadorRutas: React.FC = () => {
           </Dialog>
         </div>
 
-        <ActionButton
-          onClick={handleSave}
-          className="px-12 h-11 text-base shadow-lg shadow-primary/20"
-        >
-          <Check className="h-5 w-5 mr-2" /> Guardar Ruta
-        </ActionButton>
+        <div className="flex items-center gap-3">
+          {/* BOTÓN DE CANCELAR: Solo aparece si estás editando */}
+          {editingRouteId && (
+            <Button
+              variant="ghost"
+              className="text-muted-foreground hover:text-destructive"
+              onClick={() => {
+                setEditingRouteId(null);
+                setSegments([]);
+                setNombreRuta("");
+                setTipoUnidadId("");
+                setSelectedCliente("");
+                setOrigen("");
+                setDestino("");
+                setShowAdditional(false);
+                toast.info("Edición cancelada");
+              }}
+            >
+              Cancelar Edición
+            </Button>
+          )}
+
+          <ActionButton
+            onClick={handleSave}
+            className="px-12 h-11 text-base shadow-lg shadow-primary/20"
+          >
+            <Check className="h-5 w-5 mr-2" />
+            {editingRouteId ? "Actualizar Ruta" : "Guardar Ruta"}
+          </ActionButton>
+        </div>
       </div>
 
       {/* TABLA TARIFAS */}

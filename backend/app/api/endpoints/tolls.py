@@ -50,6 +50,95 @@ def update_toll(
     return db_toll
 
 
+# backend/app/api/endpoints/tolls.py
+
+
+@router.put(
+    "/rate-templates/{template_id}", response_model=schemas.RateTemplateResponse
+)
+def update_template(
+    template_id: int,
+    data: schemas.RateTemplateUpdate,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    # 1. Buscar la ruta existente
+    db_template = (
+        db.query(models.RateTemplate)
+        .filter(models.RateTemplate.id == template_id)
+        .first()
+    )
+    if not db_template:
+        raise HTTPException(status_code=404, detail="Ruta no encontrada")
+
+    # 2. Actualizar campos básicos de la cabecera (origen, destino, unidad)
+    update_data = data.model_dump(exclude={"segments"}, exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_template, key, value)
+
+    db_template.updated_by_id = user.id
+
+    # 3. Sincronizar Segmentos (Borrar antiguos y crear nuevos)
+    if data.segments is not None:
+        # Eliminar segmentos anteriores para reconstruir la ruta
+        db.query(models.RateSegment).filter(
+            models.RateSegment.rate_template_id == template_id
+        ).delete()
+
+        total_s, total_f, total_km, total_min = 0.0, 0.0, 0.0, 0
+
+        for seg_data in data.segments:
+            # Determinamos los costos base (vengan del frontend o 0)
+            cost_s = seg_data.costo_momento_sencillo or 0.0
+            cost_f = seg_data.costo_momento_full or 0.0
+
+            # Si tiene una caseta ligada, recalculamos el costo actual (snapshot)
+            if seg_data.toll_booth_id:
+                toll = db.query(models.TollBooth).get(seg_data.toll_booth_id)
+                if toll:
+                    if db_template.tipo_unidad == "5ejes":
+                        cost_s, cost_f = (
+                            toll.costo_5_ejes_sencillo,
+                            toll.costo_5_ejes_full,
+                        )
+                    else:
+                        cost_s, cost_f = (
+                            toll.costo_9_ejes_sencillo,
+                            toll.costo_9_ejes_full,
+                        )
+
+            # CORRECCIÓN: Excluimos los campos manuales del dump para que no se dupliquen
+            new_seg = models.RateSegment(
+                rate_template_id=template_id,
+                **seg_data.model_dump(
+                    exclude={
+                        "rate_template_id",
+                        "costo_momento_sencillo",
+                        "costo_momento_full",
+                    }
+                ),
+                costo_momento_sencillo=cost_s,
+                costo_momento_full=cost_f,
+            )
+            db.add(new_seg)
+
+            # Acumulamos totales para actualizar la cabecera
+            total_s += cost_s
+            total_f += cost_f
+            total_km += seg_data.distancia_km
+            total_min += seg_data.tiempo_minutos
+
+        # 4. Actualizar totales automáticos en el registro padre
+        db_template.costo_total_sencillo = total_s
+        db_template.costo_total_full = total_f
+        db_template.distancia_total_km = total_km
+        db_template.tiempo_total_minutos = total_min
+
+    db.commit()
+    db.refresh(db_template)
+    return db_template
+
+
 @router.delete("/tolls/{toll_id}")
 def delete_toll(toll_id: int, db: Session = Depends(get_db)):
     db_toll = db.query(models.TollBooth).get(toll_id)
