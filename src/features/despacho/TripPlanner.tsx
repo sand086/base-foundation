@@ -61,7 +61,7 @@ import {
   UpdateStatusModal,
   StatusUpdateData,
 } from "@/features/monitoreo/UpdateStatusModal";
-import { TripSettlementModal } from "@/features/cierre/TripSettlementModal";
+import TripSettlementModal from "@/features/cierre/TripSettlementModal";
 import { NextLegModal } from "@/features/despacho/NextLegModal";
 import { TripDetailsModal } from "@/features/despacho/TripDetailsModal";
 import { toast } from "sonner";
@@ -516,9 +516,8 @@ export const TripPlanner = () => {
     }
   }, [trips]);
 
-  const safeTrips = Array.isArray(trips) ? trips : [];
-
   const allActiveLegs = useMemo(() => {
+    const safeTrips = Array.isArray(trips) ? trips : [];
     const items: KanbanItem[] = [];
     for (const trip of safeTrips) {
       if (trip.status === "cerrado") continue;
@@ -531,7 +530,7 @@ export const TripPlanner = () => {
       }
     }
     return items.sort((a, b) => b.leg.id - a.leg.id);
-  }, [safeTrips]);
+  }, [trips]);
 
   const groupedLegs = useMemo(() => {
     const groups: Record<KanbanColumnId, KanbanItem[]> = {
