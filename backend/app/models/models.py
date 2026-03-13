@@ -343,6 +343,12 @@ class Tariff(AuditMixin, Base):
     trips = relationship("Trip", back_populates="tariff")
 
 
+class Terminal(AuditMixin, Base):
+    __tablename__ = "terminals"
+    id = Column(Integer, primary_key=True)
+    nombre = Column(String(255), nullable=False, unique=True)
+
+
 class Unit(AuditMixin, Base):
     __tablename__ = "units"
 

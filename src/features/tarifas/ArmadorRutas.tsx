@@ -13,6 +13,7 @@ import {
   Repeat,
   Eye,
   Pencil,
+  Printer,
   MoreVertical,
   Wand2,
   Route as RouteIcon,
@@ -525,6 +526,10 @@ export const ArmadorRutas: React.FC = () => {
   };
 
   const handleSave = async () => {
+    if (!nombreRuta.trim()) {
+      toast.error("El nombre de la ruta es obligatorio");
+      return;
+    }
     // Mapeamos los campos del frontend a lo que el backend espera (costo_momento_*)
     const mappedSegments = segments.map((s, idx) => ({
       nombre_segmento: s.nombre_segmento,
@@ -620,6 +625,113 @@ export const ArmadorRutas: React.FC = () => {
     toast.info("Ruta cargada para edición");
   };
 
+  // 🚀 NUEVA FUNCIÓN: Generar Hoja de Ruta para el Chófer
+  const handlePrintRoute = (route: RateTemplate) => {
+    const isFull =
+      route.tipo_unidad === "9ejes" || route.tipo_unidad === "full";
+    const totalCost = isFull
+      ? route.costo_total_full
+      : route.costo_total_sencillo;
+    const clientName =
+      clients.find((c) => c.id === route.client_id)?.razon_social ||
+      "Ruta Libre";
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      toast.error(
+        "Por favor permite las ventanas emergentes (pop-ups) para imprimir.",
+      );
+      return;
+    }
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Hoja de Ruta - ${route.origen}</title>
+          <style>
+            body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 40px; color: #1e293b; max-width: 800px; margin: 0 auto; }
+            .header { text-align: center; border-bottom: 3px solid #0f172a; padding-bottom: 15px; margin-bottom: 30px; }
+            .title { font-size: 26px; font-weight: 900; margin: 0; text-transform: uppercase; color: #0f172a; }
+            .subtitle { font-size: 14px; color: #64748b; margin-top: 5px; font-weight: bold; letter-spacing: 2px; }
+            .info-grid { display: flex; justify-content: space-between; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 30px; }
+            .info-box p { margin: 5px 0; font-size: 14px; }
+            .info-box strong { color: #334155; display: inline-block; width: 140px; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 30px; font-size: 13px; }
+            th, td { border-bottom: 1px solid #cbd5e1; padding: 12px; text-align: left; }
+            th { background-color: #f1f5f9; font-weight: 800; text-transform: uppercase; color: #475569; }
+            .text-right { text-align: right; }
+            .text-center { text-align: center; }
+            .total-row { font-weight: 900; font-size: 18px; background-color: #f8fafc; color: #0f172a; }
+            .warning { text-align: center; border: 2px dashed #cbd5e1; padding: 15px; border-radius: 8px; color: #475569; font-size: 12px; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1 class="title">BITÁCORA DE RUTA AUTORIZADA</h1>
+            <p class="subtitle">DOCUMENTO OPERATIVO DE CONTROL</p>
+          </div>
+
+          <div class="info-grid">
+            <div class="info-box">
+              <p><strong>CLIENTE:</strong> ${clientName.toUpperCase()}</p>
+              <p><strong>ORIGEN:</strong> ${route.origen.toUpperCase()}</p>
+              <p><strong>DESTINO FINAL:</strong> ${route.destino !== "N/A" ? route.destino.toUpperCase() : "NO ESPECIFICADO"}</p>
+            </div>
+            <div class="info-box text-right">
+              <p><strong>CONFIGURACIÓN:</strong> <span style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px;">${isFull ? "FULL (9 EJES)" : "SENCILLO (5 EJES)"}</span></p>
+              <p><strong>DISTANCIA SCT:</strong> ${Number(route.distancia_total_km || 0).toFixed(1)} KM</p>
+              <p><strong>FECHA IMPRESIÓN:</strong> ${new Date().toLocaleDateString("es-MX")}</p>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th class="text-center">Orden</th>
+                <th>Tramo / Plaza de Cobro</th>
+                <th>Estado / Vía</th>
+                <th class="text-right">Monto Autorizado</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${route.segments
+                ?.map(
+                  (seg: any, i: number) => `
+                <tr>
+                  <td class="text-center"><b>${i + 1}</b></td>
+                  <td>
+                    <span style="font-weight: bold; color: #0f172a;">${seg.nombre_segmento}</span><br/>
+                    <span style="color: #64748b; font-size: 11px;">${seg.toll_booth_id ? "📍 Caseta SCT" : "🛣️ Tramo Libre"}</span>
+                  </td>
+                  <td>${seg.carretera || "-"} ${seg.estado ? `(${seg.estado})` : ""}</td>
+                  <td class="text-right font-mono"><b>$${Number(isFull ? seg.costo_momento_full : seg.costo_momento_sencillo).toFixed(2)}</b></td>
+                </tr>
+              `,
+                )
+                .join("")}
+              <tr class="total-row">
+                <td colspan="3" class="text-right">PRESUPUESTO EXACTO PARA CASETAS:</td>
+                <td class="text-right">$${Number(totalCost).toFixed(2)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="warning">
+            ⚠️ NOTA IMPORTANTE PARA EL OPERADOR ⚠️<br/>
+            Las desviaciones de esta ruta o los cobros de casetas no autorizadas serán descontados en la liquidación del viaje.
+          </div>
+
+          <script>
+            window.onload = () => { setTimeout(() => { window.print(); window.close(); }, 500); }
+          </script>
+        </body>
+      </html>
+    `;
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
+
   const historyColumns: ColumnDef<RateTemplate>[] = useMemo(
     () => [
       {
@@ -700,6 +812,10 @@ export const ArmadorRutas: React.FC = () => {
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => handleEditRoute(row)}>
                 <Pencil className="mr-2 h-4 w-4 text-blue-500" /> Editar Ruta
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handlePrintRoute(row)}>
+                <Printer className="mr-2 h-4 w-4 text-slate-700" /> Imprimir
+                Ruta
               </DropdownMenuItem>
 
               <DropdownMenuItem
