@@ -69,7 +69,7 @@ import type { TollBooth } from "@/types/api.types";
 import { tollService } from "@/services/tollService";
 import { toast } from "sonner";
 
-type FormaPago = "TAG" | "EFECTIVO" | "AMBOS";
+type FormaPago = "tag" | "efectivo" | "ambos";
 
 type TollForm = {
   nombre: string;
@@ -97,7 +97,7 @@ const emptyForm = (): TollForm => ({
   tramo: "",
   costo_5_ejes_sencillo: 0,
   costo_9_ejes_full: 0,
-  forma_pago: "AMBOS",
+  forma_pago: "ambos",
 });
 
 const formatCurrency = (amount: number) =>
@@ -206,7 +206,7 @@ export const CatalogoCasetas = () => {
       // ✅ Vista simplificada
       costo_5_ejes_sencillo: toll.costo_5_ejes_sencillo ?? 0,
       costo_9_ejes_full: toll.costo_9_ejes_full ?? 0,
-      forma_pago: ((toll as any).forma_pago ?? "AMBOS") as FormaPago,
+      forma_pago: ((toll as any).forma_pago ?? "ambos") as FormaPago,
     });
 
     setDialogOpen(true);
@@ -511,9 +511,9 @@ export const CatalogoCasetas = () => {
                       <SelectValue placeholder="Seleccionar..." />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="TAG">Solo TAG</SelectItem>
-                      <SelectItem value="EFECTIVO">Solo Efectivo</SelectItem>
-                      <SelectItem value="AMBOS">TAG y Efectivo</SelectItem>
+                      <SelectItem value="tag">Solo TAG</SelectItem>
+                      <SelectItem value="efectivo">Solo Efectivo</SelectItem>
+                      <SelectItem value="ambos">TAG y Efectivo</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

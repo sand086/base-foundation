@@ -5,7 +5,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.models.models import RecordStatus, TollUnitType
+from app.models.models import RecordStatus, TollUnitType, PaymentMethod
 
 
 # =========================================================
@@ -35,19 +35,29 @@ class TollBoothBase(ORMBase):
     costo_9_ejes_sencillo: float = 0.0
     costo_9_ejes_full: float = 0.0
 
-    # Model: forma_pago = Column(String(20), default="AMBOS")
-    forma_pago: str = Field(default="AMBOS", max_length=20)
+    # Model: forma_pago = Column(String(20), default="ambos")
+    forma_pago: PaymentMethod = Field(default=PaymentMethod.AMBOS)
 
-    @field_validator("forma_pago")
+    @field_validator("forma_pago", mode="before")
     @classmethod
-    def validate_forma_pago(cls, v: str) -> str:
-        # Comentario: en modelo es String. Si quieres permitir solo valores específicos, valida aquí.
-        vv = (v or "").strip().upper()
-        if vv not in {"AMBOS", "TAG", "EFECTIVO"}:
-            # Si en tu negocio solo existen estos 3, esto ayuda a evitar basura.
-            # Si tienes otros, agrégalos.
-            raise ValueError("forma_pago debe ser AMBOS, TAG o EFECTIVO")
-        return vv
+    def validate_forma_pago(cls, v):
+        # 1. Si viene vacío, por defecto es AMBOS
+        if not v:
+            return PaymentMethod.AMBOS
+
+        # 2. Convertimos lo que sea (texto o el objeto Enum) a string mayúsculas.
+        # Si es Enum, vv será "PAYMENTMETHOD.AMBOS". Si es Frontend, será "AMBOS".
+        vv = str(v).upper()
+
+        # 3. Usamos 'in' en lugar de '==' para atrapar la coincidencia dentro del texto
+        if "AMBOS" in vv:
+            return PaymentMethod.AMBOS
+        elif "TAG" in vv:
+            return PaymentMethod.TAG
+        elif "EFECTIVO" in vv:
+            return PaymentMethod.EFECTIVO
+
+        raise ValueError(f"Forma de pago inválida: {v}")
 
 
 class TollBoothCreate(TollBoothBase):

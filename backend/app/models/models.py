@@ -174,9 +174,9 @@ class RecordStatus(str, PyEnum):
 
 
 class PaymentMethod(str, PyEnum):
-    TAG = "TAG"
-    EFECTIVO = "EFECTIVO"
-    AMBOS = "AMBOS"
+    TAG = "tag"
+    EFECTIVO = "efectivo"
+    AMBOS = "ambos"
 
 
 class TollUnitType(str, PyEnum):
@@ -1131,7 +1131,9 @@ class TollBooth(AuditMixin, Base):
     costo_5_ejes_full = Column(Float, default=0.0)
     costo_9_ejes_sencillo = Column(Float, default=0.0)
     costo_9_ejes_full = Column(Float, default=0.0)
-    forma_pago = Column(String(20), default="AMBOS")
+    forma_pago = Column(
+        pg_enum(PaymentMethod, "paymentmethod"), default=PaymentMethod.AMBOS
+    )
     route_segments = relationship("RateSegment", back_populates="toll")
 
 
