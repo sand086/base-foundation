@@ -19,7 +19,7 @@ export type OperatorStatus =
 
 export type ClientStatus = "activo" | "pendiente" | "incompleto";
 
-export type FormaPago = "TAG" | "EFECTIVO" | "AMBOS";
+export type FormaPago = "tag" | "efectivo" | "ambos";
 
 export type ClasificacionFinanciera =
   | "costo_directo_viaje"

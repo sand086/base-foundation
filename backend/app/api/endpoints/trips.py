@@ -116,10 +116,20 @@ def create_timeline_event(
     "/trips/leg/{trip_leg_id}/settlement", response_model=schemas.TripSettlementResponse
 )
 def get_trip_settlement(trip_leg_id: int, db: Session = Depends(get_db)):
-    settlement = crud.get_trip_settlement(db, trip_leg_id)
-    if not settlement:
-        raise HTTPException(status_code=404, detail="Tramo no encontrado para liquidar")
-    return settlement
+    try:
+        settlement = crud.get_trip_settlement(db, trip_leg_id)
+        if not settlement:
+            raise HTTPException(
+                status_code=404, detail="Tramo no encontrado para liquidar"
+            )
+        return settlement
+    except ValueError as e:
+        if str(e) == "BLOCKED_NO_FUEL":
+            raise HTTPException(
+                status_code=400,
+                detail="No se puede liquidar: El operador no ha comprobado el combustible (Diésel) de este tramo.",
+            )
+        raise e
 
 
 @router.post(
@@ -373,6 +383,17 @@ def preview_batch_settlement_endpoint(
     if result is None:
         raise HTTPException(status_code=404, detail="Error al generar pre-liquidación")
     return result
+
+
+@router.post("/trips/{trip_id}/undo-leg", response_model=schemas.TripResponse)
+def undo_trip_leg_endpoint(trip_id: int, db: Session = Depends(get_db)):
+    """Deshace el último desenganche (Me equivoqué)"""
+    trip = crud.undo_last_leg(db, str(trip_id))
+    if not trip:
+        raise HTTPException(
+            status_code=400, detail="No se puede deshacer la fase inicial."
+        )
+    return trip
 
 
 # $2y$12$y3vy.iw/pjjr67cPO5/LgOQPFlKJBvlHQrsbinE3EVm6pkg3l9gSu
