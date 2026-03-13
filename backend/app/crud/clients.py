@@ -5,31 +5,56 @@ from app.models.models import RecordStatus
 from app.schemas import clients as schemas
 
 
+# backend/app/crud/clients.py
+
+
 def get_clients(db: Session, skip: int = 0, limit: int = 100):
     """
-    Lista clientes filtrando eliminados en todos los niveles para ser consistente con el detalle.
+    Lista clientes activos. Carga hijos activos sin ocultar al padre si no tiene hijos.
     """
     return (
         db.query(models.Client)
-        .outerjoin(models.SubClient)
-        .outerjoin(models.Tariff)
-        .filter(
-            models.Client.record_status != RecordStatus.ELIMINADO,
-            # Filtro para subclientes y tarifas activos
-            (models.SubClient.id == None)
-            | (models.SubClient.record_status != RecordStatus.ELIMINADO),
-            (models.Tariff.id == None)
-            | (models.Tariff.record_status != RecordStatus.ELIMINADO),
-        )
+        .filter(models.Client.record_status != RecordStatus.ELIMINADO)
         .options(
-            contains_eager(models.Client.sub_clients).contains_eager(
-                models.SubClient.tariffs
+            joinedload(
+                models.Client.sub_clients.and_(
+                    models.SubClient.record_status != RecordStatus.ELIMINADO
+                )
+            ).joinedload(
+                models.SubClient.tariffs.and_(
+                    models.Tariff.record_status != RecordStatus.ELIMINADO
+                )
             )
         )
         .order_by(models.Client.razon_social.asc())
         .offset(skip)
         .limit(limit)
         .all()
+    )
+
+
+def get_client(db: Session, client_id: int):
+    """
+    Obtiene un detalle de cliente cargando solo sub-elementos activos.
+    """
+    return (
+        db.query(models.Client)
+        .filter(
+            models.Client.id == client_id,
+            models.Client.record_status != RecordStatus.ELIMINADO,
+        )
+        .options(
+            joinedload(
+                models.Client.sub_clients.and_(
+                    models.SubClient.record_status != RecordStatus.ELIMINADO
+                )
+            ).joinedload(
+                models.SubClient.tariffs.and_(
+                    models.Tariff.record_status != RecordStatus.ELIMINADO
+                )
+            )
+        )
+        .first()
     )
 
 
