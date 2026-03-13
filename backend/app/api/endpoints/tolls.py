@@ -48,11 +48,74 @@ def update_toll(
 ):
     db_toll = db.query(models.TollBooth).get(toll_id)
     if not db_toll:
-        raise HTTPException(404)
+        raise HTTPException(status_code=404, detail="Caseta no encontrada")
+
+    # 1. Actualizamos la caseta en el catálogo maestro
     for k, v in toll.model_dump(exclude_unset=True).items():
         setattr(db_toll, k, v)
     db_toll.updated_by_id = user.id
+    db.flush()  # Para tener los nuevos costos disponibles
+
+    # 2. Buscamos todos los segmentos de rutas ARMADAS que usan esta caseta
+    segments = (
+        db.query(models.RateSegment)
+        .filter(
+            models.RateSegment.toll_booth_id == toll_id,
+            models.RateSegment.record_status == "A",
+        )
+        .all()
+    )
+
+    templates_to_update = set()
+    for seg in segments:
+        # Actualizamos la "foto" del precio dentro de cada segmento de ruta
+        seg.costo_momento_sencillo = db_toll.costo_5_ejes_sencillo
+        seg.costo_momento_full = db_toll.costo_9_ejes_full
+        if seg.template:
+            templates_to_update.add(seg.template)
+
+    db.flush()
+
+    # 3. Recalculamos Totales de las Rutas e impactamos los Convenios de Clientes
+    for template in templates_to_update:
+        active_segments = (
+            db.query(models.RateSegment)
+            .filter(
+                models.RateSegment.rate_template_id == template.id,
+                models.RateSegment.record_status == "A",
+            )
+            .all()
+        )
+
+        template.costo_total_sencillo = sum(
+            (s.costo_momento_sencillo or 0.0) for s in active_segments
+        )
+        template.costo_total_full = sum(
+            (s.costo_momento_full or 0.0) for s in active_segments
+        )
+
+        # 🚀 CASCADA A CLIENTES: Actualizar la tabla de convenios (Tariff)
+        client_tariffs = (
+            db.query(models.Tariff)
+            .filter(
+                models.Tariff.rate_template_id == template.id,
+                models.Tariff.record_status == "A",
+            )
+            .all()
+        )
+
+        for ct in client_tariffs:
+            # Determinamos si el convenio del cliente es para Sencillo o Full
+            es_full = (
+                "full" in (ct.tipo_unidad or "").lower()
+                or "9" in (ct.tipo_unidad or "").lower()
+            )
+            ct.costo_casetas = (
+                template.costo_total_full if es_full else template.costo_total_sencillo
+            )
+
     db.commit()
+    db.refresh(db_toll)
     return db_toll
 
 
@@ -248,6 +311,7 @@ def update_template(
     if not db_template:
         raise HTTPException(status_code=404, detail="Ruta no encontrada")
 
+    # Actualizamos campos básicos de la ruta
     update_data = data.model_dump(exclude={"segments"}, exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_template, key, value)
@@ -255,20 +319,25 @@ def update_template(
     db_template.updated_by_id = user.id
 
     if data.segments is not None:
-        # 🚀 BORRADO LÓGICO DE LOS SEGMENTOS ANTERIORES
+        # 🚀 SOLUCIÓN DUPLICACIÓN: 1. Vaciamos la caché de la relación en memoria
+        db_template.segments = []
+
+        # 🚀 SOLUCIÓN DUPLICACIÓN: 2. Borramos físicamente los segmentos anteriores
         db.query(models.RateSegment).filter(
             models.RateSegment.rate_template_id == template_id
-        ).update({"record_status": "E"})
+        ).delete(synchronize_session=False)
+
+        db.flush()
 
         total_s, total_f, total_km, total_min = 0.0, 0.0, 0.0, 0
 
+        # 3. Insertamos los nuevos segmentos manteniendo el orden del Frontend
         for seg_data in data.segments:
             cost_s, cost_f = 0.0, 0.0
 
             if seg_data.toll_booth_id:
                 toll = db.query(models.TollBooth).get(seg_data.toll_booth_id)
                 if toll:
-                    # 🚀 SIEMPRE GUARDA AMBOS COSTOS
                     cost_s = toll.costo_5_ejes_sencillo
                     cost_f = toll.costo_9_ejes_full
 
@@ -279,11 +348,12 @@ def update_template(
                         "rate_template_id",
                         "costo_momento_sencillo",
                         "costo_momento_full",
+                        "id",
                     }
                 ),
                 costo_momento_sencillo=cost_s,
                 costo_momento_full=cost_f,
-                record_status="A",  # Los nuevos nacen como Activos
+                record_status="A",
             )
             db.add(new_seg)
 
@@ -297,10 +367,33 @@ def update_template(
         db_template.distancia_total_km = total_km
         db_template.tiempo_total_minutos = total_min
 
-    db.commit()
-    db.refresh(db_template)
+        db.flush()
 
-    # 🚀 Forzamos recargar la relación para que la respuesta no devuelva los eliminados en memoria
+        # 🚀 CASCADA A CLIENTES: Actualizar convenios vinculados a esta ruta específica
+        client_tariffs = (
+            db.query(models.Tariff)
+            .filter(
+                models.Tariff.rate_template_id == template_id,
+                models.Tariff.record_status == "A",
+            )
+            .all()
+        )
+
+        for ct in client_tariffs:
+            es_full = (
+                "full" in (ct.tipo_unidad or "").lower()
+                or "9" in (ct.tipo_unidad or "").lower()
+            )
+            # Asignamos el nuevo total de la ruta recién calculada
+            ct.costo_casetas = (
+                db_template.costo_total_full
+                if es_full
+                else db_template.costo_total_sencillo
+            )
+
+    db.commit()
+    db.expire_all()  # Forzamos recarga de todos los objetos para evitar datos viejos en memoria
+    db.refresh(db_template)
     return db_template
 
 

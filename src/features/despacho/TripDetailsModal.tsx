@@ -438,10 +438,7 @@ export function TripDetailsModal({
                     <Printer className="h-4 w-4 mr-1.5 text-slate-500" /> Hoja
                     de Ruta
                   </Button>
-                  <div>selecciona la operacion de los elementos</div>
-                  <p>almacen</p>
-                  <p>selecciona tramp</p>
-                  <p>movimiento de patio </p>
+
                   <Button
                     variant="outline"
                     size="sm"

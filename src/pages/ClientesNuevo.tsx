@@ -10,10 +10,12 @@ import {
   MapPin,
   ArrowRight,
   Building2,
+  PlusCircle,
   Phone,
   Clock,
   DollarSign,
   Paperclip,
+  Repeat,
   FileCheck,
   Route,
   Calendar,
@@ -367,14 +369,16 @@ export default function ClientsNew() {
 
   const calcularInfoTarifa = (tarifa: TarifaAutorizada) => {
     const base = Number(tarifa.tarifaBase || 0);
-    const casetas = Number(tarifa.costoCasetas || 0);
-    const subtotal = base + casetas;
-    const iva = subtotal * (globalIVA / 100);
-    const ret = subtotal * (globalRetencion / 100);
-    const total = subtotal + iva - ret;
+
+    // 🚀 LA REGLA: IVA y Retención se calculan SOLO sobre el Flete Base
+    const iva = base * (globalIVA / 100);
+    const ret = base * (globalRetencion / 100);
+
+    // 🚀 EL TOTAL: No incluye casetas, solo flete base + impuestos
+    const total = base + iva - ret;
     const rentabilidad = tarifa.distancia_km ? base / tarifa.distancia_km : 0;
 
-    return { subtotal, iva, ret, total, rentabilidad };
+    return { subtotal: base, iva, ret, total, rentabilidad };
   };
 
   const handleSearchRoutes = async (term: string) => {
@@ -387,6 +391,51 @@ export default function ClientsNew() {
       console.error("Error buscando rutas:", e);
     }
   };
+
+  // 🚀 FUNCIÓN PARA RECARGAR CATÁLOGO Y ACTUALIZAR PRECIOS MANUALMENTE
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefreshTariffs = async () => {
+    setIsRefreshing(true);
+    try {
+      // 1. Volvemos a traer las rutas del servidor
+      const nuevasRutas = await tollService.getTemplates();
+      setRutasDisponibles(nuevasRutas ?? []);
+
+      // 2. Aplicamos la lógica de actualización a los subclientes actuales
+      setSubClientes((prevSubs) =>
+        prevSubs.map((sub) => ({
+          ...sub,
+          tarifas: sub.tarifas.map((t) => {
+            if (t.rate_template_id) {
+              const rutaMaestra = nuevasRutas.find(
+                (r) => r.id === t.rate_template_id,
+              );
+              if (rutaMaestra) {
+                const isFull =
+                  t.tipoUnidad.toLowerCase().includes("full") ||
+                  t.tipoUnidad.includes("9");
+                const nuevoCosto = isFull
+                  ? rutaMaestra.costo_total_full
+                  : rutaMaestra.costo_total_sencillo;
+                return { ...t, costoCasetas: nuevoCosto };
+              }
+            }
+            return t;
+          }),
+        })),
+      );
+      toast.success("Catálogo sincronizado", {
+        description:
+          "Los precios se actualizaron con los datos más recientes del servidor.",
+      });
+    } catch (error) {
+      toast.error("Error al sincronizar");
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   /** =========================
    * Cargar datos (READ)
    * ========================= */
@@ -710,6 +759,46 @@ export default function ClientsNew() {
     }
   };
 
+  // 🚀 NUEVO FILTRO: Muestra solo las rutas que coinciden con el tipo de unidad de la fila
+  const rutasParaModal = useMemo(() => {
+    if (!activePickerIndex) return [];
+    const { subIdx, tarIdx } = activePickerIndex;
+    const currentTarifa = subClientes[subIdx]?.tarifas?.[tarIdx];
+    if (!currentTarifa) return [];
+
+    // Detectamos si la tarifa de esta fila es Full o Sencillo
+    const isFullTariff =
+      currentTarifa.tipoUnidad.toLowerCase().includes("full") ||
+      currentTarifa.tipoUnidad.toLowerCase().includes("9");
+
+    return rutasFiltradas.filter((r) => {
+      // Detectamos cómo se guardó la ruta en el armador
+      const isFullRoute = r.tipo_unidad === "9ejes" || r.tipo_unidad === "full";
+
+      // Si la fila es full, mostramos solo las rutas full. Si es sencillo, solo sencillos.
+      return isFullTariff === isFullRoute;
+    });
+  }, [rutasFiltradas, activePickerIndex, subClientes]);
+
+  // 🚀 FILTRO: Solo muestra rutas del catálogo que coinciden con la unidad de la fila
+  const rutasFiltradasParaModal = useMemo(() => {
+    if (!activePickerIndex) return [];
+    const { subIdx, tarIdx } = activePickerIndex;
+    const currentTarifa = subClientes[subIdx]?.tarifas?.[tarIdx];
+    if (!currentTarifa) return [];
+
+    // Detectamos si el usuario eligió "Full/9 ejes" en el Select de la fila
+    const esFilaFull =
+      currentTarifa.tipoUnidad.toLowerCase().includes("full") ||
+      currentTarifa.tipoUnidad.toLowerCase().includes("9");
+
+    return rutasFiltradas.filter((r) => {
+      const esRutaFull = r.tipo_unidad === "9ejes" || r.tipo_unidad === "full";
+      // Solo dejamos pasar las rutas que coinciden con la fila
+      return esFilaFull === esRutaFull;
+    });
+  }, [rutasFiltradas, activePickerIndex, subClientes]);
+
   /** =========================
    * Gating por pasos
    * ========================= */
@@ -858,7 +947,7 @@ export default function ClientsNew() {
                   )}
                 />
                 {fiscalData.rfc && !validateRFC(fiscalData.rfc) && (
-                  <p className="text-xs text-destructive">
+                  <p className="text-[12px] text-destructive">
                     RFC debe tener 12-13 caracteres
                   </p>
                 )}
@@ -1074,7 +1163,7 @@ export default function ClientsNew() {
 
               {!isEditMode ? (
                 <div className="p-6 border-2 border-dashed rounded-xl bg-muted/20 text-center">
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-[12px] text-muted-foreground">
                     El repositorio de documentos adicionales se activa después
                     del primer guardado.
                   </p>
@@ -1098,7 +1187,7 @@ export default function ClientsNew() {
                     <CardContent className="p-4 flex gap-3 items-start">
                       <AlertTriangle className="h-5 w-5 text-primary mt-0.5" />
                       <div className="space-y-1">
-                        <p className="text-xs font-bold uppercase">
+                        <p className="text-[12px] font-bold uppercase">
                           Formatos Soportados
                         </p>
                         <p className=" text-muted-foreground leading-relaxed">
@@ -1488,16 +1577,20 @@ export default function ClientsNew() {
                   </Select>
                 </div>
 
-                <div className="flex justify-end">
-                  <Badge
+                <div className=" flex justify-end gap-2">
+                  <Button
                     variant="outline"
-                    className="bg-white border-slate-300 py-2"
+                    className="h-9 bg-white border-slate-300 text-slate-600 font-bold hover:bg-slate-100 shadow-sm"
+                    onClick={handleRefreshTariffs}
+                    disabled={isRefreshing}
                   >
-                    <Clock className="h-3 w-3 mr-2 text-primary" />
-                    <span className="text-[9px] font-bold uppercase">
-                      Configuración de Cobro
-                    </span>
-                  </Badge>
+                    {isRefreshing ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Repeat className="h-4 w-4 mr-2 text-primary" />
+                    )}
+                    Sincronizar Catálogo
+                  </Button>
                 </div>
               </div>
             </CardContent>
@@ -1517,7 +1610,7 @@ export default function ClientsNew() {
 
                 {/*  CRÉDITO POR SUBCLIENTE (Opcional si es diferente al general) */}
                 <div className="flex items-center gap-2">
-                  <Label className="text-[9px] uppercase font-bold text-slate-500">
+                  <Label className="text-[12px] uppercase font-bold text-slate-500">
                     Crédito Destino:
                   </Label>
                   <Select
@@ -1540,161 +1633,176 @@ export default function ClientsNew() {
                 </div>
               </CardHeader>
 
-              <CardContent className="pt-4 space-y-3">
+              <CardContent className="pt-4 space-y-4">
                 {sub.tarifas.map((tarifa, tIdx) => {
                   const info = calcularInfoTarifa(tarifa);
                   return (
                     <div
                       key={tarifa.id}
-                      className="grid grid-cols-12 gap-3 items-center border p-3 rounded-xl bg-white hover:border-primary/40 transition-all group"
+                      className="relative grid grid-cols-12 gap-4 items-stretch border-2 p-4 rounded-2xl bg-white hover:border-primary/30 hover:shadow-md transition-all group"
                     >
-                      {/* BUSCADOR DE RUTA SCT */}
-                      <div className="col-span-3 space-y-1">
-                        <Label className="text-[9px] font-bold uppercase text-muted-foreground">
-                          Ruta del Catálogo
+                      {/* 1. TIPO DE CONFIGURACIÓN */}
+                      <div className="col-span-2 flex flex-col justify-center space-y-1.5">
+                        <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                          1. Tipo
+                        </Label>
+                        <Select
+                          value={tarifa.tipoUnidad}
+                          onValueChange={(nuevaUnidad) => {
+                            updateTarifa(idx, tIdx, "tipoUnidad", nuevaUnidad);
+                            updateTarifa(idx, tIdx, "rate_template_id", null);
+                            updateTarifa(idx, tIdx, "nombreRuta", "");
+                            updateTarifa(idx, tIdx, "costoCasetas", 0);
+                            toast.info(
+                              "Tipo actualizado. Por favor selecciona la ruta.",
+                            );
+                          }}
+                        >
+                          <SelectTrigger className="h-10 font-bold border-slate-200 bg-slate-50/50 text-sm">
+                            <SelectValue placeholder="Tipo..." />
+                          </SelectTrigger>
+                          <SelectContent className="z-[200]">
+                            <SelectItem value="sencillo">
+                              Sencillo (5 Ejes)
+                            </SelectItem>
+                            <SelectItem value="full">
+                              Doble / Full (9 Ejes)
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* 2. BUSCADOR DE RUTA */}
+                      <div className="col-span-3 flex flex-col justify-center space-y-1.5">
+                        <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                          2. Ruta autorizada
                         </Label>
                         <Button
                           variant="outline"
-                          className="w-full h-8  justify-start bg-slate-50 border-slate-200 font-bold"
+                          className={cn(
+                            "w-full h-10 justify-start font-bold border-slate-200 text-[12px]",
+                            !tarifa.nombreRuta &&
+                              "text-rose-500 border-rose-200 bg-rose-50 hover:bg-rose-100",
+                          )}
                           onClick={() => {
                             setActivePickerIndex({ subIdx: idx, tarIdx: tIdx });
                             setIsRoutePickerOpen(true);
                           }}
                         >
-                          <Search className="h-3 w-3 mr-2 text-primary" />
-                          {tarifa.nombreRuta || "SELECCIONAR RUTA..."}
+                          <Route className="h-4 w-4 mr-2 shrink-0 text-slate-500" />
+                          <span className="truncate">
+                            {tarifa.nombreRuta || "SELECCIONAR RUTA..."}
+                          </span>
                         </Button>
                       </div>
-
-                      {/* 2. Unidad con recálculo automático */}
-                      <div className="col-span-2 space-y-1">
-                        <Label className="text-[9px] font-bold uppercase text-muted-foreground">
-                          Unidad
-                        </Label>
-                        <Select
-                          value={tarifa.tipoUnidad}
-                          onValueChange={(nuevaUnidad) => {
-                            // 1. Primero actualizamos el tipo de unidad
-                            updateTarifa(idx, tIdx, "tipoUnidad", nuevaUnidad);
-
-                            // 2. Si hay una ruta seleccionada, buscamos su precio para la nueva unidad
-                            if (tarifa.rate_template_id) {
-                              const rutaData = rutasDisponibles.find(
-                                (r) => r.id === tarifa.rate_template_id,
-                              );
-                              if (rutaData) {
-                                const nuevoCosto =
-                                  nuevaUnidad === "full"
-                                    ? rutaData.costo_total_full
-                                    : rutaData.costo_total_sencillo;
-
-                                updateTarifa(
-                                  idx,
-                                  tIdx,
-                                  "costoCasetas",
-                                  nuevoCosto,
-                                );
-                                toast.info(
-                                  `Costo de casetas actualizado a ${nuevaUnidad}`,
-                                );
-                              }
-                            }
-                          }}
-                        >
-                          <SelectTrigger className="h-8 ">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="z-[200]">
-                            {tiposActivos.map((t) => (
-                              <SelectItem
-                                key={t.id}
-                                value={t.nombre.toLowerCase()}
-                              >
-                                {t.nombre}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="col-span-2 space-y-1">
-                        <Label className="text-[9px] font-bold uppercase text-muted-foreground">
-                          Flete Base ($)
-                        </Label>
-                        <Input
-                          type="number"
-                          value={tarifa.tarifaBase || ""}
-                          onChange={(e) =>
-                            updateTarifa(
-                              idx,
-                              tIdx,
-                              "tarifaBase",
-                              Number(e.target.value),
-                            )
-                          }
-                          className="h-8 text-xs font-bold"
-                        />
-                      </div>
-
-                      {/* INFO AUTOMÁTICA (Read-Only) */}
-                      <div className="col-span-2 border-l border-r px-3 flex flex-col gap-1">
-                        <div className="flex justify-between ">
-                          <span className="text-muted-foreground font-medium">
-                            Casetas:
+                      {/* 4. DESGLOSE INTERNO (CASETAS E IMPUESTOS) */}
+                      <div className="col-span-3 flex flex-col justify-center px-4 border-l border-r border-slate-100 bg-slate-50/30 rounded-lg py-1 space-y-1">
+                        {/* Casetas como referencia de costo interno */}
+                        <div className="flex justify-between items-center">
+                          <span className="text-[12px] font-bold text-status-success uppercase">
+                            Casetas (Gasto):
                           </span>
-                          <span className="font-bold text-blue-600">
+                          <span className="text-[12px] font-mono font-bold text-status-success">
                             ${tarifa.costoCasetas.toLocaleString()}
                           </span>
                         </div>
-                        <div className="flex justify-between ">
-                          <span className="text-muted-foreground font-medium">
-                            $/KM:
+
+                        <Separator className="opacity-50" />
+
+                        {/* Impuestos reales a facturar */}
+                        <div className="flex justify-between items-center">
+                          <span className="text-[12px] font-bold text-slate-500 uppercase">
+                            IVA ({globalIVA}%):
                           </span>
-                          <Badge className="h-4 bg-blue-50 text-blue-600 border-none">
-                            ${info.rentabilidad.toFixed(2)}
-                          </Badge>
+                          <span className="text-[12px] font-mono font-bold text-primary">
+                            +$
+                            {info.iva.toLocaleString("es-MX", {
+                              minimumFractionDigits: 2,
+                            })}
+                          </span>
+                        </div>
+
+                        <div className="flex justify-between items-center">
+                          <span className="text-[12px] font-bold text-slate-500 uppercase">
+                            Ret ({globalRetencion}%):
+                          </span>
+                          <span className="text-[12px] font-mono font-bold text-rose-600">
+                            -$
+                            {info.ret.toLocaleString("es-MX", {
+                              minimumFractionDigits: 2,
+                            })}
+                          </span>
                         </div>
                       </div>
 
-                      {/* TOTAL REAL */}
-                      <div className="col-span-2 bg-emerald-50 p-2 rounded-lg border border-emerald-100 text-right">
-                        <p className="text-[8px] font-bold text-emerald-600 uppercase">
-                          A Facturar
-                        </p>
-                        <p className="text-sm font-black text-emerald-800">
-                          $
-                          {info.total.toLocaleString("es-MX", {
-                            minimumFractionDigits: 2,
-                          })}
-                        </p>
+                      {/* 3. FLETE BASE (LO QUE SE COBRA) */}
+                      <div className="col-span-2 flex flex-col justify-center space-y-1.5">
+                        <Label className="text-[10px] font-black uppercase text-primary tracking-wider">
+                          3. Flete Base
+                        </Label>
+                        <div className="relative">
+                          <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                          <Input
+                            type="number"
+                            value={tarifa.tarifaBase || ""}
+                            onChange={(e) =>
+                              updateTarifa(
+                                idx,
+                                tIdx,
+                                "tarifaBase",
+                                Number(e.target.value),
+                              )
+                            }
+                            className="h-10 pl-8 text-sm font-black border-slate-200 focus-visible:ring-primary"
+                          />
+                        </div>
                       </div>
 
-                      <div className="col-span-1 flex justify-end">
+                      {/* 5. TOTAL A FACTURAR + ELIMINAR */}
+                      <div className="col-span-2 flex items-center gap-2">
+                        {/* Caja de Total */}
+                        <div className="flex-1 bg-brand-navy p-2.5 rounded-xl text-right shadow-md border border-slate-800 flex flex-col justify-center h-full">
+                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                            A Facturar
+                          </p>
+                          <p className="text-base font-black text-primary font-mono leading-none">
+                            $
+                            {info.total.toLocaleString("es-MX", {
+                              minimumFractionDigits: 2,
+                            })}
+                          </p>
+                        </div>
+
+                        {/* Botón de eliminar con mejor visibilidad */}
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7"
+                          className="h-10 w-10 shrink-0 text-slate-300 hover:text-white hover:bg-destructive rounded-xl transition-all shadow-sm"
                           onClick={() => removeTarifa(idx, tIdx)}
                         >
-                          <Trash2 className="h-4 w-4 text-destructive" />
+                          <Trash2 className="h-5 w-5" />
                         </Button>
                       </div>
                     </div>
                   );
                 })}
+
+                {/* BOTÓN PARA AÑADIR NUEVA FILA */}
                 <Button
                   variant="ghost"
-                  size="sm"
-                  className="w-full border-dashed border-2 h-9 "
+                  size="lg"
+                  className="w-full border-dashed border-2 border-slate-200 h-14 text-slate-500 hover:text-primary hover:border-primary/50 hover:bg-primary/5 transition-all rounded-2xl"
                   onClick={() => addTarifa(idx)}
                 >
-                  <Plus className="h-3 w-3 mr-1" /> AÑADIR OTRA RUTA
+                  <PlusCircle className="h-5 w-5 mr-2" />
+                  <span className="font-bold uppercase tracking-tight">
+                    Añadir nueva ruta autorizada a este destino
+                  </span>
                 </Button>
               </CardContent>
             </Card>
           ))}
-
-          {/*  MODAL DE BÚSQUEDA CORREGIDO (CARGA INICIAL AUTOMÁTICA) */}
+          {/* MODAL DE BÚSQUEDA SCT (Ahora filtra columnas según Sencillo o Full) */}
           <Dialog open={isRoutePickerOpen} onOpenChange={setIsRoutePickerOpen}>
             <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col p-0 border-none shadow-2xl">
               <DialogHeader className="p-6 pb-2 bg-slate-900 text-white">
@@ -1721,37 +1829,43 @@ export default function ClientsNew() {
                         <TableHead className="font-bold uppercase">
                           Ruta Autorizada
                         </TableHead>
-                        <TableHead className="text-right  font-bold uppercase">
-                          Sencillo
-                        </TableHead>
-                        <TableHead className="text-right font-bold uppercase">
-                          Full
-                        </TableHead>
+                        {/* 🚀 Encabezado dinámico */}
+                        {activePickerIndex &&
+                        (subClientes[activePickerIndex.subIdx]?.tarifas[
+                          activePickerIndex.tarIdx
+                        ]?.tipoUnidad?.includes("full") ||
+                          subClientes[activePickerIndex.subIdx]?.tarifas[
+                            activePickerIndex.tarIdx
+                          ]?.tipoUnidad?.includes("9")) ? (
+                          <TableHead className="text-right font-bold uppercase text-emerald-700">
+                            Costo Full Autorizado
+                          </TableHead>
+                        ) : (
+                          <TableHead className="text-right font-bold uppercase text-blue-700">
+                            Costo Sencillo Autorizado
+                          </TableHead>
+                        )}
                         <TableHead className="text-right font-bold uppercase">
                           Acciones
                         </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {rutasFiltradas.length === 0 ? (
+                      {rutasFiltradasParaModal.length === 0 ? (
                         <TableRow>
                           <TableCell
-                            colSpan={4}
+                            colSpan={3}
                             className="text-center py-20 text-slate-400 italic"
                           >
-                            <div className="flex flex-col items-center gap-2 opacity-50">
-                              <Loader2 className="h-8 w-8 animate-spin" />
-                              <p>Cargando rutas...</p>
-                            </div>
+                            No hay rutas armadas en el catálogo para esta
+                            configuración.
                           </TableCell>
                         </TableRow>
                       ) : (
-                        rutasFiltradas.map((r) => {
-                          //  CORRECCIÓN: Usamos 'clients' (el valor del hook) en lugar de 'Client' (el tipo)
-                          const clienteNombre =
-                            clients.find((c) => c.id === r.client_id)
-                              ?.razon_social || "Ruta Libre";
-
+                        rutasFiltradasParaModal.map((r) => {
+                          const isFull =
+                            r.tipo_unidad === "9ejes" ||
+                            r.tipo_unidad === "full";
                           return (
                             <TableRow
                               key={r.id}
@@ -1759,47 +1873,35 @@ export default function ClientsNew() {
                             >
                               <TableCell className="py-3">
                                 <div className="flex flex-col gap-0.5">
-                                  {/*  Nombre de la Ruta (Destacado en negrita y mayúsculas) */}
                                   <span className="font-black text-slate-900 text-sm uppercase tracking-tight">
                                     {r.origen}
                                   </span>
-
-                                  {/*  Datos Complementarios (Información en miniatura abajo) */}
-                                  <div className="flex flex-wrap items-center gap-x-2  text-muted-foreground font-medium">
-                                    {/* <span className="text-primary/80 font-bold">
-                                      {clienteNombre}
-                                    </span> */}
+                                  <div className="flex flex-wrap items-center gap-x-2 text-muted-foreground font-medium text-[11px]">
                                     {r.destino && r.destino !== "N/A" && (
-                                      <>
-                                        <span className="text-slate-300">
-                                          •
-                                        </span>
-                                        <span>Hacia: {r.destino}</span>
-                                      </>
+                                      <span>Hacia: {r.destino}</span>
                                     )}
                                     <span className="text-slate-300">•</span>
-                                    <span className="font-mono text-slate-500">
-                                      {r.distancia_total_km} KM /{" "}
-                                      {Math.floor(r.tiempo_total_minutos / 60)}h{" "}
-                                      {r.tiempo_total_minutos % 60}m
+                                    <span className="font-mono">
+                                      {r.distancia_total_km} KM
                                     </span>
                                   </div>
                                 </div>
                               </TableCell>
 
-                              {/* Sencillo (5 ejes) */}
-                              <TableCell className="text-right font-mono text-xs font-bold text-blue-600 bg-blue-50/20">
-                                $
-                                {r.costo_total_sencillo.toLocaleString(
-                                  "es-MX",
-                                  { minimumFractionDigits: 2 },
+                              {/* 🚀 Solo una celda de costo */}
+                              <TableCell
+                                className={cn(
+                                  "text-right font-mono text-[12px] font-bold",
+                                  isFull
+                                    ? "text-emerald-600 bg-emerald-50/20"
+                                    : "text-blue-600 bg-blue-50/20",
                                 )}
-                              </TableCell>
-
-                              {/* Full (9 Ejes) */}
-                              <TableCell className="text-right font-mono text-xs font-bold text-emerald-600 bg-emerald-50/20">
+                              >
                                 $
-                                {r.costo_total_full.toLocaleString("es-MX", {
+                                {(isFull
+                                  ? r.costo_total_full
+                                  : r.costo_total_sencillo
+                                ).toLocaleString("es-MX", {
                                   minimumFractionDigits: 2,
                                 })}
                               </TableCell>
@@ -1807,37 +1909,15 @@ export default function ClientsNew() {
                               <TableCell className="text-right">
                                 <Button
                                   size="sm"
-                                  className="h-7  uppercase font-black shadow-sm"
-                                  // src/pages/clients/ClientsNew.tsx
-
+                                  className="h-7 uppercase font-black shadow-sm"
                                   onClick={() => {
                                     if (!activePickerIndex) return;
                                     const { subIdx, tarIdx } =
                                       activePickerIndex;
+                                    const costo = isFull
+                                      ? r.costo_total_full
+                                      : r.costo_total_sencillo;
 
-                                    // Acceso seguro al subcliente y su tarifa
-                                    const currentSub = subClientes[subIdx];
-                                    const currentTarifa =
-                                      currentSub?.tarifas?.[tarIdx];
-
-                                    if (!currentTarifa) {
-                                      console.error(
-                                        "No se encontró la tarifa en el índice especificado:",
-                                        { subIdx, tarIdx },
-                                      );
-                                      toast.error(
-                                        "Error al vincular: No se encontró la fila seleccionada.",
-                                      );
-                                      return;
-                                    }
-
-                                    // Determinamos costo según el tipo de unidad del convenio (acceso seguro)
-                                    const costo =
-                                      currentTarifa.tipoUnidad === "full"
-                                        ? r.costo_total_full
-                                        : r.costo_total_sencillo;
-
-                                    // Actualizamos los campos usando los índices validados
                                     updateTarifa(
                                       subIdx,
                                       tarIdx,
@@ -1862,7 +1942,6 @@ export default function ClientsNew() {
                                       "distancia_km",
                                       r.distancia_total_km,
                                     );
-
                                     setIsRoutePickerOpen(false);
                                     toast.success(
                                       "Ruta vinculada correctamente",

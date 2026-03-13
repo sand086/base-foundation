@@ -1,5 +1,5 @@
 // src/features/tarifas/ArmadorRutas.tsx
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import {
   Plus,
   Trash2,
@@ -17,6 +17,7 @@ import {
   MoreVertical,
   Wand2,
   Route as RouteIcon,
+  Truck,
 } from "lucide-react";
 
 // DND Kit
@@ -89,9 +90,8 @@ import {
 
 // Services & Hooks
 import { TollBooth, RateTemplate } from "@/types/api.types";
-import { useTiposUnidad } from "@/hooks/useTiposUnidad";
 import { useClients } from "@/hooks/useClients";
-import { tollService, RateTemplateCreate } from "@/services/tollService";
+import { tollService } from "@/services/tollService";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -108,7 +108,6 @@ interface SegmentEntry {
   tiempo_minutos: number;
   toll_booth_id: number | null;
   toll_nombre?: string;
-  // Siempre presentes (lado a lado)
   costo_s: number; // 5 ejes (Sencillo)
   costo_f: number; // 9 ejes (Full)
 }
@@ -124,6 +123,7 @@ type SortableRowProps = {
   formatCurrency: (val: number) => string;
   hasGap: boolean;
   showAdvanced: boolean;
+  isFullUnit: boolean; // 🚀 Nueva prop para saber qué costo mostrar
 };
 
 // --- COMPONENTE FILA (SORTABLE) ---
@@ -135,6 +135,7 @@ const SortableTableRow: React.FC<SortableRowProps> = ({
   formatCurrency,
   hasGap,
   showAdvanced,
+  isFullUnit,
 }) => {
   const {
     attributes,
@@ -156,7 +157,7 @@ const SortableTableRow: React.FC<SortableRowProps> = ({
     <>
       {hasGap && (
         <TableRow className="bg-amber-50/30 border-none h-7">
-          <TableCell colSpan={showAdvanced ? 9 : 7} className="py-0">
+          <TableCell colSpan={showAdvanced ? 8 : 6} className="py-0">
             <div className="flex items-center justify-center gap-2 text-[12px] font-bold text-amber-600 uppercase tracking-tighter">
               <AlertTriangle className="h-3 w-3" /> Discontinuidad detectada
               entre tramos
@@ -209,7 +210,7 @@ const SortableTableRow: React.FC<SortableRowProps> = ({
           <>
             <TableCell className="w-16">
               <Input
-                className="h-7  uppercase w-16 text-center border-transparent hover:border-slate-200 focus:bg-white"
+                className="h-7 uppercase w-16 text-center border-transparent hover:border-slate-200 focus:bg-white"
                 value={seg.estado}
                 placeholder="Edo."
                 onChange={(e) => updateSegment(idx, "estado", e.target.value)}
@@ -218,7 +219,7 @@ const SortableTableRow: React.FC<SortableRowProps> = ({
 
             <TableCell className="w-24">
               <Input
-                className="h-7  uppercase w-24 border-transparent hover:border-slate-200 focus:bg-white"
+                className="h-7 uppercase w-24 border-transparent hover:border-slate-200 focus:bg-white"
                 value={seg.carretera}
                 placeholder="Carr."
                 onChange={(e) =>
@@ -232,7 +233,7 @@ const SortableTableRow: React.FC<SortableRowProps> = ({
         <TableCell className="w-20">
           <Input
             type="number"
-            className="h-7  w-20 text-right font-mono border-transparent hover:border-slate-200 focus:bg-white"
+            className="h-7 w-20 text-right font-mono border-transparent hover:border-slate-200 focus:bg-white"
             value={seg.distancia_km || ""}
             onChange={(e) =>
               updateSegment(
@@ -247,7 +248,7 @@ const SortableTableRow: React.FC<SortableRowProps> = ({
         <TableCell className="w-20">
           <Input
             type="number"
-            className="h-7  w-20 text-right font-mono border-transparent hover:border-slate-200 focus:bg-white"
+            className="h-7 w-20 text-right font-mono border-transparent hover:border-slate-200 focus:bg-white"
             value={seg.tiempo_minutos || ""}
             onChange={(e) =>
               updateSegment(
@@ -259,13 +260,17 @@ const SortableTableRow: React.FC<SortableRowProps> = ({
           />
         </TableCell>
 
-        <TableCell className="text-right font-mono text-slate-600 text-xs">
-          {formatCurrency(seg.costo_s)}
-        </TableCell>
-
-        <TableCell className="text-right font-mono font-bold text-slate-800 text-xs bg-slate-50/40">
-          {formatCurrency(seg.costo_f)}
-        </TableCell>
+        {/* 🚀 Renderizado Condicional del Costo: Solo mostramos la configuración elegida */}
+        {!isFullUnit && (
+          <TableCell className="text-right font-mono font-bold text-blue-700 text-xs bg-blue-50/40">
+            {formatCurrency(seg.costo_s)}
+          </TableCell>
+        )}
+        {isFullUnit && (
+          <TableCell className="text-right font-mono font-bold text-emerald-700 text-xs bg-emerald-50/40">
+            {formatCurrency(seg.costo_f)}
+          </TableCell>
+        )}
 
         <TableCell className="w-10 text-right">
           <Button
@@ -284,15 +289,17 @@ const SortableTableRow: React.FC<SortableRowProps> = ({
 
 // --- COMPONENTE PRINCIPAL ---
 export const ArmadorRutas: React.FC = () => {
-  const { tiposActivos } = useTiposUnidad();
   const { clients } = useClients();
 
-  // ✅ Principales (obligatorios)
+  // ✅ Principales
   const [nombreRuta, setNombreRuta] = useState("");
-  const [tipoUnidadId, setTipoUnidadId] = useState("");
+  const [configuracion, setConfiguracion] = useState<"5ejes" | "9ejes">(
+    "5ejes",
+  ); // 🚀 Default Sencillo
+  const isFullUnit = configuracion === "9ejes";
 
   // ✅ Secundarios (opcionales)
-  const [selectedCliente, setSelectedCliente] = useState(""); // "" = libre
+  const [selectedCliente, setSelectedCliente] = useState("");
   const [origen, setOrigen] = useState("");
   const [destino, setDestino] = useState("");
 
@@ -300,29 +307,26 @@ export const ArmadorRutas: React.FC = () => {
   const [allTolls, setAllTolls] = useState<TollBooth[]>([]);
   const [savedRoutes, setSavedRoutes] = useState<RateTemplate[]>([]);
 
+  // 🚀 Filtro de tabla histórica
+  const [filtroTipo, setFiltroTipo] = useState<"todos" | "5ejes" | "9ejes">(
+    "todos",
+  );
+
   const [isLoading, setIsLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [tollSearch, setTollSearch] = useState("");
 
-  // Toggle avanzado
   const [showAdvanced, setShowAdvanced] = useState(false);
-
-  // Cálculo mock
   const [isCalculating, setIsCalculating] = useState(false);
-
-  // Eliminación
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [routeToDelete, setRouteToDelete] = useState<RateTemplate | null>(null);
-
-  // Modal detalle
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedRouteDetail, setSelectedRouteDetail] =
     useState<RateTemplate | null>(null);
-
   const [showAdditional, setShowAdditional] = useState(false);
-
   const [editingRouteId, setEditingRouteId] = useState<number | null>(null);
-
+  // 🚀 NUEVO: Referencia para el scroll
+  const topFormRef = useRef<HTMLDivElement>(null);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, {
@@ -346,15 +350,6 @@ export const ArmadorRutas: React.FC = () => {
     void fetchData();
   }, []);
 
-  // FULL/Sencillo por unidad
-  const isFullUnit = useMemo(() => {
-    const t = tiposActivos.find((x) => x.id === tipoUnidadId);
-    const name = t?.nombre?.toLowerCase?.() || "";
-    return (
-      name.includes("full") || name.includes("9 ejes") || name.includes("9ejes")
-    );
-  }, [tipoUnidadId, tiposActivos]);
-
   const totals = useMemo(() => {
     return segments.reduce(
       (acc, s) => {
@@ -367,6 +362,31 @@ export const ArmadorRutas: React.FC = () => {
       { distancia: 0, tiempo: 0, costo_s: 0, costo_f: 0 },
     );
   }, [segments]);
+
+  // 🚀 Lógica del filtro de la tabla
+  const rutasFiltradas = useMemo(() => {
+    if (filtroTipo === "todos") return savedRoutes;
+
+    return savedRoutes.filter((r: any) => {
+      const config = String(r.configuracion || "")
+        .trim()
+        .toLowerCase();
+
+      const isSencillo =
+        config === "5ejes" ||
+        config === "5 ejes" ||
+        config === "sencillo" ||
+        config === "5ejes sencillo";
+
+      const isFull =
+        config === "9ejes" ||
+        config === "9 ejes" ||
+        config === "full" ||
+        config === "9ejes full";
+
+      return filtroTipo === "9ejes" ? isFull : isSencillo;
+    });
+  }, [savedRoutes, filtroTipo]);
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("es-MX", {
@@ -393,7 +413,6 @@ export const ArmadorRutas: React.FC = () => {
           updated[idx].carretera = (match as any).carretera || "";
           updated[idx].estado = (match as any).estado || "";
           updated[idx].toll_booth_id = match.id;
-
           updated[idx].costo_s = (match as any).costo_5_ejes_sencillo ?? 0;
           updated[idx].costo_f = (match as any).costo_9_ejes_full ?? 0;
         } else {
@@ -405,30 +424,19 @@ export const ArmadorRutas: React.FC = () => {
     });
   };
 
-  const normalizeStr = (str: string) =>
-    str
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/\s+/g, " ")
-      .trim();
-
-  // Auto calcular KM/Min (mock)
   const handleAutoCalculate = async () => {
     if (segments.length === 0) {
       toast.warning("Agrega al menos un tramo para calcular");
       return;
     }
-
     setIsCalculating(true);
     await new Promise((resolve) => setTimeout(resolve, 1000));
-
     setSegments((prev) =>
       prev.map((seg) => {
         const newKm =
           seg.distancia_km > 0
             ? seg.distancia_km
-            : Math.floor(Math.random() * 50) + 20; // 20..70
+            : Math.floor(Math.random() * 50) + 20;
         const newMins =
           seg.tiempo_minutos > 0
             ? seg.tiempo_minutos
@@ -436,33 +444,18 @@ export const ArmadorRutas: React.FC = () => {
         return { ...seg, distancia_km: newKm, tiempo_minutos: newMins };
       }),
     );
-
     setIsCalculating(false);
     toast.success("Distancias y tiempos estimados calculados.");
   };
 
-  const tiposFiltrados = useMemo(() => {
-    return tiposActivos.filter((t) => {
-      const nombre = normalizeStr(t.nombre);
-      return (
-        nombre.includes("sencillo") ||
-        nombre.includes("full") ||
-        nombre.includes("ejes") // Esto captura "5 ejes" o "9 ejes"
-      );
-    });
-  }, [tiposActivos]);
-
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-
     setSegments((items) => {
       const oldIndex = items.findIndex((i) => i.tempId === active.id);
       const newIndex = items.findIndex((i) => i.tempId === over.id);
       return arrayMove(items, oldIndex, newIndex);
     });
-
-    toast.info("Orden de ruta actualizado", { duration: 1000 });
   };
 
   const handleConfirmDelete = async () => {
@@ -480,13 +473,9 @@ export const ArmadorRutas: React.FC = () => {
 
   const handleReverseRoute = () => {
     if (!origen && !destino && !nombreRuta) return;
-
-    // Si llenaron origen/destino opcional, invertimos esos
     const oldO = origen;
     setOrigen(destino);
     setDestino(oldO);
-
-    // Y si el nombre contiene " - " lo invertimos también (nice-to-have)
     setNombreRuta((prev) => {
       if (!prev?.includes("-")) return prev;
       return prev
@@ -495,7 +484,6 @@ export const ArmadorRutas: React.FC = () => {
         .reverse()
         .join(" - ");
     });
-
     setSegments((prev) =>
       [...prev].reverse().map((s) => ({
         ...s,
@@ -508,7 +496,6 @@ export const ArmadorRutas: React.FC = () => {
           : s.nombre_segmento,
       })),
     );
-
     toast.success("Ruta invertida");
   };
 
@@ -527,10 +514,9 @@ export const ArmadorRutas: React.FC = () => {
 
   const handleSave = async () => {
     if (!nombreRuta.trim()) {
-      toast.error("El nombre de la ruta es obligatorio");
+      toast.error("El nombre de la ruta es obligatorio.");
       return;
     }
-    // Mapeamos los campos del frontend a lo que el backend espera (costo_momento_*)
     const mappedSegments = segments.map((s, idx) => ({
       nombre_segmento: s.nombre_segmento,
       estado: s.estado,
@@ -550,60 +536,48 @@ export const ArmadorRutas: React.FC = () => {
           : 6,
       origen: nombreRuta,
       destino: destino || "N/A",
-      tipo_unidad: isFullUnit ? "9ejes" : "5ejes",
+      tipo_unidad: configuracion, // 🚀 Guardamos la configuración (5ejes o 9ejes)
       segments: mappedSegments,
     };
 
     try {
       let res: RateTemplate;
-
       if (editingRouteId) {
-        // MODO EDICIÓN: PUT
         res = await tollService.updateTemplate(editingRouteId, payload);
         setSavedRoutes((prev) =>
           prev.map((r) => (r.id === editingRouteId ? res : r)),
         );
         toast.success("Ruta actualizada correctamente");
       } else {
-        // MODO CREACIÓN: POST
         res = await tollService.saveTemplate(payload as any);
         setSavedRoutes((prev) => [res, ...prev]);
         toast.success("Nueva ruta guardada exitosamente");
       }
 
-      // RESET COMPLETO DEL FORMULARIO
       setEditingRouteId(null);
       setSegments([]);
       setNombreRuta("");
-      setTipoUnidadId("");
+      setConfiguracion("5ejes");
       setSelectedCliente("");
       setOrigen("");
       setDestino("");
       setShowAdditional(false);
     } catch (error) {
-      console.error(error);
       toast.error("Error al procesar la ruta");
     }
   };
 
   const handleEditRoute = (route: RateTemplate) => {
-    // Nombre principal ahora vive en "origen" del template
     setEditingRouteId(route.id);
     setNombreRuta(route.origen || "");
-
-    // Opcionales
     setSelectedCliente(route.client_id ? String(route.client_id) : "");
-    setOrigen(""); // si quieres mapearlo, ajusta según tu backend
+    setOrigen("");
     setDestino(route.destino && route.destino !== "N/A" ? route.destino : "");
 
-    const unit = tiposActivos.find(
-      (t) =>
-        route.tipo_unidad === "9ejes"
-          ? t.nombre.toLowerCase().includes("9")
-          : t.nombre.toLowerCase().includes("5") ||
-            t.nombre.toLowerCase().includes("6"), // por si renombraste a 5 ejes
-    );
-    if (unit) setTipoUnidadId(unit.id);
+    // Cargamos la configuración guardada
+    const isRouteFull =
+      route.tipo_unidad === "9ejes" || route.tipo_unidad === "full";
+    setConfiguracion(isRouteFull ? "9ejes" : "5ejes");
 
     setSegments(
       (route.segments || []).map((s: any) => ({
@@ -615,17 +589,35 @@ export const ArmadorRutas: React.FC = () => {
         tiempo_minutos: Number(s.tiempo_minutos || 0),
         toll_booth_id: s.toll_booth_id ?? null,
         toll_nombre: s.toll_nombre,
-        // compat: si tu backend guarda costo_momento_*
-        costo_s: Number(s.costo_momento_sencillo ?? s.costo_s ?? 0),
-        costo_f: Number(s.costo_momento_full ?? s.costo_f ?? 0),
+        costo_s: Number(s.costo_momento_sencillo ?? 0),
+        costo_f: Number(s.costo_momento_full ?? 0),
       })),
     );
 
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    // 🚀 SCROLL INFALIBLE HACIA LA REFERENCIA
+    setTimeout(() => {
+      // 1. Intentamos mover el elemento específico a la vista
+      document.getElementById("form-rutas-top")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+
+      // 2. Forzamos a TODOS los contenedores padre con scroll a ir hacia arriba
+      const scrollContainers = document.querySelectorAll(
+        ".overflow-y-auto, .overflow-auto",
+      );
+      scrollContainers.forEach((container) => {
+        container.scrollTo({ top: 0, behavior: "smooth" });
+      });
+
+      // 3. Fallback a la ventana principal
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }, 150);
+
     toast.info("Ruta cargada para edición");
   };
 
-  // 🚀 NUEVA FUNCIÓN: Generar Hoja de Ruta para el Chófer
+  // 🚀 FUNCIÓN: Generar Hoja de Ruta para el Chófer (Impresión)
   const handlePrintRoute = (route: RateTemplate) => {
     const isFull =
       route.tipo_unidad === "9ejes" || route.tipo_unidad === "full";
@@ -671,7 +663,6 @@ export const ArmadorRutas: React.FC = () => {
             <h1 class="title">BITÁCORA DE RUTA AUTORIZADA</h1>
             <p class="subtitle">DOCUMENTO OPERATIVO DE CONTROL</p>
           </div>
-
           <div class="info-grid">
             <div class="info-box">
               <p><strong>CLIENTE:</strong> ${clientName.toUpperCase()}</p>
@@ -684,7 +675,6 @@ export const ArmadorRutas: React.FC = () => {
               <p><strong>FECHA IMPRESIÓN:</strong> ${new Date().toLocaleDateString("es-MX")}</p>
             </div>
           </div>
-
           <table>
             <thead>
               <tr>
@@ -716,12 +706,10 @@ export const ArmadorRutas: React.FC = () => {
               </tr>
             </tbody>
           </table>
-
           <div class="warning">
             ⚠️ NOTA IMPORTANTE PARA EL OPERADOR ⚠️<br/>
             Las desviaciones de esta ruta o los cobros de casetas no autorizadas serán descontados en la liquidación del viaje.
           </div>
-
           <script>
             window.onload = () => { setTimeout(() => { window.print(); window.close(); }, 500); }
           </script>
@@ -732,6 +720,7 @@ export const ArmadorRutas: React.FC = () => {
     printWindow.document.close();
   };
 
+  // 🚀 COLUMNAS DEL HISTÓRICO (AHORA DINÁMICAS SEGÚN LA CONFIGURACIÓN)
   const historyColumns: ColumnDef<RateTemplate>[] = useMemo(
     () => [
       {
@@ -763,6 +752,39 @@ export const ArmadorRutas: React.FC = () => {
         },
       },
       {
+        key: "tipo_unidad",
+        header: "Configuración",
+        type: "status",
+        statusOptions: ["5ejes", "9ejes"],
+        statusNormalizer: (value) => {
+          const raw = String(value || "")
+            .trim()
+            .toLowerCase();
+
+          if (raw === "full") return "9ejes";
+          if (raw === "sencillo") return "5ejes";
+
+          return raw;
+        },
+        render: (_, row) => {
+          const isFullRoute =
+            row.tipo_unidad === "9ejes" || row.tipo_unidad === "full";
+
+          return (
+            <Badge
+              variant="outline"
+              className={
+                isFullRoute
+                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                  : "bg-blue-50 text-blue-700 border-blue-200"
+              }
+            >
+              {isFullRoute ? "FULL (9 EJES)" : "SENCILLO (5 EJES)"}
+            </Badge>
+          );
+        },
+      },
+      {
         key: "casetas",
         header: "Tramos",
         render: (_, row) => {
@@ -777,23 +799,24 @@ export const ArmadorRutas: React.FC = () => {
           );
         },
       },
+      // 🚀 UNIFICAMOS LOS PRECIOS EN UNA SOLA COLUMNA QUE MUESTRA LO QUE CORRESPONDE
       {
-        key: "costo_total_sencillo",
-        header: "Costo 5 ejes",
-        render: (v) => (
-          <span className="font-mono font-medium text-blue-600">
-            {formatCurrency(Number(v || 0))}
-          </span>
-        ),
-      },
-      {
-        key: "costo_total_full",
-        header: "Costo 9 Ejes",
-        render: (v) => (
-          <span className="font-mono font-bold text-emerald-600">
-            {formatCurrency(Number(v || 0))}
-          </span>
-        ),
+        key: "costo",
+        header: "Presupuesto Autorizado",
+        render: (_, row) => {
+          const isFullRoute =
+            row.tipo_unidad === "9ejes" || row.tipo_unidad === "full";
+          const cost = isFullRoute
+            ? row.costo_total_full
+            : row.costo_total_sencillo;
+          return (
+            <span
+              className={`font-mono font-bold text-base ${isFullRoute ? "text-emerald-700" : "text-blue-700"}`}
+            >
+              {formatCurrency(Number(cost || 0))}
+            </span>
+          );
+        },
       },
       {
         key: "id",
@@ -813,10 +836,6 @@ export const ArmadorRutas: React.FC = () => {
               <DropdownMenuItem onClick={() => handleEditRoute(row)}>
                 <Pencil className="mr-2 h-4 w-4 text-blue-500" /> Editar Ruta
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handlePrintRoute(row)}>
-                <Printer className="mr-2 h-4 w-4 text-slate-700" /> Imprimir
-                Ruta
-              </DropdownMenuItem>
 
               <DropdownMenuItem
                 onClick={() => {
@@ -825,6 +844,11 @@ export const ArmadorRutas: React.FC = () => {
                 }}
               >
                 <Eye className="mr-2 h-4 w-4 text-slate-500" /> Ver Detalle
+              </DropdownMenuItem>
+
+              <DropdownMenuItem onClick={() => handlePrintRoute(row)}>
+                <Printer className="mr-2 h-4 w-4 text-slate-700" /> Imprimir
+                Bitácora
               </DropdownMenuItem>
 
               <DropdownMenuSeparator />
@@ -854,26 +878,51 @@ export const ArmadorRutas: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div
+      className="space-y-6 scroll-mt-24"
+      id="form-rutas-top"
+      ref={topFormRef}
+    >
       <Card className="border-t-4 border-t-primary shadow-xl overflow-hidden">
         <CardHeader className="bg-slate-50/80 border-b p-5">
-          {/* ✅ FILA 1: OBLIGATORIO */}
-          <div className="grid grid-cols-1 gap-4 items-start">
+          {/* ✅ FILA 1: OBLIGATORIOS CLAROS PARA GUSTAVO */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
             <div className="space-y-1.5">
               <Label className="text-sm font-black text-slate-800 flex items-center gap-2">
                 <RouteIcon className="h-4 w-4 text-primary" /> Nombre de la Ruta
                 *
               </Label>
               <Input
-                placeholder="Ej: CDMX - Nuevo Laredo Exprés"
+                placeholder="Ej: Carcher (Ruta Corta)"
                 className="h-11 bg-white text-base font-medium shadow-sm border-slate-300"
                 value={nombreRuta}
                 onChange={(e) => setNombreRuta(e.target.value)}
               />
             </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm font-black text-slate-800 flex items-center gap-2">
+                <Truck className="h-4 w-4 text-primary" /> Configuración de la
+                Ruta *
+              </Label>
+              <Select
+                value={configuracion}
+                onValueChange={(v: any) => setConfiguracion(v)}
+              >
+                <SelectTrigger className="h-11 bg-white text-base font-bold shadow-sm border-slate-300">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="5ejes">
+                    Ruta para Tractocamión Sencillo (5 Ejes)
+                  </SelectItem>
+                  <SelectItem value="9ejes">
+                    Ruta para Doble Articulado / Full (9 Ejes)
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-
-          {/*  FILA 2: OPCIONAL */}
+          {/* FILA 2: OPCIONAL */}
           {showAdditional && (
             <div className="mt-6 p-4 rounded-xl border border-slate-200 bg-white/60">
               <p className=" uppercase font-bold text-slate-400 mb-3 tracking-widest">
@@ -887,7 +936,6 @@ export const ArmadorRutas: React.FC = () => {
                   <Select
                     value={selectedCliente}
                     onValueChange={(v) => {
-                      // "none" => libre
                       setSelectedCliente(v === "none" ? "" : v);
                     }}
                   >
@@ -906,24 +954,6 @@ export const ArmadorRutas: React.FC = () => {
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs text-slate-500">
-                    Tipo de Unidad
-                  </Label>
-                  <Select value={tipoUnidadId} onValueChange={setTipoUnidadId}>
-                    <SelectTrigger className="h-9 bg-white">
-                      <SelectValue placeholder="Sencillo (Default)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {tiposFiltrados.map((t) => (
-                        <SelectItem key={t.id} value={t.id}>
-                          {t.nombre}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="text-xs text-slate-500">
                     Ciudad Origen
                   </Label>
                   <Input
@@ -933,7 +963,6 @@ export const ArmadorRutas: React.FC = () => {
                     onChange={(e) => setOrigen(e.target.value)}
                   />
                 </div>
-
                 <div className="space-y-1">
                   <Label className="text-xs text-slate-500">
                     Ciudad Destino
@@ -949,7 +978,6 @@ export const ArmadorRutas: React.FC = () => {
             </div>
           )}
 
-          {/* Botón invertir */}
           <div className="mt-4 flex justify-end">
             <Button
               variant="outline"
@@ -958,16 +986,14 @@ export const ArmadorRutas: React.FC = () => {
               onClick={handleReverseRoute}
               title="Invertir"
             >
-              <Repeat className="h-4 w-4 mr-2 text-slate-600" /> Invertir
+              <Repeat className="h-4 w-4 mr-2 text-slate-600" /> Invertir Ruta
             </Button>
           </div>
         </CardHeader>
 
-        {/* TOOLBAR: switch + autocalc */}
+        {/* TOOLBAR */}
         <div className="bg-slate-100/50 border-b p-3 flex justify-between items-center">
           <div className="flex items-center space-x-6">
-            {" "}
-            {/* Espaciado entre grupos de switches */}
             <div className="flex items-center space-x-2">
               <Switch
                 id="advanced-mode"
@@ -981,7 +1007,6 @@ export const ArmadorRutas: React.FC = () => {
                 Mostrar Carretera / Estado
               </Label>
             </div>
-            {/* ✅ NUEVO: Switch para Información Adicional */}
             <div className="flex items-center space-x-2 border-l pl-6 border-slate-300">
               <Switch
                 id="additional-info-mode"
@@ -992,11 +1017,10 @@ export const ArmadorRutas: React.FC = () => {
                 htmlFor="additional-info-mode"
                 className="text-xs font-semibold cursor-pointer"
               >
-                Información Adicional (Opcionales)
+                Más Opciones (Cliente/Ciudad)
               </Label>
             </div>
           </div>
-
           <Button
             variant="secondary"
             size="sm"
@@ -1021,7 +1045,7 @@ export const ArmadorRutas: React.FC = () => {
           >
             <Table>
               <TableHeader className="bg-slate-100">
-                <TableRow className=" uppercase font-bold text-slate-600">
+                <TableRow className="uppercase font-bold text-slate-600">
                   <TableHead className="w-10"></TableHead>
                   <TableHead className={showAdvanced ? "w-[30%]" : "w-[40%]"}>
                     Tramo / Plaza
@@ -1032,8 +1056,17 @@ export const ArmadorRutas: React.FC = () => {
                   )}
                   <TableHead className="text-right w-20">Km</TableHead>
                   <TableHead className="text-right w-20">Min</TableHead>
-                  <TableHead className="text-right">5 ejes (Senc.)</TableHead>
-                  <TableHead className="text-right">9 Ejes (Full)</TableHead>
+                  {/* 🚀 ENCABEZADO DE COSTO DINÁMICO */}
+                  {!isFullUnit && (
+                    <TableHead className="text-right text-blue-700 font-black">
+                      Costo Sencillo
+                    </TableHead>
+                  )}
+                  {isFullUnit && (
+                    <TableHead className="text-right text-emerald-700 font-black">
+                      Costo Full
+                    </TableHead>
+                  )}
                   <TableHead className="w-10"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -1057,6 +1090,7 @@ export const ArmadorRutas: React.FC = () => {
                       formatCurrency={formatCurrency}
                       hasGap={checkRouteGap(idx)}
                       showAdvanced={showAdvanced}
+                      isFullUnit={isFullUnit} // Le pasamos la configuración para que oculte columnas
                     />
                   ))}
                 </SortableContext>
@@ -1065,7 +1099,7 @@ export const ArmadorRutas: React.FC = () => {
                 <TableRow className="bg-slate-900 text-white font-bold hover:bg-slate-900 border-none sticky bottom-0">
                   <TableCell
                     colSpan={showAdvanced ? 4 : 2}
-                    className="text-right  uppercase tracking-widest opacity-70"
+                    className="text-right uppercase tracking-widest opacity-70"
                   >
                     Totales SCT
                   </TableCell>
@@ -1075,12 +1109,17 @@ export const ArmadorRutas: React.FC = () => {
                   <TableCell className="text-right font-mono text-xs border-l border-white/10">
                     {Math.floor(totals.tiempo / 60)}h {totals.tiempo % 60}m
                   </TableCell>
-                  <TableCell className="text-right text-base font-bold text-blue-400 border-l border-white/10">
-                    {formatCurrency(totals.costo_s)}
-                  </TableCell>
-                  <TableCell className="text-right text-base font-bold text-emerald-400 border-l border-white/10">
-                    {formatCurrency(totals.costo_f)}
-                  </TableCell>
+                  {/* 🚀 TOTAL DINÁMICO */}
+                  {!isFullUnit && (
+                    <TableCell className="text-right text-base font-bold text-blue-400 border-l border-white/10">
+                      {formatCurrency(totals.costo_s)}
+                    </TableCell>
+                  )}
+                  {isFullUnit && (
+                    <TableCell className="text-right text-base font-bold text-emerald-400 border-l border-white/10">
+                      {formatCurrency(totals.costo_f)}
+                    </TableCell>
+                  )}
                   <TableCell />
                 </TableRow>
               </TableBody>
@@ -1122,12 +1161,10 @@ export const ArmadorRutas: React.FC = () => {
                 Casetas
               </Button>
             </DialogTrigger>
-
-            <DialogContent className="w-full">
+            <DialogContent className="max-w-md">
               <DialogHeader>
                 <DialogTitle>Insertar Caseta</DialogTitle>
               </DialogHeader>
-
               <div className="relative my-2">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <Input
@@ -1137,7 +1174,6 @@ export const ArmadorRutas: React.FC = () => {
                   onChange={(e) => setTollSearch(e.target.value)}
                 />
               </div>
-
               <ScrollArea className="h-80 pr-4">
                 <div className="space-y-2">
                   {allTolls
@@ -1177,7 +1213,7 @@ export const ArmadorRutas: React.FC = () => {
                           <p className="text-sm font-bold group-hover:text-primary">
                             {t.nombre}
                           </p>
-                          <p className="uppercase leading-tight mt-0.5">
+                          <p className="text-muted-foreground uppercase leading-tight mt-0.5">
                             {t.tramo}
                             {((t as any).carretera || (t as any).estado) && (
                               <span className="block mt-0.5 text-slate-400">
@@ -1190,24 +1226,30 @@ export const ArmadorRutas: React.FC = () => {
                             )}
                           </p>
                         </div>
-
                         <div className="flex flex-col items-end gap-1.5 shrink-0">
-                          <Badge
-                            variant="secondary"
-                            className="font-mono text-[12px] bg-blue-50 text-blue-700 border-blue-100 px-1.5"
-                          >
-                            Sencillo:{" "}
-                            {formatCurrency(
-                              (t as any).costo_5_ejes_sencillo ?? 0,
-                            )}
-                          </Badge>
-                          <Badge
-                            variant="secondary"
-                            className="font-mono text-[12px] bg-emerald-50 text-emerald-700 border-emerald-100 px-1.5"
-                          >
-                            Full:{" "}
-                            {formatCurrency((t as any).costo_9_ejes_full ?? 0)}
-                          </Badge>
+                          {/* 🚀 Solo mostramos el precio que aplica para la ruta actual */}
+                          {!isFullUnit && (
+                            <Badge
+                              variant="secondary"
+                              className="font-mono text-[12px] bg-blue-50 text-blue-700 border-blue-200 px-2 py-1"
+                            >
+                              $
+                              {Number(
+                                (t as any).costo_5_ejes_sencillo ?? 0,
+                              ).toFixed(2)}
+                            </Badge>
+                          )}
+                          {isFullUnit && (
+                            <Badge
+                              variant="secondary"
+                              className="font-mono text-[12px] bg-emerald-50 text-emerald-700 border-emerald-200 px-2 py-1"
+                            >
+                              $
+                              {Number(
+                                (t as any).costo_9_ejes_full ?? 0,
+                              ).toFixed(2)}
+                            </Badge>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -1218,7 +1260,6 @@ export const ArmadorRutas: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          {/* BOTÓN DE CANCELAR: Solo aparece si estás editando */}
           {editingRouteId && (
             <Button
               variant="ghost"
@@ -1227,7 +1268,7 @@ export const ArmadorRutas: React.FC = () => {
                 setEditingRouteId(null);
                 setSegments([]);
                 setNombreRuta("");
-                setTipoUnidadId("");
+                setConfiguracion("5ejes");
                 setSelectedCliente("");
                 setOrigen("");
                 setDestino("");
@@ -1238,7 +1279,6 @@ export const ArmadorRutas: React.FC = () => {
               Cancelar Edición
             </Button>
           )}
-
           <ActionButton
             onClick={handleSave}
             className="px-12 h-11 text-base shadow-lg shadow-primary/20"
@@ -1249,14 +1289,30 @@ export const ArmadorRutas: React.FC = () => {
         </div>
       </div>
 
-      {/* TABLA TARIFAS */}
+      {/* TABLA TARIFAS HISTÓRICAS */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between border-b bg-slate-50/50 py-3">
           <CardTitle className="text-lg">Catálogo de Rutas Armadas</CardTitle>
+          {/* 🚀 FILTRO POR TIPO DE RUTA */}
+          <Select
+            value={filtroTipo}
+            onValueChange={(v: any) => setFiltroTipo(v)}
+          >
+            <SelectTrigger className="w-[240px] bg-white h-9 text-xs font-bold border-slate-300">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todas las Configuraciones</SelectItem>
+              <SelectItem value="5ejes">
+                Solo Rutas Sencillas (5 Ejes)
+              </SelectItem>
+              <SelectItem value="9ejes">Solo Rutas Full (9 Ejes)</SelectItem>
+            </SelectContent>
+          </Select>
         </CardHeader>
         <CardContent className="pt-6">
           <EnhancedDataTable
-            data={savedRoutes}
+            data={rutasFiltradas}
             columns={historyColumns}
             exportFileName="rutas_armadas"
           />
@@ -1265,29 +1321,45 @@ export const ArmadorRutas: React.FC = () => {
 
       {/* MODAL ELIMINACIÓN */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent className="rounded-2xl max-w-md">
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar tarifa autorizada?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta acción es irreversible y afectará los reportes históricos.
+            <AlertDialogTitle className="text-red-600 flex items-center gap-2 font-black">
+              <AlertTriangle className="h-5 w-5" />
+              ¿Eliminar Ruta Armada?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-600 leading-relaxed pt-2 space-y-3">
+              <p>
+                Estás a punto de eliminar la plantilla de ruta{" "}
+                <b>{routeToDelete?.origen}</b>.
+              </p>
+              <div className="text-emerald-700 bg-emerald-50 p-3 rounded-lg border border-emerald-200 font-medium">
+                <b>Tranquilo:</b> Los viajes históricos que ya fueron
+                despachados o liquidados con esta ruta{" "}
+                <b>NO se verán afectados</b>.
+              </div>
+              <p>
+                Sin embargo, esta plantilla se desactivará y{" "}
+                <b>ya no podrá ser seleccionada para viajes futuros</b> en el
+                módulo de Despacho.
+              </p>
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+          <AlertDialogFooter className="mt-2">
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirmDelete}
-              className="bg-destructive text-white hover:bg-destructive/90"
+              className="bg-destructive text-white hover:bg-destructive/90 font-bold"
             >
-              Confirmar
+              Sí, Eliminar Ruta
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* MODAL DETALLE (TIMELINE) */}
+      {/* MODAL DETALLE DE LA RUTA */}
       <Dialog open={detailModalOpen} onOpenChange={setDetailModalOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
-          <DialogHeader className="pb-4 border-b">
+          <DialogHeader className="pb-4 border-b flex flex-row justify-between items-start">
             <DialogTitle className="flex flex-col gap-2">
               <span className="text-sm text-muted-foreground uppercase tracking-wider">
                 Detalles de Ruta
@@ -1296,87 +1368,94 @@ export const ArmadorRutas: React.FC = () => {
                 <span>{selectedRouteDetail?.origen}</span>
               </div>
             </DialogTitle>
+            {selectedRouteDetail && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-2 border-slate-300"
+                onClick={() => handlePrintRoute(selectedRouteDetail)}
+              >
+                <Printer className="h-4 w-4 mr-2" /> Imprimir Hoja
+              </Button>
+            )}
           </DialogHeader>
 
           <ScrollArea className="flex-1 px-2 py-4">
             {selectedRouteDetail && (
               <div className="relative border-l-2 border-slate-200 ml-4 mt-2 space-y-8 pb-6">
-                {selectedRouteDetail.segments.map((seg: any, idx: number) => (
-                  <div key={seg.id || idx} className="relative pl-6">
-                    <span
-                      className={cn(
-                        "absolute -left-[9px] top-1 h-4 w-4 rounded-full border-2 border-white",
-                        seg.toll_booth_id ? "bg-amber-500" : "bg-blue-500",
-                      )}
-                    />
-
-                    <div className="flex flex-col gap-2">
-                      <div className="flex items-start justify-between">
-                        <span className="text-sm font-bold text-slate-800">
-                          {seg.nombre_segmento}
-                        </span>
-                        {seg.toll_booth_id ? (
-                          <Badge
-                            variant="outline"
-                            className="bg-amber-50 text-amber-700 border-amber-200 uppercase text-[12px]"
-                          >
-                            Caseta
-                          </Badge>
-                        ) : (
-                          <Badge
-                            variant="outline"
-                            className="bg-blue-50 text-blue-700 border-blue-200 uppercase text-[12px]"
-                          >
-                            Tramo Libre
-                          </Badge>
+                {selectedRouteDetail.segments.map((seg: any, idx: number) => {
+                  const isFullRoute =
+                    selectedRouteDetail.tipo_unidad === "9ejes" ||
+                    selectedRouteDetail.tipo_unidad === "full";
+                  return (
+                    <div key={seg.id || idx} className="relative pl-6">
+                      <span
+                        className={cn(
+                          "absolute -left-[9px] top-1 h-4 w-4 rounded-full border-2 border-white",
+                          seg.toll_booth_id ? "bg-amber-500" : "bg-blue-500",
                         )}
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3 mt-1 text-xs">
-                        <div className="p-2.5 bg-slate-50 border rounded-lg">
-                          <p className="text-slate-500 font-semibold mb-1  uppercase">
-                            Sencillo (5 ejes)
-                          </p>
-                          <p className="font-mono text-sm">
-                            {formatCurrency(
-                              Number(seg.costo_momento_sencillo || 0),
-                            )}
-                          </p>
+                      />
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-start justify-between">
+                          <span className="text-sm font-bold text-slate-800">
+                            {seg.nombre_segmento}
+                          </span>
+                          <Badge
+                            variant="outline"
+                            className={
+                              seg.toll_booth_id
+                                ? "bg-amber-50 text-amber-700 border-amber-200 uppercase text-[9px]"
+                                : "bg-blue-50 text-blue-700 border-blue-200 uppercase text-[9px]"
+                            }
+                          >
+                            {seg.toll_booth_id ? "Caseta" : "Tramo Libre"}
+                          </Badge>
                         </div>
-                        <div className="p-2.5 bg-slate-50 border rounded-lg">
-                          <p className="text-slate-500 font-semibold mb-1  uppercase">
-                            Full (9 Ejes)
-                          </p>
-                          <p className="font-mono font-bold text-emerald-600 text-sm">
-                            {formatCurrency(
-                              Number(seg.costo_momento_full || 0),
-                            )}
-                          </p>
+                        <div className="mt-1 text-xs">
+                          {/* 🚀 Solo mostramos el costo de la configuración que guardó */}
+                          <div
+                            className={`p-2.5 border rounded-lg inline-block min-w-[150px] ${isFullRoute ? "bg-emerald-50 border-emerald-100" : "bg-blue-50 border-blue-100"}`}
+                          >
+                            <p className="text-slate-500 font-semibold mb-1 uppercase">
+                              Costo Autorizado (
+                              {isFullRoute ? "9 Ejes" : "5 Ejes"})
+                            </p>
+                            <p
+                              className={`font-mono text-sm font-bold ${isFullRoute ? "text-emerald-700" : "text-blue-700"}`}
+                            >
+                              {formatCurrency(
+                                Number(
+                                  isFullRoute
+                                    ? seg.costo_momento_full
+                                    : seg.costo_momento_sencillo,
+                                ),
+                              )}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-
-                      {seg.carretera ||
-                      seg.distancia_km ||
-                      seg.tiempo_minutos ? (
-                        <div className="flex flex-wrap gap-4 mt-1 text-[11px] text-slate-500 font-mono bg-white p-2 border border-dashed rounded-md">
-                          {seg.carretera ? (
-                            <span className="flex items-center gap-1">
-                              <MapPin className="h-3 w-3" /> {seg.carretera}
+                        {seg.carretera ||
+                        seg.distancia_km ||
+                        seg.tiempo_minutos ? (
+                          <div className="flex flex-wrap gap-4 mt-1 text-[11px] text-slate-500 font-mono bg-white p-2 border border-dashed rounded-md">
+                            {seg.carretera ? (
+                              <span className="flex items-center gap-1">
+                                <MapPin className="h-3 w-3" /> {seg.carretera}
+                              </span>
+                            ) : null}
+                            <span>
+                              Distancia: {Number(seg.distancia_km || 0)} km
                             </span>
-                          ) : null}
-                          <span>
-                            Distancia: {Number(seg.distancia_km || 0)} km
-                          </span>
-                          <span>
-                            Tiempo:{" "}
-                            {Math.floor(Number(seg.tiempo_minutos || 0) / 60)}h{" "}
-                            {Number(seg.tiempo_minutos || 0) % 60}m
-                          </span>
-                        </div>
-                      ) : null}
+                            <span>
+                              Tiempo:{" "}
+                              {Math.floor(Number(seg.tiempo_minutos || 0) / 60)}
+                              h {Number(seg.tiempo_minutos || 0) % 60}m
+                            </span>
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </ScrollArea>
