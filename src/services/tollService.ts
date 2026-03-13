@@ -42,9 +42,19 @@ export const tollService = {
     const { data } = await axiosClient.put<TollBooth>(`/tolls/${id}`, toll);
     return data;
   },
-
-  deleteToll: async (id: number): Promise<void> => {
-    await axiosClient.delete(`/tolls/${id}`);
+  deleteToll: async (
+    id: number,
+    removeFromRoutes: boolean = false,
+  ): Promise<void> => {
+    await axiosClient.delete(
+      `/tolls/${id}?remove_from_routes=${removeFromRoutes}`,
+    );
+  },
+  checkDependencies: async (
+    id: number,
+  ): Promise<{ in_use: boolean; rutas_count: number }> => {
+    const { data } = await axiosClient.get(`/tolls/${id}/dependencies`);
+    return data;
   },
 
   // --- GESTIÓN DE TARIFAS AUTORIZADAS (ARMADOR) ---

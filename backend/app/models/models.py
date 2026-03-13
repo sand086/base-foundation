@@ -1159,7 +1159,7 @@ class RateTemplate(AuditMixin, Base):
     )
 
 
-class RateSegment(Base):
+class RateSegment(AuditMixin, Base):
     __tablename__ = "rate_template_segments"
     id = Column(Integer, primary_key=True)
     rate_template_id = Column(

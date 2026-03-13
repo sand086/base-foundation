@@ -108,7 +108,7 @@ interface SegmentEntry {
   toll_booth_id: number | null;
   toll_nombre?: string;
   // Siempre presentes (lado a lado)
-  costo_s: number; // 6 ejes (Sencillo)
+  costo_s: number; // 5 ejes (Sencillo)
   costo_f: number; // 9 ejes (Full)
 }
 
@@ -156,7 +156,7 @@ const SortableTableRow: React.FC<SortableRowProps> = ({
       {hasGap && (
         <TableRow className="bg-amber-50/30 border-none h-7">
           <TableCell colSpan={showAdvanced ? 9 : 7} className="py-0">
-            <div className="flex items-center justify-center gap-2 text-[9px] font-bold text-amber-600 uppercase tracking-tighter">
+            <div className="flex items-center justify-center gap-2 text-[12px] font-bold text-amber-600 uppercase tracking-tighter">
               <AlertTriangle className="h-3 w-3" /> Discontinuidad detectada
               entre tramos
             </div>
@@ -446,7 +446,7 @@ export const ArmadorRutas: React.FC = () => {
       return (
         nombre.includes("sencillo") ||
         nombre.includes("full") ||
-        nombre.includes("ejes") // Esto captura "6 ejes" o "9 ejes"
+        nombre.includes("ejes") // Esto captura "5 ejes" o "9 ejes"
       );
     });
   }, [tiposActivos]);
@@ -596,7 +596,7 @@ export const ArmadorRutas: React.FC = () => {
         route.tipo_unidad === "9ejes"
           ? t.nombre.toLowerCase().includes("9")
           : t.nombre.toLowerCase().includes("5") ||
-            t.nombre.toLowerCase().includes("6"), // por si renombraste a 6 ejes
+            t.nombre.toLowerCase().includes("6"), // por si renombraste a 5 ejes
     );
     if (unit) setTipoUnidadId(unit.id);
 
@@ -667,7 +667,7 @@ export const ArmadorRutas: React.FC = () => {
       },
       {
         key: "costo_total_sencillo",
-        header: "Costo 6 Ejes",
+        header: "Costo 5 ejes",
         render: (v) => (
           <span className="font-mono font-medium text-blue-600">
             {formatCurrency(Number(v || 0))}
@@ -916,7 +916,7 @@ export const ArmadorRutas: React.FC = () => {
                   )}
                   <TableHead className="text-right w-20">Km</TableHead>
                   <TableHead className="text-right w-20">Min</TableHead>
-                  <TableHead className="text-right">6 Ejes (Senc.)</TableHead>
+                  <TableHead className="text-right">5 ejes (Senc.)</TableHead>
                   <TableHead className="text-right">9 Ejes (Full)</TableHead>
                   <TableHead className="w-10"></TableHead>
                 </TableRow>
@@ -1007,7 +1007,7 @@ export const ArmadorRutas: React.FC = () => {
               </Button>
             </DialogTrigger>
 
-            <DialogContent className="max-w-md">
+            <DialogContent className="w-full">
               <DialogHeader>
                 <DialogTitle>Insertar Caseta</DialogTitle>
               </DialogHeader>
@@ -1061,7 +1061,7 @@ export const ArmadorRutas: React.FC = () => {
                           <p className="text-sm font-bold group-hover:text-primary">
                             {t.nombre}
                           </p>
-                          <p className=" text-muted-foreground uppercase leading-tight mt-0.5">
+                          <p className="uppercase leading-tight mt-0.5">
                             {t.tramo}
                             {((t as any).carretera || (t as any).estado) && (
                               <span className="block mt-0.5 text-slate-400">
@@ -1078,7 +1078,7 @@ export const ArmadorRutas: React.FC = () => {
                         <div className="flex flex-col items-end gap-1.5 shrink-0">
                           <Badge
                             variant="secondary"
-                            className="font-mono text-[9px] bg-blue-50 text-blue-700 border-blue-100 px-1.5"
+                            className="font-mono text-[12px] bg-blue-50 text-blue-700 border-blue-100 px-1.5"
                           >
                             Sencillo:{" "}
                             {formatCurrency(
@@ -1087,7 +1087,7 @@ export const ArmadorRutas: React.FC = () => {
                           </Badge>
                           <Badge
                             variant="secondary"
-                            className="font-mono text-[9px] bg-emerald-50 text-emerald-700 border-emerald-100 px-1.5"
+                            className="font-mono text-[12px] bg-emerald-50 text-emerald-700 border-emerald-100 px-1.5"
                           >
                             Full:{" "}
                             {formatCurrency((t as any).costo_9_ejes_full ?? 0)}
@@ -1202,14 +1202,14 @@ export const ArmadorRutas: React.FC = () => {
                         {seg.toll_booth_id ? (
                           <Badge
                             variant="outline"
-                            className="bg-amber-50 text-amber-700 border-amber-200 uppercase text-[9px]"
+                            className="bg-amber-50 text-amber-700 border-amber-200 uppercase text-[12px]"
                           >
                             Caseta
                           </Badge>
                         ) : (
                           <Badge
                             variant="outline"
-                            className="bg-blue-50 text-blue-700 border-blue-200 uppercase text-[9px]"
+                            className="bg-blue-50 text-blue-700 border-blue-200 uppercase text-[12px]"
                           >
                             Tramo Libre
                           </Badge>
@@ -1219,7 +1219,7 @@ export const ArmadorRutas: React.FC = () => {
                       <div className="grid grid-cols-2 gap-3 mt-1 text-xs">
                         <div className="p-2.5 bg-slate-50 border rounded-lg">
                           <p className="text-slate-500 font-semibold mb-1  uppercase">
-                            Sencillo (6 Ejes)
+                            Sencillo (5 ejes)
                           </p>
                           <p className="font-mono text-sm">
                             {formatCurrency(

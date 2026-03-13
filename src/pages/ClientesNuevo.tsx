@@ -1787,7 +1787,7 @@ export default function ClientsNew() {
                                 </div>
                               </TableCell>
 
-                              {/* Sencillo (6 Ejes) */}
+                              {/* Sencillo (5 ejes) */}
                               <TableCell className="text-right font-mono text-xs font-bold text-blue-600 bg-blue-50/20">
                                 $
                                 {r.costo_total_sencillo.toLocaleString(
