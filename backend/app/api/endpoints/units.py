@@ -292,7 +292,9 @@ def update_unit_tires(
     if not unit:
         raise HTTPException(status_code=404, detail="Unidad no encontrada")
 
-    db.query(models.Tire).filter(models.Tire.unit_id == unit.id).delete()
+    db.query(models.Tire).filter(models.Tire.unit_id == unit.id).update(
+        {"record_status": models.RecordStatus.ELIMINADO.value}
+    )
     new_tires = []
     for t in tires:
         tire_db = models.Tire(**t.dict(), unit_id=unit.id)

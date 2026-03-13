@@ -1,5 +1,6 @@
+# backend/app/api/endpoints/tolls.py
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, contains_eager
 from typing import List, Optional
 from app.db.database import get_db
 from app.models import models
@@ -8,9 +9,14 @@ from app.api.endpoints.auth import get_current_user
 
 router = APIRouter()
 
+# =====================================================================
+# CASETAS (TOLL BOOTHS)
+# =====================================================================
+
 
 @router.get("/tolls", response_model=List[schemas.TollBoothResponse])
 def list_tolls(search: str = "", db: Session = Depends(get_db)):
+    # 🚀 Filtramos para que SOLO mande las activas
     query = db.query(models.TollBooth).filter(models.TollBooth.record_status == "A")
     if search:
         query = query.filter(
@@ -50,7 +56,179 @@ def update_toll(
     return db_toll
 
 
-# backend/app/api/endpoints/tolls.py
+# 🚀 NUEVO ENDPOINT: Verifica dependencias ANTES de borrar
+@router.get("/tolls/{toll_id}/dependencies")
+def check_toll_dependencies(toll_id: int, db: Session = Depends(get_db)):
+    rutas_count = (
+        db.query(models.RateSegment)
+        .filter(
+            models.RateSegment.toll_booth_id == toll_id,
+            models.RateSegment.record_status == "A",  # Solo cuenta en rutas activas
+        )
+        .count()
+    )
+    return {"in_use": rutas_count > 0, "rutas_count": rutas_count}
+
+
+# 🚀 ENDPOINT ACTUALIZADO: Recibe la decisión del usuario y hace borrado lógico
+@router.delete("/tolls/{toll_id}")
+def delete_toll(
+    toll_id: int, remove_from_routes: bool = Query(False), db: Session = Depends(get_db)
+):
+    db_toll = db.query(models.TollBooth).get(toll_id)
+    if not db_toll:
+        raise HTTPException(status_code=404, detail="Caseta no encontrada")
+
+    # Buscar en qué segmentos está viva esta caseta
+    segments = (
+        db.query(models.RateSegment)
+        .filter(
+            models.RateSegment.toll_booth_id == toll_id,
+            models.RateSegment.record_status == "A",
+        )
+        .all()
+    )
+
+    if segments:
+        if remove_from_routes:
+            templates_to_update = set()
+
+            # 1. Borrado Lógico: En lugar de destruir, cambiamos el estatus a "E"
+            for seg in segments:
+                if seg.template:
+                    templates_to_update.add(seg.template)
+                seg.record_status = "E"
+                db.add(seg)
+
+            db.flush()
+
+            # 2. Recalculamos los totales de las rutas afectadas (Ignorando los "E")
+            for template in templates_to_update:
+                active_segments = (
+                    db.query(models.RateSegment)
+                    .filter(
+                        models.RateSegment.rate_template_id == template.id,
+                        models.RateSegment.record_status == "A",  # 🚀 SOLO ACTIVOS
+                    )
+                    .all()
+                )
+
+                total_s = sum(
+                    (s.costo_momento_sencillo or 0.0) for s in active_segments
+                )
+                total_f = sum((s.costo_momento_full or 0.0) for s in active_segments)
+                total_km = sum((s.distancia_km or 0.0) for s in active_segments)
+                total_min = sum((s.tiempo_minutos or 0) for s in active_segments)
+
+                template.costo_total_sencillo = total_s
+                template.costo_total_full = total_f
+                template.distancia_total_km = total_km
+                template.tiempo_total_minutos = total_min
+
+        # Inactivamos la caseta en el catálogo ('I')
+        db_toll.record_status = "I"
+        msg = "Caseta inactivada y sus tramos marcados como eliminados en las rutas (Borrado lógico)."
+    else:
+        db_toll.record_status = "E"
+        msg = "Caseta eliminada permanentemente del sistema."
+
+    db.commit()
+    return {"status": "success", "message": msg}
+
+
+# =====================================================================
+# RUTAS ARMADAS (RATE TEMPLATES)
+# =====================================================================
+
+
+@router.get("/rate-templates", response_model=List[schemas.RateTemplateResponse])
+def list_templates(
+    search: str = "",
+    client_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+):
+    # 🚀 FILTRO CRÍTICO: Join con segmentos para ignorar los que tienen 'E'
+    query = (
+        db.query(models.RateTemplate)
+        .outerjoin(
+            models.RateSegment,
+            (models.RateSegment.rate_template_id == models.RateTemplate.id)
+            & (models.RateSegment.record_status == "A"),  # Solo hijos vivos
+        )
+        .options(contains_eager(models.RateTemplate.segments))
+        .filter(models.RateTemplate.record_status == "A")
+    )
+
+    if search:
+        query = query.filter(
+            models.RateTemplate.origen.ilike(f"%{search}%")
+            | models.RateTemplate.destino.ilike(f"%{search}%")
+        )
+
+    if client_id:
+        query = query.filter(models.RateTemplate.client_id == client_id)
+
+    # Nota: contains_eager requiere un order_by en el padre si los hijos están ordenados
+    return query.order_by(models.RateTemplate.id.desc()).limit(50).all()
+
+
+@router.post("/rate-templates", response_model=schemas.RateTemplateResponse)
+def create_template(
+    data: schemas.RateTemplateCreate,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    new_template = models.RateTemplate(
+        client_id=data.client_id,
+        origen=data.origen,
+        destino=data.destino,
+        tipo_unidad=data.tipo_unidad,
+        created_by_id=user.id,
+    )
+    db.add(new_template)
+    db.flush()
+
+    total_s, total_f, total_km, total_min = 0.0, 0.0, 0.0, 0
+
+    for seg_data in data.segments:
+        cost_s, cost_f = 0.0, 0.0
+
+        if seg_data.toll_booth_id:
+            toll = db.query(models.TollBooth).get(seg_data.toll_booth_id)
+            if toll:
+                # 🚀 SIEMPRE GUARDA AMBOS COSTOS (Sencillo 5 ejes, Full 9 ejes)
+                cost_s = toll.costo_5_ejes_sencillo
+                cost_f = toll.costo_9_ejes_full
+
+        segment = models.RateSegment(
+            rate_template_id=new_template.id,
+            **seg_data.model_dump(
+                exclude={
+                    "toll_booth_id",
+                    "rate_template_id",
+                    "costo_momento_sencillo",
+                    "costo_momento_full",
+                }
+            ),
+            toll_booth_id=seg_data.toll_booth_id,
+            costo_momento_sencillo=cost_s,
+            costo_momento_full=cost_f,
+        )
+        db.add(segment)
+
+        total_s += cost_s
+        total_f += cost_f
+        total_km += seg_data.distancia_km
+        total_min += seg_data.tiempo_minutos
+
+    new_template.costo_total_sencillo = total_s
+    new_template.costo_total_full = total_f
+    new_template.distancia_total_km = total_km
+    new_template.tiempo_total_minutos = total_min
+
+    db.commit()
+    db.refresh(new_template)
+    return new_template
 
 
 @router.put(
@@ -62,7 +240,6 @@ def update_template(
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    # 1. Buscar la ruta existente
     db_template = (
         db.query(models.RateTemplate)
         .filter(models.RateTemplate.id == template_id)
@@ -71,43 +248,30 @@ def update_template(
     if not db_template:
         raise HTTPException(status_code=404, detail="Ruta no encontrada")
 
-    # 2. Actualizar campos básicos de la cabecera (origen, destino, unidad)
     update_data = data.model_dump(exclude={"segments"}, exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_template, key, value)
 
     db_template.updated_by_id = user.id
 
-    # 3. Sincronizar Segmentos (Borrar antiguos y crear nuevos)
     if data.segments is not None:
-        # Eliminar segmentos anteriores para reconstruir la ruta
+        # 🚀 BORRADO LÓGICO DE LOS SEGMENTOS ANTERIORES
         db.query(models.RateSegment).filter(
             models.RateSegment.rate_template_id == template_id
-        ).delete()
+        ).update({"record_status": "E"})
 
         total_s, total_f, total_km, total_min = 0.0, 0.0, 0.0, 0
 
         for seg_data in data.segments:
-            # Determinamos los costos base (vengan del frontend o 0)
-            cost_s = seg_data.costo_momento_sencillo or 0.0
-            cost_f = seg_data.costo_momento_full or 0.0
+            cost_s, cost_f = 0.0, 0.0
 
-            # Si tiene una caseta ligada, recalculamos el costo actual (snapshot)
             if seg_data.toll_booth_id:
                 toll = db.query(models.TollBooth).get(seg_data.toll_booth_id)
                 if toll:
-                    if db_template.tipo_unidad == "5ejes":
-                        cost_s, cost_f = (
-                            toll.costo_5_ejes_sencillo,
-                            toll.costo_5_ejes_full,
-                        )
-                    else:
-                        cost_s, cost_f = (
-                            toll.costo_9_ejes_sencillo,
-                            toll.costo_9_ejes_full,
-                        )
+                    # 🚀 SIEMPRE GUARDA AMBOS COSTOS
+                    cost_s = toll.costo_5_ejes_sencillo
+                    cost_f = toll.costo_9_ejes_full
 
-            # CORRECCIÓN: Excluimos los campos manuales del dump para que no se dupliquen
             new_seg = models.RateSegment(
                 rate_template_id=template_id,
                 **seg_data.model_dump(
@@ -119,16 +283,15 @@ def update_template(
                 ),
                 costo_momento_sencillo=cost_s,
                 costo_momento_full=cost_f,
+                record_status="A",  # Los nuevos nacen como Activos
             )
             db.add(new_seg)
 
-            # Acumulamos totales para actualizar la cabecera
             total_s += cost_s
             total_f += cost_f
             total_km += seg_data.distancia_km
             total_min += seg_data.tiempo_minutos
 
-        # 4. Actualizar totales automáticos en el registro padre
         db_template.costo_total_sencillo = total_s
         db_template.costo_total_full = total_f
         db_template.distancia_total_km = total_km
@@ -136,134 +299,25 @@ def update_template(
 
     db.commit()
     db.refresh(db_template)
+
+    # 🚀 Forzamos recargar la relación para que la respuesta no devuelva los eliminados en memoria
     return db_template
-
-
-@router.delete("/tolls/{toll_id}")
-def delete_toll(toll_id: int, db: Session = Depends(get_db)):
-    db_toll = db.query(models.TollBooth).get(toll_id)
-    # Validación: No borrar si se usa en rutas activas
-    usage = db.query(models.RateTemplateToll).filter_by(toll_booth_id=toll_id).first()
-    if usage:
-        raise HTTPException(
-            status_code=400,
-            detail="No se puede eliminar: La caseta está en uso por rutas guardadas.",
-        )
-    db_toll.record_status = "E"
-    db.commit()
-    return {"status": "deleted"}
-
-
-@router.post("/rate-templates", response_model=schemas.RateTemplateResponse)
-def create_template(
-    data: schemas.RateTemplateCreate,
-    db: Session = Depends(get_db),
-    user=Depends(get_current_user),
-):
-    # 1. Crear cabecera
-    new_template = models.RateTemplate(
-        client_id=data.client_id,
-        origen=data.origen,
-        destino=data.destino,
-        tipo_unidad=data.tipo_unidad,
-        created_by_id=user.id,
-    )
-    db.add(new_template)
-    db.flush()
-
-    total_s = 0.0
-    total_f = 0.0
-    total_km = 0.0
-    total_min = 0
-
-    # 2. Procesar Segmentos
-    for seg_data in data.segments:
-        cost_s = 0.0
-        cost_f = 0.0
-
-        # Si tiene caseta, obtener costos actuales para el snapshot
-        if seg_data.toll_booth_id:
-            toll = db.query(models.TollBooth).get(seg_data.toll_booth_id)
-            if toll:
-                if data.tipo_unidad == "5ejes":
-                    cost_s, cost_f = toll.costo_5_ejes_sencillo, toll.costo_5_ejes_full
-                else:
-                    cost_s, cost_f = toll.costo_9_ejes_sencillo, toll.costo_9_ejes_full
-
-            segment = models.RateSegment(
-                rate_template_id=new_template.id,
-                **seg_data.model_dump(
-                    exclude={
-                        "toll_booth_id",
-                        "rate_template_id",
-                        "costo_momento_sencillo",
-                        "costo_momento_full",
-                    }
-                ),
-                toll_booth_id=seg_data.toll_booth_id,
-                costo_momento_sencillo=cost_s,
-                costo_momento_full=cost_f,
-            )
-        db.add(segment)
-
-        total_s += cost_s
-        total_f += cost_f
-        total_km += seg_data.distancia_km
-        total_min += seg_data.tiempo_minutos
-
-    # 3. Actualizar totales en cabecera
-    new_template.costo_total_sencillo = total_s
-    new_template.costo_total_full = total_f
-    new_template.distancia_total_km = total_km
-    new_template.tiempo_total_minutos = total_min
-
-    db.commit()
-    db.refresh(new_template)
-    return new_template
-
-
-@router.get("/rate-templates", response_model=List[schemas.RateTemplateResponse])
-def list_templates(
-    search: str = "",
-    client_id: Optional[int] = None,
-    db: Session = Depends(get_db),
-):
-    query = db.query(models.RateTemplate).filter(
-        models.RateTemplate.record_status == "A"
-    )
-
-    if search:
-        query = query.filter(
-            models.RateTemplate.origen.ilike(f"%{search}%")
-            | models.RateTemplate.destino.ilike(f"%{search}%")
-        )
-
-    if client_id:
-        query = query.filter_by(client_id=client_id)
-
-    return query.limit(50).all()
 
 
 @router.delete("/rate-templates/{template_id}")
 def delete_template(
     template_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)
 ):
-    # 1. Buscar la ruta por ID
     db_template = (
         db.query(models.RateTemplate)
         .filter(models.RateTemplate.id == template_id)
         .first()
     )
-
-    # 2. Si no existe, lanzar 404
     if not db_template:
         raise HTTPException(status_code=404, detail="Ruta no encontrada")
 
-    # 3. Borrado lógico: cambiar record_status a 'E' (Eliminado)
     db_template.record_status = "E"
-
-    # 4. Registrar quién lo eliminó (aprovechando el AuditMixin)
     db_template.updated_by_id = user.id
-
     db.commit()
+
     return {"status": "deleted", "message": "Ruta eliminada correctamente"}

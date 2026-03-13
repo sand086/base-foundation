@@ -11,7 +11,9 @@ import {
   DollarSign,
   Loader2,
   Check,
+  AlertTriangle,
   Route,
+  RefreshCw,
 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
@@ -20,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 
 import {
   DataTable,
@@ -82,7 +85,7 @@ type TollForm = {
   tramo: string;
 
   // UI simplificada (backend se queda igual)
-  costo_5_ejes_sencillo: number; // UI: 6 Ejes (Sencillo)
+  costo_5_ejes_sencillo: number; // UI: 5 ejes (Sencillo)
   costo_9_ejes_full: number; // UI: 9 Ejes (Full)
 
   forma_pago: FormaPago;
@@ -117,15 +120,24 @@ export const CatalogoCasetas = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [tollBooths, setTollBooths] = useState<TollBooth[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
 
   const [selectedToll, setSelectedToll] = useState<TollBooth | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // 🚀 ESTADO PARA SELECCIÓN MÚLTIPLE
+  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
+
   // ✅ Toggle avanzado SCT
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [dependencies, setDependencies] = useState<{
+    in_use: boolean;
+    rutas_count: number;
+  } | null>(null);
 
   const [formData, setFormData] = useState<TollForm>(emptyForm());
 
@@ -139,16 +151,23 @@ export const CatalogoCasetas = () => {
     return <Badge className={`${cls} hover:opacity-80`}>{formaPago}</Badge>;
   };
 
-  const loadTolls = async () => {
-    setIsLoading(true);
+  const loadTolls = async (showRefreshIndicator = false) => {
+    if (showRefreshIndicator) {
+      setIsRefreshing(true);
+    } else {
+      setIsLoading(true);
+    }
     try {
       const data = await tollService.getTolls(searchTerm);
       setTollBooths(data ?? []);
+      // Limpiamos selección al recargar para evitar bugs
+      setSelectedRows(new Set());
     } catch (error) {
       console.error(error);
       toast.error("Error al cargar el catálogo");
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -283,17 +302,122 @@ export const CatalogoCasetas = () => {
     }
   };
 
-  const handleDelete = async () => {
-    if (!selectedToll) return;
+  // Cuando le dan click al bote de basura de UNA caseta
+  const handleAskDelete = async (toll: TollBooth) => {
+    setSelectedToll(toll);
+    setIsSubmitting(true);
     try {
-      await tollService.deleteToll(selectedToll.id);
-      toast.success("Eliminado");
+      const deps = await tollService.checkDependencies(toll.id);
+      setDependencies(deps);
+      setDeleteDialogOpen(true);
+    } catch (error) {
+      toast.error("Error al verificar dependencias de la caseta.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // La ejecución real del borrado (recibe la decisión del usuario)
+  const executeDelete = async (removeFromRoutes: boolean) => {
+    if (!selectedToll) return;
+    setIsSubmitting(true);
+    try {
+      await tollService.deleteToll(selectedToll.id, removeFromRoutes);
+      toast.success(
+        removeFromRoutes
+          ? "Caseta eliminada y removida de rutas."
+          : "Caseta eliminada (Mantenida en rutas).",
+      );
       await loadTolls();
       setDeleteDialogOpen(false);
       setSelectedToll(null);
+      setDependencies(null);
     } catch (e) {
-      console.error(e);
       toast.error("Error al eliminar");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!selectedToll) return;
+    setIsSubmitting(true);
+    try {
+      // Suponiendo que el servicio devuelve la data del backend: { status: "archived", message: "..." }
+      await tollService.deleteToll(selectedToll.id);
+
+      // Mostrar mensaje genérico de éxito
+      toast.success("Caseta procesada correctamente");
+
+      await loadTolls();
+      setDeleteDialogOpen(false);
+      setSelectedToll(null);
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e?.response?.data?.detail || "Error al eliminar");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // 🚀 LÓGICA DE ELIMINACIÓN MASIVA ACTUALIZADA
+  const executeBulkDelete = async (removeFromRoutes: boolean) => {
+    if (selectedRows.size === 0) return;
+
+    setIsSubmitting(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    try {
+      // Iteramos sobre el Set y mandamos la petición por cada ID
+      for (const id of Array.from(selectedRows)) {
+        try {
+          // Pasamos el ID y la decisión del usuario (false = Ocultar, true = Quitar de rutas)
+          await tollService.deleteToll(id, removeFromRoutes);
+          successCount++;
+        } catch (error) {
+          console.error(`Error eliminando caseta ${id}:`, error);
+          errorCount++;
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(
+          removeFromRoutes
+            ? `${successCount} casetas procesadas y removidas de rutas.`
+            : `${successCount} casetas procesadas (Mantenidas en rutas).`,
+        );
+      }
+      if (errorCount > 0) {
+        toast.error(`Hubo problemas procesando ${errorCount} casetas.`);
+      }
+
+      await loadTolls();
+      setBulkDeleteDialogOpen(false);
+      setSelectedRows(new Set()); // Limpiar selección
+    } catch (error) {
+      toast.error("Ocurrió un error general durante la eliminación");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // 🚀 LÓGICA DE CHECKBOXES
+  const toggleRow = (id: number) => {
+    const newSet = new Set(selectedRows);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    setSelectedRows(newSet);
+  };
+
+  const toggleAll = () => {
+    if (selectedRows.size === tollBooths.length && tollBooths.length > 0) {
+      setSelectedRows(new Set()); // Deseleccionar todos
+    } else {
+      setSelectedRows(new Set(tollBooths.map((t) => t.id))); // Seleccionar todos
     }
   };
 
@@ -310,11 +434,6 @@ export const CatalogoCasetas = () => {
         render: (_, t) => (
           <div className="flex flex-col">
             <span className="font-bold text-slate-900">{t.nombre}</span>
-            {/* {((t as any).carretera || (t as any).estado) && (
-              <span className=" text-primary font-mono uppercase mt-0.5">
-                {(t as any).carretera || "—"} | {(t as any).estado || "—"}
-              </span>
-            )} */}
           </div>
         ),
       },
@@ -324,7 +443,7 @@ export const CatalogoCasetas = () => {
         render: (v, t) => (
           <Badge
             variant="outline"
-            className="font-mono  bg-slate-50 text-slate-500 font-medium"
+            className="font-mono  bg-slate-50 text-slate-500 font-medium"
           >
             {String(v ?? t.nombre)}
           </Badge>
@@ -334,10 +453,10 @@ export const CatalogoCasetas = () => {
         key: "costos",
         header: "Tarifas Autorizadas",
         render: (_, t) => (
-          <div className="grid grid-cols-2 gap-4  font-mono w-48">
+          <div className="grid grid-cols-2 gap-4  font-mono w-48">
             <div className="flex flex-col border-l-2 border-blue-500 pl-2">
               <span className="text-slate-500 uppercase font-bold text-[8px]">
-                6 Ejes (Sencillo)
+                5 ejes (Sencillo)
               </span>
               <span className="text-blue-600 font-bold text-sm">
                 {formatCurrency(t.costo_5_ejes_sencillo ?? 0)}
@@ -375,10 +494,7 @@ export const CatalogoCasetas = () => {
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={() => {
-                  setSelectedToll(t);
-                  setDeleteDialogOpen(true);
-                }}
+                onClick={() => handleAskDelete(t)} // <--- AQUI CAMBIÓ
                 className="text-destructive"
               >
                 <Trash2 className="h-4 w-4 mr-2" /> Eliminar
@@ -394,20 +510,50 @@ export const CatalogoCasetas = () => {
   return (
     <div className="space-y-4">
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-4 justify-between">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <Input
-            placeholder="Buscar por caseta o tramo..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
+      <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
+        <div className="flex items-center gap-3 flex-1 w-full sm:max-w-xl">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Input
+              placeholder="Buscar por caseta o tramo..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 h-10"
+            />
+          </div>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-10 w-10 shrink-0 text-slate-500"
+            onClick={() => loadTolls(true)}
+            disabled={isRefreshing}
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
+            />
+          </Button>
         </div>
 
-        <ActionButton onClick={handleOpenCreate}>
-          <Plus className="h-4 w-4 mr-2" /> Nueva Caseta
-        </ActionButton>
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          {/* 🚀 BOTÓN DE ELIMINACIÓN MASIVA (Aparece si hay selección) */}
+          {selectedRows.size > 0 && (
+            <Button
+              variant="destructive"
+              className="h-10 whitespace-nowrap animate-in fade-in zoom-in duration-200"
+              onClick={() => setBulkDeleteDialogOpen(true)}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Eliminar Selección ({selectedRows.size})
+            </Button>
+          )}
+
+          <ActionButton
+            onClick={handleOpenCreate}
+            className="h-10 whitespace-nowrap"
+          >
+            <Plus className="h-4 w-4 mr-2" /> Nueva Caseta
+          </ActionButton>
+        </div>
       </div>
 
       {/* Table */}
@@ -419,6 +565,17 @@ export const CatalogoCasetas = () => {
         <DataTable>
           <DataTableHeader>
             <DataTableRow>
+              {/* 🚀 CABECERA CHECKBOX */}
+              <DataTableHead className="w-12">
+                <Checkbox
+                  checked={
+                    selectedRows.size === tollBooths.length &&
+                    tollBooths.length > 0
+                  }
+                  onCheckedChange={toggleAll}
+                  aria-label="Select all"
+                />
+              </DataTableHead>
               {columns.map((c) => (
                 <DataTableHead key={c.key}>{c.header}</DataTableHead>
               ))}
@@ -427,7 +584,18 @@ export const CatalogoCasetas = () => {
 
           <DataTableBody>
             {tollBooths.map((t) => (
-              <DataTableRow key={t.id}>
+              <DataTableRow
+                key={t.id}
+                className={selectedRows.has(t.id) ? "bg-slate-50/50" : ""}
+              >
+                {/* 🚀 CELDA CHECKBOX */}
+                <DataTableCell className="w-12">
+                  <Checkbox
+                    checked={selectedRows.has(t.id)}
+                    onCheckedChange={() => toggleRow(t.id)}
+                    aria-label={`Select row ${t.id}`}
+                  />
+                </DataTableCell>
                 {columns.map((c) => (
                   <DataTableCell key={`${t.id}-${c.key}`}>
                     {c.render
@@ -437,6 +605,17 @@ export const CatalogoCasetas = () => {
                 ))}
               </DataTableRow>
             ))}
+
+            {tollBooths.length === 0 && !isLoading && (
+              <DataTableRow>
+                <DataTableCell
+                  colSpan={columns.length + 1}
+                  className="h-24 text-center text-slate-500"
+                >
+                  No se encontraron casetas.
+                </DataTableCell>
+              </DataTableRow>
+            )}
           </DataTableBody>
         </DataTable>
       )}
@@ -521,12 +700,12 @@ export const CatalogoCasetas = () => {
 
               {/* SECCIÓN 2: COSTOS SIMPLIFICADOS */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-dashed border-slate-200">
-                {/* 6 Ejes Sencillo */}
+                {/* 5 ejes Sencillo */}
                 <div className="space-y-3 p-4 rounded-xl border border-blue-100 bg-blue-50/30">
                   <div className="flex items-center gap-2 border-b border-blue-100 pb-2">
                     <div className="w-2 h-2 rounded-full bg-blue-500" />
                     <span className=" font-black uppercase text-blue-800">
-                      Tarifa 6 Ejes (Sencillo)
+                      Tarifa 5 ejes (Sencillo)
                     </span>
                   </div>
                   <div className="relative">
@@ -627,11 +806,11 @@ export const CatalogoCasetas = () => {
                       />
                     </div>
 
-                    <div className="col-span-2 mt-2 bg-slate-100 p-2 rounded text-center  font-mono text-slate-500 border border-dashed border-slate-300">
+                    <div className="col-span-2 mt-2 bg-slate-100 p-2 rounded text-center  font-mono text-slate-500 border border-dashed border-slate-300">
                       Resultado: {formData.tramo || "Esperando datos..."}
                     </div>
 
-                    <div className="col-span-2  text-slate-500">
+                    <div className="col-span-2  text-slate-500">
                       Si lo dejas vacío, el sistema guardará el <b>Nombre</b>{" "}
                       como tramo.
                     </div>
@@ -666,24 +845,147 @@ export const CatalogoCasetas = () => {
         </DialogContent>
       </Dialog>
 
-      {/* MODAL ELIMINAR */}
+      {/* MODAL ELIMINAR INDIVIDUAL */}
+      {/* MODAL ELIMINAR INDIVIDUAL */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent className="rounded-2xl max-w-lg">
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Confirmar eliminación?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta acción no se puede deshacer y puede afectar tarifas o rutas
-              previamente guardadas.
+            <AlertDialogTitle className="text-red-600 flex items-center gap-2 font-black">
+              <AlertTriangle className="h-5 w-5" />
+              ¿Eliminar Caseta del Catálogo?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-600 leading-relaxed pt-2 space-y-4">
+              {dependencies?.in_use ? (
+                <>
+                  <div>
+                    ⚠️ Esta caseta actualmente está{" "}
+                    <b>
+                      asignada en {dependencies.rutas_count} ruta(s) armada(s)
+                    </b>
+                    .
+                  </div>
+                  <p>
+                    ¿Deseas eliminarla también de esas rutas? <br />
+                    (Se convertirá en un "Tramo Libre" sin costo en las
+                    plantillas).
+                  </p>
+                  <p className="text-emerald-700 bg-emerald-50 p-2 rounded border border-emerald-200 font-medium">
+                    Tranquilo, sin importar lo que elijas,{" "}
+                    <b>
+                      los viajes despachados y liquidaciones históricas NO se
+                      verán afectados
+                    </b>
+                    .
+                  </p>
+                </>
+              ) : (
+                "Esta caseta no está en uso. Se eliminará permanentemente. ¿Deseas continuar?"
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Regresar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              className="bg-destructive text-white hover:bg-destructive/90"
+
+          <AlertDialogFooter className="flex flex-col sm:flex-row gap-2 mt-4">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteDialogOpen(false)}
+              disabled={isSubmitting}
             >
-              Eliminar Caseta
-            </AlertDialogAction>
+              Cancelar
+            </Button>
+
+            {dependencies?.in_use ? (
+              <>
+                <Button
+                  variant="secondary"
+                  onClick={() => executeDelete(false)}
+                  disabled={isSubmitting}
+                  className="bg-amber-100 text-amber-800 hover:bg-amber-200 font-bold"
+                >
+                  No, lo haré manual
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => executeDelete(true)}
+                  disabled={isSubmitting}
+                  className="font-bold"
+                >
+                  Sí, quitar de las rutas
+                </Button>
+              </>
+            ) : (
+              <Button
+                variant="destructive"
+                onClick={() => executeDelete(false)}
+                disabled={isSubmitting}
+                className="font-bold"
+              >
+                Eliminar Permanentemente
+              </Button>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* 🚀 MODAL ELIMINACIÓN MASIVA ACTUALIZADO */}
+      <AlertDialog
+        open={bulkDeleteDialogOpen}
+        onOpenChange={setBulkDeleteDialogOpen}
+      >
+        <AlertDialogContent className="rounded-2xl w-full max-w-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-red-600 flex items-center gap-2 font-black">
+              <AlertTriangle className="h-5 w-5" />
+              ¿Eliminar {selectedRows.size} casetas?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-600 leading-relaxed pt-2 space-y-4">
+              <p>Estás a punto de procesar múltiples casetas.</p>
+              <p>
+                Las casetas libres serán eliminadas. Aquellas que ya estén
+                asignadas a una ruta armada serán <b>ocultadas</b> del catálogo
+                para proteger tu información, pero{" "}
+                <b className="text-emerald-700">
+                  no afectarán los viajes o liquidaciones en curso.
+                </b>
+              </p>
+              <p>
+                ¿Deseas que el sistema también las{" "}
+                <b>elimine automáticamente de las rutas armadas</b> donde están
+                asignadas?
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <AlertDialogFooter className="flex flex-col sm:flex-row gap-2 mt-4">
+            <Button
+              variant="outline"
+              onClick={() => setBulkDeleteDialogOpen(false)}
+              disabled={isSubmitting}
+            >
+              Cancelar
+            </Button>
+
+            <Button
+              variant="secondary"
+              onClick={() => executeBulkDelete(false)}
+              disabled={isSubmitting}
+              className="bg-amber-100 text-amber-800 hover:bg-amber-200 font-bold"
+            >
+              No, conservar en rutas
+            </Button>
+
+            <Button
+              variant="destructive"
+              onClick={() => executeBulkDelete(true)}
+              disabled={isSubmitting}
+              className="font-bold"
+            >
+              {isSubmitting ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <Trash2 className="h-4 w-4 mr-2" />
+              )}
+              Sí, quitar de las rutas
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
