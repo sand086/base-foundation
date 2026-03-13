@@ -46,6 +46,7 @@ export interface ColumnDef<T> {
   sortable?: boolean;
   type?: "text" | "date" | "status" | "number";
   statusOptions?: string[];
+  statusNormalizer?: (value: any) => string;
   render?: (value: any, row: T) => React.ReactNode;
   width?: string;
 }
@@ -150,9 +151,16 @@ export function EnhancedDataTable<T extends Record<string, any>>({
         filter.value.length > 0
       ) {
         const statusValues = filter.value as string[];
-        result = result.filter((row) =>
-          statusValues.includes(getValue(row, key)),
-        );
+        const column = columns.find((c) => String(c.key) === key);
+
+        result = result.filter((row) => {
+          const rawValue = getValue(row, key);
+          const comparableValue = column?.statusNormalizer
+            ? column.statusNormalizer(rawValue)
+            : String(rawValue ?? "");
+
+          return statusValues.includes(comparableValue);
+        });
       }
     });
 

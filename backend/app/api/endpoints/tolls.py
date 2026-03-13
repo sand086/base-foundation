@@ -49,10 +49,54 @@ def update_toll(
     db_toll = db.query(models.TollBooth).get(toll_id)
     if not db_toll:
         raise HTTPException(404)
+
+    # 1. Actualizamos la caseta en el catálogo
     for k, v in toll.model_dump(exclude_unset=True).items():
         setattr(db_toll, k, v)
     db_toll.updated_by_id = user.id
+
+    db.flush()  # Guardamos temporalmente para tener los nuevos precios
+
+    # Buscamos todos los segmentos ACTIVOS que usan esta caseta
+    segments = (
+        db.query(models.RateSegment)
+        .filter(
+            models.RateSegment.toll_booth_id == toll_id,
+            models.RateSegment.record_status == "A",
+        )
+        .all()
+    )
+
+    templates_to_update = set()
+    for seg in segments:
+        # Actualizamos la "foto" del precio dentro de la ruta armada
+        seg.costo_momento_sencillo = db_toll.costo_5_ejes_sencillo
+        seg.costo_momento_full = db_toll.costo_9_ejes_full
+        if seg.template:
+            templates_to_update.add(seg.template)
+
+    db.flush()
+
+    # 3. Recalculamos los Totales de cada Ruta impactada
+    for template in templates_to_update:
+        active_segments = (
+            db.query(models.RateSegment)
+            .filter(
+                models.RateSegment.rate_template_id == template.id,
+                models.RateSegment.record_status == "A",
+            )
+            .all()
+        )
+
+        template.costo_total_sencillo = sum(
+            (s.costo_momento_sencillo or 0.0) for s in active_segments
+        )
+        template.costo_total_full = sum(
+            (s.costo_momento_full or 0.0) for s in active_segments
+        )
+
     db.commit()
+    db.refresh(db_toll)
     return db_toll
 
 
@@ -255,10 +299,14 @@ def update_template(
     db_template.updated_by_id = user.id
 
     if data.segments is not None:
-        # 🚀 BORRADO LÓGICO DE LOS SEGMENTOS ANTERIORES
+        # 🚀 SOLUCIÓN DE LA DUPLICACIÓN:
+        # Primero, eliminamos FÍSICAMENTE los segmentos anteriores de esta plantilla.
+        # (Esto es seguro aquí porque los viajes no apuntan a los segmentos, apuntan a un JSON snapshot)
         db.query(models.RateSegment).filter(
             models.RateSegment.rate_template_id == template_id
-        ).update({"record_status": "E"})
+        ).delete(synchronize_session=False)
+
+        db.flush()  # Aplicamos el borrado inmediatamente antes de insertar los nuevos
 
         total_s, total_f, total_km, total_min = 0.0, 0.0, 0.0, 0
 
@@ -268,10 +316,11 @@ def update_template(
             if seg_data.toll_booth_id:
                 toll = db.query(models.TollBooth).get(seg_data.toll_booth_id)
                 if toll:
-                    # 🚀 SIEMPRE GUARDA AMBOS COSTOS
+                    # Siempre guarda ambos costos
                     cost_s = toll.costo_5_ejes_sencillo
                     cost_f = toll.costo_9_ejes_full
 
+            # Creamos el segmento desde cero (ya con el orden correcto del drag-and-drop)
             new_seg = models.RateSegment(
                 rate_template_id=template_id,
                 **seg_data.model_dump(
@@ -279,11 +328,12 @@ def update_template(
                         "rate_template_id",
                         "costo_momento_sencillo",
                         "costo_momento_full",
+                        "id",  # Ignoramos el ID viejo si el front lo manda
                     }
                 ),
                 costo_momento_sencillo=cost_s,
                 costo_momento_full=cost_f,
-                record_status="A",  # Los nuevos nacen como Activos
+                record_status="A",
             )
             db.add(new_seg)
 
@@ -298,9 +348,9 @@ def update_template(
         db_template.tiempo_total_minutos = total_min
 
     db.commit()
-    db.refresh(db_template)
 
-    # 🚀 Forzamos recargar la relación para que la respuesta no devuelva los eliminados en memoria
+    # Refrescar y forzar expiración para que devuelva los datos limpios
+    db.expire(db_template)
     return db_template
 
 
