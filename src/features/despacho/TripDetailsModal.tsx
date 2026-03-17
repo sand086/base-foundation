@@ -112,6 +112,7 @@ export function TripDetailsModal({
   const [terminalComboboxOpen, setTerminalComboboxOpen] = useState(false);
   const [isCreatingTerminal, setIsCreatingTerminal] = useState(false);
   const [finishingLeg, setFinishingLeg] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // 🚀 Cargar Terminales al abrir el modal
   useEffect(() => {
@@ -237,15 +238,15 @@ export function TripDetailsModal({
       }
     }
   };
-
+  // 🚀 CORRECCIÓN: Guardar Finanzas y Refrescar
   const handleSaveFinanzas = async () => {
     setSaving(true);
     const success = await editTrip(String(trip.id), {
       tarifa_base: Number(tarifaBase),
       costo_casetas: Number(costoCasetas),
     });
-    setSaving(false);
     if (success) {
+      await refreshTrips(); // 🚀 OBLIGATORIO: Actualizar estado global
       setIsEditing(false);
       toast.success("Finanzas actualizadas.");
       if (activeLeg) {
@@ -259,29 +260,39 @@ export function TripDetailsModal({
           },
           true,
         );
-      } else {
-        await refreshTrips();
       }
     }
+    setSaving(false);
   };
 
+  // 🚀 CORRECCIÓN: Deshacer fase y Refrescar
   const handleUndoLeg = async () => {
-    const ok = confirm(
-      "¿Estás seguro de deshacer el último movimiento? Esto eliminará la fase actual y restaurará la anterior.",
-    );
+    const ok = confirm("¿Estás seguro de deshacer el último movimiento?");
     if (!ok) return;
 
     setIsUndoing(true);
     try {
       await axiosClient.post(`/trips/${trip.id}/undo-leg`);
       toast.success("Movimiento deshecho correctamente.");
-      await refreshTrips();
+      await refreshTrips(); // 🚀 OBLIGATORIO: Actualizar para cambiar estatus operativo
     } catch (error: any) {
-      toast.error(
-        error?.response?.data?.detail || "No se pudo deshacer la fase.",
-      );
+      toast.error("No se pudo deshacer la fase.");
     } finally {
       setIsUndoing(false);
+    }
+  };
+
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    try {
+      await refreshTrips(); // Refresca el estado global de useTrips
+      toast.success("Datos actualizados", {
+        description: "Se han cargado los cambios más recientes.",
+      });
+    } catch (error) {
+      toast.error("Error al sincronizar");
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -903,21 +914,43 @@ export function TripDetailsModal({
                             <CardTitle
                               className={`text-base font-black flex items-center gap-2 uppercase tracking-wider ${isEditing ? "text-amber-800" : "text-emerald-800"}`}
                             >
-                              <DollarSign className="h-5 w-5" />{" "}
+                              <DollarSign className="h-5 w-5" />
                               {isEditing
                                 ? "Editando Finanzas"
                                 : "Estado de Cuenta del Viaje"}
                             </CardTitle>
-                            {!isEditing && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setIsEditing(true)}
-                              >
-                                <Edit2 className="h-3.5 w-3.5 mr-2" /> Editar
-                                Montos
-                              </Button>
-                            )}
+
+                            {/* 🚀 BOTONERA DE ACCIÓN RÁPIDA */}
+                            <div className="flex gap-2">
+                              {!isEditing && (
+                                <>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 border-slate-300 text-slate-600 font-bold hover:bg-slate-100"
+                                    onClick={handleManualSync}
+                                    disabled={isSyncing}
+                                  >
+                                    {isSyncing ? (
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" />
+                                    ) : (
+                                      <History className="h-3.5 w-3.5 mr-2 text-primary" />
+                                    )}
+                                    Sincronizar
+                                  </Button>
+
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8"
+                                    onClick={() => setIsEditing(true)}
+                                  >
+                                    <Edit2 className="h-3.5 w-3.5 mr-2" />{" "}
+                                    Editar Montos
+                                  </Button>
+                                </>
+                              )}
+                            </div>
                           </div>
                         </CardHeader>
                         <CardContent className="p-6 space-y-6">
