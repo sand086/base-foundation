@@ -660,18 +660,25 @@ class TripLeg(AuditMixin, Base):
         Integer, ForeignKey("operators.id", ondelete="RESTRICT"), nullable=True
     )
 
-    # --- FINANZAS DEL TRAMO ---
+    # Finanzas del tramo
     anticipo_casetas = Column(Float, default=0.0)
     anticipo_viaticos = Column(Float, default=0.0)
     anticipo_combustible = Column(Float, default=0.0)
     otros_anticipos = Column(Float, default=0.0)
-    saldo_operador = Column(Float, default=0.0)
 
-    # --- TELEMETRÍA DE ARRANQUE ---
+    # 🚀 NUEVOS CAMPOS DE LIQUIDACIÓN
+    monto_sueldo = Column(Float, default=0.0)
+    monto_bonos = Column(Float, default=0.0)
+    monto_maniobras = Column(Float, default=0.0)
+    monto_penalizaciones = Column(Float, default=0.0)
+    monto_neto_pagado = Column(Float, default=0.0)
+
+    # Telemetría
     odometro_inicial = Column(Integer, nullable=True, default=0)
-    nivel_tanque_inicial = Column(Float, nullable=True, default=100.0)
+    odometro_final = Column(Integer, nullable=True)  # 🚀 NUEVO
+    rendimiento_real = Column(Float, nullable=True)  # 🚀 NUEVO
 
-    # --- TIEMPOS Y RASTREO ---
+    # Tiempos y rastreo
     start_date = Column(DateTime(timezone=True), nullable=True)
     actual_arrival = Column(DateTime(timezone=True), nullable=True)
     last_update = Column(

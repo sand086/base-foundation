@@ -524,7 +524,6 @@ export const TripPlanner = () => {
     if (tripToView) {
       const updatedTrip = trips.find((t) => t.id === tripToView.id);
       if (updatedTrip) {
-        // 🚀 USAMOS EL SPREAD OPERATOR {...} PARA FORZAR RE-RENDER
         setTripToView({ ...updatedTrip });
       }
     }

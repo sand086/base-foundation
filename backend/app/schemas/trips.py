@@ -62,10 +62,17 @@ class TripLegBase(ORMBase):
     anticipo_viaticos: float = 0.0
     anticipo_combustible: float = 0.0
     otros_anticipos: float = 0.0
-    saldo_operador: float = 0.0
+
+    # 🚀 AGREGAR ESTOS EN EL SCHEMA BASE
+    monto_sueldo: float = 0.0
+    monto_bonos: float = 0.0
+    monto_maniobras: float = 0.0
+    monto_penalizaciones: float = 0.0
+    monto_neto_pagado: float = 0.0
 
     odometro_inicial: Optional[int] = 0
-    nivel_tanque_inicial: Optional[float] = 100.0
+    odometro_final: Optional[int] = None  # 🚀 NUEVO
+    rendimiento_real: Optional[float] = None  # 🚀 NUEVO
 
     start_date: Optional[datetime] = None
     actual_arrival: Optional[datetime] = None

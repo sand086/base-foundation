@@ -114,14 +114,15 @@ export function TripDetailsModal({
   const [finishingLeg, setFinishingLeg] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // 🚀 Cargar Terminales al abrir el modal
   useEffect(() => {
-    if (showTerminalModal) {
-      loadTerminals();
-      setSelectedTerminal("");
-      setSearchTerminalQuery("");
+    if (trip) {
+      // Solo actualizamos si NO estamos en modo edición para no borrar lo que el usuario escribe
+      if (!isEditing) {
+        setTarifaBase(trip.tarifa_base || 0);
+        setCostoCasetas(trip.costo_casetas || 0);
+      }
     }
-  }, [showTerminalModal]);
+  }, [trip, isEditing]);
 
   const loadTerminals = async () => {
     try {
@@ -834,27 +835,17 @@ export function TripDetailsModal({
                                           <AlertTriangle className="h-4 w-4 mr-2" />{" "}
                                           Reportar Falla
                                         </Button>
-
-                                        {leg.leg_type === "entrega_vacio" ? (
-                                          <Button
-                                            className="flex-[2] bg-brand-navy hover:bg-brand-navy/90 text-white font-black shadow-md"
-                                            onClick={() =>
-                                              setShowTerminalModal(true)
-                                            }
-                                          >
-                                            📍 REGISTRAR LLEGADA DE VACÍO (FIN)
-                                          </Button>
-                                        ) : (
-                                          <Button
-                                            className="flex-[2] bg-brand-navy hover:bg-brand-navy/90 text-white font-black shadow-md"
-                                            onClick={() =>
-                                              onRelayClick?.(leg, trip)
-                                            }
-                                          >
-                                            <LinkIcon className="h-4 w-4 mr-2" />{" "}
-                                            CONCLUIR Y DESENGANCHAR (Drop)
-                                          </Button>
-                                        )}
+                                        : (
+                                        <Button
+                                          className="flex-[2] bg-brand-navy hover:bg-brand-navy/90 text-white font-black shadow-md"
+                                          onClick={() =>
+                                            onRelayClick?.(leg, trip)
+                                          }
+                                        >
+                                          <LinkIcon className="h-4 w-4 mr-2" />{" "}
+                                          CONCLUIR Y DESENGANCHAR (Drop)
+                                        </Button>
+                                        )
                                       </div>
                                     )}
 
