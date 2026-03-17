@@ -1,4 +1,3 @@
-// src/features/combustible/AddTicketModal.tsx
 import * as React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -47,35 +46,32 @@ import {
   FileImage,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { PRECIOS_PROMEDIO, type TipoCombustible } from "@/data/combustibleData";
 
-// 🚀 IMPORTAMOS TODOS LOS HOOKS REALES
+// 🚀 IMPORTAMOS TODOS LOS TIPOS Y CONFIGURACIONES REALES
+import { FUEL_CONFIG, FuelType } from "@/types/api.types";
 import { useClients } from "@/hooks/useClients";
 import { useTrips } from "@/hooks/useTrips";
 import { useOperators } from "@/hooks/useOperators";
 import { useUnits } from "@/hooks/useUnits";
 
-import { Client, Trip, Operator, Unit } from "@/types/api.types";
-
 /** =========================
  * Types
  * ========================= */
-type ID = string | number;
 
+// El estado interno del formulario (100% sincronizado con la BD)
 export interface TicketFormData {
-  unidadId: string;
-  operadorId: string;
-  viajeId: string;
-  fechaHora: string;
+  unit_id: string;
+  operator_id: string;
+  trip_id: string;
+  fecha_hora: string;
   estacion: string;
-  tipoCombustible: TipoCombustible;
+  tipo_combustible: FuelType;
   litros: number;
-  precioPorLitro: number;
-  odometro: number | string; // Permitimos string vacío temporalmente
+  precio_por_litro: number;
+  odometro: string | number;
   evidencia: File | null;
 }
 
-// 🚀 AHORA EL MODAL YA NO PIDE LAS LISTAS POR PROPS, LAS SACA ÉL MISMO
 interface AddTicketModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -183,6 +179,7 @@ function SearchableSelect({
   );
 }
 
+// FUNCIONES DE FORMATEO Y SEGURIDAD
 function toDatetimeLocalValue(date: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");
   const y = date.getFullYear();
@@ -207,14 +204,6 @@ function safeInt(value: string, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
-function getDieselCapacity(unit: any): number | null {
-  return unit?.capacidad_tanque_diesel ?? unit?.capacidad_tanque_diesel ?? null;
-}
-
-function getUreaCapacity(unit: any): number | null {
-  return unit?.capacidad_tanque_urea ?? unit?.capacidad_tanque_urea ?? null;
-}
-
 export function AddTicketModal({
   open,
   onOpenChange,
@@ -222,34 +211,23 @@ export function AddTicketModal({
 }: AddTicketModalProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // 🚀 1. USAMOS LOS HOOKS DIRECTAMENTE DENTRO DEL MODAL
+  // 🚀 1. HOOKS DE DATOS REALES
   const { clients = [] } = useClients();
   const { trips = [] } = useTrips();
-  const { operadores = [] } = useOperators(); // Nota: En tu console log vi que devuelve `operadores` y no `operators`
-  const { unidades = [] } = useUnits(); // Nota: En tu console log vi que devuelve `unidades` y no `units`
+  const { operadores = [] } = useOperators();
+  const { unidades = [] } = useUnits();
 
-  // 🚀 2. CONSOLES DE DEBUG PARA VER QUÉ LLEGA REALMENTE
-  useEffect(() => {
-    if (open) {
-      console.log("=== DEBUG DATOS EN MODAL ===");
-      console.log("CLIENTES FETCHED:", clients);
-      console.log("VIAJES FETCHED:", trips);
-      console.log("OPERADORES FETCHED:", operadores);
-      console.log("UNIDADES FETCHED:", unidades);
-      console.log("============================");
-    }
-  }, [open, clients, trips, operadores, unidades]);
-
+  // Estado Inicial
   const [formData, setFormData] = useState<TicketFormData>({
-    unidadId: "",
-    operadorId: "",
-    viajeId: "",
-    fechaHora: toDatetimeLocalValue(new Date()),
+    unit_id: "",
+    operator_id: "",
+    trip_id: "",
+    fecha_hora: toDatetimeLocalValue(new Date()),
     estacion: "",
-    tipoCombustible: "diesel",
+    tipo_combustible: "diesel",
     litros: 0,
-    precioPorLitro: PRECIOS_PROMEDIO.diesel,
-    odometro: "", // Inicializado vacío
+    precio_por_litro: FUEL_CONFIG.PRECIOS_PROMEDIO.diesel,
+    odometro: "",
     evidencia: null,
   });
 
@@ -258,36 +236,38 @@ export function AddTicketModal({
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
+  // Actualizar fecha al abrir
   useEffect(() => {
     if (!open) return;
     setFormData((prev) => ({
       ...prev,
-      fechaHora: toDatetimeLocalValue(new Date()),
+      fecha_hora: toDatetimeLocalValue(new Date()),
     }));
   }, [open]);
 
+  // Actualizar precio promedio al cambiar de diésel a urea
   useEffect(() => {
     setFormData((prev) => ({
       ...prev,
-      precioPorLitro: PRECIOS_PROMEDIO[prev.tipoCombustible],
+      precio_por_litro: FUEL_CONFIG.PRECIOS_PROMEDIO[prev.tipo_combustible],
     }));
-  }, [formData.tipoCombustible]);
+  }, [formData.tipo_combustible]);
 
+  // Buscar unidad seleccionada para extraer su capacidad
   const selectedUnit = useMemo(() => {
-    if (!formData.unidadId || !Array.isArray(unidades)) return undefined;
-    return unidades.find((u: any) => String(u.id) === formData.unidadId);
-  }, [unidades, formData.unidadId]);
+    if (!formData.unit_id || !Array.isArray(unidades)) return undefined;
+    return unidades.find((u: any) => String(u.id) === formData.unit_id);
+  }, [unidades, formData.unit_id]);
 
-  // 1. Filtrar viajes (Excluir liquidados globalmente)
+  // 1. Filtrar viajes activos (Excluir liquidados globalmente)
   const activeTrips = useMemo(() => {
     if (!Array.isArray(trips)) return [];
-    return trips.filter((t: any) => {
-      if (String(t.status).toLowerCase() === "liquidado") return false;
-      return true;
-    });
+    return trips.filter(
+      (t: any) => String(t.status).toLowerCase() !== "liquidado",
+    );
   }, [trips]);
 
-  // 2. Extraer clientes
+  // 2. Extraer clientes con viajes activos para el select de filtro
   const availableClientsForFilter = useMemo(() => {
     if (!Array.isArray(clients) || !Array.isArray(activeTrips)) return [];
     const activeClientIds = new Set(
@@ -304,14 +284,12 @@ export function AddTicketModal({
     });
   }, [activeTrips, clients]);
 
-  // 3. Aplicar Filtros (Cliente y Fecha)
+  // 3. Aplicar Filtros (Cliente y Fecha) a la lista de viajes
   const filteredTrips = useMemo(() => {
     return activeTrips.filter((t: any) => {
-      // Filtro Cliente
       const matchClient =
         filterClient === "ALL" || String(t.client_id) === filterClient;
 
-      // Filtro Rango Fechas
       let matchDate = true;
       const tripDate = new Date(t.start_date || t.created_at);
 
@@ -329,7 +307,7 @@ export function AddTicketModal({
     });
   }, [activeTrips, filterClient, dateFrom, dateTo]);
 
-  // 4. Formatear para el Buscador de Viajes
+  // 4. Formatear datos para los Selects Inteligentes
   const searchableTrips = useMemo(() => {
     const list = filteredTrips.map((t: any) => {
       const foundClient = Array.isArray(clients)
@@ -337,17 +315,12 @@ export function AddTicketModal({
         : null;
 
       const cName =
-        foundClient?.razon_social ||
-        foundClient?.rfc ||
-        t.client?.razon_social ||
-        t.client?.nombre ||
-        "Sin Cliente";
-
+        foundClient?.razon_social || t.client?.razon_social || "Sin Cliente";
       const dateStr = new Date(t.start_date || t.created_at).toLocaleDateString(
         "es-MX",
       );
 
-      const label = `FOLIO ${t.public_id || t.id} | ${cName} | ${t.origin} ➔ ${t.destination} | ${dateStr} (${t.status.toUpperCase()})`;
+      const label = `FOLIO ${t.public_id || t.id} | ${cName} | ${t.origin} ➔ ${t.destination} | ${dateStr}`;
       return { label, value: String(t.id) };
     });
 
@@ -360,16 +333,14 @@ export function AddTicketModal({
     ];
   }, [filteredTrips, clients]);
 
-  // Transformar Unidades para el Select Inteligente
   const searchableUnits = useMemo(() => {
     if (!Array.isArray(unidades)) return [];
     return unidades.map((u: any) => ({
-      label: `${u.numero_economico} - ${u.placas || "S/P"}`,
+      label: `ECO-${u.numero_economico} - ${u.placas || "S/P"}`,
       value: String(u.id),
     }));
   }, [unidades]);
 
-  // Transformar Operadores para el Select Inteligente
   const searchableOperators = useMemo(() => {
     if (!Array.isArray(operadores)) return [];
     return operadores.map((o: any) => ({
@@ -378,10 +349,10 @@ export function AddTicketModal({
     }));
   }, [operadores]);
 
-  // MANEJADOR SÚPER INTELIGENTE: Auto-Fill
+  // AUTO-FILL: Al seleccionar viaje, autocompletar operador y unidad
   const handleTripSelection = (selectedTripId: string) => {
     if (selectedTripId === "none") {
-      setFormData((prev) => ({ ...prev, viajeId: "" }));
+      setFormData((prev) => ({ ...prev, trip_id: "" }));
       return;
     }
 
@@ -390,6 +361,7 @@ export function AddTicketModal({
     );
 
     if (tripObj) {
+      // Buscar el tramo activo (leg)
       const activeLeg =
         tripObj.legs?.find(
           (l: any) =>
@@ -400,13 +372,11 @@ export function AddTicketModal({
 
       setFormData((prev) => ({
         ...prev,
-        viajeId: selectedTripId,
-        unidadId: activeLeg?.unit_id
-          ? String(activeLeg.unit_id)
-          : prev.unidadId,
-        operadorId: activeLeg?.operator_id
+        trip_id: selectedTripId,
+        unit_id: activeLeg?.unit_id ? String(activeLeg.unit_id) : prev.unit_id,
+        operator_id: activeLeg?.operator_id
           ? String(activeLeg.operator_id)
-          : prev.operadorId,
+          : prev.operator_id,
       }));
 
       toast.success("Viaje Vinculado", {
@@ -414,54 +384,52 @@ export function AddTicketModal({
           "Se han cargado la unidad y el operador registrados en el viaje.",
       });
     } else {
-      setFormData((prev) => ({ ...prev, viajeId: selectedTripId }));
+      setFormData((prev) => ({ ...prev, trip_id: selectedTripId }));
     }
   };
 
+  // Validación de Capacidad de Tanque
   const tankCapacity = useMemo(() => {
-    if (!selectedUnit) return 0;
-    if (formData.tipoCombustible === "diesel") {
-      return (selectedUnit.capacidad_carga ?? 600) as number;
+    if (!selectedUnit)
+      return formData.tipo_combustible === "diesel"
+        ? FUEL_CONFIG.CAPACIDADES_DEFAULT.diesel
+        : FUEL_CONFIG.CAPACIDADES_DEFAULT.urea;
+
+    if (formData.tipo_combustible === "diesel") {
+      return (selectedUnit.capacidad_tanque_diesel ??
+        FUEL_CONFIG.CAPACIDADES_DEFAULT.diesel) as number;
     }
-    return (selectedUnit.capacidad_carga ?? 40) as number;
-  }, [selectedUnit, formData.tipoCombustible]);
+    return (selectedUnit.capacidad_tanque_urea ??
+      FUEL_CONFIG.CAPACIDADES_DEFAULT.urea) as number;
+  }, [selectedUnit, formData.tipo_combustible]);
 
   const isOverCapacity =
     Boolean(selectedUnit) && formData.litros > tankCapacity;
 
+  // Calculo de importe
   const total = useMemo(
-    () => (formData.litros || 0) * (formData.precioPorLitro || 0),
-    [formData.litros, formData.precioPorLitro],
+    () => (formData.litros || 0) * (formData.precio_por_litro || 0),
+    [formData.litros, formData.precio_por_litro],
   );
-
-  const getFuelTypeStyles = (type: TipoCombustible, isSelected: boolean) => {
-    if (type === "diesel")
-      return isSelected
-        ? "bg-amber-500 text-white border-amber-500 shadow-md"
-        : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50";
-    return isSelected
-      ? "bg-sky-500 text-white border-sky-500 shadow-md"
-      : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50";
-  };
 
   const clearFilters = () => {
     setFilterClient("ALL");
     setDateFrom("");
     setDateTo("");
-    setFormData((prev) => ({ ...prev, viajeId: "" }));
+    setFormData((prev) => ({ ...prev, trip_id: "" }));
   };
 
   const resetForm = () => {
     setFormData({
-      unidadId: "",
-      operadorId: "",
-      viajeId: "",
-      fechaHora: toDatetimeLocalValue(new Date()),
+      unit_id: "",
+      operator_id: "",
+      trip_id: "",
+      fecha_hora: toDatetimeLocalValue(new Date()),
       estacion: "",
-      tipoCombustible: "diesel",
+      tipo_combustible: "diesel",
       litros: 0,
-      precioPorLitro: PRECIOS_PROMEDIO.diesel,
-      odometro: "", // Limpio y sin ceros forzados
+      precio_por_litro: FUEL_CONFIG.PRECIOS_PROMEDIO.diesel,
+      odometro: "",
       evidencia: null,
     });
     clearFilters();
@@ -469,12 +437,12 @@ export function AddTicketModal({
   };
 
   const validate = () => {
-    if (!formData.unidadId) return "Selecciona una unidad.";
-    if (!formData.operadorId) return "Selecciona un operador.";
-    if (!formData.fechaHora) return "Selecciona fecha y hora.";
+    if (!formData.unit_id) return "Selecciona una unidad.";
+    if (!formData.operator_id) return "Selecciona un operador.";
+    if (!formData.fecha_hora) return "Selecciona fecha y hora.";
     if (!formData.estacion.trim()) return "Escribe la estación de servicio.";
     if (!(formData.litros > 0)) return "Los litros deben ser mayor a 0.";
-    if (!(formData.precioPorLitro > 0))
+    if (!(formData.precio_por_litro > 0))
       return "El precio por litro debe ser mayor a 0.";
     if (isOverCapacity)
       return `Excede la capacidad técnica del tanque (${tankCapacity}L).`;
@@ -498,7 +466,7 @@ export function AddTicketModal({
 
     onSubmit(finalData);
     toast.success("Carga Exitosa", {
-      description: "Ticket de combustible registrado en el sistema.",
+      description: "Ticket de combustible preparado para registro.",
     });
     resetForm();
     onOpenChange(false);
@@ -536,12 +504,12 @@ export function AddTicketModal({
             <div
               className={cn(
                 "w-12 h-12 rounded-xl flex items-center justify-center shadow-inner",
-                formData.tipoCombustible === "diesel"
+                formData.tipo_combustible === "diesel"
                   ? "bg-amber-100"
                   : "bg-sky-100",
               )}
             >
-              {formData.tipoCombustible === "diesel" ? (
+              {formData.tipo_combustible === "diesel" ? (
                 <Fuel className="h-6 w-6 text-amber-600" />
               ) : (
                 <Droplets className="h-6 w-6 text-sky-600" />
@@ -550,7 +518,8 @@ export function AddTicketModal({
             <div>
               Registro de Inyección de Combustible
               <p className="text-xs font-medium text-slate-500 font-normal mt-1 tracking-normal">
-                Capture los datos del ticket para la conciliación financiera.
+                Capture los datos del ticket para la conciliación financiera y
+                rendimiento de flota.
               </p>
             </div>
           </DialogTitle>
@@ -634,7 +603,7 @@ export function AddTicketModal({
 
                   <SearchableSelect
                     items={searchableTrips}
-                    value={formData.viajeId}
+                    value={formData.trip_id}
                     onSelect={handleTripSelection}
                     placeholder="Escriba folio, ruta o seleccione..."
                   />
@@ -648,9 +617,9 @@ export function AddTicketModal({
                     </Label>
                     <SearchableSelect
                       items={searchableUnits}
-                      value={formData.unidadId}
+                      value={formData.unit_id}
                       onSelect={(value) =>
-                        setFormData((p) => ({ ...p, unidadId: value }))
+                        setFormData((p) => ({ ...p, unit_id: value }))
                       }
                       placeholder="Buscar unidad..."
                     />
@@ -662,9 +631,9 @@ export function AddTicketModal({
                     </Label>
                     <SearchableSelect
                       items={searchableOperators}
-                      value={formData.operadorId}
+                      value={formData.operator_id}
                       onSelect={(value) =>
-                        setFormData((p) => ({ ...p, operadorId: value }))
+                        setFormData((p) => ({ ...p, operator_id: value }))
                       }
                       placeholder="Buscar operador..."
                     />
@@ -679,12 +648,9 @@ export function AddTicketModal({
                   <Input
                     type="number"
                     placeholder="Opcional. Ej: 245890"
-                    value={formData.odometro || ""}
+                    value={formData.odometro}
                     onChange={(e) =>
-                      setFormData((p) => ({
-                        ...p,
-                        odometro: e.target.value,
-                      }))
+                      setFormData((p) => ({ ...p, odometro: e.target.value }))
                     }
                     className="h-11 font-mono text-sm bg-white shadow-sm border-slate-300"
                   />
@@ -710,13 +676,13 @@ export function AddTicketModal({
                     onClick={() =>
                       setFormData((p) => ({
                         ...p,
-                        tipoCombustible: "diesel",
+                        tipo_combustible: "diesel",
                         litros: 0,
                       }))
                     }
                     className={cn(
                       "flex items-center justify-center gap-3 py-2.5 px-3 rounded-xl border-2 transition-all",
-                      formData.tipoCombustible === "diesel"
+                      formData.tipo_combustible === "diesel"
                         ? "bg-amber-500 border-amber-500 text-white shadow-md"
                         : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50",
                     )}
@@ -731,13 +697,13 @@ export function AddTicketModal({
                     onClick={() =>
                       setFormData((p) => ({
                         ...p,
-                        tipoCombustible: "urea",
+                        tipo_combustible: "urea",
                         litros: 0,
                       }))
                     }
                     className={cn(
                       "flex items-center justify-center gap-3 py-2.5 px-3 rounded-xl border-2 transition-all",
-                      formData.tipoCombustible === "urea"
+                      formData.tipo_combustible === "urea"
                         ? "bg-sky-500 border-sky-500 text-white shadow-md"
                         : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50",
                     )}
@@ -756,11 +722,11 @@ export function AddTicketModal({
                     </Label>
                     <Input
                       type="datetime-local"
-                      value={formData.fechaHora}
+                      value={formData.fecha_hora}
                       onChange={(e) =>
                         setFormData((p) => ({
                           ...p,
-                          fechaHora: e.target.value,
+                          fecha_hora: e.target.value,
                         }))
                       }
                       className="h-11 text-sm bg-white shadow-sm border-slate-300"
@@ -772,7 +738,7 @@ export function AddTicketModal({
                     </Label>
                     <Input
                       placeholder={
-                        formData.tipoCombustible === "diesel"
+                        formData.tipo_combustible === "diesel"
                           ? "Ej: Parador San Marcos"
                           : "Ej: AdBlue Center"
                       }
@@ -832,11 +798,11 @@ export function AddTicketModal({
                         type="number"
                         step="0.01"
                         placeholder="0.00"
-                        value={formData.precioPorLitro || ""}
+                        value={formData.precio_por_litro || ""}
                         onChange={(e) =>
                           setFormData((p) => ({
                             ...p,
-                            precioPorLitro: safeNumber(e.target.value, 0),
+                            precio_por_litro: safeNumber(e.target.value, 0),
                           }))
                         }
                         className="h-11 text-base font-mono pl-8 bg-white shadow-sm border-slate-300"
@@ -848,7 +814,7 @@ export function AddTicketModal({
                 <div
                   className={cn(
                     "mt-2 rounded-xl p-4 border flex justify-between items-center shadow-inner",
-                    formData.tipoCombustible === "diesel"
+                    formData.tipo_combustible === "diesel"
                       ? "bg-amber-50 border-amber-200"
                       : "bg-sky-50 border-sky-200",
                   )}
@@ -859,7 +825,7 @@ export function AddTicketModal({
                   <span
                     className={cn(
                       "text-2xl font-black font-mono tracking-tighter",
-                      formData.tipoCombustible === "diesel"
+                      formData.tipo_combustible === "diesel"
                         ? "text-amber-700"
                         : "text-sky-700",
                     )}
@@ -932,7 +898,7 @@ export function AddTicketModal({
               type="submit"
               className={cn(
                 "h-12 px-8 text-sm font-black shadow-lg",
-                formData.tipoCombustible === "diesel"
+                formData.tipo_combustible === "diesel"
                   ? "bg-amber-600 hover:bg-amber-700 text-white"
                   : "bg-sky-600 hover:bg-sky-700 text-white",
               )}

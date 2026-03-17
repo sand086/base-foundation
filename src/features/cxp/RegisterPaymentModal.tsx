@@ -281,15 +281,24 @@ export function RegisterPaymentModal({
               <SelectTrigger className="h-10">
                 <SelectValue placeholder="Seleccionar cuenta" />
               </SelectTrigger>
-              <SelectContent className="bg-card">
+              <SelectContent className="bg-card rounded-xl border-slate-200 shadow-xl">
                 {bankAccounts.map((acc) => (
-                  <SelectItem key={acc.id} value={String(acc.id)}>
-                    <span className="font-medium">{acc.name}</span>
-                    {acc.last_digits ? (
-                      <span className="text-muted-foreground ml-2">
-                        ****{acc.last_digits}
+                  <SelectItem
+                    key={acc.id}
+                    value={String(acc.id)}
+                    className="cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg leading-none">
+                        {acc.banco_logo || "🏦"}
                       </span>
-                    ) : null}
+                      <span className="font-bold text-slate-700">
+                        {acc.alias}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono mt-0.5 ml-1">
+                        ••{acc.numero_cuenta.slice(-4)}
+                      </span>
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>

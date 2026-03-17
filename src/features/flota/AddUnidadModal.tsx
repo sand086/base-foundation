@@ -235,6 +235,14 @@ const getLayoutDescription = (categoriaFisica: string): string => {
   return LAYOUT_LABELS[layout] || layout;
 };
 
+const getAxleConfig = (categoriaFisica: string) => {
+  const cat = normalizeText(categoriaFisica);
+  if (cat === "TRACTOCAMION") return "TRACTO_10";
+  if (cat === "REMOLQUE") return "REMOLQUE_8";
+  if (cat === "DOLLY") return "DOLLY_8";
+  return "TRACTO_10";
+};
+
 // =====================
 // Component
 // =====================
@@ -425,19 +433,21 @@ export function AddUnidadModal({
     const payload: Partial<Unit> & { ignore_blocking?: boolean } = {
       ...(isEditMode && unidadToEdit ? { id: unidadToEdit.id } : {}),
 
+      // 🚀 LIMPIEZA TOTAL PARA EVITAR "ECO ECO 02" O "ECO-02"
       numero_economico: formData.numero_economico
+        .replace(/^ECO[-\s]?/i, "")
         .trim()
-        .toUpperCase()
-        .replace(/^ECO[-\s]?/, ""),
+        .toUpperCase(),
       placas: formData.placas.trim().toUpperCase() || "S/P",
       vin: cleanString(formData.vin?.toUpperCase?.() ?? formData.vin),
       marca: formData.marca.trim(),
       modelo: cleanString(formData.modelo),
       year: parseInt(formData.year, 10) || new Date().getFullYear(),
 
-      // Nueva lógica oficial
+      // Nueva lógica oficial de UI y Base de Datos
       tipo: layoutCalculado as any,
       tipo_1: categoriaFisica as any,
+      configuracion_ejes: getAxleConfig(categoriaFisica) as any, // 🚀 VITAL PARA EL ESQUEMA DE LLANTAS
 
       numero_serie_motor: cleanString(formData.numero_serie_motor),
       marca_motor: cleanString(formData.marca_motor),
@@ -450,7 +460,6 @@ export function AddUnidadModal({
       ),
       permiso_sct_folio: cleanString(formData.permiso_sct_folio),
       caat_folio: cleanString(formData.caat_folio),
-
       seguro_vence: cleanDate(formData.seguro_vence),
       verificacion_humo_vence: cleanDate(formData.verificacion_humo_vence),
       verificacion_fisico_mecanica_vence: cleanDate(
@@ -458,7 +467,6 @@ export function AddUnidadModal({
       ),
       permiso_sct_vence: cleanDate(formData.permiso_sct_vence),
       caat_vence: cleanDate(formData.caat_vence),
-
       status: (formData.status || unidadToEdit?.status || "disponible") as any,
       ignore_blocking: ignoreBlocking,
     };
@@ -632,9 +640,16 @@ export function AddUnidadModal({
 
           <Tabs defaultValue="general" className="w-full">
             <TabsList className="grid w-full grid-cols-3 mb-6">
-              <TabsTrigger value="general">General</TabsTrigger>
-              <TabsTrigger value="tecnica">Ficha Técnica</TabsTrigger>
-              <TabsTrigger value="documentacion">Documentación</TabsTrigger>
+              {/* 🚀 AGREGAMOS type="button" a cada uno */}
+              <TabsTrigger value="general" type="button">
+                General
+              </TabsTrigger>
+              <TabsTrigger value="tecnica" type="button">
+                Ficha Técnica
+              </TabsTrigger>
+              <TabsTrigger value="documentacion" type="button">
+                Documentación
+              </TabsTrigger>
             </TabsList>
 
             {/* TAB GENERAL */}

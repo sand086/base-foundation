@@ -1,66 +1,84 @@
 import axiosClient from "@/api/axiosClient";
+import { Tire, TireHistoryEvent } from "@/types/api.types";
 
-export const getTireLifePercentage = (tire: GlobalTire): number => {
-  if (tire.profundidad_original === 0) return 0;
-  // Usamos _snake_case
-  return Math.round(
+export interface AssignTirePayload {
+  unit_id: number | null;
+  posicion: number | null;
+  notas?: string;
+}
+
+export interface MaintenanceTirePayload {
+  tipo: string;
+  costo: number;
+  descripcion: string;
+}
+
+// --- HELPERS DE CÁLCULO ---
+
+export const getTireLifePercentage = (tire: Tire): number => {
+  if (!tire.profundidad_original || tire.profundidad_original === 0) return 0;
+  const percentage = Math.round(
     (tire.profundidad_actual / tire.profundidad_original) * 100,
   );
+  return Math.max(0, Math.min(100, percentage)); // Asegurar rango 0-100
 };
 
-export const getTireSemaphoreStatus = (
-  tire: GlobalTire,
-): { color: string; bgColor: string; label: string } => {
-  const depth = tire.profundidad_actual; // Usamos _snake_case
+export const getTireSemaphoreStatus = (tire: Tire) => {
+  const depth = tire.profundidad_actual;
 
-  if (depth < 5)
+  if (depth <= 4)
     return {
       color: "text-white",
-      bgColor: "bg-red-600", // Tailwind directo para asegurar color
+      bgColor: "bg-red-600",
       label: "Crítico",
+      variant: "destructive" as const,
     };
-  if (depth <= 10)
+
+  if (depth <= 8)
     return {
       color: "text-black",
       bgColor: "bg-amber-400",
       label: "Atención",
+      variant: "secondary" as const,
     };
-  return { color: "text-white", bgColor: "bg-emerald-600", label: "Óptimo" };
+
+  return {
+    color: "text-white",
+    bgColor: "bg-emerald-600",
+    label: "Óptimo",
+    variant: "default" as const,
+  };
 };
 
-export const getEstadoFisicoBadge = (
-  estado: string,
-): { variant: "default" | "secondary" | "destructive"; label: string } => {
-  switch (estado) {
-    case "buena":
-      return { variant: "default", label: "Buena" };
-    case "regular":
-      return { variant: "secondary", label: "Regular" };
-    case "mala":
-      return { variant: "destructive", label: "Mala" };
-    default:
-      return { variant: "secondary", label: estado };
-  }
-};
-
-export const getEstadoBadge = (
-  estado: string,
-): { className: string; label: string } => {
-  switch (estado) {
+export const getEstadoBadge = (estado: string) => {
+  switch (estado.toLowerCase()) {
     case "nuevo":
-      return { className: "bg-emerald-100 text-emerald-700", label: "Nuevo" };
+      return {
+        className: "bg-emerald-100 text-emerald-700 border-emerald-200",
+        label: "Nuevo",
+      };
     case "usado":
-      return { className: "bg-blue-100 text-blue-700", label: "Usado" };
+      return {
+        className: "bg-blue-100 text-blue-700 border-blue-200",
+        label: "Usado",
+      };
     case "renovado":
-      return { className: "bg-purple-100 text-purple-700", label: "Renovado" };
+      return {
+        className: "bg-purple-100 text-purple-700 border-purple-200",
+        label: "Renovado",
+      };
     case "desecho":
-      return { className: "bg-rose-100 text-rose-700", label: "Desecho" };
+      return {
+        className: "bg-rose-100 text-rose-700 border-rose-200",
+        label: "Desecho",
+      };
     default:
       return { className: "bg-gray-100 text-gray-700", label: estado };
   }
 };
 
-// 🚀 ACTUALIZADO: Posiciones numéricas para mapear directamente con el diagrama SVG y la BD
+// --- CONFIGURACIÓN DE POSICIONES ---
+
 export const TIRE_POSITIONS = [
   { id: 1, label: "Posición 1 (Direccional Izq)", eje: 1, lado: "izquierda" },
   { id: 2, label: "Posición 2 (Direccional Der)", eje: 1, lado: "derecha" },
@@ -97,116 +115,39 @@ export const TIRE_POSITIONS = [
     eje: 3,
     lado: "derecha",
   },
-  { id: 0, label: "Repuesto", eje: 0, lado: "repuesto" }, // 0 para llanta de refacción
+  { id: 0, label: "Repuesto", eje: 0, lado: "repuesto" },
 ];
 
-export type TireHistoryEventType =
-  | "compra"
-  | "montaje"
-  | "desmontaje"
-  | "reparacion"
-  | "renovado"
-  | "rotacion"
-  | "inspeccion"
-  | "desecho"
-  | "edicion";
-
-export interface TireHistoryEvent {
-  id: number;
-  fecha: string;
-  tipo: TireHistoryEventType;
-  descripcion: string;
-  unidad?: string;
-  unidad_economico?: string;
-  posicion?: number | null; // 🚀 CAMBIO: Ahora es number
-  km?: number;
-  costo?: number;
-  responsable?: string;
-}
-
-export interface GlobalTire {
-  id: number;
-  codigo_interno: string;
-  marca: string;
-  modelo: string;
-  medida: string;
-  dot: string;
-
-  // Ubicación
-  unidad_actual_id?: number | null;
-  unidad_actual_economico?: string | null;
-  posicion?: number | null; // 🚀 CAMBIO: Ahora es number
-
-  // Estado
-  estado: "nuevo" | "usado" | "renovado" | "desecho";
-  estado_fisico: "buena" | "regular" | "mala";
-  profundidad_actual: number;
-  profundidad_original: number;
-  km_recorridos: number;
-
-  // Tracking
-  fecha_compra: string;
-  precio_compra: number;
-  costo_acumulado: number;
-  proveedor: string;
-
-  historial?: TireHistoryEvent[];
-}
-
-export interface AssignTirePayload {
-  unit_id: number | null;
-  posicion: number | null; // 🚀 CAMBIO: Ahora es number
-  notas?: string;
-}
-
-export interface MaintenanceTirePayload {
-  tipo: string;
-  costo: number;
-  descripcion: string;
-}
-
-// --- SERVICIO ACTUALIZADO ---
+// --- SERVICIO API ---
 
 export const tireService = {
-  // Obtener todas
-  getAll: async (): Promise<GlobalTire[]> => {
-    const { data } = await axiosClient.get("/tires");
+  getAll: async () => {
+    const { data } = await axiosClient.get<Tire[]>("/tires");
     return data;
   },
-
-  // Obtener una
-  getById: async (id: number): Promise<GlobalTire> => {
-    const { data } = await axiosClient.get(`/tires/${id}`);
+  getById: async (id: number) => {
+    const { data } = await axiosClient.get<Tire>(`/tires/${id}`);
     return data;
   },
-
-  // Crear
-  create: async (tire: any): Promise<GlobalTire> => {
-    const { data } = await axiosClient.post("/tires", tire);
+  create: async (payload: any) => {
+    const { data } = await axiosClient.post<Tire>("/tires", payload);
     return data;
   },
-
-  // Asignar
+  update: async (id: number, payload: any) => {
+    const { data } = await axiosClient.put<Tire>(`/tires/${id}`, payload);
+    return data;
+  },
   assign: async (id: number, payload: AssignTirePayload): Promise<void> => {
     await axiosClient.post(`/tires/${id}/assign`, payload);
   },
-
-  // Mantenimiento
   maintenance: async (
     id: number,
     payload: MaintenanceTirePayload,
   ): Promise<void> => {
+    // Enviamos el payload directamente al backend de Python
     await axiosClient.post(`/tires/${id}/maintenance`, payload);
   },
-
-  // Actualizar (Editar)
-  update: async (id: number, data: any): Promise<GlobalTire> => {
-    const { data: res } = await axiosClient.put(`/tires/${id}`, data);
-    return res;
-  },
-
-  // Eliminar
-  delete: async (id: number): Promise<void> => {
+  delete: async (id: number) => {
     await axiosClient.delete(`/tires/${id}`);
   },
 };

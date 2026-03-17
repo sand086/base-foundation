@@ -41,12 +41,12 @@ import {
 
 // Imports de Tipos y Hooks
 import {
-  GlobalTire,
   getTireLifePercentage,
   getTireSemaphoreStatus,
   getEstadoBadge,
 } from "@/services/tireService";
 import { useTires } from "@/hooks/useTires";
+import { UnitTire, Tire } from "@/types/api.types";
 
 // Componentes Modales
 import { TireHistorySheet } from "@/features/llantas/TireHistorySheet";
@@ -66,7 +66,7 @@ export default function FlotaLlantas() {
     deleteTire,
   } = useTires();
 
-  const [selectedTire, setSelectedTire] = useState<GlobalTire | null>(null);
+  const [selectedTire, setSelectedTire] = useState<Tire | null>(null);
 
   // Estados de Visibilidad de Modales
   const [historySheetOpen, setHistorySheetOpen] = useState(false);
@@ -100,13 +100,13 @@ export default function FlotaLlantas() {
   // --- HANDLERS ---
 
   // Historial
-  const handleViewHistory = (tire: GlobalTire) => {
+  const handleViewHistory = (tire: Tire) => {
     setSelectedTire(tire);
     setHistorySheetOpen(true);
   };
 
   // Asignar
-  const handleOpenAssign = (tire: GlobalTire) => {
+  const handleOpenAssign = (tire: Tire) => {
     setSelectedTire(tire);
     setAssignModalOpen(true);
   };
@@ -114,7 +114,7 @@ export default function FlotaLlantas() {
   const handleAssignSubmit = async (
     tireId: string,
     unidad: string | null,
-    posicion: string | null,
+    posicion: number | null,
     notas: string,
   ) => {
     const idNum = parseInt(tireId);
@@ -128,7 +128,7 @@ export default function FlotaLlantas() {
   };
 
   // Mantenimiento
-  const handleOpenMaintenance = (tire: GlobalTire) => {
+  const handleOpenMaintenance = (tire: Tire) => {
     setSelectedTire(tire);
     setMaintenanceModalOpen(true);
   };
@@ -154,7 +154,7 @@ export default function FlotaLlantas() {
     setCreateModalOpen(true);
   };
 
-  const handleOpenEdit = (tire: GlobalTire) => {
+  const handleOpenEdit = (tire: Tire) => {
     setSelectedTire(tire); // Establecemos selección -> Modo Editar
     setCreateModalOpen(true);
   };
@@ -175,7 +175,7 @@ export default function FlotaLlantas() {
   }, [tires]);
 
   // Eliminar
-  const handleOpenDelete = (tire: GlobalTire) => {
+  const handleOpenDelete = (tire: Tire) => {
     setSelectedTire(tire);
     setDeleteAlertOpen(true);
   };
@@ -189,7 +189,7 @@ export default function FlotaLlantas() {
   };
 
   // 3. Definición de Columnas
-  const columns: ColumnDef<GlobalTire>[] = useMemo(
+  const columns: ColumnDef<Tire>[] = useMemo(
     () => [
       {
         key: "codigo_interno",

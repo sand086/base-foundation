@@ -1,4 +1,3 @@
-// src/pages/ProveedoresCxP.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
@@ -68,12 +67,12 @@ import { useBankAccounts } from "@/hooks/useBankAccounts";
 // Types (Centralizados)
 import type { PayableInvoice, Supplier } from "@/types/api.types";
 
-//  Helpers
+// Helpers
 import {
   getInvoiceStatusInfo,
   getClasificacionLabel,
   getClasificacionColor,
-} from "@/lib/utils"; // <-- asegúrate que esta ruta sea la correcta
+} from "@/lib/utils";
 
 interface PrefillData {
   proveedor: string;
@@ -105,7 +104,7 @@ export default function ProveedoresCxP() {
     refreshInvoices,
     createInvoice,
     updateInvoice,
-    deleteInvoice, //  NUEVO
+    deleteInvoice,
     registerPayment,
     createSupplier,
     updateSupplier,
@@ -115,7 +114,9 @@ export default function ProveedoresCxP() {
     indirectCategories,
   } = useSuppliers();
 
-  const { bankAccounts, isLoadingBankAccounts } = useBankAccounts();
+  // 🚀 CORRECCIÓN: Usamos alias para mapear lo que devuelve el hook a los nombres que espera tu componente
+  const { accounts: bankAccounts, isLoading: isLoadingBankAccounts } =
+    useBankAccounts();
 
   const [searchCatalog, setSearchCatalog] = useState("");
   const [searchCxP, setSearchCxP] = useState("");
@@ -127,7 +128,7 @@ export default function ProveedoresCxP() {
   const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
-  //  NUEVO: delete factura
+  // Modal confirmación delete factura
   const [isDeleteInvoiceOpen, setIsDeleteInvoiceOpen] = useState(false);
   const [invoiceToDelete, setInvoiceToDelete] = useState<PayableInvoice | null>(
     null,
@@ -290,14 +291,12 @@ export default function ProveedoresCxP() {
     }
   };
 
-  //  NUEVO: eliminar factura (con modal confirm)
   const handleConfirmDeleteInvoice = async () => {
     if (!invoiceToDelete) return;
     const ok = await deleteInvoice(invoiceToDelete.id);
     if (ok) {
       setIsDeleteInvoiceOpen(false);
       setInvoiceToDelete(null);
-      // Por consistencia, refresca
       await refreshInvoices?.();
     }
   };
@@ -718,7 +717,6 @@ export default function ProveedoresCxP() {
                                 Registrar Pago
                               </DropdownMenuItem>
 
-                              {/*  NUEVO: Eliminar Factura */}
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 onClick={() => {
@@ -838,8 +836,6 @@ export default function ProveedoresCxP() {
         prefillData={prefillData}
       />
 
-      {/*  OJO: en tu snippet “actualizaciones” lo renderizas siempre.
-          Para evitar crash, lo mostramos solo si hay selectedInvoice. */}
       {selectedInvoice && (
         <InvoiceDetailSheet
           open={isDetailSheetOpen}
@@ -853,7 +849,7 @@ export default function ProveedoresCxP() {
           open={isPaymentModalOpen}
           onOpenChange={setIsPaymentModalOpen}
           invoice={selectedInvoice}
-          bankAccounts={bankAccounts}
+          bankAccounts={bankAccounts} // Pasamos la variable correctamente referenciada
           onSubmit={handleRegisterPayment}
         />
       )}
@@ -919,7 +915,7 @@ export default function ProveedoresCxP() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/*  NUEVO: Modal Confirmación Eliminar Factura */}
+      {/* Modal Confirmación Eliminar Factura */}
       <AlertDialog
         open={isDeleteInvoiceOpen}
         onOpenChange={setIsDeleteInvoiceOpen}

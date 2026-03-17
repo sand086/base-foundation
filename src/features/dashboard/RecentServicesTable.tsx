@@ -3,7 +3,8 @@ import { ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge, StatusType } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
-import { RecentService } from "@/data/dashboardData";
+// 🚀 Cambiamos la ruta al nuevo servicio centralizado
+import { RecentService } from "@/services/dashboardService";
 import {
   Tooltip,
   TooltipContent,
@@ -15,15 +16,22 @@ interface RecentServicesTableProps {
   services: RecentService[];
 }
 
+/**
+ * 🛠️ Configuración de estados actualizada para coincidir
+ * con los Enums de TripStatus en el backend de Python.
+ */
 const getStatusConfig = (
   status: string,
 ): { type: StatusType; label: string } => {
   const statusMap: Record<string, { type: StatusType; label: string }> = {
+    creado: { type: "info", label: "Creado" },
+    programado: { type: "info", label: "Programado" },
+    en_transito: { type: "success", label: "En Tránsito" },
     en_ruta: { type: "success", label: "En Ruta" },
     detenido: { type: "warning", label: "Detenido" },
     retraso: { type: "danger", label: "Retraso" },
     entregado: { type: "success", label: "Entregado" },
-    programado: { type: "info", label: "Programado" },
+    cerrado: { type: "info", label: "Cerrado" },
   };
   return statusMap[status] || { type: "info", label: status };
 };
@@ -32,7 +40,6 @@ export function RecentServicesTable({ services }: RecentServicesTableProps) {
   const navigate = useNavigate();
 
   const handleRowClick = (service: RecentService) => {
-    // Navigate to monitoring with URL params for filtering
     const params = new URLSearchParams({
       serviceId: service.id,
       clientId: service.clientId,
@@ -72,7 +79,7 @@ export function RecentServicesTable({ services }: RecentServicesTableProps) {
                     ID
                   </th>
                   <th className="text-left py-3 px-4 text-[11px] font-semibold uppercase text-muted-foreground tracking-wider">
-                    Client
+                    Cliente
                   </th>
                   <th className="text-left py-3 px-4 text-[11px] font-semibold uppercase text-muted-foreground tracking-wider">
                     Ruta
@@ -92,7 +99,7 @@ export function RecentServicesTable({ services }: RecentServicesTableProps) {
                 </tr>
               </thead>
               <tbody>
-                {services.slice(0, 10).map((service) => {
+                {services.map((service) => {
                   const statusConfig = getStatusConfig(service.status);
                   return (
                     <tr

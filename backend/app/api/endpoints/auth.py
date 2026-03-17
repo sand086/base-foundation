@@ -114,12 +114,12 @@ def login(
     )
 
 
-@router.post("/2fa/verify", response_model=schemas.LoginResponse)
+@router.post("/verify-2fa", response_model=schemas.LoginResponse)
 def verify_2fa(
     request_data: schemas.TwoFactorVerifyRequest,
     request: Request,
     db: Session = Depends(get_db),
-):  # <--- Agregado request: Request
+):
     # Validar token temporal
     user_id_str = security.decode_temp_token(request_data.temp_token)
     if not user_id_str:
