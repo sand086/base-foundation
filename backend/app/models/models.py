@@ -595,6 +595,7 @@ class Trip(AuditMixin, Base):
     origin = Column(String(200), nullable=False)
     destination = Column(String(200), nullable=False)
     route_name = Column(String(200))
+    terminal_entrega_vacio = Column(String(255), nullable=True)
 
     #   CAMPOS DE MERCANCÍA (CARTA PORTE)
     descripcion_mercancia = Column(String(255), default="Carga General")

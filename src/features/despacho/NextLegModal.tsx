@@ -26,6 +26,7 @@ import {
   Loader2,
   Info,
   CheckCircle2,
+  MapPin,
   Box,
 } from "lucide-react";
 import { useUnits } from "@/hooks/useUnits";
@@ -44,6 +45,7 @@ interface ExtendedLegPayload extends TripLegCreatePayload {
   remolque_1_id?: number | null;
   dolly_id?: number | null;
   remolque_2_id?: number | null;
+  terminal_entrega_vacio?: string;
 }
 
 export function NextLegModal({
@@ -56,7 +58,9 @@ export function NextLegModal({
   const { operadores } = useOperators();
   const [loading, setLoading] = useState(false);
 
-  const [formData, setFormData] = useState<Partial<ExtendedLegPayload>>({
+  const [formData, setFormData] = useState<
+    Partial<ExtendedLegPayload & { terminal_entrega_vacio: string }>
+  >({
     leg_type: "ruta_carretera",
     unit_id: null,
     operator_id: null,
@@ -66,6 +70,7 @@ export function NextLegModal({
     anticipo_casetas: 0,
     anticipo_viaticos: 0,
     anticipo_combustible: 0,
+    terminal_entrega_vacio: "", // 🚀 Nuevo campo
   });
 
   // 🚀 Lógica para detectar si es un viaje Full basándose en el tipo de unidad
@@ -169,6 +174,15 @@ export function NextLegModal({
       );
     }
 
+    if (
+      formData.leg_type === "entrega_vacio" &&
+      !formData.terminal_entrega_vacio
+    ) {
+      return toast.error(
+        "Por favor especifica la terminal de entrega del vacío.",
+      );
+    }
+
     setLoading(true);
 
     const payload: ExtendedLegPayload = {
@@ -197,6 +211,7 @@ export function NextLegModal({
       anticipo_combustible: isRoadLeg
         ? Number(formData.anticipo_combustible || 0)
         : 0,
+      terminal_entrega_vacio: formData.terminal_entrega_vacio,
     };
 
     const success = await onSubmit(String(tripPadre.id), payload as any);
