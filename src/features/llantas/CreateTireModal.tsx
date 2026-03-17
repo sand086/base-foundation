@@ -18,8 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CirclePlus, Pencil } from "lucide-react";
-import { UnitTire } from "@/services/unitService";
-
+import { UnitTire } from "@/types/api.types";
 const MARCAS_COMUNES = [
   "Michelin",
   "Bridgestone",

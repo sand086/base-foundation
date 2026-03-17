@@ -1,11 +1,17 @@
 // src/features/cierre/TripSettlementModal.tsx
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Calculator,
   CheckCircle2,
   AlertCircle,
   DollarSign,
   FileText,
+  User,
+  Fuel,
+  TrendingUp,
+  AlertTriangle,
+  History,
+  Loader2,
 } from "lucide-react";
 
 import {
@@ -20,21 +26,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 
 import { Trip, TripLeg } from "@/types/api.types";
 import { useTrips } from "@/hooks/useTrips";
 
-// ==========================================
-// INTERFAZ
-// ==========================================
 export interface TripSettlementModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  // Props para un solo tramo (desde TripPlanner)
   leg?: TripLeg | null;
   tripPadre?: Trip | null;
-  // Props para múltiples tramos (desde CierreViajePage)
   selectedLegs?: any[];
   onSuccess?: () => void;
 }
@@ -47,8 +50,14 @@ export default function TripSettlementModal({
   selectedLegs = [],
   onSuccess,
 }: TripSettlementModalProps) {
-  const { updateTripStatus } = useTrips();
+  const { updateTripStatus, refreshTrips } = useTrips();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false); // 🚀 DEFINIDO
+
+  // ==========================================
+  // ESTADOS DE CONTROL OPERATIVO (GUSTAVO)
+  // ==========================================
+  const [odometroFinal, setOdometroFinal] = useState<number | "">("");
 
   // ==========================================
   // ESTADOS FINANCIEROS
@@ -56,11 +65,11 @@ export default function TripSettlementModal({
   const [sueldoBase, setSueldoBase] = useState<number | "">("");
   const [bonos, setBonos] = useState<number | "">("");
   const [maniobras, setManiobras] = useState<number | "">("");
-  const [descuentos, setDescuentos] = useState<number | "">("");
+  const [penalizaciones, setPenalizaciones] = useState<number | "">("");
   const [observaciones, setObservaciones] = useState("");
 
   // ==========================================
-  // UNIFICAR DATOS (Individual o Múltiple)
+  // UNIFICAR DATOS
   // ==========================================
   const activeLegs = useMemo(() => {
     if (selectedLegs.length > 0) return selectedLegs;
@@ -68,64 +77,92 @@ export default function TripSettlementModal({
     return [];
   }, [leg, tripPadre, selectedLegs]);
 
+  // Carga inicial de datos
+  useEffect(() => {
+    if (open && activeLegs.length > 0) {
+      const padre = activeLegs[0].trip || tripPadre;
+      if (padre?.tarifa_base) {
+        setSueldoBase(padre.tarifa_base * 0.1); // 10% sugerido en junta
+      }
+    }
+  }, [open, activeLegs, tripPadre]);
+
   // ==========================================
-  // CÁLCULOS AUTOMÁTICOS
+  // LÓGICA DE RENDIMIENTO
   // ==========================================
-  const sumViaticos = activeLegs.reduce(
-    (sum, item) => sum + (Number(item.anticipo_viaticos) || 0),
+  const kmsRecorridos = useMemo(() => {
+    const inicial = Number(activeLegs[0]?.odometro_inicial) || 0;
+    if (!odometroFinal || odometroFinal <= inicial) return 0;
+    return Number(odometroFinal) - inicial;
+  }, [activeLegs, odometroFinal]);
+
+  const totalLitrosCargados = useMemo(() => {
+    return activeLegs.reduce((acc, current) => {
+      const logs = current.fuel_logs || [];
+      return (
+        acc + logs.reduce((sum: number, log: any) => sum + (log.litros || 0), 0)
+      );
+    }, 0);
+  }, [activeLegs]);
+
+  const rendimientoReal = useMemo(() => {
+    if (kmsRecorridos <= 0 || totalLitrosCargados <= 0) return 0;
+    return kmsRecorridos / totalLitrosCargados;
+  }, [kmsRecorridos, totalLitrosCargados]);
+
+  const sumAnticipos = activeLegs.reduce(
+    (sum, item) =>
+      sum +
+      (Number(item.anticipo_viaticos) || 0) +
+      (Number(item.anticipo_casetas) || 0) +
+      (Number(item.otros_anticipos) || 0),
     0,
   );
-  const sumCasetas = activeLegs.reduce(
-    (sum, item) => sum + (Number(item.anticipo_casetas) || 0),
-    0,
-  );
-  const totalAnticipos = sumViaticos + sumCasetas;
 
   const totalPercepciones =
     (Number(sueldoBase) || 0) + (Number(bonos) || 0) + (Number(maniobras) || 0);
-  const totalDeducciones = (Number(descuentos) || 0) + totalAnticipos;
+  const totalDeducciones = (Number(penalizaciones) || 0) + sumAnticipos;
   const totalNeto = totalPercepciones - totalDeducciones;
-
-  const operatorName =
-    activeLegs[0]?.operator?.name || activeLegs[0]?.operatorName || "Operador";
 
   // ==========================================
   // HANDLERS
   // ==========================================
   const handleClose = () => {
+    // 🚀 DEFINIDO
     onOpenChange(false);
-    // Limpiar formulario al cerrar
+    setOdometroFinal("");
     setSueldoBase("");
     setBonos("");
     setManiobras("");
-    setDescuentos("");
+    setPenalizaciones("");
     setObservaciones("");
   };
 
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    await refreshTrips();
+    setIsSyncing(false);
+    toast.success("Sincronizado con vales de combustible");
+  };
+
   const handleSettle = async () => {
-    if (activeLegs.length === 0) return;
+    if (!odometroFinal) return toast.error("El odómetro final es obligatorio");
 
     try {
       setIsSubmitting(true);
-
-      // Aquí iteramos para cambiar el estatus de los viajes a "liquidado"
       for (const item of activeLegs) {
         const tripId = item.trip?.id || item.trip_id;
-        if (!tripId) continue;
-
-        // Llamada real al hook (Ajusta el estatus exacto según tu API)
         await updateTripStatus(
           String(tripId),
           "cerrado",
-          `Liquidación generada: ${observaciones}`,
+          `Liquidado. Rendimiento: ${rendimientoReal.toFixed(2)} km/l. Obs: ${observaciones}`,
         );
       }
-
-      toast.success("Liquidación procesada correctamente");
+      toast.success("Liquidación completada");
       if (onSuccess) onSuccess();
       handleClose();
     } catch (error) {
-      toast.error("Error al procesar la liquidación");
+      toast.error("Error al liquidar");
     } finally {
       setIsSubmitting(false);
     }
@@ -133,265 +170,178 @@ export default function TripSettlementModal({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-4xl p-0 overflow-hidden bg-slate-50 rounded-2xl">
-        {/* HEADER */}
-        <div className="bg-brand-navy p-6">
-          <DialogTitle className="text-2xl font-black text-white flex items-center gap-2">
-            <Calculator className="h-6 w-6 text-emerald-400" /> Liquidación de
-            Operador
-          </DialogTitle>
-          <DialogDescription className="text-slate-300 mt-1 text-sm font-medium">
-            Generando recibo de pago para{" "}
-            <strong className="text-white">{operatorName}</strong> (
-            {activeLegs.length} movimientos seleccionados)
-          </DialogDescription>
+      <DialogContent className="max-w-5xl p-0 overflow-hidden bg-slate-50 rounded-2xl border-none shadow-2xl">
+        <div className="bg-brand-navy p-6 flex justify-between items-center text-white">
+          <div>
+            <DialogTitle className="text-2xl font-black flex items-center gap-2">
+              <Calculator className="h-6 w-6 text-emerald-400" /> Liquidación
+              Operativa
+            </DialogTitle>
+            <DialogDescription className="text-slate-300 font-bold text-[11px] uppercase mt-1">
+              Operador: {activeLegs[0]?.operator?.name || "S/A"}
+            </DialogDescription>
+          </div>
+          <Button
+            variant="outline"
+            className="bg-white/10 border-white/20 text-white h-9"
+            onClick={handleManualSync}
+            disabled={isSyncing}
+          >
+            {isSyncing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <History className="h-4 w-4 mr-2" />
+            )}
+            Actualizar Vales
+          </Button>
         </div>
 
-        <div className="p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* COLUMNA IZQ: RESUMEN DE VIAJES (Ancho 5) */}
-          <div className="lg:col-span-5 space-y-4">
-            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1">
-              <FileText className="h-4 w-4" /> Detalle de Viajes
+        <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* CONTROL DE RENDIMIENTO */}
+          <div className="space-y-4">
+            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" /> Rendimiento
             </h3>
-
-            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm max-h-[350px] overflow-y-auto">
-              {activeLegs.map((item, idx) => (
-                <div
-                  key={item.id || idx}
-                  className="p-3 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors"
-                >
-                  <div className="flex justify-between items-start mb-1">
-                    <span className="font-bold text-brand-navy text-sm">
-                      {item.trip?.public_id ||
-                        `TRP-${item.trip?.id || item.trip_id}`}
-                    </span>
-                    <Badge
-                      variant="outline"
-                      className="text-[9px] bg-slate-100 text-slate-600 uppercase"
-                    >
-                      {item.leg_type?.replace("_", " ")}
-                    </Badge>
+            <Card className="border-slate-200 shadow-sm">
+              <CardContent className="p-4 space-y-4">
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="space-y-1">
+                    <Label className="font-bold text-slate-500">
+                      KM INICIAL
+                    </Label>
+                    <Input
+                      value={activeLegs[0]?.odometro_inicial || 0}
+                      readOnly
+                      className="bg-slate-50 font-mono"
+                    />
                   </div>
-                  <div className="text-xs text-slate-500 font-medium mb-2">
-                    {item.trip?.origin} ➔ {item.trip?.destination}
+                  <div className="space-y-1">
+                    <Label className="font-bold text-blue-600">
+                      KM FINAL *
+                    </Label>
+                    <Input
+                      type="number"
+                      value={odometroFinal}
+                      onChange={(e) => setOdometroFinal(Number(e.target.value))}
+                      className="border-blue-200 font-mono"
+                    />
                   </div>
-
-                  {/* Desglose de Anticipos por Viaje */}
-                  {(item.anticipo_viaticos > 0 ||
-                    item.anticipo_casetas > 0) && (
-                    <div className="flex gap-2">
-                      {item.anticipo_viaticos > 0 && (
-                        <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded">
-                          Viáticos: $
-                          {Number(item.anticipo_viaticos).toLocaleString()}
-                        </span>
-                      )}
-                      {item.anticipo_casetas > 0 && (
-                        <span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded">
-                          Casetas: $
-                          {Number(item.anticipo_casetas).toLocaleString()}
-                        </span>
-                      )}
-                    </div>
-                  )}
                 </div>
-              ))}
-            </div>
-
-            {totalAnticipos > 0 && (
-              <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 flex gap-3">
-                <AlertCircle className="h-5 w-5 text-rose-600 shrink-0" />
-                <p className="text-xs text-rose-800 font-medium leading-tight">
-                  Se detectaron{" "}
-                  <strong>${totalAnticipos.toLocaleString()}</strong> en
-                  anticipos previos. Este monto será descontado automáticamente.
-                </p>
-              </div>
-            )}
+                <div className="bg-slate-900 text-white p-3 rounded-xl flex justify-between items-center">
+                  <span className="text-[10px] font-black uppercase text-slate-400">
+                    Distancia:
+                  </span>
+                  <span className="text-xl font-black font-mono">
+                    {kmsRecorridos} KM
+                  </span>
+                </div>
+                <div
+                  className={`p-4 rounded-2xl text-center border-2 ${rendimientoReal < 2.2 ? "bg-rose-50 border-rose-200" : "bg-emerald-50 border-emerald-200"}`}
+                >
+                  <p className="text-[9px] font-black uppercase text-slate-400 mb-1">
+                    Rendimiento Real
+                  </p>
+                  <p
+                    className={`text-3xl font-black ${rendimientoReal < 2.2 ? "text-rose-600" : "text-emerald-600"}`}
+                  >
+                    {rendimientoReal.toFixed(2)}
+                  </p>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase mt-1">
+                    KM/L
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
-          {/* COLUMNA DER: CALCULADORA FINANCIERA (Ancho 7) */}
-          <div className="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col">
-            <div className="grid grid-cols-2 gap-6 flex-1">
-              {/* PERCEPCIONES */}
-              <div className="space-y-4">
-                <h4 className="text-xs font-black text-emerald-600 uppercase tracking-widest border-b pb-2">
-                  Percepciones (+)
-                </h4>
-
+          {/* CALCULADORA */}
+          <div className="lg:col-span-2 space-y-4">
+            <div className="grid grid-cols-2 gap-6 bg-white p-6 rounded-2xl border border-slate-200">
+              {/* INGRESOS */}
+              <div className="space-y-3">
+                <p className="text-[10px] font-black text-emerald-600 uppercase border-b pb-1">
+                  Percepciones
+                </p>
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">
-                    Sueldo / Tarifa Base
-                  </Label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">
-                      $
-                    </span>
-                    <Input
-                      type="number"
-                      value={sueldoBase}
-                      onChange={(e) =>
-                        setSueldoBase(
-                          e.target.value === "" ? "" : Number(e.target.value),
-                        )
-                      }
-                      className="pl-7 font-mono"
-                      placeholder="0.00"
-                    />
-                  </div>
+                  <Label className="text-[11px] font-bold">Sueldo Base</Label>
+                  <Input
+                    type="number"
+                    value={sueldoBase}
+                    onChange={(e) => setSueldoBase(Number(e.target.value))}
+                    className="font-mono h-10"
+                  />
                 </div>
-
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">
-                    Maniobras Extra
-                  </Label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">
-                      $
-                    </span>
-                    <Input
-                      type="number"
-                      value={maniobras}
-                      onChange={(e) =>
-                        setManiobras(
-                          e.target.value === "" ? "" : Number(e.target.value),
-                        )
-                      }
-                      className="pl-7 font-mono"
-                      placeholder="0.00"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">
-                    Bonos de Rendimiento
-                  </Label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-500 font-bold">
-                      $
-                    </span>
-                    <Input
-                      type="number"
-                      value={bonos}
-                      onChange={(e) =>
-                        setBonos(
-                          e.target.value === "" ? "" : Number(e.target.value),
-                        )
-                      }
-                      className="pl-7 font-mono bg-emerald-50/50 border-emerald-200"
-                      placeholder="0.00"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* DEDUCCIONES */}
-              <div className="space-y-4">
-                <h4 className="text-xs font-black text-rose-600 uppercase tracking-widest border-b pb-2">
-                  Deducciones (-)
-                </h4>
-
-                <div className="space-y-1.5 opacity-70">
-                  <Label className="text-xs font-bold text-slate-700">
-                    Anticipos (Viáticos y Casetas)
-                  </Label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-rose-500 font-bold">
-                      $
-                    </span>
-                    <Input
-                      type="number"
-                      value={totalAnticipos}
-                      readOnly
-                      className="pl-7 font-mono bg-slate-100 text-rose-600 font-bold"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">
-                    Otros Descuentos
-                  </Label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-rose-400 font-bold">
-                      $
-                    </span>
-                    <Input
-                      type="number"
-                      value={descuentos}
-                      onChange={(e) =>
-                        setDescuentos(
-                          e.target.value === "" ? "" : Number(e.target.value),
-                        )
-                      }
-                      className="pl-7 font-mono bg-rose-50/50 border-rose-200"
-                      placeholder="0.00"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5 pt-2">
-                  <Label className="text-xs font-bold text-slate-700">
-                    Observaciones del pago
+                  <Label className="text-[11px] font-bold text-emerald-600">
+                    Bonos
                   </Label>
                   <Input
-                    value={observaciones}
-                    onChange={(e) => setObservaciones(e.target.value)}
-                    placeholder="Motivo del descuento/bono..."
-                    className="text-xs"
+                    type="number"
+                    value={bonos}
+                    onChange={(e) => setBonos(Number(e.target.value))}
+                    className="font-mono h-10 bg-emerald-50/20"
+                  />
+                </div>
+              </div>
+              {/* EGRESOS */}
+              <div className="space-y-3">
+                <p className="text-[10px] font-black text-rose-600 uppercase border-b pb-1">
+                  Deducciones
+                </p>
+                <div className="p-3 bg-rose-50/50 border border-dashed border-rose-200 rounded-xl">
+                  <div className="flex justify-between items-center text-[11px] font-bold text-slate-500">
+                    <span>TOTAL ANTICIPOS:</span>
+                    <span className="text-rose-600">
+                      -${sumAnticipos.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] font-bold text-rose-600">
+                    Penalizaciones
+                  </Label>
+                  <Input
+                    type="number"
+                    value={penalizaciones}
+                    onChange={(e) => setPenalizaciones(Number(e.target.value))}
+                    className="font-mono h-10 bg-rose-50/20"
                   />
                 </div>
               </div>
             </div>
 
-            {/* TOTAL A PAGAR */}
-            <div className="mt-6 pt-4 border-t-2 border-dashed border-slate-200">
-              <div className="flex justify-between items-center bg-slate-50 p-4 rounded-xl border border-slate-100">
-                <div>
-                  <span className="block text-xs font-bold text-slate-500 uppercase tracking-widest">
-                    Total a Pagar
-                  </span>
-                  <span className="block text-[10px] text-slate-400">
-                    Percepciones - Deducciones
-                  </span>
-                </div>
-                <div
-                  className={`text-3xl font-black tracking-tighter ${totalNeto < 0 ? "text-rose-600" : "text-brand-navy"}`}
-                >
-                  $
-                  {totalNeto.toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
-                </div>
+            <div className="bg-brand-navy p-6 rounded-2xl flex justify-between items-center shadow-2xl border-t-4 border-emerald-500">
+              <div className="text-white">
+                <p className="text-slate-400 font-black uppercase text-[10px] tracking-widest">
+                  Saldo Neto a Pagar
+                </p>
+                <p className="text-xs">{activeLegs[0]?.operator?.name}</p>
               </div>
+              <p className="text-5xl font-black text-white font-mono tracking-tighter">
+                $
+                {totalNeto.toLocaleString("es-MX", {
+                  minimumFractionDigits: 2,
+                })}
+              </p>
             </div>
           </div>
         </div>
 
-        {/* FOOTER ACCIONES */}
-        <DialogFooter className="bg-white p-4 border-t border-slate-200 flex items-center justify-between sm:justify-between px-6 rounded-b-2xl">
-          <Button
-            variant="ghost"
-            onClick={handleClose}
-            disabled={isSubmitting}
-            className="rounded-xl"
-          >
-            Cancelar
+        <DialogFooter className="bg-slate-100 p-5 border-t flex justify-end gap-4 rounded-b-2xl">
+          <Button variant="ghost" onClick={handleClose} disabled={isSubmitting}>
+            CANCELAR
           </Button>
           <Button
-            className="bg-brand-navy hover:bg-brand-navy/90 text-white font-bold rounded-xl px-8"
+            className="bg-brand-navy hover:bg-slate-800 text-white font-black px-12 h-14 rounded-2xl text-base"
+            disabled={isSubmitting || !odometroFinal}
             onClick={handleSettle}
-            disabled={isSubmitting || activeLegs.length === 0}
           >
             {isSubmitting ? (
-              "Procesando pago..."
+              <Loader2 className="animate-spin mr-2" />
             ) : (
-              <>
-                <CheckCircle2 className="w-4 h-4 mr-2" /> Confirmar Liquidación
-              </>
+              <CheckCircle2 className="mr-2" />
             )}
+            AUTORIZAR PAGO Y CERRAR
           </Button>
         </DialogFooter>
       </DialogContent>
