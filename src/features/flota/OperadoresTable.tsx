@@ -28,11 +28,11 @@ import {
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { OperatorDetailSheet } from "./OperatorDetailSheet";
-import { Operador } from "@/services/operatorService";
+import { Operator } from "@/types/api.types";
 
 interface OperadoresTableProps {
-  operadores: Operador[];
-  onEdit?: (operador: Operador) => void;
+  operadores: Operator[];
+  onEdit?: (operador: Operator) => void;
   onDelete?: (id: number) => void;
 }
 
@@ -122,17 +122,17 @@ export function OperadoresTable({
   onEdit,
   onDelete,
 }: OperadoresTableProps) {
-  const [selectedOperator, setSelectedOperator] = useState<Operador | null>(
+  const [selectedOperator, setSelectedOperator] = useState<Operator | null>(
     null,
   );
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
-  const handleViewDetails = (operador: Operador) => {
+  const handleViewDetails = (operador: Operator) => {
     setSelectedOperator(operador);
     setIsDetailOpen(true);
   };
 
-  const columns: ColumnDef<Operador>[] = useMemo(
+  const columns: ColumnDef<Operator>[] = useMemo(
     () => [
       {
         key: "name",

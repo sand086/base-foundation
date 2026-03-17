@@ -2,14 +2,14 @@ import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import {
   tireService,
-  GlobalTire,
   AssignTirePayload,
   MaintenanceTirePayload,
 } from "@/services/tireService";
+import { Tire } from "@/types/api.types";
 import { AxiosError } from "axios";
 
 export const useTires = () => {
-  const [tires, setTires] = useState<GlobalTire[]>([]);
+  const [tires, setTires] = useState<Tire[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Cargar Llantas

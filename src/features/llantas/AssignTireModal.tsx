@@ -20,7 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { ArrowRightLeft, Truck, MapPin, Loader2 } from "lucide-react";
 
-import { GlobalTire } from "@/services/tireService";
+import { Tire } from "@/types/api.types";
 import { useUnits } from "@/hooks/useUnits";
 
 // 🚀 NUEVO MAPEO: IDs numéricos directos para la BD
@@ -38,7 +38,7 @@ const TIRE_POSITIONS = [
 ];
 
 interface AssignTireModalProps {
-  tire: GlobalTire | null;
+  tire: Tire | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAssign: (
@@ -89,6 +89,17 @@ export function AssignTireModal({
   if (!tire) return null;
 
   const isCurrentlyMounted = !!tire.unidad_actual_id;
+  const selectedUnitObj = unidadesList.find(
+    (u) => u.id.toString() === selectedUnit,
+  );
+  const isTrailer =
+    selectedUnitObj &&
+    ["REMOLQUE", "DOLLY", "REMOLQUE_8", "DOLLY_8"].includes(
+      selectedUnitObj.tipo_1 || selectedUnitObj.configuracion_ejes || "",
+    );
+  const availablePositions = isTrailer
+    ? TIRE_POSITIONS.filter((p) => parseInt(p.id) > 2)
+    : TIRE_POSITIONS;
 
   const handleSubmit = async () => {
     if (selectedUnit === "almacen") {
@@ -155,8 +166,8 @@ export function AssignTireModal({
           {/* Selector de Unidad */}
           <div className="space-y-2">
             <Label className="flex items-center gap-2">
-              <Truck className="h-4 w-4" />
-              Nueva Ubicación (Unidad)
+              <MapPin className="h-4 w-4" />
+              Posición en el Vehículo {isTrailer && "(Solo Ejes Traseros)"}
             </Label>
 
             <Select
@@ -215,7 +226,8 @@ export function AssignTireModal({
                   <SelectValue placeholder="Seleccionar posición (1 al 10)..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {TIRE_POSITIONS.map((pos) => (
+                  {/* 🚀 3. AQUÍ USAMOS LA LISTA FILTRADA */}
+                  {availablePositions.map((pos) => (
                     <SelectItem key={pos.id} value={pos.id}>
                       {pos.label}
                     </SelectItem>

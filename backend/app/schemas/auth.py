@@ -1,17 +1,19 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional, Dict, Any
+from datetime import datetime
 
 
 # Esquema básico de Usuario para respuestas de Auth
 class UserAuthSchema(BaseModel):
-    id: int  # <--- IMPORTANTE: Ahora es int
+    id: int
     nombre: str
     email: EmailStr
-    role_id: Optional[int] = None # Puede ser int o null
+    role_id: Optional[int] = None
     avatar_url: Optional[str] = None
 
     class Config:
-        from_attributes = True # Antes orm_mode = True
+        from_attributes = True
+
 
 # Lo que envía el usuario para loguearse
 class LoginRequest(BaseModel):
@@ -24,8 +26,6 @@ class LoginResponse(BaseModel):
     access_token: Optional[str] = None
     token_type: str = "bearer"
     user: Optional[UserAuthSchema] = None
-
-    # Campos para flujo 2FA
     require_2fa: bool = False
     temp_token: Optional[str] = None
 
@@ -49,19 +49,25 @@ class TwoFactorEnableRequest(BaseModel):
     user_id: int
 
 
-# Desactivar 2FA
-class TwoFactorDisableRequest(BaseModel):
-    code: str
-    user_id: int
+# --- NUEVOS SCHEMAS PARA SYSTEM CONFIG (Para que funcione el adminService) ---
 
 
-# Cambio de contraseña
-class PasswordChangeRequest(BaseModel):
-    old_password: str
-    new_password: str
+class SystemConfig(BaseModel):
+    key: str
+    value: str
+    grupo: str
+    tipo: str
+    is_public: bool
+
+    class Config:
+        from_attributes = True
 
 
-# Respuesta de información del usuario
+class UpdateConfigPayload(BaseModel):
+    value: str
+
+
+# Respuesta de información detallada del usuario
 class UserInfoResponse(BaseModel):
     id: int
     nombre: str
@@ -69,9 +75,12 @@ class UserInfoResponse(BaseModel):
     email: EmailStr
     telefono: Optional[str] = None
     puesto: Optional[str] = None
-    role_id: str
+    role_id: Optional[int] = None  # <--- CORREGIDO: de str a int
     activo: bool
     is_2fa_enabled: bool
     avatar_url: Optional[str] = None
-    last_login: Optional[str] = None
+    last_login: Optional[datetime] = None  # <--- CORREGIDO: de str a datetime
     permisos: Optional[Dict[str, Any]] = None
+
+    class Config:
+        from_attributes = True

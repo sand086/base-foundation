@@ -42,10 +42,6 @@ type Unit = {
   placas?: string | null;
   capacidad_tanque_diesel?: number | null;
   capacidad_tanque_urea?: number | null;
-
-  // compat opcional
-  capacidad_tanque_diesel?: number | null;
-  capacidad_tanque_urea?: number | null;
 };
 
 type Operator = {

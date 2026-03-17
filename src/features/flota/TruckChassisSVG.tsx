@@ -86,7 +86,14 @@ export function TruckChassisSVG({
 
   // 🚀 Lógica de Layout Automático
   // T3 = Tracto (10 llantas), R2/D2 = Remolque/Dolly (8 llantas, sin dirección)
-  const isTrailerOrDolly = unitType === "R2" || unitType === "D2";
+  const isTrailerOrDolly = [
+    "R2",
+    "D2",
+    "REMOLQUE",
+    "DOLLY",
+    "REMOLQUE_8",
+    "DOLLY_8",
+  ].includes(unitType?.toUpperCase() || "");
 
   const allPossiblePositions = [
     { x: 80, y: 60, position: 1, isDirectional: true },

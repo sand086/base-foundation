@@ -16,6 +16,7 @@ interface AuthContextType {
   login: (userData: User, token: string) => void;
   logout: () => void;
   isLoading: boolean;
+  verifyOtp: (tempToken: string, code: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -55,6 +56,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     window.location.href = "/login";
   };
 
+  const verifyOtp = async (tempToken: string, code: string) => {
+    try {
+      const data = await authService.verify2FA({ temp_token: tempToken, code });
+      login(data.user, data.access_token);
+    } catch (error) {
+      console.error("Error al verificar OTP:", error);
+      throw error; // Lanzamos el error para que el componente de 2FA pueda manejarlo (mostrar mensaje, etc.)
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -63,6 +74,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         login,
         logout,
         isLoading,
+        verifyOtp, // 🚀 FIJADO: Ahora la función está disponible para el resto de la app
       }}
     >
       {children}

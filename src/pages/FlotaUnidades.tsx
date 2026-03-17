@@ -55,6 +55,8 @@ import { AddUnidadModal } from "@/features/flota/AddUnidadModal";
 import { PatrimonialView } from "@/features/flota/PatrimonialView";
 import { useUnits } from "@/hooks/useUnits";
 
+import { useTiposUnidad } from "@/hooks/useTiposUnidad";
+
 import { Unit } from "@/types/api.types";
 
 // --- Helpers Visuales ---

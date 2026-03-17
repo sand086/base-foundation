@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -16,9 +16,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2, FileText, DollarSign } from "lucide-react";
+import { Plus, Trash2, FileText, DollarSign, Loader2 } from "lucide-react";
 import { ReceivableInvoice, InvoiceConcept, FinalizableService } from "./types";
-import { mockClients } from "@/data/mockData";
+// 🚀 1. Eliminamos el mock e importamos el hook real y el tipo
+import { useClients } from "@/hooks/useClients";
+import { Client } from "@/types/api.types";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface CreateInvoiceModalProps {
   open: boolean;
@@ -43,6 +51,9 @@ export function CreateInvoiceModal({
   onSubmit,
   importedServices,
 }: CreateInvoiceModalProps) {
+  // 🚀 2. Consumimos clientes reales
+  const { clients, isLoading: loadingClients } = useClients();
+
   const [clienteId, setClienteId] = useState("");
   const [diasCredito, setDiasCredito] = useState(30);
   const [moneda, setMoneda] = useState<"MXN" | "USD">("MXN");
@@ -51,13 +62,16 @@ export function CreateInvoiceModal({
   );
   const [conceptos, setConceptos] = useState<InvoiceConcept[]>([]);
 
-  // Initialize with imported services
+  // 🚀 3. Buscar el cliente seleccionado en la lista real
+  const selectedClient = useMemo(
+    () => clients.find((c) => c.id.toString() === clienteId),
+    [clients, clienteId],
+  );
+
   useEffect(() => {
     if (importedServices && importedServices.length > 0 && open) {
-      // Set client from first service
-      setClienteId(importedServices[0].clienteId);
+      setClienteId(importedServices[0].clienteId.toString());
 
-      // Create concepts from services
       const newConceptos: InvoiceConcept[] = importedServices.map(
         (srv, idx) => ({
           id: `IMP-${idx}`,
@@ -70,7 +84,6 @@ export function CreateInvoiceModal({
 
       setConceptos(newConceptos);
     } else if (open && !importedServices) {
-      // Reset for manual creation
       setClienteId("");
       setConceptos([
         {
@@ -84,16 +97,12 @@ export function CreateInvoiceModal({
     }
   }, [importedServices, open]);
 
-  const selectedClient = mockClients.find((c) => c.id === clienteId);
-
-  // Calculate due date
   const fechaVencimiento = (() => {
     const date = new Date(fechaEmision);
     date.setDate(date.getDate() + diasCredito);
     return date.toISOString().split("T")[0];
   })();
 
-  // Calculate total
   const montoTotal = conceptos.reduce((sum, c) => sum + c.importe, 0);
 
   const addConcepto = () => {
@@ -124,9 +133,9 @@ export function CreateInvoiceModal({
       conceptos.map((c) => {
         if (c.id === id) {
           const updated = { ...c, [field]: value };
-          // Recalculate importe
           if (field === "cantidad" || field === "precioUnitario") {
-            updated.importe = updated.cantidad * updated.precioUnitario;
+            updated.importe =
+              Number(updated.cantidad) * Number(updated.precioUnitario);
           }
           return updated;
         }
@@ -140,7 +149,7 @@ export function CreateInvoiceModal({
 
     onSubmit({
       clienteId,
-      cliente: selectedClient?.razónSocial || "",
+      cliente: selectedClient?.razon_social || "", // 🚀 Corregido nombre de campo
       clienteRfc: selectedClient?.rfc || "",
       conceptos,
       montoTotal,
@@ -167,24 +176,32 @@ export function CreateInvoiceModal({
         </DialogHeader>
 
         <div className="space-y-6 py-4">
-          {/* Client Selection */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Client <span className="text-status-danger">*</span>
+                Cliente <span className="text-status-danger">*</span>
               </Label>
-              <Select value={clienteId} onValueChange={setClienteId}>
+              <Select
+                value={clienteId}
+                onValueChange={setClienteId}
+                disabled={loadingClients}
+              >
                 <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar cliente" />
+                  <SelectValue
+                    placeholder={
+                      loadingClients
+                        ? "Cargando clientes..."
+                        : "Seleccionar cliente"
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent className="bg-card">
-                  {mockClients
-                    .filter((c) => c.estatus === "activo")
-                    .map((client) => (
-                      <SelectItem key={client.id} value={client.id}>
-                        {client.razónSocial}
-                      </SelectItem>
-                    ))}
+                  {/* 🚀 4. Iteramos sobre los clientes reales del backend */}
+                  {clients.map((client) => (
+                    <SelectItem key={client.id} value={client.id.toString()}>
+                      {client.razon_social}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -195,12 +212,11 @@ export function CreateInvoiceModal({
               <Input
                 value={selectedClient?.rfc || ""}
                 disabled
-                className="bg-muted"
+                className="bg-muted font-mono"
               />
             </div>
           </div>
 
-          {/* Dates and Terms */}
           <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -214,7 +230,7 @@ export function CreateInvoiceModal({
             </div>
             <div className="space-y-2">
               <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Días de Crédito
+                Términos (Días)
               </Label>
               <Select
                 value={String(diasCredito)}
@@ -251,45 +267,42 @@ export function CreateInvoiceModal({
             </div>
           </div>
 
-          {/* Due Date Preview */}
-          <div className="p-3 bg-muted/50 rounded-md border">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">
-                Fecha de Vencimiento (calculada):
-              </span>
-              <span className="font-semibold text-brand-dark">
-                {fechaVencimiento}
-              </span>
-            </div>
+          <div className="p-3 bg-muted/50 rounded-md border flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">
+              Vencimiento calculado:
+            </span>
+            <span className="font-semibold text-brand-dark">
+              {fechaVencimiento}
+            </span>
           </div>
 
           {/* Conceptos */}
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between border-b pb-2">
               <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Conceptos
+                Conceptos de Facturación
               </Label>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={addConcepto}
-                className="gap-1"
+                className="gap-1 h-7 text-[11px]"
               >
                 <Plus className="h-3 w-3" />
-                Agregar
+                Añadir Concepto
               </Button>
             </div>
 
-            <div className="space-y-2 max-h-[200px] overflow-y-auto">
-              {conceptos.map((concepto, idx) => (
+            <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1">
+              {conceptos.map((concepto) => (
                 <div
                   key={concepto.id}
-                  className="grid grid-cols-12 gap-2 items-center p-2 bg-muted/30 rounded border"
+                  className="grid grid-cols-12 gap-2 items-center p-2 bg-muted/30 rounded border group hover:border-brand-navy/30 transition-colors"
                 >
-                  <div className="col-span-5">
+                  <div className="col-span-6">
                     <Input
-                      placeholder="Descripción del concepto"
+                      placeholder="Descripción"
                       value={concepto.descripcion}
                       onChange={(e) =>
                         updateConcepto(
@@ -304,8 +317,7 @@ export function CreateInvoiceModal({
                   <div className="col-span-2">
                     <Input
                       type="number"
-                      placeholder="Cant."
-                      value={concepto.cantidad || ""}
+                      value={concepto.cantidad}
                       onChange={(e) =>
                         updateConcepto(
                           concepto.id,
@@ -314,14 +326,12 @@ export function CreateInvoiceModal({
                         )
                       }
                       className="h-8 text-sm text-center"
-                      min={1}
                     />
                   </div>
                   <div className="col-span-2">
                     <Input
                       type="number"
-                      placeholder="Precio"
-                      value={concepto.precioUnitario || ""}
+                      value={concepto.precioUnitario}
                       onChange={(e) =>
                         updateConcepto(
                           concepto.id,
@@ -332,10 +342,8 @@ export function CreateInvoiceModal({
                       className="h-8 text-sm"
                     />
                   </div>
-                  <div className="col-span-2 text-right">
-                    <span className="font-medium text-sm">
-                      ${concepto.importe.toLocaleString("es-MX")}
-                    </span>
+                  <div className="col-span-1 text-right text-xs font-bold">
+                    ${concepto.importe.toLocaleString("es-MX")}
                   </div>
                   <div className="col-span-1 text-right">
                     <Button
@@ -354,40 +362,36 @@ export function CreateInvoiceModal({
             </div>
           </div>
 
-          {/* Total */}
-          <div className="p-4 bg-brand-navy/5 rounded-lg border border-brand-navy/20">
+          <div className="p-4 bg-brand-dark rounded-xl text-white">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <DollarSign className="h-5 w-5 text-brand-green" />
-                <span className="font-medium">Total a Facturar</span>
+                <span className="font-medium">Monto Total</span>
               </div>
-              <span className="text-2xl font-bold text-brand-green">
-                ${montoTotal.toLocaleString("es-MX")} {moneda}
-              </span>
+              <div className="text-right">
+                <span className="text-2xl font-bold">
+                  ${montoTotal.toLocaleString("es-MX")}
+                </span>
+                <span className="ml-2 text-xs opacity-70">{moneda}</span>
+              </div>
             </div>
           </div>
-
-          {/* Imported Services Info */}
-          {importedServices && importedServices.length > 0 && (
-            <div className="p-3 bg-emerald-50 rounded border border-emerald-200">
-              <p className="text-sm text-emerald-700">
-                ✓ Esta factura incluye {importedServices.length} servicio(s)
-                importados: {importedServices.map((s) => s.id).join(", ")}
-              </p>
-            </div>
-          )}
         </div>
 
         <DialogFooter className="border-t pt-4">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Cerrar
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={!clienteId || montoTotal <= 0}
-            className="bg-brand-green hover:bg-brand-green/90 text-white"
+            disabled={!clienteId || montoTotal <= 0 || loadingClients}
+            className="bg-brand-green hover:bg-brand-green/90 text-white min-w-[140px]"
           >
-            Crear Factura
+            {loadingClients ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              "Confirmar y Crear"
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

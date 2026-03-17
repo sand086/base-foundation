@@ -1,72 +1,73 @@
-import { useState, useEffect, useCallback } from 'react';
-import { RutaAutorizada, defaultRutasAutorizadas } from '@/data/rutasData';
-
-const STORAGE_KEY = 'rutas_autorizadas';
+import { useState, useEffect, useCallback } from "react";
+import axiosClient from "@/api/axiosClient";
+import { RutaAutorizada } from "@/types/api.types";
+import { toast } from "sonner";
 
 export const useRutasAutorizadas = () => {
   const [rutas, setRutas] = useState<RutaAutorizada[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Load from localStorage on mount
-  useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      try {
-        setRutas(JSON.parse(stored));
-      } catch {
-        setRutas(defaultRutasAutorizadas);
-      }
-    } else {
-      setRutas(defaultRutasAutorizadas);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultRutasAutorizadas));
+  const fetchRutas = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const { data } =
+        await axiosClient.get<RutaAutorizada[]>("/catalogs/routes");
+      setRutas(data);
+    } catch (error) {
+      toast.error("Error al cargar el catálogo de rutas");
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 
-  // Save to localStorage whenever rutas change
-  const saveToStorage = useCallback((newRutas: RutaAutorizada[]) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(newRutas));
-    setRutas(newRutas);
-  }, []);
+  useEffect(() => {
+    fetchRutas();
+  }, [fetchRutas]);
 
-  const addRuta = useCallback((ruta: Omit<RutaAutorizada, 'id' | 'fechaCreacion'>) => {
-    const newRuta: RutaAutorizada = {
-      ...ruta,
-      id: `ruta-${Date.now()}`,
-      fechaCreacion: new Date().toISOString().split('T')[0],
-    };
-    const newRutas = [...rutas, newRuta];
-    saveToStorage(newRutas);
-    return newRuta;
-  }, [rutas, saveToStorage]);
+  const addRuta = async (ruta: Omit<RutaAutorizada, "id">) => {
+    try {
+      await axiosClient.post("/catalogs/routes", ruta);
+      fetchRutas();
+      return true;
+    } catch (error) {
+      toast.error("Error al crear la ruta");
+      return false;
+    }
+  };
 
-  const updateRuta = useCallback((id: string, updates: Partial<RutaAutorizada>) => {
-    const newRutas = rutas.map(r => 
-      r.id === id ? { ...r, ...updates } : r
-    );
-    saveToStorage(newRutas);
-  }, [rutas, saveToStorage]);
+  const updateRuta = async (id: number, ruta: Partial<RutaAutorizada>) => {
+    try {
+      await axiosClient.put(`/catalogs/routes/${id}`, ruta);
+      fetchRutas();
+      return true;
+    } catch (error) {
+      toast.error("Error al actualizar la ruta");
+      return false;
+    }
+  };
 
-  const deleteRuta = useCallback((id: string) => {
-    const newRutas = rutas.filter(r => r.id !== id);
-    saveToStorage(newRutas);
-  }, [rutas, saveToStorage]);
+  const deleteRuta = async (id: number) => {
+    try {
+      await axiosClient.delete(`/catalogs/routes/${id}`);
+      fetchRutas();
+      return true;
+    } catch (error) {
+      toast.error("No se pudo eliminar la ruta. Puede estar en uso.");
+      return false;
+    }
+  };
 
-  const toggleRutaActivo = useCallback((id: string) => {
-    const newRutas = rutas.map(r => 
-      r.id === id ? { ...r, activo: !r.activo } : r
-    );
-    saveToStorage(newRutas);
-  }, [rutas, saveToStorage]);
-
-  const getRutasActivas = useCallback(() => {
-    return rutas.filter(r => r.activo);
-  }, [rutas]);
+  const toggleRutaActivo = async (id: number, currentState: boolean) => {
+    return updateRuta(id, { activo: !currentState });
+  };
 
   return {
     rutas,
-    rutasActivas: getRutasActivas(),
+    isLoading,
     addRuta,
     updateRuta,
     deleteRuta,
     toggleRutaActivo,
+    refreshRutas: fetchRutas,
   };
 };

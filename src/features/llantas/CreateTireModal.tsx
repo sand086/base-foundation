@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CirclePlus, Pencil } from "lucide-react";
-import { UnitTire } from "@/types/api.types";
+import { Tire } from "@/types/api.types";
 const MARCAS_COMUNES = [
   "Michelin",
   "Bridgestone",
@@ -35,7 +35,7 @@ interface CreateTireModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: any) => Promise<boolean>;
-  tireToEdit?: UnitTire | null; // NUEVO: Prop opcional para edición
+  tireToEdit?: Tire | null; // NUEVO: Prop opcional para edición
 }
 
 export function CreateTireModal({

@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://23.29.114.149";
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "/";
 
 export function ViewCargaModal({ open, onOpenChange, carga }: any) {
   // ✅ Estado para manejar errores de carga de imagen sin romper el DOM

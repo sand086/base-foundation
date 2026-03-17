@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -16,23 +16,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CreditCard, Landmark, AlertCircle } from "lucide-react";
-import { mockBankAccounts } from "@/data/tesoreriaData";
+import { CreditCard, Landmark, AlertCircle, Loader2 } from "lucide-react";
+// 🚀 Importamos datos reales
+import { useBankAccounts } from "@/hooks/useBankAccounts";
+import { Supplier, BankAccount } from "@/types/api.types";
 
 interface PaymentModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (data: PaymentFormData) => void;
-  suppliers: { id: string; razonSocial: string }[];
-}
-
-export interface PaymentFormData {
-  proveedor: string;
-  folioFactura: string;
-  monto: number;
-  metodoPago: string;
-  cuentaOrigen: string;
-  referencia: string;
+  onSubmit: (data: any) => void;
+  suppliers: Supplier[]; // 🚀 Ahora usa el tipo real
 }
 
 const metodosPago = [
@@ -47,174 +40,161 @@ export function PaymentModal({
   onSubmit,
   suppliers,
 }: PaymentModalProps) {
-  const [formData, setFormData] = useState<PaymentFormData>({
-    proveedor: "",
-    folioFactura: "",
+  const { accounts, isLoading: loadingAccounts } = useBankAccounts();
+
+  const [formData, setFormData] = useState({
+    supplier_id: "",
+    folio_factura: "",
     monto: 0,
-    metodoPago: "",
-    cuentaOrigen: "",
+    metodo_pago: "",
+    cuenta_id: "",
     referencia: "",
   });
 
   const [showAccountWarning, setShowAccountWarning] = useState(false);
 
-  const activeAccounts = mockBankAccounts.filter((a) => a.estatus === "activo");
+  // Cuentas filtradas
+  const activeAccounts = useMemo(
+    () => accounts.filter((a) => a.estatus === "activo"),
+    [accounts],
+  );
+
+  const selectedAccount = useMemo(
+    () => activeAccounts.find((a) => a.id.toString() === formData.cuenta_id),
+    [activeAccounts, formData.cuenta_id],
+  );
 
   const handleSubmit = () => {
-    if (!formData.cuentaOrigen) {
+    if (!formData.cuenta_id) {
       setShowAccountWarning(true);
       return;
     }
-    onSubmit(formData);
+
+    // 🚀 Enviamos los datos con el formato que espera el backend
+    onSubmit({
+      ...formData,
+      supplier_id: parseInt(formData.supplier_id),
+      cuenta_id: parseInt(formData.cuenta_id),
+      monto: parseFloat(formData.monto.toString()),
+    });
+
+    // Reset
     setFormData({
-      proveedor: "",
-      folioFactura: "",
+      supplier_id: "",
+      folio_factura: "",
       monto: 0,
-      metodoPago: "",
-      cuentaOrigen: "",
+      metodo_pago: "",
+      cuenta_id: "",
       referencia: "",
     });
-    setShowAccountWarning(false);
     onOpenChange(false);
   };
-
-  const selectedAccount = activeAccounts.find(
-    (a) => a.id === formData.cuentaOrigen,
-  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[520px]">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-brand-dark">
-            <CreditCard className="h-5 w-5" />
-            Registrar Pago
+          <DialogTitle className="flex items-center gap-2 text-brand-dark font-black">
+            <CreditCard className="h-5 w-5 text-brand-green" />
+            Registrar Pago a Proveedor
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 pt-4">
-          {/* Proveedor */}
+          {/* Proveedor Real */}
           <div className="space-y-2">
-            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Proveedor
+            <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+              Seleccionar Proveedor
             </Label>
             <Select
-              value={formData.proveedor}
-              onValueChange={(value) =>
-                setFormData({ ...formData, proveedor: value })
+              value={formData.supplier_id}
+              onValueChange={(v) =>
+                setFormData({ ...formData, supplier_id: v })
               }
             >
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue placeholder="Seleccionar proveedor" />
+              <SelectTrigger className="rounded-xl">
+                <SelectValue placeholder="Buscar proveedor..." />
               </SelectTrigger>
-              <SelectContent className="bg-card">
+              <SelectContent>
                 {suppliers.map((s) => (
-                  <SelectItem key={s.id} value={s.id} className="text-sm">
-                    {s.razonSocial}
+                  <SelectItem key={s.id} value={s.id.toString()}>
+                    {s.razon_social}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
 
-          {/* Folio y Monto */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
                 Folio Factura
               </Label>
               <Input
-                placeholder="Ej: A-1234"
-                value={formData.folioFactura}
+                placeholder="A-001"
+                className="rounded-xl"
+                value={formData.folio_factura}
                 onChange={(e) =>
-                  setFormData({ ...formData, folioFactura: e.target.value })
+                  setFormData({ ...formData, folio_factura: e.target.value })
                 }
-                className="h-9 text-sm"
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Monto
+              <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                Monto a Pagar
               </Label>
-              <Input
-                type="number"
-                placeholder="$0.00"
-                value={formData.monto || ""}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    monto: parseFloat(e.target.value) || 0,
-                  })
-                }
-                className="h-9 text-sm"
-              />
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                  $
+                </span>
+                <Input
+                  type="number"
+                  placeholder="0.00"
+                  className="pl-7 rounded-xl"
+                  value={formData.monto || ""}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      monto: parseFloat(e.target.value) || 0,
+                    })
+                  }
+                />
+              </div>
             </div>
           </div>
 
-          {/* Método de Pago */}
           <div className="space-y-2">
-            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Método de Pago
+            <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
+              <Landmark className="h-3 w-3" /> Cuenta Bancaria de Origen
             </Label>
             <Select
-              value={formData.metodoPago}
-              onValueChange={(value) =>
-                setFormData({ ...formData, metodoPago: value })
-              }
-            >
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue placeholder="Seleccionar método" />
-              </SelectTrigger>
-              <SelectContent className="bg-card">
-                {metodosPago.map((m) => (
-                  <SelectItem key={m.value} value={m.value} className="text-sm">
-                    {m.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* CRITICAL: Cuenta de Origen */}
-          <div className="space-y-2">
-            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-              <Landmark className="h-3 w-3" />
-              Cuenta de Origen
-              <span className="text-status-danger">*</span>
-            </Label>
-            <Select
-              value={formData.cuentaOrigen}
-              onValueChange={(value) => {
-                setFormData({ ...formData, cuentaOrigen: value });
+              value={formData.cuenta_id}
+              onValueChange={(v) => {
+                setFormData({ ...formData, cuenta_id: v });
                 setShowAccountWarning(false);
               }}
+              disabled={loadingAccounts}
             >
               <SelectTrigger
-                className={`h-10 text-sm ${showAccountWarning ? "border-status-danger ring-1 ring-status-danger" : ""}`}
+                className={`rounded-xl ${showAccountWarning ? "border-red-500 ring-1 ring-red-500" : ""}`}
               >
-                <SelectValue placeholder="Seleccionar cuenta bancaria" />
+                {loadingAccounts ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Cargando
+                    cuentas...
+                  </div>
+                ) : (
+                  <SelectValue placeholder="Seleccionar banco..." />
+                )}
               </SelectTrigger>
-              <SelectContent className="bg-card">
-                {activeAccounts.map((account) => (
-                  <SelectItem
-                    key={account.id}
-                    value={account.id}
-                    className="text-sm"
-                  >
+              <SelectContent>
+                {activeAccounts.map((acc) => (
+                  <SelectItem key={acc.id} value={acc.id.toString()}>
                     <div className="flex items-center gap-2">
-                      <span className="text-base">{account.bancoLogo}</span>
-                      <span className="font-medium">{account.alias}</span>
-                      <span className="text-muted-foreground text-xs">
-                        - {account.banco} (****{account.numeroCuenta.slice(-4)})
-                      </span>
-                      <span
-                        className={`ml-auto  font-bold ${
-                          account.moneda === "MXN"
-                            ? "text-brand-green"
-                            : "text-status-info"
-                        }`}
-                      >
-                        {account.moneda}
+                      <span>{acc.banco_logo || "🏦"}</span>
+                      <span className="font-bold">{acc.alias}</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        ({acc.banco} ••{acc.numero_cuenta.slice(-4)})
                       </span>
                     </div>
                   </SelectItem>
@@ -222,63 +202,47 @@ export function PaymentModal({
               </SelectContent>
             </Select>
 
-            {showAccountWarning && (
-              <div className="flex items-center gap-2 text-status-danger text-xs mt-1">
-                <AlertCircle className="h-3 w-3" />
-                Debe seleccionar una cuenta de origen para el pago
-              </div>
-            )}
-
+            {/* Saldo Preview */}
             {selectedAccount && (
-              <div className="p-2 bg-muted/50 rounded border text-xs mt-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">
-                    Saldo disponible:
-                  </span>
-                  <span className="font-medium text-brand-dark">
-                    $
-                    {(selectedAccount.saldo || 0).toLocaleString(
-                      selectedAccount.moneda === "MXN" ? "es-MX" : "en-US",
-                    )}{" "}
-                    {selectedAccount.moneda}
-                  </span>
-                </div>
+              <div className="p-3 bg-slate-50 rounded-xl border border-dashed flex justify-between items-center">
+                <span className="text-[10px] uppercase font-bold text-slate-400">
+                  Saldo Disponible:
+                </span>
+                <span className="font-mono font-bold text-brand-navy">
+                  ${selectedAccount.saldo.toLocaleString()}{" "}
+                  {selectedAccount.moneda}
+                </span>
               </div>
             )}
           </div>
 
-          {/* Referencia */}
           <div className="space-y-2">
-            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Referencia / Número de Transacción
+            <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+              Referencia de Transferencia
             </Label>
             <Input
-              placeholder="Ej: REF-2025-001"
+              placeholder="Número de rastreo o autorización"
+              className="rounded-xl"
               value={formData.referencia}
               onChange={(e) =>
                 setFormData({ ...formData, referencia: e.target.value })
               }
-              className="h-9 text-sm"
             />
           </div>
         </div>
 
-        <DialogFooter className="pt-4 border-t">
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            className="h-9 text-sm"
-          >
+        <DialogFooter className="pt-6 border-t gap-2">
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
           <Button
             onClick={handleSubmit}
-            className="h-9 text-sm bg-brand-green hover:bg-brand-green/90 text-white"
+            className="bg-brand-green hover:bg-brand-green/90 text-white rounded-xl px-8"
             disabled={
-              !formData.proveedor || !formData.monto || !formData.metodoPago
+              !formData.supplier_id || !formData.monto || !formData.cuenta_id
             }
           >
-            Registrar Pago
+            Confirmar Pago
           </Button>
         </DialogFooter>
       </DialogContent>

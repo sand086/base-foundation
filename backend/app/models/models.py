@@ -238,6 +238,16 @@ class AuditMixin:
 # =========================================================
 
 
+class UnitTypeCatalog(AuditMixin, Base):
+    __tablename__ = "unit_types_catalog"
+
+    id = Column(String(50), primary_key=True, index=True)
+    nombre = Column(String(100), nullable=False)
+    icono = Column(String(20), nullable=False, default="🚛")
+    activo = Column(Boolean, default=True)
+    descripcion = Column(Text, nullable=True)
+
+
 class Brand(AuditMixin, Base):
     __tablename__ = "brands"
 
@@ -1373,3 +1383,30 @@ class ReceivableInvoicePayment(AuditMixin, Base):
 
     # Relación inversa
     invoice = relationship("ReceivableInvoice", backref="payments")
+
+
+# =========================================================
+# NOTIFICACIONES, ALERTAS Y PLANTILLAS
+# =========================================================
+
+
+class AlertConfig(AuditMixin, Base):
+    __tablename__ = "alert_configs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    alerta_combustible = Column(Boolean, default=True)
+    umbral_combustible = Column(Integer, default=5)
+    alerta_documento_vencido = Column(Boolean, default=True)
+    dias_anticipacion_documento = Column(Integer, default=15)
+    alerta_retraso_viaje = Column(Boolean, default=True)
+    minutos_retraso = Column(Integer, default=30)
+
+
+class EmailTemplate(AuditMixin, Base):
+    __tablename__ = "email_templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    codigo = Column(String(50), unique=True, nullable=False)  # Ej: TPL-001
+    nombre = Column(String(100), nullable=False)
+    asunto = Column(String(200), nullable=False)
+    cuerpo = Column(Text, nullable=False)

@@ -19,13 +19,13 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { GlobalTire } from "@/services/tireService";
+import { Tire } from "@/types/api.types";
 import { Wrench, RefreshCw, Trash2, DollarSign } from "lucide-react";
 
 type MaintenanceType = "reparacion" | "renovado" | "desecho";
 
 interface MaintenanceTireModalProps {
-  tire: GlobalTire | null;
+  tire: Tire | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (

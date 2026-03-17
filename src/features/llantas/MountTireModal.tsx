@@ -19,11 +19,8 @@ import {
 import { toast } from "sonner";
 import { ArrowDownToLine, MapPin, Search, Loader2 } from "lucide-react";
 
-import {
-  tireService,
-  TIRE_POSITIONS,
-  GlobalTire,
-} from "@/services/tireService";
+import { tireService, TIRE_POSITIONS } from "@/services/tireService";
+import { Tire } from "@/types/api.types";
 
 interface MountTireModalProps {
   unitId: number;
@@ -38,7 +35,7 @@ export function MountTireModal({
   onOpenChange,
   onSuccess,
 }: MountTireModalProps) {
-  const [availableTires, setAvailableTires] = useState<GlobalTire[]>([]);
+  const [availableTires, setAvailableTires] = useState<Tire[]>([]);
   const [loadingTires, setLoadingTires] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 

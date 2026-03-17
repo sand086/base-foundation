@@ -27,13 +27,13 @@ import {
   Heart,
   Loader2,
 } from "lucide-react";
-import { Operador } from "@/services/operatorService";
+import { Operator } from "@/types/api.types";
 import { useUnits } from "@/hooks/useUnits";
 
 interface AddOperadorModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  operatorToEdit?: Operador | null;
+  operatorToEdit?: Operator | null;
   // Omitimos ID al crear (y permitimos payload flexible)
   onSave?: (operador: any) => void;
   isSaving?: boolean;

@@ -1,13 +1,10 @@
-// src/pages/CombustibleCargas.tsx
 import * as React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
 import {
   Fuel,
   Plus,
@@ -28,7 +25,8 @@ import {
   BarChart3,
 } from "lucide-react";
 
-import type { CargaCombustible, TipoCombustible } from "@/data/combustibleData";
+// 🚀 IMPORTAMOS TIPOS REALES (Adiós al mock de combustibleData)
+import { FuelLoad, Unit, Operator } from "@/types/api.types";
 
 import {
   AddTicketModal,
@@ -78,42 +76,31 @@ import {
 } from "@/components/ui/alert-dialog";
 
 /** =========================================================
- * Tipos y Helpers
+ * Tipos y Helpers Extendidos
  * ========================================================= */
-type ID = string | number;
 
-interface Unit {
-  id: ID;
-  numero_economico?: string | null;
-  placas?: string | null;
-  tipo_1?: string | null;
-  capacidad_tanque_diesel?: number | null;
-  capacidad_tanque_urea?: number | null;
-}
-
-function unitLabel(u: Unit) {
-  const ne = (u.numero_economico ?? "").trim();
-  const pl = (u.placas ?? "").trim();
-  if (ne && pl) return `${ne} (${pl})`;
-  if (ne) return ne;
-  if (pl) return pl;
-  return `Unidad ${String(u.id)}`;
+// Extendemos FuelLoad solo para la vista de la tabla
+interface FuelLoadDisplay extends FuelLoad {
+  unidad_numero: string;
+  operador_nombre: string;
+  excede_tanque: boolean;
 }
 
 const CombustibleCargas = () => {
+  // Estados para Modal de Edición (que aún los necesita) y Tabla
   const [units, setUnits] = useState<Unit[]>([]);
-  const [operators, setOperators] = useState<any[]>([]);
-  const [cargas, setCargas] = useState<CargaCombustible[]>([]);
+  const [operators, setOperators] = useState<Operator[]>([]);
+  const [cargas, setCargas] = useState<FuelLoadDisplay[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [idParaEliminar, setIdParaEliminar] = useState<string | null>(null);
+  const [idParaEliminar, setIdParaEliminar] = useState<number | null>(null);
 
-  //  ESTADOS DE FILTRO Y AUDITORÍA (Proceso Gustavo)
+  // ESTADOS DE FILTRO Y AUDITORÍA
   const [selectedUnitId, setSelectedUnitId] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [cargaToView, setCargaToView] = useState<CargaCombustible | null>(null);
-  const [cargaToEdit, setCargaToEdit] = useState<CargaCombustible | null>(null);
+  const [cargaToView, setCargaToView] = useState<FuelLoadDisplay | null>(null);
+  const [cargaToEdit, setCargaToEdit] = useState<FuelLoadDisplay | null>(null);
 
   /** =========================================================
    * 1) Carga masiva de datos y normalización
@@ -123,22 +110,32 @@ const CombustibleCargas = () => {
       const [uData, oData, fData] = await Promise.all([
         unitService.getAll(),
         operatorService.getAll(),
-        fuelService.getAll(),
+        fuelService.getAll(), // Asumimos que fuelService devuelve FuelLoad[]
       ]);
 
       setUnits(uData || []);
       setOperators(oData || []);
 
-      const normalizedFuel = (fData || []).map((item: any) => ({
-        ...item,
-        tipoCombustible: item.tipo_combustible || item.tipoCombustible,
-        fechaHora: item.fecha_hora || item.fechaHora,
-        precioPorLitro: item.precio_por_litro || item.precioPorLitro,
-        excedeTanque: item.excede_tanque ?? item.excedeTanque,
-        evidenciaUrl: item.evidencia_url || item.evidenciaUrl,
-        unidadNumero: item.unit?.numero_economico || "N/A",
-        operadorNombre: item.operator?.name || "N/A",
-      }));
+      // 🚀 Mapeamos los datos del backend para mostrar en la tabla
+      const normalizedFuel: FuelLoadDisplay[] = (fData || []).map(
+        (item: any) => {
+          // Encontrar unidad para saber si excede capacidad
+          const unit = uData.find((u: Unit) => u.id === item.unit_id);
+          const capacity =
+            item.tipo_combustible === "diesel"
+              ? unit?.capacidad_tanque_diesel || 800
+              : unit?.capacidad_tanque_urea || 60;
+
+          return {
+            ...item,
+            unidad_numero:
+              item.unit?.numero_economico || unit?.numero_economico || "N/A",
+            operador_nombre:
+              item.operator?.name || item.operator?.nombre || "N/A",
+            excede_tanque: Number(item.litros) > Number(capacity),
+          };
+        },
+      );
 
       setCargas(normalizedFuel);
     } catch (error) {
@@ -154,16 +151,16 @@ const CombustibleCargas = () => {
   }, []);
 
   /** =========================================================
-   *  LÓGICA DE AUDITORÍA: RENDIMIENTOS Y REMANENTES
+   * LÓGICA DE AUDITORÍA: RENDIMIENTOS Y REMANENTES
    * ========================================================= */
 
   const filteredCargas = useMemo(() => {
     return cargas.filter((c) => {
       const matchesUnit =
-        selectedUnitId === "all" || String(c.unidadId) === selectedUnitId;
+        selectedUnitId === "all" || String(c.unit_id) === selectedUnitId;
       const term = searchTerm.toLowerCase();
       const matchesSearch =
-        c.unidadNumero?.toLowerCase().includes(term) ||
+        c.unidad_numero?.toLowerCase().includes(term) ||
         c.estacion?.toLowerCase().includes(term);
       return matchesUnit && matchesSearch;
     });
@@ -173,19 +170,18 @@ const CombustibleCargas = () => {
     const ahora = new Date();
     const hace7Dias = new Date(ahora.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    // Solo tomamos en cuenta los últimos 7 días para el dashboard de rendimiento
     const cargasSemana = filteredCargas.filter(
-      (c) => new Date(c.fechaHora) >= hace7Dias,
+      (c) => new Date(c.fecha_hora) >= hace7Dias,
     );
 
     const litros = cargasSemana.reduce((sum, c) => sum + (c.litros || 0), 0);
     const inversion = cargasSemana.reduce((sum, c) => sum + (c.total || 0), 0);
 
-    // Cálculo de odómetro (Diferencia entre la carga más nueva y la más antigua de la semana)
     const sorted = [...cargasSemana].sort(
       (a, b) =>
-        new Date(b.fechaHora).getTime() - new Date(a.fechaHora).getTime(),
+        new Date(b.fecha_hora).getTime() - new Date(a.fecha_hora).getTime(),
     );
+
     const odoActual = sorted.length > 0 ? sorted[0].odometro : 0;
     const odoAnterior =
       sorted.length > 1 ? sorted[sorted.length - 1].odometro : odoActual;
@@ -210,7 +206,13 @@ const CombustibleCargas = () => {
   const handleAddTicket = async (data: TicketFormData) => {
     const toastId = toast.loading("Registrando ticket...");
     try {
-      await fuelService.create(data);
+      // 🚀 Adaptar el payload del form al FuelLoad si es necesario
+      await fuelService.create({
+        ...data,
+        unit_id: Number(data.unit_id),
+        operator_id: Number(data.operator_id),
+        trip_id: data.trip_id ? Number(data.trip_id) : null,
+      });
       await loadData();
       toast.success("Ticket registrado correctamente", { id: toastId });
       setIsModalOpen(false);
@@ -224,7 +226,7 @@ const CombustibleCargas = () => {
     const toastId = toast.loading("Eliminando registro...");
     try {
       await fuelService.delete(idParaEliminar);
-      setCargas((prev) => prev.filter((c) => String(c.id) !== idParaEliminar));
+      setCargas((prev) => prev.filter((c) => c.id !== idParaEliminar));
       toast.success("Registro eliminado", { id: toastId });
     } catch (error) {
       toast.error("No se pudo eliminar", { id: toastId });
@@ -234,26 +236,29 @@ const CombustibleCargas = () => {
   };
 
   /** =========================================================
-   *  Columnas de la Tabla
+   * Columnas de la Tabla (100% compatibles con snake_case)
    * ========================================================= */
-  const columns: ColumnDef<CargaCombustible>[] = useMemo(
+  const columns: ColumnDef<FuelLoadDisplay>[] = useMemo(
     () => [
       {
-        key: "fechaHora",
+        key: "fecha_hora",
         header: "Fecha y Hora",
         render: (v) => (
           <div className="flex flex-col">
             <span className="font-bold text-slate-700">
-              {new Date(String(v)).toLocaleDateString()}
+              {new Date(String(v)).toLocaleDateString("es-MX")}
             </span>
             <span className="text-[10px] text-slate-400 font-mono">
-              {new Date(String(v)).toLocaleTimeString()}
+              {new Date(String(v)).toLocaleTimeString("es-MX", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
             </span>
           </div>
         ),
       },
       {
-        key: "tipoCombustible",
+        key: "tipo_combustible",
         header: "Tipo",
         render: (v) => (
           <Badge
@@ -275,11 +280,11 @@ const CombustibleCargas = () => {
         ),
       },
       {
-        key: "unidadNumero",
+        key: "unidad_numero",
         header: "Unidad",
         render: (v) => (
           <Badge variant="secondary" className="font-black">
-            {v}
+            ECO-{v}
           </Badge>
         ),
       },
@@ -291,12 +296,12 @@ const CombustibleCargas = () => {
             <span
               className={cn(
                 "font-mono font-bold",
-                row.excedeTanque && "text-rose-600",
+                row.excede_tanque && "text-rose-600",
               )}
             >
               {Number(v).toFixed(1)} L
             </span>
-            {row.excedeTanque && (
+            {row.excede_tanque && (
               <AlertTriangle className="h-3 w-3 text-rose-500 animate-pulse" />
             )}
           </div>
@@ -307,7 +312,7 @@ const CombustibleCargas = () => {
         header: "Monto",
         render: (v) => (
           <span className="font-bold text-emerald-700">
-            ${Number(v).toLocaleString()}
+            ${Number(v).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
           </span>
         ),
       },
@@ -324,7 +329,7 @@ const CombustibleCargas = () => {
         ),
       },
       {
-        key: "evidenciaUrl",
+        key: "evidencia_url",
         header: "Ticket",
         render: (v) =>
           v ? (
@@ -343,6 +348,7 @@ const CombustibleCargas = () => {
       {
         key: "acciones",
         header: "",
+        sortable: false,
         render: (_, row) => (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -350,19 +356,25 @@ const CombustibleCargas = () => {
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setCargaToView(row)}>
-                <Eye className="h-4 w-4 mr-2" />
+            <DropdownMenuContent align="end" className="rounded-xl">
+              <DropdownMenuItem
+                onClick={() => setCargaToView(row)}
+                className="cursor-pointer"
+              >
+                <Eye className="h-4 w-4 mr-2 text-slate-400" />
                 Detalles
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCargaToEdit(row)}>
-                <Pencil className="h-4 w-4 mr-2" />
+              <DropdownMenuItem
+                onClick={() => setCargaToEdit(row)}
+                className="cursor-pointer"
+              >
+                <Pencil className="h-4 w-4 mr-2 text-slate-400" />
                 Editar
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                className="text-destructive"
-                onClick={() => setIdParaEliminar(String(row.id))}
+                className="text-red-600 focus:bg-red-50 focus:text-red-700 cursor-pointer"
+                onClick={() => setIdParaEliminar(row.id)}
               >
                 <Trash2 className="h-4 w-4 mr-2" />
                 Eliminar
@@ -377,7 +389,7 @@ const CombustibleCargas = () => {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen items-center justify-center">
+      <div className="flex h-[80vh] items-center justify-center">
         <Loader2 className="animate-spin h-12 w-12 text-brand-navy" />
       </div>
     );
@@ -391,12 +403,12 @@ const CombustibleCargas = () => {
           description="Control semanal de cargas, rendimientos y remanentes"
         />
 
-        {/*  FILTROS DE AUDITORÍA (Lógica Gustavo) */}
+        {/* FILTROS DE AUDITORÍA */}
         <div className="flex items-center gap-3 bg-white p-2 rounded-2xl border shadow-sm">
           <div className="flex items-center gap-2 border-r pr-4 pl-2">
             <Search className="h-4 w-4 text-slate-400" />
             <Input
-              placeholder="Buscar unidad, estación u operador..."
+              placeholder="Buscar unidad o estación..."
               className="border-none shadow-none focus-visible:ring-0 text-xs w-[250px]"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -410,7 +422,7 @@ const CombustibleCargas = () => {
               <SelectItem value="all">Todas las unidades</SelectItem>
               {units.map((u) => (
                 <SelectItem key={u.id} value={String(u.id)}>
-                  Eco-{u.numero_economico}
+                  ECO-{u.numero_economico}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -419,7 +431,7 @@ const CombustibleCargas = () => {
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className="h-8 w-8 hover:bg-slate-100 rounded-lg"
               onClick={() => setSelectedUnitId("all")}
             >
               <FilterX className="h-4 w-4 text-slate-400" />
@@ -428,9 +440,9 @@ const CombustibleCargas = () => {
         </div>
       </div>
 
-      {/*  DASHBOARD DE RENDIMIENTO (Gustavo min 16:24) */}
+      {/* DASHBOARD DE RENDIMIENTO */}
       <div className="grid gap-4 md:grid-cols-4">
-        <Card className="border-none shadow-md bg-white group hover:ring-2 hover:ring-amber-500/20 transition-all">
+        <Card className="border-none shadow-md bg-white group hover:ring-2 hover:ring-amber-500/20 transition-all rounded-2xl">
           <CardContent className="p-5">
             <div className="flex justify-between items-center">
               <div className="space-y-1">
@@ -451,7 +463,7 @@ const CombustibleCargas = () => {
           </CardContent>
         </Card>
 
-        <Card className="border-none shadow-md bg-white group">
+        <Card className="border-none shadow-md bg-white group rounded-2xl">
           <CardContent className="p-5">
             <div className="flex justify-between items-center">
               <div className="space-y-1">
@@ -472,7 +484,7 @@ const CombustibleCargas = () => {
           </CardContent>
         </Card>
 
-        <Card className="border-none shadow-md bg-white group">
+        <Card className="border-none shadow-md bg-white group rounded-2xl">
           <CardContent className="p-5">
             <div className="flex justify-between items-center">
               <div className="space-y-1">
@@ -494,7 +506,7 @@ const CombustibleCargas = () => {
           </CardContent>
         </Card>
 
-        <Card className="border-none shadow-md bg-brand-navy text-white group">
+        <Card className="border-none shadow-md bg-brand-navy text-white group rounded-2xl">
           <CardContent className="p-5">
             <div className="flex justify-between items-center">
               <div className="space-y-1">
@@ -517,7 +529,7 @@ const CombustibleCargas = () => {
         </Card>
       </div>
 
-      {/*  ALERTA DE CONTROL PARA UNIDADES DE PATIO (Min 02:53) */}
+      {/* ALERTA DE CONTROL PARA UNIDADES DE PATIO */}
       {selectedUnitId !== "all" &&
         selectedUnitObj?.tipo_1?.toLowerCase().includes("patio") && (
           <Alert className="bg-indigo-50 border-indigo-200 rounded-2xl shadow-sm">
@@ -537,14 +549,13 @@ const CombustibleCargas = () => {
         )}
 
       {/* TOOLBAR Y TABLA */}
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center mt-8">
         <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-          <FileText className="h-4 w-4 text-brand-navy" /> Historial de
-          Movimientos
+          <FileText className="h-4 w-4 text-brand-navy" /> Historial de Cargas
         </h3>
         <Button
           onClick={() => setIsModalOpen(true)}
-          className="bg-brand-navy hover:bg-brand-navy/90 gap-2 shadow-lg shadow-brand-navy/20 h-10 px-6 rounded-xl"
+          className="bg-brand-navy hover:bg-brand-navy/90 gap-2 shadow-lg shadow-brand-navy/20 h-11 px-6 rounded-xl text-white"
         >
           <Plus className="h-4 w-4" /> Registrar Vale / Ticket
         </Button>
@@ -554,7 +565,7 @@ const CombustibleCargas = () => {
         <CardContent className="p-0">
           <EnhancedDataTable
             data={filteredCargas}
-            columns={columns}
+            columns={columns as any} // Fuerza el tipo si react-table marca error genérico de render
             onRowClick={(row) => setCargaToView(row)}
             exportFileName="auditoria_combustible"
           />
@@ -562,50 +573,56 @@ const CombustibleCargas = () => {
       </Card>
 
       {/* MODALES */}
+
+      {/* OJO: AddTicketModal ya no recibe 'units' ni 'operators' porque lo configuramos para auto-fetcherse */}
       <AddTicketModal
         open={isModalOpen}
         onOpenChange={setIsModalOpen}
-        onSubmit={handleAddTicket}
-        units={units}
-        operators={operators}
+        onSubmit={handleAddTicket as any}
       />
 
-      <ViewCargaModal
-        open={!!cargaToView}
-        onOpenChange={() => setCargaToView(null)}
-        carga={cargaToView}
-      />
+      {/* Si EditCargaModal y ViewCargaModal todavía dependen de Mocks por dentro, 
+          tendremos que limpiarlos en el siguiente paso. Por ahora le pasamos la data */}
+      {cargaToView && (
+        <ViewCargaModal
+          open={!!cargaToView}
+          onOpenChange={() => setCargaToView(null)}
+          carga={cargaToView as any}
+        />
+      )}
 
-      <EditCargaModal
-        open={!!cargaToEdit}
-        onOpenChange={() => setCargaToEdit(null)}
-        carga={cargaToEdit}
-        units={units}
-        operators={operators}
-        onSave={loadData}
-      />
+      {cargaToEdit && (
+        <EditCargaModal
+          open={!!cargaToEdit}
+          onOpenChange={() => setCargaToEdit(null)}
+          carga={cargaToEdit as any}
+          units={units as any}
+          operators={operators as any}
+          onSave={loadData}
+        />
+      )}
 
       <AlertDialog
         open={!!idParaEliminar}
         onOpenChange={(o) => !o && setIdParaEliminar(null)}
       >
-        <AlertDialogContent className="rounded-2xl">
+        <AlertDialogContent className="rounded-2xl border-slate-200">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-brand-navy font-black">
-              ¿Eliminar registro?
+            <AlertDialogTitle className="text-red-600 font-black flex items-center gap-2">
+              <Trash2 className="h-5 w-5" /> ¿Eliminar registro?
             </AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescription className="text-slate-600">
               Esta acción es irreversible y afectará el cálculo de rendimiento
-              km/L de la unidad.
+              km/L de la unidad en los reportes financieros.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-xl">
+          <AlertDialogFooter className="mt-4">
+            <AlertDialogCancel className="rounded-xl font-bold">
               Cancelar
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
-              className="bg-destructive text-white rounded-xl"
+              className="bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold"
             >
               Confirmar Eliminación
             </AlertDialogAction>

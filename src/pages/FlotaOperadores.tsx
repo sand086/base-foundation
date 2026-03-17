@@ -24,7 +24,8 @@ import { OperadoresTable } from "@/features/flota/OperadoresTable";
 import { AddOperadorModal } from "@/features/flota/AddOperadorModal";
 import { useToast } from "@/hooks/use-toast";
 import { useOperators } from "@/hooks/useOperators"; // <--- Hook Real
-import { Operador } from "@/services/operatorService"; // <--- Tipo Real
+import { operatorService } from "@/services/operatorService"; // <--- Tipo Real
+import { Operator } from "@/types/api.types"; // <--- Tipo Real
 
 // Helper de fechas (puedes moverlo a utils si prefieres)
 const getExpiryStatus = (dateString: string) => {
@@ -50,7 +51,7 @@ export default function FlotaOperadores() {
   } = useOperators();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [operadorToEdit, setOperadorToEdit] = useState<Operador | null>(null);
+  const [operadorToEdit, setOperadorToEdit] = useState<Operator | null>(null);
   const [operadorToDelete, setOperadorToDelete] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -81,7 +82,7 @@ export default function FlotaOperadores() {
     examenesPorVencer;
 
   // CRUD Handlers
-  const handleSave = async (operadorData: Operador) => {
+  const handleSave = async (operadorData: Operator) => {
     setIsSaving(true);
     let success = false;
 
@@ -102,11 +103,11 @@ export default function FlotaOperadores() {
 
   const handleDelete = async () => {
     if (!operadorToDelete) return;
-    await deleteOperator(operadorToDelete);
+    await deleteOperator(Number(operadorToDelete));
     setOperadorToDelete(null);
   };
 
-  const handleEdit = (operador: Operador) => {
+  const handleEdit = (operador: Operator) => {
     setOperadorToEdit(operador);
     setIsModalOpen(true);
   };
@@ -253,7 +254,7 @@ export default function FlotaOperadores() {
       <OperadoresTable
         operadores={operadores}
         onEdit={handleEdit}
-        onDelete={(id) => setOperadorToDelete(id)}
+        onDelete={(id) => setOperadorToDelete(String(id))}
       />
 
       {/* Add/Edit Operator Modal */}
@@ -279,7 +280,10 @@ export default function FlotaOperadores() {
             <AlertDialogDescription>
               ¿Está seguro que desea dar de baja a{" "}
               <span className="font-semibold">
-                {operadores.find((op) => op.id === operadorToDelete)?.name}
+                {
+                  operadores.find((op) => op.id === Number(operadorToDelete))
+                    ?.name
+                }
               </span>
               ? Esta acción eliminará al operador del sistema.
             </AlertDialogDescription>

@@ -17,7 +17,10 @@ from app.api.endpoints import (
     catalogs_sat,
     receivables,
     brands,
+    dashboard,
+    notifications,
     terminals,
+    catalogs,
 )
 
 api_router = APIRouter()
@@ -48,9 +51,15 @@ api_router.include_router(
     suppliers.router, prefix="/finance", tags=["Proveedores y CXP"]
 )
 
-api_router.include_router(catalogs_sat.router, prefix="/catalogs", tags=["Catalogs"])
+api_router.include_router(
+    catalogs_sat.router, prefix="/catalogs-sat", tags=["Catalogs SAT"]
+)
 api_router.include_router(receivables.router, tags=["Cuentas por Cobrar"])
 
 api_router.include_router(brands.router, tags=["Marcas"])
 
 api_router.include_router(terminals.router, tags=["Terminales"])
+
+api_router.include_router(notifications.router, tags=["Notificaciones"])
+api_router.include_router(dashboard.router, tags=["Dashboard"])
+api_router.include_router(catalogs.router, tags=["Catálogos Generales"])

@@ -1,242 +1,122 @@
-// Hook for simulating API calls to the admin backend
-import { useState, useCallback } from 'react';
-import { toast } from 'sonner';
-import { 
-  UserProfile, 
-  SystemConfig, 
-  NotificationEvent,
-  currentUserProfile,
-  mockUsers,
-  mockSystemConfig,
-  mockNotificationEvents,
-  generateTOTPSecret,
-  generateTOTPQRUrl
-} from '@/data/mockAdminData';
-
-interface TwoFactorSetup {
-  secret: string;
-  qrCodeUrl: string;
-}
+import { useState, useCallback, useEffect } from "react";
+import { toast } from "sonner";
+import { User, SystemConfig } from "@/types/api.types";
+import { adminService } from "@/services/adminService";
+import { useAuth } from "@/context/AuthContext";
 
 export function useAdminActions() {
   const [isLoading, setIsLoading] = useState(false);
-  const [profile, setProfile] = useState<UserProfile>(currentUserProfile);
-  const [users, setUsers] = useState<UserProfile[]>(mockUsers);
-  const [systemConfig, setSystemConfig] = useState<SystemConfig[]>(mockSystemConfig);
-  const [notificationEvents, setNotificationEvents] = useState<NotificationEvent[]>(mockNotificationEvents);
+  const { user: profile } = useAuth(); // Obtenemos el perfil del contexto real
+  const [users, setUsers] = useState<User[]>([]);
+  const [systemConfigs, setSystemConfigs] = useState<SystemConfig[]>([]);
 
-  // Simulate API delay
-  const simulateDelay = () => new Promise(resolve => setTimeout(resolve, 500));
-
-  // Profile actions
-  const updateProfile = useCallback(async (data: Partial<UserProfile>) => {
+  // 1. Cargar datos iniciales
+  const loadAdminData = useCallback(async () => {
     setIsLoading(true);
-    await simulateDelay();
-    setProfile(prev => ({ ...prev, ...data }));
-    toast.success('Perfil actualizado', {
-      description: 'Los cambios han sido guardados correctamente.',
-    });
-    setIsLoading(false);
-  }, []);
-
-  const updatePassword = useCallback(async (currentPassword: string, newPassword: string) => {
-    setIsLoading(true);
-    await simulateDelay();
-    
-    // Simulate password validation
-    if (currentPassword.length < 4) {
-      toast.error('Error de validación', {
-        description: 'La contraseña actual es incorrecta.',
-      });
+    try {
+      const [usersData, configsData] = await Promise.all([
+        adminService.getUsers(),
+        adminService.getConfigs(),
+      ]);
+      setUsers(usersData);
+      setSystemConfigs(configsData);
+    } catch (error) {
+      toast.error("Error al cargar datos administrativos");
+    } finally {
       setIsLoading(false);
-      return false;
     }
-
-    toast.success('Contraseña actualizada', {
-      description: 'Tu contraseña ha sido cambiada exitosamente.',
-    });
-    setIsLoading(false);
-    return true;
   }, []);
 
-  // 2FA actions
-  const initiate2FA = useCallback(async (): Promise<TwoFactorSetup> => {
-    setIsLoading(true);
-    await simulateDelay();
-    
-    const secret = generateTOTPSecret();
-    const qrCodeUrl = generateTOTPQRUrl(secret, profile.email);
-    
-    setIsLoading(false);
-    return { secret, qrCodeUrl };
-  }, [profile.email]);
+  useEffect(() => {
+    loadAdminData();
+  }, [loadAdminData]);
 
-  const verify2FACode = useCallback(async (code: string, secret: string): Promise<boolean> => {
+  // 2. Acciones de Usuario
+  const createUser = useCallback(async (data: any) => {
     setIsLoading(true);
-    await simulateDelay();
-    
-    // Simulate code verification (in real app, validate TOTP)
-    if (code.length !== 6 || !/^\d+$/.test(code)) {
-      toast.error('Código inválido', {
-        description: 'Ingresa un código de 6 dígitos.',
-      });
+    try {
+      const newUser = await adminService.createUser(data);
+      setUsers((prev) => [...prev, newUser]);
+      toast.success("Usuario creado exitosamente");
+      return newUser;
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || "Error al crear usuario");
+    } finally {
       setIsLoading(false);
-      return false;
     }
-
-    // For demo, accept any 6-digit code
-    setProfile(prev => ({
-      ...prev,
-      twoFactorEnabled: true,
-      twoFactorMethod: 'app',
-      twoFactorSecret: secret,
-    }));
-
-    toast.success('2FA Activado', {
-      description: 'La autenticación de dos factores está configurada.',
-    });
-    setIsLoading(false);
-    return true;
   }, []);
 
-  const disable2FA = useCallback(async (password: string): Promise<boolean> => {
+  const toggleUserStatus = useCallback(async (id: number) => {
     setIsLoading(true);
-    await simulateDelay();
-    
-    if (password.length < 4) {
-      toast.error('Error', {
-        description: 'Contraseña incorrecta.',
-      });
+    try {
+      await adminService.toggleUserStatus(id);
+      setUsers((prev) =>
+        prev.map((u) => (u.id === id ? { ...u, activo: !u.activo } : u)),
+      );
+      toast.success("Estado del usuario actualizado");
+    } catch (error) {
+      toast.error("No se pudo cambiar el estado");
+    } finally {
       setIsLoading(false);
-      return false;
     }
-
-    setProfile(prev => ({
-      ...prev,
-      twoFactorEnabled: false,
-      twoFactorMethod: undefined,
-      twoFactorSecret: undefined,
-    }));
-
-    toast.success('2FA Desactivado', {
-      description: 'La autenticación de dos factores ha sido deshabilitada.',
-    });
-    setIsLoading(false);
-    return true;
   }, []);
 
-  // User management actions
-  const createUser = useCallback(async (data: Omit<UserProfile, 'id' | 'ultimoAcceso' | 'creadoEn' | 'twoFactorEnabled'>) => {
+  // 3. Acciones de 2FA
+  const initiate2FA = useCallback(async () => {
     setIsLoading(true);
-    await simulateDelay();
-    
-    const newUser: UserProfile = {
-      ...data,
-      id: `USR-${String(users.length + 1).padStart(3, '0')}`,
-      ultimoAcceso: 'Nunca',
-      creadoEn: new Date().toISOString().split('T')[0],
-      twoFactorEnabled: false,
-    };
-
-    setUsers(prev => [...prev, newUser]);
-    toast.success('Usuario creado', {
-      description: `${data.nombre} ${data.apellidos} ha sido agregado al sistema.`,
-    });
-    setIsLoading(false);
-    return newUser;
-  }, [users.length]);
-
-  const updateUser = useCallback(async (id: string, data: Partial<UserProfile>) => {
-    setIsLoading(true);
-    await simulateDelay();
-    
-    setUsers(prev => prev.map(u => u.id === id ? { ...u, ...data } : u));
-    toast.success('Usuario actualizado', {
-      description: 'Los cambios han sido guardados.',
-    });
-    setIsLoading(false);
+    try {
+      const data = await adminService.setup2FA();
+      return data; // { secret, qrCodeUrl }
+    } catch (error) {
+      toast.error("Error al iniciar configuración 2FA");
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
-  const resetUserPassword = useCallback(async (id: string) => {
+  const verify2FACode = useCallback(async (code: string, secret: string) => {
     setIsLoading(true);
-    await simulateDelay();
-    
-    const user = users.find(u => u.id === id);
-    toast.success('Contraseña restablecida', {
-      description: `Se envió un email a ${user?.email} con la nueva contraseña.`,
-    });
-    setIsLoading(false);
-  }, [users]);
+    try {
+      await adminService.confirm2FA(code, secret);
+      toast.success("2FA Activado correctamente");
+      return true;
+    } catch (error) {
+      toast.error("Código inválido");
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
-  const toggleUserStatus = useCallback(async (id: string) => {
-    setIsLoading(true);
-    await simulateDelay();
-    
-    setUsers(prev => prev.map(u => {
-      if (u.id === id) {
-        const newStatus = u.estado === 'activo' ? 'inactivo' : 'activo';
-        toast.success(`Usuario ${newStatus}`, {
-          description: `${u.nombre} ha sido ${newStatus === 'activo' ? 'activado' : 'desactivado'}.`,
-        });
-        return { ...u, estado: newStatus };
+  // 4. Configuración del Sistema
+  const updateSystemConfig = useCallback(
+    async (key: string, valor: string) => {
+      setIsLoading(true);
+      try {
+        await adminService.updateConfig(key, valor);
+        toast.success("Configuración actualizada");
+        loadAdminData(); // Recargamos para asegurar sincronía
+      } catch (error) {
+        toast.error("Error al guardar configuración");
+      } finally {
+        setIsLoading(false);
       }
-      return u;
-    }));
-    setIsLoading(false);
-  }, []);
-
-  // System config actions
-  const updateSystemConfig = useCallback(async (id: string, valor: string) => {
-    setIsLoading(true);
-    await simulateDelay();
-    
-    setSystemConfig(prev => prev.map(c => c.id === id ? { ...c, valor } : c));
-    toast.success('Configuración guardada');
-    setIsLoading(false);
-  }, []);
-
-  const saveAllSystemConfig = useCallback(async (configs: SystemConfig[]) => {
-    setIsLoading(true);
-    await simulateDelay();
-    
-    setSystemConfig(configs);
-    toast.success('Configuración guardada', {
-      description: 'Todos los cambios han sido aplicados.',
-    });
-    setIsLoading(false);
-  }, []);
-
-  // Notification events actions
-  const updateNotificationEvent = useCallback(async (id: string, canales: NotificationEvent['canales']) => {
-    setIsLoading(true);
-    await simulateDelay();
-    
-    setNotificationEvents(prev => prev.map(e => e.id === id ? { ...e, canales } : e));
-    toast.success('Notificación actualizada');
-    setIsLoading(false);
-  }, []);
+    },
+    [loadAdminData],
+  );
 
   return {
     isLoading,
     profile,
     users,
-    systemConfig,
-    notificationEvents,
-    // Profile
-    updateProfile,
-    updatePassword,
-    // 2FA
+    systemConfigs,
+    // Acciones exportadas
+    createUser,
+    toggleUserStatus,
     initiate2FA,
     verify2FACode,
-    disable2FA,
-    // Users
-    createUser,
-    updateUser,
-    resetUserPassword,
-    toggleUserStatus,
-    // Config
     updateSystemConfig,
-    saveAllSystemConfig,
-    updateNotificationEvent,
+    refreshData: loadAdminData,
   };
 }
