@@ -1,18 +1,17 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict, Field
 from typing import Optional, Dict, Any
 from datetime import datetime
 
 
 # Esquema básico de Usuario para respuestas de Auth
 class UserAuthSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)  # <-- Sintaxis V2
+
     id: int
     nombre: str
     email: EmailStr
     role_id: Optional[int] = None
     avatar_url: Optional[str] = None
-
-    class Config:
-        from_attributes = True
 
 
 # Lo que envía el usuario para loguearse
@@ -24,10 +23,15 @@ class LoginRequest(BaseModel):
 # Lo que responde el servidor (Token o Solicitud de 2FA)
 class LoginResponse(BaseModel):
     access_token: Optional[str] = None
+    refresh_token: Optional[str] = None
     token_type: str = "bearer"
     user: Optional[UserAuthSchema] = None
     require_2fa: bool = False
     temp_token: Optional[str] = None
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
 
 
 # Verificación del código 2FA

@@ -3,7 +3,7 @@ import axiosClient from "@/api/axiosClient";
 export const fuelService = {
   // Obtener historial real
   getAll: async () => {
-    const { data } = await axiosClient.get("/fuel-logs");
+    const { data } = await axiosClient.get("/fuel/fuel-logs");
     return data;
   },
 
@@ -20,7 +20,7 @@ export const fuelService = {
       }
     });
 
-    const { data } = await axiosClient.post("/fuel-logs", dataToSend, {
+    const { data } = await axiosClient.post("/fuel/fuel-logs", dataToSend, {
       headers: { "Content-Type": "multipart/form-data" },
     });
     return data;
@@ -28,7 +28,10 @@ export const fuelService = {
 
   update: async (id: number | string, data: any) => {
     // Si la edición no incluye archivo, enviamos JSON plano
-    const { data: response } = await axiosClient.put(`/fuel-logs/${id}`, data);
+    const { data: response } = await axiosClient.put(
+      `/fuel/fuel-logs/${id}`,
+      data,
+    );
     return response;
   },
 
@@ -36,7 +39,7 @@ export const fuelService = {
     const formData = new FormData();
     formData.append("file", file);
     const { data } = await axiosClient.post(
-      `/fuel-logs/${logId}/documents/${docType}`,
+      `/fuel/fuel-logs/${logId}/documents/${docType}`,
       formData,
       { headers: { "Content-Type": "multipart/form-data" } },
     );
@@ -44,7 +47,7 @@ export const fuelService = {
   },
 
   delete: async (id: string | number) => {
-    const { data } = await axiosClient.delete(`/fuel-logs/${id}`);
+    const { data } = await axiosClient.delete(`/fuel/fuel-logs/${id}`);
     return data;
   },
 };

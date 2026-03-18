@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 // Importamos el hook que hicimos para la sesión
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 import { openGlobalSearch } from "@/components/common/GlobalSearch";
 
 export function AppHeader() {

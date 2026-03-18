@@ -222,7 +222,7 @@ export function AccountStatementModal({
                 {filteredInvoices.map((invoice) => {
                   const statusInfo = getInvoiceStatusInfo(invoice);
                   const daysOverdue = calculateDaysOverdue(
-                    invoice.fechaVencimiento,
+                    invoice.fecha_vencimiento,
                   );
                   const isOverdue = daysOverdue > 0;
 
@@ -234,13 +234,13 @@ export function AccountStatementModal({
                       }`}
                     >
                       <div className="col-span-2 font-mono font-medium">
-                        {invoice.folio}
+                        {invoice.folio_interno}
                       </div>
                       <div className="col-span-3 truncate">
                         {invoice.cliente}
                       </div>
                       <div className="col-span-2 text-right font-mono">
-                        {formatCurrency(invoice.montoTotal)}
+                        {formatCurrency(invoice.monto_total)}
                       </div>
                       <div
                         className={`col-span-2 text-right font-mono font-bold ${
@@ -249,12 +249,12 @@ export function AccountStatementModal({
                             : "text-status-warning"
                         }`}
                       >
-                        {formatCurrency(invoice.saldoPendiente)}
+                        {formatCurrency(invoice.saldo_pendiente)}
                       </div>
                       <div className="col-span-2 flex flex-col">
                         <span>
                           {new Date(
-                            invoice.fechaVencimiento,
+                            invoice.fecha_vencimiento,
                           ).toLocaleDateString("es-MX")}
                         </span>
                         {isOverdue && (

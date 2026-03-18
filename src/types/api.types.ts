@@ -58,11 +58,12 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
-  access_token?: string;
-  token_type?: string;
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+  user: User;
   require_2fa?: boolean;
   temp_token?: string;
-  user?: User;
 }
 
 export interface TwoFactorVerifyRequest {

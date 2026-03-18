@@ -23,6 +23,7 @@ import {
   Clock,
   History,
   CheckSquare,
+  Edit,
 } from "lucide-react";
 
 import {
@@ -196,10 +197,8 @@ export default function CierreViaje() {
   }, [pendingLegs, selectedOperatorId]);
 
   const selectedLegsData = useMemo(() => {
-    return legsForSelectedOperator.filter((l) =>
-      selectedLegIds.includes(String(l.id)),
-    );
-  }, [legsForSelectedOperator, selectedLegIds]);
+    return allLegs.filter((l) => selectedLegIds.includes(String(l.id)));
+  }, [allLegs, selectedLegIds]);
 
   // ==========================================
   // CÁLCULOS FINANCIEROS (FRONTEND + BACKEND)
@@ -363,6 +362,16 @@ export default function CierreViaje() {
     entrega_vacio: "Retorno Vacío",
   };
 
+  const safeLiquidacion = liquidacion || {
+    pagoBaseBruto: 0,
+    bonosAdicionales: 0,
+    deduccionViaticos: 0,
+    otrosAnticipos: 0,
+    combustibleFaltante: 0,
+    deduccionesManuales: 0,
+    neto_a_pagar: 0,
+  };
+
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto pb-24 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
@@ -457,17 +466,20 @@ export default function CierreViaje() {
               </TabsTrigger>
             </TabsList>
 
-            <Card className="border-slate-200 shadow-sm overflow-hidden">
-              <div className="bg-slate-50 border-b px-4 py-3 flex justify-between items-center">
+            <Card className="border-slate-200 shadow-sm overflow-hidden flex flex-col h-full max-h-[600px]">
+              <div className="bg-slate-50 border-b px-4 py-3 flex justify-between items-center shrink-0">
                 <h3 className="font-bold text-sm text-slate-600 flex items-center gap-2">
-                  <MapPin className="h-4 w-4" /> 2. Movimientos del Operador
+                  <MapPin className="h-4 w-4" />
+                  {activeTab === "pendientes"
+                    ? "2. Selecciona Movimientos"
+                    : "Historial de Liquidaciones"}
                 </h3>
                 {activeTab === "pendientes" && selectedOperatorId && (
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={toggleAllLegs}
-                    className="h-8 text-xs font-bold"
+                    className="h-8 text-xs font-bold transition-all hover:bg-slate-100"
                   >
                     {selectedLegIds.length === legsForSelectedOperator.length
                       ? "Deseleccionar Todos"
@@ -475,54 +487,61 @@ export default function CierreViaje() {
                   </Button>
                 )}
               </div>
-              <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+              <div className="overflow-x-auto overflow-y-auto flex-1 custom-scrollbar">
                 <table className="w-full text-sm text-left">
-                  <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b sticky top-0 z-10 shadow-sm">
+                  <thead className="text-[10px] text-slate-400 font-bold uppercase tracking-widest bg-slate-50/80 border-b sticky top-0 z-10 backdrop-blur-sm">
                     <tr>
                       {activeTab === "pendientes" && (
-                        <th scope="col" className="px-4 py-4 w-[50px]"></th>
+                        <th
+                          scope="col"
+                          className="px-4 py-3 w-[50px] text-center"
+                        >
+                          {/* Opcional: Checkbox global aquí */}
+                        </th>
                       )}
-                      <th
-                        scope="col"
-                        className="px-6 py-4 font-black tracking-wider"
-                      >
-                        Viaje / Cliente
+                      <th scope="col" className="px-6 py-3">
+                        Referencia
                       </th>
-                      <th
-                        scope="col"
-                        className="px-6 py-4 font-black tracking-wider"
-                      >
-                        Tipo
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-6 py-4 font-black tracking-wider"
-                      >
+                      <th scope="col" className="px-6 py-3">
                         Ruta
                       </th>
-                      <th
-                        scope="col"
-                        className="px-6 py-4 font-black tracking-wider text-right"
-                      >
-                        Estatus
+                      <th scope="col" className="px-6 py-3">
+                        Unidad
                       </th>
+                      <th scope="col" className="px-6 py-3 text-right">
+                        Monto / Estatus
+                      </th>
+                      {activeTab === "historico" && (
+                        <th scope="col" className="px-4 py-3 text-center">
+                          Acciones
+                        </th>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
                     {currentList.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={5}
-                          className="px-6 py-12 text-center text-slate-400 bg-white"
+                          colSpan={activeTab === "historico" ? 5 : 5}
+                          className="px-6 py-16 text-center bg-white"
                         >
-                          <FileCheck className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                          <p className="text-lg font-medium">
-                            No se encontraron movimientos.
-                          </p>
-                          <p className="text-sm">
-                            Selecciona un operador arriba o revisa el estado de
-                            los viajes.
-                          </p>
+                          <div className="flex flex-col items-center justify-center text-slate-400">
+                            {activeTab === "pendientes" ? (
+                              <Calculator className="h-10 w-10 mb-3 opacity-20" />
+                            ) : (
+                              <History className="h-10 w-10 mb-3 opacity-20" />
+                            )}
+                            <p className="text-base font-semibold text-slate-600 mb-1">
+                              {activeTab === "pendientes"
+                                ? "Sin movimientos pendientes"
+                                : "Historial vacío"}
+                            </p>
+                            <p className="text-xs">
+                              {activeTab === "pendientes"
+                                ? "Selecciona un operador arriba o revisa el estado de los viajes."
+                                : "No hay liquidaciones cerradas para los filtros actuales."}
+                            </p>
+                          </div>
                         </td>
                       </tr>
                     ) : (
@@ -530,21 +549,32 @@ export default function CierreViaje() {
                         const isSelected = selectedLegIds.includes(
                           String(leg.id),
                         );
+                        const totalAnticipos =
+                          (leg.anticipo_viaticos || 0) +
+                          (leg.anticipo_casetas || 0);
+
                         return (
                           <tr
                             key={leg.id}
                             className={cn(
-                              "border-b last:border-0 transition-colors hover:bg-slate-50/80",
-                              isSelected ? "bg-blue-50/40" : "bg-white",
+                              "border-b last:border-0 transition-colors group cursor-pointer",
+                              isSelected
+                                ? "bg-blue-50/60 hover:bg-blue-50/80"
+                                : "bg-white hover:bg-slate-50/60",
                             )}
-                            onClick={() =>
-                              activeTab === "pendientes" &&
-                              toggleLegSelection(String(leg.id))
-                            }
+                            onClick={() => {
+                              if (activeTab === "pendientes") {
+                                toggleLegSelection(String(leg.id));
+                              } else {
+                                // Comportamiento rápido: Al hacer clic en la fila del histórico, mostramos el recibo
+                                // (Asumiendo que implementas una función para cargar la liquidación)
+                                // handleViewReceipt(leg);
+                              }
+                            }}
                           >
                             {activeTab === "pendientes" && (
                               <td
-                                className="px-4 py-4"
+                                className="px-4 py-3"
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <Checkbox
@@ -552,63 +582,119 @@ export default function CierreViaje() {
                                   onCheckedChange={() =>
                                     toggleLegSelection(String(leg.id))
                                   }
+                                  className={cn(
+                                    "transition-all",
+                                    isSelected
+                                      ? "border-brand-navy bg-brand-navy"
+                                      : "border-slate-300",
+                                  )}
                                 />
                               </td>
                             )}
-                            <td className="px-6 py-4">
-                              <div className="font-bold text-brand-navy">
+                            <td className="px-6 py-3">
+                              <div className="font-bold text-brand-navy text-sm">
                                 {leg.trip?.public_id || `TRP-${leg.trip_id}`}
                               </div>
                               <div
-                                className="text-[11px] text-slate-500 font-medium truncate max-w-[200px]"
+                                className="text-[10px] text-slate-500 font-medium truncate max-w-[180px] mt-0.5"
                                 title={leg.trip?.clientName}
                               >
                                 {leg.trip?.clientName}
                               </div>
                             </td>
-                            <td className="px-6 py-4">
+                            <td className="px-6 py-3">
+                              <div className="flex flex-col gap-1">
+                                <div className="flex items-center gap-1.5">
+                                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"></div>
+                                  <span
+                                    className="text-xs font-semibold text-slate-700 truncate max-w-[150px]"
+                                    title={leg.trip?.origin}
+                                  >
+                                    {leg.trip?.origin}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <div className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0"></div>
+                                  <span
+                                    className="text-xs font-semibold text-slate-700 truncate max-w-[150px]"
+                                    title={leg.trip?.destination}
+                                  >
+                                    {leg.trip?.destination}
+                                  </span>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-3">
                               <Badge
                                 variant="outline"
-                                className="bg-slate-50 font-semibold text-slate-600"
+                                className="bg-slate-50 font-semibold text-slate-600 mb-1 border-slate-200"
                               >
                                 {legTypeLabels[leg.leg_type] || leg.leg_type}
                               </Badge>
-                              <div className="text-xs text-slate-400 mt-1 flex items-center gap-1">
-                                <Truck className="h-3 w-3" /> Eco:{" "}
-                                {leg.unit?.numero_economico}
+                              <div className="text-[10px] text-slate-500 font-bold flex items-center gap-1">
+                                <Truck className="h-3 w-3 text-slate-400" />{" "}
+                                Eco: {leg.unit?.numero_economico}
                               </div>
                             </td>
-                            <td className="px-6 py-4">
-                              <div className="text-xs font-bold text-slate-700">
-                                {leg.trip?.origin}
-                              </div>
-                              <div className="text-[10px] text-slate-400 uppercase tracking-widest">
-                                Hacia
-                              </div>
-                              <div className="text-xs font-bold text-slate-700">
-                                {leg.trip?.destination}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 text-right">
+                            <td className="px-6 py-3 text-right">
                               {activeTab === "pendientes" ? (
-                                <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 border-0">
-                                  Pendiente Pago
-                                </Badge>
+                                <div className="flex flex-col items-end">
+                                  <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-200 border-0 text-[10px] uppercase tracking-wider mb-1">
+                                    Pendiente
+                                  </Badge>
+                                  {totalAnticipos > 0 && (
+                                    <div className="text-[10px] text-rose-500 font-bold bg-rose-50 px-1.5 py-0.5 rounded">
+                                      Ant: -${totalAnticipos.toLocaleString()}
+                                    </div>
+                                  )}
+                                </div>
                               ) : (
-                                <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-0 flex items-center justify-end gap-1 ml-auto">
-                                  <CheckCircle className="h-3 w-3" /> Liquidado
-                                </Badge>
-                              )}
-                              {(leg.anticipo_viaticos > 0 ||
-                                leg.anticipo_casetas > 0) && (
-                                <div className="text-[10px] text-rose-500 font-bold mt-2">
-                                  Anticipos: $
-                                  {(
-                                    leg.anticipo_viaticos + leg.anticipo_casetas
-                                  ).toLocaleString()}
+                                <div className="flex flex-col items-end">
+                                  <span className="font-mono font-black text-emerald-600 text-sm">
+                                    {/* Aquí deberías mostrar el monto real liquidado si lo tienes en el backend */}
+                                    $
+                                    {(
+                                      leg.monto_neto_pagado || 0
+                                    ).toLocaleString("es-MX", {
+                                      minimumFractionDigits: 2,
+                                    })}
+                                  </span>
+                                  <div className="text-[9px] text-slate-400 uppercase tracking-widest flex items-center gap-1 mt-0.5">
+                                    <CheckCircle className="h-3 w-3 text-emerald-500" />{" "}
+                                    Liquidado
+                                  </div>
                                 </div>
                               )}
                             </td>
+
+                            {/* COLUMNA DE ACCIONES (Solo en Histórico) */}
+                            {activeTab === "historico" && (
+                              <td
+                                className="px-4 py-3 text-center"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0 text-slate-400 hover:text-brand-navy hover:bg-slate-100 rounded-full"
+                                    title="Ver y Reimprimir Recibo"
+                                    // onClick={() => handleViewReceipt(leg)}
+                                  >
+                                    <Printer className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-full"
+                                    title="Reabrir Liquidación (Editar)"
+                                    // onClick={() => handleReopenSettlement(leg)}
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </td>
+                            )}
                           </tr>
                         );
                       })
@@ -621,284 +707,303 @@ export default function CierreViaje() {
         </div>
 
         {/* COLUMNA DERECHA: CONFIGURACIÓN FINANCIERA */}
-        {selectedLegsData.length > 0 && liquidacion && (
-          <div className="xl:col-span-5 space-y-6 animate-in slide-in-from-right-8 duration-500">
-            {/* 🚀 CANDADO Y PRE-LIQUIDACIÓN DE COMBUSTIBLE */}
-            <Card className="border-slate-200 shadow-sm border-t-4 border-t-amber-500">
-              <CardHeader className="bg-amber-50/30 border-b pb-4">
-                <CardTitle className="text-sm font-bold text-amber-800 uppercase flex items-center gap-2">
-                  <Fuel className="h-4 w-4" /> 3. Conciliación Diésel
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-5 space-y-4">
-                {isLoadingPreview ? (
-                  <div className="flex flex-col items-center justify-center py-6 text-slate-400">
-                    <Loader2 className="h-8 w-8 animate-spin mb-2 text-amber-500" />
-                    <p className="text-sm font-medium">
-                      Cruzando vales vs telemetría...
-                    </p>
-                  </div>
-                ) : (
-                  <>
-                    {/* Alertas del Backend (Faltan Vales) */}
-                    {previewData?.alertas?.length > 0 && (
-                      <div className="bg-rose-50 border border-rose-200 p-3 rounded-lg space-y-2 mb-4">
-                        <h4 className="flex items-center gap-2 text-xs font-bold text-rose-700">
-                          <AlertTriangle className="h-4 w-4" /> ATENCIÓN: Vales
-                          Faltantes
-                        </h4>
-                        <ul className="text-[11px] text-rose-600 list-disc pl-4 space-y-1">
-                          {previewData.alertas.map(
-                            (alerta: string, i: number) => (
-                              <li key={i}>{alerta}</li>
-                            ),
-                          )}
-                        </ul>
-                      </div>
-                    )}
-
-                    {/* Resumen de Rendimiento */}
-                    <div className="bg-slate-100 p-4 rounded-xl text-xs space-y-2 font-mono">
-                      <div className="flex justify-between text-slate-600">
-                        <span className="font-bold font-sans">
-                          KMs Recorridos (Acumulado):
-                        </span>{" "}
-                        <span>{previewData?.total_kms || 0} km</span>
-                      </div>
-                      <div className="flex justify-between text-slate-600">
-                        <span className="font-bold font-sans">
-                          Consumo Esperado (ECM):
-                        </span>{" "}
-                        <span>{previewData?.consumo_esperado || 0} L</span>
-                      </div>
-                      <div className="flex justify-between text-brand-navy">
-                        <span className="font-bold font-sans">
-                          Consumo Real (Vales):
-                        </span>{" "}
-                        <span className="font-bold">
-                          {previewData?.consumo_real || 0} L
-                        </span>
-                      </div>
-                      <Separator className="my-2 bg-slate-200" />
-                      {previewData?.diferencia_litros > 0 ? (
-                        <div className="flex justify-between text-rose-600 font-bold">
-                          <span className="font-sans">Exceso a Descontar:</span>{" "}
-                          <span>{previewData.diferencia_litros} L</span>
-                        </div>
-                      ) : (
-                        <div className="flex justify-between text-emerald-600 font-bold">
-                          <span className="font-sans">Rendimiento Óptimo:</span>{" "}
-                          <span>No hay penalización</span>
+        <div className="xl:col-span-5 space-y-6">
+          {!liquidacion ? (
+            // 🚀 ESTADO VACÍO: Se muestra cuando no has seleccionado viajes
+            <Card className="border-dashed shadow-none bg-slate-50 flex flex-col items-center justify-center h-[400px] text-slate-400">
+              <Calculator className="h-12 w-12 mb-4 opacity-20" />
+              <p className="font-medium text-lg text-slate-500">
+                Panel de Liquidación
+              </p>
+              <p className="text-sm">
+                Selecciona al menos un viaje de la tabla para calcular.
+              </p>
+            </Card>
+          ) : (
+            // 🚀 PANEL FINANCIERO: Se muestra en cuanto seleccionas un viaje
+            <div className="space-y-6 animate-in slide-in-from-right-8 duration-500">
+              {/* 🚀 CANDADO Y PRE-LIQUIDACIÓN DE COMBUSTIBLE */}
+              <Card className="border-slate-200 shadow-sm border-t-4 border-t-amber-500">
+                <CardHeader className="bg-amber-50/30 border-b pb-4">
+                  <CardTitle className="text-sm font-bold text-amber-800 uppercase flex items-center gap-2">
+                    <Fuel className="h-4 w-4" /> 3. Conciliación Diésel
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-5 space-y-4">
+                  {isLoadingPreview ? (
+                    <div className="flex flex-col items-center justify-center py-6 text-slate-400">
+                      <Loader2 className="h-8 w-8 animate-spin mb-2 text-amber-500" />
+                      <p className="text-sm font-medium">
+                        Cruzando vales vs telemetría...
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Alertas del Backend (Faltan Vales) */}
+                      {previewData?.alertas?.length > 0 && (
+                        <div className="bg-rose-50 border border-rose-200 p-3 rounded-lg space-y-2 mb-4">
+                          <h4 className="flex items-center gap-2 text-xs font-bold text-rose-700">
+                            <AlertTriangle className="h-4 w-4" /> ATENCIÓN:
+                            Vales Faltantes
+                          </h4>
+                          <ul className="text-[11px] text-rose-600 list-disc pl-4 space-y-1">
+                            {previewData.alertas.map(
+                              (alerta: string, i: number) => (
+                                <li key={i}>{alerta}</li>
+                              ),
+                            )}
+                          </ul>
                         </div>
                       )}
-                    </div>
 
-                    <div className="space-y-2 pt-2">
-                      <Label className="text-xs font-bold text-rose-700 uppercase tracking-widest">
-                        Penalización Económica
-                      </Label>
-                      <div className="relative">
-                        <Input
-                          type="number"
-                          value={combustibleFaltante || ""}
-                          onChange={(e) =>
-                            setCombustibleFaltante(Number(e.target.value))
-                          }
-                          className="pl-10 font-bold border-rose-200 bg-rose-50/30 text-rose-700"
-                        />
-                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-rose-400" />
-                      </div>
-                    </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* ESQUEMA DE PAGO Y RECIBO */}
-            <Card className="border-slate-200 shadow-xl overflow-hidden">
-              <CardHeader className="bg-brand-navy text-white pb-6">
-                <CardTitle className="text-lg font-black uppercase flex items-center gap-2">
-                  <Receipt className="h-5 w-5" /> 4. Recibo de Liquidación
-                </CardTitle>
-              </CardHeader>
-
-              <CardContent className="p-0">
-                <div className="p-6 space-y-6">
-                  {/* Selector de Esquema Fijo/Porcentaje */}
-                  <Tabs
-                    value={calcMode}
-                    onValueChange={(v) => setCalcMode(v as any)}
-                    className="w-full bg-slate-50 p-1 rounded-lg"
-                  >
-                    <TabsList className="grid w-full grid-cols-2">
-                      <TabsTrigger
-                        value="percentage"
-                        className="font-bold text-xs"
-                      >
-                        Pagar % del Flete
-                      </TabsTrigger>
-                      <TabsTrigger value="fixed" className="font-bold text-xs">
-                        Pagar Fijo x Viaje
-                      </TabsTrigger>
-                    </TabsList>
-                  </Tabs>
-
-                  {/* INGRESOS */}
-                  <div className="space-y-3">
-                    <h4 className="flex items-center justify-between text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">
-                      <span className="flex items-center gap-1">
-                        <ArrowUpCircle className="h-4 w-4 text-emerald-500" />{" "}
-                        Ingresos
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setNewConceptoType("ingreso");
-                          setShowAddConceptoDialog(true);
-                        }}
-                        className="h-6 px-2 text-emerald-600 hover:bg-emerald-50"
-                      >
-                        <Plus className="h-3 w-3 mr-1" /> Bono
-                      </Button>
-                    </h4>
-
-                    <div className="flex justify-between items-center text-sm font-medium text-slate-700">
-                      <span className="flex items-center gap-2">
-                        Pago Base ({selectedLegsData.length} movs)
-                        {calcMode === "percentage" ? (
-                          <Input
-                            type="number"
-                            className="w-16 h-6 text-xs p-1"
-                            value={porcentajeFlete}
-                            onChange={(e) =>
-                              setPorcentajeFlete(Number(e.target.value))
-                            }
-                          />
+                      {/* Resumen de Rendimiento */}
+                      <div className="bg-slate-100 p-4 rounded-xl text-xs space-y-2 font-mono">
+                        <div className="flex justify-between text-slate-600">
+                          <span className="font-bold font-sans">
+                            KMs Recorridos (Acumulado):
+                          </span>
+                          <span>{previewData?.total_kms || 0} km</span>
+                        </div>
+                        <div className="flex justify-between text-slate-600">
+                          <span className="font-bold font-sans">
+                            Consumo Esperado (ECM):
+                          </span>
+                          <span>{previewData?.consumo_esperado || 0} L</span>
+                        </div>
+                        <div className="flex justify-between text-brand-navy">
+                          <span className="font-bold font-sans">
+                            Consumo Real (Vales):
+                          </span>
+                          <span className="font-bold">
+                            {previewData?.consumo_real || 0} L
+                          </span>
+                        </div>
+                        <Separator className="my-2 bg-slate-200" />
+                        {previewData?.diferencia_litros > 0 ? (
+                          <div className="flex justify-between text-rose-600 font-bold">
+                            <span className="font-sans">
+                              Exceso a Descontar:
+                            </span>
+                            <span>{previewData.diferencia_litros} L</span>
+                          </div>
                         ) : (
+                          <div className="flex justify-between text-emerald-600 font-bold">
+                            <span className="font-sans">
+                              Rendimiento Óptimo:
+                            </span>
+                            <span>No hay penalización</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="space-y-2 pt-2">
+                        <Label className="text-xs font-bold text-rose-700 uppercase tracking-widest">
+                          Penalización Económica
+                        </Label>
+                        <div className="relative">
                           <Input
                             type="number"
-                            className="w-20 h-6 text-xs p-1"
-                            value={montoFijo}
+                            value={combustibleFaltante || "0"}
                             onChange={(e) =>
-                              setMontoFijo(Number(e.target.value))
+                              setCombustibleFaltante(Number(e.target.value))
                             }
+                            className="pl-10 font-bold border-rose-200 bg-rose-50/30 text-rose-700"
                           />
-                        )}
+                          <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-rose-400" />
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* ESQUEMA DE PAGO Y RECIBO */}
+              <Card className="border-slate-200 shadow-xl overflow-hidden">
+                <CardHeader className="bg-brand-navy text-white pb-6">
+                  <CardTitle className="text-lg font-black uppercase flex items-center gap-2">
+                    <Receipt className="h-5 w-5" /> 4. Recibo de Liquidación
+                  </CardTitle>
+                </CardHeader>
+
+                <CardContent className="p-0">
+                  <div className="p-6 space-y-6">
+                    <Tabs
+                      value={calcMode}
+                      onValueChange={(v) => setCalcMode(v as any)}
+                      className="w-full bg-slate-50 p-1 rounded-lg"
+                    >
+                      <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger
+                          value="percentage"
+                          className="font-bold text-xs"
+                        >
+                          Pagar % del Flete
+                        </TabsTrigger>
+                        <TabsTrigger
+                          value="fixed"
+                          className="font-bold text-xs"
+                        >
+                          Pagar Fijo x Viaje
+                        </TabsTrigger>
+                      </TabsList>
+                    </Tabs>
+
+                    {/* INGRESOS */}
+                    <div className="space-y-3">
+                      <h4 className="flex items-center justify-between text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">
+                        <span className="flex items-center gap-1">
+                          <ArrowUpCircle className="h-4 w-4 text-emerald-500" />{" "}
+                          Ingresos
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setNewConceptoType("ingreso");
+                            setShowAddConceptoDialog(true);
+                          }}
+                          className="h-6 px-2 text-emerald-600 hover:bg-emerald-50"
+                        >
+                          <Plus className="h-3 w-3 mr-1" /> Bono
+                        </Button>
+                      </h4>
+
+                      <div className="flex justify-between items-center text-sm font-medium text-slate-700">
+                        <span className="flex items-center gap-2">
+                          Pago Base ({selectedLegsData.length} movs)
+                          {calcMode === "percentage" ? (
+                            <Input
+                              type="number"
+                              className="w-16 h-6 text-xs p-1"
+                              value={porcentajeFlete}
+                              onChange={(e) =>
+                                setPorcentajeFlete(Number(e.target.value))
+                              }
+                            />
+                          ) : (
+                            <Input
+                              type="number"
+                              className="w-20 h-6 text-xs p-1"
+                              value={montoFijo}
+                              onChange={(e) =>
+                                setMontoFijo(Number(e.target.value))
+                              }
+                            />
+                          )}
+                        </span>
+                        <span className="font-mono text-emerald-600 font-bold">
+                          +{formatCurrency(liquidacion.pagoBaseBruto)}
+                        </span>
+                      </div>
+
+                      {conceptosExtra
+                        .filter((c) => c.tipo === "ingreso")
+                        .map((bono) => (
+                          <div
+                            key={bono.id}
+                            className="flex justify-between items-center text-sm font-medium text-emerald-600 bg-emerald-50/50 px-2 py-1 rounded"
+                          >
+                            <span>+ {bono.descripcion}</span>
+                            <span className="font-mono">
+                              +{formatCurrency(bono.monto)}
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+
+                    {/* DEDUCCIONES */}
+                    <div className="space-y-3">
+                      <h4 className="flex items-center justify-between text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">
+                        <span className="flex items-center gap-1">
+                          <ArrowDownCircle className="h-4 w-4 text-rose-500" />{" "}
+                          Deducciones
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setNewConceptoType("deduccion");
+                            setShowAddConceptoDialog(true);
+                          }}
+                          className="h-6 px-2 text-rose-600 hover:bg-rose-50"
+                        >
+                          <Plus className="h-3 w-3 mr-1" /> Cargo
+                        </Button>
+                      </h4>
+
+                      {liquidacion.deduccionViaticos > 0 && (
+                        <div className="flex justify-between items-center text-sm font-medium text-rose-600">
+                          <span>Anticipos Otorgados (Casetas/Viáticos)</span>
+                          <span className="font-mono">
+                            -{formatCurrency(liquidacion.deduccionViaticos)}
+                          </span>
+                        </div>
+                      )}
+
+                      {liquidacion.combustibleFaltante > 0 && (
+                        <div className="flex justify-between items-center text-sm font-bold text-rose-600 bg-rose-50 px-2 py-1 rounded border border-rose-100">
+                          <span>Faltante de Combustible</span>
+                          <span className="font-mono">
+                            -{formatCurrency(liquidacion.combustibleFaltante)}
+                          </span>
+                        </div>
+                      )}
+
+                      {conceptosExtra
+                        .filter((c) => c.tipo === "deduccion")
+                        .map((desc) => (
+                          <div
+                            key={desc.id}
+                            className="flex justify-between items-center text-sm font-medium text-rose-600 bg-rose-50/30 px-2 py-1 rounded"
+                          >
+                            <span>- {desc.descripcion}</span>
+                            <span className="font-mono">
+                              -{formatCurrency(desc.monto)}
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+
+                  {/* GRAN TOTAL */}
+                  <div className="bg-slate-50 p-6 border-t border-slate-200">
+                    <div className="flex items-center justify-between mb-6">
+                      <span className="text-sm font-black uppercase tracking-widest text-slate-500">
+                        Neto a Depositar
                       </span>
-                      <span className="font-mono text-emerald-600 font-bold">
-                        +{formatCurrency(liquidacion.pagoBaseBruto)}
+                      <span
+                        className={cn(
+                          "text-4xl font-black font-mono tracking-tighter",
+                          liquidacion.neto_a_pagar >= 0
+                            ? "text-emerald-600"
+                            : "text-rose-600",
+                        )}
+                      >
+                        {formatCurrency(liquidacion.neto_a_pagar)}
                       </span>
                     </div>
 
-                    {conceptosExtra
-                      .filter((c) => c.tipo === "ingreso")
-                      .map((bono) => (
-                        <div
-                          key={bono.id}
-                          className="flex justify-between items-center text-sm font-medium text-emerald-600 bg-emerald-50/50 px-2 py-1 rounded"
-                        >
-                          <span>+ {bono.descripcion}</span>
-                          <span className="font-mono">
-                            +{formatCurrency(bono.monto)}
-                          </span>
-                        </div>
-                      ))}
-                  </div>
-
-                  {/* DEDUCCIONES */}
-                  <div className="space-y-3">
-                    <h4 className="flex items-center justify-between text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">
-                      <span className="flex items-center gap-1">
-                        <ArrowDownCircle className="h-4 w-4 text-rose-500" />{" "}
-                        Deducciones
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setNewConceptoType("deduccion");
-                          setShowAddConceptoDialog(true);
-                        }}
-                        className="h-6 px-2 text-rose-600 hover:bg-rose-50"
-                      >
-                        <Plus className="h-3 w-3 mr-1" /> Cargo
-                      </Button>
-                    </h4>
-
-                    {liquidacion.deduccionViaticos > 0 && (
-                      <div className="flex justify-between items-center text-sm font-medium text-rose-600">
-                        <span>Anticipos Otorgados (Casetas/Viáticos)</span>
-                        <span className="font-mono">
-                          -{formatCurrency(liquidacion.deduccionViaticos)}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* 🚀 AQUÍ ESTÁ LA CORRECCIÓN DEL BUG (liquidacion.combustibleFaltante) */}
-                    {liquidacion.combustibleFaltante > 0 && (
-                      <div className="flex justify-between items-center text-sm font-bold text-rose-600 bg-rose-50 px-2 py-1 rounded border border-rose-100">
-                        <span>Faltante de Combustible</span>
-                        <span className="font-mono">
-                          -{formatCurrency(liquidacion.combustibleFaltante)}
-                        </span>
-                      </div>
-                    )}
-
-                    {conceptosExtra
-                      .filter((c) => c.tipo === "deduccion")
-                      .map((desc) => (
-                        <div
-                          key={desc.id}
-                          className="flex justify-between items-center text-sm font-medium text-rose-600 bg-rose-50/30 px-2 py-1 rounded"
-                        >
-                          <span>- {desc.descripcion}</span>
-                          <span className="font-mono">
-                            -{formatCurrency(desc.monto)}
-                          </span>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-
-                {/* GRAN TOTAL */}
-                <div className="bg-slate-50 p-6 border-t border-slate-200">
-                  <div className="flex items-center justify-between mb-6">
-                    <span className="text-sm font-black uppercase tracking-widest text-slate-500">
-                      Neto a Depositar
-                    </span>
-                    <span
-                      className={cn(
-                        "text-4xl font-black font-mono tracking-tighter",
-                        liquidacion.neto_a_pagar >= 0
-                          ? "text-emerald-600"
-                          : "text-rose-600",
-                      )}
+                    <Button
+                      size="lg"
+                      className="w-full bg-brand-navy hover:bg-brand-navy/90 text-white font-black gap-2 text-lg h-14 shadow-lg"
+                      disabled={isAnimating || isLoadingPreview}
+                      onClick={handleLiquidate}
                     >
-                      {formatCurrency(liquidacion.neto_a_pagar)}
-                    </span>
+                      {isAnimating ? (
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                      ) : (
+                        <CheckCircle className="h-5 w-5" />
+                      )}
+                      {isAnimating
+                        ? "Procesando Nómina..."
+                        : "Emitir Recibo y Liquidar"}
+                    </Button>
                   </div>
-
-                  <Button
-                    size="lg"
-                    className="w-full bg-brand-navy hover:bg-brand-navy/90 text-white font-black gap-2 text-lg h-14 shadow-lg"
-                    disabled={isAnimating || isLoadingPreview}
-                    onClick={handleLiquidate}
-                  >
-                    {isAnimating ? (
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                    ) : (
-                      <CheckCircle className="h-5 w-5" />
-                    )}
-                    {isAnimating
-                      ? "Procesando Nómina..."
-                      : "Emitir Recibo y Liquidar"}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* 🚀 MODALES SECUNDARIOS */}
@@ -977,7 +1082,7 @@ export default function CierreViaje() {
         </DialogContent>
       </Dialog>
 
-      {/* 🚀 RECIBO DE IMPRESIÓN OFICIAL (REGLA 5) */}
+      {/* 🚀 RECIBO DE IMPRESIÓN OFICIAL (REGLA 5) - FIX PARA 1 SOLA HOJA */}
       <Dialog
         open={showReceiptModal}
         onOpenChange={(open) => {
@@ -991,109 +1096,250 @@ export default function CierreViaje() {
           }
         }}
       >
-        <DialogContent className="max-w-[450px] p-0 overflow-hidden bg-white">
-          <div className="p-8 border-b-8 border-brand-navy space-y-6">
-            <div className="text-center space-y-1">
-              <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Receipt className="h-8 w-8 text-slate-800" />
+        <DialogContent className="max-w-[800px] p-0 overflow-hidden bg-slate-50 sm:rounded-2xl border-slate-200 shadow-2xl print:fixed print:top-0 print:left-0 print:right-0 print:bottom-0 print:w-[100vw] print:h-[100vh] print:max-w-none print:m-0 print:p-8 print:bg-white print:shadow-none print:border-none print:rounded-none print:transform-none print:overflow-hidden print:z-50">
+          {/* Se oculta al imprimir para no gastar tinta azul en la cabecera */}
+          <div className="print:hidden">
+            <div className="h-2 w-full bg-brand-navy"></div>
+          </div>
+
+          {/* WATERMARK LOGO DE FONDO (Ajustado para no desbordar el papel) */}
+          <div className="absolute inset-0 z-0 flex items-center justify-center opacity-[0.02] pointer-events-none print:opacity-5 print:overflow-hidden">
+            <Truck className="w-[400px] h-[400px] transform -rotate-12" />
+          </div>
+
+          <div className="p-6 sm:p-8 relative z-10 flex flex-col h-full print:p-0 print:h-auto">
+            {/* 1. HEADER (Horizontal) */}
+            <div className="flex justify-between items-start mb-6 print:mb-8">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 bg-white border border-slate-200 shadow-sm rounded-xl flex items-center justify-center shrink-0 print:border-slate-300 print:shadow-none">
+                  <Receipt className="h-7 w-7 text-brand-navy print:text-black" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-black text-slate-900 uppercase tracking-widest leading-none mb-1">
+                    Liquidación
+                  </h2>
+                  <p className="text-slate-500 text-xs font-mono print:text-slate-600">
+                    {new Date().toLocaleString("es-MX", {
+                      dateStyle: "long",
+                      timeStyle: "short",
+                    })}
+                  </p>
+                </div>
               </div>
-              <h2 className="text-2xl font-black text-slate-900 uppercase tracking-widest">
-                Liquidación
-              </h2>
-              <p className="text-slate-500 text-sm font-mono">
-                {new Date().toLocaleString("es-MX")}
+              <div className="text-right">
+                <span className="bg-slate-200/70 text-slate-700 px-4 py-1.5 rounded-lg font-mono font-bold text-sm tracking-wider border border-slate-300/50 shadow-sm print:bg-transparent print:border-slate-400 print:text-black print:shadow-none">
+                  FOLIO: LIQ-{String(Date.now()).slice(-6)}
+                </span>
+              </div>
+            </div>
+
+            {/* 2. CUERPO PRINCIPAL A DOS COLUMNAS */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-8 mb-6 print:grid-cols-12 print:gap-10">
+              {/* COLUMNA IZQUIERDA: Contexto y Operación */}
+              <div className="md:col-span-7 print:col-span-7 space-y-4">
+                <div className="grid grid-cols-2 gap-3 print:gap-6">
+                  <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm print:shadow-none print:border-slate-300">
+                    <span className="text-[12px] uppercase font-bold tracking-widest text-slate-400 mb-1 block print:text-slate-500">
+                      Operador Asignado
+                    </span>
+                    <span
+                      className="font-bold text-brand-navy text-sm truncate block print:text-black"
+                      title={selectedLegsData[0]?.operator?.name}
+                    >
+                      {selectedLegsData[0]?.operator?.name || "N/A"}
+                    </span>
+                  </div>
+                  <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm print:shadow-none print:border-slate-300">
+                    <span className="text-[12px] uppercase font-bold tracking-widest text-slate-400 mb-1 block print:text-slate-500">
+                      Movimientos
+                    </span>
+                    <span className="font-bold text-slate-700 text-sm block print:text-black">
+                      {selectedLegsData.length}{" "}
+                      <span className="font-normal text-slate-400 print:text-slate-500">
+                        tramos
+                      </span>
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-blue-50/80 border border-blue-100 p-4 rounded-xl relative overflow-hidden h-full print:bg-white print:border-slate-300">
+                  <Fuel className="absolute -right-4 -bottom-4 h-24 w-24 text-blue-200/50 opacity-40 print:hidden" />
+                  <h4 className="text-[12px] font-black uppercase tracking-widest text-blue-800 mb-4 relative z-10 print:text-black">
+                    Telemetría y Diésel
+                  </h4>
+                  <div className="grid grid-cols-3 gap-2 text-xs font-mono text-slate-600 relative z-10 print:text-black">
+                    <div>
+                      <p className="text-[10px] text-blue-600/70 font-sans font-bold uppercase mb-1 print:text-slate-500">
+                        Distancia
+                      </p>
+                      <p className="font-bold text-slate-800 text-sm print:text-black">
+                        {previewData?.total_kms || 0}{" "}
+                        <span className="text-slate-400 text-xs">km</span>
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-blue-600/70 font-sans font-bold uppercase mb-1 print:text-slate-500">
+                        Esperado
+                      </p>
+                      <p className="font-bold text-slate-800 text-sm print:text-black">
+                        {previewData?.consumo_esperado || 0}{" "}
+                        <span className="text-slate-400 text-xs">L</span>
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-blue-600/70 font-sans font-bold uppercase mb-1 print:text-slate-500">
+                        Comprobado
+                      </p>
+                      <p className="font-bold text-slate-800 text-sm print:text-black">
+                        {previewData?.consumo_real || 0}{" "}
+                        <span className="text-slate-400 text-xs">L</span>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* COLUMNA DERECHA: Dinero y Desglose */}
+              <div className="md:col-span-5 print:col-span-5 flex flex-col justify-between">
+                <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm space-y-3 flex-1 mb-4 print:shadow-none print:border-slate-300">
+                  <h4 className="text-[12px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100 pb-2 mb-3 print:text-slate-600 print:border-slate-300">
+                    Desglose Financiero
+                  </h4>
+
+                  <div className="space-y-2.5 text-xs font-medium">
+                    <div className="flex justify-between items-center text-slate-700 print:text-black">
+                      <span>Flete Base</span>
+                      <span className="font-mono font-semibold">
+                        {formatCurrency(safeLiquidacion.pagoBaseBruto)}
+                      </span>
+                    </div>
+
+                    {safeLiquidacion.bonosAdicionales > 0 && (
+                      <div className="flex justify-between items-center text-emerald-600 print:text-black">
+                        <span>Bonos Extra</span>
+                        <span className="font-mono font-semibold">
+                          +{formatCurrency(safeLiquidacion.bonosAdicionales)}
+                        </span>
+                      </div>
+                    )}
+
+                    {safeLiquidacion.deduccionViaticos +
+                      safeLiquidacion.otrosAnticipos >
+                      0 && (
+                      <div className="flex justify-between items-center text-rose-600 print:text-black">
+                        <span>Anticipos</span>
+                        <span className="font-mono font-semibold">
+                          -
+                          {formatCurrency(
+                            safeLiquidacion.deduccionViaticos +
+                              safeLiquidacion.otrosAnticipos,
+                          )}
+                        </span>
+                      </div>
+                    )}
+
+                    {safeLiquidacion.combustibleFaltante > 0 && (
+                      <div className="flex justify-between items-center text-rose-600 print:text-black">
+                        <span>Faltante Diésel</span>
+                        <span className="font-mono font-semibold">
+                          -{formatCurrency(safeLiquidacion.combustibleFaltante)}
+                        </span>
+                      </div>
+                    )}
+
+                    {safeLiquidacion.deduccionesManuales > 0 && (
+                      <div className="flex justify-between items-center text-rose-600 print:text-black">
+                        <span>Cargos Varios</span>
+                        <span className="font-mono font-semibold">
+                          -{formatCurrency(safeLiquidacion.deduccionesManuales)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="relative bg-slate-900 p-4 sm:p-5 rounded-xl shadow-lg flex justify-between items-center overflow-hidden shrink-0 print:bg-white print:border-2 print:border-slate-800 print:shadow-none">
+                  <div className="absolute inset-0 bg-gradient-to-r from-brand-navy to-slate-900 z-0 print:hidden"></div>
+                  <div className="relative z-10">
+                    <span className="block text-[10px] sm:text-[12px] text-slate-400 font-bold uppercase tracking-widest mb-1 print:text-slate-600">
+                      Total a Depositar
+                    </span>
+                    <span className="text-2xl sm:text-3xl font-black font-mono text-white tracking-tight print:text-black">
+                      {formatCurrency(safeLiquidacion.neto_a_pagar)}
+                    </span>
+                  </div>
+                  <div className="relative z-10 w-10 h-10 sm:w-12 sm:h-12 bg-white/10 rounded-full flex items-center justify-center backdrop-blur-sm border border-white/10 print:border-none print:bg-transparent">
+                    <DollarSign className="h-5 w-5 sm:h-6 sm:w-6 text-emerald-400 print:text-black" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. DIVISOR Y ZONA LEGAL */}
+            <div className="mt-auto pt-4 print:pt-16">
+              <div className="relative flex items-center pb-11 mb-11 print:pb-12 ">
+                <div className="absolute -left-10 w-6 h-6 bg-slate-800/20 rounded-full blur-[2px] print:hidden"></div>
+                <div className="absolute -right-10 w-6 h-6 bg-slate-800/20 rounded-full blur-[2px] print:hidden"></div>
+                <div className="w-full border-t-2 border-dashed border-slate-300 print:border-slate-400"></div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row justify-between gap-12 sm:gap-24 px-8 md:px-16 mb-8">
+                <div className="flex-1 text-center">
+                  <div className="border-t border-slate-400 pt-2">
+                    <p className="text-[10px] text-brand-navy font-black uppercase tracking-widest print:text-slate-800">
+                      Conformidad
+                    </p>
+                    <p className="text-[12px] font-bold text-slate-600 mt-1 truncate print:text-black">
+                      {selectedLegsData[0]?.operator?.name ||
+                        "Firma del Operador"}
+                    </p>
+                    <p className="text-[8px] text-slate-400 font-medium mt-0.5 print:text-slate-500">
+                      Recibe
+                    </p>
+                  </div>
+                </div>
+                <div className="flex-1 text-center">
+                  <div className="border-t border-slate-400 pt-2">
+                    <p className="text-[10px] text-brand-navy font-black uppercase tracking-widest print:text-slate-800">
+                      Autorización
+                    </p>
+                    <p className="text-[12px] font-bold text-slate-600 mt-1 truncate print:text-black">
+                      Depto. Finanzas / Despacho
+                    </p>
+                    <p className="text-[8px] text-slate-400 font-medium mt-0.5 print:text-slate-500">
+                      Entrega
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-[8px] text-slate-400 text-center leading-relaxed px-4 md:px-12 print:text-slate-500 print:max-w-2xl print:mx-auto">
+                Este documento ampara la liquidación de los movimientos
+                descritos. Al firmar, el operador acepta de conformidad los
+                descuentos y pagos realizados, no reservándose acción ni derecho
+                legal en contra de la empresa.
               </p>
-            </div>
-
-            <div className="bg-slate-50 p-4 rounded-lg text-sm space-y-2">
-              <div className="flex justify-between border-b pb-2">
-                <span className="text-slate-500 font-bold">Operador:</span>
-                <span className="font-black text-brand-navy text-right">
-                  {selectedLegsData[0]?.operator?.name}
-                </span>
-              </div>
-              <div className="flex justify-between border-b pb-2">
-                <span className="text-slate-500 font-bold">Movimientos:</span>
-                <span className="font-bold">{selectedLegsData.length}</span>
-              </div>
-
-              {/* DESGLOSE TELEMÉTRICO */}
-              <div className="pt-2 text-[11px] font-mono text-slate-500 space-y-1">
-                <div className="flex justify-between">
-                  <span>Distancia Total:</span>{" "}
-                  <span>{previewData?.total_kms || 0} km</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Diésel Esperado:</span>{" "}
-                  <span>{previewData?.consumo_esperado || 0} L</span>
-                </div>
-                <div className="flex justify-between text-slate-800 font-bold">
-                  <span>Diésel Comprobado:</span>{" "}
-                  <span>{previewData?.consumo_real || 0} L</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-2 text-sm font-mono">
-              <div className="flex justify-between text-slate-600">
-                <span>Pago de Flete</span>{" "}
-                <span>{formatCurrency(liquidacion?.pagoBaseBruto || 0)}</span>
-              </div>
-              <div className="flex justify-between text-emerald-600">
-                <span>Bonos</span>{" "}
-                <span>
-                  +{formatCurrency(liquidacion?.bonosAdicionales || 0)}
-                </span>
-              </div>
-              <div className="flex justify-between text-rose-600">
-                <span>Anticipos</span>{" "}
-                <span>
-                  -
-                  {formatCurrency(
-                    (liquidacion?.deduccionViaticos || 0) +
-                      (liquidacion?.otrosAnticipos || 0),
-                  )}
-                </span>
-              </div>
-              <div className="flex justify-between text-rose-600">
-                <span>Penalización Diésel</span>{" "}
-                <span>
-                  -{formatCurrency(liquidacion?.combustibleFaltante || 0)}
-                </span>
-              </div>
-              <div className="flex justify-between text-rose-600">
-                <span>Cargos Varios</span>{" "}
-                <span>
-                  -{formatCurrency(liquidacion?.deduccionesManuales || 0)}
-                </span>
-              </div>
-            </div>
-
-            <div className="bg-slate-900 text-white p-4 rounded-xl flex justify-between items-center shadow-inner">
-              <span className="font-bold uppercase tracking-widest text-xs">
-                Total a Pagar
-              </span>
-              <span className="text-2xl font-black font-mono">
-                {formatCurrency(liquidacion?.neto_a_pagar || 0)}
-              </span>
-            </div>
-
-            <div className="pt-4 flex justify-center">
-              <div className="border-t border-slate-300 w-48 text-center pt-2">
-                <p className="text-[10px] text-slate-400 font-bold uppercase">
-                  Firma de Conformidad
-                </p>
-              </div>
             </div>
           </div>
 
-          <DialogFooter className="p-4 bg-slate-50 flex justify-center gap-4 sm:justify-center">
+          {/* FOOTER & ACCIONES */}
+          <DialogFooter className="p-4 bg-white border-t border-slate-200 flex flex-col-reverse sm:flex-row justify-end gap-3 print:hidden">
+            {/* Botón de Cerrar */}
             <Button
+              className="w-full sm:w-auto min-w-[120px] font-bold text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+              variant="ghost"
+              onClick={() => setShowReceiptModal(false)}
+            >
+              Cerrar
+            </Button>
+
+            {/* Botón de Imprimir */}
+            <Button
+              className="w-full sm:w-auto min-w-[220px] gap-2 font-bold bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 hover:text-brand-navy shadow-sm transition-all"
               variant="outline"
-              className="w-full gap-2 font-bold"
               onClick={() => window.print()}
             >
-              <Printer className="h-4 w-4" /> Imprimir Documento
+              <Printer className="h-5 w-5 text-slate-400" /> Imprimir Documento
             </Button>
           </DialogFooter>
         </DialogContent>

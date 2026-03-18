@@ -464,8 +464,11 @@ export const ArmadorRutas: React.FC = () => {
       await tollService.deleteTemplate(routeToDelete.id);
       setSavedRoutes((prev) => prev.filter((r) => r.id !== routeToDelete.id));
       toast.success("Ruta eliminada correctamente");
-    } catch {
-      toast.error("Error al eliminar");
+    } catch (error: any) {
+      console.error(error);
+      const backendMessage =
+        error.response?.data?.detail || "Error al eliminar la ruta";
+      toast.error(backendMessage);
     } finally {
       setDeleteDialogOpen(false);
     }
@@ -562,8 +565,11 @@ export const ArmadorRutas: React.FC = () => {
       setOrigen("");
       setDestino("");
       setShowAdditional(false);
-    } catch (error) {
-      toast.error("Error al procesar la ruta");
+    } catch (error: any) {
+      console.error(error);
+      const backendMessage =
+        error.response?.data?.detail || "Error al guardar la ruta armada";
+      toast.error(backendMessage);
     }
   };
 
