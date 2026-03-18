@@ -8,6 +8,8 @@ import {
   User as UserIcon,
   Settings,
   Command,
+  AlertTriangle,
+  CheckCircle2,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -50,7 +52,6 @@ export function AppHeader() {
   const { value: empresaLogo } = useSystemConfig("empresa_logo");
   const { value: empresaNombre } = useSystemConfig("empresa_nombre");
 
-  // 🚀 FIX: Dependemos solo del ID para evitar renders infinitos
   useEffect(() => {
     const fetchFreshUserData = async () => {
       if (!cachedUser?.id) return;
@@ -81,14 +82,13 @@ export function AppHeader() {
 
   const safeUser = currentUser || cachedUser;
 
-  // Extraemos el rol (dependiendo de cómo venga de la BD)
+  // 🚀 EXTRACCIÓN ROBUSTA DEL ROL: Busca en la relación de BD o en texto plano
   const userRoleName =
     safeUser?.role?.nombre || safeUser?.rol || safeUser?.puesto || "Usuario";
 
   return (
     <header className="sticky top-0 z-30 flex h-12 items-center justify-between border-b border-border bg-card px-4 shadow-sm">
       <div className="flex items-center gap-4 flex-1">
-        {/* BRANDING DINÁMICO */}
         {empresaLogo && (
           <div className="hidden md:flex items-center justify-center h-8 w-8 bg-slate-50 border border-slate-200 rounded-md overflow-hidden shrink-0">
             <img
@@ -99,7 +99,6 @@ export function AppHeader() {
           </div>
         )}
 
-        {/* Global Search */}
         <button
           onClick={() => openGlobalSearch()}
           className="relative w-full max-w-[280px] flex items-center gap-2 h-8 px-3 text-xs bg-muted/50 hover:bg-muted/80 rounded cursor-pointer transition-colors duration-150 group border border-transparent hover:border-border/50"
@@ -116,19 +115,77 @@ export function AppHeader() {
         </button>
       </div>
 
-      {/* Actions */}
       <div className="flex items-center gap-2">
-        {/* 🚀 BOTÓN DE NOTIFICACIONES (Preparado para conectarse) */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="relative h-8 w-8 hover:bg-muted/80"
-        >
-          <Bell className="h-4 w-4 text-muted-foreground" />
-          <Badge className="absolute -right-0.5 -top-0.5 h-4 w-4 rounded-full p-0 flex items-center justify-center text-[9px] bg-red-600 text-white border-2 border-card shadow-sm">
-            3
-          </Badge>
-        </Button>
+        {/* 🚀 DROPDOWN DE NOTIFICACIONES (UI Preparada) */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="relative h-8 w-8 hover:bg-muted/80"
+            >
+              <Bell className="h-4 w-4 text-muted-foreground" />
+              <Badge className="absolute -right-0.5 -top-0.5 h-4 w-4 rounded-full p-0 flex items-center justify-center text-[9px] bg-red-600 text-white border-2 border-card shadow-sm">
+                2
+              </Badge>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="end"
+            className="w-80 mt-1 shadow-xl rounded-xl p-0"
+          >
+            <div className="flex justify-between items-center p-3 border-b border-slate-100 bg-slate-50/50 rounded-t-xl">
+              <span className="font-bold text-slate-800 text-sm">
+                Notificaciones
+              </span>
+              <span className="text-[10px] text-primary font-bold cursor-pointer hover:underline">
+                Marcar todas leídas
+              </span>
+            </div>
+
+            {/* Lista MOCK de Notificaciones (Hasta que hagamos el Backend) */}
+            <div className="max-h-[300px] overflow-y-auto">
+              <DropdownMenuItem className="flex flex-col items-start p-3 border-b border-slate-50 cursor-pointer hover:bg-slate-50 focus:bg-slate-50">
+                <div className="flex items-center justify-between w-full mb-1">
+                  <span className="text-xs font-bold text-rose-600 flex items-center gap-1">
+                    <AlertTriangle className="h-3.5 w-3.5" /> Viaje Detenido
+                  </span>
+                  <span className="text-[9px] text-slate-400 font-medium">
+                    Hace 5 min
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 line-clamp-2">
+                  Viaje TRP-892 marcado como DETENIDO por Inspección. Cliente
+                  notificado.
+                </p>
+              </DropdownMenuItem>
+
+              <DropdownMenuItem className="flex flex-col items-start p-3 border-b border-slate-50 cursor-pointer hover:bg-slate-50 focus:bg-slate-50">
+                <div className="flex items-center justify-between w-full mb-1">
+                  <span className="text-xs font-bold text-amber-600 flex items-center gap-1">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> 2FA Desactivado
+                  </span>
+                  <span className="text-[9px] text-slate-400 font-medium">
+                    Hace 1 hora
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 line-clamp-2">
+                  Se desactivó la autenticación de dos factores para Gustavo
+                  Martínez.
+                </p>
+              </DropdownMenuItem>
+            </div>
+
+            <div className="p-2 border-t border-slate-100">
+              <Button
+                variant="ghost"
+                className="w-full text-xs text-muted-foreground h-8"
+              >
+                Ver todo el historial
+              </Button>
+            </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {/* User Profile Dropdown */}
         <DropdownMenu>
@@ -154,7 +211,7 @@ export function AppHeader() {
                   {safeUser?.nombre || "Cargando..."}
                 </span>
                 {/* 🚀 EL ROL DEBAJO DEL NOMBRE EN COLOR PRIMARY */}
-                <span className="text-[10px] font-bold text-primary mt-1 truncate max-w-[100px] leading-none uppercase tracking-wider">
+                <span className="text-[10px] font-black text-primary mt-1 truncate max-w-[100px] leading-none uppercase tracking-wider">
                   {userRoleName}
                 </span>
               </div>
