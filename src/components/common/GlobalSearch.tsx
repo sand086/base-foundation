@@ -156,7 +156,7 @@ const searchItems: SearchItem[] = [
   // Admin
   {
     title: "Usuarios",
-    path: "/usuarios",
+    path: "/users",
     icon: Users,
     category: "Administración",
     keywords: ["cuentas", "accesos"],
