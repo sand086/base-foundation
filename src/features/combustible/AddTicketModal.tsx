@@ -498,15 +498,41 @@ export function AddTicketModal({
   };
 
   useEffect(() => {
+    // Solo actuamos si el modal se abre Y tenemos datos para precargar
     if (open && initialData) {
       setFormData((prev) => ({
         ...prev,
-        trip_id: String(initialData.trip_id || ""),
-        unit_id: String(initialData.unit_id || ""),
-        operator_id: String(initialData.operator_id || ""),
-        // Si quieres que el precio se resetee al promedio del tipo:
-        precio_por_litro: FUEL_CONFIG.PRECIOS_PROMEDIO[prev.tipo_combustible],
+        // 🚀 Sincronización de IDs (Convertimos a string por seguridad para los Selects)
+        trip_id: initialData.trip_id ? String(initialData.trip_id) : "",
+        unit_id: initialData.unit_id ? String(initialData.unit_id) : "",
+        operator_id: initialData.operator_id
+          ? String(initialData.operator_id)
+          : "",
+
+        // 🛡️ Limpieza de seguridad: Evita duplicar datos de la carga anterior
+        litros: 0,
+        estacion: "",
+        odometro: "",
+        evidencia: null,
+
+        // ⛽ Inteligencia de Negocio: Si el tramo ya define un tipo, lo respetamos
+        tipo_combustible: initialData.tipo_combustible || "diesel",
+        // Ajustamos el precio al promedio actual del combustible seleccionado
+        precio_por_litro:
+          FUEL_CONFIG.PRECIOS_PROMEDIO[
+            initialData.tipo_combustible || "diesel"
+          ],
       }));
+
+      // Resetear el input de archivo físicamente si existe el ref
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+
+      toast.info("Tramo vinculado", {
+        description: `Cargando datos para la unidad y operador del tramo #${initialData.trip_id}`,
+        duration: 3000,
+      });
     }
   }, [open, initialData]);
 

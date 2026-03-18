@@ -41,6 +41,7 @@ import {
   Edit2,
   Check,
   ChevronsUpDown,
+  Gauge, // 🚀 1. AGREGADO: Icono de odómetro
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -62,9 +63,9 @@ export interface StatusUpdateData {
   comments: string;
   notifyClient: boolean;
   timestamp: string;
+  odometro_final?: string; // 🚀 2. AGREGADO: Campo opcional en la interfaz
 }
 
-// 🚀 DICCIONARIO DE PUNTOS CLAVE PARA AUTOCOMPLETADO
 const COMMON_LOCATIONS = [
   "Patio Base Veracruz",
   "Aduana / Puerto Veracruz",
@@ -97,12 +98,12 @@ export function UpdateStatusModal({
     comments: "",
     notifyClient: false,
     timestamp: "",
+    odometro_final: "", // 🚀 3. AGREGADO: Inicialización
   });
 
   const [openCombobox, setOpenCombobox] = useState(false);
   const [searchLocationQuery, setSearchLocationQuery] = useState("");
 
-  // Limpiar formulario al abrir
   useEffect(() => {
     if (open) {
       setFormData({
@@ -113,12 +114,12 @@ export function UpdateStatusModal({
         comments: "",
         notifyClient: false,
         timestamp: "",
+        odometro_final: "", // 🚀 AGREGADO: Reset al abrir
       });
       setSearchLocationQuery("");
     }
   }, [open]);
 
-  // 🚀 HOMOLOGACIÓN DE ESTATUS SEGÚN LA FASE ACTIVA
   const statusOptions = useMemo(() => {
     const isMuelle = activeLeg?.leg_type === "carga_muelle";
     const isRetorno = activeLeg?.leg_type === "entrega_vacio";
@@ -167,20 +168,20 @@ export function UpdateStatusModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-
     const now = new Date();
     const timestamp = now.toISOString();
 
-    // 🚀 PREVENCIÓN DE ERROR 500 (BASE DE DATOS ENUM)
-    // Si el despachador seleccionó "Punto de Control", el estado real para la BD
-    // debe seguir siendo "en_transito" para no violar el ENUM de PostgreSQL.
     let finalStatus = formData.status;
     let finalComments = formData.comments;
 
     if (formData.status === "punto_control") {
       finalStatus = "en_transito";
-      // Le inyectamos una etiqueta visual al comentario para que resalte en el Traffic Log
       finalComments = `📍 PUNTO DE AVANCE: ${formData.comments}`;
+    }
+
+    // Validación de seguridad para el odómetro si es entrega
+    if (formData.status === "entregado" && !formData.odometro_final) {
+      return toast.error("El odómetro es obligatorio para finalizar la fase.");
     }
 
     onSubmit({
@@ -224,7 +225,6 @@ export function UpdateStatusModal({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6 pt-2">
-          {/* ESTATUS */}
           <div className="space-y-2">
             <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
               <Navigation className="h-3.5 w-3.5 text-brand-navy" />
@@ -276,13 +276,11 @@ export function UpdateStatusModal({
             </Select>
           </div>
 
-          {/* UBICACIÓN CON COMBOBOX SHADCN (PERMITE TEXTO LIBRE O SELECCIÓN) */}
           <div className="space-y-2">
             <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
               <MapPin className="h-3.5 w-3.5 text-brand-navy" />
               Ubicación o Referencia Actual *
             </Label>
-
             <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
               <PopoverTrigger asChild>
                 <Button
@@ -301,7 +299,6 @@ export function UpdateStatusModal({
               </PopoverTrigger>
               <PopoverContent className="w-[470px] p-0" align="start">
                 <Command>
-                  {/* Este input actualiza la búsqueda y también permite escribir lo que sea */}
                   <CommandInput
                     placeholder="Buscar o escribir nueva ubicación..."
                     value={searchLocationQuery}
@@ -310,7 +307,6 @@ export function UpdateStatusModal({
                   <CommandList>
                     <CommandEmpty className="p-4 text-sm text-center text-slate-500">
                       <p className="mb-2">No está en la lista rápida.</p>
-                      {/* Botón para forzar el uso del texto libre */}
                       <Button
                         type="button"
                         variant="secondary"
@@ -332,8 +328,7 @@ export function UpdateStatusModal({
                         <CommandItem
                           key={loc}
                           value={loc}
-                          onSelect={(currentValue) => {
-                            // En shadcn, el currentValue viene en minúsculas por defecto, así que usamos el original (loc)
+                          onSelect={() => {
                             setFormData({ ...formData, location: loc });
                             setSearchLocationQuery("");
                             setOpenCombobox(false);
@@ -356,6 +351,28 @@ export function UpdateStatusModal({
               </PopoverContent>
             </Popover>
           </div>
+
+          {/* 🚀 4. AGREGADO: CAMPO DE ODÓMETRO CONDICIONAL */}
+          {formData.status === "entregado" && (
+            <div className="space-y-2 bg-emerald-50 p-4 rounded-xl border border-emerald-100 animate-in fade-in zoom-in duration-300">
+              <Label className="text-xs font-bold text-emerald-700 uppercase flex items-center gap-2">
+                <Gauge className="h-4 w-4" /> Lectura de Odómetro al Arribo *
+              </Label>
+              <Input
+                type="number"
+                required
+                placeholder="Ej: 125400"
+                className="h-11 font-mono text-lg border-emerald-200"
+                value={formData.odometro_final || ""}
+                onChange={(e) =>
+                  setFormData({ ...formData, odometro_final: e.target.value })
+                }
+              />
+              <p className="text-[10px] text-emerald-600 font-medium">
+                Dato obligatorio para calcular el rendimiento de combustible.
+              </p>
+            </div>
+          )}
 
           {/* COMENTARIOS */}
           <div className="space-y-2">
@@ -406,7 +423,6 @@ export function UpdateStatusModal({
             </Label>
           </div>
 
-          {/* BOTONERA */}
           <div className="flex justify-end gap-3 pt-2">
             <Button
               type="button"
@@ -426,7 +442,8 @@ export function UpdateStatusModal({
               disabled={
                 !formData.status ||
                 !formData.location ||
-                (isIncident && !formData.comments)
+                (isIncident && !formData.comments) ||
+                (formData.status === "entregado" && !formData.odometro_final)
               }
             >
               {isIncident ? "Registrar Incidencia" : "Guardar en Bitácora"}

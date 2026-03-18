@@ -193,7 +193,7 @@ const RolesPermisosPage: React.FC = () => {
     deleteSystemModule: (moduleId: string) => Promise<boolean>;
   };
 
-  // ✅ usuario desde localStorage o /usuarios/me
+  // ✅ usuario desde localStorage o /users/me
   const [meUser, setMeUser] = useState<MeUser | null>(null);
   const [meLoading, setMeLoading] = useState(true);
 

@@ -271,7 +271,7 @@ const ProfilePage: React.FC = () => {
   const fetchProfile = async () => {
     setIsFetchingProfile(true);
     try {
-      const { data } = await axiosClient.get<FullProfile>("/usuarios/me");
+      const { data } = await axiosClient.get<FullProfile>("/users/me");
       setFullProfile(data);
       profileForm.reset({
         nombre: data.nombre || "",

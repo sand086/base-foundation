@@ -43,3 +43,13 @@ class SystemConfigBase(BaseModel):
 
 class SystemConfigUpdate(BaseModel):
     value: str
+
+
+class ModuleSchema(BaseModel):
+    id: str
+    nombre: str
+    icono: str
+    descripcion: Optional[str] = None
+
+    class Config:
+        from_attributes = True

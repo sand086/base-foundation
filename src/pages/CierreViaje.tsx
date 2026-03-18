@@ -124,6 +124,9 @@ export default function CierreViaje() {
   const [isAnimating, setIsAnimating] = useState(false);
   const [showAddTicket, setShowAddTicket] = useState(false);
   const [ticketPrefill, setTicketPrefill] = useState<any>(null);
+  const [currentFixingLegId, setCurrentFixingLegId] = useState<number | null>(
+    null,
+  );
 
   // ==========================================
   // EFECTO: SOLICITAR PRE-LIQUIDACIÓN AL BACKEND
@@ -414,14 +417,14 @@ export default function CierreViaje() {
   };
 
   const handleQuickFixTicket = (legId: number) => {
-    // Buscamos los datos de ese tramo en la lista cargada
     const leg = allLegs.find((l) => l.id === legId);
     if (leg) {
       setTicketPrefill({
-        trip_id: leg.id, // Pasamos el ID del tramo como trip_id para el modal
+        trip_id: leg.id,
         unit_id: leg.unit_id,
         operator_id: leg.operator_id,
       });
+      setCurrentFixingLegId(legId); // Guardamos cuál estamos arreglando
       setShowAddTicket(true);
     }
   };
@@ -784,14 +787,19 @@ export default function CierreViaje() {
                     <>
                       {/* Alertas del Backend (Faltan Vales) */}
                       {previewData?.legs_sin_ticket?.length > 0 && (
-                        <div className="bg-rose-50 border border-rose-200 rounded-xl mb-6 overflow-hidden shadow-sm">
-                          <div className="p-3 bg-rose-100 flex items-center gap-2">
-                            <AlertTriangle className="h-4 w-4 text-rose-600" />
-                            <span className="text-[10px] font-black text-rose-700 uppercase">
-                              Vales Faltantes Detectados
-                            </span>
+                        <div className="bg-rose-50 border border-rose-200 rounded-xl mb-6 overflow-hidden shadow-sm animate-in zoom-in-95">
+                          <div className="p-3 bg-rose-100/50 border-b border-rose-200 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <AlertTriangle className="h-4 w-4 text-rose-600" />
+                              <span className="text-[10px] font-black text-rose-700 uppercase tracking-widest">
+                                Pendientes de Comprobación (
+                                {previewData.legs_sin_ticket.length})
+                              </span>
+                            </div>
                           </div>
-                          <div className="p-2 space-y-2">
+
+                          {/* Lista de viajes con problemas */}
+                          <div className="p-2 space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar">
                             {selectedLegsData
                               .filter((l) =>
                                 previewData.legs_sin_ticket.includes(l.id),
@@ -799,19 +807,43 @@ export default function CierreViaje() {
                               .map((leg) => (
                                 <div
                                   key={leg.id}
-                                  className="flex items-center justify-between bg-white p-2 rounded-lg border border-rose-100"
+                                  className={cn(
+                                    "flex items-center justify-between p-3 rounded-lg border transition-all",
+                                    currentFixingLegId === leg.id
+                                      ? "bg-rose-100 border-rose-300"
+                                      : "bg-white border-rose-100 shadow-sm",
+                                  )}
                                 >
-                                  <div className="text-[10px] font-bold text-slate-600">
-                                    ID: {leg.id} |{" "}
-                                    {leg.trip?.origin.slice(0, 10)}...
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className="text-[9px] font-black text-rose-500 uppercase">
+                                      Tramo #{leg.id}
+                                    </span>
+                                    <span className="text-xs font-bold text-slate-700">
+                                      {leg.trip?.public_id || "S/F"} •{" "}
+                                      {leg.trip?.origin.split(",")[0]} ➔{" "}
+                                      {leg.trip?.destination.split(",")[0]}
+                                    </span>
+                                    <div className="flex items-center gap-2 mt-1">
+                                      <Badge
+                                        variant="outline"
+                                        className="text-[8px] h-4 bg-slate-50"
+                                      >
+                                        {leg.operator?.name}
+                                      </Badge>
+                                      <Badge
+                                        variant="outline"
+                                        className="text-[8px] h-4 bg-slate-50"
+                                      >
+                                        ECO-{leg.unit?.numero_economico}
+                                      </Badge>
+                                    </div>
                                   </div>
                                   <Button
                                     size="sm"
-                                    variant="ghost"
                                     onClick={() => handleQuickFixTicket(leg.id)}
-                                    className="h-6 text-[9px] font-black text-rose-600 hover:bg-rose-50"
+                                    className="h-8 px-4 text-[10px] font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-full shadow-sm"
                                   >
-                                    + CARGAR VALE
+                                    CARGAR TICKET
                                   </Button>
                                 </div>
                               ))}
@@ -1378,7 +1410,10 @@ export default function CierreViaje() {
       {/* 🚀 MODAL DE TICKETS REUTILIZADO */}
       <AddTicketModal
         open={showAddTicket}
-        onOpenChange={setShowAddTicket}
+        onOpenChange={(isOpen) => {
+          setShowAddTicket(isOpen);
+          if (!isOpen) setTicketPrefill(null); // 🚀 Limpiamos el "fantasma" al cerrar
+        }}
         onSubmit={handleQuickTicketSubmit}
         initialData={ticketPrefill}
       />

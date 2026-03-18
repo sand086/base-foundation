@@ -69,5 +69,7 @@ api_router.include_router(brands.router, tags=["Marcas"])
 api_router.include_router(terminals.router, tags=["Terminales"])
 
 # --- DASHBOARD Y NOTIFICACIONES ---
-api_router.include_router(notifications.router, tags=["Notificaciones"])
+api_router.include_router(
+    notifications.router, prefix="/notifications", tags=["Notificaciones"]
+)
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])
