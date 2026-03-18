@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 from typing import List, Dict, Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from app.services.storage import StorageService
 from sqlalchemy.orm import Session
 
 
@@ -210,3 +211,34 @@ def delete_user(user_id: int, db: Session = Depends(get_db)):
     if not ok:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     return {"message": "Usuario eliminado"}
+
+
+@router.post("/{user_id}/avatar")
+async def upload_user_avatar(
+    user_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    # 1. Verificar existencia del usuario
+    user = crud.get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    # 2. Guardar físicamente usando el StorageService
+    try:
+        storage_data = StorageService.save_file(
+            file, folder="avatars", prefix=f"USER_{user_id}"
+        )
+
+        # 3. Actualizar solo el campo avatar_url en la BD
+        user.avatar_url = storage_data["url"]
+        db.commit()
+        db.refresh(user)
+
+        return {"avatar_url": user.avatar_url}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500, detail=f"Error al guardar imagen: {str(e)}"
+        )

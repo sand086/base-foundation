@@ -37,8 +37,10 @@ export type FuelType = "diesel" | "urea";
 export interface User {
   id: number;
   nombre: string;
+  apellido?: string | null;
   email: string;
   role_id?: number | null;
+  puesto?: string | null;
   avatar_url?: string;
   activo?: boolean;
 }

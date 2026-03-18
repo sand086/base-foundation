@@ -63,6 +63,7 @@ import { ManageCategoriesModal } from "@/features/cxp/ManageCategoriesModal";
 // Hooks
 import { useSuppliers } from "@/hooks/useSuppliers";
 import { useBankAccounts } from "@/hooks/useBankAccounts";
+import { useSystemConfig } from "@/hooks/useSystemConfig";
 
 // Types (Centralizados)
 import type { PayableInvoice, Supplier } from "@/types/api.types";
@@ -94,7 +95,14 @@ const parseDateSafe = (v: unknown): Date | null => {
 
 export default function ProveedoresCxP() {
   const [searchParams, setSearchParams] = useSearchParams();
-
+  const { valueAsNumber: defaultCredito } = useSystemConfig(
+    "dias_credito_default",
+  );
+  const { valueAsNumber: defaultIva } = useSystemConfig("iva_porcentaje");
+  const { valueAsNumber: defaultRetencion } = useSystemConfig(
+    "retencion_porcentaje",
+  );
+  const { value: defaultMoneda } = useSystemConfig("moneda_base");
   // Data real desde DB/API
   const {
     suppliers,
@@ -273,7 +281,21 @@ export default function ProveedoresCxP() {
   // Acciones Facturas
   // =====================
   const handleCreateInvoice = async (invoiceData: Partial<PayableInvoice>) => {
-    const ok = await createInvoice(invoiceData);
+    // 🚀 Inyectar configuraciones globales si los campos vienen vacíos o en 0
+    const payloadConDefaults = {
+      ...invoiceData,
+      moneda: invoiceData.moneda || defaultMoneda || "MXN",
+      iva:
+        invoiceData.iva !== undefined
+          ? invoiceData.iva
+          : (invoiceData.subtotal || 0) * (defaultIva / 100),
+      retenciones:
+        invoiceData.retenciones !== undefined
+          ? invoiceData.retenciones
+          : (invoiceData.subtotal || 0) * (defaultRetencion / 100),
+    };
+
+    const ok = await createInvoice(payloadConDefaults);
     if (ok) {
       setIsExpenseModalOpen(false);
       setPrefillData(null);
@@ -859,6 +881,7 @@ export default function ProveedoresCxP() {
         open={isSupplierModalOpen}
         onOpenChange={setIsSupplierModalOpen}
         supplier={editingSupplier}
+        defaultCredito={!editingSupplier ? defaultCredito : undefined}
         onSubmit={async (payload) => {
           if (editingSupplier) {
             await updateSupplier(editingSupplier.id, payload);

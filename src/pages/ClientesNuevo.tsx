@@ -82,6 +82,7 @@ import { cn } from "@/lib/utils";
 
 import { useTiposUnidad } from "@/hooks/useTiposUnidad";
 import { useClients } from "@/hooks/useClients";
+import { useSystemConfig } from "@/hooks/useSystemConfig";
 
 import { DocumentUploadManager } from "@/features/flota/DocumentUploadManager";
 
@@ -289,16 +290,64 @@ export default function ClientsNew() {
     getTipoIcono,
     loading: loadingTipos,
   } = useTiposUnidad();
-
   const [step, setStep] = useState(1);
-
-  // READ
   const [loadingData, setLoadingData] = useState(false);
   const { clients, isLoading: loadingClients } = useClients();
 
-  //  NUEVO: % globales (Paso 3)
+  // 🚀 1. TRAEMOS LOS PARÁMETROS GLOBALES
+  const { valueAsNumber: defaultIva, isLoading: isLoadingConfig } =
+    useSystemConfig("iva_porcentaje");
+  const { valueAsNumber: defaultRetencion } = useSystemConfig(
+    "retencion_porcentaje",
+  );
+  const { valueAsNumber: defaultCredito } = useSystemConfig(
+    "dias_credito_default",
+  );
+  const { value: defaultMoneda } = useSystemConfig("moneda_base");
+
+  // Estados originales
   const [globalIVA, setGlobalIVA] = useState<number>(16);
   const [globalRetencion, setGlobalRetencion] = useState<number>(4);
+
+  // 🚀 2. PRE-LLENADO INTELIGENTE (Solo si es un cliente NUEVO)
+  useEffect(() => {
+    if (!isEditMode && !isLoadingConfig) {
+      setGlobalIVA(defaultIva || 16);
+      setGlobalRetencion(defaultRetencion || 4);
+      setFiscalData((prev) => ({
+        ...prev,
+        // Pre-llenar solo si está en 0 (recién inicializado)
+        dias_credito:
+          prev.dias_credito === 0 ? defaultCredito || 15 : prev.dias_credito,
+      }));
+    }
+  }, [
+    defaultIva,
+    defaultRetencion,
+    defaultCredito,
+    isEditMode,
+    isLoadingConfig,
+  ]);
+
+  // 🚀 3. DROPDOWN DE CRÉDITO DINÁMICO
+  // Si en Settings ponen "45 días", esto asegura que aparezca en el menú
+  const dynamicOpcionesDiasCredito = useMemo(() => {
+    const base = [
+      { value: 0, label: "Contado" },
+      { value: 15, label: "15 días" },
+      { value: 30, label: "30 días" },
+      { value: 45, label: "45 días" },
+      { value: 60, label: "60 días" },
+    ];
+    // Si el default de la BD no está en la lista base, lo agregamos
+    if (defaultCredito > 0 && !base.find((o) => o.value === defaultCredito)) {
+      base.push({
+        value: defaultCredito,
+        label: `${defaultCredito} días (Default)`,
+      });
+    }
+    return base.sort((a, b) => a.value - b.value); // Ordenar de menor a mayor
+  }, [defaultCredito]);
 
   const [fiscalData, setFiscalData] = useState<FiscalDataForm>({
     razonSocial: "",
@@ -554,6 +603,7 @@ export default function ClientsNew() {
     const newSub: SubClienteForm = {
       ...emptySubCliente,
       id: `SUB-${Date.now()}`,
+      diasCredito: defaultCredito || 15, // 🚀 Hereda los días de crédito globales por defecto
     };
     setSubClientes((prev) => [...prev, newSub]);
     setEditingSubCliente(newSub);
@@ -599,6 +649,7 @@ export default function ClientsNew() {
         id: `TAR-${Date.now()}`,
         iva_porcentaje: globalIVA,
         retencion_porcentaje: globalRetencion,
+        moneda: (defaultMoneda as "MXN" | "USD") || "MXN", // 🚀 Hereda la moneda global
         vigencia: todayISO(),
       };
 
@@ -1568,7 +1619,7 @@ export default function ClientsNew() {
                       <SelectValue placeholder="Seleccionar crédito..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {opcionesDiasCredito.map((op) => (
+                      {dynamicOpcionesDiasCredito.map((op) => (
                         <SelectItem key={op.value} value={String(op.value)}>
                           {op.label}
                         </SelectItem>

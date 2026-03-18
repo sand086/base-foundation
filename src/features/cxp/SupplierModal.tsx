@@ -31,8 +31,9 @@ import { Supplier } from "@/types/api.types";
 interface SupplierModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  supplier?: Supplier | null; // Si viene, es Edición. Si no, es Creación.
-  onSubmit: (payload: Partial<Supplier>) => Promise<void>;
+  supplier?: Supplier | null;
+  defaultCredito?: number; // 🚀 NUEVO
+  onSubmit: (data: Partial<Supplier>) => Promise<void>;
 }
 
 const emptyForm: Partial<Supplier> = {
@@ -57,6 +58,7 @@ export function SupplierModal({
   open,
   onOpenChange,
   supplier,
+  defaultCredito,
   onSubmit,
 }: SupplierModalProps) {
   const [formData, setFormData] = useState<Partial<Supplier>>(emptyForm);
@@ -68,10 +70,14 @@ export function SupplierModal({
       if (supplier) {
         setFormData({ ...supplier });
       } else {
-        setFormData({ ...emptyForm });
+        // 🚀 NUEVO: Inyectamos el valor global aquí
+        setFormData({
+          ...emptyForm,
+          dias_credito: defaultCredito || 0, // Si no hay configuración, por defecto es 0
+        });
       }
     }
-  }, [open, supplier]);
+  }, [open, supplier, defaultCredito]);
 
   const validate = () => {
     if (!formData.razon_social?.trim()) return "La Razón Social es obligatoria";
@@ -194,10 +200,11 @@ export function SupplierModal({
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-slate-700">
-                  Días de Crédito
+                  Días de Crédito Base
                 </Label>
                 <Input
                   type="number"
+                  min={0}
                   value={formData.dias_credito ?? 0}
                   onChange={(e) =>
                     setFormData({
@@ -205,6 +212,8 @@ export function SupplierModal({
                       dias_credito: parseInt(e.target.value) || 0,
                     })
                   }
+                  className="bg-white"
+                  placeholder="Ej: 15"
                 />
               </div>
             </div>

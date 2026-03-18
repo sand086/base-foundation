@@ -70,6 +70,7 @@ import {
 
 import type { TollBooth } from "@/types/api.types";
 import { tollService } from "@/services/tollService";
+import { useSystemConfig } from "@/hooks/useSystemConfig";
 import { toast } from "sonner";
 
 type FormaPago = "tag" | "efectivo" | "ambos";
@@ -103,11 +104,6 @@ const emptyForm = (): TollForm => ({
   forma_pago: "ambos",
 });
 
-const formatCurrency = (amount: number) =>
-  new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(
-    Number.isFinite(amount) ? amount : 0,
-  );
-
 const splitTramo = (tramoRaw: string) => {
   const tramo = (tramoRaw ?? "").trim();
   const parts = tramo.includes("-")
@@ -117,6 +113,7 @@ const splitTramo = (tramoRaw: string) => {
 };
 
 export const CatalogoCasetas = () => {
+  const { value: monedaBase } = useSystemConfig("moneda_base");
   const [searchTerm, setSearchTerm] = useState("");
   const [tollBooths, setTollBooths] = useState<TollBooth[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -150,6 +147,11 @@ export const CatalogoCasetas = () => {
     const cls = styles[formaPago] ?? styles.AMBOS;
     return <Badge className={`${cls} hover:opacity-80`}>{formaPago}</Badge>;
   };
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: monedaBase || "MXN",
+    }).format(Number.isFinite(amount) ? amount : 0);
 
   const loadTolls = async (showRefreshIndicator = false) => {
     if (showRefreshIndicator) {
