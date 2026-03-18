@@ -13,13 +13,15 @@ import { authService } from "@/services/authService";
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
-  login: (userData: User, token: string) => void;
+  login: (userData: User, token: string, refreshToken: string) => void;
   logout: () => void;
   isLoading: boolean;
   verifyOtp: (tempToken: string, code: string) => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(
+  undefined,
+);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -38,34 +40,36 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setIsLoading(false);
   }, []);
 
-  const login = (userData: User, token: string) => {
-    // Guardamos en localStorage para que resista el F5
+  const login = (userData: User, token: string, refreshToken: string) => {
     localStorage.setItem("access_token", token);
+    localStorage.setItem("refresh_token", refreshToken); // 💾 La llave de 7 días
     localStorage.setItem("user_data", JSON.stringify(userData));
 
-    // Guardamos en el estado de React
     setUser(userData);
   };
 
   const logout = () => {
-    // Limpiamos todo mediante el servicio
+    // 🧹 Limpiamos localStorage (Asegúrate que authService.logout()
+    // borre tanto access_token como refresh_token)
     authService.logout();
     setUser(null);
-
-    // Redirigimos al login forzando la recarga para limpiar cualquier estado residual en memoria
     window.location.href = "/login";
   };
-
   const verifyOtp = async (tempToken: string, code: string) => {
     try {
       const data = await authService.verify2FA({ temp_token: tempToken, code });
-      login(data.user, data.access_token);
+
+      // 🛡️ Validación de seguridad: Aseguramos que el backend mandó todo
+      if (data.user && data.access_token && data.refresh_token) {
+        login(data.user, data.access_token, data.refresh_token);
+      } else {
+        throw new Error("Respuesta de autenticación incompleta");
+      }
     } catch (error) {
       console.error("Error al verificar OTP:", error);
-      throw error; // Lanzamos el error para que el componente de 2FA pueda manejarlo (mostrar mensaje, etc.)
+      throw error;
     }
   };
-
   return (
     <AuthContext.Provider
       value={{
@@ -74,15 +78,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         login,
         logout,
         isLoading,
-        verifyOtp, // 🚀 FIJADO: Ahora la función está disponible para el resto de la app
+        verifyOtp,
       }}
     >
       {children}
     </AuthContext.Provider>
   );
 };
-
-// Hook personalizado para usar el contexto en cualquier parte de la app
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {

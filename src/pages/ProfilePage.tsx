@@ -16,7 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 import axiosClient from "@/api/axiosClient";
 
 import { useForm } from "react-hook-form";

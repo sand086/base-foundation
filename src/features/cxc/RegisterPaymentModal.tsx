@@ -50,7 +50,7 @@ export function RegisterPaymentModal({
     if (invoice) {
       setFormData({
         fecha: new Date().toISOString().split("T")[0],
-        monto: invoice.saldoPendiente,
+        monto: invoice.saldo_pendiente,
         cuentaDestino: "",
         referencia: "",
         comprobanteUrl: "",
@@ -69,9 +69,9 @@ export function RegisterPaymentModal({
       return;
     }
 
-    if (formData.monto > invoice.saldoPendiente) {
+    if (formData.monto > invoice.saldo_pendiente) {
       setError(
-        `El monto no puede exceder el saldo pendiente ($${invoice.saldoPendiente.toLocaleString("es-MX")})`,
+        `El monto no puede exceder el saldo pendiente ($${invoice.saldo_pendiente.toLocaleString("es-MX")})`,
       );
       return;
     }
@@ -85,7 +85,7 @@ export function RegisterPaymentModal({
       (a) => a.id === formData.cuentaDestino,
     );
 
-    onSubmit(invoice.id, {
+    onSubmit(String(invoice.id), {
       fecha: formData.fecha,
       monto: formData.monto,
       cuentaDestino: account?.name || formData.cuentaDestino,
@@ -98,7 +98,7 @@ export function RegisterPaymentModal({
     onOpenChange(false);
   };
 
-  const remainingAfterPayment = invoice.saldoPendiente - formData.monto;
+  const remainingAfterPayment = invoice.saldo_pendiente - formData.monto;
   const willBeFullyPaid = remainingAfterPayment === 0;
 
   return (
@@ -117,7 +117,7 @@ export function RegisterPaymentModal({
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <p className="text-muted-foreground text-xs">Factura</p>
-                <p className="font-medium">{invoice.folio}</p>
+                <p className="font-medium">{invoice.folio_interno}</p>
               </div>
               <div>
                 <p className="text-muted-foreground text-xs">Client</p>
@@ -126,13 +126,13 @@ export function RegisterPaymentModal({
               <div>
                 <p className="text-muted-foreground text-xs">Monto Total</p>
                 <p className="font-medium">
-                  ${invoice.montoTotal.toLocaleString("es-MX")}
+                  ${invoice.monto_total.toLocaleString("es-MX")}
                 </p>
               </div>
               <div>
                 <p className="text-muted-foreground text-xs">Saldo Pendiente</p>
                 <p className="font-bold text-amber-700">
-                  ${invoice.saldoPendiente.toLocaleString("es-MX")}
+                  ${invoice.saldo_pendiente.toLocaleString("es-MX")}
                 </p>
               </div>
             </div>
@@ -171,20 +171,20 @@ export function RegisterPaymentModal({
                 setError("");
               }}
               className="h-10 text-lg font-medium"
-              max={invoice.saldoPendiente}
+              max={invoice.saldo_pendiente}
             />
             <div className="flex items-center justify-between text-xs">
               <button
                 type="button"
                 onClick={() =>
-                  setFormData({ ...formData, monto: invoice.saldoPendiente })
+                  setFormData({ ...formData, monto: invoice.saldo_pendiente })
                 }
                 className="text-brand-navy hover:underline"
               >
                 Cobrar saldo completo
               </button>
               <span className="text-muted-foreground">
-                Máximo: ${invoice.saldoPendiente.toLocaleString("es-MX")}
+                Máximo: ${invoice.saldo_pendiente.toLocaleString("es-MX")}
               </span>
             </div>
           </div>

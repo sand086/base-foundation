@@ -763,6 +763,7 @@ class User(AuditMixin, Base):
     two_factor_secret = Column(String(32), nullable=True)
     is_2fa_enabled = Column(Boolean, default=False)
     last_login = Column(DateTime(timezone=True))
+    refresh_token = Column(String(512), nullable=True)
 
     role = relationship(
         "Role",
@@ -1364,6 +1365,11 @@ class ReceivableInvoice(AuditMixin, Base):
     client = relationship("Client")
     sub_client = relationship("SubClient")
     trip = relationship("Trip")
+    payments = relationship(
+        "ReceivableInvoicePayment",
+        back_populates="invoice",
+        cascade="all, delete-orphan",  # Opcional, pero recomendado para pagos
+    )
 
 
 class ReceivableInvoicePayment(AuditMixin, Base):
@@ -1383,7 +1389,7 @@ class ReceivableInvoicePayment(AuditMixin, Base):
     cuenta_deposito = Column(String(50))  # A qué cuenta de la empresa cayó
 
     # Relación inversa
-    invoice = relationship("ReceivableInvoice", backref="payments")
+    invoice = relationship("ReceivableInvoice", back_populates="payments")
 
 
 # =========================================================

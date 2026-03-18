@@ -220,3 +220,38 @@ async def upload_fuel_document(
         "version": new_doc.version,
         "message": "Nueva evidencia cargada correctamente",
     }
+
+
+@router.delete("/fuel-logs/{log_id}/documents/{doc_type}")
+def delete_fuel_document(
+    log_id: int,
+    doc_type: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    log = db.query(models.FuelLog).filter(models.FuelLog.id == log_id).first()
+    if not log:
+        raise HTTPException(
+            status_code=404, detail="Registro de combustible no encontrado"
+        )
+
+    active_doc = (
+        db.query(models.FuelDocumentHistory)
+        .filter(
+            models.FuelDocumentHistory.fuel_log_id == log_id,
+            models.FuelDocumentHistory.document_type == doc_type,
+            models.FuelDocumentHistory.is_active == True,
+        )
+        .first()
+    )
+
+    if not active_doc:
+        raise HTTPException(status_code=404, detail="Documento no encontrado")
+
+    active_doc.is_active = False
+    log.evidencia_url = None
+    log.updated_by_id = current_user.id
+
+    db.commit()
+
+    return {"message": "Documento eliminado correctamente"}

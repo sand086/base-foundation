@@ -294,9 +294,12 @@ export const CatalogoCasetas = () => {
 
       await loadTolls();
       setDialogOpen(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      toast.error("Error al guardar la caseta");
+      // Extraemos el mensaje del backend o usamos uno por defecto
+      const backendMessage =
+        error.response?.data?.detail || "Error al guardar la caseta";
+      toast.error(backendMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -332,8 +335,11 @@ export const CatalogoCasetas = () => {
       setDeleteDialogOpen(false);
       setSelectedToll(null);
       setDependencies(null);
-    } catch (e) {
-      toast.error("Error al eliminar");
+    } catch (error: any) {
+      console.error(error);
+      const backendMessage =
+        error.response?.data?.detail || "Error al eliminar la caseta";
+      toast.error(backendMessage);
     } finally {
       setIsSubmitting(false);
     }

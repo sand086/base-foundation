@@ -1,11 +1,12 @@
 # backend/app/api/endpoints/tolls.py
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session, contains_eager
 from typing import List, Optional
 from app.db.database import get_db
 from app.models import models
 from app.schemas import tolls as schemas
 from app.api.endpoints.auth import get_current_user
+from sqlalchemy.exc import IntegrityError
 
 router = APIRouter()
 
@@ -14,7 +15,7 @@ router = APIRouter()
 # =====================================================================
 
 
-@router.get("/tolls", response_model=List[schemas.TollBoothResponse])
+@router.get("", response_model=List[schemas.TollBoothResponse])
 def list_tolls(search: str = "", db: Session = Depends(get_db)):
     # 🚀 Filtramos para que SOLO mande las activas
     query = db.query(models.TollBooth).filter(models.TollBooth.record_status == "A")
@@ -26,7 +27,7 @@ def list_tolls(search: str = "", db: Session = Depends(get_db)):
     return query.all()
 
 
-@router.post("/tolls", response_model=schemas.TollBoothResponse)
+@router.post("", response_model=schemas.TollBoothResponse)
 def create_toll(
     toll: schemas.TollBoothCreate,
     db: Session = Depends(get_db),
@@ -34,12 +35,21 @@ def create_toll(
 ):
     db_toll = models.TollBooth(**toll.model_dump(), created_by_id=user.id)
     db.add(db_toll)
-    db.commit()
-    db.refresh(db_toll)
-    return db_toll
+
+    try:
+        db.commit()
+        db.refresh(db_toll)
+        return db_toll
+    except IntegrityError:
+        # Revertimos la transacción si hay error de llave duplicada
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ya existe una caseta registrada con ese mismo Nombre y Tramo.",
+        )
 
 
-@router.put("/tolls/{toll_id}", response_model=schemas.TollBoothResponse)
+@router.put("/{toll_id}", response_model=schemas.TollBoothResponse)
 def update_toll(
     toll_id: int,
     toll: schemas.TollBoothUpdate,
@@ -113,13 +123,21 @@ def update_toll(
                 template.costo_total_full if es_full else template.costo_total_sencillo
             )
 
-    db.commit()
-    db.refresh(db_toll)
-    return db_toll
+    try:
+        db.commit()
+        db.refresh(db_toll)
+        return db_toll
+    except IntegrityError:
+        # Si el usuario intentó actualizar el nombre/tramo a uno que ya existe
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ya existe otra caseta registrada con ese mismo Nombre y Tramo.",
+        )
 
 
 # 🚀 NUEVO ENDPOINT: Verifica dependencias ANTES de borrar
-@router.get("/tolls/{toll_id}/dependencies")
+@router.get("/{toll_id}/dependencies")
 def check_toll_dependencies(toll_id: int, db: Session = Depends(get_db)):
     rutas_count = (
         db.query(models.RateSegment)
@@ -133,7 +151,7 @@ def check_toll_dependencies(toll_id: int, db: Session = Depends(get_db)):
 
 
 # 🚀 ENDPOINT ACTUALIZADO: Recibe la decisión del usuario y hace borrado lógico
-@router.delete("/tolls/{toll_id}")
+@router.delete("/{toll_id}")
 def delete_toll(
     toll_id: int, remove_from_routes: bool = Query(False), db: Session = Depends(get_db)
 ):

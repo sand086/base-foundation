@@ -14,13 +14,11 @@ export const authService = {
 
   /**
    * 2. Verificación de Segundo Factor (2FA)
-   * 🚀 Unificado para que coincida con el AuthContext y el backend de Python
    */
   verify2FA: async (payload: {
     temp_token: string;
     code: string;
   }): Promise<LoginResponse> => {
-    // Asegúrate de que este endpoint sea el que definiste en FastAPI
     const { data } = await axiosClient.post<LoginResponse>(
       "/auth/verify-2fa",
       payload,
@@ -28,10 +26,25 @@ export const authService = {
     return data;
   },
 
-  // 3. Limpieza de sesión
+  /**
+   * 🚀 3. Renovación de Token (NUEVO)
+   * Este método es llamado por el interceptor de Axios cuando el access_token expira.
+   */
+  refreshToken: async (refreshToken: string): Promise<LoginResponse> => {
+    const { data } = await axiosClient.post<LoginResponse>("/auth/refresh", {
+      refresh_token: refreshToken,
+    });
+    return data;
+  },
+
+  // 4. Limpieza de sesión mejorada
   logout: () => {
     localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token"); // 🧹 Limpiamos la llave de larga duración
     localStorage.removeItem("user_data");
+
+    // Opcional: Podrías llamar a un endpoint de /auth/logout en el backend
+    // para borrar el refresh_token de la base de datos y por seguridad.
   },
 
   /**
@@ -48,7 +61,8 @@ export const authService = {
   },
 
   /**
-   * Valida de forma rápida si existe un token en el navegador
+   * Valida de forma rápida si existe un token en el navegador.
+   * Ahora chequeamos que al menos exista el access_token.
    */
   isAuthenticated: (): boolean => {
     return !!localStorage.getItem("access_token");

@@ -45,9 +45,13 @@ export function InvoiceDetailSheet({
   if (!invoice) return null;
 
   const statusInfo = getInvoiceStatusInfo(invoice);
-  const daysOverdue = calculateDaysOverdue(invoice.fechaVencimiento);
+  const daysOverdue = calculateDaysOverdue(invoice.fecha_vencimiento);
+  const montoTotal = invoice.monto_total || invoice.monto_total || 0;
+  const saldoPendiente =
+    invoice.saldo_pendiente || invoice.saldo_pendiente || 0;
+
   const paymentPercentage =
-    ((invoice.montoTotal - invoice.saldoPendiente) / invoice.montoTotal) * 100;
+    montoTotal > 0 ? ((montoTotal - saldoPendiente) / montoTotal) * 100 : 0;
 
   const listaConceptos =
     invoice.conceptos ||
@@ -57,13 +61,13 @@ export function InvoiceDetailSheet({
             id: "unico",
             descripcion: invoice.concepto,
             cantidad: 1,
-            importe: invoice.subtotal || invoice.montoTotal,
+            importe: invoice.subtotal || montoTotal,
           },
         ]
       : []);
 
-  const listaServicios = invoice.serviciosRelacionados || [];
-  const listaCobros = invoice.cobros || invoice.payments || [];
+  const listaServicios = invoice.servicios_relacionados || [];
+  const listaCobros = invoice.payments || [];
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -83,14 +87,14 @@ export function InvoiceDetailSheet({
                 Folio
               </p>
               <p className="font-mono font-bold text-xl text-brand-dark">
-                {invoice.folio}
+                {invoice.folio_interno}
               </p>
             </div>
             <div className="flex flex-col items-end gap-1">
               <StatusBadge status={statusInfo.status}>
                 {statusInfo.label}
               </StatusBadge>
-              {invoice.requiereREP && (
+              {invoice.requiere_rep && (
                 <span className=" px-2 py-0.5 bg-amber-100 text-amber-700 rounded font-medium">
                   PENDIENTE REP
                 </span>
@@ -108,7 +112,7 @@ export function InvoiceDetailSheet({
             </div>
             <p className="font-semibold text-brand-dark">{invoice.cliente}</p>
             <p className="text-sm text-muted-foreground font-mono">
-              {invoice.clienteRfc}
+              {invoice.cliente_rfc || "RFC no disponible"}
             </p>
           </div>
 
@@ -124,12 +128,12 @@ export function InvoiceDetailSheet({
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>
                 Cobrado: $
-                {(invoice.montoTotal - invoice.saldoPendiente).toLocaleString(
+                {(invoice.monto_total - invoice.saldo_pendiente).toLocaleString(
                   "es-MX",
                 )}
               </span>
               <span>
-                Pendiente: ${invoice.saldoPendiente.toLocaleString("es-MX")}
+                Pendiente: ${invoice.saldo_pendiente.toLocaleString("es-MX")}
               </span>
             </div>
           </div>
@@ -141,7 +145,7 @@ export function InvoiceDetailSheet({
                 <Calendar className="h-3 w-3" />
                 Fecha Emisión
               </div>
-              <p className="font-medium">{invoice.fechaEmision}</p>
+              <p className="font-medium">{invoice.fecha_emision}</p>
             </div>
             <div
               className={`p-3 rounded border ${daysOverdue > 0 ? "bg-red-50 border-red-200" : "bg-slate-50"}`}
@@ -153,7 +157,7 @@ export function InvoiceDetailSheet({
               <p
                 className={`font-medium ${daysOverdue > 0 ? "text-status-danger" : ""}`}
               >
-                {invoice.fechaVencimiento}
+                {invoice.fecha_vencimiento}
                 {daysOverdue > 0 && (
                   <span className="text-xs ml-2">(+{daysOverdue} días)</span>
                 )}
@@ -169,21 +173,21 @@ export function InvoiceDetailSheet({
                 Monto Total
               </div>
               <p className="text-xl font-bold text-brand-dark">
-                ${invoice.montoTotal.toLocaleString("es-MX")}{" "}
+                ${invoice.monto_total.toLocaleString("es-MX")}{" "}
                 <span className="text-xs">{invoice.moneda}</span>
               </p>
             </div>
             <div
-              className={`p-4 rounded-lg ${invoice.saldoPendiente > 0 ? "bg-amber-50" : "bg-emerald-50"}`}
+              className={`p-4 rounded-lg ${invoice.saldo_pendiente > 0 ? "bg-amber-50" : "bg-emerald-50"}`}
             >
               <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
                 <AlertCircle className="h-3 w-3" />
                 Saldo Pendiente
               </div>
               <p
-                className={`text-xl font-bold ${invoice.saldoPendiente > 0 ? "text-amber-700" : "text-emerald-700"}`}
+                className={`text-xl font-bold ${invoice.saldo_pendiente > 0 ? "text-amber-700" : "text-emerald-700"}`}
               >
-                ${invoice.saldoPendiente.toLocaleString("es-MX")}{" "}
+                ${invoice.saldo_pendiente.toLocaleString("es-MX")}{" "}
                 <span className="text-xs">{invoice.moneda}</span>
               </p>
             </div>

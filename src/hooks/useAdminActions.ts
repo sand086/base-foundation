@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { toast } from "sonner";
 import { User, SystemConfig } from "@/types/api.types";
 import { adminService } from "@/services/adminService";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 
 export function useAdminActions() {
   const [isLoading, setIsLoading] = useState(false);
