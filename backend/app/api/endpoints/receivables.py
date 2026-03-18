@@ -8,7 +8,7 @@ from app.models import models
 router = APIRouter()
 
 
-@router.get("/receivables")
+@router.get("")
 def get_receivable_invoices(
     skip: int = 0, limit: int = 100, db: Session = Depends(get_db)
 ):
@@ -57,7 +57,7 @@ def get_receivable_invoices(
     return response
 
 
-@router.delete("/receivables/{invoice_id}")
+@router.delete("/{invoice_id}")
 def delete_receivable_invoice(invoice_id: int, db: Session = Depends(get_db)):
     invoice = (
         db.query(models.ReceivableInvoice)
@@ -78,7 +78,7 @@ def delete_receivable_invoice(invoice_id: int, db: Session = Depends(get_db)):
     return {"message": "Factura eliminada"}
 
 
-@router.post("/receivables/{invoice_id}/payments")
+@router.post("/{invoice_id}/payments")
 def register_receivable_payment(
     invoice_id: int, payment: dict = Body(...), db: Session = Depends(get_db)
 ):

@@ -68,9 +68,12 @@ export const tollService = {
     if (search) params.search = search;
     if (clientId) params.client_id = clientId; // Enviar el ID del cliente al backend
 
-    const { data } = await axiosClient.get<RateTemplate[]>("/rate-templates", {
-      params,
-    });
+    const { data } = await axiosClient.get<RateTemplate[]>(
+      "/tolls/rate-templates",
+      {
+        params,
+      },
+    );
     return data;
   },
 
@@ -81,7 +84,7 @@ export const tollService = {
       destino: payload.destino?.trim().toUpperCase(),
     };
     const { data } = await axiosClient.put<RateTemplate>(
-      `/rate-templates/${id}`,
+      `/tolls/rate-templates/${id}`,
       cleanPayload,
     );
     return data;
@@ -96,7 +99,7 @@ export const tollService = {
       destino: payload.destino.trim().toUpperCase(),
     };
     const { data } = await axiosClient.post<RateTemplate>(
-      "/rate-templates",
+      "/tolls/rate-templates",
       cleanPayload,
     );
     return data;
@@ -104,13 +107,13 @@ export const tollService = {
 
   //  Eliminar tarifa
   deleteTemplate: async (id: number): Promise<void> => {
-    await axiosClient.delete(`/rate-templates/${id}`);
+    await axiosClient.delete(`/tolls/rate-templates/${id}`);
   },
 
   // Obtener detalle de una sola ruta (por si necesitas ver el reporte SCT individual)
   getTemplateById: async (id: number): Promise<RateTemplate> => {
     const { data } = await axiosClient.get<RateTemplate>(
-      `/rate-templates/${id}`,
+      `/tolls/rate-templates/${id}`,
     );
     return data;
   },

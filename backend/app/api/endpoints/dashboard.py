@@ -12,11 +12,7 @@ router = APIRouter()
 
 
 @router.get("/stats", response_model=DashboardData)
-def get_dashboard_stats(
-    start_date: Optional[date] = Query(None),
-    end_date: Optional[date] = Query(None),
-    db: Session = Depends(get_db),
-):
+def get_dashboard_stats(start_date: str, end_date: str, db: Session = Depends(get_db)):
     # 1. Ajuste de fechas por defecto (últimos 30 días)
     if not start_date:
         start_date = date.today() - timedelta(days=30)

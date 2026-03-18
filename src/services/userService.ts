@@ -16,34 +16,34 @@ export interface UserData {
 
 export const userService = {
   getAll: async () => {
-    const { data } = await axiosClient.get("/usuarios");
+    const { data } = await axiosClient.get("/users");
     return data;
   },
 
   create: async (user: UserData) => {
-    const { data } = await axiosClient.post("/usuarios", user);
+    const { data } = await axiosClient.post("/users", user);
     return data;
   },
 
   update: async (id: string, user: Partial<UserData>) => {
-    const { data } = await axiosClient.put(`/usuarios/${id}`, user);
+    const { data } = await axiosClient.put(`/users/${id}`, user);
     return data;
   },
 
   toggleStatus: async (id: string) => {
-    const { data } = await axiosClient.patch(`/usuarios/${id}/status`);
+    const { data } = await axiosClient.patch(`/users/${id}/status`);
     return data;
   },
 
   resetPassword: async (id: string, newPassword: string) => {
-    const { data } = await axiosClient.post(`/usuarios/${id}/reset-password`, {
+    const { data } = await axiosClient.post(`/users/${id}/reset-password`, {
       new_password: newPassword,
     });
     return data;
   },
 
   delete: async (id: string) => {
-    const { data } = await axiosClient.delete(`/usuarios/${id}`);
+    const { data } = await axiosClient.delete(`/users/${id}`);
     return data;
   },
 };

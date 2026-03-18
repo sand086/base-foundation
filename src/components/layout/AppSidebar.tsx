@@ -120,7 +120,7 @@ const menuItems: MenuItem[] = [
     icon: Settings,
     iconName: "Administracion",
     children: [
-      { title: "Usuarios", path: "/usuarios" },
+      { title: "Usuarios", path: "/users" },
       { title: "Roles y Permisos", path: "/roles-permisos" },
       { title: "Mi Perfil", path: "/perfil" },
       { title: "Configuración", path: "/configuracion" },

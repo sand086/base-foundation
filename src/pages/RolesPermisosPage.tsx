@@ -144,7 +144,7 @@ async function fetchMeUser(): Promise<MeUser | null> {
   if (!API_BASE || !token) return null;
 
   try {
-    const res = await fetch(`${API_BASE}/usuarios/me`, {
+    const res = await fetch(`${API_BASE}/users/me`, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${token}`,

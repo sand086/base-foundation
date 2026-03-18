@@ -221,7 +221,7 @@ export default function CierreViaje() {
     const bonosAdicionales = conceptosExtra
       .filter((c) => c.tipo === "ingreso")
       .reduce((sum, c) => sum + c.monto, 0);
-    const totalIngresos = pagoBaseBruto + bonosAdicionales;
+    const total_ingresos = pagoBaseBruto + bonosAdicionales;
 
     let deduccionViaticos = 0;
     let otrosAnticipos = 0;
@@ -236,25 +236,25 @@ export default function CierreViaje() {
       .reduce((sum, c) => sum + c.monto, 0);
 
     // 🚀 Sumamos el Faltante de Combustible a las deducciones
-    const totalDeducciones =
+    const total_deducciones =
       deduccionViaticos +
       otrosAnticipos +
       deduccionesManuales +
       (combustibleFaltante || 0);
 
-    const netoAPagar = totalIngresos - totalDeducciones;
+    const neto_a_pagar = total_ingresos - total_deducciones;
 
     // 🚀 RETORNAMOS TODO, INCLUYENDO combustibleFaltante
     return {
       pagoBaseBruto,
       bonosAdicionales,
-      totalIngresos,
+      total_ingresos,
       deduccionViaticos,
       otrosAnticipos,
       deduccionesManuales,
       combustibleFaltante,
-      totalDeducciones,
-      netoAPagar,
+      total_deducciones,
+      neto_a_pagar,
     };
   }, [
     selectedLegsData,
@@ -308,10 +308,10 @@ export default function CierreViaje() {
     try {
       if (!liquidacion) return;
       if (liquidarLote) {
-        await liquidarLote(selectedLegIds, liquidacion.netoAPagar);
+        await liquidarLote(selectedLegIds, liquidacion.neto_a_pagar);
       }
       toast.success("Liquidación Exitosa", {
-        description: `Se registró el pago de ${formatCurrency(liquidacion.netoAPagar)} correctamente.`,
+        description: `Se registró el pago de ${formatCurrency(liquidacion.neto_a_pagar)} correctamente.`,
       });
       setShowReceiptModal(true);
     } catch (error) {
@@ -870,12 +870,12 @@ export default function CierreViaje() {
                     <span
                       className={cn(
                         "text-4xl font-black font-mono tracking-tighter",
-                        liquidacion.netoAPagar >= 0
+                        liquidacion.neto_a_pagar >= 0
                           ? "text-emerald-600"
                           : "text-rose-600",
                       )}
                     >
-                      {formatCurrency(liquidacion.netoAPagar)}
+                      {formatCurrency(liquidacion.neto_a_pagar)}
                     </span>
                   </div>
 
@@ -1074,7 +1074,7 @@ export default function CierreViaje() {
                 Total a Pagar
               </span>
               <span className="text-2xl font-black font-mono">
-                {formatCurrency(liquidacion?.netoAPagar || 0)}
+                {formatCurrency(liquidacion?.neto_a_pagar || 0)}
               </span>
             </div>
 

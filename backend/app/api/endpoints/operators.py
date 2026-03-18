@@ -18,12 +18,12 @@ from app.crud import operators as crud
 router = APIRouter()
 
 
-@router.get("/operators", response_model=List[schemas.OperatorResponse])
+@router.get("", response_model=List[schemas.OperatorResponse])
 def read_operators(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return crud.get_operators(db, skip, limit)
 
 
-@router.post("/operators", response_model=schemas.OperatorResponse)
+@router.post("", response_model=schemas.OperatorResponse)
 def create_operator(operator: schemas.OperatorCreate, db: Session = Depends(get_db)):
     if (
         db.query(models.Operator)
@@ -34,7 +34,7 @@ def create_operator(operator: schemas.OperatorCreate, db: Session = Depends(get_
     return crud.create_operator(db, operator)
 
 
-@router.put("/operators/{operator_id}", response_model=schemas.OperatorResponse)
+@router.put("/{operator_id}", response_model=schemas.OperatorResponse)
 def update_operator(
     operator_id: int,
     operator: schemas.OperatorUpdate,
@@ -46,14 +46,14 @@ def update_operator(
     return db_op
 
 
-@router.delete("/operators/{operator_id}")
+@router.delete("/{operator_id}")
 def delete_operator(operator_id: int, db: Session = Depends(get_db)):
     if not crud.delete_operator(db, operator_id):
         raise HTTPException(status_code=404, detail="Operador no encontrado")
     return {"message": "Operador eliminado"}
 
 
-@router.post("/operators/{operator_id}/documents/{doc_type}")
+@router.post("/{operator_id}/documents/{doc_type}")
 async def upload_operator_document(
     operator_id: int,
     doc_type: str,
@@ -114,7 +114,7 @@ async def upload_operator_document(
     return {"url": new_doc.file_url, "version": new_doc.version}
 
 
-@router.get("/operators/{operator_id}/documents/{doc_type}/history")
+@router.get("/{operator_id}/documents/{doc_type}/history")
 def get_operator_document_history(
     operator_id: int, doc_type: str, db: Session = Depends(get_db)
 ):

@@ -343,7 +343,7 @@ class Tariff(AuditMixin, Base):
     retencion_porcentaje = Column(Float, default=4.0)
     distancia_km = Column(Float, default=0.0)
 
-    costo_casetas = Column(Float, default=0)
+    costo_casetas = Column(Float, default=0.0)
     moneda = Column(pg_enum(Currency, "currency"), default=Currency.MXN)
     vigencia = Column(Date, nullable=False)
     estatus = Column(pg_enum(TariffStatus, "tariffstatus"), default=TariffStatus.ACTIVA)
@@ -686,6 +686,7 @@ class TripLeg(AuditMixin, Base):
     # Telemetría
     odometro_inicial = Column(Integer, nullable=True, default=0)
     odometro_final = Column(Integer, nullable=True)  # 🚀 NUEVO
+    nivel_tanque_inicial = Column(Integer, nullable=True, default=0)
     rendimiento_real = Column(Float, nullable=True)  # 🚀 NUEVO
 
     # Tiempos y rastreo
@@ -984,7 +985,7 @@ class SupplierTariff(AuditMixin, Base):
     tipo_unidad = Column(pg_enum(UnitType, "unittype"), nullable=False)
 
     tarifa_base = Column(Float, nullable=False, default=0.0)
-    costo_casetas = Column(Float, default=0)
+    costo_casetas = Column(Float, default=0.00)
 
     iva_porcentaje = Column(Float, default=16.0)
     retencion_porcentaje = Column(Float, default=4.0)
@@ -1410,3 +1411,36 @@ class EmailTemplate(AuditMixin, Base):
     nombre = Column(String(100), nullable=False)
     asunto = Column(String(200), nullable=False)
     cuerpo = Column(Text, nullable=False)
+
+
+class BankAccount(AuditMixin, Base):
+    __tablename__ = "bank_accounts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    banco = Column(String(100), nullable=False)
+    banco_logo = Column(String(20))
+    numero_cuenta = Column(String(50), nullable=False)
+    clabe = Column(String(18))
+    moneda = Column(String(10), default="MXN")
+    alias = Column(String(100), nullable=False)
+    saldo = Column(Float, default=0.0)
+    estatus = Column(String(20), default="activo")
+    tipo_cuenta = Column(String(50))  # operativa o cobranza
+
+
+class BankMovement(AuditMixin, Base):
+    __tablename__ = "bank_movements"
+
+    id = Column(Integer, primary_key=True, index=True)
+    bank_account_id = Column(
+        Integer, ForeignKey("bank_accounts.id", ondelete="CASCADE"), nullable=False
+    )
+
+    tipo = Column(String(20))  # 'ingreso' o 'egreso'
+    monto = Column(Float, nullable=False)
+    fecha = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    concepto = Column(String(255))
+    referencia = Column(String(100))
+
+    # Relación con la cuenta bancaria
+    bank_account = relationship("BankAccount", backref="movements")

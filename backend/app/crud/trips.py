@@ -443,9 +443,9 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
         kmsRecorridos=kms_recorridos,
         estatus=leg.status,
         conceptos=conceptos,
-        totalIngresos=total_ingresos,
-        totalDeducciones=total_deducciones,
-        netoAPagar=neto_pagar,
+        total_ingresos=total_ingresos,
+        total_deducciones=total_deducciones,
+        neto_a_pagar=neto_pagar,
         consumoEsperadoLitros=round(consumo_esperado, 2),
         consumoRealLitros=round(consumo_real_litros, 2),
         diferenciaLitros=round(diferencia_litros, 2),
@@ -466,13 +466,13 @@ def close_trip_settlement(
 
     # Cerramos el Tramo
     leg.status = models.TripStatus.CERRADO
-    leg.saldo_operador = payload.netoAPagar
+    leg.saldo_operador = payload.neto_a_pagar
     leg.actual_arrival = datetime.utcnow()
 
     event = models.TripTimelineEvent(
         trip_leg_id=leg.id,
         time=datetime.utcnow(),
-        event=f"Tramo Liquidado y Cerrado. Saldo pagado: ${payload.netoAPagar:,.2f}",
+        event=f"Tramo Liquidado y Cerrado. Saldo pagado: ${payload.neto_a_pagar:,.2f}",
         event_type="success",
     )
     db.add(event)
