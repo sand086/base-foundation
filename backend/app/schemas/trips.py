@@ -54,26 +54,21 @@ class TripTimelineEventResponse(TripTimelineEventBase):
 class TripLegBase(ORMBase):
     leg_type: TripLegType
     status: TripStatus = TripStatus.CREADO
-
     unit_id: Optional[int] = None
     operator_id: Optional[int] = None
-
     anticipo_casetas: float = 0.0
     anticipo_viaticos: float = 0.0
     anticipo_combustible: float = 0.0
     otros_anticipos: float = 0.0
-
-    # 🚀 AGREGAR ESTOS EN EL SCHEMA BASE
     monto_sueldo: float = 0.0
     monto_bonos: float = 0.0
     monto_maniobras: float = 0.0
     monto_penalizaciones: float = 0.0
     monto_neto_pagado: float = 0.0
-
     odometro_inicial: Optional[int] = 0
-    odometro_final: Optional[int] = None  # 🚀 NUEVO
-    rendimiento_real: Optional[float] = None  # 🚀 NUEVO
-
+    nivel_tanque_inicial: Optional[int] = 0
+    odometro_final: Optional[int] = None
+    rendimiento_real: Optional[float] = None
     start_date: Optional[datetime] = None
     actual_arrival: Optional[datetime] = None
     last_location: Optional[str] = Field(default=None, max_length=200)
@@ -245,9 +240,9 @@ class TripSettlementResponse(BaseModel):
     estatus: str
 
     conceptos: List[ConceptoPago]
-    totalIngresos: float
-    totalDeducciones: float
-    netoAPagar: float
+    total_ingresos: float
+    total_deducciones: float
+    neto_a_pagar: float
 
     consumoEsperadoLitros: float
     consumoRealLitros: float
@@ -258,9 +253,9 @@ class TripSettlementResponse(BaseModel):
 
 class CloseSettlementPayload(BaseModel):
     conceptos: List[ConceptoPago]
-    totalIngresos: float
-    totalDeducciones: float
-    netoAPagar: float
+    total_ingresos: float  # <--- Asegúrate que sea snake_case
+    total_deducciones: float  # <--- Asegúrate que sea snake_case
+    neto_a_pagar: float
 
 
 # ==========================================

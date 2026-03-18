@@ -121,8 +121,8 @@ export default function TripSettlementModal({
 
   const totalPercepciones =
     (Number(sueldoBase) || 0) + (Number(bonos) || 0) + (Number(maniobras) || 0);
-  const totalDeducciones = (Number(penalizaciones) || 0) + sumAnticipos;
-  const totalNeto = totalPercepciones - totalDeducciones;
+  const total_deducciones = (Number(penalizaciones) || 0) + sumAnticipos;
+  const totalNeto = totalPercepciones - total_deducciones;
 
   // ==========================================
   // HANDLERS

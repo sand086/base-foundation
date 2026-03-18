@@ -28,12 +28,12 @@ except Exception as e:
 router = APIRouter()
 
 
-@router.get("/trips", response_model=List[schemas.TripResponse])
+@router.get("", response_model=List[schemas.TripResponse])
 def read_trips(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return crud.get_trips(db, skip, limit)
 
 
-@router.post("/trips", response_model=schemas.TripResponse)
+@router.post("", response_model=schemas.TripResponse)
 def create_trip(
     trip: schemas.TripCreate,
     db: Session = Depends(get_db),
@@ -61,7 +61,7 @@ def create_trip(
     return db_trip
 
 
-@router.patch("/trips/{trip_id}/status", response_model=schemas.TripResponse)
+@router.patch("/{trip_id}/status", response_model=schemas.TripResponse)
 def update_status(
     trip_id: int,  # Cambiado a int
     status: str,
@@ -74,7 +74,7 @@ def update_status(
     return trip
 
 
-@router.delete("/trips/{trip_id}", response_model=dict)
+@router.delete("/{trip_id}", response_model=dict)
 def delete_trip_endpoint(trip_id: str, db: Session = Depends(get_db)):
     success = crud.delete_trip(db, trip_id)
     if not success:
@@ -84,7 +84,7 @@ def delete_trip_endpoint(trip_id: str, db: Session = Depends(get_db)):
     return {"message": "Viaje eliminado correctamente"}
 
 
-@router.put("/trips/{trip_id}", response_model=schemas.TripResponse)
+@router.put("/{trip_id}", response_model=schemas.TripResponse)
 def update_trip(
     trip_id: int, trip_in: schemas.TripUpdate, db: Session = Depends(get_db)
 ):
@@ -95,7 +95,7 @@ def update_trip(
     return trip
 
 
-@router.post("/trips/{trip_id}/timeline", response_model=schemas.TripResponse)
+@router.post("/{trip_id}/timeline", response_model=schemas.TripResponse)
 def create_timeline_event(
     trip_id: int,
     payload: schemas.TripTimelineEventCreatePayload,
@@ -113,7 +113,7 @@ def create_timeline_event(
 
 
 @router.get(
-    "/trips/leg/{trip_leg_id}/settlement", response_model=schemas.TripSettlementResponse
+    "/leg/{trip_leg_id}/settlement", response_model=schemas.TripSettlementResponse
 )
 def get_trip_settlement(trip_leg_id: int, db: Session = Depends(get_db)):
     try:
@@ -132,9 +132,7 @@ def get_trip_settlement(trip_leg_id: int, db: Session = Depends(get_db)):
         raise e
 
 
-@router.post(
-    "/trips/leg/{trip_leg_id}/close-settlement", response_model=schemas.TripResponse
-)
+@router.post("/leg/{trip_leg_id}/close-settlement", response_model=schemas.TripResponse)
 def close_trip_settlement(
     trip_leg_id: int,
     payload: schemas.CloseSettlementPayload,
@@ -146,7 +144,7 @@ def close_trip_settlement(
     return trip
 
 
-@router.post("/trips/{trip_id}/next-leg", response_model=schemas.TripResponse)
+@router.post("/{trip_id}/next-leg", response_model=schemas.TripResponse)
 def create_next_leg_endpoint(
     trip_id: int,
     payload: schemas.TripLegCreate,
@@ -167,7 +165,7 @@ TEMPLATE_DIR = os.path.join(
 jinja_env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
 
 
-@router.post("/trips/legs/{leg_id}/settle")
+@router.post("/legs/{leg_id}/settle")
 def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(get_db)):
     # 1. Buscar el tramo
     leg = db.query(models.TripLeg).filter(models.TripLeg.id == leg_id).first()
@@ -176,7 +174,7 @@ def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(g
 
     # 2. Guardar el saldo final a favor del operador y cerrar el tramo
     leg.status = "cerrado"
-    leg.saldo_operador = data.get("netoAPagar", 0.0)
+    leg.saldo_operador = data.get("neto_a_pagar", 0.0)
     db.commit()
     db.refresh(leg)
 
@@ -249,7 +247,7 @@ def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(g
     }
 
 
-@router.post("/trips/legs/{leg_id}/reopen")
+@router.post("/legs/{leg_id}/reopen")
 def reopen_trip_leg(leg_id: int, db: Session = Depends(get_db)):
     # 1. Buscar el tramo
     leg = db.query(models.TripLeg).filter(models.TripLeg.id == leg_id).first()
@@ -286,7 +284,7 @@ def reopen_trip_leg(leg_id: int, db: Session = Depends(get_db)):
     return {"message": "Fase reabierta exitosamente. Facturas anuladas."}
 
 
-@router.get("/trips/{trip_id}/carta-porte-ciega")
+@router.get("/{trip_id}/carta-porte-ciega")
 def generate_carta_porte_ciega(trip_id: int, db: Session = Depends(get_db)):
     # 1. Verificar si WeasyPrint cargó
     if HTML is None:
@@ -359,21 +357,21 @@ def generate_carta_porte_ciega(trip_id: int, db: Session = Depends(get_db)):
 
 class BatchSettlementPayload(BaseModel):
     leg_ids: List[int]
-    netoAPagar: float
+    neto_a_pagar: float
 
 
-@router.post("/trips/legs/settle-batch")
+@router.post("/legs/settle-batch")
 def settle_trip_legs_batch(
     payload: BatchSettlementPayload, db: Session = Depends(get_db)
 ):
-    result = crud.settle_trip_legs_batch(db, payload.leg_ids, payload.netoAPagar)
+    result = crud.settle_trip_legs_batch(db, payload.leg_ids, payload.neto_a_pagar)
     if not result:
         raise HTTPException(status_code=404, detail="No se encontraron los tramos")
     return result
 
 
 @router.post(
-    "/trips/legs/settlement-preview",
+    "/legs/settlement-preview",
     response_model=schemas.BatchSettlementPreviewResponse,
 )
 def preview_batch_settlement_endpoint(
@@ -385,7 +383,7 @@ def preview_batch_settlement_endpoint(
     return result
 
 
-@router.post("/trips/{trip_id}/undo-leg", response_model=schemas.TripResponse)
+@router.post("/{trip_id}/undo-leg", response_model=schemas.TripResponse)
 def undo_trip_leg_endpoint(trip_id: int, db: Session = Depends(get_db)):
     """Deshace el último desenganche (Me equivoqué)"""
     trip = crud.undo_last_leg(db, str(trip_id))

@@ -17,31 +17,31 @@ export interface ModuleData {
 
 export const roleService = {
   getAll: async () => {
-    const { data } = await axiosClient.get("/roles");
+    const { data } = await axiosClient.get("/users/roles");
     return data;
   },
   create: async (role: Omit<RoleData, "id">) => {
-    const { data } = await axiosClient.post("/roles", role);
+    const { data } = await axiosClient.post("/users/roles", role);
     return data;
   },
   update: async (id: number, role: Partial<RoleData>) => {
-    const { data } = await axiosClient.put(`/roles/${id}`, role);
+    const { data } = await axiosClient.put(`/users/roles/${id}`, role);
     return data;
   },
   delete: async (id: number) => {
-    const { data } = await axiosClient.delete(`/roles/${id}`);
+    const { data } = await axiosClient.delete(`/users/roles/${id}`);
     return data;
   },
   getModules: async () => {
-    const { data } = await axiosClient.get("/config/modules");
+    const { data } = await axiosClient.get("/catalogs/modules");
     return data;
   },
   addModule: async (modulo: ModuleData) => {
-    const { data } = await axiosClient.post("/config/modules", modulo);
+    const { data } = await axiosClient.post("/catalogs/modules", modulo);
     return data;
   },
   getPermissions: async (id: number) => {
-    const { data } = await axiosClient.get(`/roles/${id}/permisos`);
+    const { data } = await axiosClient.get(`/users/roles/${id}/permisos`);
     return data;
   },
   updateModule: async (id: string, modulo: ModuleData) => {

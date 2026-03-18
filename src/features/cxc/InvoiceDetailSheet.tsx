@@ -49,6 +49,22 @@ export function InvoiceDetailSheet({
   const paymentPercentage =
     ((invoice.montoTotal - invoice.saldoPendiente) / invoice.montoTotal) * 100;
 
+  const listaConceptos =
+    invoice.conceptos ||
+    (invoice.concepto
+      ? [
+          {
+            id: "unico",
+            descripcion: invoice.concepto,
+            cantidad: 1,
+            importe: invoice.subtotal || invoice.montoTotal,
+          },
+        ]
+      : []);
+
+  const listaServicios = invoice.serviciosRelacionados || [];
+  const listaCobros = invoice.cobros || invoice.payments || [];
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-[580px] overflow-y-auto">
@@ -177,7 +193,7 @@ export function InvoiceDetailSheet({
           <div>
             <h3 className="text-sm font-semibold text-brand-dark mb-3 flex items-center gap-2">
               <FileText className="h-4 w-4" />
-              Conceptos Facturados ({invoice.conceptos.length})
+              Conceptos Facturados ({listaConceptos.length})
             </h3>
             <DataTable>
               <DataTableHeader>
@@ -206,7 +222,7 @@ export function InvoiceDetailSheet({
           </div>
 
           {/* Related Services */}
-          {invoice.serviciosRelacionados.length > 0 && (
+          {listaServicios.length > 0 && (
             <div className="p-3 bg-slate-50 rounded border">
               <div className="flex items-center gap-2 mb-2">
                 <Link2 className="h-4 w-4 text-muted-foreground" />
@@ -215,7 +231,7 @@ export function InvoiceDetailSheet({
                 </span>
               </div>
               <div className="flex flex-wrap gap-1">
-                {invoice.serviciosRelacionados.map((srvId) => (
+                {listaServicios.map((srvId) => (
                   <span
                     key={srvId}
                     className="px-2 py-1 bg-brand-navy/10 text-brand-navy text-xs font-mono rounded"
@@ -231,10 +247,10 @@ export function InvoiceDetailSheet({
           <div>
             <h3 className="text-sm font-semibold text-brand-dark mb-3 flex items-center gap-2">
               <Receipt className="h-4 w-4" />
-              Historial de Cobros ({invoice.cobros.length})
+              Historial de Cobros ({listaCobros.length})
             </h3>
 
-            {invoice.cobros.length === 0 ? (
+            {listaCobros.length === 0 ? (
               <div className="p-4 text-center bg-muted/30 rounded-lg border border-dashed">
                 <p className="text-sm text-muted-foreground">
                   No hay cobros registrados
@@ -251,7 +267,7 @@ export function InvoiceDetailSheet({
                   </DataTableRow>
                 </DataTableHeader>
                 <DataTableBody>
-                  {invoice.cobros.map((cobro) => (
+                  {listaCobros.map((cobro) => (
                     <DataTableRow key={cobro.id}>
                       <DataTableCell className="text-sm">
                         {cobro.fecha}

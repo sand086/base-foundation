@@ -21,12 +21,12 @@ router = APIRouter()
 # =========================================================
 
 
-@router.get("/usuarios", response_model=List[schemas.UserResponse])
+@router.get("", response_model=List[schemas.UserResponse])
 def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return crud.get_users(db, skip=skip, limit=limit)
 
 
-@router.get("/usuarios/me", response_model=schemas.UserResponse)
+@router.get("/me", response_model=schemas.UserResponse)
 def read_user_me(current_user: models.User = Depends(get_current_active_user)):
     """
     Devuelve toda la información detallada del usuario que está logueado actualmente.
@@ -34,7 +34,7 @@ def read_user_me(current_user: models.User = Depends(get_current_active_user)):
     return current_user
 
 
-@router.get("/usuarios/{user_id}", response_model=schemas.UserResponse)
+@router.get("/{user_id}", response_model=schemas.UserResponse)
 def read_user(user_id: int, db: Session = Depends(get_db)):
     user = crud.get_user(db, user_id)
     if not user:
@@ -42,7 +42,7 @@ def read_user(user_id: int, db: Session = Depends(get_db)):
     return user
 
 
-@router.post("/usuarios", response_model=schemas.UserResponse)
+@router.post("", response_model=schemas.UserResponse)
 def create_user(payload: schemas.UserCreate, db: Session = Depends(get_db)):
     # email unique (aunque tu db también lo impone)
     if crud.get_user_by_email(db, payload.email):
@@ -57,7 +57,7 @@ def create_user(payload: schemas.UserCreate, db: Session = Depends(get_db)):
     return crud.create_user(db, payload)
 
 
-@router.put("/usuarios/{user_id}", response_model=schemas.UserResponse)
+@router.put("/{user_id}", response_model=schemas.UserResponse)
 def update_user(
     user_id: int, payload: schemas.UserUpdate, db: Session = Depends(get_db)
 ):
@@ -79,7 +79,7 @@ def update_user(
     return user
 
 
-@router.patch("/usuarios/{user_id}/status")
+@router.patch("/{user_id}/status")
 def toggle_status(user_id: int, db: Session = Depends(get_db)):
     status_value = crud.toggle_user_status(db, user_id)
     if status_value is None:
@@ -87,7 +87,7 @@ def toggle_status(user_id: int, db: Session = Depends(get_db)):
     return {"activo": status_value}
 
 
-@router.post("/usuarios/{user_id}/reset-password")
+@router.post("/{user_id}/reset-password")
 def reset_password(
     user_id: int, payload: schemas.PasswordReset, db: Session = Depends(get_db)
 ):
@@ -97,7 +97,7 @@ def reset_password(
     return {"message": "Contraseña actualizada"}
 
 
-@router.delete("/usuarios/{user_id}")
+@router.delete("/{user_id}")
 def delete_user(user_id: int, db: Session = Depends(get_db)):
     ok = crud.delete_user(db, user_id)
     if not ok:

@@ -18,12 +18,12 @@ from app.services.storage import StorageService
 router = APIRouter()
 
 
-@router.get("/clients", response_model=List[schemas.ClientResponse])
+@router.get("", response_model=List[schemas.ClientResponse])
 def read_clients(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return crud.get_clients(db, skip=skip, limit=limit)
 
 
-@router.get("/clients/{client_id}", response_model=schemas.ClientResponse)
+@router.get("/{client_id}", response_model=schemas.ClientResponse)
 def read_client(client_id: int, db: Session = Depends(get_db)):  # <--- Cambio a int
     db_client = crud.get_client(db, client_id=client_id)
     if db_client is None:
@@ -31,7 +31,7 @@ def read_client(client_id: int, db: Session = Depends(get_db)):  # <--- Cambio a
     return db_client
 
 
-@router.post("/clients", response_model=schemas.ClientResponse)
+@router.post("", response_model=schemas.ClientResponse)
 def create_client(client: schemas.ClientCreate, db: Session = Depends(get_db)):
     existing = db.query(models.Client).filter(models.Client.rfc == client.rfc).first()
     if existing:
@@ -39,7 +39,7 @@ def create_client(client: schemas.ClientCreate, db: Session = Depends(get_db)):
     return crud.create_client(db=db, client=client)
 
 
-@router.put("/clients/{client_id}", response_model=schemas.ClientResponse)
+@router.put("/{client_id}", response_model=schemas.ClientResponse)
 def update_client(
     client_id: int,
     client: schemas.ClientUpdate,
@@ -51,7 +51,7 @@ def update_client(
     return db_client
 
 
-@router.delete("/clients/{client_id}")
+@router.delete("/{client_id}")
 def delete_client(client_id: int, db: Session = Depends(get_db)):  # <--- Cambio a int
     success = crud.delete_client(db, client_id=client_id)
     if not success:
@@ -59,7 +59,7 @@ def delete_client(client_id: int, db: Session = Depends(get_db)):  # <--- Cambio
     return {"message": "Client deleted"}
 
 
-@router.post("/clients/{client_id}/documents/{doc_type}")
+@router.post("/{client_id}/documents/{doc_type}")
 async def upload_client_document(
     client_id: int,
     doc_type: str,
@@ -126,7 +126,7 @@ async def upload_client_document(
     }
 
 
-@router.get("/clients/{client_id}/documents/{doc_type}/history")
+@router.get("/{client_id}/documents/{doc_type}/history")
 def get_client_document_history(
     client_id: int, doc_type: str, db: Session = Depends(get_db)
 ):

@@ -39,9 +39,9 @@ export const supplierService = {
   },
 
   // 4. Actualizar proveedor
-  updateSupplier: async (id: number, supplier: Partial<Supplier>) => {
+  updateSupplier: async (id: number | string, supplier: Partial<Supplier>) => {
     const response = await axiosClient.put<Supplier>(
-      `/finance/suppliers/${id}`,
+      `/finance/suppliers/${Number(id)}`,
       supplier,
     );
     return response.data;
@@ -99,10 +99,19 @@ export const supplierService = {
   // --- MÓDULO: PAGOS ---
 
   // 11. Registrar un pago a una factura
-  registerPayment: async (invoiceId: number, payment: InvoicePayment) => {
+  registerPayment: async (invoiceId: number, payment: any) => {
+    // 🚀 Aseguramos que los campos financieros vayan como Python los quiere
+    const normalizedPayment = {
+      monto: payment.monto,
+      fecha_pago: payment.fechaPago || payment.fecha_pago,
+      metodo_pago: payment.metodoPago || payment.metodo_pago,
+      referencia: payment.referencia,
+      cuenta_bancaria_id: payment.bankAccountId || payment.cuenta_bancaria_id,
+    };
+
     const response = await axiosClient.post<PayableInvoice>(
       `/finance/invoices/${invoiceId}/payments`,
-      payment,
+      normalizedPayment, // Enviamos el objeto limpio
     );
     return response.data;
   },

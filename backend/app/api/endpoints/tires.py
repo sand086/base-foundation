@@ -10,12 +10,12 @@ router = APIRouter()
 # --- LECTURA ---
 
 
-@router.get("/tires", response_model=List[schemas.TireResponse])
+@router.get("", response_model=List[schemas.TireResponse])
 def read_tires(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return crud.get_tires(db, skip, limit)
 
 
-@router.get("/tires/{tire_id}", response_model=schemas.TireResponse)
+@router.get("/{tire_id}", response_model=schemas.TireResponse)
 def read_tire(tire_id: int, db: Session = Depends(get_db)):
     tire = crud.get_tire(db, tire_id)
     if not tire:
@@ -27,7 +27,7 @@ def read_tire(tire_id: int, db: Session = Depends(get_db)):
 
 
 @router.post(
-    "/tires", response_model=schemas.TireResponse, status_code=status.HTTP_201_CREATED
+    "", response_model=schemas.TireResponse, status_code=status.HTTP_201_CREATED
 )
 def create_tire(tire: schemas.TireCreate, db: Session = Depends(get_db)):
     existing = crud.get_tire_by_code(db, tire.codigo_interno)
@@ -39,7 +39,7 @@ def create_tire(tire: schemas.TireCreate, db: Session = Depends(get_db)):
 # --- ACCIONES OPERATIVAS ---
 
 
-@router.post("/tires/{tire_id}/assign")
+@router.post("/{tire_id}/assign")
 def assign_tire(
     tire_id: int, payload: schemas.AssignTirePayload, db: Session = Depends(get_db)
 ):
@@ -52,7 +52,7 @@ def assign_tire(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/tires/{tire_id}/maintenance")
+@router.post("/{tire_id}/maintenance")
 def maintenance_tire(
     tire_id: int, payload: schemas.MaintenanceTirePayload, db: Session = Depends(get_db)
 ):
@@ -65,7 +65,7 @@ def maintenance_tire(
 # --- EDICIÓN Y ELIMINACIÓN ---
 
 
-@router.put("/tires/{tire_id}", response_model=schemas.TireResponse)
+@router.put("/{tire_id}", response_model=schemas.TireResponse)
 def update_tire(
     tire_id: int, tire_in: schemas.TireUpdate, db: Session = Depends(get_db)
 ):
@@ -75,7 +75,7 @@ def update_tire(
     return tire
 
 
-@router.delete("/tires/{tire_id}")
+@router.delete("/{tire_id}")
 def delete_tire(tire_id: int, db: Session = Depends(get_db)):
     success = crud.delete_tire(db, tire_id)
     if not success:

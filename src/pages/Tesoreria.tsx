@@ -170,13 +170,13 @@ export default function Tesoreria() {
   const stats = useMemo(() => {
     const conciliados = movimientos.filter((m) => m.conciliado).length;
     const pendientes = movimientos.filter((m) => !m.conciliado).length;
-    const totalIngresos = movimientos
+    const total_ingresos = movimientos
       .filter((m) => m.tipo === "ingreso")
       .reduce((sum, m) => sum + m.monto, 0);
     const totalEgresos = movimientos
       .filter((m) => m.tipo === "egreso")
       .reduce((sum, m) => sum + m.monto, 0);
-    return { conciliados, pendientes, totalIngresos, totalEgresos };
+    return { conciliados, pendientes, total_ingresos, totalEgresos };
   }, [movimientos]);
 
   const handleAddAccount = async () => {
@@ -445,7 +445,7 @@ export default function Tesoreria() {
           <CardContent>
             <p className="text-2xl font-black font-mono text-emerald-600">
               {showBalances
-                ? `+$${stats.totalIngresos.toLocaleString("es-MX", { minimumFractionDigits: 2 })}`
+                ? `+$${stats.total_ingresos.toLocaleString("es-MX", { minimumFractionDigits: 2 })}`
                 : "••••••••"}
             </p>
           </CardContent>

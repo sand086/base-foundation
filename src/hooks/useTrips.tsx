@@ -254,11 +254,11 @@ export const useTrips = () => {
     await fetchTrips();
   }, [fetchTrips]);
 
-  const liquidarLote = async (legIds: string[], netoAPagar: number) => {
+  const liquidarLote = async (legIds: string[], neto_a_pagar: number) => {
     try {
       const response = await axiosClient.post("/trips/legs/settle-batch", {
         leg_ids: legIds.map(Number),
-        netoAPagar,
+        neto_a_pagar,
       });
       // Recargamos los viajes para que se quiten de "Pendientes"
       await fetchTrips();

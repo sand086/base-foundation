@@ -26,3 +26,19 @@ def delete_provider(provider_id: str, db: Session = Depends(get_db)):
     if not crud.delete_provider(db, provider_id):
         raise HTTPException(status_code=404, detail="Proveedor no encontrado")
     return {"message": "Proveedor eliminado"}
+
+
+@router.get("/indirect-categories")
+def read_indirect_categories(db: Session = Depends(get_db)):
+    """Obtiene las categorías de gastos indirectos (Fijos/Variables)"""
+    return crud.get_indirect_categories(db)
+
+
+@router.get("/bank-accounts", response_model=List[schemas.BankAccountResponse])
+def read_bank_accounts(db: Session = Depends(get_db)):
+    return crud.get_bank_accounts(db)
+
+
+@router.get("/movements", response_model=List[schemas.BankMovementResponse])
+def read_movements(db: Session = Depends(get_db)):
+    return crud.get_bank_movements(db)

@@ -46,12 +46,12 @@ def clean_eco_prefix(eco_str: str) -> str:
 # --- RUTAS CRUD BÁSICAS ---
 
 
-@router.get("/units", response_model=List[schemas.UnitResponse])
+@router.get("", response_model=List[schemas.UnitResponse])
 def read_units(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return crud.get_units(db, skip=skip, limit=limit)
 
 
-@router.post("/units", response_model=schemas.UnitResponse)
+@router.post("", response_model=schemas.UnitResponse)
 def create_unit(unit: schemas.UnitCreate, db: Session = Depends(get_db)):
     # 🚀 LIMPIAMOS EL NÚMERO ANTES DE VALIDAR
     clean_eco = clean_eco_prefix(unit.numero_economico)
@@ -103,7 +103,7 @@ def create_unit(unit: schemas.UnitCreate, db: Session = Depends(get_db)):
         )
 
 
-@router.put("/units/{unit_id}", response_model=schemas.UnitResponse)
+@router.put("/{unit_id}", response_model=schemas.UnitResponse)
 def update_unit(unit_id: str, unit: schemas.UnitUpdate, db: Session = Depends(get_db)):
     try:
         # 🚀 LIMPIAMOS TAMBIÉN EN EDICIÓN
@@ -128,14 +128,14 @@ def update_unit(unit_id: str, unit: schemas.UnitUpdate, db: Session = Depends(ge
         )
 
 
-@router.delete("/units/{unit_id}")
+@router.delete("/{unit_id}")
 def delete_unit(unit_id: str, db: Session = Depends(get_db)):
     if not crud.delete_unit(db, unit_id):
         raise HTTPException(status_code=404, detail="Unidad no encontrada")
     return {"message": "Unidad eliminada"}
 
 
-@router.post("/units/bulk-upload")
+@router.post("/bulk-upload")
 async def upload_units_bulk(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -250,7 +250,7 @@ async def download_upload(upload_id: int, db: Session = Depends(get_db)):
     return FileResponse(record.file_path, filename=record.filename)
 
 
-@router.get("/units/{term}", response_model=schemas.UnitResponse)
+@router.get("/{term}", response_model=schemas.UnitResponse)
 def read_unit(term: str, db: Session = Depends(get_db)):
     if term.isdigit():
         db_unit = crud.get_unit(db, unit_id=int(term))
@@ -266,7 +266,7 @@ def read_unit(term: str, db: Session = Depends(get_db)):
     raise HTTPException(status_code=404, detail="Unidad no encontrada")
 
 
-@router.get("/units/{unit_id}/documents/{doc_type}/history")
+@router.get("/{unit_id}/documents/{doc_type}/history")
 def get_document_history(unit_id: int, doc_type: str, db: Session = Depends(get_db)):
     history = (
         db.query(UnitDocumentHistory)
@@ -280,7 +280,7 @@ def get_document_history(unit_id: int, doc_type: str, db: Session = Depends(get_
     return history
 
 
-@router.put("/units/{unit_term}/tires", response_model=List[tires_schemas.TireResponse])
+@router.put("/{unit_term}/tires", response_model=List[tires_schemas.TireResponse])
 def update_unit_tires(
     unit_term: str, tires: List[tires_schemas.TireCreate], db: Session = Depends(get_db)
 ):
@@ -307,7 +307,7 @@ def update_unit_tires(
     return new_tires
 
 
-@router.post("/units/{unit_term}/documents/{doc_type}")
+@router.post("/{unit_term}/documents/{doc_type}")
 async def upload_unit_document(
     unit_term: str,
     doc_type: str,
@@ -364,7 +364,7 @@ async def upload_unit_document(
     }
 
 
-@router.patch("/units/{unit_id}/load-status", response_model=schemas.UnitResponse)
+@router.patch("/{unit_id}/load-status", response_model=schemas.UnitResponse)
 def update_unit_load_status(
     unit_id: int, load_status: bool, db: Session = Depends(get_db)
 ):

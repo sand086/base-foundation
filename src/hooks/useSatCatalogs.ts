@@ -17,7 +17,7 @@ export const useSatCatalogs = () => {
     const fetchProducts = async () => {
       setLoading(true);
       try {
-        const response = await axiosClient.get("/catalogs/sat-products");
+        const response = await axiosClient.get("/catalogs-sat/sat-products");
         setProducts(response.data);
       } catch (error) {
         console.error("Error fetching SAT products:", error);
