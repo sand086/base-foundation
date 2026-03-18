@@ -103,7 +103,7 @@ export function getInvoiceStatusInfo(invoice: ReceivableInvoice): {
     case "vencido_31_60":
       return { status: "danger", label: "VENCIDA 31-60d" };
     case "incobrable":
-      return { status: "danger", label: "INCOBRABLE +90d" };
+      return { status: "danger", label: "ATRASADO +90d" };
     default:
       return { status: "warning", label: "POR COBRAR" };
   }

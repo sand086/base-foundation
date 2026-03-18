@@ -1,31 +1,20 @@
 import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/ui/page-header";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAdminActions } from "@/hooks/useAdminActions";
 import { cn } from "@/lib/utils";
+
+// Asumiendo que estos componentes ya los tienes funcionales
 import { TiposUnidadConfig } from "@/features/configuracion/TiposUnidadConfig";
 import { RutasAutorizadasConfig } from "@/features/configuracion/RutasAutorizadasConfig";
+
 import {
   Building2,
   Settings2,
@@ -33,7 +22,6 @@ import {
   Save,
   Loader2,
   Mail,
-  Smartphone,
   Upload,
   MapPin,
   DollarSign,
@@ -43,8 +31,8 @@ import {
   AlertTriangle,
   Server,
   Key,
-  Truck,
   Globe,
+  Truck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { SystemConfig } from "@/types/api.types";
@@ -83,27 +71,122 @@ const categories: {
   },
 ];
 
+// 🚀 1. LISTA DE CONFIGURACIONES POR DEFECTO
+// Esto asegura que los campos siempre existan, aunque la BD esté vacía
+const DEFAULT_CONFIGS: SystemConfig[] = [
+  {
+    key: "empresa_nombre",
+    value: "Transportes TMS",
+    grupo: "empresa",
+    tipo: "string",
+    is_public: true,
+  },
+  {
+    key: "empresa_rfc",
+    value: "XAXX010101000",
+    grupo: "empresa",
+    tipo: "string",
+    is_public: true,
+  },
+  {
+    key: "empresa_direccion",
+    value: "Ciudad de México",
+    grupo: "empresa",
+    tipo: "string",
+    is_public: true,
+  },
+  {
+    key: "empresa_telefono",
+    value: "555-123-4567",
+    grupo: "empresa",
+    tipo: "string",
+    is_public: true,
+  },
+  {
+    key: "empresa_email",
+    value: "contacto@empresa.com",
+    grupo: "empresa",
+    tipo: "string",
+    is_public: true,
+  },
+  {
+    key: "moneda_base",
+    value: "MXN",
+    grupo: "empresa",
+    tipo: "string",
+    is_public: true,
+  },
+
+  {
+    key: "iva_porcentaje",
+    value: "16",
+    grupo: "operacion",
+    tipo: "number",
+    is_public: false,
+  },
+  {
+    key: "retencion_porcentaje",
+    value: "4",
+    grupo: "operacion",
+    tipo: "number",
+    is_public: false,
+  },
+  {
+    key: "dias_credito_default",
+    value: "15",
+    grupo: "operacion",
+    tipo: "number",
+    is_public: false,
+  },
+  {
+    key: "rendimiento_diesel_esperado",
+    value: "3.2",
+    grupo: "operacion",
+    tipo: "number",
+    is_public: false,
+  },
+  {
+    key: "tolerancia_diesel_pct",
+    value: "0.05",
+    grupo: "operacion",
+    tipo: "number",
+    is_public: false,
+  },
+];
+
 const SettingsPage = () => {
-  const {
-    systemConfigs, // 🚀 Viene del hook real
-    isLoading,
-    updateSystemConfig, // 🚀 Función para guardar uno por uno
-  } = useAdminActions();
+  const { systemConfigs, isLoading, updateSystemConfig } = useAdminActions();
 
   const [activeCategory, setActiveCategory] =
     useState<ConfigCategory>("empresa");
   const [localConfig, setLocalConfig] = useState<SystemConfig[]>([]);
-  const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
-  // 🔄 Sincronizar estado local cuando carguen los datos del backend
+  // 🚀 2. MEZCLAR DATOS DE LA BD CON LOS DEFAULT
   useEffect(() => {
-    if (systemConfigs.length > 0) {
-      setLocalConfig(systemConfigs);
-    }
+    // Si la BD tiene datos, los usamos. Si le faltan keys de DEFAULT_CONFIGS, las agregamos.
+    const mergedConfigs = DEFAULT_CONFIGS.map((defaultConf) => {
+      const dbConf = systemConfigs?.find((c) => c.key === defaultConf.key);
+      return dbConf ? dbConf : defaultConf;
+    });
+
+    // Agregar configuraciones extra que vengan de la BD pero no estén en defaults (ignorando la de modulos)
+    const extraDbConfigs = (systemConfigs || []).filter(
+      (c) =>
+        !DEFAULT_CONFIGS.some((dc) => dc.key === c.key) &&
+        c.key !== "modules_list" &&
+        c.key !== "empresa_logo",
+    );
+
+    setLocalConfig([...mergedConfigs, ...extraDbConfigs]);
   }, [systemConfigs]);
 
-  // Filtrar configs por el grupo actual (antes categoria)
   const configByGroup = localConfig.filter((c) => c.grupo === activeCategory);
+
+  // Extraer el logo (si existe en el backend)
+  const logoConfig = systemConfigs?.find((c) => c.key === "empresa_logo");
+  const [logoPreview, setLogoPreview] = useState<string | null>(
+    logoConfig?.value || null,
+  );
 
   const handleConfigChange = (key: string, value: string) => {
     setLocalConfig((prev) =>
@@ -113,17 +196,25 @@ const SettingsPage = () => {
 
   const handleSaveAll = async () => {
     try {
-      // Guardamos las configuraciones que han cambiado
       const promises = localConfig.map((config) =>
         updateSystemConfig(config.key, config.value),
       );
+
+      // Guardar el logo si se subió uno nuevo
+      if (logoPreview && logoPreview !== logoConfig?.value) {
+        promises.push(updateSystemConfig("empresa_logo", logoPreview));
+      }
+
       await Promise.all(promises);
-      toast.success("Configuración guardada correctamente");
+      toast.success("Configuración guardada", {
+        description: "Los parámetros han sido aplicados en el sistema.",
+      });
     } catch (error) {
       toast.error("Error al guardar algunos cambios");
     }
   };
 
+  // 🚀 3. MANEJO DEL LOGO (Base64)
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -131,7 +222,7 @@ const SettingsPage = () => {
       reader.onloadend = () => {
         setLogoPreview(reader.result as string);
         toast.info("Vista previa cargada", {
-          description: "Recuerda guardar los cambios.",
+          description: "No olvides darle click a 'Guardar Cambios'.",
         });
       };
       reader.readAsDataURL(file);
@@ -145,12 +236,12 @@ const SettingsPage = () => {
       return Percent;
     if (k.includes("dias") || k.includes("days") || k.includes("vence"))
       return Calendar;
-    if (k.includes("combustible") || k.includes("fuel")) return Fuel;
+    if (k.includes("combustible") || k.includes("diesel")) return Fuel;
     if (k.includes("alerta") || k.includes("alert")) return AlertTriangle;
     if (k.includes("mail") || k.includes("smtp")) return Mail;
     if (k.includes("key") || k.includes("token") || k.includes("api"))
       return Key;
-    if (k.includes("direccion") || k.includes("address")) return MapPin;
+    if (k.includes("direccion") || k.includes("rfc")) return MapPin;
     if (k.includes("url") || k.includes("sitio")) return Globe;
     return Server;
   };
@@ -164,7 +255,7 @@ const SettingsPage = () => {
         <Button
           onClick={handleSaveAll}
           disabled={isLoading}
-          className="bg-brand-navy hover:bg-brand-navy/90 text-white gap-2 rounded-xl"
+          className="bg-brand-navy hover:bg-brand-navy/90 text-white gap-2 rounded-xl h-11 px-6 shadow-md"
         >
           {isLoading ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -175,9 +266,9 @@ const SettingsPage = () => {
         </Button>
       </PageHeader>
 
-      <div className="flex gap-6 h-[calc(100vh-200px)]">
+      <div className="flex flex-col md:flex-row gap-6 h-[calc(100vh-200px)]">
         {/* Sidebar */}
-        <div className="w-64 space-y-2">
+        <div className="w-full md:w-64 space-y-2 shrink-0">
           {categories.map((cat) => {
             const Icon = cat.icon;
             return (
@@ -187,8 +278,8 @@ const SettingsPage = () => {
                 className={cn(
                   "w-full text-left p-4 rounded-xl transition-all border",
                   activeCategory === cat.id
-                    ? "bg-brand-navy text-white shadow-lg border-brand-navy"
-                    : "bg-white hover:bg-slate-50 border-slate-200 text-slate-600",
+                    ? "bg-brand-navy text-black shadow-lg border-brand-navy"
+                    : "bg-primary/10 hover:bg-slate-50 border-slate-200 text-slate-600",
                 )}
               >
                 <div className="flex items-center gap-3">
@@ -196,7 +287,7 @@ const SettingsPage = () => {
                     className={cn(
                       "h-5 w-5",
                       activeCategory === cat.id
-                        ? "text-white"
+                        ? "text-black"
                         : "text-brand-navy",
                     )}
                   />
@@ -206,8 +297,8 @@ const SettingsPage = () => {
                       className={cn(
                         "text-[10px]",
                         activeCategory === cat.id
-                          ? "text-white/70"
-                          : "text-slate-400",
+                          ? "text-black/70"
+                          : "text-slate-500",
                       )}
                     >
                       {cat.description}
@@ -222,7 +313,7 @@ const SettingsPage = () => {
         {/* Content */}
         <Card className="flex-1 overflow-hidden rounded-2xl border-slate-200 shadow-sm">
           <ScrollArea className="h-full">
-            <CardContent className="p-8 space-y-8">
+            <CardContent className="p-6 md:p-8 space-y-8">
               {/* Sección Empresa: Logo Especial */}
               {activeCategory === "empresa" && (
                 <div className="space-y-6">
@@ -231,11 +322,11 @@ const SettingsPage = () => {
                       Identidad Visual
                     </Label>
                     <div className="flex items-center gap-6">
-                      <div className="h-24 w-24 rounded-2xl border-2 border-dashed border-slate-200 flex items-center justify-center bg-slate-50 overflow-hidden">
+                      <div className="h-24 w-24 rounded-2xl border-2 border-dashed border-slate-300 flex items-center justify-center bg-slate-50 overflow-hidden shadow-inner">
                         {logoPreview ? (
                           <img
                             src={logoPreview}
-                            alt="Logo Preview"
+                            alt="Logo Empresa"
                             className="h-full w-full object-contain p-2"
                           />
                         ) : (
@@ -246,11 +337,12 @@ const SettingsPage = () => {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="rounded-lg"
+                          className="rounded-lg font-bold"
                           asChild
                         >
                           <label className="cursor-pointer">
-                            <Upload className="mr-2 h-4 w-4" /> Actualizar Logo
+                            <Upload className="mr-2 h-4 w-4 text-brand-navy" />{" "}
+                            Subir Logo
                             <input
                               type="file"
                               className="hidden"
@@ -259,7 +351,7 @@ const SettingsPage = () => {
                             />
                           </label>
                         </Button>
-                        <p className="text-[10px] text-slate-400">
+                        <p className="text-[10px] text-slate-400 font-medium">
                           Recomendado: PNG Transparente 512x512px
                         </p>
                       </div>
@@ -269,66 +361,63 @@ const SettingsPage = () => {
                 </div>
               )}
 
-              {/* Renderizado Dinámico de Configuraciones (Empresa y Operación) */}
+              {/* Renderizado Dinámico (Empresa y Operación) */}
               {(activeCategory === "empresa" ||
                 activeCategory === "operacion") && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
                   {configByGroup.map((config) => {
                     const Icon = getConfigIcon(config.key);
+                    const isPercentage =
+                      config.key.includes("porcentaje") ||
+                      config.key.includes("pct");
 
                     return (
                       <div
                         key={config.key}
-                        className="space-y-3 p-4 rounded-xl border border-slate-100 bg-slate-50/50"
+                        className="space-y-3 p-5 rounded-xl border border-slate-100 bg-slate-50/50 shadow-sm"
                       >
                         <div className="flex items-center justify-between">
-                          <Label className="flex items-center gap-2 font-bold text-slate-700">
+                          <Label className="flex items-center gap-2 font-bold text-slate-700 text-xs uppercase tracking-wide">
                             <Icon className="h-4 w-4 text-brand-navy" />
-                            {config.key.replace(/_/g, " ").toUpperCase()}
+                            {config.key.replace(/_/g, " ")}
                           </Label>
-                          {config.is_public && (
-                            <Badge variant="secondary" className="text-[9px]">
-                              Público
-                            </Badge>
-                          )}
                         </div>
 
-                        {/* Manejo de tipos de input según la base de datos */}
                         {config.tipo === "boolean" ? (
-                          <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-3 bg-white p-3 rounded-lg border border-slate-200">
                             <Switch
                               checked={config.value === "true"}
                               onCheckedChange={(checked) =>
                                 handleConfigChange(config.key, String(checked))
                               }
                             />
-                            <span className="text-xs text-slate-500">
-                              {config.value === "true"
-                                ? "Activado"
-                                : "Desactivado"}
+                            <span className="text-xs font-bold text-slate-500">
+                              {config.value === "true" ? "Activo" : "Inactivo"}
                             </span>
                           </div>
                         ) : config.tipo === "number" ? (
                           <div className="relative">
                             <Input
                               type="number"
+                              step={isPercentage ? "0.01" : "1"}
                               value={config.value}
                               onChange={(e) =>
                                 handleConfigChange(config.key, e.target.value)
                               }
-                              className="rounded-lg border-slate-200 focus:ring-brand-navy"
+                              className="h-11 rounded-lg border-slate-200 font-mono font-bold text-slate-700 focus-visible:ring-brand-navy"
                             />
-                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">
-                              NUM
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400 bg-slate-100 px-2 py-1 rounded">
+                              {isPercentage ? "%" : "NUM"}
                             </span>
                           </div>
                         ) : (
                           <Input
+                            type="text"
                             value={config.value}
                             onChange={(e) =>
                               handleConfigChange(config.key, e.target.value)
                             }
-                            className="rounded-lg border-slate-200 focus:ring-brand-navy"
+                            className="h-11 rounded-lg border-slate-200 font-medium text-slate-700 focus-visible:ring-brand-navy"
                           />
                         )}
                       </div>
@@ -337,30 +426,32 @@ const SettingsPage = () => {
                 </div>
               )}
 
-              {/* Sección Catálogos (Componentes especializados) */}
+              {/* Sección Catálogos (Tipos de unidad, rutas, etc.) */}
               {activeCategory === "catalogos" && (
-                <div className="space-y-8">
+                <div className="space-y-10 animate-in fade-in duration-300">
                   <TiposUnidadConfig />
                   <Separator />
                   <RutasAutorizadasConfig />
                 </div>
               )}
 
-              {/* Sección Notificaciones (Simplificada) */}
+              {/* Sección Notificaciones */}
               {activeCategory === "notificaciones" && (
-                <div className="space-y-6">
-                  <div className="bg-amber-50 border border-amber-100 p-4 rounded-xl flex gap-3 items-start">
-                    <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
-                    <p className="text-xs text-amber-800">
-                      Las notificaciones se envían automáticamente según las
-                      reglas de negocio establecidas. Asegúrate de tener
-                      configurado el servidor SMTP en la sección de Operación.
-                    </p>
+                <div className="space-y-6 animate-in fade-in duration-300">
+                  <div className="bg-amber-50 border border-amber-200 p-5 rounded-xl flex gap-4 items-start shadow-sm">
+                    <AlertTriangle className="h-6 w-6 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="text-sm font-bold text-amber-800 mb-1">
+                        Configuración en construcción
+                      </h4>
+                      <p className="text-xs text-amber-700/80 leading-relaxed">
+                        Las notificaciones SMS y Email se están disparando
+                        automáticamente según los eventos de cambio de estatus
+                        de los viajes. Pronto podrás configurar las plantillas
+                        desde aquí.
+                      </p>
+                    </div>
                   </div>
-                  {/* Aquí iría el mapeo de localNotifications si decides implementarlo en el backend */}
-                  <p className="text-sm text-slate-400 text-center py-10">
-                    Módulo de gestión de canales en desarrollo...
-                  </p>
                 </div>
               )}
             </CardContent>

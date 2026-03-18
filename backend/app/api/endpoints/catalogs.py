@@ -5,6 +5,8 @@ from app.models import models
 from app.schemas import catalogs as schemas
 from typing import List
 import json
+from app.api.endpoints.auth import get_current_active_user
+
 
 router = APIRouter()
 
@@ -63,27 +65,46 @@ def save_unit_types_bulk(
 # =========================================================
 
 
-@router.get("/system-config", response_model=List[schemas.SystemConfigBase])
+@router.get("/system-config", response_model=List[schemas.SystemConfigResponse])
 def get_system_config(db: Session = Depends(get_db)):
-    """Ruta: /api/catalogs/system-config"""
-    return db.query(models.SystemConfig).all()
+    """Obtiene todas las configuraciones del sistema (Ruta: /api/catalogs/system-config)"""
+    # Filtramos la de 'modules_list' para que no viaje a la pantalla de Settings generales
+    return (
+        db.query(models.SystemConfig)
+        .filter(models.SystemConfig.key != "modules_list")
+        .all()
+    )
 
 
-@router.put("/system-config/{key}")
-def update_system_config(
-    key: str, data: schemas.SystemConfigUpdate, db: Session = Depends(get_db)
+@router.put("/system-config/{key}", response_model=schemas.SystemConfigResponse)
+def upsert_system_config(
+    key: str,
+    data: schemas.SystemConfigUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(
+        get_current_active_user
+    ),  # 🚀 Para la auditoría
 ):
-    """Ruta: /api/catalogs/system-config/{key}"""
+    """Actualiza o Crea una configuración específica."""
     config = (
         db.query(models.SystemConfig).filter(models.SystemConfig.key == key).first()
     )
 
     if not config:
-        # Opcional: Si la llave no existe, la creamos
-        config = models.SystemConfig(key=key)
+        # Si no existe en la BD, la creamos desde cero
+        config = models.SystemConfig(
+            key=key,
+            value=data.value,
+            # Los valores por defecto de grupo y tipo los manejará el frontend al crear
+        )
         db.add(config)
+    else:
+        # Si ya existe, solo actualizamos el valor
+        config.value = data.value
 
-    config.value = data.value
+    # Registramos quién hizo el cambio
+    config.updated_by_id = current_user.id
+
     db.commit()
     db.refresh(config)
     return config

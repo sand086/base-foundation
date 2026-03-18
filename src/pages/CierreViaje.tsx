@@ -65,6 +65,7 @@ import { useTrips } from "@/hooks/useTrips";
 import { useClients } from "@/hooks/useClients";
 import { useOperators } from "@/hooks/useOperators";
 import { useUnits } from "@/hooks/useUnits";
+import { useSystemConfig } from "@/hooks/useSystemConfig";
 
 interface ConceptoExtra {
   id: string;
@@ -79,6 +80,16 @@ export default function CierreViaje() {
   const { clients = [] } = useClients();
   const { operadores = [], operators = [] } = useOperators() as any;
   const { unidades = [], units = [] } = useUnits() as any;
+
+  // 🚀 1. EXTRAEMOS LOS PARÁMETROS GLOBALES DINÁMICOS
+  const { valueAsNumber: rendimientoGlobal } = useSystemConfig(
+    "rendimiento_diesel_esperado",
+  );
+  const { valueAsNumber: toleranciaGlobal } = useSystemConfig(
+    "tolerancia_diesel_pct",
+  );
+  const rendimientoEsperado = rendimientoGlobal || 3.2;
+  const toleranciaPct = toleranciaGlobal || 0.05;
 
   const safeOperators = operadores.length > 0 ? operadores : operators;
   const safeUnits = unidades.length > 0 ? unidades : units;
@@ -137,10 +148,23 @@ export default function CierreViaje() {
       getSettlementPreview(selectedLegIds)
         .then((data: any) => {
           setPreviewData(data);
-          // Auto-completar el descuento si hay exceso de consumo
-          if (data?.deduccion_combustible > 0) {
-            setCombustibleFaltante(data.deduccion_combustible);
+
+          // 🚀 2. CÁLCULO DINÁMICO BASADO EN TU CONFIGURACIÓN
+          const totalKms = data?.total_kms || 0;
+          const consumoReal = data?.consumo_real || 0;
+          const precioPromedio = data?.precio_promedio || 24.5;
+
+          // Hacemos la matemática usando tus parámetros globales
+          const consumoIdeal =
+            totalKms > 0 ? totalKms / rendimientoEsperado : 0;
+          const diferencia = consumoReal - consumoIdeal;
+          const litrosTolerados = consumoIdeal * toleranciaPct;
+
+          if (diferencia > litrosTolerados) {
+            // Si se pasa de la tolerancia, se le cobra el exceso
+            setCombustibleFaltante(diferencia * precioPromedio);
           } else {
+            // Si está dentro del rango o ahorró, no se le cobra
             setCombustibleFaltante(0);
           }
         })
@@ -153,7 +177,7 @@ export default function CierreViaje() {
       setPreviewData(null);
       setCombustibleFaltante(0);
     }
-  }, [selectedLegIds]); // Se ejecuta cada que seleccionas o deseleccionas un viaje
+  }, [selectedLegIds, rendimientoEsperado, toleranciaPct]); // Se ejecuta cada que seleccionas o deseleccionas un viaje
 
   // ==========================================
   // DERIVACIONES Y LISTAS
@@ -852,7 +876,14 @@ export default function CierreViaje() {
                       )}
 
                       {/* Resumen */}
+                      {/* Resumen */}
                       <div className="bg-slate-100 p-4 rounded-xl text-xs space-y-2 font-mono">
+                        {/* 🚀 3. MOSTRAMOS LAS REGLAS ACTUALES */}
+                        <div className="mb-3 pb-2 border-b border-slate-200 flex justify-between items-center text-[9px] text-slate-400 font-sans uppercase font-black tracking-widest">
+                          <span>Regla Activa: {rendimientoEsperado} km/L</span>
+                          <span>Tolerancia: {toleranciaPct * 100}%</span>
+                        </div>
+
                         <div className="flex justify-between text-slate-600">
                           <span className="font-bold font-sans">
                             KMs Totales:
@@ -863,7 +894,13 @@ export default function CierreViaje() {
                           <span className="font-bold font-sans">
                             Consumo ECM:
                           </span>
-                          <span>{previewData?.consumo_esperado || 0} L</span>
+                          <span>
+                            {(
+                              (previewData?.total_kms || 0) /
+                              rendimientoEsperado
+                            ).toFixed(2)}{" "}
+                            L
+                          </span>
                         </div>
                         <div className="flex justify-between text-brand-navy">
                           <span className="font-bold font-sans">
@@ -873,13 +910,25 @@ export default function CierreViaje() {
                             {previewData?.consumo_real || 0} L
                           </span>
                         </div>
+
                         <Separator className="my-2 bg-slate-200" />
-                        {previewData?.diferencia_litros > 0 ? (
+
+                        {(previewData?.consumo_real || 0) -
+                          (previewData?.total_kms || 0) / rendimientoEsperado >
+                        ((previewData?.total_kms || 0) / rendimientoEsperado) *
+                          toleranciaPct ? (
                           <div className="flex justify-between text-rose-600 font-bold">
                             <span className="font-sans">
                               Exceso a Descontar:
                             </span>
-                            <span>{previewData.diferencia_litros} L</span>
+                            <span>
+                              {(
+                                (previewData?.consumo_real || 0) -
+                                (previewData?.total_kms || 0) /
+                                  rendimientoEsperado
+                              ).toFixed(2)}{" "}
+                              L
+                            </span>
                           </div>
                         ) : (
                           <div className="flex justify-between text-emerald-600 font-bold text-[10px] uppercase tracking-tighter">
