@@ -6,6 +6,9 @@ from typing import List
 from app.db.database import get_db
 from app.models.models import AlertConfig, EmailTemplate
 from app.schemas import notifications as schemas
+from app.api.endpoints.auth import get_current_active_user
+from app.models import models
+
 
 router = APIRouter()
 
@@ -101,3 +104,73 @@ def update_template(
     db.commit()
     db.refresh(template)
     return template
+
+
+@router.get("/me", response_model=List[schemas.NotificationResponse])
+def get_my_notifications(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """Obtiene las últimas 20 notificaciones del usuario actual."""
+    return (
+        db.query(models.Notification)
+        .filter(models.Notification.user_id == current_user.id)
+        .order_by(models.Notification.created_at.desc())
+        .limit(20)
+        .all()
+    )
+
+
+@router.post("/", response_model=schemas.NotificationResponse)
+def create_notification(
+    payload: schemas.NotificationCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    db_notif = models.Notification(
+        user_id=payload.user_id,
+        title=payload.title,
+        message=payload.message,
+        event_type=payload.event_type,
+        reference_id=payload.reference_id,
+        created_by_id=current_user.id,
+    )
+    db.add(db_notif)
+    db.commit()
+    db.refresh(db_notif)
+    return db_notif
+
+
+@router.patch("/{notif_id}/read")
+def mark_notification_as_read(
+    notif_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    notif = (
+        db.query(models.Notification)
+        .filter(
+            models.Notification.id == notif_id,
+            models.Notification.user_id == current_user.id,
+        )
+        .first()
+    )
+
+    if notif:
+        notif.is_read = True
+        db.commit()
+    return {"message": "Marcada como leída"}
+
+
+@router.post("/mark-all-read")
+def mark_all_as_read(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    db.query(models.Notification).filter(
+        models.Notification.user_id == current_user.id,
+        models.Notification.is_read == False,
+    ).update({"is_read": True})
+
+    db.commit()
+    return {"message": "Todas marcadas como leídas"}

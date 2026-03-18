@@ -1450,3 +1450,21 @@ class BankMovement(AuditMixin, Base):
 
     # Relación con la cuenta bancaria
     bank_account = relationship("BankAccount", backref="movements")
+
+
+class Notification(AuditMixin, Base):
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    title = Column(String(100), nullable=False)
+    message = Column(Text, nullable=False)
+    is_read = Column(Boolean, default=False)
+    event_type = Column(String(50), nullable=True)
+    reference_id = Column(
+        String(50), nullable=True
+    )  # Ej: el ID del viaje para abrirlo al dar clic
+
+    user = relationship("User")

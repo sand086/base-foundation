@@ -43,6 +43,14 @@ export interface User {
   puesto?: string | null;
   avatar_url?: string;
   activo?: boolean;
+
+  // 🚀 AGREGAMOS ESTO PARA QUE TYPESCRIPT LO RECONOZCA
+  role?: {
+    id: number;
+    nombre: string;
+    name_key: string;
+  };
+  rol?: string; // Lo dejamos por compatibilidad con algunas vistas del frontend
 }
 
 export interface UserProfile extends User {
@@ -111,6 +119,16 @@ export interface NotificationEvent {
     whatsapp: boolean;
   };
   prioridad: "baja" | "media" | "alta" | "critica";
+}
+
+export interface UserNotification {
+  id: number;
+  title: string;
+  message: string;
+  is_read: boolean;
+  event_type?: string | null;
+  reference_id?: string | null;
+  created_at: string;
 }
 
 export interface TipoUnidad {

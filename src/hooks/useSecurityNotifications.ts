@@ -1,4 +1,7 @@
+// src/hooks/useSecurityNotifications.ts
 import { toast } from "sonner";
+import axiosClient from "@/api/axiosClient";
+import { useAuth } from "./useAuth";
 
 // Types of security events
 export type SecurityEvent =
@@ -22,7 +25,9 @@ interface SecurityNotificationParams {
 }
 
 export const useSecurityNotifications = () => {
-  const sendSecurityNotification = ({
+  const { user } = useAuth(); // Extraemos el usuario actual
+
+  const sendSecurityNotification = async ({
     event,
     details,
   }: SecurityNotificationParams) => {
@@ -31,69 +36,87 @@ export const useSecurityNotifications = () => {
       timeStyle: "short",
     });
 
+    let title = "Notificación de Sistema";
+    let message = "";
+
     switch (event) {
       case "password_reset":
+        title = "Restablecimiento de Contraseña";
+        message = `Se notificó a ${details.userEmail || "usuario"} sobre el restablecimiento de contraseña.`;
         toast.info("📧 Simulación: Email Enviado", {
-          description: `Se notificó a ${details.userEmail || "usuario"} sobre el restablecimiento de contraseña.`,
+          description: message,
           duration: 5000,
         });
-        console.log(
-          `[SECURITY] ${timestamp} - Password reset email sent to: ${details.userEmail}`,
-        );
         break;
 
       case "two_factor_disabled":
+        title = "2FA Desactivado";
+        message = `Se desactivó la autenticación de dos factores para ${details.userName}. Se envió notificación por correo.`;
         toast.warning("🔐 Alerta de Seguridad: 2FA Desactivado", {
-          description: `Se desactivó la autenticación de dos factores para ${details.userName}. Se envió notificación por correo.`,
+          description: message,
           duration: 6000,
         });
-        console.log(
-          `[SECURITY] ${timestamp} - 2FA disabled for user: ${details.userName}. Email notification sent.`,
-        );
         break;
 
       case "two_factor_reset":
+        title = "2FA Restablecido";
+        message = `Se restableció el 2FA para ${details.userName}. Se envió correo con nuevas instrucciones.`;
         toast.warning("🔐 Alerta de Seguridad: 2FA Restablecido", {
-          description: `Se restableció el 2FA para ${details.userName}. Se envió correo con nuevas instrucciones.`,
+          description: message,
           duration: 6000,
         });
-        console.log(
-          `[SECURITY] ${timestamp} - 2FA reset for user: ${details.userName}. Email notification sent.`,
-        );
         break;
 
       case "trip_stopped":
-        toast.error("🚨 Viaje Detenido - Notificación al Client", {
-          description: `Viaje ${details.tripId} marcado como DETENIDO. Se notificó automáticamente a ${details.clientName || "el cliente"}.`,
+        title = "Viaje Detenido";
+        message = `Viaje ${details.tripId} marcado como DETENIDO. Se notificó automáticamente a ${details.clientName || "el cliente"}.`;
+        toast.error("🚨 Viaje Detenido - Notificación al Cliente", {
+          description: message,
           duration: 8000,
         });
-        console.log(
-          `[OPERATIONS] ${timestamp} - Trip ${details.tripId} STOPPED. Client notification sent to: ${details.clientName}`,
-        );
         break;
 
       case "trip_incident":
-        toast.error("⚠️ Incidencia Reportada - Notificación al Client", {
-          description: `Incidencia en viaje ${details.tripId}. Motivo: ${details.reason || "No especificado"}. Client notificado.`,
+        title = "Incidencia Reportada";
+        message = `Incidencia en viaje ${details.tripId}. Motivo: ${details.reason || "No especificado"}. Cliente notificado.`;
+        toast.error("⚠️ Incidencia Reportada - Notificación al Cliente", {
+          description: message,
           duration: 8000,
         });
-        console.log(
-          `[OPERATIONS] ${timestamp} - Trip ${details.tripId} INCIDENT: ${details.reason}. Client notification sent.`,
-        );
         break;
 
       case "forced_assignment":
+        title = "Asignación Forzada";
+        message = `${details.adminName || "Administrador"} forzó asignación. Motivo: ${details.reason}. Acción registrada en auditoría.`;
         toast.warning("⚡ Asignación Forzada - Admin Override", {
-          description: `${details.adminName || "Administrador"} forzó asignación. Motivo: ${details.reason}. Acción registrada en auditoría.`,
+          description: message,
           duration: 6000,
         });
-        console.log(
-          `[AUDIT] ${timestamp} - FORCED ASSIGNMENT by ${details.adminName}. Reason: ${details.reason}`,
-        );
         break;
 
       default:
-        break;
+        return; // Salir si el evento no existe
+    }
+
+    // 1. Log en consola para historial de la sesión local
+    console.log(`[${event.toUpperCase()}] ${timestamp} - ${message}`);
+
+    // 2. 🚀 GUARDAR EN LA BASE DE DATOS (Backend)
+    try {
+      if (user?.id) {
+        await axiosClient.post("/notifications/", {
+          user_id: user.id,
+          title: title,
+          message: message,
+          event_type: event,
+          reference_id: details.tripId || null,
+        });
+      }
+    } catch (error) {
+      console.error(
+        "No se pudo guardar la notificación en la base de datos",
+        error,
+      );
     }
   };
 
