@@ -48,16 +48,12 @@ import {
 import { AddUserModal, UserFormData } from "@/features/usuarios/AddUserModal";
 import { EditUserModal } from "@/features/usuarios/EditUserModal";
 
+import { userService } from "@/services/userService";
+import { toast } from "sonner";
+
 const UsuariosPage = () => {
-  // Hook 100% real conectado al backend
-  const {
-    users,
-    isLoading,
-    createUser,
-    updateUser,
-    toggleStatus,
-    resetPassword,
-  } = useUsers();
+  const { users, isLoading, createUser, toggleStatus, resetPassword } =
+    useUsers();
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -70,7 +66,6 @@ const UsuariosPage = () => {
 
   const selectedUser = users.find((u) => u.id === selectedUserId);
 
-  // --- Helpers de UI ---
   const getRoleBadgeColor = (rol: string) => {
     const rolLower = rol?.toLowerCase() || "";
     if (rolLower.includes("admin"))
@@ -88,7 +83,6 @@ const UsuariosPage = () => {
       : "bg-gray-100 text-gray-500 border-gray-200";
   };
 
-  // --- Handlers ---
   const handleAddUser = async (data: UserFormData) => {
     const apiData = {
       nombre: data.nombre,
@@ -96,7 +90,7 @@ const UsuariosPage = () => {
       email: data.email || data.nombre + ".test@transportes3t.com",
       telefono: data.telefono || "5555555555",
       puesto: data.puesto || "Prueba",
-      role_id: Number(data.rol),
+      role_id: data.rol ? Number(data.rol) : null,
       password: data.password,
       activo: true,
     };
@@ -104,23 +98,31 @@ const UsuariosPage = () => {
     if (success) setIsAddModalOpen(false);
   };
 
-  const handleEditUser = async (data: any) => {
-    if (!selectedUserForEdit) return;
-    const apiData = {
-      nombre: data.nombre,
-      apellido: data.apellidos,
-      email: data.email,
-      telefono: data.telefono,
-      puesto: data.puesto,
-      role_id: data.rol,
-      activo: data.estado === "activo",
-    };
+  // 🚀 EL HANDLER CORREGIDO Y EN EL LUGAR CORRECTO
+  const handleEditUser = async (userData: any, avatarFile?: File) => {
+    try {
+      const updatedUser = await userService.update(userData.id, userData);
 
-    const success = await updateUser(selectedUserForEdit.id, apiData);
-    if (success && data.password) {
-      await resetPassword(selectedUserForEdit.id, data.password);
+      if (avatarFile) {
+        await userService.uploadAvatar(updatedUser.id, avatarFile);
+        toast.success("Usuario y foto actualizados correctamente");
+      } else {
+        toast.success("Usuario actualizado correctamente");
+      }
+
+      setIsEditModalOpen(false);
+
+      // Forzar una recarga para que React Query o el Hook actualice la tabla y las fotos
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
+    } catch (error: any) {
+      console.error("Error updating user:", error);
+      toast.error("Error al actualizar usuario", {
+        description:
+          error.response?.data?.detail || "Por favor intente nuevamente.",
+      });
     }
-    if (success) setIsEditModalOpen(false);
   };
 
   const handleResetPasswordConfirm = async () => {
@@ -139,28 +141,34 @@ const UsuariosPage = () => {
     }
   };
 
-  // --- Columnas del EnhancedDataTable ---
   const columns: ColumnDef<UserDisplay>[] = [
     {
       key: "nombre",
       header: "Usuario",
-      render: (_, user) => (
-        <div className="flex items-center gap-3">
-          <Avatar className="h-9 w-9">
-            <AvatarImage src={user.avatar} />
-            <AvatarFallback className="text-xs bg-primary text-primary-foreground">
-              {user.nombre.charAt(0)}
-              {user.apellidos.charAt(0)}
-            </AvatarFallback>
-          </Avatar>
-          <div>
-            <p className="font-medium text-sm">
-              {user.nombre} {user.apellidos}
-            </p>
-            <p className="text-xs text-muted-foreground">{user.puesto}</p>
+      render: (_, user) => {
+        // 🚀 Construimos la URL segura para la tabla
+        const avatarUrl = user.avatar?.startsWith("http")
+          ? user.avatar
+          : `${import.meta.env.VITE_API_BASE_URL?.replace(/\/api$/, "") || ""}${user.avatar}`;
+
+        return (
+          <div className="flex items-center gap-3">
+            <Avatar className="h-9 w-9">
+              <AvatarImage src={avatarUrl} />
+              <AvatarFallback className="text-xs bg-primary text-primary-foreground uppercase">
+                {user.nombre.charAt(0)}
+                {user.apellidos.charAt(0)}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <p className="font-medium text-sm">
+                {user.nombre} {user.apellidos}
+              </p>
+              <p className="text-xs text-muted-foreground">{user.puesto}</p>
+            </div>
           </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       key: "email",
@@ -179,7 +187,7 @@ const UsuariosPage = () => {
       ),
     },
     {
-      key: "rolNombre", // Se usa el nombre del rol real
+      key: "rolNombre",
       header: "Rol",
       render: (rolNombre) => (
         <Badge
@@ -239,14 +247,14 @@ const UsuariosPage = () => {
                   email: user.email,
                   telefono: user.telefono,
                   puesto: user.puesto,
-                  rol: user.rol, // ID del rol para el Select del modal
+                  rol: user.rol,
                   estado: user.estado,
+                  avatar: user.avatar,
                 });
                 setIsEditModalOpen(true);
               }}
             >
-              <Edit className="mr-2 h-4 w-4" />
-              Editar Usuario
+              <Edit className="mr-2 h-4 w-4" /> Editar Usuario
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={() => {
@@ -254,8 +262,7 @@ const UsuariosPage = () => {
                 setShowResetPasswordDialog(true);
               }}
             >
-              <Key className="mr-2 h-4 w-4" />
-              Resetear Contraseña
+              <Key className="mr-2 h-4 w-4" /> Resetear Contraseña
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
@@ -269,13 +276,11 @@ const UsuariosPage = () => {
             >
               {user.estado === "activo" ? (
                 <>
-                  <UserX className="mr-2 h-4 w-4" />
-                  Desactivar
+                  <UserX className="mr-2 h-4 w-4" /> Desactivar
                 </>
               ) : (
                 <>
-                  <UserCheck className="mr-2 h-4 w-4" />
-                  Activar
+                  <UserCheck className="mr-2 h-4 w-4" /> Activar
                 </>
               )}
             </DropdownMenuItem>
@@ -298,7 +303,6 @@ const UsuariosPage = () => {
         title="Gestión de Usuarios"
         description="Administración de usuarios del sistema"
       />
-
       <Card>
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
@@ -315,8 +319,7 @@ const UsuariosPage = () => {
               onClick={() => setIsAddModalOpen(true)}
               className="bg-primary hover:bg-primary/90 text-white gap-2"
             >
-              <Plus className="h-4 w-4" />
-              Nuevo Usuario
+              <Plus className="h-4 w-4" /> Nuevo Usuario
             </Button>
           </div>
         </CardHeader>
@@ -329,7 +332,6 @@ const UsuariosPage = () => {
         </CardContent>
       </Card>
 
-      {/* Reset Password Dialog */}
       <AlertDialog
         open={showResetPasswordDialog}
         onOpenChange={setShowResetPasswordDialog}
@@ -352,7 +354,6 @@ const UsuariosPage = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Toggle Status Dialog */}
       <AlertDialog
         open={showToggleStatusDialog}
         onOpenChange={setShowToggleStatusDialog}
@@ -384,7 +385,6 @@ const UsuariosPage = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Modales */}
       <AddUserModal
         open={isAddModalOpen}
         onOpenChange={setIsAddModalOpen}

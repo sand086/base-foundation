@@ -100,6 +100,8 @@ import {
   ColumnDef,
 } from "@/components/ui/enhanced-data-table";
 
+import { useSystemConfig } from "@/hooks/useSystemConfig";
+
 interface SegmentEntry {
   tempId: string;
   nombre_segmento: string;
@@ -291,6 +293,7 @@ const SortableTableRow: React.FC<SortableRowProps> = ({
 // --- COMPONENTE PRINCIPAL ---
 export const ArmadorRutas: React.FC = () => {
   const { clients } = useClients();
+  const { value: monedaBase } = useSystemConfig("moneda_base");
 
   // ✅ Principales
   const [nombreRuta, setNombreRuta] = useState("");
@@ -392,7 +395,7 @@ export const ArmadorRutas: React.FC = () => {
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("es-MX", {
       style: "currency",
-      currency: "MXN",
+      currency: monedaBase || "MXN", // Usa la global o MXN por defecto
     }).format(val || 0);
 
   const updateSegment = (idx: number, field: UpdateField, value: unknown) => {
@@ -537,10 +540,10 @@ export const ArmadorRutas: React.FC = () => {
       client_id:
         selectedCliente && selectedCliente !== "none"
           ? parseInt(selectedCliente, 10)
-          : 6,
+          : null,
       origen: nombreRuta,
       destino: destino || "N/A",
-      tipo_unidad: configuracion, // 🚀 Guardamos la configuración (5ejes o 9ejes)
+      tipo_unidad: configuracion,
       segments: mappedSegments,
     };
 

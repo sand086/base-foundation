@@ -1,3 +1,4 @@
+# app/services/storage.py
 import os
 import uuid
 from fastapi import UploadFile
@@ -16,15 +17,17 @@ class StorageService:
         unique_name = f"{prefix}_{uuid.uuid4()}{file_ext}"
         file_path = os.path.join(target_dir, unique_name)
 
+        # Leer y guardar el contenido binario
         content = file.file.read()
         file_size = len(content)
 
         with open(file_path, "wb") as f:
             f.write(content)
 
-        # Regresamos la URL para guardar en DB
+        # 🚀 CORRECCIÓN: La URL debe coincidir con el mount de main.py
+        # Antes era /static/, ahora es /api/static/
         return {
-            "url": f"/static/{folder}/{unique_name}",
+            "url": f"/api/static/{folder}/{unique_name}",
             "filename": file.filename,
             "size": file_size,
             "mime_type": file.content_type,

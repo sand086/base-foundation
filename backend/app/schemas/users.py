@@ -140,14 +140,15 @@ class UserCreate(ORMBase):
     model_config = ConfigDict(extra="ignore")
 
 
-class UserUpdate(ORMBase):
+class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     nombre: Optional[str] = Field(default=None, max_length=100)
     apellido: Optional[str] = Field(default=None, max_length=100)
 
     telefono: Optional[str] = Field(default=None, max_length=20)
     puesto: Optional[str] = Field(default=None, max_length=100)
-    avatar_url: Optional[str] = Field(default=None, max_length=500)
+
+    avatar_url: Optional[str] = None
 
     role_id: Optional[int] = None
     activo: Optional[bool] = None

@@ -39,8 +39,6 @@ import {
   ShieldOff,
 } from "lucide-react";
 import { toast } from "sonner";
-
-// Reemplazamos la importación del mock data por el hook real
 import { useRoles } from "@/hooks/useRoles";
 
 export interface UserData {
@@ -60,7 +58,7 @@ interface EditUserModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   user: UserData | null;
-  onSave: (data: UserData & { password?: string }) => void;
+  onSave: (data: any, avatarFile?: File) => Promise<void> | void;
 }
 
 export function EditUserModal({
@@ -69,12 +67,15 @@ export function EditUserModal({
   user,
   onSave,
 }: EditUserModalProps) {
-  // Inicializamos el hook para traer los roles reales
   const { roles } = useRoles();
 
   const [activeTab, setActiveTab] = useState("general");
   const [isSaving, setIsSaving] = useState(false);
   const [showReset2FADialog, setShowReset2FADialog] = useState(false);
+
+  // 🚀 Guardar el archivo físico seleccionado
+  const [selectedFile, setSelectedFile] = useState<File | undefined>();
+
   const [formData, setFormData] = useState<UserData & { password: string }>({
     id: "",
     nombre: "",
@@ -89,13 +90,13 @@ export function EditUserModal({
     password: "",
   });
 
-  // Load user data when modal opens
   useEffect(() => {
     if (user && open) {
       setFormData({
         ...user,
         password: "",
       });
+      setSelectedFile(undefined);
       setActiveTab("general");
       setShowReset2FADialog(false);
     }
@@ -104,28 +105,32 @@ export function EditUserModal({
   const handleReset2FA = () => {
     setFormData({ ...formData, twoFactorEnabled: false });
     setShowReset2FADialog(false);
-    toast.success("2FA reseteado", {
-      description: `La autenticación de dos factores de ${formData.nombre} ha sido desactivada.`,
-    });
+    toast.success("2FA reseteado");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
 
-    // Simulate API call (aquí después se conecta con onSave que ya hace el await real)
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    try {
+      const { password, avatar, ...userData } = formData;
+      const payloadToSave: any = { ...userData };
 
-    const { password, ...userData } = formData;
-    await onSave({ ...userData, password: password || undefined });
+      if (password && password.trim() !== "") {
+        payloadToSave.password = password;
+      }
 
-    setIsSaving(false);
-    onOpenChange(false);
+      // Enviar datos + Archivo físico al padre (UsuariosPage)
+      await onSave(payloadToSave, selectedFile);
+    } catch (error) {
+      toast.error("Error al intentar guardar los cambios");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   if (!user) return null;
-
-  const initials = `${formData.nombre.charAt(0)}${formData.apellidos.charAt(0)}`;
+  const initials = `${formData.nombre.charAt(0)}${formData.apellidos?.charAt(0) || ""}`;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -143,16 +148,13 @@ export function EditUserModal({
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="grid w-full grid-cols-3 mb-6">
               <TabsTrigger value="general" className="gap-1.5">
-                <User className="h-3.5 w-3.5" />
-                General
+                <User className="h-3.5 w-3.5" /> General
               </TabsTrigger>
               <TabsTrigger value="seguridad" className="gap-1.5">
-                <Lock className="h-3.5 w-3.5" />
-                Seguridad
+                <Lock className="h-3.5 w-3.5" /> Seguridad
               </TabsTrigger>
               <TabsTrigger value="imagen" className="gap-1.5">
-                <ImageIcon className="h-3.5 w-3.5" />
-                Imagen
+                <ImageIcon className="h-3.5 w-3.5" /> Imagen
               </TabsTrigger>
             </TabsList>
 
@@ -266,7 +268,6 @@ export function EditUserModal({
                       <SelectValue placeholder="Seleccionar rol" />
                     </SelectTrigger>
                     <SelectContent>
-                      {/* Generamos las opciones desde los roles reales */}
                       {roles.map((rol) => (
                         <SelectItem
                           key={rol.id}
@@ -347,7 +348,6 @@ export function EditUserModal({
                 />
               </div>
 
-              {/* Reset 2FA Section */}
               {formData.twoFactorEnabled && (
                 <div className="p-4 rounded-lg border border-destructive/30 bg-destructive/5">
                   <div className="flex items-start gap-3">
@@ -358,10 +358,6 @@ export function EditUserModal({
                       <Label className="text-sm font-medium text-destructive">
                         Resetear 2FA
                       </Label>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Desconectará la autenticación de dos factores. El
-                        usuario deberá configurarla nuevamente.
-                      </p>
                       <AlertDialog
                         open={showReset2FADialog}
                         onOpenChange={setShowReset2FADialog}
@@ -373,8 +369,8 @@ export function EditUserModal({
                             size="sm"
                             className="mt-3 gap-2"
                           >
-                            <ShieldOff className="h-4 w-4" />
-                            Resetear Autenticación
+                            <ShieldOff className="h-4 w-4" /> Resetear
+                            Autenticación
                           </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
@@ -386,8 +382,7 @@ export function EditUserModal({
                               <strong>
                                 {formData.nombre} {formData.apellidos}
                               </strong>
-                              . El usuario deberá configurar 2FA nuevamente en
-                              su próximo inicio de sesión.
+                              .
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
@@ -410,9 +405,7 @@ export function EditUserModal({
             <TabsContent value="imagen" className="py-4">
               <ImageUpload
                 value={formData.avatar}
-                onChange={(value) =>
-                  setFormData({ ...formData, avatar: value })
-                }
+                onChange={(file) => setSelectedFile(file)} // 🚀 AHORA SÍ SETEAMOS EL ARCHIVO
                 fallback={initials}
               />
             </TabsContent>
@@ -434,8 +427,7 @@ export function EditUserModal({
             >
               {isSaving ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Guardando...
+                  <Loader2 className="h-4 w-4 animate-spin" /> Guardando...
                 </>
               ) : (
                 "Guardar Cambios"

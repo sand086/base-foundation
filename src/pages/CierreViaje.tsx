@@ -91,6 +91,12 @@ export default function CierreViaje() {
   const rendimientoEsperado = rendimientoGlobal || 3.2;
   const toleranciaPct = toleranciaGlobal || 0.05;
 
+  const { value: empresaNombre } = useSystemConfig("empresa_nombre");
+  const { value: empresaRFC } = useSystemConfig("empresa_rfc");
+  const { value: empresaDireccion } = useSystemConfig("empresa_direccion");
+  const { value: empresaTelefono } = useSystemConfig("empresa_telefono");
+  const { value: empresaLogo } = useSystemConfig("empresa_logo");
+
   const safeOperators = operadores.length > 0 ? operadores : operators;
   const safeUnits = unidades.length > 0 ? unidades : units;
 
@@ -1221,27 +1227,43 @@ export default function CierreViaje() {
 
           <div className="p-6 sm:p-8 relative z-10 flex flex-col h-full print:p-0 print:h-auto">
             {/* 1. HEADER (Horizontal) */}
-            <div className="flex justify-between items-start mb-6 print:mb-8">
+            <div className="flex justify-between items-start mb-6 print:mb-8 border-b-2 border-brand-navy pb-4 print:border-black">
               <div className="flex items-center gap-4">
-                <div className="w-14 h-14 bg-white border border-slate-200 shadow-sm rounded-xl flex items-center justify-center shrink-0 print:border-slate-300 print:shadow-none">
-                  <Receipt className="h-7 w-7 text-brand-navy print:text-black" />
+                {/* Logo dinámico o ícono por defecto */}
+                <div className="w-16 h-16 bg-white border border-slate-200 shadow-sm rounded-xl flex items-center justify-center shrink-0 print:border-transparent print:shadow-none overflow-hidden">
+                  {empresaLogo ? (
+                    <img
+                      src={empresaLogo}
+                      alt="Logo"
+                      className="w-full h-full object-contain p-1"
+                    />
+                  ) : (
+                    <Receipt className="h-8 w-8 text-brand-navy print:text-black" />
+                  )}
                 </div>
                 <div>
+                  {/* Nombre de empresa dinámico */}
                   <h2 className="text-2xl font-black text-slate-900 uppercase tracking-widest leading-none mb-1">
-                    Liquidación
+                    {empresaNombre || "Nombre de Empresa"}
                   </h2>
-                  <p className="text-slate-500 text-xs font-mono print:text-slate-600">
-                    {new Date().toLocaleString("es-MX", {
-                      dateStyle: "long",
-                      timeStyle: "short",
-                    })}
+                  <p className="text-slate-500 text-xs font-mono font-bold print:text-slate-600">
+                    RFC: {empresaRFC || "XAXX010101000"}
+                  </p>
+                  <p className="text-slate-400 text-[10px] max-w-sm mt-0.5 leading-tight print:text-slate-500">
+                    {empresaDireccion} • Tel: {empresaTelefono}
                   </p>
                 </div>
               </div>
-              <div className="text-right">
+              <div className="text-right flex flex-col items-end gap-2">
                 <span className="bg-slate-200/70 text-slate-700 px-4 py-1.5 rounded-lg font-mono font-bold text-sm tracking-wider border border-slate-300/50 shadow-sm print:bg-transparent print:border-slate-400 print:text-black print:shadow-none">
                   FOLIO: LIQ-{String(Date.now()).slice(-6)}
                 </span>
+                <p className="text-slate-500 text-xs font-mono print:text-slate-600">
+                  {new Date().toLocaleString("es-MX", {
+                    dateStyle: "long",
+                    timeStyle: "short",
+                  })}
+                </p>
               </div>
             </div>
 

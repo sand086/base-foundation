@@ -752,7 +752,7 @@ class User(AuditMixin, Base):
     apellido = Column(String(100))
     telefono = Column(String(20))
     puesto = Column(String(100))
-    avatar_url = Column(String(500))
+    avatar_url = Column(Text, nullable=True)
 
     role_id = Column(Integer, ForeignKey("roles.id", ondelete="SET NULL"))
 

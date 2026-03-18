@@ -46,4 +46,20 @@ export const userService = {
     const { data } = await axiosClient.delete(`/users/${id}`);
     return data;
   },
+
+  async uploadAvatar(userId: number, file: File) {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await axiosClient.post(
+      `/users/${userId}/avatar`,
+      formData,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      },
+    );
+    return response.data;
+  },
 };

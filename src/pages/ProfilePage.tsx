@@ -307,7 +307,7 @@ const ProfilePage: React.FC = () => {
         telefono: data.telefono,
         puesto: data.puesto,
       };
-      await axiosClient.put(`/usuarios/${fullProfile.id}`, payload);
+      await axiosClient.put(`/users/${fullProfile.id}`, payload);
       setFullProfile((prev) => (prev ? { ...prev, ...payload } : prev));
       toast.success("Perfil actualizado correctamente");
     } catch (error) {
@@ -321,7 +321,7 @@ const ProfilePage: React.FC = () => {
     if (!fullProfile) return;
     setIsLoading(true);
     try {
-      await axiosClient.post(`/usuarios/${fullProfile.id}/reset-password`, {
+      await axiosClient.post(`/users/${fullProfile.id}/reset-password`, {
         new_password: data.newPassword,
       });
       toast.success("Contraseña actualizada con éxito");
@@ -377,7 +377,7 @@ const ProfilePage: React.FC = () => {
       const payload = {
         preferencias: { theme, email_notifications: emailNotifications },
       };
-      await axiosClient.put(`/usuarios/${fullProfile.id}`, payload);
+      await axiosClient.put(`/users/${fullProfile.id}`, payload);
       setFullProfile((prev) => (prev ? { ...prev, ...payload } : prev));
       toast.success("Preferencias guardadas");
     } catch (error) {
