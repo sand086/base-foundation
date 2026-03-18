@@ -76,6 +76,7 @@ interface AddTicketModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: TicketFormData) => void;
+  initialData?: any; // 🚀 NUEVO PROP
 }
 
 /** =========================
@@ -208,7 +209,8 @@ export function AddTicketModal({
   open,
   onOpenChange,
   onSubmit,
-}: AddTicketModalProps) {
+  initialData,
+}: any) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // 🚀 1. HOOKS DE DATOS REALES
@@ -495,9 +497,22 @@ export function AddTicketModal({
     setFormData((p) => ({ ...p, evidencia: file }));
   };
 
+  useEffect(() => {
+    if (open && initialData) {
+      setFormData((prev) => ({
+        ...prev,
+        trip_id: String(initialData.trip_id || ""),
+        unit_id: String(initialData.unit_id || ""),
+        operator_id: String(initialData.operator_id || ""),
+        // Si quieres que el precio se resetee al promedio del tipo:
+        precio_por_litro: FUEL_CONFIG.PRECIOS_PROMEDIO[prev.tipo_combustible],
+      }));
+    }
+  }, [open, initialData]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[850px] max-h-[90vh] overflow-y-auto p-0 gap-0 border-0 shadow-2xl rounded-2xl bg-slate-50">
+      <DialogContent className="sm:max-w-[1200px] max-h-[90vh] overflow-y-auto p-0 gap-0 border-0 shadow-2xl rounded-2xl bg-slate-50">
         {/* HEADER */}
         <DialogHeader className="p-6 bg-white border-b border-slate-200 sticky top-0 z-10">
           <DialogTitle className="flex items-center gap-3 text-slate-800 text-xl font-black">

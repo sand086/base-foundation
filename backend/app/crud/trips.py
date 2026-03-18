@@ -690,18 +690,20 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
     total_real_liters = 0.0
     total_fuel_cost = 0.0
     alertas = []
+    legs_sin_ticket = []
 
     for leg in legs:
         trip = leg.trip
-
-        # 1. Sumar Kilómetros
         kms = trip.tariff.distancia_km if trip and trip.tariff else 0
         total_kms += kms
 
-        # 2. Candado de Combustible (Regla Gustavo)
-        if not leg.fuel_logs:
+        # Verificamos si no tiene vales activos
+        fuel_logs_activos = [f for f in leg.fuel_logs if f.record_status == "A"]
+
+        if not fuel_logs_activos:
+            legs_sin_ticket.append(leg.id)  # 🚀 Guardamos el ID
             alertas.append(
-                f"⚠️ El viaje {trip.public_id or trip.id} ({trip.origin} a {trip.destination}) NO tiene vales de combustible registrados."
+                f"Tramo #{leg.id}: {trip.origin} a {trip.destination} no tiene vales."
             )
 
         # 3. Sumar Vales
@@ -733,6 +735,7 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
         "precio_promedio": round(precio_promedio, 2),
         "deduccion_combustible": round(deduccion, 2),
         "alertas": alertas,
+        "legs_sin_ticket": legs_sin_ticket,
     }
 
 

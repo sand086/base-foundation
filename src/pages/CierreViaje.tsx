@@ -123,6 +123,7 @@ export default function CierreViaje() {
   const [newConceptoAmount, setNewConceptoAmount] = useState("");
   const [isAnimating, setIsAnimating] = useState(false);
   const [showAddTicket, setShowAddTicket] = useState(false);
+  const [ticketPrefill, setTicketPrefill] = useState<any>(null);
 
   // ==========================================
   // EFECTO: SOLICITAR PRE-LIQUIDACIÓN AL BACKEND
@@ -409,6 +410,19 @@ export default function CierreViaje() {
         description:
           error.response?.data?.detail || "Intente de nuevo más tarde.",
       });
+    }
+  };
+
+  const handleQuickFixTicket = (legId: number) => {
+    // Buscamos los datos de ese tramo en la lista cargada
+    const leg = allLegs.find((l) => l.id === legId);
+    if (leg) {
+      setTicketPrefill({
+        trip_id: leg.id, // Pasamos el ID del tramo como trip_id para el modal
+        unit_id: leg.unit_id,
+        operator_id: leg.operator_id,
+      });
+      setShowAddTicket(true);
     }
   };
 
@@ -769,31 +783,39 @@ export default function CierreViaje() {
                   ) : (
                     <>
                       {/* Alertas del Backend (Faltan Vales) */}
-                      {previewData?.alertas?.length > 0 && (
-                        <div className="bg-rose-50 border border-rose-200 p-4 rounded-xl mb-4 shadow-sm animate-in fade-in slide-in-from-top-2">
-                          <div className="flex items-center justify-between mb-3">
-                            <h4 className="flex items-center gap-2 text-xs font-black text-rose-700 uppercase tracking-wider">
-                              <AlertTriangle className="h-4 w-4" />
-                              Vigilancia: Vales Faltantes
-                            </h4>
-                            {/* 🚀 BOTÓN DE ACCIÓN RÁPIDA */}
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setShowAddTicket(true)}
-                              className="h-7 text-[10px] font-black bg-white border-rose-300 text-rose-700 hover:bg-rose-100 hover:text-rose-800 transition-all shadow-sm"
-                            >
-                              <Plus className="h-3 w-3 mr-1" /> CORREGIR AHORA
-                            </Button>
+                      {previewData?.legs_sin_ticket?.length > 0 && (
+                        <div className="bg-rose-50 border border-rose-200 rounded-xl mb-6 overflow-hidden shadow-sm">
+                          <div className="p-3 bg-rose-100 flex items-center gap-2">
+                            <AlertTriangle className="h-4 w-4 text-rose-600" />
+                            <span className="text-[10px] font-black text-rose-700 uppercase">
+                              Vales Faltantes Detectados
+                            </span>
                           </div>
-
-                          <ul className="text-[11px] text-rose-600/90 list-disc pl-5 space-y-1 font-medium">
-                            {previewData.alertas.map(
-                              (alerta: string, i: number) => (
-                                <li key={i}>{alerta}</li>
-                              ),
-                            )}
-                          </ul>
+                          <div className="p-2 space-y-2">
+                            {selectedLegsData
+                              .filter((l) =>
+                                previewData.legs_sin_ticket.includes(l.id),
+                              )
+                              .map((leg) => (
+                                <div
+                                  key={leg.id}
+                                  className="flex items-center justify-between bg-white p-2 rounded-lg border border-rose-100"
+                                >
+                                  <div className="text-[10px] font-bold text-slate-600">
+                                    ID: {leg.id} |{" "}
+                                    {leg.trip?.origin.slice(0, 10)}...
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => handleQuickFixTicket(leg.id)}
+                                    className="h-6 text-[9px] font-black text-rose-600 hover:bg-rose-50"
+                                  >
+                                    + CARGAR VALE
+                                  </Button>
+                                </div>
+                              ))}
+                          </div>
                         </div>
                       )}
 
@@ -1358,6 +1380,7 @@ export default function CierreViaje() {
         open={showAddTicket}
         onOpenChange={setShowAddTicket}
         onSubmit={handleQuickTicketSubmit}
+        initialData={ticketPrefill}
       />
     </div>
   );
