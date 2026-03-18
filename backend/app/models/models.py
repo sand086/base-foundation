@@ -772,12 +772,12 @@ class User(AuditMixin, Base):
     )
 
 
-class SystemConfig(Base):
+class SystemConfig(AuditMixin, Base):
     __tablename__ = "system_configs"
 
     key = Column(String(100), primary_key=True)
-    value = Column(Text)
-    grupo = Column(String(50))
+    value = Column(Text, nullable=True)
+    grupo = Column(String(50), nullable=True)
     tipo = Column(String(20), default="string")
     is_public = Column(Boolean, default=False)
 

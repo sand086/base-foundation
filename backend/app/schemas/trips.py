@@ -273,3 +273,4 @@ class BatchSettlementPreviewResponse(BaseModel):
     precio_promedio: float
     deduccion_combustible: float
     alertas: List[str]
+    legs_sin_ticket: List[int] = []

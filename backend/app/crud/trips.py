@@ -544,6 +544,9 @@ def create_next_leg(db: Session, trip_id: str, payload: schemas.TripLegCreate):
             db.add(db_event)
             db.add(last_leg)
 
+        if not payload.odometro_inicial or payload.odometro_inicial == 0:
+            payload.odometro_inicial = get_last_unit_odometer(db, payload.unit_id)
+
     # 2. Crear el NUEVO Tramo
     new_leg = models.TripLeg(
         trip_id=trip.id,
@@ -672,11 +675,11 @@ def settle_trip_legs_batch(db: Session, leg_ids: list[int], total_pago: float):
 
 
 def preview_batch_settlement(db: Session, leg_ids: list[int]):
-    # Buscamos los tramos e incluimos sus viajes, tarifas y vales de combustible
     legs = (
         db.query(models.TripLeg)
         .options(
             joinedload(models.TripLeg.trip).joinedload(models.Trip.tariff),
+            joinedload(models.TripLeg.unit),
             joinedload(models.TripLeg.fuel_logs),
         )
         .filter(models.TripLeg.id.in_(leg_ids))
@@ -686,54 +689,89 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
     if not legs:
         return None
 
-    total_kms = 0.0
+    total_kms_reales = 0.0
     total_real_liters = 0.0
     total_fuel_cost = 0.0
+    total_consumo_esperado = 0.0
     alertas = []
 
     for leg in legs:
-        trip = leg.trip
-
-        # 1. Sumar Kilómetros
-        kms = trip.tariff.distancia_km if trip and trip.tariff else 0
-        total_kms += kms
-
-        # 2. Candado de Combustible (Regla Gustavo)
-        if not leg.fuel_logs:
+        # 1. KILOMETRAJE REAL (Diferencia de Odómetros)
+        distancia = 0.0
+        if (
+            leg.odometro_final
+            and leg.odometro_inicial
+            and leg.odometro_final >= leg.odometro_inicial
+        ):
+            distancia = float(leg.odometro_final - leg.odometro_inicial)
+        else:
+            # Fallback a la tarifa si no hay odómetros, pero avisamos
+            distancia = float(
+                leg.trip.tariff.distancia_km if leg.trip and leg.trip.tariff else 0.0
+            )
             alertas.append(
-                f"⚠️ El viaje {trip.public_id or trip.id} ({trip.origin} a {trip.destination}) NO tiene vales de combustible registrados."
+                f"Tramo #{leg.id}: Usando distancia estimada (Faltan odómetros)."
             )
 
-        # 3. Sumar Vales
-        for f in leg.fuel_logs:
+        total_kms_reales += distancia
+
+        # 2. RENDIMIENTO PERSONALIZADO (ECM)
+        # Usamos el rendimiento de la unidad (ej. 2.8) o 3.2 como base
+        rendimiento = getattr(leg.unit, "rendimiento_ecm_esperado", 3.2) or 3.2
+        total_consumo_esperado += (distancia / rendimiento) if distancia > 0 else 0.0
+
+        # 3. CONSUMO REAL (Vales)
+        fuel_logs_activos = [f for f in leg.fuel_logs if f.record_status == "A"]
+        for f in fuel_logs_activos:
             total_real_liters += f.litros
             total_fuel_cost += f.litros * f.precio_por_litro
 
-    # 4. Matemáticas de Rendimiento
-    RENDIMIENTO_ESPERADO = 3.2  # km por litro (puedes ajustarlo o traerlo de BD)
-    consumo_esperado = total_kms / RENDIMIENTO_ESPERADO if total_kms > 0 else 0.0
-
+    # 4. CÁLCULO DE EXCESO (REGLA GUSTAVO)
     precio_promedio = (
         (total_fuel_cost / total_real_liters) if total_real_liters > 0 else 24.50
     )
+    diferencia_litros = total_real_liters - total_consumo_esperado
 
-    diferencia = total_real_liters - consumo_esperado
-    deduccion = 0.0
-
-    # Tolerancia del 5% (Si gasta 5% más de lo esperado, se le cobra)
-    TOLERANCIA_PCT = 0.05
-    if diferencia > (consumo_esperado * TOLERANCIA_PCT):
-        deduccion = diferencia * precio_promedio
+    deduccion_combustible = 0.0
+    # Tolerancia de Gustavo: 5% del esperado
+    if diferencia_litros > (total_consumo_esperado * 0.05):
+        deduccion_combustible = diferencia_litros * precio_promedio
 
     return {
-        "total_kms": round(total_kms, 2),
-        "consumo_esperado": round(consumo_esperado, 2),
+        "total_kms": round(total_kms_reales, 2),
+        "consumo_esperado": round(total_consumo_esperado, 2),
         "consumo_real": round(total_real_liters, 2),
-        "diferencia_litros": round(diferencia, 2),
+        "diferencia_litros": round(diferencia_litros, 2),
         "precio_promedio": round(precio_promedio, 2),
-        "deduccion_combustible": round(deduccion, 2),
+        "deduccion_combustible": round(deduccion_combustible, 2),
         "alertas": alertas,
     }
+
+
+def get_last_unit_odometer(db: Session, unit_id: int) -> int:
+    """Busca el último kilometraje conocido de la unidad."""
+    # 1. Buscar en el último tramo de viaje que tenga odómetro final
+    last_leg = (
+        db.query(models.TripLeg)
+        .filter(
+            models.TripLeg.unit_id == unit_id, models.TripLeg.odometro_final != None
+        )
+        .order_by(models.TripLeg.id.desc())
+        .first()
+    )
+
+    if last_leg:
+        return last_leg.odometro_final
+
+    # 2. Si no hay viajes, buscar en el último vale de combustible
+    last_fuel = (
+        db.query(models.FuelLog)
+        .filter(models.FuelLog.unit_id == unit_id)
+        .order_by(models.FuelLog.odometro.desc())
+        .first()
+    )
+
+    return last_fuel.odometro if last_fuel else 0
 
 
 def undo_last_leg(db: Session, trip_id: str):

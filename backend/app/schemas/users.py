@@ -62,6 +62,9 @@ class RoleUpdate(ORMBase):
 
 class RoleResponse(RoleBase):
     id: int
+    name_key: str
+    nombre: str
+    descripcion: Optional[str] = None
 
     # AuditMixin
     record_status: RecordStatus
@@ -69,10 +72,8 @@ class RoleResponse(RoleBase):
     updated_at: Optional[datetime] = None
     created_by_id: Optional[int] = None
     updated_by_id: Optional[int] = None
-
-    # Comentario (raro en tu esquema anterior):
-    # Antes lo tenías como Optional[...] = None; si ya estás estandarizando,
-    # mejor tiparlo estricto como arriba para detectar inconsistencias.
+    permisos: Optional[Dict[str, Any]] = {}
+    model_config = ConfigDict(from_attributes=True)
 
 
 # =========================================================

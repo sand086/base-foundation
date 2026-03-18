@@ -16,6 +16,7 @@ import {
   Printer,
   MoreVertical,
   Wand2,
+  Clock,
   Route as RouteIcon,
   Truck,
 } from "lucide-react";
@@ -1363,105 +1364,170 @@ export const ArmadorRutas: React.FC = () => {
       </AlertDialog>
 
       {/* MODAL DETALLE DE LA RUTA */}
+      {/* MODAL DETALLE DE LA RUTA */}
       <Dialog open={detailModalOpen} onOpenChange={setDetailModalOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
-          <DialogHeader className="pb-4 border-b flex flex-row justify-between items-start">
-            <DialogTitle className="flex flex-col gap-2">
-              <span className="text-sm text-muted-foreground uppercase tracking-wider">
-                Detalles de Ruta
-              </span>
-              <div className="flex items-center gap-2 text-xl text-primary">
-                <span>{selectedRouteDetail?.origen}</span>
-              </div>
-            </DialogTitle>
-            {selectedRouteDetail && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-2 border-slate-300"
-                onClick={() => handlePrintRoute(selectedRouteDetail)}
-              >
-                <Printer className="h-4 w-4 mr-2" /> Imprimir Hoja
-              </Button>
-            )}
+        <DialogContent className="sm:max-w-2xl p-0 overflow-hidden bg-slate-50 flex flex-col max-h-[85vh]">
+          {/* HEADER DEL MODAL (Fijo) */}
+          <DialogHeader className="px-6 py-4 bg-white border-b border-slate-200 shrink-0">
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+              <DialogTitle className="flex flex-col gap-1.5">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  Detalle Operativo de Ruta
+                </span>
+                <span className="text-xl font-black text-brand-navy flex items-center gap-2">
+                  <RouteIcon className="h-5 w-5 text-primary" />
+                  {selectedRouteDetail?.origen}
+                </span>
+                <div className="flex items-center gap-2 mt-1">
+                  <Badge variant="outline" className="bg-slate-50">
+                    {selectedRouteDetail?.tipo_unidad === "9ejes" ||
+                    selectedRouteDetail?.tipo_unidad === "full"
+                      ? "FULL (9 Ejes)"
+                      : "SENCILLO (5 Ejes)"}
+                  </Badge>
+                  <span className="text-xs text-slate-500 font-medium">
+                    {selectedRouteDetail?.distancia_total_km || 0} km totales
+                  </span>
+                </div>
+              </DialogTitle>
+              {selectedRouteDetail && (
+                <Button
+                  className="bg-white text-slate-700 border-slate-200 shadow-sm hover:bg-slate-50 hover:text-brand-navy"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePrintRoute(selectedRouteDetail)}
+                >
+                  <Printer className="h-4 w-4 mr-2" /> Imprimir Hoja
+                </Button>
+              )}
+            </div>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 px-2 py-4">
+          {/* CUERPO DEL MODAL (Scrolleable) */}
+          <ScrollArea className="flex-1 px-6 py-6 custom-scrollbar">
             {selectedRouteDetail && (
-              <div className="relative border-l-2 border-slate-200 ml-4 mt-2 space-y-8 pb-6">
-                {selectedRouteDetail.segments.map((seg: any, idx: number) => {
-                  const isFullRoute =
-                    selectedRouteDetail.tipo_unidad === "9ejes" ||
-                    selectedRouteDetail.tipo_unidad === "full";
-                  return (
-                    <div key={seg.id || idx} className="relative pl-6">
-                      <span
-                        className={cn(
-                          "absolute -left-[9px] top-1 h-4 w-4 rounded-full border-2 border-white",
-                          seg.toll_booth_id ? "bg-amber-500" : "bg-blue-500",
-                        )}
-                      />
-                      <div className="flex flex-col gap-2">
-                        <div className="flex items-start justify-between">
-                          <span className="text-sm font-bold text-slate-800">
-                            {seg.nombre_segmento}
-                          </span>
-                          <Badge
-                            variant="outline"
-                            className={
-                              seg.toll_booth_id
-                                ? "bg-amber-50 text-amber-700 border-amber-200 uppercase text-[9px]"
-                                : "bg-blue-50 text-blue-700 border-blue-200 uppercase text-[9px]"
-                            }
-                          >
-                            {seg.toll_booth_id ? "Caseta" : "Tramo Libre"}
-                          </Badge>
+              <div className="relative">
+                {/* La línea vertical del Timeline */}
+                <div className="absolute left-[11px] top-3 bottom-8 w-0.5 bg-slate-200 rounded-full" />
+
+                <div className="space-y-8">
+                  {selectedRouteDetail.segments.map((seg: any, idx: number) => {
+                    const isFullRoute =
+                      selectedRouteDetail.tipo_unidad === "9ejes" ||
+                      selectedRouteDetail.tipo_unidad === "full";
+
+                    const cost = isFullRoute
+                      ? seg.costo_momento_full
+                      : seg.costo_momento_sencillo;
+
+                    return (
+                      <div
+                        key={seg.id || idx}
+                        className="relative pl-10 flex flex-col group"
+                      >
+                        {/* El punto en el timeline */}
+                        <div
+                          className={cn(
+                            "absolute left-0 top-1 h-6 w-6 rounded-full border-4 border-slate-50 flex items-center justify-center shadow-sm z-10 transition-colors",
+                            seg.toll_booth_id ? "bg-amber-500" : "bg-blue-500",
+                          )}
+                        >
+                          <div className="h-1.5 w-1.5 rounded-full bg-white" />
                         </div>
-                        <div className="mt-1 text-xs">
-                          {/* 🚀 Solo mostramos el costo de la configuración que guardó */}
-                          <div
-                            className={`p-2.5 border rounded-lg inline-block min-w-[150px] ${isFullRoute ? "bg-emerald-50 border-emerald-100" : "bg-blue-50 border-blue-100"}`}
-                          >
-                            <p className="text-slate-500 font-semibold mb-1 uppercase">
-                              Costo Autorizado (
-                              {isFullRoute ? "9 Ejes" : "5 Ejes"})
-                            </p>
-                            <p
-                              className={`font-mono text-sm font-bold ${isFullRoute ? "text-emerald-700" : "text-blue-700"}`}
-                            >
-                              {formatCurrency(
-                                Number(
-                                  isFullRoute
-                                    ? seg.costo_momento_full
-                                    : seg.costo_momento_sencillo,
-                                ),
+
+                        {/* Tarjeta de Información */}
+                        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow">
+                          <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-3">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-bold text-slate-800">
+                                  {seg.nombre_segmento}
+                                </span>
+                                <Badge
+                                  variant="secondary"
+                                  className={
+                                    seg.toll_booth_id
+                                      ? "bg-amber-50 text-amber-700 hover:bg-amber-100 uppercase text-[9px]"
+                                      : "bg-blue-50 text-blue-700 hover:bg-blue-100 uppercase text-[9px]"
+                                  }
+                                >
+                                  {seg.toll_booth_id
+                                    ? "Caseta SCT"
+                                    : "Tramo Libre"}
+                                </Badge>
+                              </div>
+                              {(seg.carretera || seg.estado) && (
+                                <p className="text-xs font-medium text-slate-500 flex items-center gap-1">
+                                  <MapPin className="h-3 w-3" />
+                                  {seg.carretera}{" "}
+                                  {seg.carretera && seg.estado ? "•" : ""}{" "}
+                                  {seg.estado}
+                                </p>
                               )}
-                            </p>
+                            </div>
+
+                            {/* Costo Destacado */}
+                            <div
+                              className={cn(
+                                "flex flex-col items-end p-2.5 rounded-lg border min-w-[120px] shrink-0",
+                                isFullRoute
+                                  ? "bg-emerald-50/50 border-emerald-100"
+                                  : "bg-blue-50/50 border-blue-100",
+                              )}
+                            >
+                              <span className="text-[9px] uppercase font-black tracking-widest text-slate-400 mb-0.5">
+                                Costo Autorizado
+                              </span>
+                              <span
+                                className={cn(
+                                  "font-mono font-black text-lg",
+                                  isFullRoute
+                                    ? "text-emerald-700"
+                                    : "text-blue-700",
+                                )}
+                              >
+                                {formatCurrency(Number(cost || 0))}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Metadatos (Distancia y Tiempo) */}
+                          <div className="flex gap-4 pt-3 border-t border-slate-100">
+                            <div className="flex items-center gap-1.5">
+                              <div className="h-6 w-6 rounded bg-slate-100 flex items-center justify-center">
+                                <RouteIcon className="h-3 w-3 text-slate-500" />
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="text-[9px] uppercase font-bold text-slate-400">
+                                  Distancia
+                                </span>
+                                <span className="text-xs font-mono font-medium text-slate-700">
+                                  {Number(seg.distancia_km || 0)} km
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <div className="h-6 w-6 rounded bg-slate-100 flex items-center justify-center">
+                                <Clock className="h-3 w-3 text-slate-500" />
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="text-[9px] uppercase font-bold text-slate-400">
+                                  Tiempo
+                                </span>
+                                <span className="text-xs font-mono font-medium text-slate-700">
+                                  {Math.floor(
+                                    Number(seg.tiempo_minutos || 0) / 60,
+                                  )}
+                                  h {Number(seg.tiempo_minutos || 0) % 60}m
+                                </span>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                        {seg.carretera ||
-                        seg.distancia_km ||
-                        seg.tiempo_minutos ? (
-                          <div className="flex flex-wrap gap-4 mt-1 text-[11px] text-slate-500 font-mono bg-white p-2 border border-dashed rounded-md">
-                            {seg.carretera ? (
-                              <span className="flex items-center gap-1">
-                                <MapPin className="h-3 w-3" /> {seg.carretera}
-                              </span>
-                            ) : null}
-                            <span>
-                              Distancia: {Number(seg.distancia_km || 0)} km
-                            </span>
-                            <span>
-                              Tiempo:{" "}
-                              {Math.floor(Number(seg.tiempo_minutos || 0) / 60)}
-                              h {Number(seg.tiempo_minutos || 0) % 60}m
-                            </span>
-                          </div>
-                        ) : null}
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             )}
           </ScrollArea>

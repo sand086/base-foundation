@@ -43,14 +43,18 @@ def get_fuel_logs(
 
 @router.post("/fuel-logs", response_model=schemas.FuelLogResponse)
 async def create_fuel_log(
-    unidadId: int = Form(...),
-    operadorId: int = Form(...),
-    viajeId: Optional[int] = Form(None),
-    fechaHora: str = Form(...),
+    unit_id: int = Form(...),  # 🚀 Cambiado de unidadId a unit_id
+    operator_id: int = Form(...),  # 🚀 Cambiado de operadorId a operator_id
+    trip_id: Optional[int] = Form(None),  # 🚀 Cambiado de viajeId a trip_id
+    fecha_hora: str = Form(...),  # 🚀 Cambiado de fechaHora a fecha_hora
     estacion: str = Form(...),
-    tipoCombustible: str = Form(...),
+    tipo_combustible: str = Form(
+        ...
+    ),  # 🚀 Cambiado de tipoCombustible a tipo_combustible
     litros: float = Form(...),
-    precioPorLitro: float = Form(...),
+    precio_por_litro: float = Form(
+        ...
+    ),  # 🚀 Cambiado de precioPorLitro a precio_por_litro
     odometro: int = Form(...),
     file: UploadFile = File(None),
     db: Session = Depends(get_db),
@@ -60,21 +64,21 @@ async def create_fuel_log(
     filename = None
     if file:
         storage = StorageService.save_file(
-            file, folder="fuel_tickets", prefix=f"FUEL_{unidadId}"
+            file, folder="fuel_tickets", prefix=f"FUEL_{unit_id}"
         )
         evidencia_url = storage["url"]
         filename = storage["filename"]
 
     new_log = models.FuelLog(
-        unit_id=unidadId,
-        operator_id=operadorId,
-        trip_leg_id=viajeId,  # 🚀 CORRECCIÓN: Era trip_id, debe ser trip_leg_id
-        fecha_hora=fechaHora,
+        unit_id=unit_id,
+        operator_id=operator_id,
+        trip_leg_id=trip_id,  # ✅ Ahora sí recibirá el ID del viaje/tramo
+        fecha_hora=fecha_hora,
         estacion=estacion,
-        tipo_combustible=tipoCombustible,
+        tipo_combustible=tipo_combustible,
         litros=litros,
-        precio_por_litro=precioPorLitro,
-        total=litros * precioPorLitro,
+        precio_por_litro=precio_por_litro,
+        total=litros * precio_por_litro,
         odometro=odometro,
         evidencia_url=evidencia_url,
         created_by_id=current_user.id,
@@ -86,6 +90,7 @@ async def create_fuel_log(
     if evidencia_url:
         history_entry = models.FuelDocumentHistory(
             fuel_log_id=new_log.id,
+            document_type="ticket",  # Agregamos un string por defecto
             filename=filename,
             file_url=evidencia_url,
             version=1,

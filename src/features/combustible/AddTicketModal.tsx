@@ -76,6 +76,7 @@ interface AddTicketModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: TicketFormData) => void;
+  initialData?: any; // 🚀 NUEVO PROP
 }
 
 /** =========================
@@ -208,7 +209,8 @@ export function AddTicketModal({
   open,
   onOpenChange,
   onSubmit,
-}: AddTicketModalProps) {
+  initialData,
+}: any) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // 🚀 1. HOOKS DE DATOS REALES
@@ -495,9 +497,48 @@ export function AddTicketModal({
     setFormData((p) => ({ ...p, evidencia: file }));
   };
 
+  useEffect(() => {
+    // Solo actuamos si el modal se abre Y tenemos datos para precargar
+    if (open && initialData) {
+      setFormData((prev) => ({
+        ...prev,
+        // 🚀 Sincronización de IDs (Convertimos a string por seguridad para los Selects)
+        trip_id: initialData.trip_id ? String(initialData.trip_id) : "",
+        unit_id: initialData.unit_id ? String(initialData.unit_id) : "",
+        operator_id: initialData.operator_id
+          ? String(initialData.operator_id)
+          : "",
+
+        // 🛡️ Limpieza de seguridad: Evita duplicar datos de la carga anterior
+        litros: 0,
+        estacion: "",
+        odometro: "",
+        evidencia: null,
+
+        // ⛽ Inteligencia de Negocio: Si el tramo ya define un tipo, lo respetamos
+        tipo_combustible: initialData.tipo_combustible || "diesel",
+        // Ajustamos el precio al promedio actual del combustible seleccionado
+        precio_por_litro:
+          FUEL_CONFIG.PRECIOS_PROMEDIO[
+            initialData.tipo_combustible || "diesel"
+          ],
+      }));
+
+      // Resetear el input de archivo físicamente si existe el ref
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+
+      toast.info("Tramo vinculado", {
+        description: `Cargando datos para la unidad y operador del tramo #${initialData.trip_id}`,
+        duration: 3000,
+      });
+    }
+  }, [open, initialData]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[850px] max-h-[90vh] overflow-y-auto p-0 gap-0 border-0 shadow-2xl rounded-2xl bg-slate-50">
+      <DialogContent className="sm:max-w-[1200px] max-h-[90vh] overflow-y-auto p-0 gap-0 border-0 shadow-2xl rounded-2xl bg-slate-50">
         {/* HEADER */}
         <DialogHeader className="p-6 bg-white border-b border-slate-200 sticky top-0 z-10">
           <DialogTitle className="flex items-center gap-3 text-slate-800 text-xl font-black">

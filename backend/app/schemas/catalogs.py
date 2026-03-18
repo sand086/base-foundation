@@ -1,6 +1,6 @@
 # backend/app/schemas/catalogs.py
-from pydantic import BaseModel
-from typing import Optional, List
+from pydantic import BaseModel, ConfigDict
+from typing import Optional
 
 
 # --- SCHEMAS PARA TIPOS DE UNIDADES ---
@@ -33,9 +33,10 @@ class RouteCreate(BaseModel):
 # --- SCHEMAS PARA CONFIGURACIÓN DEL SISTEMA ---
 class SystemConfigBase(BaseModel):
     key: str
-    value: str
+    value: Optional[str] = None
     grupo: Optional[str] = None
     tipo: Optional[str] = "string"
+    is_public: Optional[bool] = False
 
     class Config:
         from_attributes = True
@@ -43,3 +44,17 @@ class SystemConfigBase(BaseModel):
 
 class SystemConfigUpdate(BaseModel):
     value: str
+
+
+class SystemConfigResponse(SystemConfigBase):
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ModuleSchema(BaseModel):
+    id: str
+    nombre: str
+    icono: str
+    descripcion: Optional[str] = None
+
+    class Config:
+        from_attributes = True
