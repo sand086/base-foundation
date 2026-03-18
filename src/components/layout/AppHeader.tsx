@@ -86,9 +86,11 @@ export function AppHeader() {
     try {
       await axiosClient.post("/notifications/mark-all-read");
       setNotifications(notifications.map((n) => ({ ...n, is_read: true })));
-    } catch (e) {}
+    } catch (e) {
+      // 🚀 SOLUCIÓN: Agregamos un console.error en lugar de dejar el bloque vacío
+      console.error("Error al marcar notificaciones como leídas", e);
+    }
   };
-
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 
   const handleLogout = () => logout();

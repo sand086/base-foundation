@@ -1467,4 +1467,4 @@ class Notification(AuditMixin, Base):
         String(50), nullable=True
     )  # Ej: el ID del viaje para abrirlo al dar clic
 
-    user = relationship("User")
+    user = relationship("User", foreign_keys=[user_id])
