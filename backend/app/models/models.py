@@ -399,6 +399,18 @@ class Unit(AuditMixin, Base):
     permiso_sct_folio = Column(String(50), nullable=True)
     caat_folio = Column(String(50), nullable=True)
     caat_vence = Column(Date, nullable=True)
+    permiso_sct_tipo = Column(
+        String(20), nullable=True, default="TPAF01", server_default="TPAF01"
+    )
+    config_vehicular_sat = Column(
+        String(20), nullable=True, default="T3S2", server_default="T3S2"
+    )
+    aseguradora_resp_civil = Column(
+        String(100), nullable=True, default="POR DEFINIR", server_default="POR DEFINIR"
+    )
+    poliza_resp_civil = Column(
+        String(50), nullable=True, default="00000000", server_default="00000000"
+    )
 
     tarjeta_circulacion_url = Column(String(500), nullable=True)
     permiso_doble_articulado_url = Column(String(500), nullable=True)
@@ -557,6 +569,12 @@ class Operator(AuditMixin, Base):
     ine_url = Column(String(500), nullable=True)
     apto_medico_url = Column(String(500), nullable=True)
     comprobante_domicilio_url = Column(String(500), nullable=True)
+    rfc = Column(
+        String(13),
+        nullable=True,
+        default="XAXX010101000",
+        server_default="XAXX010101000",
+    )
 
     # RELACIONES CORREGIDAS
     assigned_unit = relationship("Unit", back_populates="operators")
@@ -612,7 +630,9 @@ class Trip(AuditMixin, Base):
     peso_toneladas = Column(Float, default=0.0)
     es_material_peligroso = Column(Boolean, default=False)
     clase_imo = Column(String(50), nullable=True)  # Ej. "8 (Corrosivos)", "9"
-
+    sat_clave_producto = Column(String(20), default="78101802")  # Fletes
+    sat_clave_unidad = Column(String(10), default="E48")  # Servicio
+    mercancia_clave_stcc = Column(String(20), nullable=True)
     status = Column(pg_enum(TripStatus, "tripstatus"), default=TripStatus.CREADO)
 
     # --- FINANZAS GLOBALES (Cobro al cliente) ---
@@ -1182,6 +1202,7 @@ class RateTemplate(AuditMixin, Base):
     costo_total_full = Column(Float, default=0.0)
     distancia_total_km = Column(Float, default=0.0)
     tiempo_total_minutos = Column(Integer, default=0)
+    client = relationship("Client")
 
     segments = relationship(
         "RateSegment",
@@ -1347,6 +1368,11 @@ class ReceivableInvoice(AuditMixin, Base):
         String(36), unique=True, nullable=True
     )  # UUID del SAT cuando se timbre
     folio_interno = Column(String(50))
+    is_nominal = Column(Boolean, default=False)  # True si es la Carta Porte de $1
+    status_sat = Column(
+        String(20), default="PROVISIONAL"
+    )  # PROVISIONAL, TIMBRADA, CANCELADA
+    uuid_relacionado = Column(String(36), nullable=True)  # Para la relación 04
 
     # Finanzas
     subtotal = Column(Float, default=0.0)

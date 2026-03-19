@@ -65,6 +65,7 @@ import {
 import { Trip, TripLeg } from "@/types/api.types";
 import { useTrips } from "@/hooks/useTrips";
 import { useUnits } from "@/hooks/useUnits";
+import { useBilling } from "@/hooks/useBilling";
 import axiosClient from "@/api/axiosClient";
 
 interface TripDetailsModalProps {
@@ -95,6 +96,7 @@ export function TripDetailsModal({
 }: TripDetailsModalProps) {
   const { editTrip, refreshTrips, addTimelineEvent } = useTrips();
   const { updateLoadStatus } = useUnits();
+  const { isStamping, handleStampNominal, handleStampFinal } = useBilling();
 
   const [activeTab, setActiveTab] = useState("fases");
   const [isEditing, setIsEditing] = useState(false);
@@ -455,9 +457,17 @@ export function TripDetailsModal({
                     variant="outline"
                     size="sm"
                     className="h-9 text-xs border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 font-bold shadow-sm"
-                    onClick={handlePrintPDF}
+                    onClick={() => handleStampNominal(trip.id, refreshTrips)}
+                    disabled={isStamping || !!trip.uuid_fiscal}
                   >
-                    <Printer className="h-4 w-4 mr-1.5" /> C. Porte Aduana
+                    {isStamping ? (
+                      <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                    ) : (
+                      <Printer className="h-4 w-4 mr-1.5" />
+                    )}
+                    {trip.uuid_fiscal
+                      ? "C. Porte Generada"
+                      : "Generar C. Porte ($1)"}
                   </Button>
                 </div>
               </div>
@@ -1052,6 +1062,37 @@ export function TripDetailsModal({
                                   ${utilidadEstimada.toLocaleString()}
                                 </span>
                               </div>
+                              <div className="bg-slate-900 p-6 rounded-xl shadow-lg flex flex-col sm:flex-row justify-between items-center text-white mt-6 border-t-4 border-emerald-500">
+                                <div className="mb-4 sm:mb-0">
+                                  <h4 className="font-black uppercase tracking-widest text-emerald-400 text-sm mb-1 text-left">
+                                    Cierre y Facturación
+                                  </h4>
+                                  <p className="text-xs text-slate-400 text-left">
+                                    Timbra la factura real y cancela la
+                                    provisional.
+                                  </p>
+                                </div>
+                                <Button
+                                  className="bg-emerald-500 hover:bg-emerald-600 text-white font-black shadow-md w-full sm:w-auto"
+                                  disabled={isStamping || !trip.uuid_fiscal}
+                                  onClick={() =>
+                                    handleStampFinal(
+                                      trip.id,
+                                      trip.uuid_fiscal || "",
+                                      refreshTrips,
+                                    )
+                                  }
+                                >
+                                  {isStamping ? (
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  ) : (
+                                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                                  )}
+                                  Timbrar Factura Final 4.0
+                                </Button>
+                              </div>
+
+                              {/* FIN DE SECCIÓN NUEVA */}
                             </div>
                           )}
                         </CardContent>
