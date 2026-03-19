@@ -7,6 +7,7 @@ from app.models import models
 from app.schemas import tolls as schemas
 from app.api.endpoints.auth import get_current_user
 from sqlalchemy.exc import IntegrityError
+import datetime
 
 router = APIRouter()
 
@@ -258,6 +259,24 @@ def create_template(
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
+    # 🚀 1. VALIDACIÓN: Evitar duplicados solo si la ruta está ACTIVA
+    existing_route = (
+        db.query(models.RateTemplate)
+        .filter(
+            models.RateTemplate.origen == data.origen,
+            models.RateTemplate.destino == data.destino,
+            models.RateTemplate.client_id == data.client_id,
+            models.RateTemplate.record_status == "A",  # Solo buscamos entre las activas
+        )
+        .first()
+    )
+
+    if existing_route:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ya existe una ruta ACTIVA con este mismo origen y destino para este cliente.",
+        )
+
     new_template = models.RateTemplate(
         client_id=data.client_id,
         origen=data.origen,
@@ -276,7 +295,6 @@ def create_template(
         if seg_data.toll_booth_id:
             toll = db.query(models.TollBooth).get(seg_data.toll_booth_id)
             if toll:
-                # 🚀 SIEMPRE GUARDA AMBOS COSTOS (Sencillo 5 ejes, Full 9 ejes)
                 cost_s = toll.costo_5_ejes_sencillo
                 cost_f = toll.costo_9_ejes_full
 
@@ -425,8 +443,16 @@ def delete_template(
     if not db_template:
         raise HTTPException(status_code=404, detail="Ruta no encontrada")
 
+    # 🚀 2. MAGIA: Alteramos el nombre para liberar el original
+    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M")
+    db_template.origen = f"{db_template.origen} [ELIMINADA-{timestamp}]"
+
+    # Hacemos el borrado lógico
     db_template.record_status = "E"
     db_template.updated_by_id = user.id
     db.commit()
 
-    return {"status": "deleted", "message": "Ruta eliminada correctamente"}
+    return {
+        "status": "deleted",
+        "message": "Ruta eliminada correctamente. El nombre ha sido liberado.",
+    }
