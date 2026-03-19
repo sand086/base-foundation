@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -34,18 +33,25 @@ import {
 } from "@/components/ui/popover";
 import {
   MapPin,
+  Search,
   Navigation,
   MessageSquare,
-  Mail,
   AlertTriangle,
   Edit2,
   Check,
   ChevronsUpDown,
-  Gauge, // 🚀 1. AGREGADO: Icono de odómetro
+  Gauge,
+  Droplet,
+  History,
+  Bookmark,
+  Compass,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { Trip, TripLeg } from "@/types/api.types";
+import { TripLeg, TripTimelineEvent } from "@/types/api.types";
+import { useSecurityNotifications } from "@/hooks/useSecurityNotifications";
+import { geoapifyService } from "@/services/geoapifyService";
 
 interface UpdateStatusModalProps {
   open: boolean;
@@ -53,6 +59,7 @@ interface UpdateStatusModalProps {
   serviceId: string;
   activeLeg?: TripLeg;
   onSubmit: (data: StatusUpdateData) => void;
+  eventToEdit?: TripTimelineEvent | null; // 🚀 Prop para el modo edición
 }
 
 export interface StatusUpdateData {
@@ -63,10 +70,12 @@ export interface StatusUpdateData {
   comments: string;
   notifyClient: boolean;
   timestamp: string;
-  odometro_final?: string; // 🚀 2. AGREGADO: Campo opcional en la interfaz
+  odometro?: string;
+  combustible_porcentaje?: string;
+  combustible_litros?: string;
 }
 
-const COMMON_LOCATIONS = [
+const DEFAULT_LOCATIONS = [
   "Patio Base Veracruz",
   "Aduana / Puerto Veracruz",
   "Caseta San Marcos",
@@ -83,152 +92,258 @@ const COMMON_LOCATIONS = [
   "Patio Destino Guadalajara",
 ];
 
+interface CachedLocation {
+  address: string;
+  lat: string;
+  lng: string;
+}
+
 export function UpdateStatusModal({
   open,
   onOpenChange,
   serviceId,
   activeLeg,
   onSubmit,
+  eventToEdit,
 }: UpdateStatusModalProps) {
+  const { sendSecurityNotification } = useSecurityNotifications();
+
+  const [customLocations, setCustomLocations] = useState<CachedLocation[]>([]);
+  const [geoapifyResults, setGeoapifyResults] = useState<any[]>([]);
+  const [isSearchingGeo, setIsSearchingGeo] = useState(false);
+
   const [formData, setFormData] = useState<StatusUpdateData>({
-    status: "",
+    status: "en_transito", // 🚀 Predeterminado: Reporte Normal
     location: "",
     lat: "",
     lng: "",
     comments: "",
     notifyClient: false,
     timestamp: "",
-    odometro_final: "", // 🚀 3. AGREGADO: Inicialización
+    odometro: "",
+    combustible_porcentaje: "",
+    combustible_litros: "",
   });
 
   const [openCombobox, setOpenCombobox] = useState(false);
   const [searchLocationQuery, setSearchLocationQuery] = useState("");
 
+  // Manejo de carga inicial (Edición vs Creación)
   useEffect(() => {
     if (open) {
-      setFormData({
-        status: "",
-        location: "",
-        lat: "",
-        lng: "",
-        comments: "",
-        notifyClient: false,
-        timestamp: "",
-        odometro_final: "", // 🚀 AGREGADO: Reset al abrir
-      });
+      const saved = localStorage.getItem("tracking_custom_locations_v2");
+      if (saved) setCustomLocations(JSON.parse(saved));
+
+      if (eventToEdit) {
+        // 🧠 Lógica de limpieza para registros antiguos
+        let cleanLocation = eventToEdit.location || "";
+
+        // Si la localización es nula, intentamos limpiar el campo 'event'
+        if (!cleanLocation && eventToEdit.event) {
+          // Quitamos la frase "Estatus actualizado a [Estado] en "
+          cleanLocation = eventToEdit.event.replace(
+            /Estatus actualizado a .* en /i,
+            "",
+          );
+        }
+
+        const rawStatus = eventToEdit.event_type;
+        const uiStatus = ["checkpoint", "status_change", "info"].includes(
+          rawStatus,
+        )
+          ? "en_transito"
+          : rawStatus;
+
+        setFormData({
+          status: uiStatus || "en_transito",
+          location: cleanLocation,
+          lat: eventToEdit.lat || "",
+          lng: eventToEdit.lng || "",
+          comments: eventToEdit.comments || "",
+          notifyClient: false,
+          timestamp: eventToEdit.time,
+          odometro: "",
+          combustible_porcentaje: "",
+          combustible_litros: "",
+        });
+      } else {
+        // MODO CREACIÓN
+        setFormData({
+          status: "en_transito",
+          location: "",
+          lat: "",
+          lng: "",
+          comments: "",
+          notifyClient: false,
+          timestamp: "",
+          odometro: "",
+          combustible_porcentaje: "",
+          combustible_litros: "",
+        });
+      }
       setSearchLocationQuery("");
+      setGeoapifyResults([]);
     }
-  }, [open]);
+  }, [open, eventToEdit]);
+  // Buscador Geoapify con Debounce
+  useEffect(() => {
+    if (!searchLocationQuery || searchLocationQuery.length < 3) {
+      setGeoapifyResults([]);
+      setIsSearchingGeo(false);
+      return;
+    }
 
-  const statusOptions = useMemo(() => {
-    const isMuelle = activeLeg?.leg_type === "carga_muelle";
-    const isRetorno = activeLeg?.leg_type === "entrega_vacio";
-    const isCarretera = activeLeg?.leg_type === "ruta_carretera";
+    const timeoutId = setTimeout(async () => {
+      setIsSearchingGeo(true);
+      const features = await geoapifyService.autocomplete(searchLocationQuery);
+      setGeoapifyResults(features);
+      setIsSearchingGeo(false);
+    }, 500);
 
-    let labelTransito = "En Ruta / Tránsito Normal";
-    if (isMuelle) labelTransito = "🚜 Operando en Muelle / Patio";
-    if (isCarretera) labelTransito = "🚚 En Carretera (Viaje a Destino)";
-    if (isRetorno) labelTransito = "🔄 Retornando Vacío";
+    return () => clearTimeout(timeoutId);
+  }, [searchLocationQuery]);
 
-    let labelEntregado = "Arribo Físico (En Destino)";
-    if (isMuelle) labelEntregado = "📦 Cargado en Patio (Listo para Ruta)";
-    if (isCarretera) labelEntregado = "⏳ Vacío en Patio (Viaje Terminado)";
-    if (isRetorno) labelEntregado = "🏁 Llegada Final / Vaciado";
-
-    return [
-      { value: "en_transito", label: labelTransito, color: "bg-blue-500" },
-      { value: "entregado", label: labelEntregado, color: "bg-emerald-500" },
+  const statusOptions = useMemo(
+    () => [
       {
-        value: "punto_control",
-        label: "📍 Reporte de Avance / Punto de Control",
+        value: "en_transito",
+        label: "📍 Reporte de Posición (Normal)",
+        color: "bg-blue-500",
+      },
+      {
+        value: "entregado",
+        label: "🏁 Arribo a Destino / Entregado",
+        color: "bg-emerald-500",
+      },
+      {
+        value: "detenido_descanso",
+        label: "🛑 Detención para Descanso / Alimentos",
         color: "bg-sky-500",
       },
       {
-        value: "detenido",
-        label: "Detenido (Inspección/Descanso/Tránsito)",
+        value: "retraso",
+        label: "🚦 Tráfico / Retraso Operativo",
         color: "bg-amber-500",
       },
       {
-        value: "retraso",
-        label: "Retraso Operativo (Clima/Fila en Puerto)",
+        value: "revision_autoridad",
+        label: "👮 Revisión de Autoridad (Retén/Báscula)",
         color: "bg-orange-500",
       },
       {
-        value: "accidente",
-        label: "Accidente (Avería Mecánica/Siniestro)",
-        color: "bg-red-600",
+        value: "incidencia",
+        label: "⚠️ Incidencia en Ruta (Falla Mecánica)",
+        color: "bg-red-500",
       },
       {
-        value: "bloqueado",
-        label: "Bloqueado (Problema Administrativo/Aduana)",
-        color: "bg-red-900",
+        value: "accidente",
+        label: "🚨 Accidente / Siniestro Mayor",
+        color: "bg-red-800",
       },
-    ];
-  }, [activeLeg]);
+    ],
+    [],
+  );
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const now = new Date();
-    const timestamp = now.toISOString();
+    const timestamp = new Date().toISOString();
 
-    let finalStatus = formData.status;
-    let finalComments = formData.comments;
+    let dbStatus = formData.status;
+    const finalComments = formData.comments;
 
-    if (formData.status === "punto_control") {
-      finalStatus = "en_transito";
-      finalComments = `📍 PUNTO DE AVANCE: ${formData.comments}`;
+    // Normalización de estados para la DB
+    if (
+      ["detenido_descanso", "revision_autoridad", "incidencia"].includes(
+        formData.status,
+      )
+    ) {
+      dbStatus = "detenido";
     }
 
-    // Validación de seguridad para el odómetro si es entrega
-    if (formData.status === "entregado" && !formData.odometro_final) {
-      return toast.error("El odómetro es obligatorio para finalizar la fase.");
+    const isIncident = [
+      "detenido",
+      "retraso",
+      "accidente",
+      "incidencia",
+      "revision_autoridad",
+    ].includes(formData.status);
+
+    if (isIncident && !eventToEdit) {
+      sendSecurityNotification({
+        event:
+          formData.status === "accidente" ? "trip_incident" : "trip_stopped",
+        details: {
+          tripId: serviceId,
+          reason: finalComments || "Sin comentarios detallados",
+          userName: "Monitorista",
+        },
+      });
+    }
+
+    // Guardar en Caché Local si es un lugar nuevo y tiene coordenadas
+    const cleanLocation = formData.location.trim();
+    if (
+      cleanLocation &&
+      !DEFAULT_LOCATIONS.includes(cleanLocation) &&
+      formData.lat
+    ) {
+      const exists = customLocations.some((c) => c.address === cleanLocation);
+      if (!exists) {
+        const newLocation: CachedLocation = {
+          address: cleanLocation,
+          lat: formData.lat || "",
+          lng: formData.lng || "",
+        };
+        const updatedLocations = [newLocation, ...customLocations].slice(0, 20);
+        setCustomLocations(updatedLocations);
+        localStorage.setItem(
+          "tracking_custom_locations_v2",
+          JSON.stringify(updatedLocations),
+        );
+      }
     }
 
     onSubmit({
       ...formData,
-      status: finalStatus,
-      comments: finalComments,
-      timestamp,
+      status: dbStatus,
+      timestamp: eventToEdit ? formData.timestamp : timestamp,
     });
-
-    if (formData.notifyClient) {
-      toast.success("Correo enviado al cliente", {
-        description: `Notificación de estatus enviada exitosamente.`,
-      });
-    }
   };
 
   const selectedStatus = statusOptions.find((s) => s.value === formData.status);
-  const isIncident = ["detenido", "retraso", "accidente", "bloqueado"].includes(
-    formData.status,
-  );
+  const isIncidentUI = [
+    "detenido_descanso",
+    "retraso",
+    "accidente",
+    "incidencia",
+    "revision_autoridad",
+  ].includes(formData.status);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[520px] rounded-2xl">
-        <DialogHeader className="border-b pb-4">
+      <DialogContent className="sm:max-w-[550px] rounded-2xl overflow-hidden p-0 border-0 shadow-2xl">
+        <div className="bg-slate-50 border-b border-slate-100 p-6 pb-4">
           <DialogTitle className="flex items-center gap-2 text-brand-navy font-black text-xl">
-            <Edit2 className="h-5 w-5" />
-            Registrar Novedad en Bitácora
-          </DialogTitle>
-          <DialogDescription className="font-medium text-slate-500">
-            Actualiza el historial del viaje <strong>#{serviceId}</strong>.
-            {activeLeg && (
-              <span className="block mt-2 text-xs text-brand-navy bg-slate-50 p-2 rounded border border-slate-200">
-                Afectando la Fase Activa:{" "}
-                <strong>
-                  {activeLeg.leg_type.replace("_", " ").toUpperCase()}
-                </strong>
-              </span>
+            {eventToEdit ? (
+              <Edit2 className="h-5 w-5 text-amber-500" />
+            ) : (
+              <Navigation className="h-5 w-5 text-blue-600" />
             )}
+            {eventToEdit ? "Corregir Reporte" : "Registrar Novedad"}
+          </DialogTitle>
+          <DialogDescription className="font-medium text-slate-500 mt-1.5">
+            Viaje <strong>#{serviceId}</strong> —{" "}
+            {eventToEdit
+              ? "Editando registro histórico"
+              : "Actualizando posición actual"}
           </DialogDescription>
-        </DialogHeader>
+        </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6 pt-2">
+        <form onSubmit={handleSubmit} className="space-y-5 p-6 bg-white">
+          {/* TIPO DE EVENTO */}
           <div className="space-y-2">
-            <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-              <Navigation className="h-3.5 w-3.5 text-brand-navy" />
-              Tipo de Evento *
+            <Label className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+              <Navigation className="h-3.5 w-3.5" /> Motivo de Actualización *
             </Label>
             <Select
               value={formData.status}
@@ -238,17 +353,25 @@ export function UpdateStatusModal({
               required
             >
               <SelectTrigger
-                className={`h-12 text-sm font-bold border-2 ${isIncident ? "border-red-200 bg-red-50" : "border-slate-200"}`}
+                className={cn(
+                  "h-12 border-2 font-bold transition-colors",
+                  isIncidentUI
+                    ? "border-red-200 bg-red-50/30"
+                    : "border-slate-200 hover:bg-slate-50",
+                )}
               >
-                <SelectValue placeholder="Selecciona qué está pasando...">
+                <SelectValue placeholder="Selecciona el motivo...">
                   {selectedStatus && (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2.5">
                       <span
-                        className={`w-3 h-3 rounded-full shadow-sm ${selectedStatus.color}`}
+                        className={cn(
+                          "w-2.5 h-2.5 rounded-full shadow-sm",
+                          selectedStatus.color,
+                        )}
                       />
                       <span
                         className={
-                          isIncident ? "text-red-700" : "text-slate-800"
+                          isIncidentUI ? "text-red-700" : "text-slate-700"
                         }
                       >
                         {selectedStatus.label}
@@ -262,11 +385,14 @@ export function UpdateStatusModal({
                   <SelectItem
                     key={status.value}
                     value={status.value}
-                    className="text-sm font-medium py-3"
+                    className="font-medium py-3 cursor-pointer"
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2.5">
                       <span
-                        className={`w-3 h-3 rounded-full shadow-sm ${status.color}`}
+                        className={cn(
+                          "w-2.5 h-2.5 rounded-full shadow-sm",
+                          status.color,
+                        )}
                       />
                       {status.label}
                     </div>
@@ -276,177 +402,339 @@ export function UpdateStatusModal({
             </Select>
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-              <MapPin className="h-3.5 w-3.5 text-brand-navy" />
-              Ubicación o Referencia Actual *
-            </Label>
-            <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={openCombobox}
-                  className="w-full justify-between h-12 font-medium bg-white border-2 border-slate-200 hover:bg-slate-50"
-                >
-                  {formData.location || (
-                    <span className="text-slate-400">
-                      Ej: Caseta de Tepotzotlán / Escribe lugar...
+          {/* UBICACIÓN CON GEOAPIFY */}
+          <div className="space-y-3 border border-slate-100 bg-slate-50/30 p-3 rounded-xl">
+            <div className="space-y-2">
+              <Label className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                <MapPin className="h-3.5 w-3.5" /> Ubicación o Referencia *
+              </Label>
+              <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className={cn(
+                      "w-full justify-between h-11 font-medium border-2 hover:bg-slate-50 transition-colors overflow-hidden",
+                      formData.location
+                        ? "border-brand-navy/30 bg-blue-50/20 text-brand-navy font-bold"
+                        : "border-slate-200 text-slate-500 bg-white",
+                    )}
+                  >
+                    {/* 🚀 EL TRUCO ESTÁ EN ESTE SPAN: max-width evita que empuje el botón hacia afuera */}
+                    <span className="truncate flex-1 text-left mr-2 max-w-[380px]">
+                      {formData.location ||
+                        "Busca una caseta, ciudad o bodega..."}
                     </span>
-                  )}
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[470px] p-0" align="start">
-                <Command>
-                  <CommandInput
-                    placeholder="Buscar o escribir nueva ubicación..."
-                    value={searchLocationQuery}
-                    onValueChange={setSearchLocationQuery}
-                  />
-                  <CommandList>
-                    <CommandEmpty className="p-4 text-sm text-center text-slate-500">
-                      <p className="mb-2">No está en la lista rápida.</p>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        className="w-full font-bold"
-                        onClick={() => {
-                          setFormData({
-                            ...formData,
-                            location: searchLocationQuery,
-                          });
-                          setOpenCombobox(false);
-                        }}
-                      >
-                        <MapPin className="h-4 w-4 mr-2" />
-                        Usar: "{searchLocationQuery}"
-                      </Button>
-                    </CommandEmpty>
-                    <CommandGroup heading="Lugares Frecuentes">
-                      {COMMON_LOCATIONS.map((loc) => (
-                        <CommandItem
-                          key={loc}
-                          value={loc}
-                          onSelect={() => {
-                            setFormData({ ...formData, location: loc });
-                            setSearchLocationQuery("");
+                    <ChevronsUpDown className="ml-auto h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  className="w-[500px] p-0 rounded-xl overflow-hidden border-slate-200 shadow-xl"
+                  align="start"
+                >
+                  <Command>
+                    <div className="relative border-b">
+                      <Search className="absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
+                      <CommandInput
+                        placeholder="Escribe para buscar en el mapa..."
+                        value={searchLocationQuery}
+                        onValueChange={setSearchLocationQuery}
+                        className="h-11 pl-9 border-0 focus:ring-0"
+                      />
+                      {isSearchingGeo && (
+                        <Loader2 className="absolute right-3 top-3.5 h-4 w-4 text-blue-500 animate-spin" />
+                      )}
+                    </div>
+
+                    <CommandList className="max-h-[300px]">
+                      {/* RESULTADOS DE GEOAPIFY */}
+                      {geoapifyResults.length > 0 && (
+                        <CommandGroup
+                          heading={
+                            <div className="flex items-center gap-1.5 text-emerald-600">
+                              <MapPin className="h-3.5 w-3.5" /> Resultados del
+                              Mapa
+                            </div>
+                          }
+                        >
+                          {geoapifyResults.map(
+                            (feature: any, index: number) => {
+                              const addr = feature.properties.formatted;
+                              return (
+                                <CommandItem
+                                  key={`geo-${index}`}
+                                  onSelect={() => {
+                                    setFormData({
+                                      ...formData,
+                                      location: addr,
+                                      lat: String(feature.properties.lat),
+                                      lng: String(feature.properties.lon),
+                                    });
+                                    setSearchLocationQuery("");
+                                    setOpenCombobox(false);
+                                  }}
+                                  className="cursor-pointer py-2.5 border-b border-slate-50 last:border-0"
+                                >
+                                  <div className="flex flex-col">
+                                    <span className="font-bold text-slate-700 text-sm">
+                                      {feature.properties.address_line1 || addr}
+                                    </span>
+                                    <span className="text-[10px] text-slate-500">
+                                      {feature.properties.address_line2 ||
+                                        "Dirección verificada"}
+                                    </span>
+                                  </div>
+                                </CommandItem>
+                              );
+                            },
+                          )}
+                        </CommandGroup>
+                      )}
+
+                      <CommandEmpty className="p-3">
+                        <Button
+                          type="button"
+                          className="w-full bg-slate-100 text-slate-700 hover:bg-slate-200 shadow-sm font-bold h-11"
+                          onClick={() => {
+                            setFormData({
+                              ...formData,
+                              location: searchLocationQuery,
+                              lat: "",
+                              lng: "",
+                            });
                             setOpenCombobox(false);
                           }}
                         >
-                          <Check
-                            className={cn(
-                              "mr-2 h-4 w-4 text-brand-navy",
-                              formData.location === loc
-                                ? "opacity-100"
-                                : "opacity-0",
-                            )}
-                          />
-                          {loc}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
+                          Usar texto libre: "{searchLocationQuery}"
+                        </Button>
+                      </CommandEmpty>
+
+                      {/* HISTORIAL */}
+                      {customLocations.length > 0 && !searchLocationQuery && (
+                        <CommandGroup
+                          heading={
+                            <div className="flex items-center gap-1.5 text-blue-600">
+                              <History className="h-3.5 w-3.5" /> Historial
+                              Reciente
+                            </div>
+                          }
+                        >
+                          {customLocations.map((loc) => (
+                            <CommandItem
+                              key={`custom-${loc.address}`}
+                              onSelect={() => {
+                                setFormData({
+                                  ...formData,
+                                  location: loc.address,
+                                  lat: loc.lat,
+                                  lng: loc.lng,
+                                });
+                                setOpenCombobox(false);
+                              }}
+                              className="cursor-pointer py-2.5"
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4 text-blue-600",
+                                  formData.location === loc.address
+                                    ? "opacity-100"
+                                    : "opacity-0",
+                                )}
+                              />
+                              {loc.address}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      )}
+
+                      {/* POR DEFECTO */}
+                      {!searchLocationQuery && (
+                        <CommandGroup
+                          heading={
+                            <div className="flex items-center gap-1.5">
+                              <Bookmark className="h-3.5 w-3.5" /> Puntos de
+                              Control SCT
+                            </div>
+                          }
+                        >
+                          {DEFAULT_LOCATIONS.map((loc) => (
+                            <CommandItem
+                              key={`default-${loc}`}
+                              onSelect={() => {
+                                setFormData({
+                                  ...formData,
+                                  location: loc,
+                                  lat: "",
+                                  lng: "",
+                                });
+                                setOpenCombobox(false);
+                              }}
+                              className="cursor-pointer py-2.5 text-slate-600"
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4 text-blue-600",
+                                  formData.location === loc
+                                    ? "opacity-100"
+                                    : "opacity-0",
+                                )}
+                              />
+                              {loc}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      )}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {/* COORDENADAS GPS */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1.5">
+                  <Compass className="h-3 w-3" /> Latitud
+                </Label>
+                <Input
+                  placeholder="19.4326"
+                  className="h-9 font-mono text-sm bg-white border-slate-200"
+                  value={formData.lat}
+                  onChange={(e) =>
+                    setFormData({ ...formData, lat: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1.5">
+                  <Compass className="h-3 w-3" /> Longitud
+                </Label>
+                <Input
+                  placeholder="-99.1332"
+                  className="h-9 font-mono text-sm bg-white border-slate-200"
+                  value={formData.lng}
+                  onChange={(e) =>
+                    setFormData({ ...formData, lng: e.target.value })
+                  }
+                />
+              </div>
+            </div>
           </div>
 
-          {/* 🚀 4. AGREGADO: CAMPO DE ODÓMETRO CONDICIONAL */}
-          {formData.status === "entregado" && (
-            <div className="space-y-2 bg-emerald-50 p-4 rounded-xl border border-emerald-100 animate-in fade-in zoom-in duration-300">
-              <Label className="text-xs font-bold text-emerald-700 uppercase flex items-center gap-2">
-                <Gauge className="h-4 w-4" /> Lectura de Odómetro al Arribo *
-              </Label>
-              <Input
-                type="number"
-                required
-                placeholder="Ej: 125400"
-                className="h-11 font-mono text-lg border-emerald-200"
-                value={formData.odometro_final || ""}
-                onChange={(e) =>
-                  setFormData({ ...formData, odometro_final: e.target.value })
-                }
-              />
-              <p className="text-[10px] text-emerald-600 font-medium">
-                Dato obligatorio para calcular el rendimiento de combustible.
-              </p>
+          {/* TELEMETRÍA (Oculta en modo edición para no sobreescribir datos globales por error) */}
+          {!eventToEdit && (
+            <div className="grid grid-cols-3 gap-3 p-4 bg-slate-50 border border-slate-100 rounded-xl mt-2">
+              <div className="col-span-3 pb-2 border-b border-slate-200/60 mb-1">
+                <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center justify-between">
+                  Telemetría{" "}
+                  <span className="font-normal text-[9px] text-slate-400 bg-white px-1.5 py-0.5 rounded shadow-sm border border-slate-100 italic">
+                    Actualización de Unidad
+                  </span>
+                </Label>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-bold text-slate-600 flex items-center gap-1.5">
+                  <Gauge className="h-3.5 w-3.5 text-slate-400" /> Odómetro
+                </Label>
+                <Input
+                  type="number"
+                  placeholder="Km"
+                  className="h-10 font-mono text-sm bg-white border-slate-200"
+                  value={formData.odometro}
+                  onChange={(e) =>
+                    setFormData({ ...formData, odometro: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-bold text-slate-600 flex items-center gap-1.5">
+                  <Droplet className="h-3.5 w-3.5 text-blue-500" /> Diesel %
+                </Label>
+                <Input
+                  type="number"
+                  max="100"
+                  placeholder="%"
+                  className="h-10 font-mono text-sm bg-white border-slate-200"
+                  value={formData.combustible_porcentaje}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      combustible_porcentaje: e.target.value,
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-bold text-slate-600 flex items-center gap-1.5">
+                  <Droplet className="h-3.5 w-3.5 text-cyan-500" /> Lts
+                </Label>
+                <Input
+                  type="number"
+                  placeholder="Lts"
+                  className="h-10 font-mono text-sm bg-white border-slate-200"
+                  value={formData.combustible_litros}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      combustible_litros: e.target.value,
+                    })
+                  }
+                />
+              </div>
             </div>
           )}
 
           {/* COMENTARIOS */}
-          <div className="space-y-2">
-            <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-              <MessageSquare className="h-3.5 w-3.5 text-brand-navy" />
-              Detalles / Observaciones
+          <div className="space-y-2 mt-2">
+            <Label className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+              <MessageSquare className="h-3.5 w-3.5" /> Detalles / Novedades{" "}
+              {isIncidentUI && <span className="text-red-500">*</span>}
             </Label>
             <Textarea
-              placeholder="Describe el motivo del retraso, novedades en el camino o estatus general..."
+              placeholder="Escribe notas adicionales sobre este reporte..."
               value={formData.comments}
               onChange={(e) =>
                 setFormData({ ...formData, comments: e.target.value })
               }
-              rows={3}
-              className={`text-sm resize-none border-2 ${isIncident ? "border-red-200 focus-visible:ring-red-500" : "border-slate-200"}`}
-              required={isIncident}
+              rows={2}
+              className={cn(
+                "resize-none bg-slate-50 focus:bg-white transition-colors",
+                isIncidentUI
+                  ? "border-red-300 focus-visible:ring-red-200"
+                  : "border-slate-200",
+              )}
+              required={isIncidentUI}
             />
-            {isIncident && (
-              <p className="text-[11px] text-red-600 font-bold flex items-center gap-1 mt-1">
-                <AlertTriangle className="h-3 w-3" /> Las incidencias requieren
-                obligatoriamente una descripción.
-              </p>
-            )}
           </div>
 
-          {/* NOTIFICAR CLIENTE */}
-          <div className="flex items-center space-x-3 p-4 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors">
-            <Checkbox
-              id="notifyClient"
-              checked={formData.notifyClient}
-              onCheckedChange={(checked) =>
-                setFormData({ ...formData, notifyClient: checked as boolean })
-              }
-              className="h-5 w-5 data-[state=checked]:bg-brand-navy"
-            />
-            <Label
-              htmlFor="notifyClient"
-              className="text-sm font-bold text-slate-700 flex flex-col cursor-pointer leading-tight"
-            >
-              <span className="flex items-center gap-2">
-                <Mail className="h-4 w-4 text-slate-400" />
-                Notificar al Cliente por Correo
-              </span>
-              <span className="text-[10px] text-slate-500 font-medium ml-6 mt-1">
-                Se enviará un reporte automático de este evento al correo
-                registrado.
-              </span>
-            </Label>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="flex justify-end gap-3 pt-6 pb-2">
             <Button
               type="button"
               variant="outline"
+              className="h-11 font-bold text-slate-600 hover:bg-slate-100 px-6"
               onClick={() => onOpenChange(false)}
-              className="h-12 px-6 font-bold"
             >
               Cancelar
             </Button>
             <Button
               type="submit"
-              className={`h-12 px-8 font-black text-white shadow-md transition-colors ${
-                isIncident
-                  ? "bg-red-600 hover:bg-red-700"
-                  : "bg-brand-navy hover:bg-brand-navy/90"
-              }`}
+              className={cn(
+                "h-11 px-8 font-black shadow-lg transition-all active:scale-95",
+                isIncidentUI
+                  ? "bg-red-600 hover:bg-red-700 text-white"
+                  : "bg-brand-navy hover:bg-brand-navy/90 text-white",
+              )}
               disabled={
                 !formData.status ||
                 !formData.location ||
-                (isIncident && !formData.comments) ||
-                (formData.status === "entregado" && !formData.odometro_final)
+                (isIncidentUI && !formData.comments)
               }
             >
-              {isIncident ? "Registrar Incidencia" : "Guardar en Bitácora"}
+              {eventToEdit
+                ? "Guardar Cambios"
+                : isIncidentUI
+                  ? "Reportar Incidencia"
+                  : "Guardar Reporte"}
             </Button>
           </div>
         </form>

@@ -21,6 +21,11 @@ class TripTimelineEventBase(ORMBase):
     time: datetime
     event: str = Field(..., max_length=500)
     event_type: str = Field(default="info", max_length=20)
+    # 🚀 AGREGAR AQUÍ:
+    location: Optional[str] = None
+    lat: Optional[str] = None
+    lng: Optional[str] = None
+    comments: Optional[str] = None
 
 
 class TripTimelineEventCreate(TripTimelineEventBase):
@@ -34,6 +39,9 @@ class TripTimelineEventCreatePayload(BaseModel):
     lat: Optional[str] = None
     lng: Optional[str] = None
     notifyClient: Optional[bool] = False
+    odometro: Optional[int] = None
+    combustible_porcentaje: Optional[float] = None
+    combustible_litros: Optional[float] = None
 
 
 class TripTimelineEventResponse(TripTimelineEventBase):

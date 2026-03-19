@@ -432,10 +432,15 @@ export type TripStatus =
 export type TripLegType = "carga_muelle" | "ruta_carretera" | "entrega_vacio";
 
 export interface TripTimelineEvent {
-  id?: number;
+  id: number;
+  trip_leg_id: number;
   time: string;
   event: string;
   event_type: string;
+  location?: string;
+  lat?: string;
+  lng?: string;
+  comments?: string;
 }
 
 export interface TripLeg {

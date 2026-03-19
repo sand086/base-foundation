@@ -33,6 +33,16 @@ def read_trips(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return crud.get_trips(db, skip, limit)
 
 
+@router.get("/{trip_id}", response_model=schemas.TripResponse)
+def read_trip(trip_id: int, db: Session = Depends(get_db)):
+    """Obtiene el detalle completo de un solo viaje"""
+    # Usamos str(trip_id) porque tu función get_trip en el CRUD espera un string
+    trip = crud.get_trip(db, str(trip_id))
+    if not trip:
+        raise HTTPException(status_code=404, detail="Viaje no encontrado")
+    return trip
+
+
 @router.post("", response_model=schemas.TripResponse)
 def create_trip(
     trip: schemas.TripCreate,
@@ -101,9 +111,45 @@ def create_timeline_event(
     payload: schemas.TripTimelineEventCreatePayload,
     db: Session = Depends(get_db),
 ):
+    # 1. Guardamos el evento histórico normal
     trip = crud.add_timeline_event(db, trip_id, payload)
     if not trip:
         raise HTTPException(status_code=404, detail="Viaje no encontrado")
+
+    # 🚀 2. ACTUALIZACIÓN AUTOMÁTICA DEL TRACTOCAMIÓN (UNIDAD)
+    # Buscamos cuál es el tramo (leg) que está en tránsito actualmente
+    active_leg = next(
+        (
+            leg
+            for leg in trip.legs
+            if leg.status not in ["entregado", "cerrado", "liquidado"]
+        ),
+        None,
+    )
+
+    if active_leg and active_leg.unit:
+        unidad = active_leg.unit
+
+        # Si el monitorista mandó el Odómetro, se lo actualizamos al camión
+        if payload.odometro:
+            # Lo guardamos en el tramo
+            active_leg.odometro_final = payload.odometro
+
+            # NOTA: Asegúrate de tener una columna "odometro" en tu tabla "units"
+            if hasattr(unidad, "odometro"):
+                unidad.odometro = payload.odometro
+
+        # Si mandó combustible, lo guardamos en la unidad (si tienes esos campos)
+        if payload.combustible_porcentaje:
+            if hasattr(unidad, "nivel_combustible_porcentaje"):
+                unidad.nivel_combustible_porcentaje = payload.combustible_porcentaje
+
+        if payload.combustible_litros:
+            if hasattr(unidad, "nivel_combustible_litros"):
+                unidad.nivel_combustible_litros = payload.combustible_litros
+
+    db.commit()
+    db.refresh(trip)
     return trip
 
 
@@ -394,5 +440,53 @@ def undo_trip_leg_endpoint(trip_id: int, db: Session = Depends(get_db)):
     return trip
 
 
-# $2y$12$y3vy.iw/pjjr67cPO5/LgOQPFlKJBvlHQrsbinE3EVm6pkg3l9gSu
-# LLMHA623KLARIHCO
+# =========================================================
+# EDICIÓN Y BORRADO DE EVENTOS DEL TIMELINE
+# =========================================================
+
+
+@router.delete("/timeline/{event_id}")
+def delete_timeline_event(event_id: int, db: Session = Depends(get_db)):
+    event = (
+        db.query(models.TripTimelineEvent)
+        .filter(models.TripTimelineEvent.id == event_id)
+        .first()
+    )
+    if not event:
+        raise HTTPException(status_code=404, detail="Evento no encontrado")
+
+    db.delete(event)
+    db.commit()
+    return {"message": "Evento eliminado correctamente"}
+
+
+@router.put("/timeline/{event_id}")
+def update_timeline_event(
+    event_id: int, payload: dict = Body(...), db: Session = Depends(get_db)
+):
+    event = (
+        db.query(models.TripTimelineEvent)
+        .filter(models.TripTimelineEvent.id == event_id)
+        .first()
+    )
+    if not event:
+        raise HTTPException(status_code=404, detail="Evento no encontrado")
+
+    # 🚀 ACTUALIZACIÓN TOTAL DE COLUMNAS
+    if "location" in payload:
+        event.location = payload["location"]
+    if "lat" in payload:
+        event.lat = payload["lat"]
+    if "lng" in payload:
+        event.lng = payload["lng"]
+    if "comments" in payload:
+        event.comments = payload["comments"]
+    if "status" in payload:
+        event.event_type = payload["status"]
+
+    # Re-generamos el texto de visualización
+    status_label = payload.get("status", "Reporte").replace("_", " ").title()
+    event.event = f"{status_label} en {payload.get('location')}"
+
+    db.commit()
+    return {"message": "Evento actualizado correctamente"}
