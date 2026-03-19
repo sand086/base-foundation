@@ -9,6 +9,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.models.models import Trip, TripLeg, ReceivableInvoice, Client, Unit, Operator
+
 from app.schemas.trips import ReceivableInvoiceCreate
 
 
