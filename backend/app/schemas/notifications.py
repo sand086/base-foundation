@@ -1,6 +1,7 @@
 # backend/app/schemas/notifications.py
 from pydantic import BaseModel, ConfigDict
 from typing import Optional
+from datetime import datetime
 
 
 # ==========================================
@@ -46,4 +47,22 @@ class EmailTemplateUpdate(BaseModel):
 
 class EmailTemplateResponse(EmailTemplateBase):
     id: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+class NotificationBase(BaseModel):
+    title: str
+    message: str
+    is_read: bool = False
+    event_type: Optional[str] = None
+    reference_id: Optional[str] = None
+
+
+class NotificationCreate(NotificationBase):
+    user_id: int
+
+
+class NotificationResponse(NotificationBase):
+    id: int
+    created_at: datetime
     model_config = ConfigDict(from_attributes=True)

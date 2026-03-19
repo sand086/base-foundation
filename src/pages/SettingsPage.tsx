@@ -155,7 +155,8 @@ const DEFAULT_CONFIGS: SystemConfig[] = [
 ];
 
 const SettingsPage = () => {
-  const { systemConfigs, isLoading, updateSystemConfig } = useAdminActions();
+  const { systemConfigs, isLoading, updateBulkSystemConfig } =
+    useAdminActions();
 
   const [activeCategory, setActiveCategory] =
     useState<ConfigCategory>("empresa");
@@ -163,13 +164,28 @@ const SettingsPage = () => {
 
   // 🚀 2. MEZCLAR DATOS DE LA BD CON LOS DEFAULT
   useEffect(() => {
-    // Si la BD tiene datos, los usamos. Si le faltan keys de DEFAULT_CONFIGS, las agregamos.
+    // Si la BD tiene datos, los usamos. Si le faltan keys, usamos los defaults.
     const mergedConfigs = DEFAULT_CONFIGS.map((defaultConf) => {
       const dbConf = systemConfigs?.find((c) => c.key === defaultConf.key);
-      return dbConf ? dbConf : defaultConf;
+
+      if (dbConf) {
+        return {
+          ...defaultConf, // 1. Ponemos la base (Asegura que grupo y tipo siempre existan)
+          ...dbConf, // 2. Sobrescribimos con lo que trae la base de datos
+          // 3. 🚀 BLINDAJE: Si en la BD están nulos, forzamos a usar el valor por defecto
+          value:
+            dbConf.value !== null && dbConf.value !== ""
+              ? dbConf.value
+              : defaultConf.value,
+          grupo: dbConf.grupo || defaultConf.grupo,
+          tipo: dbConf.tipo || defaultConf.tipo,
+        };
+      }
+
+      return defaultConf; // Si no existe en la BD, usamos el default puro
     });
 
-    // Agregar configuraciones extra que vengan de la BD pero no estén en defaults (ignorando la de modulos)
+    // Agregar configuraciones extra que vengan de la BD pero no estén en defaults
     const extraDbConfigs = (systemConfigs || []).filter(
       (c) =>
         !DEFAULT_CONFIGS.some((dc) => dc.key === c.key) &&
@@ -196,21 +212,25 @@ const SettingsPage = () => {
 
   const handleSaveAll = async () => {
     try {
-      const promises = localConfig.map((config) =>
-        updateSystemConfig(config.key, config.value),
-      );
+      // 1. Preparamos el array con todas las configuraciones
+      const payload = localConfig.map((config) => ({
+        key: config.key,
+        value: String(config.value),
+      }));
 
-      // Guardar el logo si se subió uno nuevo
+      // 2. Si hay un logo nuevo, lo agregamos al mismo paquete
       if (logoPreview && logoPreview !== logoConfig?.value) {
-        promises.push(updateSystemConfig("empresa_logo", logoPreview));
+        payload.push({ key: "empresa_logo", value: logoPreview });
       }
 
-      await Promise.all(promises);
+      // 3. 🚀 DISPARAMOS 1 SOLA PETICIÓN AL BACKEND
+      await updateBulkSystemConfig(payload);
+
       toast.success("Configuración guardada", {
         description: "Los parámetros han sido aplicados en el sistema.",
       });
     } catch (error) {
-      toast.error("Error al guardar algunos cambios");
+      toast.error("Error al guardar los cambios");
     }
   };
 
