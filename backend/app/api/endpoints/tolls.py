@@ -1,12 +1,13 @@
 # backend/app/api/endpoints/tolls.py
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session, contains_eager
+from sqlalchemy.orm import Session, contains_eager, joinedload
 from typing import List, Optional
 from app.db.database import get_db
 from app.models import models
 from app.schemas import tolls as schemas
 from app.api.endpoints.auth import get_current_user
 from sqlalchemy.exc import IntegrityError
+import datetime
 
 router = APIRouter()
 
@@ -227,15 +228,12 @@ def list_templates(
     client_id: Optional[int] = None,
     db: Session = Depends(get_db),
 ):
-    # 🚀 FILTRO CRÍTICO: Join con segmentos para ignorar los que tienen 'E'
+    # 🚀 SOLUCIÓN: Usamos joinedload para asegurar que la ruta padre SIEMPRE cargue.
+    # Evitamos el outerjoin/contains_eager que hacía desaparecer la ruta entera
+    # si los segmentos tenían estados inconsistentes.
     query = (
         db.query(models.RateTemplate)
-        .outerjoin(
-            models.RateSegment,
-            (models.RateSegment.rate_template_id == models.RateTemplate.id)
-            & (models.RateSegment.record_status == "A"),  # Solo hijos vivos
-        )
-        .options(contains_eager(models.RateTemplate.segments))
+        .options(joinedload(models.RateTemplate.segments))
         .filter(models.RateTemplate.record_status == "A")
     )
 
@@ -248,8 +246,20 @@ def list_templates(
     if client_id:
         query = query.filter(models.RateTemplate.client_id == client_id)
 
-    # Nota: contains_eager requiere un order_by en el padre si los hijos están ordenados
-    return query.order_by(models.RateTemplate.id.desc()).limit(50).all()
+    # Ejecutamos la consulta y traemos hasta 50 rutas
+    templates = query.order_by(models.RateTemplate.id.desc()).limit(50).all()
+
+    # 🚀 MAGIA EN MEMORIA:
+    # Limpiamos los segmentos eliminados ('E') directamente en Python.
+    # Así garantizamos que el Frontend reciba la ruta intacta, pero solo con tramos válidos.
+    for template in templates:
+        template.segments = [
+            seg
+            for seg in template.segments
+            if getattr(seg, "record_status", "A") == "A"
+        ]
+
+    return templates
 
 
 @router.post("/rate-templates", response_model=schemas.RateTemplateResponse)
@@ -258,6 +268,24 @@ def create_template(
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
+    # 🚀 1. VALIDACIÓN: Evitar duplicados solo si la ruta está ACTIVA
+    existing_route = (
+        db.query(models.RateTemplate)
+        .filter(
+            models.RateTemplate.origen == data.origen,
+            models.RateTemplate.destino == data.destino,
+            models.RateTemplate.client_id == data.client_id,
+            models.RateTemplate.record_status == "A",  # Solo buscamos entre las activas
+        )
+        .first()
+    )
+
+    if existing_route:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ya existe una ruta ACTIVA con este mismo origen y destino para este cliente.",
+        )
+
     new_template = models.RateTemplate(
         client_id=data.client_id,
         origen=data.origen,
@@ -276,7 +304,6 @@ def create_template(
         if seg_data.toll_booth_id:
             toll = db.query(models.TollBooth).get(seg_data.toll_booth_id)
             if toll:
-                # 🚀 SIEMPRE GUARDA AMBOS COSTOS (Sencillo 5 ejes, Full 9 ejes)
                 cost_s = toll.costo_5_ejes_sencillo
                 cost_f = toll.costo_9_ejes_full
 
@@ -293,6 +320,7 @@ def create_template(
             toll_booth_id=seg_data.toll_booth_id,
             costo_momento_sencillo=cost_s,
             costo_momento_full=cost_f,
+            record_status="A",
         )
         db.add(segment)
 
@@ -425,8 +453,16 @@ def delete_template(
     if not db_template:
         raise HTTPException(status_code=404, detail="Ruta no encontrada")
 
+    # 🚀 2. MAGIA: Alteramos el nombre para liberar el original
+    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M")
+    db_template.origen = f"{db_template.origen} [ELIMINADA-{timestamp}]"
+
+    # Hacemos el borrado lógico
     db_template.record_status = "E"
     db_template.updated_by_id = user.id
     db.commit()
 
-    return {"status": "deleted", "message": "Ruta eliminada correctamente"}
+    return {
+        "status": "deleted",
+        "message": "Ruta eliminada correctamente. El nombre ha sido liberado.",
+    }
