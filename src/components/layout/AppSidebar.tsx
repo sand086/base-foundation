@@ -8,6 +8,7 @@ import {
   CalendarPlus,
   Fuel,
   FileCheck,
+  Navigation,
   Briefcase,
   DollarSign,
   Settings,
@@ -75,6 +76,11 @@ const menuItems: MenuItem[] = [
     icon: Radar,
     iconName: "Monitoreo",
     path: "/monitoreo",
+  },
+  {
+    title: "Tracking Op",
+    icon: Navigation,
+    path: "/trackingop",
   },
   {
     title: "Despacho",

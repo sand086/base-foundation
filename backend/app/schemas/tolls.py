@@ -17,6 +17,14 @@ class ORMBase(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ClientLite(BaseModel):
+    id: int
+    razon_social: str
+    rfc: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 # =========================================================
 # CASETAS (toll_booths)
 # Model: TollBooth(AuditMixin, Base)
@@ -215,6 +223,7 @@ class RateTemplateUpdate(ORMBase):
 class RateTemplateResponse(RateTemplateBase):
     id: int
     segments: List[RateSegmentResponse] = Field(default_factory=list)
+    client: Optional[ClientLite] = None
 
     # AuditMixin
     record_status: RecordStatus
@@ -222,3 +231,4 @@ class RateTemplateResponse(RateTemplateBase):
     updated_at: Optional[datetime] = None
     created_by_id: Optional[int] = None
     updated_by_id: Optional[int] = None
+    model_config = ConfigDict(from_attributes=True)

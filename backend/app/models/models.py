@@ -722,6 +722,12 @@ class TripTimelineEvent(AuditMixin, Base):
     event = Column(String(500), nullable=False)
     event_type = Column(String(20), default="info")
 
+    # 🚀 AGREGAR ESTAS COLUMNAS PARA QUE COINCIDA CON EL FRONTEND
+    location = Column(String(255), nullable=True)
+    lat = Column(String(50), nullable=True)
+    lng = Column(String(50), nullable=True)
+    comments = Column(Text, nullable=True)
+
     trip_leg = relationship("TripLeg", back_populates="timeline_events")
 
 

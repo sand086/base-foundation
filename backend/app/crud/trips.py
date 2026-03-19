@@ -268,40 +268,68 @@ def delete_trip(db: Session, trip_id: str):
 def add_timeline_event(
     db: Session, trip_id: int, payload: schemas.TripTimelineEventCreatePayload
 ):
+    # 1. Obtener el viaje con todas sus relaciones
     trip = get_trip(db, str(trip_id))
     if not trip:
         return None
 
-    # Actualizamos viaje padre
+    # 2. Actualizamos el estatus del viaje padre
     trip.status = payload.status
     trip.last_update = datetime.utcnow()
 
-    # Buscamos el Tramo activo
-    active_leg = trip.legs[-1] if trip.legs else None
+    # 3. Identificamos el Tramo (Leg) activo
+    # Buscamos el último tramo que no esté finalizado; si todos están cerrados, usamos el último.
+    active_leg = next(
+        (
+            leg
+            for leg in reversed(trip.legs)
+            if leg.status not in ["entregado", "cerrado", "liquidado"]
+        ),
+        trip.legs[-1] if trip.legs else None,
+    )
 
     if active_leg:
+        # 4. Actualizamos datos operativos en el tramo
         active_leg.status = payload.status
         active_leg.last_update = datetime.utcnow()
         active_leg.last_location = payload.location
 
-        event_text = f"Estatus actualizado a {payload.status.replace('_', ' ').title()} en {payload.location}"
-        if payload.comments:
-            event_text += f" | Notas: {payload.comments}"
+        # Si el reporte trae telemetría, actualizamos los valores globales del camión
+        if active_leg.unit:
+            unidad = active_leg.unit
 
-        event_type = (
-            "alert"
-            if payload.status in ["retraso", "accidente", "detenido"]
-            else "checkpoint"
-        )
+            # Actualizar Odómetro (Kilometraje)
+            if payload.odometro:
+                active_leg.odometro_final = payload.odometro
+                # Impactamos el odómetro general de la unidad para el módulo de mantenimientos
+                if hasattr(unidad, "odometro"):
+                    unidad.odometro = payload.odometro
 
+            # Actualizar Niveles de Combustible
+            if payload.combustible_porcentaje is not None:
+                if hasattr(unidad, "nivel_combustible_porcentaje"):
+                    unidad.nivel_combustible_porcentaje = payload.combustible_porcentaje
+
+            if payload.combustible_litros is not None:
+                if hasattr(unidad, "nivel_combustible_litros"):
+                    unidad.nivel_combustible_litros = payload.combustible_litros
+
+        # 6. Crear el registro en la Bitácora (Timeline)
+        # Guardamos los datos en sus columnas individuales para permitir edición y visualización PRO
         db_event = models.TripTimelineEvent(
             trip_leg_id=active_leg.id,
             time=datetime.utcnow(),
-            event=event_text,
-            event_type=event_type,
+            # El campo 'event' sirve como el título o resumen del evento
+            event=f"{payload.status.replace('_', ' ').title()} en {payload.location}",
+            event_type=payload.status,  # 'en_transito', 'detenido', 'accidente', etc.
+            location=payload.location,
+            lat=payload.lat,
+            lng=payload.lng,
+            comments=payload.comments,
         )
         db.add(db_event)
 
+    # 7. Persistir todos los cambios en la base de datos
     db.add(trip)
     db.commit()
     db.refresh(trip)

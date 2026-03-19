@@ -27,6 +27,8 @@ DEFAULT_MODULES = [
     {"id": "cxp", "nombre": "Cuentas por Pagar", "icono": "CreditCard"},
     {"id": "reportes", "nombre": "Reportes", "icono": "BarChart3"},
     {"id": "usuarios", "nombre": "Usuarios", "icono": "Shield"},
+    {"id": "configuracion", "nombre": "Configuración", "icono": "Settings"},
+    {"id": "trackingop", "nombre": "Rastreo operativo", "icono": "Truck"},
 ]
 
 # =========================================================

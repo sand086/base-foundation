@@ -41,6 +41,7 @@ import ProfilePage from "./pages/ProfilePage";
 import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
 import TwoFactorAuth from "./pages/TwoFactorAuth";
+import ControlDeTrafico from "./pages/ControlDeTrafico";
 
 const queryClient = new QueryClient();
 
@@ -63,6 +64,7 @@ const App = () => (
               <Route path="/" element={<AppLayout />}>
                 <Route index element={<Dashboard />} />
                 <Route path="monitoreo" element={<CentroMonitoreo />} />
+                <Route path="/trackingop" element={<ControlDeTrafico />} />
                 <Route path="flota" element={<FlotaUnidades />} />
                 <Route
                   path="flota/unidad/:id"
