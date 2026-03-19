@@ -47,4 +47,12 @@ export const adminService = {
   updateConfig: async (key: string, value: string) => {
     await axiosClient.put(`/catalogs/system-config/${key}`, { value });
   },
+  updateBulkSystemConfig: async (payload: { key: string; value: string }[]) => {
+    // 🚀 Apuntamos a la nueva ruta única
+    const response = await axiosClient.put(
+      "/catalogs/system-config-bulk",
+      payload,
+    );
+    return response.data;
+  },
 };

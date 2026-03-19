@@ -1,12 +1,13 @@
+# backend/app/api/endpoints/catalogs.py
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.models import models
+from pydantic import BaseModel
 from app.schemas import catalogs as schemas
 from typing import List
 import json
 from app.api.endpoints.auth import get_current_active_user
-
 
 router = APIRouter()
 
@@ -40,7 +41,9 @@ def get_unit_types(db: Session = Depends(get_db)):
 
 @router.post("/unit-types/bulk")
 def save_unit_types_bulk(
-    tipos: List[schemas.UnitTypeCreate], db: Session = Depends(get_db)
+    tipos: List[schemas.UnitTypeCreate],
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
 ):
     for item in tipos:
         db_item = (
@@ -53,8 +56,10 @@ def save_unit_types_bulk(
             db_item.icono = item.icono
             db_item.activo = item.activo
             db_item.descripcion = item.descripcion
+            db_item.updated_by_id = current_user.id  # 🚀 Auditoría
         else:
             new_item = models.UnitTypeCatalog(**item.model_dump())
+            new_item.created_by_id = current_user.id  # 🚀 Auditoría
             db.add(new_item)
     db.commit()
     return {"message": "Catálogo actualizado correctamente"}
@@ -67,8 +72,7 @@ def save_unit_types_bulk(
 
 @router.get("/system-config", response_model=List[schemas.SystemConfigResponse])
 def get_system_config(db: Session = Depends(get_db)):
-    """Obtiene todas las configuraciones del sistema (Ruta: /api/catalogs/system-config)"""
-    # Filtramos la de 'modules_list' para que no viaje a la pantalla de Settings generales
+    """Obtiene todas las configuraciones del sistema"""
     return (
         db.query(models.SystemConfig)
         .filter(models.SystemConfig.key != "modules_list")
@@ -81,33 +85,53 @@ def upsert_system_config(
     key: str,
     data: schemas.SystemConfigUpdate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(
-        get_current_active_user
-    ),  # 🚀 Para la auditoría
+    current_user: models.User = Depends(get_current_active_user),
 ):
-    """Actualiza o Crea una configuración específica."""
     config = (
         db.query(models.SystemConfig).filter(models.SystemConfig.key == key).first()
     )
-
     if not config:
-        # Si no existe en la BD, la creamos desde cero
         config = models.SystemConfig(
-            key=key,
-            value=data.value,
-            # Los valores por defecto de grupo y tipo los manejará el frontend al crear
+            key=key, value=data.value, created_by_id=current_user.id
         )
         db.add(config)
     else:
-        # Si ya existe, solo actualizamos el valor
         config.value = data.value
 
-    # Registramos quién hizo el cambio
     config.updated_by_id = current_user.id
-
     db.commit()
     db.refresh(config)
     return config
+
+
+class ConfigBulkUpdate(BaseModel):
+    key: str
+    value: str
+
+
+@router.put("/system-config-bulk")  # <--- Cambiamos la URL aquí
+def update_system_config_bulk(
+    payload: List[ConfigBulkUpdate],
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    for item in payload:
+        config = (
+            db.query(models.SystemConfig)
+            .filter(models.SystemConfig.key == item.key)
+            .first()
+        )
+        if config:
+            config.value = item.value
+            config.updated_by_id = current_user.id
+        else:
+            new_config = models.SystemConfig(
+                key=item.key, value=item.value, created_by_id=current_user.id
+            )
+            db.add(new_config)
+
+    db.commit()
+    return {"message": "Configuraciones actualizadas correctamente"}
 
 
 # =========================================================
@@ -117,15 +141,17 @@ def upsert_system_config(
 
 @router.get("/routes")
 def get_routes_catalog(db: Session = Depends(get_db)):
-    """Ruta final: /api/catalogs/routes"""
-    # Usamos RateTemplate porque es donde guardas tus rutas origen-destino
     return db.query(models.RateTemplate).all()
 
 
 @router.post("/routes")
-def create_route_catalog(ruta: schemas.RouteCreate, db: Session = Depends(get_db)):
-    # Lógica para crear una ruta simple
+def create_route_catalog(
+    ruta: schemas.RouteCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
     new_route = models.RateTemplate(**ruta.model_dump())
+    new_route.created_by_id = current_user.id  # 🚀 Auditoría
     db.add(new_route)
     db.commit()
     db.refresh(new_route)
@@ -133,12 +159,19 @@ def create_route_catalog(ruta: schemas.RouteCreate, db: Session = Depends(get_db
 
 
 @router.delete("/routes/{route_id}")
-def delete_route_catalog(route_id: int, db: Session = Depends(get_db)):
+def delete_route_catalog(
+    route_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
     route = (
         db.query(models.RateTemplate).filter(models.RateTemplate.id == route_id).first()
     )
     if not route:
         raise HTTPException(status_code=404, detail="Ruta no encontrada")
+
+    # En un sistema con AuditMixin, a veces preferimos marcar record_status = 'E'
+    # Pero si deseas borrado físico:
     db.delete(route)
     db.commit()
     return {"message": "Ruta eliminada"}
@@ -173,7 +206,11 @@ def get_modules(db: Session = Depends(get_db)):
 
 
 @router.post("/modules", response_model=List[schemas.ModuleSchema])
-def add_module(modulo: schemas.ModuleSchema, db: Session = Depends(get_db)):
+def add_module(
+    modulo: schemas.ModuleSchema,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
     config = (
         db.query(models.SystemConfig)
         .filter(models.SystemConfig.key == "modules_list")
@@ -189,13 +226,14 @@ def add_module(modulo: schemas.ModuleSchema, db: Session = Depends(get_db)):
 
     if config:
         config.value = json.dumps(current_modules)
+        config.updated_by_id = current_user.id
     else:
         config = models.SystemConfig(
             key="modules_list",
             value=json.dumps(current_modules),
             grupo="system",
             tipo="json",
-            is_public=False,
+            created_by_id=current_user.id,
         )
         db.add(config)
 
@@ -208,6 +246,7 @@ def update_module(
     module_id: str,
     modulo_actualizado: schemas.ModuleSchema,
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
 ):
     config = (
         db.query(models.SystemConfig)
@@ -230,12 +269,17 @@ def update_module(
         raise HTTPException(status_code=404, detail="Módulo no encontrado")
 
     config.value = json.dumps(current_modules)
+    config.updated_by_id = current_user.id  # 🚀 Registro de quién editó
     db.commit()
     return current_modules
 
 
 @router.delete("/modules/{module_id}", response_model=List[schemas.ModuleSchema])
-def delete_module(module_id: str, db: Session = Depends(get_db)):
+def delete_module(
+    module_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
     config = (
         db.query(models.SystemConfig)
         .filter(models.SystemConfig.key == "modules_list")
@@ -251,5 +295,6 @@ def delete_module(module_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Módulo no encontrado")
 
     config.value = json.dumps(filtered_modules)
+    config.updated_by_id = current_user.id  # 🚀 Registro de quién eliminó
     db.commit()
     return filtered_modules

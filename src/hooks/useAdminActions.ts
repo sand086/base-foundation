@@ -1,18 +1,22 @@
+// src/hooks/useAdminActions.ts
 import { useState, useCallback, useEffect } from "react";
 import { toast } from "sonner";
 import { User, SystemConfig } from "@/types/api.types";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { adminService } from "@/services/adminService";
 import { useAuth } from "@/hooks/useAuth";
 
 export function useAdminActions() {
-  const [isLoading, setIsLoading] = useState(false);
-  const { user: profile } = useAuth(); // Obtenemos el perfil del contexto real
+  const queryClient = useQueryClient();
+  // Renombramos el estado local para no chocar con React Query
+  const [isLocalLoading, setIsLocalLoading] = useState(false);
+  const { user: profile } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [systemConfigs, setSystemConfigs] = useState<SystemConfig[]>([]);
 
   // 1. Cargar datos iniciales
   const loadAdminData = useCallback(async () => {
-    setIsLoading(true);
+    setIsLocalLoading(true);
     try {
       const [usersData, configsData] = await Promise.all([
         adminService.getUsers(),
@@ -23,7 +27,7 @@ export function useAdminActions() {
     } catch (error) {
       toast.error("Error al cargar datos administrativos");
     } finally {
-      setIsLoading(false);
+      setIsLocalLoading(false);
     }
   }, []);
 
@@ -33,7 +37,7 @@ export function useAdminActions() {
 
   // 2. Acciones de Usuario
   const createUser = useCallback(async (data: any) => {
-    setIsLoading(true);
+    setIsLocalLoading(true);
     try {
       const newUser = await adminService.createUser(data);
       setUsers((prev) => [...prev, newUser]);
@@ -42,12 +46,12 @@ export function useAdminActions() {
     } catch (error: any) {
       toast.error(error.response?.data?.detail || "Error al crear usuario");
     } finally {
-      setIsLoading(false);
+      setIsLocalLoading(false);
     }
   }, []);
 
   const toggleUserStatus = useCallback(async (id: number) => {
-    setIsLoading(true);
+    setIsLocalLoading(true);
     try {
       await adminService.toggleUserStatus(id);
       setUsers((prev) =>
@@ -57,13 +61,13 @@ export function useAdminActions() {
     } catch (error) {
       toast.error("No se pudo cambiar el estado");
     } finally {
-      setIsLoading(false);
+      setIsLocalLoading(false);
     }
   }, []);
 
   // 3. Acciones de 2FA
   const initiate2FA = useCallback(async () => {
-    setIsLoading(true);
+    setIsLocalLoading(true);
     try {
       const data = await adminService.setup2FA();
       return data; // { secret, qrCodeUrl }
@@ -71,12 +75,12 @@ export function useAdminActions() {
       toast.error("Error al iniciar configuración 2FA");
       throw error;
     } finally {
-      setIsLoading(false);
+      setIsLocalLoading(false);
     }
   }, []);
 
   const verify2FACode = useCallback(async (code: string, secret: string) => {
-    setIsLoading(true);
+    setIsLocalLoading(true);
     try {
       await adminService.confirm2FA(code, secret);
       toast.success("2FA Activado correctamente");
@@ -85,14 +89,14 @@ export function useAdminActions() {
       toast.error("Código inválido");
       return false;
     } finally {
-      setIsLoading(false);
+      setIsLocalLoading(false);
     }
   }, []);
 
-  // 4. Configuración del Sistema
+  // 4. Configuración del Sistema (Actualización individual)
   const updateSystemConfig = useCallback(
     async (key: string, valor: string) => {
-      setIsLoading(true);
+      setIsLocalLoading(true);
       try {
         await adminService.updateConfig(key, valor);
         toast.success("Configuración actualizada");
@@ -100,23 +104,34 @@ export function useAdminActions() {
       } catch (error) {
         toast.error("Error al guardar configuración");
       } finally {
-        setIsLoading(false);
+        setIsLocalLoading(false);
       }
     },
     [loadAdminData],
   );
 
+  // 5. Configuración del Sistema (Actualización en Bloque / Bulk)
+  const updateBulkConfigMutation = useMutation({
+    mutationFn: adminService.updateBulkSystemConfig,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["systemConfigs"] });
+      loadAdminData(); // Sincronizamos la UI después del guardado masivo
+    },
+  });
+
   return {
-    isLoading,
+    // 🚀 Combina inteligentemente la carga local con la de React Query
+    isLoading: isLocalLoading || updateBulkConfigMutation.isPending,
     profile,
     users,
     systemConfigs,
-    // Acciones exportadas
+    // 🚀 Funciones correctamente mapeadas
+    updateSystemConfig,
+    updateBulkSystemConfig: updateBulkConfigMutation.mutateAsync,
     createUser,
     toggleUserStatus,
     initiate2FA,
     verify2FACode,
-    updateSystemConfig,
     refreshData: loadAdminData,
   };
 }
