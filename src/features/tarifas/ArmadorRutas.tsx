@@ -1303,22 +1303,6 @@ export const ArmadorRutas: React.FC = () => {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between border-b bg-slate-50/50 py-3">
           <CardTitle className="text-lg">Catálogo de Rutas Armadas</CardTitle>
-          {/* 🚀 FILTRO POR TIPO DE RUTA */}
-          <Select
-            value={filtroTipo}
-            onValueChange={(v: any) => setFiltroTipo(v)}
-          >
-            <SelectTrigger className="w-[240px] bg-white h-9 text-xs font-bold border-slate-300">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todas las Configuraciones</SelectItem>
-              <SelectItem value="5ejes">
-                Solo Rutas Sencillas (5 Ejes)
-              </SelectItem>
-              <SelectItem value="9ejes">Solo Rutas Full (9 Ejes)</SelectItem>
-            </SelectContent>
-          </Select>
         </CardHeader>
         <CardContent className="pt-6">
           <EnhancedDataTable

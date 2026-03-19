@@ -233,7 +233,10 @@ def list_templates(
     # si los segmentos tenían estados inconsistentes.
     query = (
         db.query(models.RateTemplate)
-        .options(joinedload(models.RateTemplate.segments))
+        .options(
+            joinedload(models.RateTemplate.segments),
+            joinedload(models.RateTemplate.client),
+        )
         .filter(models.RateTemplate.record_status == "A")
     )
 
