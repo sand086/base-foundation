@@ -1,7 +1,8 @@
 from __future__ import annotations
 from datetime import datetime, date
 from typing import List, Optional
-from pydantic import BaseModel, ConfigDict, Field, computed_field
+from pydantic import BaseModel, ConfigDict, Field, computed_field, validator
+
 from app.models.models import RecordStatus, TripStatus, TripLegType
 from app.schemas.clients import ClientResponse
 from app.schemas.units import UnitResponse
@@ -133,9 +134,17 @@ class TripBase(ORMBase):
     descripcion_mercancia: Optional[str] = Field(
         default="Carga General", max_length=255
     )
-    peso_toneladas: Optional[float] = 0.0
+    peso_toneladas: Optional[float] = Field(default=0.0, ge=0.0)
     es_material_peligroso: Optional[bool] = False
     clase_imo: Optional[str] = Field(default=None, max_length=50)
+    sat_clave_producto: Optional[str] = Field(
+        default="78101802", max_length=20, description="Clave SAT para Fletes"
+    )
+    sat_clave_unidad: Optional[str] = Field(
+        default="E48", max_length=10, description="Clave SAT Unidad de Servicio"
+    )
+    mercancia_clave_stcc: Optional[str] = Field(default=None, max_length=20)
+
     status: TripStatus = TripStatus.CREADO
 
     tarifa_base: float
@@ -200,6 +209,9 @@ class TripUpdate(ORMBase):
     peso_toneladas: Optional[float] = None
     es_material_peligroso: Optional[bool] = None
     clase_imo: Optional[str] = Field(default=None, max_length=50)
+    sat_clave_producto: Optional[str] = Field(default=None, max_length=20)
+    sat_clave_unidad: Optional[str] = Field(default=None, max_length=10)
+    mercancia_clave_stcc: Optional[str] = Field(default=None, max_length=20)
     status: Optional[TripStatus] = None
 
     tarifa_base: Optional[float] = None
@@ -282,3 +294,40 @@ class BatchSettlementPreviewResponse(BaseModel):
     deduccion_combustible: float
     alertas: List[str]
     legs_sin_ticket: List[int] = []
+
+
+# =========================================================
+# FACTURACIÓN Y RELACIONES SAT (Nuevos Schemas)
+# =========================================================
+
+
+class ReceivableInvoiceCreate(BaseModel):
+    """Schema para solicitar la creación de una Factura / Carta Porte"""
+
+    viaje_id: int
+    is_nominal: bool = Field(
+        default=False,
+        description="Si es True, genera factura por $1 Peso para Bypass Aduanal",
+    )
+
+    # Campos para la Factura Final (Relación 04)
+    tipo_relacion: Optional[str] = Field(
+        default=None, description="Ej: 04 - Sustitución de CFDI previos"
+    )
+    uuid_relacionado: Optional[str] = Field(
+        default=None, description="UUID de la factura nominal a cancelar"
+    )
+
+    # Datos del pago por defecto que el usuario puede cambiar en el UI
+    metodo_pago: str = Field(default="PUE", pattern="^(PUE|PPD)$")
+    forma_pago: str = Field(default="03")  # Transferencia electrónica de fondos
+    uso_cfdi: str = Field(default="G03")  # Gastos en general
+
+    @validator("uuid_relacionado")
+    def validate_relacion_04(cls, v, values):
+        """Regla de validación crítica: Si hay relación 04, el UUID es obligatorio"""
+        if values.get("tipo_relacion") == "04" and not v:
+            raise ValueError(
+                "El UUID relacionado es obligatorio para la sustitución de CFDI (Relación 04)"
+            )
+        return v

@@ -216,6 +216,7 @@ export interface Operator {
   id: number;
   public_id?: string;
   name: string;
+  rfc?: string;
   phone?: string;
   status: OperatorStatus;
   license_number: string;
@@ -494,6 +495,10 @@ export interface Trip {
   remolque_1?: Unit;
   dolly?: Unit;
   remolque_2?: Unit;
+  uuid_fiscal?: string;
+  sat_clave_producto?: string;
+  sat_clave_unidad?: string;
+  mercancia_clave_stcc?: string;
   legs?: TripLeg[];
 }
 

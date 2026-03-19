@@ -19,6 +19,7 @@ from app.api.endpoints import (
     brands,
     dashboard,
     notifications,
+    billing,
     terminals,
     catalogs,
 )
@@ -73,3 +74,5 @@ api_router.include_router(
     notifications.router, prefix="/notifications", tags=["Notificaciones"]
 )
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])
+
+api_router.include_router(billing.router, prefix="/billing", tags=["Billing"])
