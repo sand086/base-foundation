@@ -13,3 +13,4 @@ alembic.ini
 
 # Ignorar archivos cargados por usuarios
 app/uploads/
+app/storage/
