@@ -94,6 +94,12 @@ class BillingService:
         )
         try:
             self.db.add(nueva_factura)
+
+            # 🚀 NUEVO: Ligar automáticamente el UUID al viaje para que el Frontend lo sepa
+            if nueva_factura.uuid:
+                viaje.uuid_fiscal = nueva_factura.uuid
+                self.db.add(viaje)
+
             self.db.commit()
             self.db.refresh(nueva_factura)
             logger.info(f"✅ Factura persistida exitosamente: {nueva_factura.uuid}")

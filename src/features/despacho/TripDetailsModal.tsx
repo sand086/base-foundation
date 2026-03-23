@@ -297,6 +297,32 @@ export function TripDetailsModal({
     }
   };
 
+  const handleDownloadStampedPDF = async (uuidToDownload: string) => {
+    try {
+      const response = await axiosClient.get(
+        `/billing/invoice/${uuidToDownload}/pdf`,
+        { responseType: "blob" },
+      );
+      const fileURL = window.URL.createObjectURL(
+        new Blob([response.data], { type: "application/pdf" }),
+      );
+
+      const link = document.createElement("a");
+      link.href = fileURL;
+      link.setAttribute(
+        "download",
+        `Carta_Porte_Oficial_${uuidToDownload}.pdf`,
+      );
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast.success("PDF Descargado exitosamente.");
+    } catch {
+      toast.error("Error al descargar el PDF timbrado.");
+    }
+  };
+
   if (!trip) return null;
 
   return (
@@ -331,24 +357,43 @@ export function TripDetailsModal({
                   <Printer className="h-4 w-4 mr-1.5 text-slate-500" /> PDF
                   PROVISIONAL
                 </Button>
+
+                {/* 🚀 BOTÓN INTELIGENTE: TIMBRA O DESCARGA SEGÚN EL CASO */}
                 <Button
                   variant="outline"
                   className={cn(
                     "h-10 text-xs font-black shadow-md border-indigo-200 transition-all",
                     trip.uuid_fiscal
-                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                      : "bg-indigo-50 text-indigo-700",
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                      : "bg-indigo-50 text-indigo-700 hover:bg-indigo-100",
                   )}
-                  onClick={() => handleStampNominal(trip.id, refreshTrips)}
-                  disabled={isStamping || !!trip.uuid_fiscal}
+                  onClick={() => {
+                    if (trip.uuid_fiscal) {
+                      // Si ya existe, solo lo descarga
+                      handleDownloadStampedPDF(trip.uuid_fiscal);
+                    } else {
+                      // Si no existe, lo timbra y al tener éxito lo descarga
+                      handleStampNominal(trip.id, (responseData) => {
+                        refreshTrips();
+                        // responseData viene del hook useBilling como data.data
+                        const generatedUuid = responseData?.data?.uuid;
+                        if (generatedUuid) {
+                          handleDownloadStampedPDF(generatedUuid);
+                        }
+                      });
+                    }
+                  }}
+                  disabled={isStamping}
                 >
                   {isStamping ? (
                     <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                  ) : trip.uuid_fiscal ? (
+                    <CheckCircle2 className="h-4 w-4 mr-1.5" />
                   ) : (
                     <Activity className="h-4 w-4 mr-1.5" />
                   )}
                   {trip.uuid_fiscal
-                    ? "NOMINAL TIMBRADA"
+                    ? "DESCARGAR C. PORTE NOMINAL"
                     : "TIMBRAR NOMINAL ($1)"}
                 </Button>
               </div>

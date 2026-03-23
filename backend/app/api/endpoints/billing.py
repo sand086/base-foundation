@@ -4,6 +4,8 @@ from app.db.database import get_db
 from app.schemas.trips import ReceivableInvoiceCreate
 from app.services.billing_service import BillingService
 
+from fastapi.responses import FileResponse
+
 router = APIRouter()
 
 
@@ -74,3 +76,22 @@ def generar_factura_final(
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/invoice/{uuid}/pdf")
+def download_invoice_pdf(uuid: str, db: Session = Depends(get_db)):
+    """
+    Busca el archivo PDF generado en el disco y lo descarga.
+    """
+    service = BillingService(db)
+    pdf_path = service.storage_dir / f"{uuid}.pdf"
+
+    if not pdf_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="El PDF timbrado aún no existe o no se pudo generar.",
+        )
+
+    return FileResponse(
+        path=pdf_path, filename=f"Carta_Porte_{uuid}.pdf", media_type="application/pdf"
+    )
