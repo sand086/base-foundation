@@ -28,6 +28,7 @@ from app.models.models import (
     Client as ClientModel,
     Unit,
     Operator,
+    SystemConfig,
 )
 from app.schemas.trips import ReceivableInvoiceCreate
 
@@ -46,7 +47,9 @@ class BillingService:
         self.history = HistoryPlugin()
 
         self.base_path = Path(
-            os.getenv("APP_BASE_PATH", Path(__file__).resolve().parents[1])
+            os.getenv(
+                "APP_BASE_PATH", Path(__file__).resolve().parents[2]
+            )  # 🚀 Ajustado a parents[2] para llegar a /app
         )
         self.cert_dir = Path(os.getenv("CERT_DIR", self.base_path / "certs"))
         self.storage_dir = Path(
@@ -56,15 +59,30 @@ class BillingService:
             os.getenv("TEMPLATES_DIR", self.base_path / "templates")
         )
 
+        self.cert_dir.mkdir(parents=True, exist_ok=True)
         self.storage_dir.mkdir(parents=True, exist_ok=True)
 
-        self.path_cer = (
-            self.cert_dir / "CSD_Sucursal_1_EKU9003173C9_20230517_223850.cer"
+        cert_conf = self.db.query(SystemConfig).filter_by(key="sat_cert_path").first()
+        key_conf = self.db.query(SystemConfig).filter_by(key="sat_key_path").first()
+        pass_conf = (
+            self.db.query(SystemConfig).filter_by(key="sat_key_password").first()
         )
-        self.path_key = (
-            self.cert_dir / "CSD_Sucursal_1_EKU9003173C9_20230517_223850.key"
-        )
-        self.key_password = "12345678a"
+
+        if cert_conf and cert_conf.value and Path(cert_conf.value).exists():
+            self.path_cer = Path(cert_conf.value)
+        else:
+            self.path_cer = (
+                self.cert_dir / "CSD_Sucursal_1_EKU9003173C9_20230517_223850.cer"
+            )
+
+        if key_conf and key_conf.value and Path(key_conf.value).exists():
+            self.path_key = Path(key_conf.value)
+        else:
+            self.path_key = (
+                self.cert_dir / "CSD_Sucursal_1_EKU9003173C9_20230517_223850.key"
+            )
+
+        self.key_password = pass_conf.value if pass_conf else "12345678a"
 
     def generar_carta_porte_nominal(
         self, invoice_data: ReceivableInvoiceCreate

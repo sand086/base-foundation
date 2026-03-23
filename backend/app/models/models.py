@@ -201,6 +201,7 @@ class AuditMixin:
     record_status = Column(
         pg_enum(RecordStatus, "recordstatus"),
         nullable=False,
+        default=RecordStatus.ACTIVO,
         server_default=RecordStatus.ACTIVO.value,
     )
 

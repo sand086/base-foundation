@@ -350,12 +350,39 @@ export function TripDetailsModal({
               <div className="flex gap-2">
                 <Button
                   variant="outline"
-                  size="sm"
-                  className="h-10 border-slate-300 bg-white font-bold"
-                  onClick={handlePrintPDF}
+                  className={cn(
+                    "h-10 text-xs font-black shadow-md border-indigo-200 transition-all",
+                    trip.uuid_fiscal
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                      : "bg-indigo-50 text-indigo-700 hover:bg-indigo-100",
+                  )}
+                  onClick={() => {
+                    if (trip.uuid_fiscal) {
+                      // Si ya existe, solo lo descarga
+                      handleDownloadStampedPDF(trip.uuid_fiscal);
+                    } else {
+                      // Si no existe, lo timbra y al tener éxito lo descarga
+                      handleStampNominal(trip.id, (responseData) => {
+                        refreshTrips();
+                        const generatedUuid = responseData?.data?.uuid;
+                        if (generatedUuid) {
+                          handleDownloadStampedPDF(generatedUuid);
+                        }
+                      });
+                    }
+                  }}
+                  disabled={isStamping}
                 >
-                  <Printer className="h-4 w-4 mr-1.5 text-slate-500" /> PDF
-                  PROVISIONAL
+                  {isStamping ? (
+                    <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                  ) : trip.uuid_fiscal ? (
+                    <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                  ) : (
+                    <Activity className="h-4 w-4 mr-1.5" />
+                  )}
+                  {trip.uuid_fiscal
+                    ? "DESCARGAR C. PORTE NOMINAL"
+                    : "TIMBRAR NOMINAL ($1)"}
                 </Button>
 
                 {/* 🚀 BOTÓN INTELIGENTE: TIMBRA O DESCARGA SEGÚN EL CASO */}

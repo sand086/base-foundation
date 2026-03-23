@@ -331,7 +331,7 @@ def reopen_trip_leg(leg_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{trip_id}/carta-porte-ciega")
-def generate_carta_porte_ciega(trip_id: int, db: Session = Depends(get_db)):
+def generate_carta_porte(trip_id: int, db: Session = Depends(get_db)):
     # 1. Verificar si WeasyPrint cargó
     if HTML is None:
         raise HTTPException(
@@ -359,7 +359,7 @@ def generate_carta_porte_ciega(trip_id: int, db: Session = Depends(get_db)):
 
     # 4. Renderizar HTML con Jinja2
     try:
-        template = jinja_env.get_template("carta_porte_ciega.html")
+        template = jinja_env.get_template("carta_porte.html")
         html_content = template.render(
             trip=trip,
             leg=active_leg,
