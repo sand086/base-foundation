@@ -1,9 +1,12 @@
+import os
+
 import base64
 import logging
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 from io import BytesIO
+
 
 import zeep
 from zeep.plugins import HistoryPlugin
@@ -42,10 +45,17 @@ class BillingService:
         self.pac_pass = "timbrado.SF.16672"
         self.history = HistoryPlugin()
 
-        self.base_path = Path(r"C:\xampp\htdocs\github\base-foundation\backend\app")
-        self.cert_dir = self.base_path / "certs"
-        self.storage_dir = self.base_path / "storage" / "xml_timbrados"
-        self.templates_dir = self.base_path / "templates"
+        self.base_path = Path(
+            os.getenv("APP_BASE_PATH", Path(__file__).resolve().parents[1])
+        )
+        self.cert_dir = Path(os.getenv("CERT_DIR", self.base_path / "certs"))
+        self.storage_dir = Path(
+            os.getenv("STORAGE_DIR", self.base_path / "storage" / "xml_timbrados")
+        )
+        self.templates_dir = Path(
+            os.getenv("TEMPLATES_DIR", self.base_path / "templates")
+        )
+
         self.storage_dir.mkdir(parents=True, exist_ok=True)
 
         self.path_cer = (
