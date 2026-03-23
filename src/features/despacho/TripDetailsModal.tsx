@@ -61,18 +61,19 @@ import {
   Box,
   ChevronsUpDown,
   PlusCircle,
+  Route as RouteIcon,
 } from "lucide-react";
 import { Trip, TripLeg } from "@/types/api.types";
 import { useTrips } from "@/hooks/useTrips";
 import { useUnits } from "@/hooks/useUnits";
 import { useBilling } from "@/hooks/useBilling";
 import axiosClient from "@/api/axiosClient";
+import { cn } from "@/lib/utils";
 
 interface TripDetailsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   trip: Trip | null;
-
   onRelayClick?: (leg: TripLeg, trip: Trip) => void;
   onSettleClick?: (leg: TripLeg, trip: Trip) => void;
   onIncidentClick?: (trip: Trip) => void;
@@ -106,7 +107,6 @@ export function TripDetailsModal({
   const [mantenerPreciosManuales, setMantenerPreciosManuales] = useState(true);
   const [isUndoing, setIsUndoing] = useState(false);
 
-  // 🚀 ESTADOS PARA LA TERMINAL DE VACÍOS (COMBOBOX)
   const [showTerminalModal, setShowTerminalModal] = useState(false);
   const [terminals, setTerminals] = useState<Terminal[]>([]);
   const [selectedTerminal, setSelectedTerminal] = useState("");
@@ -116,13 +116,24 @@ export function TripDetailsModal({
   const [finishingLeg, setFinishingLeg] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
+  // 🚀 FASE 4: Utilidad de Formateo de Moneda (Comas y Punto)
+  const formatCurrency = (val: number) =>
+    new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: "MXN",
+      minimumFractionDigits: 2,
+    }).format(val || 0);
+
   useEffect(() => {
-    if (trip) {
-      // Solo actualizamos si NO estamos en modo edición para no borrar lo que el usuario escribe
-      if (!isEditing) {
-        setTarifaBase(trip.tarifa_base || 0);
-        setCostoCasetas(trip.costo_casetas || 0);
-      }
+    if (open) {
+      loadTerminals();
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (trip && !isEditing) {
+      setTarifaBase(trip.tarifa_base || 0);
+      setCostoCasetas(trip.costo_casetas || 0);
     }
   }, [trip, isEditing]);
 
@@ -140,15 +151,15 @@ export function TripDetailsModal({
     setIsCreatingTerminal(true);
     try {
       const response = await axiosClient.post("/terminals", { nombre });
-      const newTerminal = response.data;
       setTerminals((prev) =>
-        [...prev, newTerminal].sort((a, b) => a.nombre.localeCompare(b.nombre)),
+        [...prev, response.data].sort((a, b) =>
+          a.nombre.localeCompare(b.nombre),
+        ),
       );
-      setSelectedTerminal(newTerminal.nombre);
+      setSelectedTerminal(response.data.nombre);
       setTerminalComboboxOpen(false);
-      setSearchTerminalQuery("");
-      toast.success("Terminal añadida al catálogo");
-    } catch (error) {
+      toast.success("Terminal añadida");
+    } catch {
       toast.error("Error al crear la terminal");
     } finally {
       setIsCreatingTerminal(false);
@@ -168,14 +179,15 @@ export function TripDetailsModal({
   const totalAnticiposGlobales = useMemo(() => {
     if (!trip) return 0;
     return (
-      trip.legs?.reduce((acc, leg) => {
-        const totalLeg =
+      trip.legs?.reduce(
+        (acc, leg) =>
+          acc +
           (leg.anticipo_casetas || 0) +
           (leg.anticipo_combustible || 0) +
           (leg.anticipo_viaticos || 0) +
-          (leg.otros_anticipos || 0);
-        return acc + totalLeg;
-      }, 0) || 0
+          (leg.otros_anticipos || 0),
+        0,
+      ) || 0
     );
   }, [trip]);
 
@@ -205,81 +217,30 @@ export function TripDetailsModal({
     );
   }, [trip]);
 
-  useEffect(() => {
-    if (trip && open) {
-      setTarifaBase(trip.tarifa_base || 0);
-      setCostoCasetas(trip.costo_casetas || 0);
-      setIsEditing(false);
-      setMantenerPreciosManuales(true);
-      setActiveTab("fases");
-    }
-  }, [trip, open]);
-
-  if (!trip) return null;
-
-  const handleChassisToggle = async (
-    unitId: number,
-    eco: string,
-    checked: boolean,
-  ) => {
-    const ok = await updateLoadStatus(unitId, checked);
-    if (ok) {
-      toast.success(checked ? "Chasis CARGADO" : "Chasis VACÍO");
-      if (activeLeg) {
-        await addTimelineEvent(
-          trip.id,
-          activeLeg.id,
-          {
-            status: trip.status,
-            location: "Patio Base",
-            comments: `Operación de Patio: Chasis ECO-${eco} fue marcado físicamente como ${checked ? "CARGADO" : "VACÍO"}.`,
-          },
-          true,
-        );
-      } else {
-        await refreshTrips();
-      }
-    }
-  };
-  // 🚀 CORRECCIÓN: Guardar Finanzas y Refrescar
   const handleSaveFinanzas = async () => {
     setSaving(true);
-    const success = await editTrip(String(trip.id), {
+    const success = await editTrip(String(trip?.id), {
       tarifa_base: Number(tarifaBase),
       costo_casetas: Number(costoCasetas),
     });
     if (success) {
-      await refreshTrips(); // 🚀 OBLIGATORIO: Actualizar estado global
+      await refreshTrips();
       setIsEditing(false);
       toast.success("Finanzas actualizadas.");
-      if (activeLeg) {
-        await addTimelineEvent(
-          trip.id,
-          activeLeg.id,
-          {
-            status: trip.status,
-            location: "Administración",
-            comments: `Ajuste comercial manual: Flete Base $${tarifaBase}, Casetas $${costoCasetas}.`,
-          },
-          true,
-        );
-      }
     }
     setSaving(false);
   };
 
-  // 🚀 CORRECCIÓN: Deshacer fase y Refrescar
   const handleUndoLeg = async () => {
     const ok = confirm("¿Estás seguro de deshacer el último movimiento?");
     if (!ok) return;
-
     setIsUndoing(true);
     try {
-      await axiosClient.post(`/trips/${trip.id}/undo-leg`);
-      toast.success("Movimiento deshecho correctamente.");
-      await refreshTrips(); // 🚀 OBLIGATORIO: Actualizar para cambiar estatus operativo
-    } catch (error: any) {
-      toast.error("No se pudo deshacer la fase.");
+      await axiosClient.post(`/trips/${trip?.id}/undo-leg`);
+      await refreshTrips();
+      toast.success("Movimiento deshecho.");
+    } catch {
+      toast.error("No se pudo deshacer.");
     } finally {
       setIsUndoing(false);
     }
@@ -287,22 +248,15 @@ export function TripDetailsModal({
 
   const handleManualSync = async () => {
     setIsSyncing(true);
-    try {
-      await refreshTrips(); // Refresca el estado global de useTrips
-      toast.success("Datos actualizados", {
-        description: "Se han cargado los cambios más recientes.",
-      });
-    } catch (error) {
-      toast.error("Error al sincronizar");
-    } finally {
-      setIsSyncing(false);
-    }
+    await refreshTrips();
+    setIsSyncing(false);
+    toast.success("Datos sincronizados.");
   };
 
   const handlePrintPDF = async () => {
     try {
       const response = await axiosClient.get(
-        `/trips/${trip.id}/carta-porte-ciega`,
+        `/trips/${trip?.id}/carta-porte-ciega`,
         { responseType: "blob" },
       );
       const fileURL = window.URL.createObjectURL(
@@ -314,669 +268,321 @@ export function TripDetailsModal({
     }
   };
 
-  const handlePrintTripSheet = () => {
-    if (!trip) return;
-
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) {
-      toast.error("Por favor permite las ventanas emergentes para imprimir.");
-      return;
-    }
-
-    const html = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Instrucción de Viaje - #${trip.public_id}</title>
-          <style>
-            body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 40px; color: #1e293b; max-width: 800px; margin: 0 auto; }
-            .header { text-align: center; border-bottom: 3px solid #0f172a; padding-bottom: 15px; margin-bottom: 30px; }
-            .title { font-size: 26px; font-weight: 900; margin: 0; text-transform: uppercase; color: #0f172a; }
-            .subtitle { font-size: 14px; color: #64748b; margin-top: 5px; font-weight: bold; letter-spacing: 2px; }
-            .grid { display: flex; flex-wrap: wrap; gap: 20px; margin-bottom: 30px; }
-            .box { flex: 1; min-width: 45%; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; }
-            .box h3 { margin-top: 0; font-size: 12px; text-transform: uppercase; color: #64748b; border-bottom: 1px solid #cbd5e1; padding-bottom: 5px; margin-bottom: 10px; }
-            .box p { margin: 5px 0; font-size: 14px; }
-            .box strong { color: #334155; }
-            .total-row { font-weight: 900; font-size: 18px; background-color: #0f172a; color: white; padding: 15px; border-radius: 8px; text-align: center; margin-top: 20px; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1 class="title">ORDEN DE SERVICIO Y DESPACHO</h1>
-            <p class="subtitle">VIAJE: #${trip.public_id || trip.id} • FECHA: ${new Date().toLocaleDateString("es-MX")}</p>
-          </div>
-
-          <div class="grid">
-            <div class="box">
-              <h3>Ruta y Cliente</h3>
-              <p><strong>Cliente:</strong> ${trip.client?.razon_social || "N/A"}</p>
-              <p><strong>Origen:</strong> ${trip.origin}</p>
-              <p><strong>Destino:</strong> ${trip.destination}</p>
-              <p><strong>Mercancía:</strong> ${trip.descripcion_mercancia || "Carga General"}</p>
-            </div>
-            
-            <div class="box">
-              <h3>Unidad y Operador (Fase Activa)</h3>
-              <p><strong>Operador:</strong> ${activeLeg?.operator?.name || "Por Asignar"}</p>
-              <p><strong>Tractocamión:</strong> ECO-${activeLeg?.unit?.numero_economico || "N/A"} (${activeLeg?.unit?.placas || "S/P"})</p>
-              <p><strong>Remolque 1:</strong> ${trip.remolque_1?.numero_economico ? "ECO-" + trip.remolque_1.numero_economico : "N/A"}</p>
-              ${trip.dolly_id ? `<p><strong>Dolly:</strong> ECO-${trip.dolly?.numero_economico || "ASIGNADO"}</p>` : ""}
-              ${trip.remolque_2_id ? `<p><strong>Remolque 2:</strong> ECO-${trip.remolque_2?.numero_economico || "ASIGNADO"}</p>` : ""}
-            </div>
-
-            <div class="box" style="flex: 100%;">
-              <h3>Anticipos Depositados (Gastos Operativos)</h3>
-              <p><strong>Fondo para Casetas:</strong> $${totalAnticiposGlobales.toLocaleString("es-MX")}</p>
-              <p style="font-size: 11px; color: #64748b; margin-top: 10px;">* El combustible se concilia directamente contra tarjeta o vales de estación.</p>
-            </div>
-          </div>
-
-          <div class="total-row">
-            BUEN VIAJE - CONDUZCA CON PRECAUCIÓN
-          </div>
-
-          <script>
-            window.onload = () => { setTimeout(() => { window.print(); window.close(); }, 500); }
-          </script>
-        </body>
-      </html>
-    `;
-    printWindow.document.write(html);
-    printWindow.document.close();
-  };
-
   const submitTerminalArrival = async () => {
-    if (!activeLeg || !selectedTerminal) {
-      toast.error("Por favor selecciona o escribe la terminal de entrega.");
-      return;
-    }
-
+    if (!activeLeg || !selectedTerminal) return;
     setFinishingLeg(true);
     try {
       await addTimelineEvent(
-        String(trip.id),
+        String(trip?.id),
         activeLeg.id,
         {
           status: "entregado",
           location: selectedTerminal,
-          comments: `📍 LLEGADA REGISTRADA: El esqueleto fue retornado vacío y entregado en: ${selectedTerminal}.`,
-          notifyClient: false,
+          comments: `📍 LLEGADA REGISTRADA: El esqueleto fue entregado en: ${selectedTerminal}.`,
         },
         true,
       );
-
-      if (trip.remolque_1_id) await updateLoadStatus(trip.remolque_1_id, false);
-      if (trip.remolque_2_id) await updateLoadStatus(trip.remolque_2_id, false);
-
-      toast.success("Viaje finalizado en terminal correctamente.");
+      if (trip?.remolque_1_id)
+        await updateLoadStatus(trip.remolque_1_id, false);
+      if (trip?.remolque_2_id)
+        await updateLoadStatus(trip.remolque_2_id, false);
       setShowTerminalModal(false);
       await refreshTrips();
-    } catch (error) {
-      toast.error("Ocurrió un error al registrar la llegada.");
+      toast.success("Viaje finalizado.");
+    } catch {
+      toast.error("Error al registrar llegada.");
     } finally {
       setFinishingLeg(false);
     }
   };
 
+  if (!trip) return null;
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-6xl bg-white h-[90vh] flex flex-col p-0 overflow-hidden rounded-2xl shadow-2xl">
+        <DialogContent className="max-w-6xl bg-white h-[90vh] flex flex-col p-0 overflow-hidden rounded-2xl shadow-2xl border-none">
           <DialogHeader className="p-6 pb-4 bg-slate-100 border-b border-slate-300 shrink-0">
             <div className="flex justify-between items-start">
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-brand-navy flex items-center justify-center shadow-inner">
+                <div className="w-12 h-12 rounded-xl bg-brand-navy flex items-center justify-center shadow-lg">
                   <Navigation className="h-6 w-6 text-black" />
                 </div>
                 <div>
-                  <DialogTitle className="text-2xl font-black text-brand-navy flex items-center gap-2">
-                    Centro de Mando: Viaje #{trip.public_id || trip.id}
+                  <DialogTitle className="text-2xl font-black text-brand-navy uppercase tracking-tighter">
+                    #{trip.public_id || trip.id} | {trip.route_name}
                   </DialogTitle>
-                  <DialogDescription className="text-sm font-medium mt-1">
+                  <DialogDescription className="text-xs font-bold text-slate-500 uppercase">
                     Cliente:{" "}
-                    <span className="text-slate-800 font-bold uppercase">
+                    <span className="text-slate-900">
                       {trip.client?.razon_social}
                     </span>
                   </DialogDescription>
                 </div>
               </div>
-              <div className="flex flex-col items-end gap-2 sm:mt-0 pt-10">
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-9 text-xs border-slate-300 text-slate-700 bg-white hover:bg-slate-50 font-bold shadow-sm"
-                    onClick={handlePrintTripSheet}
-                  >
-                    <Printer className="h-4 w-4 mr-1.5 text-slate-500" /> Hoja
-                    de Ruta
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-9 text-xs border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 font-bold shadow-sm"
-                    onClick={() => handleStampNominal(trip.id, refreshTrips)}
-                    disabled={isStamping || !!trip.uuid_fiscal}
-                  >
-                    {isStamping ? (
-                      <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                    ) : (
-                      <Printer className="h-4 w-4 mr-1.5" />
-                    )}
-                    {trip.uuid_fiscal
-                      ? "C. Porte Generada"
-                      : "Generar C. Porte ($1)"}
-                  </Button>
-                </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-10 border-slate-300 bg-white font-bold"
+                  onClick={handlePrintPDF}
+                >
+                  <Printer className="h-4 w-4 mr-1.5 text-slate-500" /> PDF
+                  PROVISIONAL
+                </Button>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "h-10 text-xs font-black shadow-md border-indigo-200 transition-all",
+                    trip.uuid_fiscal
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      : "bg-indigo-50 text-indigo-700",
+                  )}
+                  onClick={() => handleStampNominal(trip.id, refreshTrips)}
+                  disabled={isStamping || !!trip.uuid_fiscal}
+                >
+                  {isStamping ? (
+                    <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                  ) : (
+                    <Activity className="h-4 w-4 mr-1.5" />
+                  )}
+                  {trip.uuid_fiscal
+                    ? "NOMINAL TIMBRADA"
+                    : "TIMBRAR NOMINAL ($1)"}
+                </Button>
               </div>
             </div>
           </DialogHeader>
 
           <div className="flex flex-1 overflow-hidden flex-col lg:flex-row">
-            {/* PANEL IZQUIERDO: Control de Patio + Ruta */}
-            <div className="w-full lg:w-[30%] bg-slate-50 border-r border-slate-200 flex flex-col">
-              <ScrollArea className="flex-1 p-6">
-                <div className="space-y-6">
-                  <div className="space-y-2">
-                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                      <Box className="h-4 w-4 text-emerald-600" /> Control
-                      Físico de Patio
-                    </h3>
-                    {trip.remolque_1 && (
-                      <Card className="border-slate-200 shadow-sm overflow-hidden">
-                        <div
-                          className={`h-1.5 ${trip.remolque_1.is_loaded ? "bg-orange-500" : "bg-slate-300"}`}
-                        />
-                        <CardContent className="p-3 flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="p-1.5 bg-slate-100 rounded-lg">
-                              <LinkIcon className="h-4 w-4 text-slate-500" />
-                            </div>
-                            <div>
-                              <p className="text-[10px] font-bold text-slate-400 uppercase">
-                                Remolque 1
-                              </p>
-                              <p className="font-black text-brand-navy">
-                                ECO-{trip.remolque_1.numero_economico}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex flex-col items-end gap-1">
-                            <Switch
-                              checked={Boolean(trip.remolque_1.is_loaded)}
-                              disabled
-                            />
-                            <Badge
-                              variant={
-                                trip.remolque_1.is_loaded
-                                  ? "default"
-                                  : "outline"
-                              }
-                              className="text-[9px] h-4 mt-1"
-                            >
-                              {trip.remolque_1.is_loaded
-                                ? "📦 CARGADO"
-                                : "➖ VACÍO"}
-                            </Badge>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )}
-                    {trip.remolque_2 && (
-                      <Card className="border-slate-200 shadow-sm overflow-hidden mt-2">
-                        <div
-                          className={`h-1.5 ${trip.remolque_2.is_loaded ? "bg-orange-500" : "bg-slate-300"}`}
-                        />
-                        <CardContent className="p-3 flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="p-1.5 bg-slate-100 rounded-lg">
-                              <LinkIcon className="h-4 w-4 text-slate-500" />
-                            </div>
-                            <div>
-                              <p className="text-[10px] font-bold text-slate-400 uppercase">
-                                Remolque 2
-                              </p>
-                              <p className="font-black text-brand-navy">
-                                ECO-{trip.remolque_2.numero_economico}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex flex-col items-end gap-1">
-                            <Switch
-                              checked={Boolean(trip.remolque_2.is_loaded)}
-                              disabled
-                            />
-                            <Badge
-                              variant={
-                                trip.remolque_2.is_loaded
-                                  ? "default"
-                                  : "outline"
-                              }
-                              className="text-[9px] h-4 mt-1"
-                            >
-                              {trip.remolque_2.is_loaded
-                                ? "📦 CARGADO"
-                                : "➖ VACÍO"}
-                            </Badge>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )}
-                    {trip.dolly_id && (
-                      <Badge
-                        variant="secondary"
-                        className="w-full justify-center bg-blue-50 text-blue-700 border-blue-200 py-1.5 text-xs mt-2"
-                      >
-                        Dolly: Eco{" "}
-                        {trip.dolly?.numero_economico || trip.dolly_id}
-                      </Badge>
-                    )}
-                    {!trip.remolque_1_id && (
-                      <span className="text-xs text-slate-400 italic block text-center mt-2">
-                        Sin remolques asignados
-                      </span>
-                    )}
-                  </div>
-
-                  <Separator />
-
-                  <div className="space-y-2">
-                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                      <MapPin className="h-4 w-4 text-emerald-600" /> Ruta
-                      Global
-                    </h3>
-                    <Card className="shadow-sm border-slate-200">
-                      <CardContent className="p-4 pt-4 text-sm space-y-5">
-                        <div className="relative pl-6 space-y-5">
-                          <div className="absolute left-2.5 top-2 bottom-2 w-0.5 bg-slate-200" />
-                          <div className="relative">
-                            <div className="absolute -left-[27px] top-1 w-3 h-3 bg-blue-500 rounded-full ring-4 ring-white shadow-sm" />
-                            <p className="text-[10px] text-slate-400 font-bold uppercase leading-none">
-                              Origen
-                            </p>
-                            <p className="font-semibold text-slate-800 leading-tight mt-1">
-                              {trip.origin}
-                            </p>
-                          </div>
-                          <div className="relative">
-                            <div className="absolute -left-[27px] top-1 w-3 h-3 bg-emerald-500 rounded-full ring-4 ring-white shadow-sm" />
-                            <p className="text-[10px] text-slate-400 font-bold uppercase leading-none">
-                              Destino Final
-                            </p>
-                            <p className="font-semibold text-slate-800 leading-tight mt-1">
-                              {trip.destination}
-                            </p>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
+            {/* Panel Izquierdo */}
+            <div className="w-full lg:w-[30%] bg-slate-50 border-r border-slate-200 p-6 space-y-6 overflow-y-auto">
+              <div className="space-y-2">
+                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                  <RouteIcon className="h-3 w-3" /> Ruta de Servicio
+                </h3>
+                <div className="bg-white border rounded-xl p-4 shadow-sm space-y-4 text-xs">
+                  <div className="relative pl-6">
+                    <div className="absolute left-2.5 top-2 bottom-2 w-0.5 bg-slate-100" />
+                    <div className="mb-4">
+                      <div className="absolute -left-[27px] top-1 w-3 h-3 bg-blue-500 rounded-full ring-4 ring-white" />
+                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                        Origen
+                      </p>
+                      <p className="font-black text-slate-800 uppercase">
+                        {trip.origin}
+                      </p>
+                    </div>
+                    <div>
+                      <div className="absolute -left-[27px] top-1 w-3 h-3 bg-emerald-500 rounded-full ring-4 ring-white" />
+                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                        Destino Final
+                      </p>
+                      <p className="font-black text-slate-800 uppercase">
+                        {trip.destination}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </ScrollArea>
+              </div>
+              <Separator />
+              <div className="space-y-2">
+                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                  <Box className="h-3 w-3" /> Equipos Asignados
+                </h3>
+                <div className="grid grid-cols-1 gap-2">
+                  <div className="p-3 bg-white rounded-lg border flex justify-between items-center text-xs">
+                    <span className="font-bold text-slate-500 uppercase tracking-tighter">
+                      Tractor:
+                    </span>
+                    <span className="font-black text-brand-navy">
+                      ECO-{activeLeg?.unit?.numero_economico || "S/A"}
+                    </span>
+                  </div>
+                  {trip.remolque_1 && (
+                    <div className="p-3 bg-white rounded-lg border flex justify-between items-center text-xs">
+                      <span className="font-bold text-slate-500 uppercase tracking-tighter">
+                        Remolque 1:
+                      </span>
+                      <span className="font-black text-brand-navy uppercase">
+                        ECO-{trip.remolque_1.numero_economico}
+                      </span>
+                    </div>
+                  )}
+                  {trip.remolque_2 && (
+                    <div className="p-3 bg-white rounded-lg border flex justify-between items-center text-xs">
+                      <span className="font-bold text-slate-500 uppercase tracking-tighter">
+                        Remolque 2:
+                      </span>
+                      <span className="font-black text-brand-navy uppercase">
+                        ECO-{trip.remolque_2.numero_economico}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
-            {/* PANEL DERECHO: Tabs + Botonera */}
+            {/* Panel Derecho */}
             <div className="w-full lg:w-[70%] flex flex-col bg-white">
               <Tabs
                 value={activeTab}
                 onValueChange={setActiveTab}
                 className="flex flex-col h-full"
               >
-                <div className="px-6 pt-4 border-b border-slate-100">
-                  <TabsList className="grid w-full grid-cols-3 bg-slate-100 p-1 rounded-xl h-12">
-                    <TabsTrigger
-                      value="fases"
-                      className="text-xs font-bold rounded-lg data-[state=active]:shadow-sm"
-                    >
-                      <Activity className="h-4 w-4 mr-2" /> Fases Operativas
+                <div className="px-6 pt-4 border-b">
+                  <TabsList className="grid grid-cols-3 bg-slate-100 h-11 p-1 rounded-xl">
+                    <TabsTrigger value="fases" className="text-xs font-bold">
+                      Fases Operativas
                     </TabsTrigger>
-                    <TabsTrigger
-                      value="finanzas"
-                      className="text-xs font-bold rounded-lg data-[state=active]:shadow-sm"
-                    >
-                      <DollarSign className="h-4 w-4 mr-2" /> Estado Financiero
+                    <TabsTrigger value="finanzas" className="text-xs font-bold">
+                      Estado Financiero
                     </TabsTrigger>
-                    <TabsTrigger
-                      value="bitacora"
-                      className="text-xs font-bold rounded-lg data-[state=active]:shadow-sm"
-                    >
-                      <History className="h-4 w-4 mr-2" /> Diario / Bitácora
+                    <TabsTrigger value="bitacora" className="text-xs font-bold">
+                      Diario Bitácora
                     </TabsTrigger>
                   </TabsList>
                 </div>
 
                 <ScrollArea className="flex-1">
                   <div className="p-6">
-                    <TabsContent
-                      value="fases"
-                      className="m-0 focus-visible:outline-none"
-                    >
-                      {!trip.legs || trip.legs.length === 0 ? (
-                        <div className="p-12 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-300 text-slate-400">
-                          <AlertCircle className="h-10 w-10 mx-auto mb-3 opacity-50" />
-                          <p className="font-medium">
-                            El viaje no tiene tramos registrados.
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="relative pl-12 space-y-8 before:absolute before:inset-0 before:left-5 before:h-full before:w-0.5 before:bg-slate-200">
-                          {trip.legs.map((leg: TripLeg, index: number) => {
-                            const isClosed = leg.status === "cerrado";
-                            const isEntregado = leg.status === "entregado";
-                            const isPending = !isClosed && !isEntregado;
-                            const isIncident = [
-                              "detenido",
-                              "retraso",
-                              "accidente",
-                            ].includes(leg.status);
-                            const isLastLeg = index === trip.legs!.length - 1;
-
-                            return (
-                              <div key={leg.id} className="relative w-full">
-                                <div
-                                  className={`absolute -left-12 flex items-center justify-center w-10 h-10 rounded-full border-4 border-white shadow-md z-10 ${isClosed ? "bg-emerald-100 ring-2 ring-emerald-500" : isEntregado ? "bg-amber-100 ring-2 ring-amber-500" : "bg-slate-50 ring-2 ring-brand-navy"}`}
-                                >
-                                  {isClosed ? (
-                                    <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                                  ) : (
-                                    <span
-                                      className={`text-base font-black ${isEntregado ? "text-amber-600" : "text-brand-navy"}`}
-                                    >
-                                      {index + 1}
-                                    </span>
-                                  )}
-                                </div>
-
-                                <Card
-                                  className={`w-full shadow-md transition-all border-t-4 ${isClosed ? "border-t-emerald-500 bg-slate-50/50" : isEntregado ? "border-t-amber-500 bg-amber-50/10 hover:shadow-lg" : "border-t-brand-navy bg-white hover:shadow-lg"}`}
-                                >
-                                  <CardHeader className="p-4 pb-3 border-b border-slate-100">
-                                    <div className="flex justify-between items-start">
-                                      <div>
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                          FASE {index + 1}
-                                        </p>
-                                        <CardTitle className="text-sm font-black text-brand-navy uppercase mt-1 leading-tight">
-                                          {leg.leg_type.replace("_", " ")}
-                                        </CardTitle>
-                                      </div>
-                                      <Badge
-                                        className={`${isClosed ? "bg-emerald-100 text-emerald-700" : isEntregado ? "bg-amber-100 text-amber-700" : isIncident ? "bg-red-500 text-white" : "bg-blue-600 text-white"} border-0 uppercase font-bold shadow-sm px-3 py-1`}
-                                      >
-                                        {isClosed
-                                          ? "CERRADO Y PAGADO"
-                                          : isEntregado
-                                            ? "LLEGADA FÍSICA (ESPERANDO PAGO)"
-                                            : leg.status === "en_transito" &&
-                                                leg.leg_type === "carga_muelle"
-                                              ? "🚜 OPERANDO EN MUELLE"
-                                              : leg.status === "en_transito" &&
-                                                  leg.leg_type ===
-                                                    "ruta_carretera"
-                                                ? "🚚 EN CARRETERA"
-                                                : leg.status ===
-                                                      "en_transito" &&
-                                                    leg.leg_type ===
-                                                      "entrega_vacio"
-                                                  ? "🔄 RETORNANDO VACÍO"
-                                                  : leg.status.replace(
-                                                      "_",
-                                                      " ",
-                                                    )}
-                                      </Badge>
-                                    </div>
-                                  </CardHeader>
-
-                                  <CardContent className="p-4">
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-stretch">
-                                      <div className="flex flex-col justify-between gap-3 bg-white p-4 rounded-lg border border-slate-200 shadow-sm h-full">
-                                        <div className="space-y-4">
-                                          <div className="flex items-center gap-3">
-                                            <Truck className="h-5 w-5 text-slate-400" />
-                                            <div className="flex-1 flex justify-between items-center">
-                                              <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">
-                                                Tractocamión
-                                              </p>
-                                              <p className="text-sm font-black text-slate-800">
-                                                ECO-
-                                                {leg.unit?.numero_economico ||
-                                                  "N/A"}
-                                              </p>
-                                            </div>
-                                          </div>
-                                          <div className="flex items-center gap-3">
-                                            <User className="h-5 w-5 text-slate-400" />
-                                            <div className="flex-1 flex justify-between items-center">
-                                              <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">
-                                                Operador
-                                              </p>
-                                              <p className="text-sm font-black text-slate-800 truncate max-w-[150px]">
-                                                {leg.operator?.name || "N/A"}
-                                              </p>
-                                            </div>
-                                          </div>
-                                        </div>
-                                        <div className="flex items-center gap-3 pt-3 border-t border-slate-100 mt-2">
-                                          <CalendarClock className="h-5 w-5 text-slate-400" />
-                                          <div className="flex-1 flex justify-between items-center">
-                                            <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">
-                                              Inicio Fase
-                                            </p>
-                                            <p className="text-xs font-medium text-slate-600">
-                                              {leg.start_date
-                                                ? format(
-                                                    new Date(leg.start_date),
-                                                    "dd MMM HH:mm",
-                                                    { locale: es },
-                                                  )
-                                                : "N/A"}
-                                            </p>
-                                          </div>
-                                        </div>
-                                      </div>
-
-                                      <div className="flex flex-col justify-between space-y-2 bg-rose-50/60 p-4 rounded-lg border border-rose-100 h-full">
-                                        <div>
-                                          <p className="text-xs text-rose-600 font-black uppercase tracking-widest flex items-center gap-2 mb-3">
-                                            <Wallet className="h-4 w-4" />{" "}
-                                            Anticipos Entregados
-                                          </p>
-                                          <div className="space-y-2.5">
-                                            <div className="flex justify-between text-sm text-slate-700">
-                                              <span>Casetas:</span>
-                                              <span className="font-bold font-mono text-slate-900">
-                                                $
-                                                {(
-                                                  leg.anticipo_casetas || 0
-                                                ).toLocaleString()}
-                                              </span>
-                                            </div>
-                                            <div className="flex justify-between text-sm text-slate-700">
-                                              <span>Diésel:</span>
-                                              <span className="font-bold font-mono text-slate-900">
-                                                $
-                                                {(
-                                                  leg.anticipo_combustible || 0
-                                                ).toLocaleString()}
-                                              </span>
-                                            </div>
-                                            <div className="flex justify-between text-sm text-slate-700">
-                                              <span>Viáticos:</span>
-                                              <span className="font-bold font-mono text-slate-900">
-                                                $
-                                                {(
-                                                  leg.anticipo_viaticos || 0
-                                                ).toLocaleString()}
-                                              </span>
-                                            </div>
-                                          </div>
-                                        </div>
-                                        <div>
-                                          <Separator className="bg-rose-200 my-3" />
-                                          <div className="flex justify-between items-center text-sm text-rose-800 font-black">
-                                            <span>TOTAL TRAMO:</span>
-                                            <span className="font-mono text-lg bg-white px-3 py-1 rounded shadow-sm border border-rose-200">
-                                              $
-                                              {(
-                                                (leg.anticipo_casetas || 0) +
-                                                (leg.anticipo_combustible ||
-                                                  0) +
-                                                (leg.anticipo_viaticos || 0)
-                                              ).toLocaleString()}
-                                            </span>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </CardContent>
-
-                                  <CardFooter className="p-3 border-t bg-slate-50 flex flex-col gap-2">
-                                    {isPending && (
-                                      <div className="flex w-full gap-3">
-                                        <Button
-                                          variant="outline"
-                                          className="flex-1 text-red-600 border-red-200"
-                                          onClick={() =>
-                                            onIncidentClick?.(trip)
-                                          }
-                                        >
-                                          <AlertTriangle className="h-4 w-4 mr-2" />{" "}
-                                          Reportar Falla
-                                        </Button>
-
-                                        <Button
-                                          className="flex-[2] bg-brand-navy hover:bg-brand-navy/90 text-white font-black shadow-md"
-                                          onClick={() =>
-                                            onRelayClick?.(leg, trip)
-                                          }
-                                        >
-                                          <LinkIcon className="h-4 w-4 mr-2" />{" "}
-                                          CONCLUIR Y DESENGANCHAR (Drop)
-                                        </Button>
-                                      </div>
-                                    )}
-
-                                    {isEntregado && (
-                                      <div className="w-full flex flex-col gap-2 mt-1">
-                                        <Button
-                                          className="w-full h-12 bg-emerald-500 hover:bg-emerald-600 text-white font-black shadow-lg text-base"
-                                          onClick={() =>
-                                            onSettleClick?.(leg, trip)
-                                          }
-                                        >
-                                          PASAR A LIQUIDAR FASE A{" "}
-                                          {leg.operator?.name
-                                            ?.split(" ")[0]
-                                            .toUpperCase()}
-                                        </Button>
-                                      </div>
-                                    )}
-
-                                    {isLastLeg && index > 0 && (
-                                      <div className="flex w-full justify-end mt-2">
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          className="text-amber-600 hover:text-amber-700 hover:bg-amber-50 font-bold"
-                                          onClick={handleUndoLeg}
-                                          disabled={isUndoing}
-                                        >
-                                          {isUndoing ? (
-                                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                          ) : (
-                                            <Undo className="h-4 w-4 mr-2" />
-                                          )}
-                                          Me equivoqué, deshacer último
-                                          movimiento
-                                        </Button>
-                                      </div>
-                                    )}
-                                  </CardFooter>
-                                </Card>
+                    {/* TABS DE FASES */}
+                    <TabsContent value="fases" className="m-0 space-y-4">
+                      {trip.legs?.map((leg, idx) => (
+                        <Card
+                          key={leg.id}
+                          className="border-l-4 border-l-brand-navy shadow-sm overflow-hidden"
+                        >
+                          <CardContent className="p-4 flex justify-between items-center bg-white">
+                            <div className="space-y-1">
+                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                Fase {idx + 1}
+                              </p>
+                              <h4 className="font-black text-brand-navy uppercase text-sm leading-tight">
+                                {leg.leg_type.replace("_", " ")}
+                              </h4>
+                              <div className="flex items-center gap-3 text-xs font-medium text-slate-600 pt-1">
+                                <span className="flex items-center gap-1">
+                                  <User className="h-3 w-3 text-slate-400" />{" "}
+                                  {leg.operator?.name || "Sin operador"}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Truck className="h-3 w-3 text-slate-400" />{" "}
+                                  ECO-{leg.unit?.numero_economico || "N/A"}
+                                </span>
                               </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </TabsContent>
-
-                    <TabsContent
-                      value="finanzas"
-                      className="m-0 focus-visible:outline-none"
-                    >
-                      <Card
-                        className={`shadow-sm border-2 transition-colors ${isEditing ? "border-amber-200 bg-amber-50/20" : "border-emerald-100 bg-emerald-50/10"}`}
-                      >
-                        <CardHeader className="p-5 border-b border-slate-100 bg-white rounded-t-xl">
-                          <div className="flex justify-between items-center">
-                            <CardTitle
-                              className={`text-base font-black flex items-center gap-2 uppercase tracking-wider ${isEditing ? "text-amber-800" : "text-emerald-800"}`}
-                            >
-                              <DollarSign className="h-5 w-5" />
-                              {isEditing
-                                ? "Editando Finanzas"
-                                : "Estado de Cuenta del Viaje"}
-                            </CardTitle>
-
-                            {/* 🚀 BOTONERA DE ACCIÓN RÁPIDA */}
-                            <div className="flex gap-2">
-                              {!isEditing && (
-                                <>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-8 border-slate-300 text-slate-600 font-bold hover:bg-slate-100"
-                                    onClick={handleManualSync}
-                                    disabled={isSyncing}
-                                  >
-                                    {isSyncing ? (
-                                      <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" />
-                                    ) : (
-                                      <History className="h-3.5 w-3.5 mr-2 text-primary" />
-                                    )}
-                                    Sincronizar
-                                  </Button>
-
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-8"
-                                    onClick={() => setIsEditing(true)}
-                                  >
-                                    <Edit2 className="h-3.5 w-3.5 mr-2" />{" "}
-                                    Editar Montos
-                                  </Button>
-                                </>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge
+                                className={cn(
+                                  "uppercase font-bold text-[10px] border-0 px-3 py-1 shadow-sm",
+                                  leg.status === "entregado"
+                                    ? "bg-emerald-100 text-emerald-700"
+                                    : leg.status === "cerrado"
+                                      ? "bg-blue-100 text-blue-700"
+                                      : "bg-amber-100 text-amber-700",
+                                )}
+                              >
+                                {leg.status.replace("_", " ")}
+                              </Badge>
+                              {leg.status === "en_transito" && onRelayClick && (
+                                <Button
+                                  size="sm"
+                                  className="h-8 bg-brand-navy font-bold text-[11px]"
+                                  onClick={() => onRelayClick(leg, trip)}
+                                >
+                                  DESENGANCHAR
+                                </Button>
+                              )}
+                              {leg.status === "entregado" && onSettleClick && (
+                                <Button
+                                  size="sm"
+                                  className="h-8 bg-emerald-600 font-bold text-[11px]"
+                                  onClick={() => onSettleClick(leg, trip)}
+                                >
+                                  LIQUIDAR
+                                </Button>
                               )}
                             </div>
-                          </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                      {trip.status === "en_transito" &&
+                        activeLeg?.leg_type === "ruta_carretera" && (
+                          <Button
+                            variant="outline"
+                            className="w-full border-dashed border-2 h-12 text-slate-500 font-bold hover:bg-slate-50"
+                            onClick={() => setShowTerminalModal(true)}
+                          >
+                            <MapPin className="h-4 w-4 mr-2" /> REGISTRAR
+                            LLEGADA A TERMINAL (CIERRE OPERATIVO)
+                          </Button>
+                        )}
+                    </TabsContent>
+
+                    {/* TAB FINANZAS */}
+                    <TabsContent value="finanzas" className="m-0 space-y-6">
+                      <Card
+                        className={cn(
+                          "shadow-sm border-2",
+                          isEditing
+                            ? "border-amber-200 bg-amber-50/5"
+                            : "border-emerald-100 bg-emerald-50/5",
+                        )}
+                      >
+                        <CardHeader className="p-5 border-b flex justify-between items-center bg-white rounded-t-xl shadow-sm">
+                          <CardTitle className="text-sm font-black uppercase text-emerald-800 flex items-center gap-2">
+                            <Wallet className="h-4 w-4" /> Resumen de Cobros y
+                            Egresos
+                          </CardTitle>
+                          {!isEditing ? (
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={handleManualSync}
+                                disabled={isSyncing}
+                                className="h-8 font-bold"
+                              >
+                                <History className="h-3 w-3 mr-1" /> Sincronizar
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setIsEditing(true)}
+                                className="h-8 font-bold"
+                              >
+                                <Edit2 className="h-3 w-3 mr-1" /> Editar
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setIsEditing(false)}
+                                className="h-8 font-bold text-slate-500"
+                              >
+                                Cancelar
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={handleSaveFinanzas}
+                                disabled={saving}
+                                className="h-8 bg-brand-navy font-bold text-white shadow-md"
+                              >
+                                <Save className="h-3 w-3 mr-1" /> Guardar
+                                Cambios
+                              </Button>
+                            </div>
+                          )}
                         </CardHeader>
                         <CardContent className="p-6 space-y-6">
                           {isEditing ? (
-                            <div className="space-y-5 max-w-md mx-auto">
-                              <div className="flex items-center justify-between bg-white p-4 rounded-xl border border-amber-100 shadow-sm">
-                                <Label
-                                  htmlFor="manual-prices"
-                                  className="flex flex-col cursor-pointer text-sm"
-                                >
-                                  <span className="font-bold text-slate-800">
-                                    Fijar Precios Manuales
-                                  </span>
-                                  <span className="font-normal text-slate-500 mt-1">
-                                    Ignorar cálculo automático.
-                                  </span>
-                                </Label>
-                                <Switch
-                                  id="manual-prices"
-                                  checked={mantenerPreciosManuales}
-                                  onCheckedChange={setMantenerPreciosManuales}
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label className="text-xs font-bold text-slate-500 uppercase">
-                                  Ingreso (Flete Base Cliente)
+                            <div className="grid grid-cols-2 gap-6 max-w-lg mx-auto bg-white p-6 rounded-xl border border-amber-100 shadow-inner">
+                              <div className="space-y-1.5">
+                                <Label className="text-[10px] font-black uppercase text-slate-500">
+                                  Flete Base Acordado
                                 </Label>
                                 <Input
                                   type="number"
@@ -987,9 +593,9 @@ export function TripDetailsModal({
                                   className="font-mono text-lg h-12"
                                 />
                               </div>
-                              <div className="space-y-2">
-                                <Label className="text-xs font-bold text-slate-500 uppercase">
-                                  Cobro Casetas (Al Cliente)
+                              <div className="space-y-1.5">
+                                <Label className="text-[10px] font-black uppercase text-slate-500">
+                                  Recuperación Casetas
                                 </Label>
                                 <Input
                                   type="number"
@@ -1000,265 +606,134 @@ export function TripDetailsModal({
                                   className="font-mono text-lg h-12"
                                 />
                               </div>
-                              <div className="flex gap-3 pt-6 border-t border-slate-200">
-                                <Button
-                                  variant="outline"
-                                  className="flex-1 h-12"
-                                  onClick={() => setIsEditing(false)}
-                                  disabled={saving}
-                                >
-                                  Cancelar
-                                </Button>
-                                <Button
-                                  className="flex-1 h-12 bg-brand-navy hover:bg-brand-navy/90 text-white text-base"
-                                  onClick={handleSaveFinanzas}
-                                  disabled={saving}
-                                >
-                                  {saving ? (
-                                    <Loader2 className="h-5 w-5 animate-spin mr-2" />
-                                  ) : (
-                                    <Save className="h-5 w-5 mr-2" />
-                                  )}{" "}
-                                  Guardar
-                                </Button>
-                              </div>
                             </div>
                           ) : (
-                            <div className="max-w-2xl mx-auto space-y-4">
-                              <div className="bg-white p-5 rounded-xl border shadow-sm space-y-3">
-                                <div className="flex justify-between items-center text-lg">
-                                  <span className="text-slate-600 font-medium">
-                                    Ingreso Flete:
-                                  </span>
-                                  <span className="font-black text-slate-800 font-mono">
-                                    ${(trip.tarifa_base || 0).toLocaleString()}
+                            <div className="space-y-4 max-w-2xl mx-auto">
+                              <div className="bg-white p-4 rounded-xl border shadow-sm space-y-3">
+                                <div className="flex justify-between items-center font-bold text-slate-600 uppercase tracking-tighter">
+                                  <span>Ingreso Flete Base:</span>
+                                  <span className="font-mono text-lg text-slate-900">
+                                    {formatCurrency(trip.tarifa_base)}
                                   </span>
                                 </div>
-                                <div className="flex justify-between items-center text-lg">
-                                  <span className="text-slate-600 font-medium">
-                                    Cobro Casetas:
-                                  </span>
-                                  <span className="font-black text-slate-800 font-mono">
-                                    $
-                                    {(trip.costo_casetas || 0).toLocaleString()}
+                                <div className="flex justify-between items-center font-bold text-slate-600 uppercase tracking-tighter">
+                                  <span>Recuperación de Casetas:</span>
+                                  <span className="font-mono text-lg text-slate-900">
+                                    {formatCurrency(trip.costo_casetas)}
                                   </span>
                                 </div>
                               </div>
-                              <div className="bg-rose-50 p-5 rounded-xl border border-rose-100 flex justify-between items-center text-xl">
-                                <span className="text-rose-700 font-bold flex items-center gap-2">
-                                  <Wallet className="h-5 w-5" /> Egresos
+                              <div className="flex justify-between items-center text-rose-700 bg-rose-50 p-4 rounded-xl font-black border border-rose-100 shadow-sm uppercase tracking-tighter">
+                                <span className="flex items-center gap-2">
+                                  <Wallet className="h-4 w-4" /> Egresos Totales
                                   (Anticipos):
                                 </span>
-                                <span className="font-black text-rose-700 font-mono">
-                                  -${totalAnticiposGlobales.toLocaleString()}
+                                <span className="font-mono text-xl">
+                                  -{formatCurrency(totalAnticiposGlobales)}
                                 </span>
                               </div>
-                              <div className="bg-emerald-500 text-white p-6 rounded-xl shadow-lg flex justify-between items-center text-2xl mt-6">
-                                <span className="font-black uppercase tracking-widest">
-                                  Utilidad Estimada:
+                              <div className="bg-emerald-500 text-white p-6 rounded-2xl flex justify-between items-center shadow-lg border-b-4 border-emerald-700">
+                                <span className="font-black text-sm uppercase tracking-widest italic">
+                                  Utilidad Neta Estimada:
                                 </span>
-                                <span className="font-black font-mono">
-                                  ${utilidadEstimada.toLocaleString()}
+                                <span className="text-3xl font-black font-mono tracking-tighter">
+                                  {formatCurrency(utilidadEstimada)}
                                 </span>
                               </div>
-                              <div className="bg-slate-900 p-6 rounded-xl shadow-lg flex flex-col sm:flex-row justify-between items-center text-white mt-6 border-t-4 border-emerald-500">
-                                <div className="mb-4 sm:mb-0">
-                                  <h4 className="font-black uppercase tracking-widest text-emerald-400 text-sm mb-1 text-left">
-                                    Cierre y Facturación
+
+                              <div className="bg-slate-900 p-6 rounded-2xl border-t-4 border-emerald-500 flex flex-col sm:flex-row items-center justify-between gap-6 mt-10 shadow-2xl">
+                                <div className="text-left">
+                                  <h4 className="text-emerald-400 font-black text-sm uppercase tracking-tighter flex items-center gap-2">
+                                    <CheckCircle2 className="h-4 w-4" /> Cierre
+                                    Fiscal de Viaje
                                   </h4>
-                                  <p className="text-xs text-slate-400 text-left">
-                                    Timbra la factura real y cancela la
-                                    provisional.
+                                  <p className="text-[10px] text-slate-400 max-w-xs leading-relaxed mt-1 italic">
+                                    Timbra la factura 4.0 real sustituyendo la
+                                    nominal. Verifica que los montos sean
+                                    finales.
                                   </p>
                                 </div>
                                 <Button
-                                  className="bg-emerald-500 hover:bg-emerald-600 text-white font-black shadow-md w-full sm:w-auto"
+                                  className="bg-emerald-500 hover:bg-emerald-600 text-white font-black px-10 h-12 shadow-xl disabled:opacity-30"
                                   disabled={isStamping || !trip.uuid_fiscal}
                                   onClick={() =>
                                     handleStampFinal(
                                       trip.id,
-                                      trip.uuid_fiscal || "",
+                                      trip.uuid_fiscal!,
                                       refreshTrips,
                                     )
                                   }
                                 >
                                   {isStamping ? (
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    <Loader2 className="h-5 w-5 animate-spin mr-2" />
                                   ) : (
-                                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                                    <Activity className="h-5 w-5 mr-2" />
                                   )}
-                                  Timbrar Factura Final 4.0
+                                  TIMBRAR FACTURA FINAL
                                 </Button>
                               </div>
-
-                              {/* FIN DE SECCIÓN NUEVA */}
                             </div>
                           )}
                         </CardContent>
                       </Card>
                     </TabsContent>
 
-                    <TabsContent
-                      value="bitacora"
-                      className="m-0 focus-visible:outline-none space-y-6"
-                    >
-                      <div className="flex justify-between items-center bg-slate-100 p-4 rounded-xl border border-slate-200">
-                        <h4 className="text-sm font-black uppercase tracking-widest text-slate-800 flex items-center gap-2">
-                          <History className="h-5 w-5 text-brand-navy" /> Diario
-                          de Movimientos
+                    {/* TAB BITÁCORA */}
+                    <TabsContent value="bitacora" className="m-0 space-y-4">
+                      <div className="flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-slate-200 mb-4 shadow-inner">
+                        <h4 className="text-xs font-black uppercase text-slate-600 tracking-widest">
+                          Línea de Tiempo del Servicio
                         </h4>
                         <Button
-                          className="bg-brand-navy hover:bg-brand-navy/90 shadow-md gap-2"
+                          size="sm"
+                          variant="outline"
+                          className="h-8 border-brand-navy text-brand-navy font-bold hover:bg-brand-navy hover:text-white"
                           onClick={() => onUpdateStatusClick?.(trip, activeLeg)}
                         >
-                          <Edit2 className="h-4 w-4" /> Escribir Novedad
+                          <Edit2 className="h-3 w-3 mr-2" /> Insertar Novedad
                         </Button>
                       </div>
-
                       {allEvents.length === 0 ? (
-                        <div className="p-12 text-center border-2 border-dashed rounded-2xl text-slate-400 mt-4">
-                          <History className="h-10 w-10 mx-auto mb-3 opacity-50" />
-                          <p className="font-medium text-lg">
-                            Sin historial registrado.
-                          </p>
+                        <div className="text-center py-12 text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-300 italic font-medium tracking-tight">
+                          El viaje aún no cuenta con movimientos reportados
                         </div>
                       ) : (
-                        <div className="bg-white p-6 rounded-2xl border shadow-sm mt-4">
-                          <div className="space-y-4 relative before:absolute before:inset-0 before:ml-[11px] before:h-full before:w-0.5 before:bg-slate-200">
-                            {allEvents.map((event: any, idx: number) => {
-                              const isAlert = [
-                                "detenido",
-                                "retraso",
-                                "accidente",
-                                "bloqueado",
-                              ].includes(event.status);
-                              const isSuccess = [
-                                "entregado",
-                                "cerrado",
-                              ].includes(event.status);
-                              const isCheckpoint = ["punto_control"].includes(
-                                event.status,
-                              );
-                              const dotColor = isAlert
-                                ? "bg-red-500"
-                                : isSuccess
-                                  ? "bg-emerald-500"
-                                  : isCheckpoint
-                                    ? "bg-sky-500"
-                                    : "bg-brand-navy";
-
-                              return (
-                                <div
-                                  key={event.id || idx}
-                                  className="relative flex gap-3 items-start group"
-                                >
-                                  <div
-                                    className={`w-6 h-6 rounded-full mt-1 ring-4 ring-white shadow-sm shrink-0 z-10 flex items-center justify-center ${dotColor}`}
+                        <div className="space-y-4">
+                          {allEvents.map((ev, idx) => (
+                            <div
+                              key={idx}
+                              className="flex gap-4 border-b border-slate-100 pb-4 last:border-0 items-start group hover:bg-slate-50 p-2 rounded-lg transition-colors"
+                            >
+                              <div className="p-2 bg-slate-100 rounded-full group-hover:bg-brand-navy transition-colors">
+                                <Clock className="h-4 w-4 text-slate-400 group-hover:text-white" />
+                              </div>
+                              <div className="flex-1">
+                                <div className="flex justify-between items-center">
+                                  <p className="text-[10px] font-black text-brand-navy uppercase tracking-tighter bg-slate-100 px-2 py-0.5 rounded">
+                                    {format(
+                                      new Date(ev.time),
+                                      "dd MMM, HH:mm",
+                                      { locale: es },
+                                    )}
+                                  </p>
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[9px] uppercase font-black bg-white border-slate-300"
                                   >
-                                    {isAlert && (
-                                      <AlertTriangle className="h-3 w-3 text-white" />
-                                    )}
-                                    {isSuccess && (
-                                      <CheckCircle2 className="h-3 w-3 text-white" />
-                                    )}
-                                    {isCheckpoint && (
-                                      <Navigation className="h-3 w-3 text-white" />
-                                    )}
-                                    {!isAlert &&
-                                      !isSuccess &&
-                                      !isCheckpoint && (
-                                        <div className="w-2 h-2 rounded-full bg-white" />
-                                      )}
-                                  </div>
-                                  <div className="flex-1 pb-1">
-                                    <div
-                                      className={`p-3 rounded-lg border transition-all ${isAlert ? "bg-red-50/50 border-red-200" : "bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm"}`}
-                                    >
-                                      <div className="flex justify-between items-start mb-2">
-                                        <div className="flex items-center gap-1.5 flex-wrap">
-                                          <Badge
-                                            className={`text-[9px] px-1.5 py-0 h-4 font-bold uppercase border-0 ${dotColor} text-white`}
-                                          >
-                                            {event.status?.replace("_", " ")}
-                                          </Badge>
-                                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                            | {event.legName || "GENERAL"}
-                                          </span>
-                                        </div>
-                                        <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded shrink-0 border border-slate-200">
-                                          {format(
-                                            new Date(event.time),
-                                            "dd MMM • HH:mm",
-                                            { locale: es },
-                                          )}
-                                        </span>
-                                      </div>
-                                      <p
-                                        className={`text-xs font-semibold leading-snug mb-2.5 ${isAlert ? "text-red-800" : "text-slate-800"}`}
-                                      >
-                                        {event.comments ||
-                                          "Reporte sin comentarios adicionales."}
-                                      </p>
-                                      <div className="bg-slate-50/80 rounded border border-slate-100 p-2 space-y-1.5">
-                                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600">
-                                          <MapPin className="h-3 w-3 text-brand-navy" />
-                                          <span className="truncate uppercase">
-                                            {event.location ||
-                                              "UBICACIÓN NO ESPECIFICADA"}
-                                          </span>
-                                        </div>
-                                        <div className="flex flex-wrap items-center gap-2 pt-1.5 border-t border-slate-200 mt-1">
-                                          <div className="flex items-center gap-1 text-[9px] font-semibold text-slate-600 bg-white px-1.5 py-0.5 rounded shadow-sm border border-slate-100">
-                                            <User className="h-2.5 w-2.5 text-slate-400" />
-                                            <span className="truncate max-w-[80px]">
-                                              {event.operatorName}
-                                            </span>
-                                          </div>
-                                          <div
-                                            className="flex items-center gap-1 text-[9px] font-semibold text-slate-600 bg-white px-1.5 py-0.5 rounded shadow-sm border border-slate-100"
-                                            title={`Placas: ${event.unitPlacas}`}
-                                          >
-                                            <Truck className="h-2.5 w-2.5 text-slate-400" />
-                                            {event.unitEco}{" "}
-                                            <span className="text-slate-400 font-normal">
-                                              ({event.unitPlacas})
-                                            </span>
-                                          </div>
-                                          {(trip.remolque_1?.numero_economico ||
-                                            trip.remolque_2
-                                              ?.numero_economico) && (
-                                            <div className="flex items-center gap-1 text-[9px] font-medium text-slate-500 ml-auto">
-                                              <LinkIcon className="h-2.5 w-2.5 text-slate-400" />
-                                              {trip.remolque_1
-                                                ?.numero_economico && (
-                                                <span className="bg-slate-200 px-1 rounded text-slate-700 border border-slate-300">
-                                                  R1:{" "}
-                                                  {
-                                                    trip.remolque_1
-                                                      .numero_economico
-                                                  }
-                                                </span>
-                                              )}
-                                              {trip.remolque_2
-                                                ?.numero_economico && (
-                                                <span className="bg-slate-200 px-1 rounded text-slate-700 border border-slate-300">
-                                                  R2:{" "}
-                                                  {
-                                                    trip.remolque_2
-                                                      .numero_economico
-                                                  }
-                                                </span>
-                                              )}
-                                            </div>
-                                          )}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
+                                    {ev.legName}
+                                  </Badge>
                                 </div>
-                              );
-                            })}
-                          </div>
+                                <p className="text-sm font-black text-slate-800 mt-1 uppercase tracking-tight leading-tight">
+                                  {ev.event}
+                                </p>
+                                {ev.comments && (
+                                  <div className="text-[11px] text-slate-600 bg-white p-2.5 rounded border border-slate-200 mt-2 italic border-l-4 border-l-brand-navy leading-relaxed shadow-sm">
+                                    "{ev.comments}"
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       )}
                     </TabsContent>
@@ -1270,22 +745,22 @@ export function TripDetailsModal({
         </DialogContent>
       </Dialog>
 
-      {/* 🚀 MODAL DE TERMINAL DE VACÍOS (COMBOBOX) */}
+      {/* MODAL DE TERMINAL DE VACÍOS (COMBOBOX) */}
       <Dialog open={showTerminalModal} onOpenChange={setShowTerminalModal}>
-        <DialogContent className="sm:max-w-md rounded-2xl overflow-visible">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-brand-navy">
-              <MapPin className="h-5 w-5" /> ¿Dónde se botó el vacío?
+        <DialogContent className="sm:max-w-md rounded-2xl overflow-visible shadow-2xl border-none">
+          <DialogHeader className="bg-slate-100 p-6 rounded-t-2xl border-b border-slate-300">
+            <DialogTitle className="flex items-center gap-2 text-brand-navy font-black uppercase tracking-tighter">
+              <MapPin className="h-5 w-5 text-emerald-600" /> Cierre Operativo
+              de Ruta
             </DialogTitle>
-            <DialogDescription>
-              El viaje ha concluido. Por favor, selecciona o registra la
-              terminal o patio donde se entregó el esqueleto.
+            <DialogDescription className="text-slate-600 font-bold text-xs uppercase tracking-widest mt-1">
+              Registro de entrega de equipo en puerto / patio
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4 space-y-4">
+          <div className="p-6 space-y-4 bg-white">
             <div className="space-y-2">
-              <Label className="font-bold text-slate-700">
-                Nombre del Patio / Terminal *
+              <Label className="font-black text-slate-700 text-[10px] uppercase tracking-widest">
+                Seleccionar Patio de Arribo *
               </Label>
               <Popover
                 open={terminalComboboxOpen}
@@ -1296,27 +771,30 @@ export function TripDetailsModal({
                     variant="outline"
                     role="combobox"
                     aria-expanded={terminalComboboxOpen}
-                    className="w-full justify-between h-12 text-left font-normal bg-white"
+                    className="w-full justify-between h-12 text-left font-black bg-slate-50 border-slate-200 uppercase text-xs tracking-tight"
                   >
-                    {selectedTerminal || "Selecciona o busca una terminal..."}
+                    {selectedTerminal || "Buscar o escribir terminal..."}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[380px] p-0" align="start">
-                  <Command>
+                <PopoverContent
+                  className="w-[380px] p-0 shadow-2xl rounded-xl"
+                  align="start"
+                >
+                  <Command className="rounded-xl overflow-hidden">
                     <CommandInput
                       placeholder="Escribe el nombre de la terminal..."
                       value={searchTerminalQuery}
                       onValueChange={setSearchTerminalQuery}
                     />
-                    <CommandList>
-                      <CommandEmpty className="p-3 text-sm flex flex-col items-center justify-center gap-3">
-                        <span className="text-slate-500">
-                          No se encontró en el catálogo.
+                    <CommandList className="max-h-[300px]">
+                      <CommandEmpty className="p-4 text-sm flex flex-col items-center gap-3">
+                        <span className="text-slate-500 font-bold uppercase text-[10px]">
+                          No registrado en catálogo
                         </span>
                         <Button
                           size="sm"
-                          className="w-full bg-emerald-600 hover:bg-emerald-700"
+                          className="w-full bg-emerald-600 font-black h-10 shadow-lg"
                           disabled={isCreatingTerminal || !searchTerminalQuery}
                           onClick={() =>
                             handleCreateTerminal(searchTerminalQuery)
@@ -1327,10 +805,10 @@ export function TripDetailsModal({
                           ) : (
                             <PlusCircle className="h-4 w-4 mr-2" />
                           )}
-                          Añadir "{searchTerminalQuery}"
+                          AÑADIR "{searchTerminalQuery.toUpperCase()}"
                         </Button>
                       </CommandEmpty>
-                      <CommandGroup>
+                      <CommandGroup heading="Terminales Registradas">
                         {terminals
                           .filter((t) =>
                             t.nombre
@@ -1341,17 +819,19 @@ export function TripDetailsModal({
                             <CommandItem
                               key={terminal.id}
                               value={terminal.nombre}
-                              onSelect={(currentValue) => {
-                                setSelectedTerminal(currentValue);
+                              onSelect={(v) => {
+                                setSelectedTerminal(v);
                                 setTerminalComboboxOpen(false);
                               }}
+                              className="py-2.5 px-4 font-bold text-slate-700 uppercase text-xs"
                             >
                               <CheckCircle2
-                                className={`mr-2 h-4 w-4 ${
+                                className={cn(
+                                  "mr-2 h-4 w-4",
                                   selectedTerminal === terminal.nombre
                                     ? "opacity-100 text-emerald-600"
-                                    : "opacity-0"
-                                }`}
+                                    : "opacity-0",
+                                )}
                               />
                               {terminal.nombre}
                             </CommandItem>
@@ -1363,25 +843,25 @@ export function TripDetailsModal({
               </Popover>
             </div>
           </div>
-          <DialogFooter className="flex gap-2">
+          <DialogFooter className="bg-slate-50 p-4 rounded-b-2xl flex gap-3 border-t border-slate-200">
             <Button
-              variant="outline"
+              variant="ghost"
               onClick={() => setShowTerminalModal(false)}
-              disabled={finishingLeg}
+              className="rounded-xl font-bold text-slate-500"
             >
-              Cancelar
+              Cerrar
             </Button>
             <Button
               onClick={submitTerminalArrival}
               disabled={finishingLeg || !selectedTerminal}
-              className="bg-brand-navy hover:bg-brand-navy/90 text-white"
+              className="bg-brand-navy hover:bg-brand-navy/90 text-white font-black px-10 shadow-lg rounded-xl h-11"
             >
               {finishingLeg ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
               ) : (
                 <CheckCircle2 className="h-4 w-4 mr-2" />
               )}
-              Guardar y Finalizar Viaje
+              CONFIRMAR LLEGADA
             </Button>
           </DialogFooter>
         </DialogContent>

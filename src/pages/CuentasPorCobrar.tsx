@@ -94,13 +94,13 @@ export default function CuentasPorCobrar() {
         id: String(inv.id),
         folio: inv.folio_interno || `CXC-${inv.id}`,
         cliente: inv.client?.razon_social || "Cliente Desconocido",
-        montoTotal: inv.monto_total,
-        saldoPendiente: inv.saldo_pendiente,
+        monto_total: inv.monto_total,
+        saldo_pendiente: inv.saldo_pendiente,
+        requiereREP: inv.saldo_pendiente > 0,
         fechaEmision: inv.fecha_emision,
         fechaVencimiento: inv.fecha_vencimiento,
         estatus: inv.estatus,
         moneda: inv.moneda,
-        requiereREP: inv.saldo_pendiente > 0, // Lógica básica para REP
         cobros: [], // Por ahora vacío hasta que implementes abonos
       }));
 
@@ -136,14 +136,14 @@ export default function CuentasPorCobrar() {
     ];
 
     const rows = invoices.map((inv) => {
-      const diasVencidos = calculateDaysOverdue(inv.fechaVencimiento);
+      const diasVencidos = calculateDaysOverdue(inv.fecha_vencimiento);
       return [
-        inv.folio,
+        inv.folio_interno,
         `"${inv.cliente}"`, // Comillas por si el cliente tiene comas
-        inv.fechaEmision,
-        inv.fechaVencimiento,
-        inv.montoTotal,
-        inv.saldoPendiente,
+        inv.fecha_emision,
+        inv.fecha_vencimiento,
+        inv.monto_total,
+        inv.saldo_pendiente,
         inv.estatus.toUpperCase(),
         diasVencidos > 0 ? diasVencidos : 0,
       ].join(",");
@@ -173,18 +173,18 @@ export default function CuentasPorCobrar() {
     const corriente = invoices
       .filter(
         (inv) =>
-          getAgingCategory(inv) === "corriente" && inv.saldoPendiente > 0,
+          getAgingCategory(inv) === "corriente" && inv.saldo_pendiente > 0,
       )
-      .reduce((sum, inv) => sum + inv.saldoPendiente, 0);
+      .reduce((sum, inv) => sum + inv.saldo_pendiente, 0);
     const vencido1_30 = invoices
       .filter((inv) => getAgingCategory(inv) === "vencido_1_30")
-      .reduce((sum, inv) => sum + inv.saldoPendiente, 0);
+      .reduce((sum, inv) => sum + inv.saldo_pendiente, 0);
     const vencido31_60 = invoices
       .filter((inv) => getAgingCategory(inv) === "vencido_31_60")
-      .reduce((sum, inv) => sum + inv.saldoPendiente, 0);
+      .reduce((sum, inv) => sum + inv.saldo_pendiente, 0);
     const incobrable = invoices
       .filter((inv) => getAgingCategory(inv) === "incobrable")
-      .reduce((sum, inv) => sum + inv.saldoPendiente, 0);
+      .reduce((sum, inv) => sum + inv.saldo_pendiente, 0);
     return { corriente, vencido1_30, vencido31_60, incobrable };
   }, [invoices]);
 
@@ -245,6 +245,15 @@ export default function CuentasPorCobrar() {
     }
   };
 
+  // 🚀 Utilidad de formateo estándar (MXN)
+  const formatMoney = (amount: number) => {
+    return new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: "MXN",
+      minimumFractionDigits: 2,
+    }).format(amount || 0);
+  };
+
   const columns: ColumnDef<ReceivableInvoice>[] = useMemo(
     () => [
       {
@@ -278,8 +287,8 @@ export default function CuentasPorCobrar() {
         type: "number",
         render: (value, row) => (
           <span className="text-sm font-bold text-slate-700">
-            ${value.toLocaleString("es-MX", { minimumFractionDigits: 2 })}{" "}
-            <span className="text-[10px] text-muted-foreground">
+            {formatMoney(value)} {/* 🚀 Formato corregido */}
+            <span className="text-[10px] text-muted-foreground ml-1">
               {row.moneda}
             </span>
           </span>
@@ -295,7 +304,7 @@ export default function CuentasPorCobrar() {
             <span
               className={`text-sm font-black ${value === 0 ? "text-emerald-600" : statusInfo.status === "danger" ? "text-red-600" : "text-amber-600"}`}
             >
-              ${value.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+              {formatMoney(value)} {/* 🚀 Formato corregido */}
             </span>
           );
         },
@@ -316,7 +325,7 @@ export default function CuentasPorCobrar() {
         type: "date",
         render: (value, row) => {
           const daysOverdue = calculateDaysOverdue(value);
-          const isPastDue = daysOverdue > 0 && row.saldoPendiente > 0;
+          const isPastDue = daysOverdue > 0 && row.saldo_pendiente > 0;
           return (
             <div className="flex flex-col">
               <span
@@ -380,9 +389,9 @@ export default function CuentasPorCobrar() {
                   setSelectedInvoice(row);
                   setIsPaymentModalOpen(true);
                 }}
-                disabled={row.saldoPendiente === 0}
+                disabled={row.saldo_pendiente === 0}
                 className={
-                  row.saldoPendiente > 0
+                  row.saldo_pendiente > 0
                     ? "text-emerald-700 font-bold rounded-lg"
                     : "rounded-lg"
                 }
@@ -582,7 +591,7 @@ export default function CuentasPorCobrar() {
             </AlertDialogTitle>
             <AlertDialogDescription>
               {invoiceToDelete &&
-              invoiceToDelete.saldoPendiente < invoiceToDelete.montoTotal ? (
+              invoiceToDelete.saldo_pendiente < invoiceToDelete.monto_total ? (
                 <span className="text-red-600 font-bold bg-red-50 p-3 rounded-lg block mt-2 border border-red-200">
                   ⚠️ Error: Esta factura ya tiene abonos/pagos registrados. Por
                   auditoría fiscal, no es posible eliminarla. Cancele los pagos
@@ -591,7 +600,7 @@ export default function CuentasPorCobrar() {
               ) : (
                 <span className="block mt-2">
                   Esta acción no se puede deshacer. Se eliminará la factura{" "}
-                  <strong>{invoiceToDelete?.folio}</strong> del sistema.
+                  <strong>{invoiceToDelete?.folio_interno}</strong> del sistema.
                 </span>
               )}
             </AlertDialogDescription>
@@ -601,7 +610,8 @@ export default function CuentasPorCobrar() {
               Cancelar
             </AlertDialogCancel>
             {invoiceToDelete &&
-              invoiceToDelete.saldoPendiente === invoiceToDelete.montoTotal && (
+              invoiceToDelete.saldo_pendiente ===
+                invoiceToDelete.monto_total && (
                 <AlertDialogAction
                   onClick={handleDeleteInvoice}
                   className="bg-red-600 hover:bg-red-700 text-white rounded-xl"
