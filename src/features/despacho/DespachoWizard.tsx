@@ -71,7 +71,7 @@ type WizardData = {
   routeNombre: string;
   origen: string;
   destino: string;
-  fecha_programada: string; // 🚀 NUEVO: Para cuándo lo quiere el cliente
+  fecha_programada: string;
 
   // Datos de la Mercancía
   descripcion_mercancia: string;
@@ -80,7 +80,7 @@ type WizardData = {
   clase_imo: string;
 
   // Recursos
-  unitId: string; // Tracto
+  unitId: string;
   remolque1Id: string;
   dollyId: string;
   remolque2Id: string;
@@ -94,7 +94,7 @@ type WizardData = {
   anticipo_combustible: number;
 };
 
-/** COMPONENTE REUTILIZABLE: Buscador Select (Combobox) 100% SEGURO */
+/** COMPONENTE REUTILIZABLE: Buscador Select (Combobox) */
 function SearchableSelect({
   items,
   value,
@@ -138,7 +138,7 @@ function SearchableSelect({
                   key={item.value}
                   value={item.label}
                   onSelect={() => {
-                    onSelect(item.value); // guardamos el ID real
+                    onSelect(item.value);
                     setOpen(false);
                   }}
                 >
@@ -159,7 +159,6 @@ function SearchableSelect({
   );
 }
 
-// Utilidad para limpiar acentos y mayúsculas
 const normalizeStr = (str?: string | null) =>
   str
     ?.toLowerCase()
@@ -177,12 +176,11 @@ export const DespachoWizard = () => {
   const { clients } = useClients();
   const { products: satProducts } = useSatCatalogs();
 
-  // 🚀 Formatear los productos para el SearchableSelect
   const availableSatProducts = useMemo(() => {
     return satProducts.map((p) => ({
-      label: `${p.clave} - ${p.descripcion}`, // Lo que ve el usuario
-      value: p.clave, // Usaremos la clave para identificarlo
-      ...p, // Guardamos la info extra por si acaso
+      label: `${p.clave} - ${p.descripcion}`,
+      value: p.clave,
+      ...p,
     }));
   }, [satProducts]);
 
@@ -193,7 +191,7 @@ export const DespachoWizard = () => {
     routeNombre: "",
     origen: "",
     destino: "",
-    fecha_programada: new Date().toISOString().split("T")[0], // Por defecto hoy
+    fecha_programada: new Date().toISOString().split("T")[0],
 
     descripcion_mercancia: "Carga General",
     peso_toneladas: 0,
@@ -206,7 +204,7 @@ export const DespachoWizard = () => {
     remolque2Id: "",
     driverId: "",
 
-    leg_type: "carga_muelle", // Por defecto inician yendo al patio/muelle
+    leg_type: "carga_muelle",
 
     anticipo_casetas: 0,
     anticipo_viaticos: 0,
@@ -373,7 +371,7 @@ export const DespachoWizard = () => {
         origin: data.origen || selectedClient?.razon_social || "Origen",
         destination: data.destino || selectedSubClient?.ciudad || "Destino",
         route_name: data.routeNombre || "Ruta Estándar",
-        fecha_programada: data.fecha_programada || null, // 🚀 NUEVO
+        fecha_programada: data.fecha_programada || null,
 
         descripcion_mercancia: data.descripcion_mercancia,
         peso_toneladas: Number(data.peso_toneladas),
@@ -386,7 +384,6 @@ export const DespachoWizard = () => {
         start_date: new Date().toISOString(),
       };
 
-      // 🚀 SI SE DESPACHA (en_transito), AGREGAMOS EL TRAMO Y LOS EQUIPOS. SI ES STANDBY, NO.
       if (status !== "creado") {
         payload.remolque_1_id = cleanId(data.remolque1Id);
         payload.dolly_id = isFullTrip ? cleanId(data.dollyId) : null;
@@ -432,6 +429,7 @@ export const DespachoWizard = () => {
     }
   };
 
+  // 🚀 FASE 2: Validar solo Cliente, Destino y Fecha para el StandBy
   const isStep1Valid = Boolean(
     data.clienteId &&
     data.subClienteId &&
@@ -441,7 +439,10 @@ export const DespachoWizard = () => {
 
   const isStep2Valid = useMemo(() => {
     const isBasicValid = Boolean(
-      data.unitId && data.driverId && data.remolque1Id,
+      data.unitId &&
+      data.driverId &&
+      data.remolque1Id &&
+      data.descripcion_mercancia,
     );
     const isEquipValid = isFullTrip
       ? Boolean(isBasicValid && data.dollyId && data.remolque2Id)
@@ -457,13 +458,13 @@ export const DespachoWizard = () => {
             variant={currentStep >= 1 ? "info" : "neutralSoft"}
             className="px-4 py-1.5"
           >
-            1. Ruta y Mercancía
+            1. Ruta del Cliente
           </Badge>
           <Badge
             variant={currentStep >= 2 ? "info" : "neutralSoft"}
             className="px-4 py-1.5"
           >
-            2. Asignación Física
+            2. Operación y Asignación
           </Badge>
           <Badge
             variant={currentStep === 3 ? "info" : "neutralSoft"}
@@ -473,11 +474,10 @@ export const DespachoWizard = () => {
           </Badge>
         </div>
 
-        {/* PASO 1: RUTA Y MERCANCÍA */}
+        {/* PASO 1: RUTA SOLAMENTE */}
         {currentStep === 1 && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* 🚀 NUEVO CAMPO: FECHA PROGRAMADA */}
               <div className="space-y-2 md:col-span-3 bg-blue-50 p-4 rounded-xl border border-blue-100 flex flex-col md:flex-row items-start md:items-center gap-4">
                 <div className="flex items-center gap-2 text-brand-navy">
                   <CalendarDays className="h-5 w-5" />
@@ -585,6 +585,7 @@ export const DespachoWizard = () => {
                       ...prev,
                       routeId: v,
                       routeNombre: tariff?.nombre_ruta || "",
+                      origen: tariff?.origen || "Origen", // Jalamos el origen de la tarifa para que no se pierda
                       anticipo_casetas: Number(tariff?.costo_casetas || 0),
                     }));
                     resetRecursosFull(nextIsFull);
@@ -651,13 +652,65 @@ export const DespachoWizard = () => {
               </div>
             </div>
 
-            <div className="col-span-2 mt-4 space-y-4 bg-slate-50 p-6 rounded-xl border border-slate-200">
+            {/* BOTONES DEL PASO 1 */}
+            <div className="flex justify-between items-center pt-6 border-t mt-6">
+              <Button variant="outline" onClick={() => navigate("/despacho")}>
+                Cancelar
+              </Button>
+
+              <div className="flex gap-4">
+                <Button
+                  variant="secondary"
+                  className="bg-amber-100 text-amber-800 hover:bg-amber-200 font-bold"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleCreate("creado");
+                  }}
+                  disabled={!isStep1Valid}
+                >
+                  <Clock className="w-4 h-4 mr-2" /> Guardar en Planeador
+                  (Stand-By)
+                </Button>
+
+                <ActionButton
+                  onClick={() => setCurrentStep(2)}
+                  disabled={!isStep1Valid}
+                  className="px-8 font-black"
+                >
+                  Asignar Operación <ChevronRight className="w-4 h-4 ml-2" />
+                </ActionButton>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* PASO 2: ASIGNACIÓN FÍSICA Y MERCANCÍA */}
+        {currentStep === 2 && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
+            <div className="flex items-center justify-between pb-4 border-b">
+              <div className="flex items-center gap-3">
+                <h3 className="text-lg font-black text-slate-800">
+                  Preparación del Viaje
+                </h3>
+                <Badge
+                  variant={isFullTrip ? "destructive" : "secondary"}
+                  className="uppercase font-black"
+                >
+                  {isFullTrip
+                    ? "MODO: FULL / DOBLE ARTICULADO"
+                    : "MODO: SENCILLO"}
+                </Badge>
+              </div>
+            </div>
+
+            {/* 🚀 FASE 2: MERCANCÍA SE MOVIÓ AL PASO 2 */}
+            <div className="space-y-4 bg-slate-50 p-6 rounded-xl border border-slate-200 mb-6">
               <h4 className="text-sm font-black text-brand-navy uppercase tracking-widest flex items-center gap-2 mb-2">
-                <Box className="h-4 w-4" /> Mercancía
+                <Box className="h-4 w-4" /> Información de la Mercancía
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label>Descripción de la Carga *</Label>
+                  <Label>Descripción de la Carga (Catálogo SAT) *</Label>
                   <SearchableSelect
                     items={availableSatProducts}
                     value={data.descripcion_mercancia.split(" ")[0]}
@@ -694,59 +747,6 @@ export const DespachoWizard = () => {
                     }
                   />
                 </div>
-              </div>
-            </div>
-
-            {/* BOTONES DEL PASO 1 */}
-            <div className="flex justify-between items-center pt-6 border-t mt-6">
-              <Button variant="outline" onClick={() => navigate("/despacho")}>
-                Cancelar
-              </Button>
-
-              <div className="flex gap-4">
-                {/* 🚀 BOTÓN STANDBY EN EL PASO 1 */}
-                <Button
-                  variant="secondary"
-                  className="bg-amber-100 text-amber-800 hover:bg-amber-200 font-bold"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    handleCreate("creado");
-                  }}
-                  disabled={!isStep1Valid}
-                >
-                  <Clock className="w-4 h-4 mr-2" /> Guardar en Planeador
-                  (Stand-By)
-                </Button>
-
-                {/* CONTINUAR A ASIGNACIÓN */}
-                <ActionButton
-                  onClick={() => setCurrentStep(2)}
-                  disabled={!isStep1Valid}
-                  className="px-8 font-black"
-                >
-                  Asignar Unidad <ChevronRight className="w-4 h-4 ml-2" />
-                </ActionButton>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* PASO 2: ASIGNACIÓN FÍSICA */}
-        {currentStep === 2 && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
-            <div className="flex items-center justify-between pb-4 border-b">
-              <div className="flex items-center gap-3">
-                <h3 className="text-lg font-black text-slate-800">
-                  Preparación del Viaje
-                </h3>
-                <Badge
-                  variant={isFullTrip ? "destructive" : "secondary"}
-                  className="uppercase font-black"
-                >
-                  {isFullTrip
-                    ? "MODO: FULL / DOBLE ARTICULADO"
-                    : "MODO: SENCILLO"}
-                </Badge>
               </div>
             </div>
 
@@ -879,7 +879,6 @@ export const DespachoWizard = () => {
               </div>
             </div>
 
-            {/* BOTONES DEL PASO 2 */}
             <div className="flex justify-between pt-8 border-t mt-8">
               <Button
                 variant="outline"

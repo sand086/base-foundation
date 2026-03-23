@@ -169,6 +169,7 @@ class TripCreate(TripBase):
 class TripResponse(TripBase):
     id: int
     public_id: Optional[str] = None
+    uuid_fiscal: Optional[str] = None
 
     client: Optional[ClientResponse] = None
     remolque_1: Optional[UnitResponse] = None
@@ -213,6 +214,7 @@ class TripUpdate(ORMBase):
     sat_clave_unidad: Optional[str] = Field(default=None, max_length=10)
     mercancia_clave_stcc: Optional[str] = Field(default=None, max_length=20)
     status: Optional[TripStatus] = None
+    uuid_fiscal: Optional[str] = None
 
     tarifa_base: Optional[float] = None
     costo_casetas: Optional[float] = None

@@ -1,4 +1,3 @@
-# backend/app/api/endpoints/billing.py
 import os
 import shutil
 from pathlib import Path
@@ -22,7 +21,7 @@ def generar_carta_porte_nominal(
     invoice_data: ReceivableInvoiceCreate, db: Session = Depends(get_db)
 ):
     """
-    Endpoint Fase 1 (Bypass Aduanal):
+    Endpoint Fase 3 (Bypass Aduanal):
     Genera y timbra la Carta Porte 3.1 por un valor de $1.00 MXN.
     """
     service = BillingService(db)
@@ -46,15 +45,16 @@ def generar_factura_final(
     invoice_data: ReceivableInvoiceCreate, db: Session = Depends(get_db)
 ):
     """
-    Endpoint Fase 3 (Cierre Administrativo):
-    1. Genera la factura real con los costos completos.
+    Endpoint Fase 4 (Cierre Administrativo y Sustitución 04):
+    1. Genera la factura real con los costos completos jalando al operador de ruta.
     2. Aplica la Relación 04 al UUID de la Carta Porte nominal.
-    3. Manda a cancelar la Carta Porte nominal de $1.
+    3. Cancela localmente la Carta Porte nominal de $1.
     """
     service = BillingService(db)
     try:
         factura_final = service.generar_factura_final_relacionada(invoice_data)
 
+        # Efectuamos la cancelación del comprobante anterior (Fase 4)
         if invoice_data.uuid_relacionado:
             from app.models.models import ReceivableInvoice
 
@@ -174,8 +174,6 @@ def download_csd_secure(
     password: str = Form(...),
     file_type: str = Form(...),
     db: Session = Depends(get_db),
-    # Descomenta la siguiente línea si quieres forzar que solo usuarios logueados descarguen
-    # current_user = Depends(get_current_active_user)
 ):
     """
     Descarga segura de los certificados CSD.

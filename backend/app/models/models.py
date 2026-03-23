@@ -25,6 +25,7 @@ from sqlalchemy import (
     Enum,
     Index,
     func,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship, declarative_mixin, declared_attr
 from sqlalchemy.dialects.postgresql import JSONB, DOUBLE_PRECISION
@@ -427,7 +428,6 @@ class Unit(AuditMixin, Base):
         pg_enum(UnitAxleConfig, "unitaxleconfig"), nullable=True
     )
 
-    # RELACIONES CORREGIDAS
     operators = relationship("Operator", back_populates="assigned_unit")
     tires = relationship("Tire", back_populates="unit")
     work_orders = relationship("WorkOrder", back_populates="unit")
@@ -577,7 +577,6 @@ class Operator(AuditMixin, Base):
         server_default="XAXX010101000",
     )
 
-    # RELACIONES CORREGIDAS
     assigned_unit = relationship("Unit", back_populates="operators")
     trip_legs = relationship("TripLeg", back_populates="operator")
     document_history = relationship(
@@ -587,18 +586,13 @@ class Operator(AuditMixin, Base):
     )
 
 
-# =========================================================
-# MODELS DE VIAJE (REFCTORIZADOS PARA DROPS/TRAMOS)
-# =========================================================
-
-
 class Trip(AuditMixin, Base):
     __tablename__ = "trips"
 
     id = Column(Integer, primary_key=True, index=True)
     public_id = Column(String(50), unique=True, nullable=True)
+    uuid_fiscal = Column(String(36), nullable=True)
 
-    # --- LLAVES FORÁNEAS (Servicio General) ---
     client_id = Column(
         Integer, ForeignKey("clients.id", ondelete="RESTRICT"), nullable=False
     )
@@ -609,7 +603,6 @@ class Trip(AuditMixin, Base):
         Integer, ForeignKey("tariffs.id", ondelete="SET NULL"), nullable=True
     )
 
-    # EQUIPOS FIJOS (Los remolques/contenedores viajan en todo el ciclo)
     remolque_1_id = Column(
         Integer, ForeignKey("units.id", ondelete="SET NULL"), nullable=True
     )
@@ -620,34 +613,29 @@ class Trip(AuditMixin, Base):
         Integer, ForeignKey("units.id", ondelete="SET NULL"), nullable=True
     )
 
-    # --- DATOS DEL VIAJE PADRE ---
     origin = Column(String(200), nullable=False)
     destination = Column(String(200), nullable=False)
     route_name = Column(String(200))
     terminal_entrega_vacio = Column(String(255), nullable=True)
 
-    #   CAMPOS DE MERCANCÍA (CARTA PORTE)
     descripcion_mercancia = Column(String(255), default="Carga General")
     peso_toneladas = Column(Float, default=0.0)
     es_material_peligroso = Column(Boolean, default=False)
-    clase_imo = Column(String(50), nullable=True)  # Ej. "8 (Corrosivos)", "9"
-    sat_clave_producto = Column(String(20), default="78101802")  # Fletes
-    sat_clave_unidad = Column(String(10), default="E48")  # Servicio
+    clase_imo = Column(String(50), nullable=True)
+    sat_clave_producto = Column(String(20), default="78101802")
+    sat_clave_unidad = Column(String(10), default="E48")
     mercancia_clave_stcc = Column(String(20), nullable=True)
     status = Column(pg_enum(TripStatus, "tripstatus"), default=TripStatus.CREADO)
 
-    # --- FINANZAS GLOBALES (Cobro al cliente) ---
     tarifa_base = Column(Float, nullable=False, default=0.0)
     costo_casetas = Column(Float, default=0.0)
 
-    # Fechas Globales
     fecha_programada = Column(Date, nullable=True)
     start_date = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     closed_at = Column(DateTime(timezone=True))
 
-    # Relaciones
     client = relationship("Client", back_populates="trips")
     sub_client = relationship("SubClient", back_populates="trips")
     tariff = relationship("Tariff", back_populates="trips")
@@ -662,7 +650,6 @@ class Trip(AuditMixin, Base):
         "Unit", foreign_keys=[remolque_2_id], back_populates="trips_as_remolque_2"
     )
 
-    # Relación con los Tramos
     legs = relationship(
         "TripLeg",
         back_populates="trip",
@@ -671,7 +658,6 @@ class Trip(AuditMixin, Base):
     )
 
 
-# NUEVO MODELO: EL TRAMO O DESENGANCHE
 class TripLeg(AuditMixin, Base):
     __tablename__ = "trip_legs"
 
@@ -683,7 +669,6 @@ class TripLeg(AuditMixin, Base):
     leg_type = Column(pg_enum(TripLegType, "triplegtype"), nullable=False)
     status = Column(pg_enum(TripStatus, "tripstatus"), default=TripStatus.CREADO)
 
-    # --- RECURSOS ASIGNADOS AL TRAMO ---
     unit_id = Column(
         Integer, ForeignKey("units.id", ondelete="RESTRICT"), nullable=True
     )
@@ -691,26 +676,22 @@ class TripLeg(AuditMixin, Base):
         Integer, ForeignKey("operators.id", ondelete="RESTRICT"), nullable=True
     )
 
-    # Finanzas del tramo
     anticipo_casetas = Column(Float, default=0.0)
     anticipo_viaticos = Column(Float, default=0.0)
     anticipo_combustible = Column(Float, default=0.0)
     otros_anticipos = Column(Float, default=0.0)
 
-    # 🚀 NUEVOS CAMPOS DE LIQUIDACIÓN
     monto_sueldo = Column(Float, default=0.0)
     monto_bonos = Column(Float, default=0.0)
     monto_maniobras = Column(Float, default=0.0)
     monto_penalizaciones = Column(Float, default=0.0)
     monto_neto_pagado = Column(Float, default=0.0)
 
-    # Telemetría
     odometro_inicial = Column(Integer, nullable=True, default=0)
-    odometro_final = Column(Integer, nullable=True)  # 🚀 NUEVO
+    odometro_final = Column(Integer, nullable=True)
     nivel_tanque_inicial = Column(Integer, nullable=True, default=0)
-    rendimiento_real = Column(Float, nullable=True)  # 🚀 NUEVO
+    rendimiento_real = Column(Float, nullable=True)
 
-    # Tiempos y rastreo
     start_date = Column(DateTime(timezone=True), nullable=True)
     actual_arrival = Column(DateTime(timezone=True), nullable=True)
     last_update = Column(
@@ -718,7 +699,6 @@ class TripLeg(AuditMixin, Base):
     )
     last_location = Column(String(200))
 
-    # Relaciones
     trip = relationship("Trip", back_populates="legs")
     unit = relationship("Unit", foreign_keys=[unit_id], back_populates="trip_legs")
     operator = relationship(
@@ -743,7 +723,6 @@ class TripTimelineEvent(AuditMixin, Base):
     event = Column(String(500), nullable=False)
     event_type = Column(String(20), default="info")
 
-    # 🚀 AGREGAR ESTAS COLUMNAS PARA QUE COINCIDA CON EL FRONTEND
     location = Column(String(255), nullable=True)
     lat = Column(String(50), nullable=True)
     lng = Column(String(50), nullable=True)
@@ -1192,6 +1171,18 @@ class TollBooth(AuditMixin, Base):
 
 class RateTemplate(AuditMixin, Base):
     __tablename__ = "rate_templates"
+
+    # 🚀 FASE 1: Se añade el UniqueConstraint de la combinación exacta
+    __table_args__ = (
+        UniqueConstraint(
+            "client_id",
+            "origen",
+            "destino",
+            "tipo_unidad",
+            name="uq_rate_template_config",
+        ),
+    )
+
     id = Column(Integer, primary_key=True, index=True)
     client_id = Column(
         Integer, ForeignKey("clients.id", ondelete="RESTRICT"), nullable=True
@@ -1255,11 +1246,6 @@ class OperatorDocumentHistory(AuditMixin, Base):
     operator = relationship("Operator", back_populates="document_history")
 
 
-# =========================================================
-#  Historial de Documentos de Combustible
-# =========================================================
-
-
 class FuelDocumentHistory(AuditMixin, Base):
     __tablename__ = "fuel_document_history"
 
@@ -1320,33 +1306,24 @@ class FuelLog(AuditMixin, Base):
     )
 
 
-# =========================================================
-# CATÁLOGOS SAT (Para Carta Porte)
-# =========================================================
-
-
 class SatProduct(Base):
-    """Catálogo de Bienes y Servicios (Mercancía) del SAT"""
-
     __tablename__ = "sat_products"
 
     id = Column(Integer, primary_key=True, index=True)
-    clave = Column(String(20), unique=True, index=True, nullable=False)  # Ej: 50131801
-    descripcion = Column(String(255), nullable=False)  # Ej: Queso natural
-    es_material_peligroso = Column(String(5), default="0,1")  # 0, 1 (No, Sí)
+    clave = Column(String(20), unique=True, index=True, nullable=False)
+    descripcion = Column(String(255), nullable=False)
+    es_material_peligroso = Column(String(5), default="0,1")
     activo = Column(Boolean, default=True)
 
 
 class SatLocationCode(Base):
-    """Catálogo de Códigos Postales, Municipios y Estados del SAT"""
-
     __tablename__ = "sat_location_codes"
 
     id = Column(Integer, primary_key=True, index=True)
-    codigo_postal = Column(String(10), index=True, nullable=False)  # Ej: 91700
-    estado_clave = Column(String(10), nullable=False)  # Ej: VER
-    municipio_clave = Column(String(10))  # Ej: 193
-    localidad_clave = Column(String(10))  # Ej: 17
+    codigo_postal = Column(String(10), index=True, nullable=False)
+    estado_clave = Column(String(10), nullable=False)
+    municipio_clave = Column(String(10))
+    localidad_clave = Column(String(10))
 
 
 class ReceivableInvoice(AuditMixin, Base):
@@ -1354,7 +1331,6 @@ class ReceivableInvoice(AuditMixin, Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    # Relaciones al cliente y al viaje
     client_id = Column(
         Integer, ForeignKey("clients.id", ondelete="RESTRICT"), nullable=False
     )
@@ -1365,17 +1341,12 @@ class ReceivableInvoice(AuditMixin, Base):
         Integer, ForeignKey("trips.id", ondelete="SET NULL"), nullable=True
     )
 
-    uuid = Column(
-        String(36), unique=True, nullable=True
-    )  # UUID del SAT cuando se timbre
+    uuid = Column(String(36), unique=True, nullable=True)
     folio_interno = Column(String(50))
-    is_nominal = Column(Boolean, default=False)  # True si es la Carta Porte de $1
-    status_sat = Column(
-        String(20), default="PROVISIONAL"
-    )  # PROVISIONAL, TIMBRADA, CANCELADA
-    uuid_relacionado = Column(String(36), nullable=True)  # Para la relación 04
+    is_nominal = Column(Boolean, default=False)
+    status_sat = Column(String(20), default="PROVISIONAL")
+    uuid_relacionado = Column(String(36), nullable=True)
 
-    # Finanzas
     subtotal = Column(Float, default=0.0)
     iva = Column(Float, default=0.0)
     retenciones = Column(Float, default=0.0)
@@ -1394,14 +1365,13 @@ class ReceivableInvoice(AuditMixin, Base):
     pdf_url = Column(String(500))
     xml_url = Column(String(500))
 
-    # Relaciones de navegación
     client = relationship("Client")
     sub_client = relationship("SubClient")
     trip = relationship("Trip")
     payments = relationship(
         "ReceivableInvoicePayment",
         back_populates="invoice",
-        cascade="all, delete-orphan",  # Opcional, pero recomendado para pagos
+        cascade="all, delete-orphan",
     )
 
 
@@ -1417,17 +1387,11 @@ class ReceivableInvoicePayment(AuditMixin, Base):
 
     fecha_pago = Column(Date, default=date.today)
     monto = Column(Float, nullable=False)
-    metodo_pago = Column(String(50))  # Ej: TRANSFERENCIA, CHEQUE, EFECTIVO
-    referencia = Column(String(100))  # Ej: Folio de transferencia
-    cuenta_deposito = Column(String(50))  # A qué cuenta de la empresa cayó
+    metodo_pago = Column(String(50))
+    referencia = Column(String(100))
+    cuenta_deposito = Column(String(50))
 
-    # Relación inversa
     invoice = relationship("ReceivableInvoice", back_populates="payments")
-
-
-# =========================================================
-# NOTIFICACIONES, ALERTAS Y PLANTILLAS
-# =========================================================
 
 
 class AlertConfig(AuditMixin, Base):
@@ -1446,7 +1410,7 @@ class EmailTemplate(AuditMixin, Base):
     __tablename__ = "email_templates"
 
     id = Column(Integer, primary_key=True, index=True)
-    codigo = Column(String(50), unique=True, nullable=False)  # Ej: TPL-001
+    codigo = Column(String(50), unique=True, nullable=False)
     nombre = Column(String(100), nullable=False)
     asunto = Column(String(200), nullable=False)
     cuerpo = Column(Text, nullable=False)
@@ -1464,7 +1428,7 @@ class BankAccount(AuditMixin, Base):
     alias = Column(String(100), nullable=False)
     saldo = Column(Float, default=0.0)
     estatus = Column(String(20), default="activo")
-    tipo_cuenta = Column(String(50))  # operativa o cobranza
+    tipo_cuenta = Column(String(50))
 
 
 class BankMovement(AuditMixin, Base):
@@ -1475,13 +1439,12 @@ class BankMovement(AuditMixin, Base):
         Integer, ForeignKey("bank_accounts.id", ondelete="CASCADE"), nullable=False
     )
 
-    tipo = Column(String(20))  # 'ingreso' o 'egreso'
+    tipo = Column(String(20))
     monto = Column(Float, nullable=False)
     fecha = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     concepto = Column(String(255))
     referencia = Column(String(100))
 
-    # Relación con la cuenta bancaria
     bank_account = relationship("BankAccount", backref="movements")
 
 
@@ -1496,8 +1459,6 @@ class Notification(AuditMixin, Base):
     message = Column(Text, nullable=False)
     is_read = Column(Boolean, default=False)
     event_type = Column(String(50), nullable=True)
-    reference_id = Column(
-        String(50), nullable=True
-    )  # Ej: el ID del viaje para abrirlo al dar clic
+    reference_id = Column(String(50), nullable=True)
 
     user = relationship("User", foreign_keys=[user_id])
