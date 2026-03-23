@@ -3,12 +3,14 @@ import logging
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
+from io import BytesIO
 
 import zeep
 from zeep.plugins import HistoryPlugin
 from lxml import etree
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
+import qrcode
 
 # Librerías para criptografía
 from cryptography import x509
@@ -54,15 +56,6 @@ class BillingService:
         )
         self.key_password = "12345678a"
 
-        self.PAC_ERRORS = {
-            200: "OK",
-            500: "Error interno PAC",
-            601: "Auth Fallida",
-            602: "Usuario bloqueado",
-            604: "Límite de intentos",
-            1402: "Emisor no encontrado",
-        }
-
     def generar_carta_porte_nominal(
         self, invoice_data: ReceivableInvoiceCreate
     ) -> ReceivableInvoice:
@@ -93,11 +86,13 @@ class BillingService:
             self.db.add(nueva_factura)
             self.db.commit()
             self.db.refresh(nueva_factura)
-            logger.info(f"✅ Factura guardada: {nueva_factura.uuid}")
+            logger.info(f"✅ Factura persistida exitosamente: {nueva_factura.uuid}")
             return nueva_factura
         except Exception:
             self.db.rollback()
-            raise HTTPException(status_code=500, detail="Error en BD local.")
+            raise HTTPException(
+                status_code=500, detail="Error en BD local al guardar factura."
+            )
 
     def _importar_comprobante_ws(self, viaje, cliente, unidad, operador):
         try:
@@ -160,22 +155,23 @@ class BillingService:
 
             res_sat = result.resultados[0]
             if int(getattr(res_sat, "status", 0)) == 200:
-                # SOLUCIÓN CRÍTICA: Zeep ya decodifica a bytes nativos.
-                cfdi_bytes = (
-                    res_sat.cfdiTimbrado
-                    if isinstance(res_sat.cfdiTimbrado, bytes)
-                    else base64.b64decode(res_sat.cfdiTimbrado)
-                )
+                raw_cfdi = res_sat.cfdiTimbrado
+                if isinstance(raw_cfdi, str):
+                    cfdi_bytes = (
+                        raw_cfdi.encode("utf-8")
+                        if "<cfdi:Comprobante" in raw_cfdi
+                        else base64.b64decode(raw_cfdi)
+                    )
+                else:
+                    cfdi_bytes = raw_cfdi
+
+                raw_qr = res_sat.qrCode
                 qr_bytes = (
-                    res_sat.qrCode
-                    if isinstance(res_sat.qrCode, bytes)
-                    else base64.b64decode(res_sat.qrCode)
+                    base64.b64decode(raw_qr) if isinstance(raw_qr, str) else raw_qr
                 )
 
-                # Guardamos el XML oficial
                 self._guardar_xml_disco(cfdi_bytes, res_sat.uuid)
 
-                # Parseo seguro
                 root = etree.fromstring(cfdi_bytes)
                 ns = {
                     "cfdi": "http://www.sat.gob.mx/cfd/4",
@@ -190,7 +186,6 @@ class BillingService:
                     "//tfd:TimbreFiscalDigital/@NoCertificadoSAT", namespaces=ns
                 )[0]
 
-                # Generamos el PDF
                 self._generar_pdf_con_diseno(
                     viaje, res_sat.uuid, qr_bytes, s_sat, s_emi, c_sat, data
                 )
@@ -255,22 +250,14 @@ class BillingService:
     <cfdi:Conceptos>
         <cfdi:Concepto ClaveProdServ="78101802" NoIdentificacion="SERV001" Cantidad="1.00" ClaveUnidad="E48" Unidad="SERVICIO" Descripcion="SERVICIO DE FLETE GENERAL" ValorUnitario="1.00" Importe="1.00" ObjetoImp="02">
             <cfdi:Impuestos>
-                <cfdi:Traslados>
-                    <cfdi:Traslado Base="1.00" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="0.16" />
-                </cfdi:Traslados>
-                <cfdi:Retenciones>
-                    <cfdi:Retencion Base="1.00" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.040000" Importe="0.04" />
-                </cfdi:Retenciones>
+                <cfdi:Traslados><cfdi:Traslado Base="1.00" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="0.16" /></cfdi:Traslados>
+                <cfdi:Retenciones><cfdi:Retencion Base="1.00" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.040000" Importe="0.04" /></cfdi:Retenciones>
             </cfdi:Impuestos>
         </cfdi:Concepto>
     </cfdi:Conceptos>
     <cfdi:Impuestos TotalImpuestosRetenidos="0.04" TotalImpuestosTrasladados="0.16">
-        <cfdi:Retenciones>
-            <cfdi:Retencion Impuesto="002" Importe="0.04" />
-        </cfdi:Retenciones>
-        <cfdi:Traslados>
-            <cfdi:Traslado Base="1.00" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="0.16" />
-        </cfdi:Traslados>
+        <cfdi:Retenciones><cfdi:Retencion Impuesto="002" Importe="0.04" /></cfdi:Retenciones>
+        <cfdi:Traslados><cfdi:Traslado Base="1.00" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="0.16" /></cfdi:Traslados>
     </cfdi:Impuestos>
     <cfdi:Complemento>
         <cartaporte31:CartaPorte Version="3.1" IdCCP="CCCe3b8d-a5c4-d91d-2b7a-8951836e3433" TranspInternac="No" TotalDistRec="480">
@@ -300,25 +287,56 @@ class BillingService:
     def _generar_pdf_con_diseno(self, viaje, uuid, qr_bytes, s_sat, s_emi, c_sat, data):
         from jinja2 import Environment, FileSystemLoader
         from xhtml2pdf import pisa
-        from io import BytesIO
 
-        qr_src = f"data:image/png;base64,{base64.b64encode(qr_bytes).decode('utf-8')}"
+        logo_path = self.templates_dir / "assets" / "logo-black.png"
+        logo_src = ""
+        if logo_path.exists():
+            with open(logo_path, "rb") as img:
+                logo_src = f"data:image/png;base64,{base64.b64encode(img.read()).decode('utf-8')}"
+
+        qr_sat_b64 = base64.b64encode(qr_bytes).decode("utf-8")
+        qr_src = f"data:image/png;base64,{qr_sat_b64}"
+
+        id_ccp = "CCCe3b8d-a5c4-d91d-2b7a-8951836e3433"
+        url_ccp = f"https://verificacfdi.facturaelectronica.sat.gob.mx/verificaccp/default.aspx?IdCCP={id_ccp}&Fecha={data['fecha']}"
+        img_qr_ccp = qrcode.make(url_ccp)
+        buffered = BytesIO()
+        img_qr_ccp.save(buffered, format="PNG")
+        qr_ccp_src = f"data:image/png;base64,{base64.b64encode(buffered.getvalue()).decode('utf-8')}"
+
         env = Environment(loader=FileSystemLoader(str(self.templates_dir)))
         template = env.get_template("carta_porte.html")
+
+        # --- UTILIDAD PARA CORTAR CADENAS LARGAS PARA xhtml2pdf ---
+        # Esto inserta un salto de línea HTML (<br/>) cada N caracteres
+        def split_string(text, length=100):
+            if not text:
+                return ""
+            return "<br/>".join(
+                [text[i : i + length] for i in range(0, len(text), length)]
+            )
+
+        # Aquí reconstruimos la cadena original para pasarla al contexto
+        cadena_original_str = f"||1.1|{uuid}|{data['fecha']}|{s_sat}||"
 
         context = {
             "uuid": uuid,
             "folio_interno": data["folio"],
             "fecha_emision": data["fecha"],
+            "logo_src": logo_src,
             "qr_src": qr_src,
+            "qr_ccp_src": qr_ccp_src,
+            "id_ccp": id_ccp,
             "nombre_cliente": data["nombre_cliente"],
             "rfc_cliente": data["rfc_cliente"],
             "cp_cliente": data["cp_cliente"],
             "regimen_cliente": data["regimen_cliente"],
-            "sello_sat": s_sat,
-            "sello_emisor": s_emi,
+            "uso_cfdi": data["uso_cfdi"],
             "cert_sat": c_sat,
-            "cadena_original": f"||1.1|{uuid}|{data['fecha']}|{s_sat}||",
+            # PASAMOS LOS SELLOS YA PRE-CORTADOS CON LA FUNCIÓN (cortamos cada 110 caracteres)
+            "sello_sat": split_string(s_sat, 110),
+            "sello_emisor": split_string(s_emi, 110),
+            "cadena_original": split_string(cadena_original_str, 110),
             "subtotal": "1.00",
             "iva": "0.16",
             "retenciones": "0.04",
@@ -327,11 +345,159 @@ class BillingService:
                 {
                     "clave": "78101802",
                     "cantidad": "1.00",
-                    "unidad": "SERVICIO",
-                    "descripcion": "SERVICIO DE FLETE GENERAL",
+                    "unidad": "E48 - SRV",
+                    "descripcion": "[78101802] FLETE CARGA GENERAL CGMU5751959",
+                    "precio_unitario": "1.00",
                     "importe": "1.00",
                 }
             ],
+            "ubicaciones": [
+                {
+                    "tipo": "Origen",
+                    "rfc": "EKU9003173C9",
+                    "nombre": "ESCUELA KEMPER URGATE SA DE CV",
+                    "fecha": data["fecha"],
+                    "distancia": "",
+                    "cp": "91808",
+                },
+                {
+                    "tipo": "Destino",
+                    "rfc": data["rfc_cliente"],
+                    "nombre": data["nombre_cliente"],
+                    "fecha": data["fecha"],
+                    "distancia": "480",
+                    "cp": data["cp_cliente"],
+                },
+            ],
+            "autotransporte": {
+                "permiso": data["permiso_sct"],
+                "num_permiso": data["num_permiso"],
+                "configuracion": data["config_vehicular"],
+                "peso": data["peso_bruto_vehicular"],
+                "placas": data["placas"],
+                "anio": data["anio_modelo"],
+                "aseguradora": data["aseguradora"],
+                "poliza": data["poliza"],
+                "remolque": data["subtipo_remolque"],
+                "placa_remolque": data["placa_remolque"],
+            },
+            "operador": {
+                "rfc": data["rfc_operador"],
+                "licencia": data["licencia"],
+                "nombre": data["nombre_operador"],
+            },
+        }
+
+        html_renderizado = template.render(context)
+        pdf_path = self.storage_dir / f"{uuid}.pdf"
+        with open(pdf_path, "wb") as pdf_file:
+            pisa.CreatePDF(BytesIO(html_renderizado.encode("utf-8")), dest=pdf_file)
+
+        logger.info(f"📄 PDF Generado satisfactoriamente: {pdf_path.name}")
+        return pdf_path
+
+    def _generar_pdf_con_diseno(self, viaje, uuid, qr_bytes, s_sat, s_emi, c_sat, data):
+        from jinja2 import Environment, FileSystemLoader
+        from xhtml2pdf import pisa
+
+        logo_path = self.templates_dir / "assets" / "logo-black.png"
+        logo_src = ""
+        if logo_path.exists():
+            with open(logo_path, "rb") as img:
+                logo_src = f"data:image/png;base64,{base64.b64encode(img.read()).decode('utf-8')}"
+
+        qr_sat_b64 = base64.b64encode(qr_bytes).decode("utf-8")
+        qr_src = f"data:image/png;base64,{qr_sat_b64}"
+
+        id_ccp = "CCCe3b8d-a5c4-d91d-2b7a-8951836e3433"
+        url_ccp = f"https://verificacfdi.facturaelectronica.sat.gob.mx/verificaccp/default.aspx?IdCCP={id_ccp}&Fecha={data['fecha']}"
+        img_qr_ccp = qrcode.make(url_ccp)
+        buffered = BytesIO()
+        img_qr_ccp.save(buffered, format="PNG")
+        qr_ccp_src = f"data:image/png;base64,{base64.b64encode(buffered.getvalue()).decode('utf-8')}"
+
+        env = Environment(loader=FileSystemLoader(str(self.templates_dir)))
+        template = env.get_template("carta_porte.html")
+
+        # --- UTILIDAD PARA CORTAR CADENAS LARGAS PARA xhtml2pdf ---
+        # Esto inserta un salto de línea HTML (<br/>) cada N caracteres
+        def split_string(text, length=100):
+            if not text:
+                return ""
+            return "<br/>".join(
+                [text[i : i + length] for i in range(0, len(text), length)]
+            )
+
+        # Aquí reconstruimos la cadena original para pasarla al contexto
+        cadena_original_str = f"||1.1|{uuid}|{data['fecha']}|{s_sat}||"
+
+        context = {
+            "uuid": uuid,
+            "folio_interno": data["folio"],
+            "fecha_emision": data["fecha"],
+            "logo_src": logo_src,
+            "qr_src": qr_src,
+            "qr_ccp_src": qr_ccp_src,
+            "id_ccp": id_ccp,
+            "nombre_cliente": data["nombre_cliente"],
+            "rfc_cliente": data["rfc_cliente"],
+            "cp_cliente": data["cp_cliente"],
+            "regimen_cliente": data["regimen_cliente"],
+            "uso_cfdi": data["uso_cfdi"],
+            "cert_sat": c_sat,
+            # PASAMOS LOS SELLOS YA PRE-CORTADOS CON LA FUNCIÓN (cortamos cada 110 caracteres)
+            "sello_sat": split_string(s_sat, 110),
+            "sello_emisor": split_string(s_emi, 110),
+            "cadena_original": split_string(cadena_original_str, 110),
+            "subtotal": "1.00",
+            "iva": "0.16",
+            "retenciones": "0.04",
+            "total": "1.12",
+            "conceptos": [
+                {
+                    "clave": "78101802",
+                    "cantidad": "1.00",
+                    "unidad": "E48 - SRV",
+                    "descripcion": "[78101802] FLETE CARGA GENERAL CGMU5751959",
+                    "precio_unitario": "1.00",
+                    "importe": "1.00",
+                }
+            ],
+            "ubicaciones": [
+                {
+                    "tipo": "Origen",
+                    "rfc": "EKU9003173C9",
+                    "nombre": "ESCUELA KEMPER URGATE SA DE CV",
+                    "fecha": data["fecha"],
+                    "distancia": "",
+                    "cp": "91808",
+                },
+                {
+                    "tipo": "Destino",
+                    "rfc": data["rfc_cliente"],
+                    "nombre": data["nombre_cliente"],
+                    "fecha": data["fecha"],
+                    "distancia": "480",
+                    "cp": data["cp_cliente"],
+                },
+            ],
+            "autotransporte": {
+                "permiso": data["permiso_sct"],
+                "num_permiso": data["num_permiso"],
+                "configuracion": data["config_vehicular"],
+                "peso": data["peso_bruto_vehicular"],
+                "placas": data["placas"],
+                "anio": data["anio_modelo"],
+                "aseguradora": data["aseguradora"],
+                "poliza": data["poliza"],
+                "remolque": data["subtipo_remolque"],
+                "placa_remolque": data["placa_remolque"],
+            },
+            "operador": {
+                "rfc": data["rfc_operador"],
+                "licencia": data["licencia"],
+                "nombre": data["nombre_operador"],
+            },
         }
 
         html_renderizado = template.render(context)
