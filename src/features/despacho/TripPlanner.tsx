@@ -136,6 +136,15 @@ const groupKeyFromStatusAndLeg = (
 const getOperationalStatusBadge = (leg: TripLeg) => {
   const status = normalizeStatus(leg.status);
 
+  // 🚀 CORRECCIÓN DE EXPERIENCIA DE USUARIO: Traducir "Creado"
+  if (status === "creado") {
+    return (
+      <Badge className="bg-amber-400 hover:bg-amber-500 text-amber-950 shadow-sm border-0 w-full justify-center py-1">
+        <Clock className="h-3 w-3 mr-1.5" /> ASIGNADO / EN RUTA
+      </Badge>
+    );
+  }
+
   if (status === "entregado" && leg.leg_type === "carga_muelle")
     return (
       <Badge className="bg-orange-500 text-white shadow-sm border-0 w-full justify-center py-1">
@@ -542,7 +551,13 @@ export const TripPlanner = () => {
     for (const trip of safeTrips) {
       if (trip.status === "cerrado") continue;
       if (trip.legs && trip.legs.length > 0) {
-        const activeLeg = trip.legs.find((leg) => leg.status !== "cerrado");
+        // 🚀 REGLA DE LA TABLA Y PIZARRÓN (Avance de fase)
+        const activeLeg =
+          trip.legs.find(
+            (leg) =>
+              !["entregado", "cerrado"].includes(leg.status.toLowerCase()),
+          ) || trip.legs[trip.legs.length - 1];
+
         if (activeLeg) items.push({ leg: activeLeg, tripPadre: trip });
       }
     }
@@ -592,10 +607,15 @@ export const TripPlanner = () => {
 
   const handleSaveStatusEvent = async (data: StatusUpdateData) => {
     if (!selectedTripPadre) return;
+
+    // 🚀 REGLA DEL MODAL DE NOVEDADES
     const activeLeg =
       selectedLegToUpdate ||
-      selectedTripPadre.legs?.find((l) => l.status !== "cerrado") ||
+      selectedTripPadre.legs?.find(
+        (l) => !["entregado", "cerrado"].includes(l.status.toLowerCase()),
+      ) ||
       selectedTripPadre.legs?.[selectedTripPadre.legs.length - 1];
+
     if (!activeLeg)
       return toast.error("Error: No se encontró una fase activa.");
 

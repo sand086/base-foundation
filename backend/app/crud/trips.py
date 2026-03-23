@@ -846,17 +846,17 @@ def get_last_unit_odometer(db: Session, unit_id: int) -> int:
 
 def undo_last_leg(db: Session, trip_id: str):
     """
-    Elimina el tramo (leg) actual que se creó por error y reabre el tramo anterior.
+    Elimina el tramo (leg) actual que se creó por error.
+    Si había un tramo anterior, lo reabre.
+    Si era el ÚNICO tramo, regresa el viaje a Stand-By (CREADO).
     """
     tid = int(trip_id)
     trip = db.query(models.Trip).filter(models.Trip.id == tid).first()
 
-    if not trip or len(trip.legs) <= 1:
-        # No se puede deshacer si solo hay un tramo original
+    if not trip or not trip.legs:
         return False
 
     current_leg = trip.legs[-1]
-    previous_leg = trip.legs[-2]
 
     # 1. Liberamos camión/chofer del tramo actual (que fue un error)
     if current_leg.unit_id:
@@ -875,29 +875,39 @@ def undo_last_leg(db: Session, trip_id: str):
     # 2. Borramos el tramo erróneo
     db.delete(current_leg)
 
-    # 3. Restauramos el tramo anterior a "En Tránsito"
-    previous_leg.status = models.TripStatus.EN_TRANSITO
-    previous_leg.actual_arrival = None
+    # 3. Lógica para reajustar el viaje padre
+    if len(trip.legs) > 1:
+        # Había un tramo anterior: lo restauramos a "En Tránsito"
+        previous_leg = trip.legs[-2]
+        previous_leg.status = models.TripStatus.EN_TRANSITO
+        previous_leg.actual_arrival = None
 
-    # Bloqueamos de nuevo al chofer/unidad anterior
-    if previous_leg.unit_id:
-        pu = (
-            db.query(models.Unit).filter(models.Unit.id == previous_leg.unit_id).first()
-        )
-        if pu:
-            pu.status = models.UnitStatus.EN_RUTA
-    if previous_leg.operator_id:
-        po = (
-            db.query(models.Operator)
-            .filter(models.Operator.id == previous_leg.operator_id)
-            .first()
-        )
-        if po:
-            po.status = models.OperatorStatus.EN_RUTA
+        # Bloqueamos de nuevo al chofer/unidad anterior
+        if previous_leg.unit_id:
+            pu = (
+                db.query(models.Unit)
+                .filter(models.Unit.id == previous_leg.unit_id)
+                .first()
+            )
+            if pu:
+                pu.status = models.UnitStatus.EN_RUTA
+        if previous_leg.operator_id:
+            po = (
+                db.query(models.Operator)
+                .filter(models.Operator.id == previous_leg.operator_id)
+                .first()
+            )
+            if po:
+                po.status = models.OperatorStatus.EN_RUTA
 
-    # 4. Actualizamos viaje general
-    trip.status = models.TripStatus.EN_TRANSITO
+        trip.status = models.TripStatus.EN_TRANSITO
+    else:
+        # 🚀 Era el ÚNICO tramo. El viaje se queda huérfano, vuelve a Planeador.
+        trip.status = models.TripStatus.CREADO
+
     trip.closed_at = None
-
     db.commit()
+
+    # Refrescamos para devolver el objeto limpio
+    db.refresh(trip)
     return trip
