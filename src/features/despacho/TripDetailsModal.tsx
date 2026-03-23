@@ -56,6 +56,7 @@ import {
   AlertTriangle,
   Printer,
   History,
+  Clock,
   Loader2,
   Activity,
   Box,
