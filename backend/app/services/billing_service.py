@@ -50,6 +50,7 @@ class BillingService:
         self.cert_dir = self.base_path / "certs"
         self.storage_dir = self.base_path / "storage" / "xml_timbrados"
         self.storage_dir.mkdir(parents=True, exist_ok=True)
+        self.templates_dir = self.base_path / "templates"
 
         self.path_cer = (
             self.cert_dir / "CSD_Sucursal_1_EKU9003173C9_20230517_223850.cer"
@@ -138,12 +139,19 @@ class BillingService:
     def generar_carta_porte_nominal(
         self, invoice_data: ReceivableInvoiceCreate
     ) -> ReceivableInvoice:
+        # Obtenemos los datos relacionales
         viaje, cliente, unidad, operador = self._obtener_datos_completos(
             invoice_data.viaje_id
         )
 
-        resultado_pac = self._importar_comprobante_ws(viaje)
-        monto_total = Decimal("1.00")
+        # Se envían todos los datos para mapearlos en el XML
+        resultado_pac = self._importar_comprobante_ws(viaje, cliente, unidad, operador)
+
+        # Ajustamos los valores financieros reales que el SAT exige para fletes
+        monto_total = Decimal("1.12")
+        subtotal = Decimal("1.00")
+        iva = Decimal("0.16")
+        retenciones = Decimal("0.04")
 
         nueva_factura = ReceivableInvoice(
             client_id=viaje.client_id,
@@ -155,9 +163,9 @@ class BillingService:
             concepto=f"Carta Porte nominal viaje {viaje.id}",
             monto_total=monto_total,
             saldo_pendiente=monto_total,
-            subtotal=Decimal("1.00"),
-            iva=Decimal("0.00"),
-            retenciones=Decimal("0.00"),
+            subtotal=subtotal,
+            iva=iva,
+            retenciones=retenciones,
             moneda="MXN",
             fecha_emision=date.today(),
             fecha_vencimiento=date.today(),
@@ -179,15 +187,62 @@ class BillingService:
                 detail="El CFDI se timbró pero no se pudo guardar en DB.",
             )
 
-    def _importar_comprobante_ws(self, viaje):
+    def _importar_comprobante_ws(self, viaje, cliente, unidad, operador):
         try:
             client = zeep.Client(self.wsdl_timbrado, plugins=[self.history])
             fecha_iso = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+            permiso_db = getattr(unidad, "permiso_sct", "") or "TPAF01"
+            permiso_limpio = (
+                str(permiso_db).split(" ")[0].strip()
+            )  # Corta "TPAF01 - Texto" a solo "TPAF01"
 
-            xml_base = self._armar_xml_sin_sello(viaje, fecha_iso)
-            xml_sellado = self._sellar_xml(xml_base, fecha_iso, str(viaje.id))
+            # Mapeo de datos seguros. Se incluye Localidad y Municipio para cumplir CP147
+            data = {
+                "folio": str(viaje.id),
+                "fecha": fecha_iso,
+                "rfc_cliente": getattr(cliente, "rfc", "") or "CSJ871008UQ4",
+                "nombre_cliente": getattr(cliente, "razon_social", "")
+                or "CREMERIA SAN JOSE",
+                "cp_cliente": getattr(cliente, "codigo_postal", "") or "09040",
+                "regimen_cliente": getattr(cliente, "regimen_fiscal", "") or "601",
+                # --- CAMPOS OBLIGATORIOS SAT (Catálogos) ---
+                "localidad_origen": "17",
+                "municipio_origen": "193",
+                "estado_origen": "VER",
+                "pais_origen": "MEX",
+                "municipio_destino": "007",
+                "estado_destino": getattr(cliente, "estado", "") or "CMX",
+                "pais_destino": "MEX",
+                # -------------------------------------------
+                "placas": getattr(unidad, "placas", "") or "89BH4C",
+                "anio_modelo": str(getattr(unidad, "anio", "")) or "2026",
+                "config_vehicular": getattr(unidad, "configuracion", "") or "T3S3",
+                "permiso_sct": permiso_limpio,  # <--- Usamos el permiso ya limpio
+                "num_permiso": getattr(unidad, "num_permiso", "")
+                or "3066RTX02122011230301021",
+                "aseguradora": getattr(unidad, "aseguradora", "") or "QUALITAS",
+                "poliza": getattr(unidad, "poliza", "") or "7050094731",
+                "subtipo_remolque": "CTR010",  # Catálogo SAT: Chasis Portacontenedor
+                "placa_remolque": "58UD5Z",
+                "rfc_operador": (
+                    getattr(operador, "rfc", "") if operador else "HEHM750716MS6"
+                ),
+                "nombre_operador": (
+                    getattr(operador, "nombre", "")
+                    if operador
+                    else "MARIO LUIS HERNANDEZ"
+                ),
+                "licencia": (
+                    getattr(operador, "licencia", "") if operador else "VER119148"
+                ),
+            }
 
-            logger.info(f"== [REQUEST] Folio {viaje.id} enviando a timbrado ==")
+            xml_base = self._armar_xml_sin_sello(data)
+            xml_sellado = self._sellar_xml(xml_base, data)
+
+            logger.info(
+                f"== [REQUEST] Folio {viaje.id} enviando a timbrado con datos dinámicos =="
+            )
 
             xml_bytes = xml_sellado.encode("utf-8")
             result = client.service.timbrar(
@@ -337,7 +392,7 @@ class BillingService:
         except Exception as e:
             logger.error(f"Error guardando XML: {e}")
 
-    def _sellar_xml(self, xml_str, fecha, folio):
+    def _sellar_xml(self, xml_str, data):
         with open(self.path_cer, "rb") as f:
             cer_data = f.read()
             cert = x509.load_der_x509_certificate(cer_data)
@@ -350,11 +405,27 @@ class BillingService:
             sn_hex = format(cert.serial_number, "x")
             no_certificado = "".join([sn_hex[i] for i in range(1, len(sn_hex), 2)])
 
+        # CADENA ORIGINAL DINÁMICA: Incluye Localidad y Municipio en el orden exacto del SAT
         cadena = (
-            f"||4.0|A|{folio}|{fecha}|01|{no_certificado}|1.00|MXN|1.00|I|01|PUE|91808|"
+            f"||4.0|A|{data['folio']}|{data['fecha']}|03|{no_certificado}|CONTADO|1.00|MXN|1.12|I|01|PUE|91808|"
             f"EKU9003173C9|ESCUELA KEMPER URGATE SA DE CV|622|"
-            f"EKU9003173C9|ESCUELA KEMPER URGATE SA DE CV|91808|601|S01|"
-            f"78101802|SERV001|1.00|E48|SERVICIO|SERVICIO DE FLETE|1.00|1.00|01||"
+            f"{data['rfc_cliente']}|{data['nombre_cliente']}|{data['cp_cliente']}|{data['regimen_cliente']}|G03|"
+            f"78101802|SERV001|1.00|E48|SERVICIO|SERVICIO DE FLETE GENERAL|1.00|1.00|02|"
+            f"1.00|002|Tasa|0.160000|0.16|"
+            f"1.00|002|Tasa|0.040000|0.04|"
+            f"0.04|0.16|"
+            f"002|0.04|"
+            f"002|Tasa|0.160000|0.16|"
+            f"3.1|No|480|CCCe3b8d-a5c4-d91d-2b7a-8951836e3433|"
+            f"Origen|OR000001|EKU9003173C9|ESCUELA KEMPER URGATE SA DE CV|{data['fecha']}|{data['localidad_origen']}|{data['municipio_origen']}|{data['estado_origen']}|{data['pais_origen']}|91808|"
+            f"Destino|DE000001|{data['rfc_cliente']}|{data['nombre_cliente']}|{data['fecha']}|480|{data['municipio_destino']}|{data['estado_destino']}|{data['pais_destino']}|{data['cp_cliente']}|"
+            f"25000.0|KGM|1|"
+            f"50131801|CARGA GENERAL|1.00|H87|25000.0|"
+            f"{data['permiso_sct']}|{data['num_permiso']}|"
+            f"{data['config_vehicular']}|{data['placas']}|{data['anio_modelo']}|"
+            f"{data['aseguradora']}|{data['poliza']}|"
+            f"{data['subtipo_remolque']}|{data['placa_remolque']}|"  # <--- NUEVA LÍNEA AÑADIDA
+            f"01|{data['rfc_operador']}|{data['licencia']}|{data['nombre_operador']}||"
         )
 
         with open(self.path_key, "rb") as f:
@@ -372,19 +443,62 @@ class BillingService:
         atributos_nuevos = f' Sello="{sello_b64}" NoCertificado="{no_certificado}" Certificado="{cert_b64}"'
         return xml_str.replace(tag_start, tag_start + atributos_nuevos)
 
-    def _armar_xml_sin_sello(self, viaje, fecha) -> str:
-        folio = str(viaje.id)
+    def _armar_xml_sin_sello(self, data) -> str:
+        # Estructura de Ingreso $1.12 + Impuestos Desglosados + Carta Porte 3.1 + Localidad y Municipio
         return f"""<?xml version="1.0" encoding="UTF-8"?>
 <cfdi:Comprobante 
     xmlns:cfdi="http://www.sat.gob.mx/cfd/4" 
+    xmlns:cartaporte31="http://www.sat.gob.mx/CartaPorte31"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
-    xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd" 
-    Version="4.0" Fecha="{fecha}" Serie="A" Folio="{folio}" FormaPago="01" SubTotal="1.00" Moneda="MXN" Total="1.00" TipoDeComprobante="I" Exportacion="01" MetodoPago="PUE" LugarExpedicion="91808">
+    xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/CartaPorte31 http://www.sat.gob.mx/sitio_internet/cfd/CartaPorte/CartaPorte31.xsd" 
+    Version="4.0" Fecha="{data['fecha']}" Serie="A" Folio="{data['folio']}" FormaPago="03" CondicionesDePago="CONTADO" SubTotal="1.00" Moneda="MXN" Total="1.12" TipoDeComprobante="I" Exportacion="01" MetodoPago="PUE" LugarExpedicion="91808">
     <cfdi:Emisor Rfc="EKU9003173C9" Nombre="ESCUELA KEMPER URGATE SA DE CV" RegimenFiscal="622" />
-    <cfdi:Receptor Rfc="EKU9003173C9" Nombre="ESCUELA KEMPER URGATE SA DE CV" DomicilioFiscalReceptor="91808" RegimenFiscalReceptor="601" UsoCFDI="S01" />
+    <cfdi:Receptor Rfc="{data['rfc_cliente']}" Nombre="{data['nombre_cliente']}" DomicilioFiscalReceptor="{data['cp_cliente']}" RegimenFiscalReceptor="{data['regimen_cliente']}" UsoCFDI="G03" />
     <cfdi:Conceptos>
-        <cfdi:Concepto ClaveProdServ="78101802" NoIdentificacion="SERV001" Cantidad="1.00" ClaveUnidad="E48" Unidad="SERVICIO" Descripcion="SERVICIO DE FLETE" ValorUnitario="1.00" Importe="1.00" ObjetoImp="01" />
+        <cfdi:Concepto ClaveProdServ="78101802" NoIdentificacion="SERV001" Cantidad="1.00" ClaveUnidad="E48" Unidad="SERVICIO" Descripcion="SERVICIO DE FLETE GENERAL" ValorUnitario="1.00" Importe="1.00" ObjetoImp="02">
+            <cfdi:Impuestos>
+                <cfdi:Traslados>
+                    <cfdi:Traslado Base="1.00" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="0.16" />
+                </cfdi:Traslados>
+                <cfdi:Retenciones>
+                    <cfdi:Retencion Base="1.00" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.040000" Importe="0.04" />
+                </cfdi:Retenciones>
+            </cfdi:Impuestos>
+        </cfdi:Concepto>
     </cfdi:Conceptos>
+    <cfdi:Impuestos TotalImpuestosRetenidos="0.04" TotalImpuestosTrasladados="0.16">
+        <cfdi:Retenciones>
+            <cfdi:Retencion Impuesto="002" Importe="0.04" />
+        </cfdi:Retenciones>
+        <cfdi:Traslados>
+            <cfdi:Traslado Base="1.00" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="0.16" />
+        </cfdi:Traslados>
+    </cfdi:Impuestos>
+    <cfdi:Complemento>
+        <cartaporte31:CartaPorte Version="3.1" TranspInternac="No" TotalDistRec="480" IdCCP="CCCe3b8d-a5c4-d91d-2b7a-8951836e3433">
+            <cartaporte31:Ubicaciones>
+                <cartaporte31:Ubicacion TipoUbicacion="Origen" IDUbicacion="OR000001" RFCRemitenteDestinatario="EKU9003173C9" NombreRemitenteDestinatario="ESCUELA KEMPER URGATE SA DE CV" FechaHoraSalidaLlegada="{data['fecha']}">
+                    <cartaporte31:Domicilio Localidad="{data['localidad_origen']}" Municipio="{data['municipio_origen']}" Estado="{data['estado_origen']}" Pais="{data['pais_origen']}" CodigoPostal="91808" />
+                </cartaporte31:Ubicacion>
+                <cartaporte31:Ubicacion TipoUbicacion="Destino" IDUbicacion="DE000001" RFCRemitenteDestinatario="{data['rfc_cliente']}" NombreRemitenteDestinatario="{data['nombre_cliente']}" FechaHoraSalidaLlegada="{data['fecha']}" DistanciaRecorrida="480">
+                    <cartaporte31:Domicilio Municipio="{data['municipio_destino']}" Estado="{data['estado_destino']}" Pais="{data['pais_destino']}" CodigoPostal="{data['cp_cliente']}" />
+                </cartaporte31:Ubicacion>
+            </cartaporte31:Ubicaciones>
+            <cartaporte31:Mercancias PesoBrutoTotal="25000.0" UnidadPeso="KGM" NumTotalMercancias="1">
+                <cartaporte31:Mercancia BienesTransp="50131801" Descripcion="CARGA GENERAL" Cantidad="1.00" ClaveUnidad="H87" PesoEnKg="25000.0" />
+                <cartaporte31:Autotransporte PermSCT="{data['permiso_sct']}" NumPermisoSCT="{data['num_permiso']}">
+                    <cartaporte31:IdentificacionVehicular ConfigVehicular="{data['config_vehicular']}" PlacaVM="{data['placas']}" AnioModeloVM="{data['anio_modelo']}" />
+                    <cartaporte31:Seguros AseguraRespCivil="{data['aseguradora']}" PolizaRespCivil="{data['poliza']}" />
+                    <cartaporte31:Remolques>
+                        <cartaporte31:Remolque SubTipoRem="{data['subtipo_remolque']}" Placa="{data['placa_remolque']}" />
+                    </cartaporte31:Remolques>
+                </cartaporte31:Autotransporte>
+            </cartaporte31:Mercancias>
+            <cartaporte31:FiguraTransporte>
+                <cartaporte31:TiposFigura TipoFigura="01" RFCFigura="{data['rfc_operador']}" NumLicencia="{data['licencia']}" NombreFigura="{data['nombre_operador']}" />
+            </cartaporte31:FiguraTransporte>
+        </cartaporte31:CartaPorte>
+    </cfdi:Complemento>
 </cfdi:Comprobante>""".strip()
 
     def _obtener_datos_completos(self, viaje_id: int):
@@ -404,99 +518,35 @@ class BillingService:
         return viaje, cliente, unidad, operador
 
     def _generar_pdf_local(self, viaje, uuid, qr_bytes_crudos):
-        from jinja2 import Template
+        from jinja2 import Environment, FileSystemLoader
         from xhtml2pdf import pisa
         from io import BytesIO
+        import base64
 
         try:
+            # 1. Convertir el binario del QR a Base64
             qr_b64 = base64.b64encode(qr_bytes_crudos).decode("utf-8")
             qr_src = f"data:image/png;base64,{qr_b64}"
 
-            html_template = """
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <style>
-                        body { font-family: Helvetica, sans-serif; font-size: 12px; color: #333; }
-                        .header { background-color: #004080; color: white; padding: 15px; text-align: center; }
-                        .table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                        .table th { background-color: #f2f2f2; border: 1px solid #ddd; padding: 8px; text-align: left; }
-                        .table td { border: 1px solid #ddd; padding: 8px; }
-                        .footer { margin-top: 30px; font-size: 10px; color: #666; }
-                    </style>
-                </head>
-                <body>
-                    <div class="header">
-                        <h2>FACTURA / CARTA PORTE (INGRESO)</h2>
-                        <p><strong>UUID:</strong> {{ uuid }}</p>
-                    </div>
-                    
-                    <table class="table">
-                        <tr>
-                            <th>Emisor</th>
-                            <th>Receptor</th>
-                        </tr>
-                        <tr>
-                            <td>
-                                <strong>ESCUELA KEMPER URGATE SA DE CV</strong><br>
-                                RFC: EKU9003173C9<br>
-                                Régimen: 622
-                            </td>
-                            <td>
-                                <strong>ESCUELA KEMPER URGATE SA DE CV</strong><br>
-                                RFC: EKU9003173C9<br>
-                                Uso CFDI: S01
-                            </td>
-                        </tr>
-                    </table>
+            # 2. Cargar el entorno de Jinja2 apuntando a tu carpeta de plantillas
+            env = Environment(loader=FileSystemLoader(str(self.templates_dir)))
 
-                    <table class="table">
-                        <tr>
-                            <th>Cant.</th>
-                            <th>Unidad</th>
-                            <th>Concepto</th>
-                            <th>Precio Unitario</th>
-                            <th>Importe</th>
-                        </tr>
-                        <tr>
-                            <td>1.00</td>
-                            <td>E48 (SERVICIO)</td>
-                            <td>SERVICIO DE FLETE (Viaje {{ viaje_id }})</td>
-                            <td>$1.00</td>
-                            <td>$1.00</td>
-                        </tr>
-                    </table>
+            # Cargar el archivo físico HTML anti-amontonamiento
+            template = env.get_template("carta_porte_ciega.html")
 
-                    <div class="footer">
-                        <table>
-                            <tr>
-                                <td style="width: 25%; text-align: center;">
-                                    <img src="{{ qr_src }}" width="140" height="140">
-                                </td>
-                                <td style="width: 75%; padding-left: 20px;">
-                                    <p><strong>Cadena Original del Complemento de Certificación:</strong></p>
-                                    <p style="word-wrap: break-word; font-size: 8px;">||1.1|{{ uuid }}|... Aquí va la cadena del timbre ...||</p>
-                                    <p><strong>Este documento es una representación impresa de un CFDI 4.0</strong></p>
-                                </td>
-                            </tr>
-                        </table>
-                    </div>
-                </body>
-                </html>
-                """
-
-            template = Template(html_template)
+            # 3. Renderizar (Inyectar variables de Python al HTML)
             html_renderizado = template.render(
                 uuid=uuid, viaje_id=viaje.id, qr_src=qr_src
             )
 
+            # 4. Convertir HTML renderizado a PDF
             pdf_path = self.storage_dir / f"{uuid}.pdf"
             with open(pdf_path, "wb") as pdf_file:
                 pisa.CreatePDF(BytesIO(html_renderizado.encode("utf-8")), dest=pdf_file)
 
-            logger.info(f"📄 PDF Generado: {pdf_path.name}")
+            logger.info(f"📄 PDF Generado desde plantilla externa: {pdf_path.name}")
             return pdf_path
 
         except Exception as e:
-            logger.error(f"Error generando PDF: {e}")
+            logger.error(f"Error generando el PDF local: {e}")
             return None
