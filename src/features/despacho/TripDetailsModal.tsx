@@ -845,7 +845,7 @@ export function TripDetailsModal({
                                           <AlertTriangle className="h-4 w-4 mr-2" />{" "}
                                           Reportar Falla
                                         </Button>
-                                        : (
+
                                         <Button
                                           className="flex-[2] bg-brand-navy hover:bg-brand-navy/90 text-white font-black shadow-md"
                                           onClick={() =>
@@ -855,7 +855,6 @@ export function TripDetailsModal({
                                           <LinkIcon className="h-4 w-4 mr-2" />{" "}
                                           CONCLUIR Y DESENGANCHAR (Drop)
                                         </Button>
-                                        )
                                       </div>
                                     )}
 

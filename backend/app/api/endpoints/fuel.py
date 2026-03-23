@@ -13,9 +13,6 @@ from app.services.storage import StorageService
 
 router = APIRouter()
 
-UPLOAD_DIR = "uploads/fuel_tickets"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-
 
 @router.get("/fuel-logs", response_model=List[schemas.FuelLogResponse])
 def get_fuel_logs(
