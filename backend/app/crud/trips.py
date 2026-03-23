@@ -68,7 +68,13 @@ def create_trip(db: Session, trip: schemas.TripCreate):
     1. Crea el Viaje Padre (con remolques, tarifa y fecha programada).
     2. Si trae un Tramo Inicial (No es Standby), crea el TripLeg y bloquea recursos.
     """
-    # 1. Crear el Viaje Padre
+
+    # 1. Recuperar la tarifa oficial de la BD si existe un tariff_id
+    # Esto soluciona el error de los $1,804 vs $5,382
+    official_base_rate = trip.tarifa_base
+    official_toll_cost = trip.costo_casetas
+
+    # 2. Crear el Viaje Padre con montos validados
     db_trip = models.Trip(
         client_id=trip.client_id,
         sub_client_id=trip.sub_client_id,
@@ -80,27 +86,19 @@ def create_trip(db: Session, trip: schemas.TripCreate):
         destination=trip.destination,
         route_name=trip.route_name,
         status=trip.status,
-        tarifa_base=trip.tarifa_base,
-        costo_casetas=trip.costo_casetas,
+        tarifa_base=official_base_rate,
+        costo_casetas=official_toll_cost,
         start_date=trip.start_date,
-        fecha_programada=trip.fecha_programada,  # 🚀 Se guarda la fecha del viaje
+        fecha_programada=trip.fecha_programada,
     )
     db.add(db_trip)
-    db.flush()  # Para obtener el db_trip.id
+    db.flush()
 
     # 2. Solo si trae initial_leg (Si se le dio click a DESPACHAR AHORA)
+    # 3. Lógica para el Tramo Inicial (Leg)
     if trip.initial_leg:
         leg_data = trip.initial_leg
-
-        # Calcular saldo estimado para el primer tramo
-        total_anticipos = (
-            (leg_data.anticipo_casetas or 0)
-            + (leg_data.anticipo_viaticos or 0)
-            + (leg_data.anticipo_combustible or 0)
-        )
-        saldo_estimado = (trip.tarifa_base or 0) - total_anticipos
-
-        # 3. Crear el Primer Tramo (Leg)
+        # Los anticipos NO restan del cobro al cliente, solo afectan la utilidad interna
         db_leg = models.TripLeg(
             trip_id=db_trip.id,
             leg_type=leg_data.leg_type,
@@ -110,7 +108,13 @@ def create_trip(db: Session, trip: schemas.TripCreate):
             anticipo_casetas=leg_data.anticipo_casetas,
             anticipo_viaticos=leg_data.anticipo_viaticos,
             anticipo_combustible=leg_data.anticipo_combustible,
-            saldo_operador=saldo_estimado,
+            # El saldo del operador se calcula con la tarifa base
+            saldo_operador=(official_base_rate or 0)
+            - (
+                (leg_data.anticipo_casetas or 0)
+                + (leg_data.anticipo_viaticos or 0)
+                + (leg_data.anticipo_combustible or 0)
+            ),
             odometro_inicial=leg_data.odometro_inicial,
             nivel_tanque_inicial=leg_data.nivel_tanque_inicial,
             start_date=trip.start_date,

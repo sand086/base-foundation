@@ -271,22 +271,28 @@ def create_template(
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    # 🚀 1. VALIDACIÓN: Evitar duplicados solo si la ruta está ACTIVA
+    # 🚀 1. VALIDACIÓN CORREGIDA (FASE 1): Llave compuesta incluye tipo_unidad
     existing_route = (
         db.query(models.RateTemplate)
         .filter(
             models.RateTemplate.origen == data.origen,
             models.RateTemplate.destino == data.destino,
             models.RateTemplate.client_id == data.client_id,
+            models.RateTemplate.tipo_unidad
+            == data.tipo_unidad,  # <--- ESTA ES LA LÍNEA MÁGICA QUE FALTABA
             models.RateTemplate.record_status == "A",  # Solo buscamos entre las activas
         )
         .first()
     )
 
     if existing_route:
+        # 🚀 Mejoramos el mensaje de error para que Gustavo sepa exactamente qué pasó
+        config_name = (
+            "FULL (9 Ejes)" if data.tipo_unidad == "9ejes" else "SENCILLO (5 Ejes)"
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Ya existe una ruta ACTIVA con este mismo origen y destino para este cliente.",
+            detail=f"Ya existe una ruta ACTIVA con este mismo origen y destino para la configuración {config_name}.",
         )
 
     new_template = models.RateTemplate(

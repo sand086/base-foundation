@@ -13,18 +13,20 @@ export const useBilling = () => {
   ) => {
     setIsStamping(true);
     try {
+      // 🚀 Llama al endpoint /stamp/nominal del backend
       const response = await billingService.stampNominal(viajeId);
       toast({
-        title: "Éxito",
-        description: "Carta Porte provisional timbrada correctamente.",
+        title: "¡Timbrado Exitoso!",
+        description: "La Carta Porte provisional de $1 MXN ha sido generada.",
         variant: "default",
       });
       if (onSuccess) onSuccess(response.data);
     } catch (error: any) {
       toast({
-        title: "Error al timbrar",
+        title: "Error de Timbrado",
         description:
-          error.response?.data?.detail || "Ocurrió un error con el PAC.",
+          error.response?.data?.detail ||
+          "Error en la comunicación con el PAC.",
         variant: "destructive",
       });
     } finally {
@@ -39,20 +41,21 @@ export const useBilling = () => {
   ) => {
     setIsStamping(true);
     try {
+      // 🚀 Llama al endpoint /stamp/final del backend
       const response = await billingService.stampFinal(
         viajeId,
         uuidRelacionado,
       );
       toast({
-        title: "Factura Generada",
+        title: "Factura Final Generada",
         description:
-          "La factura final se generó y la provisional fue enviada a cancelación.",
+          "Se generó la factura real y se vinculó con la provisional.",
         variant: "default",
       });
       if (onSuccess) onSuccess(response.data);
     } catch (error: any) {
       toast({
-        title: "Error al facturar",
+        title: "Error al Facturar",
         description:
           error.response?.data?.detail ||
           "No se pudo generar la factura final.",

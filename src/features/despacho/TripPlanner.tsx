@@ -19,7 +19,6 @@ import {
 import { es } from "date-fns/locale";
 import {
   AlertTriangle,
-  CheckCircle2,
   Clock,
   LayoutGrid,
   Link as LinkIcon,
@@ -30,16 +29,15 @@ import {
   Banknote,
   Loader2,
   MoreVertical,
-  AlertCircle,
   Eye,
   CalendarDays,
   PlayCircle,
-  MapPin,
   Box,
   ChevronLeft,
   ChevronRight,
   Plus,
   ShieldAlert,
+  Route as RouteIcon,
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -264,10 +262,10 @@ function KanbanCard({
   onOpenCommandCenter,
   onDeleteClick,
   onSettleClick,
-  onRelayClick,
 }: any) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({ id: `leg-${leg.id}`, data: { leg, tripPadre } });
+
   const style = transform
     ? {
         transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
@@ -348,18 +346,15 @@ function KanbanCard({
             </Badge>
           </div>
 
-          <div className="bg-slate-50 border border-slate-100 rounded-lg p-2 mb-3 space-y-1.5">
-            <div className="flex items-center gap-2 text-[10px] text-slate-600">
-              <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
-              <span className="truncate">
-                {tripPadre.origin || "Origen N/A"}
-              </span>
-            </div>
-            <div className="flex items-center gap-2 text-[10px] font-bold text-slate-800">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-              <span className="truncate">
-                {tripPadre.destination || "Destino N/A"}
-              </span>
+          {/* 🚀 FASE 2: AQUÍ MOSTRAMOS EL NOMBRE COMPLETO DE LA RUTA EN GRANDE */}
+          <div className="bg-slate-50 border border-slate-100 rounded-lg p-2 mb-3 space-y-1.5 flex flex-col justify-center items-center text-center">
+            <RouteIcon className="h-4 w-4 text-primary opacity-60 mb-0.5" />
+            <div
+              className="text-[11px] font-black text-brand-navy uppercase tracking-tight line-clamp-3"
+              title={tripPadre.route_name}
+            >
+              {tripPadre.route_name ||
+                `${tripPadre.origin} - ${tripPadre.destination}`}
             </div>
           </div>
 
@@ -578,7 +573,6 @@ export const TripPlanner = () => {
     const draggedItem = allActiveLegs.find((item) => item.leg.id === legId);
     if (!draggedItem) return;
 
-    // 🚀 Ajuste oficial de estatus para BD al arrastrar a Desenganchado/Liquidar
     const targetStatus =
       columnId === "desenganchado" || columnId === "por_liquidar"
         ? "entregado"
@@ -628,11 +622,11 @@ export const TripPlanner = () => {
   };
 
   // ==========================================
-  // 🚀 LÓGICA DE CALENDARIO MENSUAL TIPO GOOGLE
+  // LÓGICA DE CALENDARIO MENSUAL TIPO GOOGLE
   // ==========================================
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(monthStart);
-  const startDate = startOfWeek(monthStart, { weekStartsOn: 1 }); // Empezar en Lunes
+  const startDate = startOfWeek(monthStart, { weekStartsOn: 1 });
   const endDate = endOfWeek(monthEnd, { weekStartsOn: 1 });
   const calendarDays = eachDayOfInterval({ start: startDate, end: endDate });
 
@@ -730,7 +724,7 @@ export const TripPlanner = () => {
                     Fase del Servicio
                   </DataTableHead>
                   <DataTableHead className="font-bold text-slate-700 uppercase tracking-widest text-[10px]">
-                    Origen ➔ Destino
+                    Ruta Registrada
                   </DataTableHead>
                   <DataTableHead className="font-bold text-slate-700 uppercase tracking-widest text-[10px]">
                     Asignación Física
@@ -785,30 +779,23 @@ export const TripPlanner = () => {
                             >
                               {legTypeShort[leg.leg_type] || leg.leg_type}
                             </Badge>
+                          </div>
+                        </DataTableCell>
+
+                        {/* 🚀 FASE 2: AQUÍ SE MUESTRA EL NOMBRE DE LA RUTA */}
+                        <DataTableCell>
+                          <div className="flex flex-col gap-1">
                             <span
-                              className="text-[11px] text-slate-500 font-medium uppercase truncate max-w-[150px]"
+                              className="text-[11px] font-black text-slate-800 uppercase tracking-tighter"
                               title={tripPadre.route_name}
                             >
-                              {tripPadre.route_name || "Ruta Estándar"}
+                              <RouteIcon className="inline h-3.5 w-3.5 mr-1.5 text-primary" />
+                              {tripPadre.route_name ||
+                                `${tripPadre.origin} - ${tripPadre.destination}`}
                             </span>
                           </div>
                         </DataTableCell>
-                        <DataTableCell>
-                          <div className="flex flex-col gap-2">
-                            <div className="flex items-center gap-2">
-                              <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
-                              <span className="text-xs font-medium text-slate-600 truncate max-w-[180px]">
-                                {tripPadre.origin}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                              <span className="text-xs font-bold text-slate-800 truncate max-w-[180px]">
-                                {tripPadre.destination}
-                              </span>
-                            </div>
-                          </div>
-                        </DataTableCell>
+
                         <DataTableCell>
                           <div className="flex flex-col gap-1.5">
                             <div className="flex items-center gap-2 text-xs font-bold text-brand-navy">
@@ -886,7 +873,7 @@ export const TripPlanner = () => {
         </Card>
       )}
 
-      {/* 🚀 VISTA 2: PLANEADOR CALENDARIO MENSUAL TIPO GOOGLE */}
+      {/* VISTA 2: PLANEADOR CALENDARIO MENSUAL TIPO GOOGLE */}
       {viewMode === "standby" && (
         <div className="flex flex-col xl:flex-row gap-6">
           {/* ALERTAS LATERALES (Atrasados y Sin Fecha) */}
@@ -909,7 +896,7 @@ export const TripPlanner = () => {
                           {v.client?.razon_social}
                         </p>
                         <p className="text-slate-500 truncate">
-                          {v.origin} ➔ {v.destination}
+                          {v.route_name || `${v.origin} - ${v.destination}`}
                         </p>
                         <Button
                           size="sm"
@@ -942,7 +929,7 @@ export const TripPlanner = () => {
                           {v.client?.razon_social}
                         </p>
                         <p className="text-slate-500 truncate">
-                          {v.origin} ➔ {v.destination}
+                          {v.route_name || `${v.origin} - ${v.destination}`}
                         </p>
                         <Button
                           size="sm"
@@ -1005,7 +992,6 @@ export const TripPlanner = () => {
                       key={day.toISOString()}
                       className={`min-h-[140px] bg-white flex flex-col transition-colors ${!isCurrentMonth ? "bg-slate-50 opacity-50" : ""} ${isDiaHoy ? "bg-blue-50/20" : ""}`}
                     >
-                      {/* Cabecera del Día */}
                       <div
                         className={`p-2 flex justify-between items-center border-b border-slate-100 ${isDiaHoy ? "bg-blue-100 text-blue-800" : "text-slate-500"}`}
                       >
@@ -1025,8 +1011,6 @@ export const TripPlanner = () => {
                           <Plus className="h-3.5 w-3.5" />
                         </button>
                       </div>
-                      {/* Contenido (Viajes) */}
-                      {/* Contenido (Viajes) - Actualizado con límite y modal */}
                       <div className="flex-1 p-1.5 overflow-y-auto max-h-[120px] custom-scrollbar space-y-1">
                         {tripsOnDay.slice(0, 2).map((v) => (
                           <div
@@ -1042,14 +1026,14 @@ export const TripPlanner = () => {
                             <div className="font-bold truncate pr-4">
                               {v.client?.razon_social}
                             </div>
-                            <div className="text-emerald-600 truncate">
-                              {v.destination}
+                            {/* 🚀 FASE 2: NOMBRE DE LA RUTA EN EL CALENDARIO */}
+                            <div className="text-emerald-600 truncate font-semibold uppercase">
+                              {v.route_name || `${v.origin}-${v.destination}`}
                             </div>
                             <PlayCircle className="h-3 w-3 absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100" />
                           </div>
                         ))}
 
-                        {/* 🚀 Opción "Ver todos" si hay más de 2 viajes */}
                         {tripsOnDay.length > 2 && (
                           <button
                             onClick={(e) => {
@@ -1071,7 +1055,7 @@ export const TripPlanner = () => {
         </div>
       )}
 
-      {/* VISTA 3: PIZARRON KANBAN OPERATIVO GUSTAVO */}
+      {/* VISTA 3: PIZARRON KANBAN OPERATIVO */}
       {viewMode === "kanban" && (
         <DndContext
           collisionDetection={closestCorners}
@@ -1085,19 +1069,19 @@ export const TripPlanner = () => {
                 items={groupedLegs[column.id] || []}
                 onOpenCommandCenter={setTripToView}
                 onDeleteClick={setTripToDelete}
-                onSettleClick={(leg: TripLeg, tripPadre: Trip) => {
-                  setLegToSettle({ leg, tripPadre });
-                }}
-                onRelayClick={(leg: TripLeg, tripPadre: Trip) => {
-                  setLegToRelay({ leg, tripPadre });
-                }}
+                onSettleClick={(leg: TripLeg, tripPadre: Trip) =>
+                  setLegToSettle({ leg, tripPadre })
+                }
+                onRelayClick={(leg: TripLeg, tripPadre: Trip) =>
+                  setLegToRelay({ leg, tripPadre })
+                }
               />
             ))}
           </div>
         </DndContext>
       )}
 
-      {/* MODALES */}
+      {/* MODALES RESTANTES */}
       {selectedTripPadre && (
         <UpdateStatusModal
           open={updateModalOpen}
@@ -1110,46 +1094,6 @@ export const TripPlanner = () => {
         />
       )}
 
-      <Dialog
-        open={!!tripToDelete}
-        onOpenChange={(open) => !open && setTripToDelete(null)}
-      >
-        <DialogContent className="rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-brand-navy font-black text-xl">
-              Eliminar Viaje
-            </DialogTitle>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setTripToDelete(null)}>
-              Cancelar
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={async () => {
-                if (tripToDelete) {
-                  await deleteTrip(String(tripToDelete.id));
-                  setTripToDelete(null);
-                }
-              }}
-            >
-              Eliminar Viaje
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {selectedTripPadre && (
-        <UpdateStatusModal
-          open={updateModalOpen}
-          onOpenChange={setUpdateModalOpen}
-          serviceId={
-            selectedTripPadre.public_id || String(selectedTripPadre.id)
-          }
-          activeLeg={selectedLegToUpdate || undefined}
-          onSubmit={handleSaveStatusEvent}
-        />
-      )}
       <Dialog
         open={!!tripToDelete}
         onOpenChange={(open) => !open && setTripToDelete(null)}
@@ -1181,6 +1125,7 @@ export const TripPlanner = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
       <NextLegModal
         open={!!legToRelay}
         onOpenChange={(open) => !open && setLegToRelay(null)}
@@ -1203,7 +1148,6 @@ export const TripPlanner = () => {
         onUpdateStatusClick={(t, l) => openUpdateStatusModal(t, l)}
       />
 
-      {/* 🚀 MODAL PARA SELECCIONAR UN VIAJE CUANDO HAY MUCHOS EN EL MISMO DÍA */}
       <Dialog
         open={!!selectedDayTrips}
         onOpenChange={() => setSelectedDayTrips(null)}
@@ -1224,7 +1168,6 @@ export const TripPlanner = () => {
                 )}
             </DialogDescription>
           </DialogHeader>
-
           <div className="space-y-3 mt-2 max-h-[50vh] overflow-y-auto p-1 custom-scrollbar">
             {selectedDayTrips?.map((v) => (
               <div
@@ -1235,8 +1178,8 @@ export const TripPlanner = () => {
                   <p className="font-black text-xs text-brand-navy uppercase truncate">
                     {v.client?.razon_social}
                   </p>
-                  <p className="text-[10px] text-slate-500 truncate">
-                    {v.origin} ➔ {v.destination}
+                  <p className="text-[10px] text-slate-500 font-bold truncate">
+                    {v.route_name || `${v.origin}-${v.destination}`}
                   </p>
                 </div>
                 <Button
