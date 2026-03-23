@@ -12,7 +12,7 @@ from app.api.endpoints.auth import get_current_active_user
 router = APIRouter()
 
 # =========================================================
-# CONSTANTES (Necesarias para la carga inicial)
+# CONSTANTES
 # =========================================================
 
 DEFAULT_MODULES = [
@@ -58,23 +58,22 @@ def save_unit_types_bulk(
             db_item.icono = item.icono
             db_item.activo = item.activo
             db_item.descripcion = item.descripcion
-            db_item.updated_by_id = current_user.id  # 🚀 Auditoría
+            db_item.updated_by_id = current_user.id
         else:
             new_item = models.UnitTypeCatalog(**item.model_dump())
-            new_item.created_by_id = current_user.id  # 🚀 Auditoría
+            new_item.created_by_id = current_user.id
             db.add(new_item)
     db.commit()
     return {"message": "Catálogo actualizado correctamente"}
 
 
 # =========================================================
-# CONFIGURACIÓN DEL SISTEMA (SystemConfig)
+# CONFIGURACIÓN DEL SISTEMA
 # =========================================================
 
 
 @router.get("/system-config", response_model=List[schemas.SystemConfigResponse])
 def get_system_config(db: Session = Depends(get_db)):
-    """Obtiene todas las configuraciones del sistema"""
     return (
         db.query(models.SystemConfig)
         .filter(models.SystemConfig.key != "modules_list")
@@ -111,7 +110,7 @@ class ConfigBulkUpdate(BaseModel):
     value: str
 
 
-@router.put("/system-config-bulk")  # <--- Cambiamos la URL aquí
+@router.put("/system-config-bulk")
 def update_system_config_bulk(
     payload: List[ConfigBulkUpdate],
     db: Session = Depends(get_db),
@@ -143,7 +142,11 @@ def update_system_config_bulk(
 
 @router.get("/routes")
 def get_routes_catalog(db: Session = Depends(get_db)):
-    return db.query(models.RateTemplate).all()
+    return (
+        db.query(models.RateTemplate)
+        .filter(models.RateTemplate.record_status != RecordStatus.ELIMINADO)
+        .all()
+    )
 
 
 @router.post("/routes")
@@ -152,8 +155,29 @@ def create_route_catalog(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_active_user),
 ):
+    # 🚀 FASE 1: Verificación de unicidad amigable
+    existing = (
+        db.query(models.RateTemplate)
+        .filter(
+            models.RateTemplate.client_id == ruta.client_id,
+            models.RateTemplate.origen == ruta.origen,
+            models.RateTemplate.destino == ruta.destino,
+            models.RateTemplate.tipo_unidad == ruta.tipo_unidad,
+        )
+        .first()
+    )
+
+    if existing:
+        config_str = (
+            "FULL (9 Ejes)" if ruta.tipo_unidad == "9ejes" else "SENCILLO (5 Ejes)"
+        )
+        raise HTTPException(
+            status_code=400,
+            detail=f"La ruta {ruta.origen} a {ruta.destino} en configuración {config_str} ya existe para este cliente.",
+        )
+
     new_route = models.RateTemplate(**ruta.model_dump())
-    new_route.created_by_id = current_user.id  # 🚀 Auditoría
+    new_route.created_by_id = current_user.id
     db.add(new_route)
     db.commit()
     db.refresh(new_route)
@@ -172,8 +196,6 @@ def delete_route_catalog(
     if not route:
         raise HTTPException(status_code=404, detail="Ruta no encontrada")
 
-    # En un sistema con AuditMixin, a veces preferimos marcar record_status = 'E'
-    # Pero si deseas borrado físico:
     db.delete(route)
     db.commit()
     return {"message": "Ruta eliminada"}
@@ -271,7 +293,7 @@ def update_module(
         raise HTTPException(status_code=404, detail="Módulo no encontrado")
 
     config.value = json.dumps(current_modules)
-    config.updated_by_id = current_user.id  # 🚀 Registro de quién editó
+    config.updated_by_id = current_user.id
     db.commit()
     return current_modules
 
@@ -297,6 +319,6 @@ def delete_module(
         raise HTTPException(status_code=404, detail="Módulo no encontrado")
 
     config.value = json.dumps(filtered_modules)
-    config.updated_by_id = current_user.id  # 🚀 Registro de quién eliminó
+    config.updated_by_id = current_user.id
     db.commit()
     return filtered_modules

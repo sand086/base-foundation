@@ -276,6 +276,13 @@ function KanbanCard({
     : undefined;
   const isIncident = isIncidentStatus(leg.status);
 
+  // 🚀 FASE 2: TITULO INTELIGENTE DEL VIAJE (Origen - Destino - Config)
+  const configText =
+    tripPadre.dolly_id || tripPadre.remolque_2_id ? "FULL" : "SENCILLO";
+  const formattedRouteName = tripPadre.route_name
+    ? `${tripPadre.route_name} - ${configText}`
+    : `${tripPadre.origin} - ${tripPadre.destination} - ${configText}`;
+
   return (
     <div
       ref={setNodeRef}
@@ -346,15 +353,13 @@ function KanbanCard({
             </Badge>
           </div>
 
-          {/* 🚀 FASE 2: AQUÍ MOSTRAMOS EL NOMBRE COMPLETO DE LA RUTA EN GRANDE */}
           <div className="bg-slate-50 border border-slate-100 rounded-lg p-2 mb-3 space-y-1.5 flex flex-col justify-center items-center text-center">
             <RouteIcon className="h-4 w-4 text-primary opacity-60 mb-0.5" />
             <div
               className="text-[11px] font-black text-brand-navy uppercase tracking-tight line-clamp-3"
-              title={tripPadre.route_name}
+              title={formattedRouteName}
             >
-              {tripPadre.route_name ||
-                `${tripPadre.origin} - ${tripPadre.destination}`}
+              {formattedRouteName}
             </div>
           </div>
 
@@ -507,7 +512,6 @@ export const TripPlanner = () => {
     tripPadre: Trip;
   } | null>(null);
 
-  // 🚀 ESTADOS PARA EL CALENDARIO TIPO GOOGLE
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
   const handleNextLegSubmit = async (tripId: string, payload: any) => {
@@ -621,9 +625,6 @@ export const TripPlanner = () => {
     }
   };
 
-  // ==========================================
-  // LÓGICA DE CALENDARIO MENSUAL TIPO GOOGLE
-  // ==========================================
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(monthStart);
   const startDate = startOfWeek(monthStart, { weekStartsOn: 1 });
@@ -669,7 +670,6 @@ export const TripPlanner = () => {
 
   return (
     <div className="h-full flex flex-col space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {/* TOOLBAR SUPERIOR */}
       <div className="flex flex-col md:flex-row md:items-center justify-between bg-white p-3 rounded-2xl border border-slate-200 shadow-sm gap-4">
         <h2 className="text-xl font-black text-brand-navy flex items-center gap-3 px-2 uppercase tracking-tighter">
           <Truck className="h-6 w-6 text-blue-600" /> Control de Tráfico
@@ -710,7 +710,6 @@ export const TripPlanner = () => {
         </Tabs>
       </div>
 
-      {/* VISTA 1: TABLA PRINCIPAL */}
       {viewMode === "table" && (
         <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden bg-white">
           <CardContent className="p-0">
@@ -755,6 +754,16 @@ export const TripPlanner = () => {
                 ) : (
                   allActiveLegs.map(({ leg, tripPadre }) => {
                     const isIncident = isIncidentStatus(leg.status);
+
+                    // 🚀 FASE 2: Título Limpio en Tabla
+                    const configText =
+                      tripPadre.dolly_id || tripPadre.remolque_2_id
+                        ? "FULL"
+                        : "SENCILLO";
+                    const formattedRouteName = tripPadre.route_name
+                      ? `${tripPadre.route_name} - ${configText}`
+                      : `${tripPadre.origin} - ${tripPadre.destination} - ${configText}`;
+
                     return (
                       <DataTableRow
                         key={leg.id}
@@ -782,16 +791,14 @@ export const TripPlanner = () => {
                           </div>
                         </DataTableCell>
 
-                        {/* 🚀 FASE 2: AQUÍ SE MUESTRA EL NOMBRE DE LA RUTA */}
                         <DataTableCell>
                           <div className="flex flex-col gap-1">
                             <span
                               className="text-[11px] font-black text-slate-800 uppercase tracking-tighter"
-                              title={tripPadre.route_name}
+                              title={formattedRouteName}
                             >
                               <RouteIcon className="inline h-3.5 w-3.5 mr-1.5 text-primary" />
-                              {tripPadre.route_name ||
-                                `${tripPadre.origin} - ${tripPadre.destination}`}
+                              {formattedRouteName}
                             </span>
                           </div>
                         </DataTableCell>
@@ -873,10 +880,8 @@ export const TripPlanner = () => {
         </Card>
       )}
 
-      {/* VISTA 2: PLANEADOR CALENDARIO MENSUAL TIPO GOOGLE */}
       {viewMode === "standby" && (
         <div className="flex flex-col xl:flex-row gap-6">
-          {/* ALERTAS LATERALES (Atrasados y Sin Fecha) */}
           {(delayedTrips.length > 0 || unscheduledTrips.length > 0) && (
             <div className="w-full xl:w-64 flex flex-col gap-4">
               {delayedTrips.length > 0 && (
@@ -949,7 +954,6 @@ export const TripPlanner = () => {
             </div>
           )}
 
-          {/* CALENDARIO GRID */}
           <Card className="flex-1 shadow-md border-slate-200 bg-white">
             <CardHeader className="p-4 border-b flex flex-row items-center justify-between bg-slate-50 rounded-t-xl">
               <Button
@@ -1026,7 +1030,6 @@ export const TripPlanner = () => {
                             <div className="font-bold truncate pr-4">
                               {v.client?.razon_social}
                             </div>
-                            {/* 🚀 FASE 2: NOMBRE DE LA RUTA EN EL CALENDARIO */}
                             <div className="text-emerald-600 truncate font-semibold uppercase">
                               {v.route_name || `${v.origin}-${v.destination}`}
                             </div>
@@ -1055,7 +1058,6 @@ export const TripPlanner = () => {
         </div>
       )}
 
-      {/* VISTA 3: PIZARRON KANBAN OPERATIVO */}
       {viewMode === "kanban" && (
         <DndContext
           collisionDetection={closestCorners}
@@ -1081,7 +1083,6 @@ export const TripPlanner = () => {
         </DndContext>
       )}
 
-      {/* MODALES RESTANTES */}
       {selectedTripPadre && (
         <UpdateStatusModal
           open={updateModalOpen}

@@ -1,4 +1,3 @@
-// src/features/despacho/TripDetailsModal.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -10,20 +9,13 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardFooter,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Command,
@@ -45,16 +37,9 @@ import {
   DollarSign,
   MapPin,
   Navigation,
-  Undo,
   Wallet,
-  CalendarClock,
-  Link as LinkIcon,
-  AlertCircle,
-  Edit2,
   Clock,
-  Save,
   CheckCircle2,
-  AlertTriangle,
   Printer,
   History,
   Loader2,
@@ -63,6 +48,8 @@ import {
   ChevronsUpDown,
   PlusCircle,
   Route as RouteIcon,
+  Edit2,
+  Save,
 } from "lucide-react";
 import { Trip, TripLeg } from "@/types/api.types";
 import { useTrips } from "@/hooks/useTrips";
@@ -93,7 +80,6 @@ export function TripDetailsModal({
   trip,
   onRelayClick,
   onSettleClick,
-  onIncidentClick,
   onUpdateStatusClick,
 }: TripDetailsModalProps) {
   const { editTrip, refreshTrips, addTimelineEvent } = useTrips();
@@ -105,8 +91,6 @@ export function TripDetailsModal({
   const [saving, setSaving] = useState(false);
   const [tarifaBase, setTarifaBase] = useState(0);
   const [costoCasetas, setCostoCasetas] = useState(0);
-  const [mantenerPreciosManuales, setMantenerPreciosManuales] = useState(true);
-  const [isUndoing, setIsUndoing] = useState(false);
 
   const [showTerminalModal, setShowTerminalModal] = useState(false);
   const [terminals, setTerminals] = useState<Terminal[]>([]);
@@ -117,7 +101,9 @@ export function TripDetailsModal({
   const [finishingLeg, setFinishingLeg] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // 🚀 FASE 4: Utilidad de Formateo de Moneda (Comas y Punto)
+  // 🚀 ESTADO LOCAL: Prioridad máxima para el renderizado
+  const [localUuid, setLocalUuid] = useState<string | null>(null);
+
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("es-MX", {
       style: "currency",
@@ -126,17 +112,19 @@ export function TripDetailsModal({
     }).format(val || 0);
 
   useEffect(() => {
-    if (open) {
-      loadTerminals();
-    }
+    if (open) loadTerminals();
   }, [open]);
 
+  // Sincronizar UUID local solo si el viaje trae uno nuevo o la ID cambia
   useEffect(() => {
-    if (trip && !isEditing) {
-      setTarifaBase(trip.tarifa_base || 0);
-      setCostoCasetas(trip.costo_casetas || 0);
+    if (trip) {
+      if (!isEditing) {
+        setTarifaBase(trip.tarifa_base || 0);
+        setCostoCasetas(trip.costo_casetas || 0);
+      }
+      setLocalUuid(trip.uuid_fiscal || null);
     }
-  }, [trip, isEditing]);
+  }, [trip?.id, trip?.uuid_fiscal, isEditing]);
 
   const loadTerminals = async () => {
     try {
@@ -232,41 +220,11 @@ export function TripDetailsModal({
     setSaving(false);
   };
 
-  const handleUndoLeg = async () => {
-    const ok = confirm("¿Estás seguro de deshacer el último movimiento?");
-    if (!ok) return;
-    setIsUndoing(true);
-    try {
-      await axiosClient.post(`/trips/${trip?.id}/undo-leg`);
-      await refreshTrips();
-      toast.success("Movimiento deshecho.");
-    } catch {
-      toast.error("No se pudo deshacer.");
-    } finally {
-      setIsUndoing(false);
-    }
-  };
-
   const handleManualSync = async () => {
     setIsSyncing(true);
     await refreshTrips();
     setIsSyncing(false);
     toast.success("Datos sincronizados.");
-  };
-
-  const handlePrintPDF = async () => {
-    try {
-      const response = await axiosClient.get(
-        `/trips/${trip?.id}/carta-porte-ciega`,
-        { responseType: "blob" },
-      );
-      const fileURL = window.URL.createObjectURL(
-        new Blob([response.data], { type: "application/pdf" }),
-      );
-      window.open(fileURL, "_blank");
-    } catch {
-      toast.error("Error al generar la Carta Porte");
-    }
   };
 
   const submitTerminalArrival = async () => {
@@ -297,6 +255,29 @@ export function TripDetailsModal({
     }
   };
 
+  const handleDownloadStampedPDF = async (uuidToDownload: string) => {
+    try {
+      const response = await axiosClient.get(
+        `/billing/invoice/${uuidToDownload}/pdf`,
+        { responseType: "blob" },
+      );
+      const fileURL = window.URL.createObjectURL(
+        new Blob([response.data], { type: "application/pdf" }),
+      );
+
+      const link = document.createElement("a");
+      link.href = fileURL;
+      link.setAttribute("download", `Carta_Porte_${uuidToDownload}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast.success("Archivo descargado.");
+    } catch {
+      toast.error("Error al descargar el PDF.");
+    }
+  };
+
   if (!trip) return null;
 
   return (
@@ -322,41 +303,47 @@ export function TripDetailsModal({
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-10 border-slate-300 bg-white font-bold"
-                  onClick={handlePrintPDF}
-                >
-                  <Printer className="h-4 w-4 mr-1.5 text-slate-500" /> PDF
-                  PROVISIONAL
-                </Button>
+                {/* 🚀 BOTÓN DINÁMICO REPARADO: Usa localUuid tanto para el texto como para el estilo */}
                 <Button
                   variant="outline"
                   className={cn(
-                    "h-10 text-xs font-black shadow-md border-indigo-200 transition-all",
-                    trip.uuid_fiscal
-                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                      : "bg-indigo-50 text-indigo-700",
+                    "h-10 text-xs font-black shadow-md transition-all",
+                    localUuid
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                      : "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100",
                   )}
-                  onClick={() => handleStampNominal(trip.id, refreshTrips)}
-                  disabled={isStamping || !!trip.uuid_fiscal}
+                  onClick={() => {
+                    if (localUuid) {
+                      handleDownloadStampedPDF(localUuid);
+                    } else {
+                      handleStampNominal(trip.id, (responseData) => {
+                        const generatedUuid = responseData?.data?.uuid;
+                        if (generatedUuid) {
+                          setLocalUuid(generatedUuid); // 🚀 Actualiza el UI al instante
+                          handleDownloadStampedPDF(generatedUuid);
+                        }
+                        refreshTrips();
+                      });
+                    }
+                  }}
+                  disabled={isStamping}
                 >
                   {isStamping ? (
                     <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                  ) : localUuid ? (
+                    <CheckCircle2 className="h-4 w-4 mr-1.5" />
                   ) : (
                     <Activity className="h-4 w-4 mr-1.5" />
                   )}
-                  {trip.uuid_fiscal
-                    ? "NOMINAL TIMBRADA"
-                    : "TIMBRAR NOMINAL ($1)"}
+                  {localUuid
+                    ? "DESCARGAR CARTA PORTE"
+                    : "TIMBRAR CARTA PORTE ($1)"}
                 </Button>
               </div>
             </div>
           </DialogHeader>
 
           <div className="flex flex-1 overflow-hidden flex-col lg:flex-row">
-            {/* Panel Izquierdo */}
             <div className="w-full lg:w-[30%] bg-slate-50 border-r border-slate-200 p-6 space-y-6 overflow-y-auto">
               <div className="space-y-2">
                 <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
@@ -424,7 +411,6 @@ export function TripDetailsModal({
               </div>
             </div>
 
-            {/* Panel Derecho */}
             <div className="w-full lg:w-[70%] flex flex-col bg-white">
               <Tabs
                 value={activeTab}
@@ -447,7 +433,6 @@ export function TripDetailsModal({
 
                 <ScrollArea className="flex-1">
                   <div className="p-6">
-                    {/* TABS DE FASES */}
                     <TabsContent value="fases" className="m-0 space-y-4">
                       {trip.legs?.map((leg, idx) => (
                         <Card
@@ -521,7 +506,6 @@ export function TripDetailsModal({
                         )}
                     </TabsContent>
 
-                    {/* TAB FINANZAS */}
                     <TabsContent value="finanzas" className="m-0 space-y-6">
                       <Card
                         className={cn(
@@ -641,7 +625,7 @@ export function TripDetailsModal({
                                   {formatCurrency(utilidadEstimada)}
                                 </span>
                               </div>
-
+                              {/* CIERRE FISCAL FINAL */}
                               <div className="bg-slate-900 p-6 rounded-2xl border-t-4 border-emerald-500 flex flex-col sm:flex-row items-center justify-between gap-6 mt-10 shadow-2xl">
                                 <div className="text-left">
                                   <h4 className="text-emerald-400 font-black text-sm uppercase tracking-tighter flex items-center gap-2">
@@ -650,17 +634,17 @@ export function TripDetailsModal({
                                   </h4>
                                   <p className="text-[10px] text-slate-400 max-w-xs leading-relaxed mt-1 italic">
                                     Timbra la factura 4.0 real sustituyendo la
-                                    nominal. Verifica que los montos sean
-                                    finales.
+                                    Carta Porte nominal de $1. Verifica que los
+                                    montos finales sean correctos.
                                   </p>
                                 </div>
                                 <Button
                                   className="bg-emerald-500 hover:bg-emerald-600 text-white font-black px-10 h-12 shadow-xl disabled:opacity-30"
-                                  disabled={isStamping || !trip.uuid_fiscal}
+                                  disabled={isStamping || !localUuid}
                                   onClick={() =>
                                     handleStampFinal(
                                       trip.id,
-                                      trip.uuid_fiscal!,
+                                      localUuid!,
                                       refreshTrips,
                                     )
                                   }
@@ -669,7 +653,7 @@ export function TripDetailsModal({
                                     <Loader2 className="h-5 w-5 animate-spin mr-2" />
                                   ) : (
                                     <Activity className="h-5 w-5 mr-2" />
-                                  )}
+                                  )}{" "}
                                   TIMBRAR FACTURA FINAL
                                 </Button>
                               </div>
@@ -679,7 +663,6 @@ export function TripDetailsModal({
                       </Card>
                     </TabsContent>
 
-                    {/* TAB BITÁCORA */}
                     <TabsContent value="bitacora" className="m-0 space-y-4">
                       <div className="flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-slate-200 mb-4 shadow-inner">
                         <h4 className="text-xs font-black uppercase text-slate-600 tracking-widest">
@@ -746,7 +729,6 @@ export function TripDetailsModal({
         </DialogContent>
       </Dialog>
 
-      {/* MODAL DE TERMINAL DE VACÍOS (COMBOBOX) */}
       <Dialog open={showTerminalModal} onOpenChange={setShowTerminalModal}>
         <DialogContent className="sm:max-w-md rounded-2xl overflow-visible shadow-2xl border-none">
           <DialogHeader className="bg-slate-100 p-6 rounded-t-2xl border-b border-slate-300">
@@ -805,7 +787,7 @@ export function TripDetailsModal({
                             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                           ) : (
                             <PlusCircle className="h-4 w-4 mr-2" />
-                          )}
+                          )}{" "}
                           AÑADIR "{searchTerminalQuery.toUpperCase()}"
                         </Button>
                       </CommandEmpty>
@@ -861,7 +843,7 @@ export function TripDetailsModal({
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
               ) : (
                 <CheckCircle2 className="h-4 w-4 mr-2" />
-              )}
+              )}{" "}
               CONFIRMAR LLEGADA
             </Button>
           </DialogFooter>

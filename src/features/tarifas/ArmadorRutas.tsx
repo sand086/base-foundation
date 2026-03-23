@@ -294,17 +294,15 @@ export const ArmadorRutas: React.FC = () => {
   const { clients } = useClients();
   const { value: monedaBase } = useSystemConfig("moneda_base");
 
-  // ✅ Datos de la Cabecera (Obligatorios para armar la cadena)
   const [origen, setOrigen] = useState("");
   const [destino, setDestino] = useState("");
-  const [variante, setVariante] = useState(""); // 🚀 Campo opcional para IMO, BRAUN, etc.
+  const [variante, setVariante] = useState("");
   const [configuracion, setConfiguracion] = useState<"5ejes" | "9ejes">(
     "5ejes",
   );
 
   const isFullUnit = configuracion === "9ejes";
 
-  // 🚀 CADENA GENERADA AUTOMÁTICAMENTE
   const nombreRutaGenerada = useMemo(() => {
     if (!origen.trim() && !destino.trim()) return "";
     return [origen.trim(), destino.trim(), variante.trim()]
@@ -313,13 +311,11 @@ export const ArmadorRutas: React.FC = () => {
       .toUpperCase();
   }, [origen, destino, variante]);
 
-  // ✅ Secundarios
   const [selectedCliente, setSelectedCliente] = useState("");
   const [segments, setSegments] = useState<SegmentEntry[]>([]);
   const [allTolls, setAllTolls] = useState<TollBooth[]>([]);
   const [savedRoutes, setSavedRoutes] = useState<RateTemplate[]>([]);
 
-  // Filtro de tabla histórica
   const [filtroTipo, setFiltroTipo] = useState<"todos" | "5ejes" | "9ejes">(
     "todos",
   );
@@ -530,12 +526,17 @@ export const ArmadorRutas: React.FC = () => {
       costo_momento_full: s.costo_f,
     }));
 
+    // 🚀 FASE 1: Enviando los parámetros limpios para la llave compuesta
+    const finalOrigen = variante.trim()
+      ? `${origen.trim().toUpperCase()} - ${variante.trim().toUpperCase()}`
+      : origen.trim().toUpperCase();
+
     const payload = {
       client_id:
         selectedCliente && selectedCliente !== "none"
           ? parseInt(selectedCliente, 10)
           : null,
-      origen: nombreRutaGenerada, // 🚀 Mandamos la cadena armada como llave principal
+      origen: finalOrigen,
       destino: destino.trim().toUpperCase(),
       tipo_unidad: configuracion,
       segments: mappedSegments,
@@ -555,7 +556,6 @@ export const ArmadorRutas: React.FC = () => {
         toast.success("Nueva ruta guardada exitosamente");
       }
 
-      // 🚀 LIMPIEZA CORRECTA AL GUARDAR
       setEditingRouteId(null);
       setSegments([]);
       setOrigen("");
@@ -574,21 +574,19 @@ export const ArmadorRutas: React.FC = () => {
   const handleEditRoute = (route: RateTemplate) => {
     setEditingRouteId(route.id);
 
-    // 🚀 Tratamos de desarmar la cadena original (separada por guiones)
     const partes = (route.origen || "").split("-");
     if (partes.length >= 2) {
       setOrigen(partes[0]);
-      setDestino(partes[1]);
-      setVariante(partes.slice(2).join("-")); // Todo lo extra va a variante
+      setDestino(route.destino || ""); // Cambiado: origen y destino ahora viajan separados en FASE 1
+      setVariante(partes.slice(1).join("-")); // Lo que sobró es variante
     } else {
       setOrigen(route.origen || "");
-      setDestino("");
+      setDestino(route.destino || "");
       setVariante("");
     }
 
     setSelectedCliente(route.client_id ? String(route.client_id) : "");
 
-    // Cargamos la configuración guardada
     const isRouteFull =
       route.tipo_unidad === "9ejes" || route.tipo_unidad === "full";
     setConfiguracion(isRouteFull ? "9ejes" : "5ejes");
@@ -625,7 +623,6 @@ export const ArmadorRutas: React.FC = () => {
     toast.info("Ruta cargada para edición");
   };
 
-  // 🚀 FUNCIÓN: Generar Hoja de Ruta para el Chófer (Impresión)
   const handlePrintRoute = (route: RateTemplate) => {
     const isFull =
       route.tipo_unidad === "9ejes" || route.tipo_unidad === "full";
@@ -734,8 +731,11 @@ export const ArmadorRutas: React.FC = () => {
         key: "origen",
         header: "Nombre de Ruta",
         render: (_, row) => (
-          <div className="flex items-center gap-1 font-bold text-slate-700">
-            <span>{row.origen}</span>
+          <div className="flex flex-col gap-0.5">
+            <span className="font-bold text-slate-700">{row.origen}</span>
+            <span className="text-[10px] text-slate-400 font-bold uppercase">
+              Hacia: {row.destino}
+            </span>
           </div>
         ),
       },
@@ -883,7 +883,6 @@ export const ArmadorRutas: React.FC = () => {
     >
       <Card className="border-t-4 border-t-primary shadow-xl overflow-hidden">
         <CardHeader className="bg-slate-50/80 border-b p-5">
-          {/* ✅ FILA 1: Origen, Destino, Variante y Configuración */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start">
             <div className="space-y-1.5">
               <Label className="text-sm font-black text-slate-800 flex items-center gap-2">
@@ -909,7 +908,6 @@ export const ArmadorRutas: React.FC = () => {
               />
             </div>
 
-            {/* 🚀 NUEVO CAMPO: Variante / IMO */}
             <div className="space-y-1.5">
               <Label className="text-sm font-black text-slate-800 flex items-center gap-2">
                 <RouteIcon className="h-4 w-4 text-primary" /> Variante
@@ -944,7 +942,6 @@ export const ArmadorRutas: React.FC = () => {
             </div>
           </div>
 
-          {/* 🚀 PREVIEW DEL NOMBRE GENERADO */}
           <div className="mt-4 p-3 bg-slate-800 rounded-lg flex flex-col md:flex-row md:items-center justify-between gap-2 border border-slate-700 shadow-inner">
             <span className="text-slate-400 text-xs uppercase font-bold tracking-wider flex items-center gap-2">
               <RouteIcon className="h-4 w-4 text-slate-500" />
@@ -962,7 +959,6 @@ export const ArmadorRutas: React.FC = () => {
             </span>
           </div>
 
-          {/* FILA DE OPCIONALES Y BOTÓN DE INVERTIR */}
           <div className="mt-4 flex flex-col md:flex-row justify-between items-center gap-4 border-t border-slate-200 pt-4">
             <div className="flex items-center space-x-2">
               <Label className="text-xs text-slate-500 font-bold uppercase">
@@ -997,7 +993,6 @@ export const ArmadorRutas: React.FC = () => {
           </div>
         </CardHeader>
 
-        {/* TOOLBAR */}
         <div className="bg-slate-100/50 border-b p-3 flex justify-between items-center">
           <div className="flex items-center space-x-6">
             <div className="flex items-center space-x-2">
@@ -1049,7 +1044,6 @@ export const ArmadorRutas: React.FC = () => {
                   )}
                   <TableHead className="text-right w-20">Km</TableHead>
                   <TableHead className="text-right w-20">Min</TableHead>
-                  {/* 🚀 ENCABEZADO DE COSTO DINÁMICO */}
                   {!isFullUnit && (
                     <TableHead className="text-right text-blue-700 font-black">
                       Costo Sencillo
@@ -1088,7 +1082,6 @@ export const ArmadorRutas: React.FC = () => {
                   ))}
                 </SortableContext>
 
-                {/* TOTALES */}
                 <TableRow className="bg-slate-900 text-white font-bold hover:bg-slate-900 border-none sticky bottom-0">
                   <TableCell
                     colSpan={showAdvanced ? 4 : 2}
@@ -1102,7 +1095,6 @@ export const ArmadorRutas: React.FC = () => {
                   <TableCell className="text-right font-mono text-xs border-l border-white/10">
                     {Math.floor(totals.tiempo / 60)}h {totals.tiempo % 60}m
                   </TableCell>
-                  {/* 🚀 TOTAL DINÁMICO */}
                   {!isFullUnit && (
                     <TableCell className="text-right text-base font-bold text-blue-400 border-l border-white/10">
                       {formatCurrency(totals.costo_s)}
@@ -1121,7 +1113,6 @@ export const ArmadorRutas: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* BOTONES INFERIORES */}
       <div className="flex flex-col md:flex-row justify-between items-center bg-white p-5 rounded-2xl border shadow-sm gap-4">
         <div className="flex gap-3">
           <Button
@@ -1280,7 +1271,6 @@ export const ArmadorRutas: React.FC = () => {
         </div>
       </div>
 
-      {/* TABLA TARIFAS HISTÓRICAS */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between border-b bg-slate-50/50 py-3">
           <CardTitle className="text-lg">Catálogo de Rutas Armadas</CardTitle>
@@ -1294,7 +1284,6 @@ export const ArmadorRutas: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* MODAL ELIMINACIÓN */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent className="rounded-2xl max-w-md">
           <AlertDialogHeader>
@@ -1331,10 +1320,8 @@ export const ArmadorRutas: React.FC = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* MODAL DETALLE DE LA RUTA */}
       <Dialog open={detailModalOpen} onOpenChange={setDetailModalOpen}>
         <DialogContent className="sm:max-w-2xl p-0 overflow-hidden bg-slate-50 flex flex-col max-h-[85vh]">
-          {/* HEADER DEL MODAL (Fijo) */}
           <DialogHeader className="px-6 py-4 bg-white border-b border-slate-200 shrink-0">
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
               <DialogTitle className="flex flex-col gap-1.5">
@@ -1370,11 +1357,9 @@ export const ArmadorRutas: React.FC = () => {
             </div>
           </DialogHeader>
 
-          {/* CUERPO DEL MODAL (Scrolleable) */}
           <ScrollArea className="flex-1 px-6 py-6 custom-scrollbar">
             {selectedRouteDetail && (
               <div className="relative">
-                {/* La línea vertical del Timeline */}
                 <div className="absolute left-[11px] top-3 bottom-8 w-0.5 bg-slate-200 rounded-full" />
 
                 <div className="space-y-8">
@@ -1392,7 +1377,6 @@ export const ArmadorRutas: React.FC = () => {
                         key={seg.id || idx}
                         className="relative pl-10 flex flex-col group"
                       >
-                        {/* El punto en el timeline */}
                         <div
                           className={cn(
                             "absolute left-0 top-1 h-6 w-6 rounded-full border-4 border-slate-50 flex items-center justify-center shadow-sm z-10 transition-colors",
@@ -1402,7 +1386,6 @@ export const ArmadorRutas: React.FC = () => {
                           <div className="h-1.5 w-1.5 rounded-full bg-white" />
                         </div>
 
-                        {/* Tarjeta de Información */}
                         <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow">
                           <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-3">
                             <div className="space-y-1">
@@ -1433,7 +1416,6 @@ export const ArmadorRutas: React.FC = () => {
                               )}
                             </div>
 
-                            {/* Costo Destacado */}
                             <div
                               className={cn(
                                 "flex flex-col items-end p-2.5 rounded-lg border min-w-[120px] shrink-0",
@@ -1458,7 +1440,6 @@ export const ArmadorRutas: React.FC = () => {
                             </div>
                           </div>
 
-                          {/* Metadatos (Distancia y Tiempo) */}
                           <div className="flex gap-4 pt-3 border-t border-slate-100">
                             <div className="flex items-center gap-1.5">
                               <div className="h-6 w-6 rounded bg-slate-100 flex items-center justify-center">
