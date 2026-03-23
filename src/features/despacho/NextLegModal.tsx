@@ -17,21 +17,30 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import {
   Link as LinkIcon,
   Truck,
   User,
   Loader2,
-  Info,
   CheckCircle2,
   MapPin,
   Box,
+  FileText,
+  DollarSign,
+  Info,
+  Activity,
+  ArrowRight,
+  ShieldCheck,
 } from "lucide-react";
 import { useUnits } from "@/hooks/useUnits";
 import { useOperators } from "@/hooks/useOperators";
+import { useBilling } from "@/hooks/useBilling";
 import { Trip, TripLegCreatePayload } from "@/types/api.types";
+import { cn } from "@/lib/utils";
 
 interface NextLegModalProps {
   open: boolean;
@@ -40,7 +49,6 @@ interface NextLegModalProps {
   onSubmit: (tripId: string, payload: TripLegCreatePayload) => Promise<boolean>;
 }
 
-// Interfaz extendida para poder mandar los remolques en el payload
 interface ExtendedLegPayload extends TripLegCreatePayload {
   remolque_1_id?: number | null;
   dolly_id?: number | null;
@@ -55,9 +63,12 @@ export function NextLegModal({
 }: NextLegModalProps) {
   const { unidades, updateLoadStatus } = useUnits();
   const { operadores } = useOperators();
-  const [loading, setLoading] = useState(false);
+  const { isStamping, handleStampNominal } = useBilling();
 
-  const [formData, setFormData] = useState<Partial<ExtendedLegPayload & {}>>({
+  const [loading, setLoading] = useState(false);
+  const [cpGenerada, setCpGenerada] = useState(false);
+
+  const [formData, setFormData] = useState<Partial<ExtendedLegPayload>>({
     leg_type: "ruta_carretera",
     unit_id: null,
     operator_id: null,
@@ -69,19 +80,43 @@ export function NextLegModal({
     anticipo_combustible: 0,
   });
 
-  // 🚀 Lógica para detectar si es un viaje Full basándose en el tipo de unidad
+  // 🚀 FORMATEO DE MONEDA (Gustavo: "Comas en vez de puntos para miles")
+  const formatCurrency = (val: number) =>
+    new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: "MXN",
+      minimumFractionDigits: 2,
+    }).format(val || 0);
+
+  // 🚀 LÓGICA DE CONFIGURACIÓN (Sencillo vs Full)
   const isFullTrip = useMemo(() => {
     if (!tripPadre) return false;
-    // Asumimos que si la tarifa o el tipo de unidad dice "9ejes" o "full", es un full.
-    // También validamos si el viaje PADRE ya tiene asignado un dolly de alguna fase anterior
-    const tu = (tripPadre as any).tipo_unidad?.toLowerCase() || "";
+    const configStr = (tripPadre.route_name || "").toLowerCase();
+    const configTarifa = (tripPadre as any).tipo_unidad?.toLowerCase() || "";
     return (
-      tu === "full" ||
-      tu === "9ejes" ||
-      tu === "9 ejes" ||
-      tu === "doble" ||
+      configStr.includes("full") ||
+      configTarifa.includes("full") ||
+      configTarifa.includes("9ejes") ||
       Boolean(tripPadre.dolly_id)
     );
+  }, [tripPadre]);
+
+  // 🚀 CÁLCULOS FINANCIEROS (Pactado con Cliente)
+  const finanzas = useMemo(() => {
+    if (!tripPadre) return { subtotal: 0, iva: 0, retencion: 0, total: 0 };
+    const base = tripPadre.tarifa_base || 0;
+    const casetas = tripPadre.costo_casetas || 0;
+    const subtotal = base + casetas;
+    const iva = subtotal * 0.16;
+    const retencion = subtotal * 0.04;
+    return {
+      base,
+      casetas,
+      subtotal,
+      iva,
+      retencion,
+      total: subtotal + iva - retencion,
+    };
   }, [tripPadre]);
 
   useEffect(() => {
@@ -90,7 +125,6 @@ export function NextLegModal({
         leg_type: "ruta_carretera",
         unit_id: null,
         operator_id: null,
-        // Si el viaje ya tiene remolques asignados (de una fase anterior), los precargamos
         remolque_1_id: tripPadre.remolque_1_id || null,
         dolly_id: tripPadre.dolly_id || null,
         remolque_2_id: tripPadre.remolque_2_id || null,
@@ -98,120 +132,56 @@ export function NextLegModal({
         anticipo_viaticos: 0,
         anticipo_combustible: 0,
       });
+      setCpGenerada(Boolean(tripPadre.uuid_fiscal));
     }
   }, [open, tripPadre]);
 
-  const isRoadLeg = formData.leg_type === "ruta_carretera";
-
-  // --- FILTROS DE UNIDADES (Los mismos que usas en DespachoWizard) ---
-  const arrUnidades = useMemo(
-    () => (Array.isArray(unidades) ? unidades : []),
-    [unidades],
-  );
-
   const availableTractos = useMemo(() => {
-    return arrUnidades.filter(
+    return unidades.filter(
       (u: any) =>
-        (`${u.tipo_1} ${u.tipo} ${u.tipo_unidad}`
-          .toLowerCase()
-          .includes("tracto") ||
-          `${u.tipo_1} ${u.tipo} ${u.tipo_unidad}`
-            .toLowerCase()
-            .includes("camion")) &&
+        (`${u.tipo_1} ${u.tipo}`.toLowerCase().includes("tracto") ||
+          `${u.tipo_1} ${u.tipo}`.toLowerCase().includes("camion")) &&
         ["disponible", "bloqueado"].includes(u.status?.toLowerCase()),
     );
-  }, [arrUnidades]);
+  }, [unidades]);
 
   const availableRemolques = useMemo(() => {
-    return arrUnidades.filter((u: any) => {
-      const strTipo1 = (u.tipo_1 || "").toLowerCase();
-      const strTipo = (u.tipo || "").toLowerCase();
-      const estaDisponible = ["disponible", "bloqueado"].includes(
-        u.status?.toLowerCase(),
-      );
+    return unidades.filter((u: any) => {
+      const type = `${u.tipo_1} ${u.tipo}`.toLowerCase();
       return (
-        ["remolque", "caja", "plataforma", "chasis", "utilitario"].some(
-          (p) => strTipo1.includes(p) || strTipo.includes(p),
-        ) && estaDisponible
+        ["remolque", "caja", "plataforma", "chasis"].some((p) =>
+          type.includes(p),
+        ) && ["disponible", "bloqueado"].includes(u.status?.toLowerCase())
       );
     });
-  }, [arrUnidades]);
+  }, [unidades]);
 
   const availableDollies = useMemo(() => {
-    const dollies = arrUnidades.filter((u: any) =>
+    const dollies = unidades.filter((u: any) =>
       (u.tipo_1 || "").toLowerCase().includes("dolly"),
     );
-    if (dollies.length === 0)
-      return [{ id: 9997, numero_economico: "DOLLY-PRUEBA (Sin stock)" }];
-    return dollies;
-  }, [arrUnidades]);
+    return dollies.length > 0
+      ? dollies
+      : [{ id: 9997, numero_economico: "DOLLY-PRUEBA" }];
+  }, [unidades]);
 
-  const availableOperators = useMemo(() => {
-    if (!operadores) return [];
-    return operadores.filter(
-      (o: any) => o.status === "activo" || o.status === "disponible",
-    );
-  }, [operadores]);
-
-  const handleSubmit = async () => {
+  const onTimbrarNominal = async () => {
     if (!tripPadre) return;
-
-    if (!formData.unit_id || !formData.operator_id) {
-      return toast.error("Debes asignar un Tractocamión y un Operador.");
+    try {
+      await handleStampNominal(tripPadre.id, () => {
+        setCpGenerada(true);
+        toast.success("Carta Porte de $1 generada.");
+      });
+    } catch {
+      toast.error("Error al timbrar bypass.");
     }
+  };
 
-    if (!formData.remolque_1_id) {
-      return toast.error("Debes asignar al menos un Remolque/Chasis.");
-    }
-
-    if (isFullTrip && (!formData.dolly_id || !formData.remolque_2_id)) {
-      return toast.error(
-        "Por ser configuración FULL, debes asignar Dolly y Remolque 2.",
-      );
-    }
-
+  const handleIniciarTramo = async () => {
+    if (!tripPadre) return;
     setLoading(true);
-
-    const payload: ExtendedLegPayload = {
-      leg_type: formData.leg_type!,
-      unit_id: Number(formData.unit_id),
-      operator_id: Number(formData.operator_id),
-
-      // 🚀 Mandamos los equipos de arrastre al backend
-      remolque_1_id: formData.remolque_1_id
-        ? Number(formData.remolque_1_id)
-        : null,
-      dolly_id:
-        isFullTrip && formData.dolly_id ? Number(formData.dolly_id) : null,
-      remolque_2_id:
-        isFullTrip && formData.remolque_2_id
-          ? Number(formData.remolque_2_id)
-          : null,
-
-      odometro_inicial: null,
-      nivel_tanque_inicial: null,
-
-      anticipo_casetas: isRoadLeg ? Number(formData.anticipo_casetas || 0) : 0,
-      anticipo_viaticos: isRoadLeg
-        ? Number(formData.anticipo_viaticos || 0)
-        : 0,
-      anticipo_combustible: isRoadLeg
-        ? Number(formData.anticipo_combustible || 0)
-        : 0,
-    };
-
-    const success = await onSubmit(String(tripPadre.id), payload as any);
-
-    if (success) {
-      if (formData.leg_type === "carga_muelle" && formData.remolque_1_id) {
-        await updateLoadStatus(Number(formData.remolque_1_id), true);
-        if (formData.remolque_2_id) {
-          await updateLoadStatus(Number(formData.remolque_2_id), true);
-        }
-        toast.success("Remolque(s) marcado(s) como CARGADOS.");
-      }
-      onOpenChange(false);
-    }
+    const success = await onSubmit(String(tripPadre.id), formData as any);
+    if (success) onOpenChange(false);
     setLoading(false);
   };
 
@@ -219,53 +189,160 @@ export function NextLegModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px] bg-slate-50 max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-xl flex items-center gap-2 text-brand-navy">
-            <LinkIcon className="h-5 w-5" /> Asignar Siguiente Fase
-          </DialogTitle>
-          <DialogDescription>
-            Viaje <strong>#{tripPadre.public_id || tripPadre.id}</strong> hacia{" "}
-            <strong>{tripPadre.destination}</strong>.<br />
-            Configura los equipos y el operador para el siguiente tramo.
-          </DialogDescription>
+      <DialogContent className="sm:max-w-[850px] bg-slate-50 p-0 overflow-hidden rounded-2xl shadow-2xl border-none">
+        <DialogHeader className="p-6 bg-brand-navy mt-10">
+          <div className="flex justify-between items-start">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Truck className="h-6 w-6 text-emerald-600" />
+                <DialogTitle className="text-2xl font-black  text-emerald-600 uppercase tracking-tighter">
+                  Despacho de Viaje #{tripPadre.public_id || tripPadre.id}
+                </DialogTitle>
+              </div>
+              <p className="font-bold text-emerald-600 uppercase  tracking-widest flex items-center gap-2">
+                <MapPin className="h-3 w-3" /> {tripPadre.origin}{" "}
+                <ArrowRight className="h-3 w-3" /> {tripPadre.destination}
+                <Badge className="bg-white/10 text-emerald-600 border-white/20 ml-2">
+                  {isFullTrip ? "FULL" : "SENCILLO"}
+                </Badge>
+              </p>
+            </div>
+            <Badge
+              className={cn(
+                "px-4 py-1 font-black",
+                cpGenerada ? "bg-emerald-500" : "bg-amber-500",
+              )}
+            >
+              {cpGenerada ? "C. PORTE $1 LISTA" : "C. PORTE PENDIENTE"}
+            </Badge>
+          </div>
         </DialogHeader>
 
-        <div className="space-y-6 py-4">
-          {/* TIPO DE FASE */}
-          <div className="space-y-2 bg-indigo-50 border border-indigo-100 p-4 rounded-xl">
-            <Label className="font-bold text-indigo-900 uppercase tracking-wider text-xs">
-              1. Selecciona la Próxima Fase *
-            </Label>
-            <Select
-              value={formData.leg_type}
-              onValueChange={(v: any) =>
-                setFormData((p) => ({ ...p, leg_type: v }))
-              }
-            >
-              <SelectTrigger className="bg-white border-indigo-200 h-11">
-                <SelectValue placeholder="Selecciona la fase" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="carga_muelle">
-                  1. Carga Muelle (Patio Base)
-                </SelectItem>
-                <SelectItem value="ruta_carretera">
-                  2. Ruta Directa (Viaje a Destino)
-                </SelectItem>
-                <SelectItem value="entrega_vacio">
-                  3. Retorno de Vacío (Regreso a Puerto/Patio)
-                </SelectItem>
-              </SelectContent>
-            </Select>
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-0">
+          {/* COLUMNA IZQUIERDA: FINANZAS PACTADAS (Fase 4) */}
+          <div className="md:col-span-2 bg-white p-6 border-r border-slate-200 space-y-6">
+            <div className="space-y-4">
+              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                <ShieldCheck className="h-3 w-3 text-brand-navy" /> Negocio
+                Pactado (Cliente)
+              </h4>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center text-sm font-bold text-slate-600">
+                  <span>Flete Base:</span>
+                  <span className="font-mono text-slate-900">
+                    {formatCurrency(finanzas.base)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-sm font-bold text-slate-600">
+                  <span>Casetas:</span>
+                  <span className="font-mono text-slate-900">
+                    {formatCurrency(finanzas.casetas)}
+                  </span>
+                </div>
+                <Separator />
+                <div className="flex justify-between items-center  font-bold text-slate-500">
+                  <span>IVA (16%):</span>
+                  <span className="font-mono">
+                    {formatCurrency(finanzas.iva)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center  font-bold text-slate-500">
+                  <span>Retención (4%):</span>
+                  <span className="font-mono text-rose-600">
+                    -{formatCurrency(finanzas.retencion)}
+                  </span>
+                </div>
+                <div className="bg-brand-navy/5 p-3 rounded-lg flex justify-between items-center mt-4">
+                  <span className=" font-black text-brand-navy uppercase">
+                    Total Factura:
+                  </span>
+                  <span className="text-lg font-black text-brand-navy font-mono">
+                    {formatCurrency(finanzas.total)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <Card className="bg-slate-900 text-white border-none shadow-lg">
+              <CardContent className="p-4 space-y-3">
+                <h5 className="text-[9px] font-black uppercase text-emerald-400 tracking-widest">
+                  Protocolo Bypass
+                </h5>
+                <p className="text-[10px] text-slate-300 leading-tight">
+                  Genera la Carta Porte de $1 para liberar la unidad
+                  inmediatamente. El operador real se asigna abajo.
+                </p>
+                <Button
+                  onClick={onTimbrarNominal}
+                  disabled={isStamping || cpGenerada}
+                  className="w-full h-10 bg-emerald-600 hover:bg-emerald-500 font-black text-[10px] uppercase shadow-lg shadow-emerald-900/20"
+                >
+                  {isStamping ? (
+                    <Loader2 className="h-3 w-3 animate-spin mr-2" />
+                  ) : (
+                    <FileText className="h-3 w-3 mr-2" />
+                  )}
+                  {cpGenerada ? "Documento Generado" : "Timbrar Carta Porte $1"}
+                </Button>
+              </CardContent>
+            </Card>
           </div>
 
-          {/* TRACTO Y OPERADOR */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-white p-4 rounded-xl border border-slate-200">
+          {/* COLUMNA DERECHA: ASIGNACIÓN OPERATIVA (Fase 2) */}
+          <div className="md:col-span-3 p-6 space-y-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-slate-500">
+                  Fase Operativa
+                </Label>
+                <Select
+                  value={formData.leg_type}
+                  onValueChange={(v: any) =>
+                    setFormData((p) => ({ ...p, leg_type: v }))
+                  }
+                >
+                  <SelectTrigger className="h-10 font-bold uppercase">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="carga_muelle">
+                      1. Carga Muelle
+                    </SelectItem>
+                    <SelectItem value="ruta_carretera">
+                      2. Ruta Carretera
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-slate-500">
+                  Operador Real
+                </Label>
+                <Select
+                  value={
+                    formData.operator_id ? String(formData.operator_id) : ""
+                  }
+                  onValueChange={(v) =>
+                    setFormData((p) => ({ ...p, operator_id: Number(v) }))
+                  }
+                >
+                  <SelectTrigger className="h-10 font-bold uppercase">
+                    <SelectValue placeholder="Seleccionar..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {operadores.map((o: any) => (
+                      <SelectItem key={o.id} value={String(o.id)}>
+                        {o.name.toUpperCase()}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
             <div className="space-y-2">
-              <Label className="flex items-center gap-2 font-bold text-slate-700">
-                <Truck className="h-4 w-4 text-brand-navy" /> Tractocamión
-                Asignado *
+              <Label className="text-[10px] font-black uppercase text-slate-500">
+                Tractocamión
               </Label>
               <Select
                 value={formData.unit_id ? String(formData.unit_id) : ""}
@@ -273,52 +350,29 @@ export function NextLegModal({
                   setFormData((p) => ({ ...p, unit_id: Number(v) }))
                 }
               >
-                <SelectTrigger className="bg-slate-50 border-slate-200">
-                  <SelectValue placeholder="Seleccionar Tracto..." />
+                <SelectTrigger className="h-11 font-black text-brand-navy border-slate-300">
+                  <SelectValue placeholder="Seleccionar unidad..." />
                 </SelectTrigger>
                 <SelectContent>
                   {availableTractos.map((u: any) => (
                     <SelectItem key={u.id} value={String(u.id)}>
-                      ECO-{u.numero_economico} - {u.placas}
+                      ECO-{u.numero_economico} [{u.placas}]
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2 font-bold text-slate-700">
-                <User className="h-4 w-4 text-brand-navy" /> Operador *
-              </Label>
-              <Select
-                value={formData.operator_id ? String(formData.operator_id) : ""}
-                onValueChange={(v) =>
-                  setFormData((p) => ({ ...p, operator_id: Number(v) }))
-                }
-              >
-                <SelectTrigger className="bg-slate-50 border-slate-200">
-                  <SelectValue placeholder="Seleccionar Operador..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableOperators.map((o: any) => (
-                    <SelectItem key={o.id} value={String(o.id)}>
-                      {o.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* 🚀 EQUIPOS DE ARRASTRE (CHASIS Y DOLLY) */}
-          <div className="bg-white p-4 rounded-xl border border-slate-200">
-            <Label className="font-bold text-slate-700 flex items-center gap-2 mb-4 uppercase tracking-wider text-xs">
-              <Box className="h-4 w-4 text-emerald-600" /> Equipos de Arrastre
-            </Label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2 sm:col-span-2">
-                <Label className="text-xs text-slate-500">
-                  Remolque / Chasis 1 *
+            <div className="bg-white p-4 rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-4 shadow-sm">
+              <div className="sm:col-span-3 border-b pb-2 flex items-center gap-2">
+                <Box className="h-4 w-4 text-brand-navy" />
+                <h5 className="text-[10px] font-black text-brand-navy uppercase tracking-widest">
+                  Configuración de Arrastre
+                </h5>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[9px] font-bold text-slate-500 uppercase">
+                  Chasis 1
                 </Label>
                 <Select
                   value={
@@ -328,25 +382,23 @@ export function NextLegModal({
                     setFormData((p) => ({ ...p, remolque_1_id: Number(v) }))
                   }
                 >
-                  <SelectTrigger className="bg-slate-50">
-                    <SelectValue placeholder="Seleccionar Remolque..." />
+                  <SelectTrigger className="h-8 text-[10px] font-bold">
+                    <SelectValue placeholder="R1" />
                   </SelectTrigger>
                   <SelectContent>
                     {availableRemolques.map((u: any) => (
                       <SelectItem key={u.id} value={String(u.id)}>
-                        ECO-{u.numero_economico} |{" "}
-                        {u.is_loaded ? "📦 CARGADO" : "➖ VACÍO"}
+                        ECO-{u.numero_economico} {u.is_loaded ? "📦" : "➖"}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-
               {isFullTrip && (
                 <>
-                  <div className="space-y-2">
-                    <Label className="text-xs text-rose-600 font-bold">
-                      Dolly *
+                  <div className="space-y-1">
+                    <Label className="text-[9px] font-bold text-rose-600 uppercase">
+                      Dolly
                     </Label>
                     <Select
                       value={formData.dolly_id ? String(formData.dolly_id) : ""}
@@ -354,8 +406,8 @@ export function NextLegModal({
                         setFormData((p) => ({ ...p, dolly_id: Number(v) }))
                       }
                     >
-                      <SelectTrigger className="bg-rose-50 border-rose-200 text-rose-700">
-                        <SelectValue placeholder="Seleccionar Dolly..." />
+                      <SelectTrigger className="h-8 text-[10px] border-rose-200 bg-rose-50 text-rose-700 font-bold">
+                        <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         {availableDollies.map((u: any) => (
@@ -366,10 +418,9 @@ export function NextLegModal({
                       </SelectContent>
                     </Select>
                   </div>
-
-                  <div className="space-y-2">
-                    <Label className="text-xs text-rose-600 font-bold">
-                      Remolque / Chasis 2 *
+                  <div className="space-y-1">
+                    <Label className="text-[9px] font-bold text-rose-600 uppercase">
+                      Chasis 2
                     </Label>
                     <Select
                       value={
@@ -381,14 +432,13 @@ export function NextLegModal({
                         setFormData((p) => ({ ...p, remolque_2_id: Number(v) }))
                       }
                     >
-                      <SelectTrigger className="bg-rose-50 border-rose-200 text-rose-700">
-                        <SelectValue placeholder="Seleccionar Remolque 2..." />
+                      <SelectTrigger className="h-8 text-[10px] border-rose-200 bg-rose-50 text-rose-700 font-bold">
+                        <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         {availableRemolques.map((u: any) => (
                           <SelectItem key={u.id} value={String(u.id)}>
-                            ECO-{u.numero_economico} |{" "}
-                            {u.is_loaded ? "📦 CARGADO" : "➖ VACÍO"}
+                            ECO-{u.numero_economico} {u.is_loaded ? "📦" : "➖"}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -398,84 +448,36 @@ export function NextLegModal({
               )}
             </div>
           </div>
-
-          {/* ANTICIPOS CONDICIONALES */}
-          {isRoadLeg ? (
-            <div className="bg-white p-4 rounded-xl border border-slate-200">
-              <Label className="font-bold text-slate-700 uppercase tracking-wider text-xs mb-4 block">
-                Anticipos Operativos
-              </Label>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-xs text-slate-500">Casetas</Label>
-                  <Input
-                    type="number"
-                    className="font-mono bg-slate-50"
-                    value={formData.anticipo_casetas || ""}
-                    onChange={(e) =>
-                      setFormData((p) => ({
-                        ...p,
-                        anticipo_casetas: Number(e.target.value),
-                      }))
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs text-slate-500">Diésel</Label>
-                  <Input
-                    type="number"
-                    className="font-mono bg-slate-50"
-                    value={formData.anticipo_combustible || ""}
-                    onChange={(e) =>
-                      setFormData((p) => ({
-                        ...p,
-                        anticipo_combustible: Number(e.target.value),
-                      }))
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs text-slate-500">Viáticos</Label>
-                  <Input
-                    type="number"
-                    className="font-mono bg-slate-50"
-                    value={formData.anticipo_viaticos || ""}
-                    onChange={(e) =>
-                      setFormData((p) => ({
-                        ...p,
-                        anticipo_viaticos: Number(e.target.value),
-                      }))
-                    }
-                  />
-                </div>
-              </div>
-            </div>
-          ) : (
-            <Card className="border-slate-200 bg-transparent flex flex-col justify-center items-center text-center p-4">
-              <p className="text-xs text-slate-400 font-medium flex items-center gap-2">
-                <Info className="h-4 w-4" /> Los movimientos de patio no
-                requieren registro de anticipos.
-              </p>
-            </Card>
-          )}
         </div>
 
-        <DialogFooter className="bg-white p-4 -m-6 mt-2 rounded-b-lg border-t sticky bottom-0">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={loading}
-            className="bg-brand-navy hover:bg-brand-navy/90 text-white font-bold gap-2 px-8"
-          >
-            {loading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <CheckCircle2 className="h-4 w-4" />
-            )}
-            Iniciar Tramo Operativo
-          </Button>
+        <DialogFooter className="p-4 bg-slate-100 border-t border-slate-200 flex justify-between sm:justify-between items-center">
+          <div className="flex items-center gap-2 px-2 text-slate-400">
+            <Info className="h-4 w-4" />
+            <span className="text-[10px] font-bold uppercase tracking-tight">
+              Verificar sellos antes de despachar
+            </span>
+          </div>
+          <div className="flex gap-3">
+            <Button
+              variant="ghost"
+              onClick={() => onOpenChange(false)}
+              className="font-bold uppercase text-[10px]"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleIniciarTramo}
+              disabled={loading || !cpGenerada}
+              className="bg-brand-navy hover:bg-brand-navy/90 text-white font-black uppercase text-[10px] tracking-widest px-12 h-11 shadow-xl shadow-brand-navy/20"
+            >
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <CheckCircle2 className="h-4 w-4 mr-2" />
+              )}
+              Iniciar Viaje Operativo
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
