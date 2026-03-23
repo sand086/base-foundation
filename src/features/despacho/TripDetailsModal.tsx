@@ -34,13 +34,11 @@ import { toast } from "sonner";
 import {
   Truck,
   User,
-  DollarSign,
   MapPin,
   Navigation,
   Wallet,
   Clock,
   CheckCircle2,
-  Printer,
   History,
   Loader2,
   Activity,
@@ -50,6 +48,9 @@ import {
   Route as RouteIcon,
   Edit2,
   Save,
+  FileText,
+  Undo,
+  Link2Off,
 } from "lucide-react";
 import { Trip, TripLeg } from "@/types/api.types";
 import { useTrips } from "@/hooks/useTrips";
@@ -100,8 +101,8 @@ export function TripDetailsModal({
   const [isCreatingTerminal, setIsCreatingTerminal] = useState(false);
   const [finishingLeg, setFinishingLeg] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isUndoing, setIsUndoing] = useState(false);
 
-  // 🚀 FASE 3: ESTADO LOCAL CON PRIORIDAD DE RENDERIZADO
   const [localUuid, setLocalUuid] = useState<string | null>(null);
 
   const formatCurrency = (val: number) =>
@@ -115,16 +116,12 @@ export function TripDetailsModal({
     if (open) loadTerminals();
   }, [open]);
 
-  // 🚀 FASE 3: LÓGICA DE ESCUDO PARA EL UUID FISCAL
   useEffect(() => {
     if (trip) {
       if (!isEditing) {
         setTarifaBase(trip.tarifa_base || 0);
         setCostoCasetas(trip.costo_casetas || 0);
       }
-
-      // 🛡️ ESCUDO: Solo actualizamos si el prop trae un valor real o si el ID cambió (cambio de modal)
-      // Esto evita que refreshTrips() nos regrese a null por un lag de la DB
       if (trip.uuid_fiscal || !localUuid) {
         setLocalUuid(trip.uuid_fiscal || null);
       }
@@ -164,33 +161,13 @@ export function TripDetailsModal({
     if (!trip) return undefined;
     const legs = trip.legs || [];
     return (
-      legs.find((l) => l.status !== "cerrado") ||
+      legs.find(
+        (l) => !["entregado", "cerrado"].includes(l.status.toLowerCase()),
+      ) ||
       legs[legs.length - 1] ||
       undefined
     );
   }, [trip]);
-
-  const totalAnticiposGlobales = useMemo(() => {
-    if (!trip) return 0;
-    return (
-      trip.legs?.reduce(
-        (acc, leg) =>
-          acc +
-          (leg.anticipo_casetas || 0) +
-          (leg.anticipo_combustible || 0) +
-          (leg.anticipo_viaticos || 0) +
-          (leg.otros_anticipos || 0),
-        0,
-      ) || 0
-    );
-  }, [trip]);
-
-  const utilidadEstimada = useMemo(() => {
-    if (!trip) return 0;
-    return (
-      (isEditing ? tarifaBase : trip.tarifa_base || 0) - totalAnticiposGlobales
-    );
-  }, [trip, isEditing, tarifaBase, totalAnticiposGlobales]);
 
   const allEvents = useMemo(() => {
     if (!trip) return [];
@@ -211,6 +188,22 @@ export function TripDetailsModal({
     );
   }, [trip]);
 
+  const finanzasComercial = useMemo(() => {
+    const base = isEditing ? tarifaBase : trip?.tarifa_base || 0;
+    const casetas = isEditing ? costoCasetas : trip?.costo_casetas || 0;
+    const subtotal = base + casetas;
+    const iva = subtotal * 0.16;
+    const retencion = subtotal * 0.04;
+    return {
+      base,
+      casetas,
+      subtotal,
+      iva,
+      retencion,
+      total: subtotal + iva - retencion,
+    };
+  }, [trip, isEditing, tarifaBase, costoCasetas]);
+
   const handleSaveFinanzas = async () => {
     setSaving(true);
     const success = await editTrip(String(trip?.id), {
@@ -220,7 +213,7 @@ export function TripDetailsModal({
     if (success) {
       await refreshTrips();
       setIsEditing(false);
-      toast.success("Finanzas actualizadas.");
+      toast.success("Montos de facturación actualizados.");
     }
     setSaving(false);
   };
@@ -230,6 +223,39 @@ export function TripDetailsModal({
     await refreshTrips();
     setIsSyncing(false);
     toast.success("Datos sincronizados.");
+  };
+
+  const handleUndoLeg = async () => {
+    const isFirstLeg = trip?.legs?.length === 1;
+    const msg = isFirstLeg
+      ? "¿Deshacer esta fase? Al ser la primera, el viaje completo regresará al Planeador (Stand-by)."
+      : "¿Estás seguro de deshacer la última fase? El camión y operador de la fase previa volverán a estar activos en la ruta.";
+
+    const ok = window.confirm(msg);
+    if (!ok) return;
+
+    setIsUndoing(true);
+    try {
+      const response = await axiosClient.post(`/trips/${trip?.id}/undo-leg`);
+
+      if (isFirstLeg) {
+        toast.success("Viaje retornado a Planeador exitosamente.");
+        onOpenChange(false);
+        refreshTrips();
+      } else {
+        toast.success("Fase revertida exitosamente.");
+        if (response.data) {
+          await refreshTrips();
+        }
+      }
+    } catch (error: any) {
+      const errorMsg =
+        error.response?.data?.detail ||
+        "Error al deshacer. Es probable que la fase ya esté liquidada.";
+      toast.error(errorMsg);
+    } finally {
+      setIsUndoing(false);
+    }
   };
 
   const submitTerminalArrival = async () => {
@@ -242,7 +268,7 @@ export function TripDetailsModal({
         {
           status: "entregado",
           location: selectedTerminal,
-          comments: `📍 LLEGADA REGISTRADA: El esqueleto fue entregado en: ${selectedTerminal}.`,
+          comments: `📍 LLEGADA REGISTRADA: El equipo fue entregado en: ${selectedTerminal}.`,
         },
         true,
       );
@@ -252,7 +278,7 @@ export function TripDetailsModal({
         await updateLoadStatus(trip.remolque_2_id, false);
       setShowTerminalModal(false);
       await refreshTrips();
-      toast.success("Viaje finalizado.");
+      toast.success("Llegada registrada, viaje finalizado.");
     } catch {
       toast.error("Error al registrar llegada.");
     } finally {
@@ -276,7 +302,6 @@ export function TripDetailsModal({
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-
       toast.success("Archivo descargado.");
     } catch {
       toast.error("Error al descargar el PDF.");
@@ -307,8 +332,7 @@ export function TripDetailsModal({
                   </DialogDescription>
                 </div>
               </div>
-              <div className="flex gap-2">
-                {/* 🚀 BOTÓN DINÁMICO DEFINITIVO: Usa localUuid para etiquetas, lógica y estilos */}
+              <div className="flex gap-2 mt-10">
                 <Button
                   variant="outline"
                   className={cn(
@@ -324,11 +348,11 @@ export function TripDetailsModal({
                       handleStampNominal(trip.id, (responseData) => {
                         const generatedUuid = responseData?.data?.uuid;
                         if (generatedUuid) {
-                          setLocalUuid(generatedUuid); // 🚀 ACTUALIZACIÓN INSTANTÁNEA EN UI
+                          setLocalUuid(generatedUuid);
                           handleDownloadStampedPDF(generatedUuid);
-                          toast.success("¡CARTA PORTE GENERADA!");
+                          toast.success("¡CARTA PORTE BYPASS GENERADA!");
                         }
-                        refreshTrips(); // Actualiza BD en background
+                        refreshTrips();
                       });
                     }
                   }}
@@ -429,7 +453,7 @@ export function TripDetailsModal({
                       Fases Operativas
                     </TabsTrigger>
                     <TabsTrigger value="finanzas" className="text-xs font-bold">
-                      Estado Financiero
+                      Datos de Facturación
                     </TabsTrigger>
                     <TabsTrigger value="bitacora" className="text-xs font-bold">
                       Diario Bitácora
@@ -440,15 +464,43 @@ export function TripDetailsModal({
                 <ScrollArea className="flex-1">
                   <div className="p-6">
                     <TabsContent value="fases" className="m-0 space-y-4">
+                      <div className="flex justify-between items-center mb-4">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                          Secuencia Operativa
+                        </p>
+                        {trip.legs && trip.legs.length > 0 && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleUndoLeg}
+                            disabled={isUndoing}
+                            className="h-8 text-[10px] font-black text-rose-600 border-rose-200 hover:bg-rose-50 uppercase tracking-widest shadow-sm"
+                          >
+                            {isUndoing ? (
+                              <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                            ) : (
+                              <Undo className="h-3 w-3 mr-2" />
+                            )}
+                            Deshacer Último Movimiento
+                          </Button>
+                        )}
+                      </div>
+
                       {trip.legs?.map((leg, idx) => (
                         <Card
                           key={leg.id}
-                          className="border-l-4 border-l-brand-navy shadow-sm overflow-hidden"
+                          className={cn(
+                            "border-l-4 shadow-sm overflow-hidden",
+                            leg.id === activeLeg?.id
+                              ? "border-l-emerald-500"
+                              : "border-l-slate-300 opacity-80",
+                          )}
                         >
                           <CardContent className="p-4 flex justify-between items-center bg-white">
                             <div className="space-y-1">
                               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                Fase {idx + 1}
+                                Fase {idx + 1}{" "}
+                                {leg.id === activeLeg?.id && "(ACTUAL)"}
                               </p>
                               <h4 className="font-black text-brand-navy uppercase text-sm leading-tight">
                                 {leg.leg_type.replace("_", " ")}
@@ -456,7 +508,7 @@ export function TripDetailsModal({
                               <div className="flex items-center gap-3 text-xs font-medium text-slate-600 pt-1">
                                 <span className="flex items-center gap-1">
                                   <User className="h-3 w-3 text-slate-400" />{" "}
-                                  {leg.operator?.name || "Sin operador"}
+                                  {leg.operator?.name || "S/A"}
                                 </span>
                                 <span className="flex items-center gap-1">
                                   <Truck className="h-3 w-3 text-slate-400" />{" "}
@@ -477,22 +529,25 @@ export function TripDetailsModal({
                               >
                                 {leg.status.replace("_", " ")}
                               </Badge>
-                              {leg.status === "en_transito" && onRelayClick && (
-                                <Button
-                                  size="sm"
-                                  className="h-8 bg-brand-navy font-bold text-[11px]"
-                                  onClick={() => onRelayClick(leg, trip)}
-                                >
-                                  DESENGANCHAR
-                                </Button>
-                              )}
+
+                              {["creado", "en_transito"].includes(leg.status) &&
+                                onRelayClick && (
+                                  <Button
+                                    size="sm"
+                                    className="h-8 bg-brand-navy font-bold text-[10px] uppercase shadow-lg shadow-brand-navy/20"
+                                    onClick={() => onRelayClick(leg, trip)}
+                                  >
+                                    <Link2Off className="h-3 w-3 mr-1.5" />
+                                    Desenganchar (Relevo)
+                                  </Button>
+                                )}
                               {leg.status === "entregado" && onSettleClick && (
                                 <Button
                                   size="sm"
                                   className="h-8 bg-emerald-600 font-bold text-[11px]"
                                   onClick={() => onSettleClick(leg, trip)}
                                 >
-                                  LIQUIDAR
+                                  LIQUIDAR OP.
                                 </Button>
                               )}
                             </div>
@@ -503,7 +558,7 @@ export function TripDetailsModal({
                         activeLeg?.leg_type === "ruta_carretera" && (
                           <Button
                             variant="outline"
-                            className="w-full border-dashed border-2 h-12 text-slate-500 font-bold hover:bg-slate-50"
+                            className="w-full border-dashed border-2 h-12 text-slate-500 font-bold hover:bg-slate-50 mt-4"
                             onClick={() => setShowTerminalModal(true)}
                           >
                             <MapPin className="h-4 w-4 mr-2" /> REGISTRAR
@@ -523,8 +578,8 @@ export function TripDetailsModal({
                       >
                         <CardHeader className="p-5 border-b flex justify-between items-center bg-white rounded-t-xl shadow-sm">
                           <CardTitle className="text-sm font-black uppercase text-emerald-800 flex items-center gap-2">
-                            <Wallet className="h-4 w-4" /> Resumen de Cobros y
-                            Egresos
+                            <FileText className="h-4 w-4" /> Pre-Factura
+                            Comercial (Cobro al Cliente)
                           </CardTitle>
                           {!isEditing ? (
                             <div className="flex gap-2">
@@ -543,7 +598,7 @@ export function TripDetailsModal({
                                 onClick={() => setIsEditing(true)}
                                 className="h-8 font-bold"
                               >
-                                <Edit2 className="h-3 w-3 mr-1" /> Editar
+                                <Edit2 className="h-3 w-3 mr-1" /> Editar Montos
                               </Button>
                             </div>
                           ) : (
@@ -563,17 +618,16 @@ export function TripDetailsModal({
                                 className="h-8 bg-brand-navy font-bold text-white shadow-md"
                               >
                                 <Save className="h-3 w-3 mr-1" /> Guardar
-                                Cambios
                               </Button>
                             </div>
                           )}
                         </CardHeader>
                         <CardContent className="p-6 space-y-6">
                           {isEditing ? (
-                            <div className="grid grid-cols-2 gap-6 max-w-lg mx-auto bg-white p-6 rounded-xl border border-amber-100 shadow-inner">
-                              <div className="space-y-1.5">
-                                <Label className="text-[10px] font-black uppercase text-slate-500">
-                                  Flete Base Acordado
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-xl mx-auto bg-amber-50 p-6 rounded-xl border border-amber-200 shadow-inner">
+                              <div className="space-y-2">
+                                <Label className="text-xs font-black uppercase text-amber-800">
+                                  Flete Base / Adicionales
                                 </Label>
                                 <Input
                                   type="number"
@@ -581,11 +635,15 @@ export function TripDetailsModal({
                                   onChange={(e) =>
                                     setTarifaBase(Number(e.target.value))
                                   }
-                                  className="font-mono text-lg h-12"
+                                  className="font-mono text-lg h-12 bg-white"
                                 />
+                                <p className="text-[10px] text-amber-700 font-medium leading-tight">
+                                  Ingreso principal. Suma demoras, custodias o
+                                  maniobras adicionales pactadas a facturar.
+                                </p>
                               </div>
-                              <div className="space-y-1.5">
-                                <Label className="text-[10px] font-black uppercase text-slate-500">
+                              <div className="space-y-2">
+                                <Label className="text-xs font-black uppercase text-amber-800">
                                   Recuperación Casetas
                                 </Label>
                                 <Input
@@ -594,58 +652,73 @@ export function TripDetailsModal({
                                   onChange={(e) =>
                                     setCostoCasetas(Number(e.target.value))
                                   }
-                                  className="font-mono text-lg h-12"
+                                  className="font-mono text-lg h-12 bg-white"
                                 />
                               </div>
                             </div>
                           ) : (
-                            <div className="space-y-4 max-w-2xl mx-auto">
-                              <div className="bg-white p-4 rounded-xl border shadow-sm space-y-3">
-                                <div className="flex justify-between items-center font-bold text-slate-600 uppercase tracking-tighter">
-                                  <span>Ingreso Flete Base:</span>
-                                  <span className="font-mono text-lg text-slate-900">
-                                    {formatCurrency(trip.tarifa_base)}
+                            <div className="space-y-4 max-w-xl mx-auto">
+                              <div className="bg-white p-6 rounded-xl border shadow-sm space-y-3">
+                                <div className="flex justify-between items-center text-sm font-bold text-slate-600">
+                                  <span>
+                                    Flete Base Acordado (y Adicionales):
+                                  </span>
+                                  <span className="font-mono text-slate-900">
+                                    {formatCurrency(finanzasComercial.base)}
                                   </span>
                                 </div>
-                                <div className="flex justify-between items-center font-bold text-slate-600 uppercase tracking-tighter">
+                                <div className="flex justify-between items-center text-sm font-bold text-slate-600">
                                   <span>Recuperación de Casetas:</span>
-                                  <span className="font-mono text-lg text-slate-900">
-                                    {formatCurrency(trip.costo_casetas)}
+                                  <span className="font-mono text-slate-900">
+                                    {formatCurrency(finanzasComercial.casetas)}
                                   </span>
                                 </div>
-                              </div>
-                              <div className="flex justify-between items-center text-rose-700 bg-rose-50 p-4 rounded-xl font-black border border-rose-100 shadow-sm uppercase tracking-tighter">
-                                <span className="flex items-center gap-2">
-                                  <Wallet className="h-4 w-4" /> Egresos Totales
-                                  (Anticipos):
-                                </span>
-                                <span className="font-mono text-xl">
-                                  -{formatCurrency(totalAnticiposGlobales)}
-                                </span>
-                              </div>
-                              <div className="bg-emerald-500 text-white p-6 rounded-2xl flex justify-between items-center shadow-lg border-b-4 border-emerald-700">
-                                <span className="font-black text-sm uppercase tracking-widest italic">
-                                  Utilidad Neta Estimada:
-                                </span>
-                                <span className="text-3xl font-black font-mono tracking-tighter">
-                                  {formatCurrency(utilidadEstimada)}
-                                </span>
+                                <Separator className="my-2" />
+                                <div className="flex justify-between items-center text-xs font-bold text-slate-500">
+                                  <span>Subtotal:</span>
+                                  <span className="font-mono text-slate-700">
+                                    {formatCurrency(finanzasComercial.subtotal)}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between items-center text-xs font-bold text-slate-500">
+                                  <span>IVA (16%):</span>
+                                  <span className="font-mono text-slate-700">
+                                    {formatCurrency(finanzasComercial.iva)}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between items-center text-xs font-bold text-slate-500">
+                                  <span>Retención (4%):</span>
+                                  <span className="font-mono text-rose-600">
+                                    -
+                                    {formatCurrency(
+                                      finanzasComercial.retencion,
+                                    )}
+                                  </span>
+                                </div>
+                                <div className="bg-emerald-500 text-white p-4 rounded-xl flex justify-between items-center shadow-lg mt-4">
+                                  <span className="font-black text-sm uppercase tracking-widest">
+                                    Total a Facturar:
+                                  </span>
+                                  <span className="text-2xl font-black font-mono tracking-tighter">
+                                    {formatCurrency(finanzasComercial.total)}
+                                  </span>
+                                </div>
                               </div>
 
                               <div className="bg-slate-900 p-6 rounded-2xl border-t-4 border-emerald-500 flex flex-col sm:flex-row items-center justify-between gap-6 mt-10 shadow-2xl">
                                 <div className="text-left">
                                   <h4 className="text-emerald-400 font-black text-sm uppercase tracking-tighter flex items-center gap-2">
-                                    <CheckCircle2 className="h-4 w-4" /> Cierre
-                                    Fiscal de Viaje
+                                    <CheckCircle2 className="h-4 w-4" /> Emisión
+                                    Factura 4.0
                                   </h4>
                                   <p className="text-[10px] text-slate-400 max-w-xs leading-relaxed mt-1 italic">
-                                    Timbra la factura 4.0 real sustituyendo la
-                                    Carta Porte nominal de $1. Verifica que los
-                                    montos finales sean correctos.
+                                    Genera la factura real del servicio
+                                    aplicando Sustitución (04) de la Carta Porte
+                                    Bypass.
                                   </p>
                                 </div>
                                 <Button
-                                  className="bg-emerald-500 hover:bg-emerald-600 text-white font-black px-10 h-12 shadow-xl disabled:opacity-30"
+                                  className="bg-emerald-500 hover:bg-emerald-600 text-white font-black px-8 h-12 shadow-xl disabled:opacity-30 uppercase tracking-widest text-[10px]"
                                   disabled={isStamping || !localUuid}
                                   onClick={() =>
                                     handleStampFinal(
@@ -660,7 +733,7 @@ export function TripDetailsModal({
                                   ) : (
                                     <Activity className="h-5 w-5 mr-2" />
                                   )}
-                                  TIMBRAR FACTURA FINAL
+                                  Timbrar Factura Final
                                 </Button>
                               </div>
                             </div>
@@ -849,7 +922,7 @@ export function TripDetailsModal({
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
               ) : (
                 <CheckCircle2 className="h-4 w-4 mr-2" />
-              )}{" "}
+              )}
               CONFIRMAR LLEGADA
             </Button>
           </DialogFooter>

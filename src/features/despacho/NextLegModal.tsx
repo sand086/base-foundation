@@ -368,13 +368,13 @@ export function NextLegModal({
               </h4>
               <Card className="border-none bg-slate-50 shadow-none">
                 <CardContent className="p-4 space-y-2.5">
-                  <div className="flex justify-between items-center text-xs font-bold text-slate-600">
+                  <div className="flex justify-between items-center text-[12px] font-bold text-slate-600">
                     <span>Flete Base:</span>
                     <span className="font-mono text-slate-900">
                       {formatCurrency(finanzas.base)}
                     </span>
                   </div>
-                  <div className="flex justify-between items-center text-xs font-bold text-slate-600">
+                  <div className="flex justify-between items-center text-[12px] font-bold text-slate-600">
                     <span>Casetas Pactadas:</span>
                     <span className="font-mono text-blue-600">
                       {formatCurrency(finanzas.casetasPactadas)}
@@ -418,7 +418,7 @@ export function NextLegModal({
               </h4>
               <Card className="border border-rose-100 bg-rose-50/30 shadow-none">
                 <CardContent className="p-4 space-y-3">
-                  <div className="flex justify-between items-center text-xs font-bold text-slate-500">
+                  <div className="flex justify-between items-center text-[12px] font-bold text-slate-500">
                     <span>Gasto Operativo:</span>
                     <span className="font-mono text-rose-600">
                       -{formatCurrency(gastoOperativoActual)}
@@ -575,7 +575,7 @@ export function NextLegModal({
                     setFormData((p) => ({ ...p, remolque_1_id: Number(v) }))
                   }
                 >
-                  <SelectTrigger className="h-9 text-xs font-bold">
+                  <SelectTrigger className="h-9 text-[12px] font-bold">
                     <SelectValue placeholder="R1" />
                   </SelectTrigger>
                   <SelectContent>
@@ -599,7 +599,7 @@ export function NextLegModal({
                         setFormData((p) => ({ ...p, dolly_id: Number(v) }))
                       }
                     >
-                      <SelectTrigger className="h-9 text-xs border-rose-200 bg-rose-50 text-rose-700 font-bold">
+                      <SelectTrigger className="h-9 text-[12px] border-rose-200 bg-rose-50 text-rose-700 font-bold">
                         <SelectValue placeholder="Dolly" />
                       </SelectTrigger>
                       <SelectContent>
@@ -625,7 +625,7 @@ export function NextLegModal({
                         setFormData((p) => ({ ...p, remolque_2_id: Number(v) }))
                       }
                     >
-                      <SelectTrigger className="h-9 text-xs border-rose-200 bg-rose-50 text-rose-700 font-bold">
+                      <SelectTrigger className="h-9 text-[12px] border-rose-200 bg-rose-50 text-rose-700 font-bold">
                         <SelectValue placeholder="R2" />
                       </SelectTrigger>
                       <SelectContent>
@@ -657,7 +657,7 @@ export function NextLegModal({
                       <DollarSign className="absolute left-2.5 top-2.5 h-3 w-3 text-slate-400" />
                       <Input
                         type="number"
-                        className="pl-7 h-9 font-mono bg-white text-xs border-amber-100"
+                        className="pl-7 h-9 font-mono bg-white text-[12px] border-amber-100"
                         value={formData.anticipo_casetas || ""}
                         onChange={(e) =>
                           setFormData((p) => ({
@@ -676,7 +676,7 @@ export function NextLegModal({
                       <DollarSign className="absolute left-2.5 top-2.5 h-3 w-3 text-slate-400" />
                       <Input
                         type="number"
-                        className="pl-7 h-9 font-mono bg-white text-xs border-amber-100"
+                        className="pl-7 h-9 font-mono bg-white text-[12px] border-amber-100"
                         value={formData.anticipo_combustible || ""}
                         onChange={(e) =>
                           setFormData((p) => ({
@@ -695,7 +695,7 @@ export function NextLegModal({
                       <DollarSign className="absolute left-2.5 top-2.5 h-3 w-3 text-slate-400" />
                       <Input
                         type="number"
-                        className="pl-7 h-9 font-mono bg-white text-xs border-amber-100"
+                        className="pl-7 h-9 font-mono bg-white text-[12px] border-amber-100"
                         value={formData.anticipo_viaticos || ""}
                         onChange={(e) =>
                           setFormData((p) => ({

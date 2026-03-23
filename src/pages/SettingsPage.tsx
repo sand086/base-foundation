@@ -15,6 +15,8 @@ import axiosClient from "@/api/axiosClient";
 import { TiposUnidadConfig } from "@/features/configuracion/TiposUnidadConfig";
 import { RutasAutorizadasConfig } from "@/features/configuracion/RutasAutorizadasConfig";
 
+import { SatCatalogsConfig } from "@/features/configuracion/SatCatalogsConfig";
+
 import {
   Building2,
   Settings2,
@@ -773,6 +775,7 @@ const SettingsPage = () => {
                         : "Actualizar Certificados SAT en Servidor"}
                     </Button>
                   </div>
+                  <SatCatalogsConfig />
                 </div>
               )}
 
