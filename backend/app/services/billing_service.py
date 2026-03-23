@@ -77,6 +77,9 @@ class BillingService:
         )
         self.key_password = pass_conf.value if pass_conf else "12345678a"
 
+    # =======================================================
+    # FASE 3: Carta Porte Provisional ($1 MXN) (BYPASS)
+    # =======================================================
     def generar_carta_porte_nominal(
         self, invoice_data: ReceivableInvoiceCreate
     ) -> ReceivableInvoice:
@@ -178,12 +181,18 @@ class BillingService:
             self.db.rollback()
             logger.error(f"Error cancelando UUID nominal {factura.uuid}: {e}")
 
+    # =======================================================
+    # LÓGICA DE EXTRACCIÓN (BLINDADA CONTRA EL 400 DE UNIDADES NULAS)
+    # =======================================================
     def _obtener_datos_completos(self, viaje_id: int, is_final: bool):
         viaje = self.db.get(Trip, viaje_id)
         if not viaje:
             raise HTTPException(status_code=404, detail="Viaje no encontrado")
+
         cliente = self.db.get(ClientModel, viaje.client_id)
+
         if is_final:
+            # 🚀 FASE 4: Para la factura final, SÍ o SÍ requerimos al operador de la carretera
             leg = (
                 self.db.query(TripLeg)
                 .filter(
@@ -193,55 +202,100 @@ class BillingService:
                 )
                 .first()
             )
+            if not leg:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No hay unidad/operador asignado para el tramo en carretera (Factura Final).",
+                )
+            unidad = self.db.get(Unit, leg.unit_id)
+            operador = (
+                self.db.get(Operator, leg.operator_id) if leg.operator_id else None
+            )
         else:
-            leg = (
-                self.db.query(TripLeg)
-                .filter(TripLeg.trip_id == viaje_id, TripLeg.unit_id.isnot(None))
-                .first()
+            # 🚀 FASE 3: Es la carta porte BYPASS ($1). Buscamos si de casualidad ya hay una unidad.
+            leg = self.db.query(TripLeg).filter(TripLeg.trip_id == viaje_id).first()
+
+            # Si hay un tramo y tiene unidad, la usamos. Si no, pasamos None y el dict usará COMODÍN.
+            unidad = self.db.get(Unit, leg.unit_id) if leg and leg.unit_id else None
+            operador = (
+                self.db.get(Operator, leg.operator_id)
+                if leg and leg.operator_id
+                else None
             )
 
-        if not leg:
-            raise HTTPException(
-                status_code=400, detail="No hay unidad/operador asignado."
-            )
-        unidad = self.db.get(Unit, leg.unit_id)
-        operador = self.db.get(Operator, leg.operator_id) if leg.operator_id else None
         return viaje, cliente, unidad, operador
 
     def _build_dict_from_models(
         self, viaje, cliente, unidad, operador, is_nominal: bool
     ) -> dict:
         fecha_iso = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+
+        # 🚀 PROTECCIÓN CONTRA NULOS: Asignación de Unidad Comodín si la DB no nos dio una
+        placas_seguras = unidad.placas if unidad and unidad.placas else "89BH4C"
+        anio_seguro = str(unidad.year) if unidad and unidad.year else "2024"
+        config_segura = (
+            unidad.config_vehicular_sat
+            if unidad and getattr(unidad, "config_vehicular_sat", None)
+            else "T3S2"
+        )
+        permiso_seguro = (
+            str(getattr(unidad, "permiso_sct_tipo", "TPAF01") or "TPAF01")
+            .split(" ")[0]
+            .strip()
+            if unidad
+            else "TPAF01"
+        )
+        num_permiso_seguro = (
+            getattr(unidad, "permiso_sct_folio", "3066RTX02122011230301021")
+            or "3066RTX02122011230301021"
+            if unidad
+            else "3066RTX02122011230301021"
+        )
+        aseg_segura = (
+            getattr(unidad, "aseguradora_resp_civil", "QUALITAS") or "QUALITAS"
+            if unidad
+            else "QUALITAS"
+        )
+        poliza_segura = (
+            getattr(unidad, "poliza_resp_civil", "7050094731") or "7050094731"
+            if unidad
+            else "7050094731"
+        )
+
         if is_nominal:
+            # CARTA PORTE DE 1 PESO
             subtotal = Decimal("1.00")
             iva = subtotal * Decimal("0.16")
             ret = subtotal * Decimal("0.04")
             total = subtotal + iva - ret
-            rfc_operador, nombre_operador, licencia = (
-                "XAXX010101000",
-                "OPERADOR BASE COMODIN",
-                "LIC0000000",
-            )
+
+            # Operador Comodín si no hay ninguno
+            rfc_operador = "XAXX010101000"
+            nombre_operador = "OPERADOR BASE COMODIN"
+            licencia = "LIC0000000"
+
             if operador:
-                rfc_operador, nombre_operador, licencia = (
-                    operador.rfc or rfc_operador,
-                    operador.name or nombre_operador,
-                    operador.license_number or licencia,
-                )
+                rfc_operador = operador.rfc or rfc_operador
+                nombre_operador = operador.name or nombre_operador
+                licencia = operador.license_number or licencia
         else:
+            # FACTURA FINAL
             base = Decimal(str(viaje.tarifa_base or 0))
             casetas = Decimal(str(viaje.costo_casetas or 0))
             subtotal = base + casetas
             iva, ret = (subtotal * Decimal("0.16"), subtotal * Decimal("0.04"))
             total = subtotal + iva - ret
-            if not operador:
-                raise HTTPException(status_code=400, detail="Operador faltante.")
-            rfc_operador, nombre_operador, licencia = (
-                operador.rfc,
-                operador.name,
-                operador.license_number,
-            )
 
+            if not operador:
+                raise HTTPException(
+                    status_code=400, detail="Operador faltante para la factura final."
+                )
+
+            rfc_operador = operador.rfc or "XAXX010101000"
+            nombre_operador = operador.name or "OPERADOR DESCONOCIDO"
+            licencia = operador.license_number or "LIC0000000"
+
+        # Ubicación y CP del cliente
         cp_cliente = getattr(cliente, "codigo_postal_fiscal", "09040") or "09040"
         ubicacion = (
             self.db.query(SatLocationCode)
@@ -272,31 +326,26 @@ class BillingService:
             "iva": f"{iva:.2f}",
             "retenciones": f"{ret:.2f}",
             "total": f"{total:.2f}",
-            "placas": getattr(unidad, "placas", "89BH4C"),
-            "anio_modelo": str(getattr(unidad, "year", "2026") or "2026"),
-            "config_vehicular": getattr(unidad, "config_vehicular_sat", "T3S3")
-            or "T3S3",
+            # Unidad
+            "placas": placas_seguras,
+            "anio_modelo": anio_seguro,
+            "config_vehicular": config_segura,
             "peso_bruto_vehicular": "25.00",
-            "permiso_sct": str(
-                getattr(unidad, "permiso_sct_tipo", "TPAF01") or "TPAF01"
-            )
-            .split(" ")[0]
-            .strip(),
-            "num_permiso": getattr(
-                unidad, "permiso_sct_folio", "3066RTX02122011230301021"
-            )
-            or "3066RTX02122011230301021",
-            "aseguradora": getattr(unidad, "aseguradora_resp_civil", "QUALITAS")
-            or "QUALITAS",
-            "poliza": getattr(unidad, "poliza_resp_civil", "7050094731")
-            or "7050094731",
+            "permiso_sct": permiso_seguro,
+            "num_permiso": num_permiso_seguro,
+            "aseguradora": aseg_segura,
+            "poliza": poliza_segura,
             "subtipo_remolque": "CTR010",
             "placa_remolque": "58UD5Z",
+            # Operador
             "rfc_operador": rfc_operador,
             "nombre_operador": nombre_operador,
             "licencia": licencia,
         }
 
+    # =======================================================
+    # MOTOR ZEEP / COMUNICACIÓN PAC
+    # =======================================================
     def _importar_comprobante_ws(self, data: dict, relacion_uuid: str = None):
         try:
             client = zeep.Client(self.wsdl_timbrado, plugins=[self.history])
@@ -424,7 +473,7 @@ class BillingService:
                     <cartaporte31:IdentificacionVehicular ConfigVehicular="{data['config_vehicular']}" PesoBrutoVehicular="{data['peso_bruto_vehicular']}" PlacaVM="{data['placas']}" AnioModeloVM="{data['anio_modelo']}" />
                     <cartaporte31:Seguros AseguraRespCivil="{data['aseguradora']}" PolizaRespCivil="{data['poliza']}" />
                     <cartaporte31:Remolques><cartaporte31:Remolque SubTipoRem="{data['subtipo_remolque']}" Placa="{data['placa_remolque']}" /></cartaporte31:Remolques>
-                </cartotransporte>
+                </cartaporte31:Autotransporte>
             </cartaporte31:Mercancias>
             <cartaporte31:FiguraTransporte>
                 <cartaporte31:TiposFigura TipoFigura="01" RFCFigura="{data['rfc_operador']}" NumLicencia="{data['licencia']}" NombreFigura="{data['nombre_operador']}" />

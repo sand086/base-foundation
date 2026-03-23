@@ -248,6 +248,10 @@ def update_trip(db: Session, trip_id: int, trip_in: schemas.TripUpdate):
 
 
 def delete_trip(db: Session, trip_id: str):
+    """
+    Realiza un borrado lógico del viaje (record_status='E') y 🚀 LIBERA RECURSOS.
+    Actualiza unidades a 'disponible' y operadores a 'activo'.
+    """
     try:
         tid = int(trip_id)
     except (TypeError, ValueError):
@@ -255,6 +259,7 @@ def delete_trip(db: Session, trip_id: str):
 
     trip = (
         db.query(models.Trip)
+        .options(joinedload(models.Trip.legs))
         .filter(
             models.Trip.id == tid, models.Trip.record_status != RecordStatus.ELIMINADO
         )
@@ -263,7 +268,40 @@ def delete_trip(db: Session, trip_id: str):
     if not trip:
         return False
 
+    # 🚀 LÓGICA DE LIBERACIÓN DE RECURSOS AL ELIMINAR
+    # 1. Identificar unidades y operadores involucrados
+    unit_ids_to_free = [trip.remolque_1_id, trip.dolly_id, trip.remolque_2_id]
+    operator_ids_to_free = []
+
+    for leg in trip.legs:
+        if leg.unit_id:
+            unit_ids_to_free.append(leg.unit_id)
+        if leg.operator_id:
+            operator_ids_to_free.append(leg.operator_id)
+
+    # Limpiar nulos
+    unit_ids_to_free = list(set([uid for uid in unit_ids_to_free if uid is not None]))
+    operator_ids_to_free = list(
+        set([oid for oid in operator_ids_to_free if oid is not None])
+    )
+
+    # 2. Liberar unidades
+    if unit_ids_to_free:
+        db.query(models.Unit).filter(models.Unit.id.in_(unit_ids_to_free)).update(
+            {"status": models.UnitStatus.DISPONIBLE}, synchronize_session=False
+        )
+
+    # 3. Liberar operadores
+    if operator_ids_to_free:
+        db.query(models.Operator).filter(
+            models.Operator.id.in_(operator_ids_to_free)
+        ).update({"status": models.OperatorStatus.ACTIVO}, synchronize_session=False)
+
+    # 4. Borrado lógico del viaje y sus tramos
     trip.record_status = RecordStatus.ELIMINADO
+    for leg in trip.legs:
+        leg.record_status = RecordStatus.ELIMINADO
+
     db.add(trip)
     db.commit()
     return True

@@ -17,21 +17,34 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import {
   Link as LinkIcon,
   Truck,
   User,
   Loader2,
-  Info,
   CheckCircle2,
   MapPin,
   Box,
+  FileText,
+  DollarSign,
+  Info,
+  Activity,
+  ArrowRight,
+  ShieldCheck,
+  TrendingDown,
+  Ticket,
 } from "lucide-react";
 import { useUnits } from "@/hooks/useUnits";
 import { useOperators } from "@/hooks/useOperators";
+import { useBilling } from "@/hooks/useBilling";
 import { Trip, TripLegCreatePayload } from "@/types/api.types";
+import { cn } from "@/lib/utils";
+// 🚀 IMPORTAMOS AXIOS CLIENT PARA LA DESCARGA
+import axiosClient from "@/api/axiosClient";
 
 interface NextLegModalProps {
   open: boolean;
@@ -40,11 +53,11 @@ interface NextLegModalProps {
   onSubmit: (tripId: string, payload: TripLegCreatePayload) => Promise<boolean>;
 }
 
-// Interfaz extendida para poder mandar los remolques en el payload
 interface ExtendedLegPayload extends TripLegCreatePayload {
   remolque_1_id?: number | null;
   dolly_id?: number | null;
   remolque_2_id?: number | null;
+  otros_anticipos: number;
 }
 
 export function NextLegModal({
@@ -55,9 +68,15 @@ export function NextLegModal({
 }: NextLegModalProps) {
   const { unidades, updateLoadStatus } = useUnits();
   const { operadores } = useOperators();
-  const [loading, setLoading] = useState(false);
+  const { isStamping, handleStampNominal } = useBilling();
 
-  const [formData, setFormData] = useState<Partial<ExtendedLegPayload & {}>>({
+  const [loading, setLoading] = useState(false);
+  const [cpGenerada, setCpGenerada] = useState(false);
+
+  // 🚀 ESTADO LOCAL PARA EL UUID (Nos permite saber si ya se generó para descargar)
+  const [localUuid, setLocalUuid] = useState<string | null>(null);
+
+  const [formData, setFormData] = useState<Partial<ExtendedLegPayload>>({
     leg_type: "ruta_carretera",
     unit_id: null,
     operator_id: null,
@@ -67,22 +86,61 @@ export function NextLegModal({
     anticipo_casetas: 0,
     anticipo_viaticos: 0,
     anticipo_combustible: 0,
+    otros_anticipos: 0,
   });
 
-  // 🚀 Lógica para detectar si es un viaje Full basándose en el tipo de unidad
+  const formatCurrency = (val: number) =>
+    new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: "MXN",
+      minimumFractionDigits: 2,
+    }).format(val || 0);
+
   const isFullTrip = useMemo(() => {
     if (!tripPadre) return false;
-    // Asumimos que si la tarifa o el tipo de unidad dice "9ejes" o "full", es un full.
-    // También validamos si el viaje PADRE ya tiene asignado un dolly de alguna fase anterior
-    const tu = (tripPadre as any).tipo_unidad?.toLowerCase() || "";
+    const configTarifa = (tripPadre as any).tipo_unidad?.toLowerCase() || "";
+    const configStr = (tripPadre.route_name || "").toLowerCase();
     return (
-      tu === "full" ||
-      tu === "9ejes" ||
-      tu === "9 ejes" ||
-      tu === "doble" ||
+      configStr.includes("full") ||
+      configTarifa.includes("full") ||
+      configTarifa.includes("9ejes") ||
       Boolean(tripPadre.dolly_id)
     );
   }, [tripPadre]);
+
+  const finanzas = useMemo(() => {
+    if (!tripPadre)
+      return {
+        base: 0,
+        casetasPactadas: 0,
+        subtotal: 0,
+        iva: 0,
+        retencion: 0,
+        total: 0,
+      };
+    const base = tripPadre.tarifa_base || 0;
+    const casetas = tripPadre.costo_casetas || 0;
+    const subtotal = base + casetas;
+    const iva = subtotal * 0.16;
+    const retencion = subtotal * 0.04;
+    return {
+      base,
+      casetasPactadas: casetas,
+      subtotal,
+      iva,
+      retencion,
+      total: subtotal + iva - retencion,
+    };
+  }, [tripPadre]);
+
+  const gastoOperativoActual = useMemo(() => {
+    return (
+      Number(formData.anticipo_casetas || 0) +
+      Number(formData.anticipo_combustible || 0) +
+      Number(formData.anticipo_viaticos || 0) +
+      Number(formData.otros_anticipos || 0)
+    );
+  }, [formData]);
 
   useEffect(() => {
     if (open && tripPadre) {
@@ -90,125 +148,149 @@ export function NextLegModal({
         leg_type: "ruta_carretera",
         unit_id: null,
         operator_id: null,
-        // Si el viaje ya tiene remolques asignados (de una fase anterior), los precargamos
         remolque_1_id: tripPadre.remolque_1_id || null,
         dolly_id: tripPadre.dolly_id || null,
         remolque_2_id: tripPadre.remolque_2_id || null,
-        anticipo_casetas: 0,
+        anticipo_casetas: tripPadre.costo_casetas || 0,
         anticipo_viaticos: 0,
         anticipo_combustible: 0,
+        otros_anticipos: 0,
       });
+      setCpGenerada(Boolean(tripPadre.uuid_fiscal));
+      setLocalUuid(tripPadre.uuid_fiscal || null);
     }
   }, [open, tripPadre]);
 
   const isRoadLeg = formData.leg_type === "ruta_carretera";
 
-  // --- FILTROS DE UNIDADES (Los mismos que usas en DespachoWizard) ---
-  const arrUnidades = useMemo(
-    () => (Array.isArray(unidades) ? unidades : []),
-    [unidades],
-  );
-
   const availableTractos = useMemo(() => {
-    return arrUnidades.filter(
+    return unidades.filter(
       (u: any) =>
-        (`${u.tipo_1} ${u.tipo} ${u.tipo_unidad}`
-          .toLowerCase()
-          .includes("tracto") ||
-          `${u.tipo_1} ${u.tipo} ${u.tipo_unidad}`
-            .toLowerCase()
-            .includes("camion")) &&
+        (`${u.tipo_1} ${u.tipo}`.toLowerCase().includes("tracto") ||
+          `${u.tipo_1} ${u.tipo}`.toLowerCase().includes("camion")) &&
         ["disponible", "bloqueado"].includes(u.status?.toLowerCase()),
     );
-  }, [arrUnidades]);
+  }, [unidades]);
 
   const availableRemolques = useMemo(() => {
-    return arrUnidades.filter((u: any) => {
-      const strTipo1 = (u.tipo_1 || "").toLowerCase();
-      const strTipo = (u.tipo || "").toLowerCase();
-      const estaDisponible = ["disponible", "bloqueado"].includes(
-        u.status?.toLowerCase(),
-      );
+    return unidades.filter((u: any) => {
+      const type = `${u.tipo_1} ${u.tipo}`.toLowerCase();
       return (
-        ["remolque", "caja", "plataforma", "chasis", "utilitario"].some(
-          (p) => strTipo1.includes(p) || strTipo.includes(p),
-        ) && estaDisponible
+        ["remolque", "caja", "plataforma", "chasis"].some((p) =>
+          type.includes(p),
+        ) && ["disponible", "bloqueado"].includes(u.status?.toLowerCase())
       );
     });
-  }, [arrUnidades]);
+  }, [unidades]);
 
   const availableDollies = useMemo(() => {
-    const dollies = arrUnidades.filter((u: any) =>
+    const dollies = unidades.filter((u: any) =>
       (u.tipo_1 || "").toLowerCase().includes("dolly"),
     );
-    if (dollies.length === 0)
-      return [{ id: 9997, numero_economico: "DOLLY-PRUEBA (Sin stock)" }];
-    return dollies;
-  }, [arrUnidades]);
+    return dollies.length > 0
+      ? dollies
+      : [{ id: 9997, numero_economico: "DOLLY-PRUEBA" }];
+  }, [unidades]);
 
   const availableOperators = useMemo(() => {
-    if (!operadores) return [];
-    return operadores.filter(
+    return (operadores || []).filter(
       (o: any) => o.status === "activo" || o.status === "disponible",
     );
   }, [operadores]);
 
+  // 🚀 FUNCIÓN DE DESCARGA PDF AÑADIDA
+  const handleDownloadStampedPDF = async (uuidToDownload: string) => {
+    try {
+      const response = await axiosClient.get(
+        `/billing/invoice/${uuidToDownload}/pdf`,
+        { responseType: "blob" },
+      );
+      const fileURL = window.URL.createObjectURL(
+        new Blob([response.data], { type: "application/pdf" }),
+      );
+      const link = document.createElement("a");
+      link.href = fileURL;
+      link.setAttribute(
+        "download",
+        `Carta_Porte_Provisional_${uuidToDownload}.pdf`,
+      );
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success("Archivo descargado.");
+    } catch {
+      toast.error("Error al descargar el PDF.");
+    }
+  };
+
+  const onTimbrarNominal = async () => {
+    if (!tripPadre) return;
+    try {
+      await handleStampNominal(tripPadre.id, (responseData) => {
+        const generatedUuid = responseData?.data?.uuid;
+        if (generatedUuid) {
+          setLocalUuid(generatedUuid);
+          setCpGenerada(true);
+          handleDownloadStampedPDF(generatedUuid); // 🚀 Descarga automática al timbrar
+          toast.success("Carta Porte Bypass de $1 generada exitosamente.");
+        }
+      });
+    } catch {
+      toast.error("Error al timbrar Carta Porte de $1.");
+    }
+  };
+
   const handleSubmit = async () => {
     if (!tripPadre) return;
-
-    if (!formData.unit_id || !formData.operator_id) {
-      return toast.error("Debes asignar un Tractocamión y un Operador.");
+    if (!formData.unit_id || !formData.operator_id || !formData.remolque_1_id) {
+      return toast.error(
+        "Asignación incompleta: Tracto, Operador y Chasis son obligatorios.",
+      );
     }
-
-    if (!formData.remolque_1_id) {
-      return toast.error("Debes asignar al menos un Remolque/Chasis.");
-    }
-
     if (isFullTrip && (!formData.dolly_id || !formData.remolque_2_id)) {
       return toast.error(
-        "Por ser configuración FULL, debes asignar Dolly y Remolque 2.",
+        "Configuración FULL: Debe asignar Dolly y Remolque 2.",
       );
     }
 
     setLoading(true);
+    const success = await onSubmit(String(tripPadre.id), formData as any);
+    if (success) {
+      if (formData.leg_type === "carga_muelle") {
+        await updateLoadStatus(Number(formData.remolque_1_id), true);
+        if (formData.remolque_2_id)
+          await updateLoadStatus(Number(formData.remolque_2_id), true);
+      }
+      onOpenChange(false);
+    }
+    setLoading(false);
+  };
 
-    const payload: ExtendedLegPayload = {
-      leg_type: formData.leg_type!,
-      unit_id: Number(formData.unit_id),
-      operator_id: Number(formData.operator_id),
+  const handleIniciarTramo = async () => {
+    if (!tripPadre) return;
 
-      // 🚀 Mandamos los equipos de arrastre al backend
-      remolque_1_id: formData.remolque_1_id
-        ? Number(formData.remolque_1_id)
-        : null,
-      dolly_id:
-        isFullTrip && formData.dolly_id ? Number(formData.dolly_id) : null,
-      remolque_2_id:
-        isFullTrip && formData.remolque_2_id
-          ? Number(formData.remolque_2_id)
-          : null,
+    // Validaciones obligatorias
+    if (!formData.unit_id || !formData.operator_id || !formData.remolque_1_id) {
+      return toast.error(
+        "Asignación incompleta: Tracto, Operador y Chasis son obligatorios.",
+      );
+    }
+    if (isFullTrip && (!formData.dolly_id || !formData.remolque_2_id)) {
+      return toast.error(
+        "Configuración FULL: Debe asignar Dolly y Remolque 2.",
+      );
+    }
 
-      odometro_inicial: null,
-      nivel_tanque_inicial: null,
-
-      anticipo_casetas: isRoadLeg ? Number(formData.anticipo_casetas || 0) : 0,
-      anticipo_viaticos: isRoadLeg
-        ? Number(formData.anticipo_viaticos || 0)
-        : 0,
-      anticipo_combustible: isRoadLeg
-        ? Number(formData.anticipo_combustible || 0)
-        : 0,
-    };
-
-    const success = await onSubmit(String(tripPadre.id), payload as any);
+    setLoading(true);
+    const success = await onSubmit(String(tripPadre.id), formData as any);
 
     if (success) {
-      if (formData.leg_type === "carga_muelle" && formData.remolque_1_id) {
+      // Si la fase es Carga Muelle, marcamos los remolques como cargados
+      if (formData.leg_type === "carga_muelle") {
         await updateLoadStatus(Number(formData.remolque_1_id), true);
         if (formData.remolque_2_id) {
           await updateLoadStatus(Number(formData.remolque_2_id), true);
         }
-        toast.success("Remolque(s) marcado(s) como CARGADOS.");
       }
       onOpenChange(false);
     }
@@ -219,53 +301,237 @@ export function NextLegModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px] bg-slate-50 max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-xl flex items-center gap-2 text-brand-navy">
-            <LinkIcon className="h-5 w-5" /> Asignar Siguiente Fase
-          </DialogTitle>
-          <DialogDescription>
-            Viaje <strong>#{tripPadre.public_id || tripPadre.id}</strong> hacia{" "}
-            <strong>{tripPadre.destination}</strong>.<br />
-            Configura los equipos y el operador para el siguiente tramo.
-          </DialogDescription>
+      <DialogContent className="sm:max-w-[900px] bg-slate-50 p-0 overflow-hidden rounded-2xl shadow-2xl border-none">
+        {/* HEADER INDUSTRIAL CON ORIGEN, DESTINO Y CONFIGURACIÓN */}
+        <DialogHeader className="p-6 bg-brand-navy shrink-0 mt-5">
+          <div className="flex justify-between items-center">
+            <div className="space-y-2">
+              <div className="flex items-center gap-3">
+                <div className="bg-gray-300 p-2 rounded-lg">
+                  <Truck className="h-6 w-6 text-brand-navy" />
+                </div>
+                <DialogTitle className="text-2xl font-black uppercase tracking-tighter">
+                  Despacho de Viaje #{tripPadre.public_id || tripPadre.id}
+                </DialogTitle>
+              </div>
+              <div className="flex items-center gap-2 font-bold text-slate-600 uppercase text-sm tracking-widest mt-11">
+                <MapPin className="h-4 w-4 text-emerald-400" />{" "}
+                {tripPadre.origin}
+                <ArrowRight className="h-4 w-4 text-emerald-400" />
+                {tripPadre.destination}
+                <Badge className="ml-3 bg-white/10 text-primary border-white/20 tracking-widest">
+                  {isFullTrip ? "FULL / 9 EJES" : "SENCILLO / 5 EJES"}
+                </Badge>
+              </div>
+            </div>
+            <div className="flex flex-col items-end gap-2">
+              <Badge
+                variant={cpGenerada ? "success" : "destructive"}
+                className="px-4 py-1.5  uppercase text-[11px] tracking-widest"
+              >
+                {cpGenerada ? "CP $1 MXN GENERADA" : "CP $1 MXN PENDIENTE"}
+              </Badge>
+              {/* 🚀 BOTÓN MODIFICADO PARA TIMBRAR Y LUEGO DESCARGAR */}
+              <Button
+                size="sm"
+                onClick={() =>
+                  localUuid
+                    ? handleDownloadStampedPDF(localUuid)
+                    : onTimbrarNominal()
+                }
+                disabled={isStamping}
+                className={cn(
+                  "font-black h-8 text-[11px] uppercase shadow-lg shadow-emerald-900/20",
+                  localUuid
+                    ? "bg-blue-600 hover:bg-blue-500 "
+                    : "bg-emerald-600 hover:bg-emerald-500 ",
+                )}
+              >
+                {isStamping ? (
+                  <Loader2 className="h-3 w-3 animate-spin mr-2" />
+                ) : (
+                  <FileText className="h-3 w-3 mr-2" />
+                )}
+                {localUuid ? "DESCARGAR CARTA PORTE" : "TIMBRAR BYPASS ($1)"}
+              </Button>
+            </div>
+          </div>
         </DialogHeader>
 
-        <div className="space-y-6 py-4">
-          {/* TIPO DE FASE */}
-          <div className="space-y-2 bg-indigo-50 border border-indigo-100 p-4 rounded-xl">
-            <Label className="font-bold text-indigo-900 uppercase tracking-wider text-xs">
-              1. Selecciona la Próxima Fase *
-            </Label>
-            <Select
-              value={formData.leg_type}
-              onValueChange={(v: any) =>
-                setFormData((p) => ({ ...p, leg_type: v }))
-              }
-            >
-              <SelectTrigger className="bg-white border-indigo-200 h-11">
-                <SelectValue placeholder="Selecciona la fase" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="carga_muelle">
-                  1. Carga Muelle (Patio Base)
-                </SelectItem>
-                <SelectItem value="ruta_carretera">
-                  2. Ruta Directa (Viaje a Destino)
-                </SelectItem>
-                <SelectItem value="entrega_vacio">
-                  3. Retorno de Vacío (Regreso a Puerto/Patio)
-                </SelectItem>
-              </SelectContent>
-            </Select>
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-0 overflow-y-auto max-h-[70vh] custom-scrollbar">
+          {/* PANEL IZQUIERDO: FINANZAS (PACTADO VS GASTADO) */}
+          <div className="md:col-span-4 bg-white p-6 border-r border-slate-200 space-y-6">
+            <div className="space-y-3">
+              <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                <ShieldCheck className="h-3 w-3 text-brand-navy" /> Negocio
+                Pactado (Cliente)
+              </h4>
+              <Card className="border-none bg-slate-50 shadow-none">
+                <CardContent className="p-4 space-y-2.5">
+                  <div className="flex justify-between items-center text-xs font-bold text-slate-600">
+                    <span>Flete Base:</span>
+                    <span className="font-mono text-slate-900">
+                      {formatCurrency(finanzas.base)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs font-bold text-slate-600">
+                    <span>Casetas Pactadas:</span>
+                    <span className="font-mono text-blue-600">
+                      {formatCurrency(finanzas.casetasPactadas)}
+                    </span>
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between items-center text-[11px] font-bold text-slate-400">
+                    <span>Subtotal:</span>
+                    <span className="font-mono text-slate-600">
+                      {formatCurrency(finanzas.subtotal)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-[11px] font-bold text-slate-400">
+                    <span>IVA (16%):</span>
+                    <span className="font-mono">
+                      {formatCurrency(finanzas.iva)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-[11px] font-bold text-slate-400">
+                    <span>Retención (4%):</span>
+                    <span className="font-mono text-rose-500">
+                      -{formatCurrency(finanzas.retencion)}
+                    </span>
+                  </div>
+                  <div className="bg-brand-navy/5 p-3 rounded-lg flex justify-between items-center mt-2 border border-brand-navy/10">
+                    <span className="text-[11px] font-black text-brand-navy uppercase tracking-tighter">
+                      Total Factura:
+                    </span>
+                    <span className="text-base font-black text-brand-navy font-mono">
+                      {formatCurrency(finanzas.total)}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="space-y-3">
+              <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                <TrendingDown className="h-3 w-3 text-rose-600" /> Utilidad
+                Estimada (Tramo)
+              </h4>
+              <Card className="border border-rose-100 bg-rose-50/30 shadow-none">
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex justify-between items-center text-xs font-bold text-slate-500">
+                    <span>Gasto Operativo:</span>
+                    <span className="font-mono text-rose-600">
+                      -{formatCurrency(gastoOperativoActual)}
+                    </span>
+                  </div>
+                  <Separator className="bg-rose-100" />
+                  <div className="flex justify-between items-center pt-1">
+                    <span className="text-[11px] font-black text-emerald-700 uppercase tracking-tight">
+                      Utilidad Neta:
+                    </span>
+                    <span className="text-lg font-black text-emerald-700 font-mono">
+                      {formatCurrency(finanzas.total - gastoOperativoActual)}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* 🚀 BOTÓN PRINCIPAL ACTUALIZADO (Con lógica de descarga) */}
+            <Card className="bg-slate-900 text-primary border-none shadow-lg">
+              <CardContent className="p-4 space-y-3">
+                <h5 className="text-[9px] font-black uppercase text-emerald-400 tracking-widest">
+                  Protocolo Bypass
+                </h5>
+                <p className="text-[11px] text-slate-600 leading-tight">
+                  Genera la Carta Porte de $1 para liberar la unidad
+                  inmediatamente. El operador real se asigna abajo.
+                </p>
+                <Button
+                  onClick={() =>
+                    localUuid
+                      ? handleDownloadStampedPDF(localUuid)
+                      : onTimbrarNominal()
+                  }
+                  disabled={isStamping}
+                  className={cn(
+                    "w-full h-10 font-black text-[11px] uppercase shadow-lg transition-colors",
+                    localUuid
+                      ? "bg-blue-600 hover:bg-blue-500 shadow-blue-900/20"
+                      : "bg-emerald-600 hover:bg-emerald-500 shadow-emerald-900/20",
+                  )}
+                >
+                  {isStamping ? (
+                    <Loader2 className="h-3 w-3 animate-spin mr-2" />
+                  ) : (
+                    <FileText className="h-3 w-3 mr-2" />
+                  )}
+                  {localUuid
+                    ? "Descargar Carta Porte $1"
+                    : "Timbrar Carta Porte $1"}
+                </Button>
+              </CardContent>
+            </Card>
           </div>
 
-          {/* TRACTO Y OPERADOR */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-white p-4 rounded-xl border border-slate-200">
+          {/* PANEL DERECHO: ASIGNACIÓN OPERATIVA (FASE 2) */}
+          <div className="md:col-span-8 p-6 space-y-8">
+            <div className="grid grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Label className="text-[11px] font-black uppercase text-slate-500 tracking-wider">
+                  Fase Operativa
+                </Label>
+                <Select
+                  value={formData.leg_type}
+                  onValueChange={(v: any) =>
+                    setFormData((p) => ({ ...p, leg_type: v }))
+                  }
+                >
+                  <SelectTrigger className="h-11 font-bold border-slate-300">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="carga_muelle">
+                      1. CARGA PATIO / MUELLE
+                    </SelectItem>
+                    <SelectItem value="ruta_carretera">
+                      2. RUTA CARRETERA
+                    </SelectItem>
+                    <SelectItem value="entrega_vacio">
+                      3. RETORNO DE VACÍO
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[11px] font-black uppercase text-slate-500 tracking-wider">
+                  Operador
+                </Label>
+                <Select
+                  value={
+                    formData.operator_id ? String(formData.operator_id) : ""
+                  }
+                  onValueChange={(v) =>
+                    setFormData((p) => ({ ...p, operator_id: Number(v) }))
+                  }
+                >
+                  <SelectTrigger className="h-11 font-bold border-slate-300">
+                    <SelectValue placeholder="Asignar Operador..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {operadores.map((o: any) => (
+                      <SelectItem key={o.id} value={String(o.id)}>
+                        {o.name.toUpperCase()}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
             <div className="space-y-2">
-              <Label className="flex items-center gap-2 font-bold text-slate-700">
-                <Truck className="h-4 w-4 text-brand-navy" /> Tractocamión
-                Asignado *
+              <Label className="text-[11px] font-black uppercase text-slate-500 tracking-wider">
+                Unidad (Tractocamión)
               </Label>
               <Select
                 value={formData.unit_id ? String(formData.unit_id) : ""}
@@ -273,52 +539,33 @@ export function NextLegModal({
                   setFormData((p) => ({ ...p, unit_id: Number(v) }))
                 }
               >
-                <SelectTrigger className="bg-slate-50 border-slate-200">
-                  <SelectValue placeholder="Seleccionar Tracto..." />
+                <SelectTrigger className="h-11 font-black text-brand-navy border-slate-400 shadow-sm">
+                  <SelectValue placeholder="Seleccionar unidad de tracción..." />
                 </SelectTrigger>
                 <SelectContent>
                   {availableTractos.map((u: any) => (
                     <SelectItem key={u.id} value={String(u.id)}>
-                      ECO-{u.numero_economico} - {u.placas}
+                      ECO-{u.numero_economico} [{u.placas}]
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2 font-bold text-slate-700">
-                <User className="h-4 w-4 text-brand-navy" /> Operador *
-              </Label>
-              <Select
-                value={formData.operator_id ? String(formData.operator_id) : ""}
-                onValueChange={(v) =>
-                  setFormData((p) => ({ ...p, operator_id: Number(v) }))
-                }
-              >
-                <SelectTrigger className="bg-slate-50 border-slate-200">
-                  <SelectValue placeholder="Seleccionar Operador..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableOperators.map((o: any) => (
-                    <SelectItem key={o.id} value={String(o.id)}>
-                      {o.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* 🚀 EQUIPOS DE ARRASTRE (CHASIS Y DOLLY) */}
-          <div className="bg-white p-4 rounded-xl border border-slate-200">
-            <Label className="font-bold text-slate-700 flex items-center gap-2 mb-4 uppercase tracking-wider text-xs">
-              <Box className="h-4 w-4 text-emerald-600" /> Equipos de Arrastre
-            </Label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2 sm:col-span-2">
-                <Label className="text-xs text-slate-500">
-                  Remolque / Chasis 1 *
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-6 shadow-sm">
+              <div className="col-span-3 border-b pb-2 flex items-center justify-between">
+                <h5 className="text-[11px] font-black text-brand-navy uppercase tracking-widest flex items-center gap-2">
+                  <Box className="h-4 w-4" /> Configuración de Arrastre
+                </h5>
+                {isFullTrip && (
+                  <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-100 border-none font-black text-[9px]">
+                    DOBLE ARTICULADO
+                  </Badge>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[9px] font-bold text-slate-500 uppercase">
+                  Chasis 1
                 </Label>
                 <Select
                   value={
@@ -328,25 +575,23 @@ export function NextLegModal({
                     setFormData((p) => ({ ...p, remolque_1_id: Number(v) }))
                   }
                 >
-                  <SelectTrigger className="bg-slate-50">
-                    <SelectValue placeholder="Seleccionar Remolque..." />
+                  <SelectTrigger className="h-9 text-xs font-bold">
+                    <SelectValue placeholder="R1" />
                   </SelectTrigger>
                   <SelectContent>
                     {availableRemolques.map((u: any) => (
                       <SelectItem key={u.id} value={String(u.id)}>
-                        ECO-{u.numero_economico} |{" "}
-                        {u.is_loaded ? "📦 CARGADO" : "➖ VACÍO"}
+                        ECO-{u.numero_economico} {u.is_loaded ? "📦" : "➖"}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-
               {isFullTrip && (
                 <>
-                  <div className="space-y-2">
-                    <Label className="text-xs text-rose-600 font-bold">
-                      Dolly *
+                  <div className="space-y-1.5">
+                    <Label className="text-[9px] font-bold text-rose-600 uppercase">
+                      Dolly
                     </Label>
                     <Select
                       value={formData.dolly_id ? String(formData.dolly_id) : ""}
@@ -354,8 +599,8 @@ export function NextLegModal({
                         setFormData((p) => ({ ...p, dolly_id: Number(v) }))
                       }
                     >
-                      <SelectTrigger className="bg-rose-50 border-rose-200 text-rose-700">
-                        <SelectValue placeholder="Seleccionar Dolly..." />
+                      <SelectTrigger className="h-9 text-xs border-rose-200 bg-rose-50 text-rose-700 font-bold">
+                        <SelectValue placeholder="Dolly" />
                       </SelectTrigger>
                       <SelectContent>
                         {availableDollies.map((u: any) => (
@@ -366,10 +611,9 @@ export function NextLegModal({
                       </SelectContent>
                     </Select>
                   </div>
-
-                  <div className="space-y-2">
-                    <Label className="text-xs text-rose-600 font-bold">
-                      Remolque / Chasis 2 *
+                  <div className="space-y-1.5">
+                    <Label className="text-[9px] font-bold text-rose-600 uppercase">
+                      Chasis 2
                     </Label>
                     <Select
                       value={
@@ -381,14 +625,13 @@ export function NextLegModal({
                         setFormData((p) => ({ ...p, remolque_2_id: Number(v) }))
                       }
                     >
-                      <SelectTrigger className="bg-rose-50 border-rose-200 text-rose-700">
-                        <SelectValue placeholder="Seleccionar Remolque 2..." />
+                      <SelectTrigger className="h-9 text-xs border-rose-200 bg-rose-50 text-rose-700 font-bold">
+                        <SelectValue placeholder="R2" />
                       </SelectTrigger>
                       <SelectContent>
                         {availableRemolques.map((u: any) => (
                           <SelectItem key={u.id} value={String(u.id)}>
-                            ECO-{u.numero_economico} |{" "}
-                            {u.is_loaded ? "📦 CARGADO" : "➖ VACÍO"}
+                            ECO-{u.numero_economico} {u.is_loaded ? "📦" : "➖"}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -397,85 +640,125 @@ export function NextLegModal({
                 </>
               )}
             </div>
-          </div>
 
-          {/* ANTICIPOS CONDICIONALES */}
-          {isRoadLeg ? (
-            <div className="bg-white p-4 rounded-xl border border-slate-200">
-              <Label className="font-bold text-slate-700 uppercase tracking-wider text-xs mb-4 block">
-                Anticipos Operativos
-              </Label>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-xs text-slate-500">Casetas</Label>
-                  <Input
-                    type="number"
-                    className="font-mono bg-slate-50"
-                    value={formData.anticipo_casetas || ""}
-                    onChange={(e) =>
-                      setFormData((p) => ({
-                        ...p,
-                        anticipo_casetas: Number(e.target.value),
-                      }))
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs text-slate-500">Diésel</Label>
-                  <Input
-                    type="number"
-                    className="font-mono bg-slate-50"
-                    value={formData.anticipo_combustible || ""}
-                    onChange={(e) =>
-                      setFormData((p) => ({
-                        ...p,
-                        anticipo_combustible: Number(e.target.value),
-                      }))
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs text-slate-500">Viáticos</Label>
-                  <Input
-                    type="number"
-                    className="font-mono bg-slate-50"
-                    value={formData.anticipo_viaticos || ""}
-                    onChange={(e) =>
-                      setFormData((p) => ({
-                        ...p,
-                        anticipo_viaticos: Number(e.target.value),
-                      }))
-                    }
-                  />
+            {/* ANTICIPOS OPERATIVOS */}
+            {isRoadLeg && (
+              <div className="bg-amber-50 p-6 rounded-2xl border border-amber-200 space-y-4 shadow-inner">
+                <h4 className="text-[11px] font-black text-amber-800 uppercase tracking-widest flex items-center gap-2">
+                  <DollarSign className="h-4 w-4" /> Registro de Anticipos y
+                  Vales (Opcional)
+                </h4>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-[9px] font-bold text-slate-600 uppercase">
+                      Casetas
+                    </Label>
+                    <div className="relative">
+                      <DollarSign className="absolute left-2.5 top-2.5 h-3 w-3 text-slate-400" />
+                      <Input
+                        type="number"
+                        className="pl-7 h-9 font-mono bg-white text-xs border-amber-100"
+                        value={formData.anticipo_casetas || ""}
+                        onChange={(e) =>
+                          setFormData((p) => ({
+                            ...p,
+                            anticipo_casetas: Number(e.target.value),
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[9px] font-bold text-slate-600 uppercase">
+                      Diesel
+                    </Label>
+                    <div className="relative">
+                      <DollarSign className="absolute left-2.5 top-2.5 h-3 w-3 text-slate-400" />
+                      <Input
+                        type="number"
+                        className="pl-7 h-9 font-mono bg-white text-xs border-amber-100"
+                        value={formData.anticipo_combustible || ""}
+                        onChange={(e) =>
+                          setFormData((p) => ({
+                            ...p,
+                            anticipo_combustible: Number(e.target.value),
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[9px] font-bold text-slate-600 uppercase">
+                      Viáticos
+                    </Label>
+                    <div className="relative">
+                      <DollarSign className="absolute left-2.5 top-2.5 h-3 w-3 text-slate-400" />
+                      <Input
+                        type="number"
+                        className="pl-7 h-9 font-mono bg-white text-xs border-amber-100"
+                        value={formData.anticipo_viaticos || ""}
+                        onChange={(e) =>
+                          setFormData((p) => ({
+                            ...p,
+                            anticipo_viaticos: Number(e.target.value),
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[9px] font-bold text-brand-navy uppercase flex items-center gap-1">
+                      <Ticket className="h-3 w-3" /> Vale / Otros
+                    </Label>
+                    <div className="relative">
+                      <DollarSign className="absolute left-2.5 top-2.5 h-3 w-3 text-blue-400" />
+                      <Input
+                        type="number"
+                        className="pl-7 h-9 font-mono bg-blue-50 border-blue-200 text-sm"
+                        value={formData.otros_anticipos || ""}
+                        onChange={(e) =>
+                          setFormData((p) => ({
+                            ...p,
+                            otros_anticipos: Number(e.target.value),
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          ) : (
-            <Card className="border-slate-200 bg-transparent flex flex-col justify-center items-center text-center p-4">
-              <p className="text-xs text-slate-400 font-medium flex items-center gap-2">
-                <Info className="h-4 w-4" /> Los movimientos de patio no
-                requieren registro de anticipos.
-              </p>
-            </Card>
-          )}
+            )}
+          </div>
         </div>
 
-        <DialogFooter className="bg-white p-4 -m-6 mt-2 rounded-b-lg border-t sticky bottom-0">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={loading}
-            className="bg-brand-navy hover:bg-brand-navy/90 text-white font-bold gap-2 px-8"
-          >
-            {loading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <CheckCircle2 className="h-4 w-4" />
-            )}
-            Iniciar Tramo Operativo
-          </Button>
+        <DialogFooter className="p-4 bg-slate-50 border-t border-slate-200 flex justify-between sm:justify-between items-center rounded-b-2xl">
+          <div className="flex items-center gap-2 px-2 text-slate-400">
+            <Info className="h-4 w-4" />
+            <span className="text-[9px] font-bold uppercase tracking-tight">
+              Validación Física Requerida
+            </span>
+          </div>
+          <div className="flex gap-3">
+            <Button
+              variant="ghost"
+              onClick={() => onOpenChange(false)}
+              className="font-bold uppercase text-[11px]"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleIniciarTramo}
+              disabled={loading || !cpGenerada}
+              className="bg-brand-navy hover:bg-brand-navy/90 text-primary font-black uppercase text-[11px] tracking-widest px-10 h-10 shadow-lg shadow-brand-navy/20"
+            >
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <CheckCircle2 className="h-4 w-4 mr-2" />
+              )}
+              Iniciar Despacho Real
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

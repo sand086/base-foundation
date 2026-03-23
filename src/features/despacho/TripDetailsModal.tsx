@@ -101,7 +101,7 @@ export function TripDetailsModal({
   const [finishingLeg, setFinishingLeg] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // 🚀 ESTADO LOCAL: Prioridad máxima para el renderizado
+  // 🚀 FASE 3: ESTADO LOCAL CON PRIORIDAD DE RENDERIZADO
   const [localUuid, setLocalUuid] = useState<string | null>(null);
 
   const formatCurrency = (val: number) =>
@@ -115,14 +115,19 @@ export function TripDetailsModal({
     if (open) loadTerminals();
   }, [open]);
 
-  // Sincronizar UUID local solo si el viaje trae uno nuevo o la ID cambia
+  // 🚀 FASE 3: LÓGICA DE ESCUDO PARA EL UUID FISCAL
   useEffect(() => {
     if (trip) {
       if (!isEditing) {
         setTarifaBase(trip.tarifa_base || 0);
         setCostoCasetas(trip.costo_casetas || 0);
       }
-      setLocalUuid(trip.uuid_fiscal || null);
+
+      // 🛡️ ESCUDO: Solo actualizamos si el prop trae un valor real o si el ID cambió (cambio de modal)
+      // Esto evita que refreshTrips() nos regrese a null por un lag de la DB
+      if (trip.uuid_fiscal || !localUuid) {
+        setLocalUuid(trip.uuid_fiscal || null);
+      }
     }
   }, [trip?.id, trip?.uuid_fiscal, isEditing]);
 
@@ -303,11 +308,11 @@ export function TripDetailsModal({
                 </div>
               </div>
               <div className="flex gap-2">
-                {/* 🚀 BOTÓN DINÁMICO REPARADO: Usa localUuid tanto para el texto como para el estilo */}
+                {/* 🚀 BOTÓN DINÁMICO DEFINITIVO: Usa localUuid para etiquetas, lógica y estilos */}
                 <Button
                   variant="outline"
                   className={cn(
-                    "h-10 text-xs font-black shadow-md transition-all",
+                    "h-10 text-xs font-black shadow-md transition-all uppercase tracking-tight",
                     localUuid
                       ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
                       : "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100",
@@ -319,10 +324,11 @@ export function TripDetailsModal({
                       handleStampNominal(trip.id, (responseData) => {
                         const generatedUuid = responseData?.data?.uuid;
                         if (generatedUuid) {
-                          setLocalUuid(generatedUuid); // 🚀 Actualiza el UI al instante
+                          setLocalUuid(generatedUuid); // 🚀 ACTUALIZACIÓN INSTANTÁNEA EN UI
                           handleDownloadStampedPDF(generatedUuid);
+                          toast.success("¡CARTA PORTE GENERADA!");
                         }
-                        refreshTrips();
+                        refreshTrips(); // Actualiza BD en background
                       });
                     }
                   }}
@@ -625,7 +631,7 @@ export function TripDetailsModal({
                                   {formatCurrency(utilidadEstimada)}
                                 </span>
                               </div>
-                              {/* CIERRE FISCAL FINAL */}
+
                               <div className="bg-slate-900 p-6 rounded-2xl border-t-4 border-emerald-500 flex flex-col sm:flex-row items-center justify-between gap-6 mt-10 shadow-2xl">
                                 <div className="text-left">
                                   <h4 className="text-emerald-400 font-black text-sm uppercase tracking-tighter flex items-center gap-2">
@@ -653,7 +659,7 @@ export function TripDetailsModal({
                                     <Loader2 className="h-5 w-5 animate-spin mr-2" />
                                   ) : (
                                     <Activity className="h-5 w-5 mr-2" />
-                                  )}{" "}
+                                  )}
                                   TIMBRAR FACTURA FINAL
                                 </Button>
                               </div>
@@ -787,7 +793,7 @@ export function TripDetailsModal({
                             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                           ) : (
                             <PlusCircle className="h-4 w-4 mr-2" />
-                          )}{" "}
+                          )}
                           AÑADIR "{searchTerminalQuery.toUpperCase()}"
                         </Button>
                       </CommandEmpty>
