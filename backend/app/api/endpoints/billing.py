@@ -102,6 +102,22 @@ def download_invoice_pdf(uuid: str, db: Session = Depends(get_db)):
     )
 
 
+@router.post("/update-params")
+def update_sat_params(data: dict, db: Session = Depends(get_db)):
+    """
+    Endpoint para la Pestaña 3: Guarda la leyenda legal y otros textos.
+    Recibe un dict: {"sat_leyenda_legal": "TEXTO LARGO...", "sat_ppd_default": "true"}
+    """
+    for key, value in data.items():
+        db_conf = db.query(SystemConfig).filter(SystemConfig.key == key).first()
+        if db_conf:
+            db_conf.value = str(value)
+        else:
+            db.add(SystemConfig(key=key, value=str(value), grupo="sat", tipo="string"))
+    db.commit()
+    return {"status": "success"}
+
+
 @router.post("/csd")
 def upload_csd_files(
     cer_file: UploadFile = File(...),

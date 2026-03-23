@@ -11,7 +11,6 @@ from zeep.plugins import HistoryPlugin
 from lxml import etree
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
-import qrcode
 
 # Librerías para criptografía
 from cryptography import x509
@@ -33,6 +32,11 @@ from app.schemas.trips import ReceivableInvoiceCreate
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("billing.audit")
+
+# =======================================================
+# LEYENDA LEGAL POR DEFECTO (Extraída del OCR de Karcher/Rapid-3T)
+# =======================================================
+DEFAULT_LEYENDA = "Condiciones de prestación de servicios que ampara la CARTA DE PORTE O COMPROBANTE PARA EL TRANSPORTE DE MERCANCÍAS. PRIMERA.- Para los efectos del presente contrato de transporte se denomina 'Transportista' al que realiza el servicio de transportación y 'Remitente' o 'Expedidor' al usuario que contrate el servicio o remite la mercancía. SEGUNDA.- El 'Remitente' o 'Expedidor' es responsable de que la información proporcionada al 'Transportista' sea veraz y que la documentación que entregue para efectos del transporte sea la correcta. TERCERA.- El 'Remitente' o 'Expedidor' debe declarar al 'Transportista' el tipo de mercancía o efectos de que se trate, peso, medidas y/o número de la carga que entrega para su transporte y, en su caso, el valor de la misma. La carga que se entregue a granel será pesada por el 'Transportista' en el primer punto donde haya báscula apropiada o, en su defecto, aforada en metros cúbicos con la conformidad del 'Remitente' o 'Expedidor'. CUARTA.- Para efectos del transporte, el 'Remitente' o 'Expedidor' deberá entregar al 'Transportista' los documentos que las leyes y reglamentos exijan para llevar a cabo el servicio, en caso de no cumplirse con estos requisitos el 'Transportista' está obligado a rehusar el transporte de las mercancías. QUINTA.- Si por sospecha de falsedad en la declaración del contenido de un bulto el 'Transportista' deseare proceder a su reconocimiento, podrá hacerlo ante testigos y con asistencia del 'Remitente' o 'Expedidor' o del consignatario. Si este último no concurriere, se solicitará la presencia de un inspector de la Secretaría de Comunicaciones y Transportes, y se levantará el acta correspondiente. El 'Transportista' tendrá en todo caso, la obligación de dejar los bultos en el estado en que se encontraban antes del reconocimiento. SEXTA.- El 'Transportista' deberá recoger y entregar la carga precisamente en los domicilios que señale el 'Remitente' o 'Expedidor' ajustándose a los términos y condiciones convenidos. El 'Transportista' sólo está obligado a llevar la carga al domicilio del consignatario para su entrega una sola vez. Si ésta no fuera recibida se dejará aviso de que la mercancía queda a disposición del interesado en las bodegas que indique el 'Transportista'. SÉPTIMA.- Si la carga no fuere retirada dentro de los 30 días hábiles siguientes a aquél en que hubiere sido puesta a disposición del consignatario, el 'Transportista' podrá solicitar la venta en subasta pública con arreglo a lo que dispone el Código de Comercio. OCTAVA.- El 'Transportista' y el 'Remitente' o 'Expedidor' negociarán libremente el precio del servicio, tomando en cuenta su tipo, característica de los embarques, volumen, regularidad, clase de carga y sistema de pago. NOVENA.- Si el 'Remitente' o 'Expedidor' desea que el 'Transportista' asuma la responsabilidad por el valor de las mercancías o efectos que él declare y que cubra toda clase de riesgos, inclusive los derivados de caso fortuito o de fuerza mayor, las partes deberán convenir un cargo adicional, equivalente al valor de la prima del seguro que se contrate, el cual se deberá expresar en la Carta de Porte. DÉCIMA.- Cuando el importe del flete no incluya el cargo adicional, la responsabilidad del 'Transportista' queda expresamente limitada a la cantidad equivalente a 15 días del salario mínimo vigente en el Distrito Federal por tonelada o cuando se trate de embarques cuyo peso sea mayor de 200 kg., pero menor de 1000 kg; y a 4 días de salario mínimo por remesa cuando se trate de embarques con peso hasta de 200 kg. DÉCIMA PRIMERA.- El precio del transporte deberá pagarse en origen, salvo convenio entre las partes de pago en destino. Cuando el transporte se hubiere concertado 'Flete por Cobrar' la entrega de las mercancías o efectos se hará contra el pago del flete y el 'Transportista' tendrá derecho a retenerlos mientras no se le cubra el precio convenido. DÉCIMA SEGUNDA.- Si al momento de la entrega resultare algún faltante o avería, el consignatario deberá hacerla constar en ese acto en la Carta de Porte y formular su reclamación por escrito al 'Transportista' dentro de las 24 horas siguientes. DÉCIMA TERCERA.- El 'Transportista' queda eximido de la obligación de recibir mercancías o efectos para su transporte, en los siguientes casos: a) Cuando se trate de carga que por su naturaleza, peso, volumen, embalaje defectuoso o cualquier otra circunstancia no pueda transportarse sin destruirse o sin causar daño a los demás artículos o al material rodante, salvo que la empresa de que se trate tenga el equipo adecuado. b) Las mercancías cuyo transporte haya sido prohibido por disposiciones legales o reglamentarias. Cuando tales disposiciones no prohíban precisamente el transporte de determinadas mercancías, pero sí ordenen la presentación de ciertos documentos para que puedan ser transportadas, el 'Remitente' o 'Expedidor' estará obligado a entregar al 'Transportista' los documentos correspondientes. DÉCIMA CUARTA.- Los casos no previstos en las presentes condiciones y las quejas derivadas de su aplicación se someterán por la vía administrativa a la Secretaría de Comunicaciones y Transportes. DÉCIMA QUINTA.- Para el caso de que el 'Remitente' o 'Expedidor' contrate carro por entero, este aceptará la responsabilidad solidaria para con el 'Transportista' mediante la figura de la corresponsabilidad que contempla el artículo 10 del Reglamento Sobre el Peso, Dimensiones y Capacidad de los Vehículos de Autotransporte que Transitan en los Caminos y Puentes de Jurisdicción Federal, por lo que el 'Remitente' o 'Expedidor' queda obligado a verificar que la carga y el vehículo que la transporta, cumplan con el peso y dimensiones máximas establecidos en la NOM-012-SCT-2-2014. Para el caso de incumplimiento e inobservancia a las disposiciones que regulan el peso y dimensiones, por parte del 'Remitente' o 'Expedidor', este será corresponsable de las infracciones y multas que la Secretaría de Comunicaciones y Transportes y la Policía Federal impongan al 'Transportista' por cargar las unidades con exceso de peso."
 
 
 class BillingService:
@@ -192,7 +196,6 @@ class BillingService:
         cliente = self.db.get(ClientModel, viaje.client_id)
 
         if is_final:
-            # 🚀 FASE 4: Para la factura final, SÍ o SÍ requerimos al operador de la carretera
             leg = (
                 self.db.query(TripLeg)
                 .filter(
@@ -212,10 +215,7 @@ class BillingService:
                 self.db.get(Operator, leg.operator_id) if leg.operator_id else None
             )
         else:
-            # 🚀 FASE 3: Es la carta porte BYPASS ($1). Buscamos si de casualidad ya hay una unidad.
             leg = self.db.query(TripLeg).filter(TripLeg.trip_id == viaje_id).first()
-
-            # Si hay un tramo y tiene unidad, la usamos. Si no, pasamos None y el dict usará COMODÍN.
             unidad = self.db.get(Unit, leg.unit_id) if leg and leg.unit_id else None
             operador = (
                 self.db.get(Operator, leg.operator_id)
@@ -230,7 +230,7 @@ class BillingService:
     ) -> dict:
         fecha_iso = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
 
-        # 🚀 PROTECCIÓN CONTRA NULOS: Asignación de Unidad Comodín si la DB no nos dio una
+        # PROTECCIÓN CONTRA NULOS: Asignación de Unidad Comodín si la DB no nos dio una
         placas_seguras = unidad.placas if unidad and unidad.placas else "89BH4C"
         anio_seguro = str(unidad.year) if unidad and unidad.year else "2024"
         config_segura = (
@@ -262,14 +262,22 @@ class BillingService:
             else "7050094731"
         )
 
+        # 🚀 OBTENER LEYENDA LEGAL DE LA BASE DE DATOS
+        leyenda_conf = (
+            self.db.query(SystemConfig).filter_by(key="sat_leyenda_legal").first()
+        )
+        leyenda_legal = (
+            leyenda_conf.value
+            if leyenda_conf and leyenda_conf.value
+            else DEFAULT_LEYENDA
+        )
+
         if is_nominal:
-            # CARTA PORTE DE 1 PESO
             subtotal = Decimal("1.00")
             iva = subtotal * Decimal("0.16")
             ret = subtotal * Decimal("0.04")
             total = subtotal + iva - ret
 
-            # Operador Comodín si no hay ninguno
             rfc_operador = "XAXX010101000"
             nombre_operador = "OPERADOR BASE COMODIN"
             licencia = "LIC0000000"
@@ -279,7 +287,6 @@ class BillingService:
                 nombre_operador = operador.name or nombre_operador
                 licencia = operador.license_number or licencia
         else:
-            # FACTURA FINAL
             base = Decimal(str(viaje.tarifa_base or 0))
             casetas = Decimal(str(viaje.costo_casetas or 0))
             subtotal = base + casetas
@@ -295,7 +302,6 @@ class BillingService:
             nombre_operador = operador.name or "OPERADOR DESCONOCIDO"
             licencia = operador.license_number or "LIC0000000"
 
-        # Ubicación y CP del cliente
         cp_cliente = getattr(cliente, "codigo_postal_fiscal", "09040") or "09040"
         ubicacion = (
             self.db.query(SatLocationCode)
@@ -326,7 +332,6 @@ class BillingService:
             "iva": f"{iva:.2f}",
             "retenciones": f"{ret:.2f}",
             "total": f"{total:.2f}",
-            # Unidad
             "placas": placas_seguras,
             "anio_modelo": anio_seguro,
             "config_vehicular": config_segura,
@@ -337,10 +342,10 @@ class BillingService:
             "poliza": poliza_segura,
             "subtipo_remolque": "CTR010",
             "placa_remolque": "58UD5Z",
-            # Operador
             "rfc_operador": rfc_operador,
             "nombre_operador": nombre_operador,
             "licencia": licencia,
+            "leyenda_legal": leyenda_legal,  # 🚀 Pasamos la leyenda al template
         }
 
     # =======================================================
@@ -441,6 +446,7 @@ class BillingService:
             if relacion_uuid
             else ""
         )
+        # 🚀 SE AGREGA LA ADDENDA AL FINAL DEL XML
         return f"""<?xml version="1.0" encoding="UTF-8"?>
 <cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:cartaporte31="http://www.sat.gob.mx/CartaPorte31" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/CartaPorte31 http://www.sat.gob.mx/sitio_internet/cfd/CartaPorte/CartaPorte31.xsd" Version="4.0" Fecha="{data['fecha']}" Serie="A" Folio="{data['folio']}" FormaPago="03" CondicionesDePago="CONTADO" SubTotal="{data['subtotal']}" Moneda="MXN" Total="{data['total']}" TipoDeComprobante="I" Exportacion="01" MetodoPago="PUE" LugarExpedicion="91808">{relacion_xml}
     <cfdi:Emisor Rfc="EKU9003173C9" Nombre="ESCUELA KEMPER URGATE SA DE CV" RegimenFiscal="622" />
@@ -480,6 +486,9 @@ class BillingService:
             </cartaporte31:FiguraTransporte>
         </cartaporte31:CartaPorte>
     </cfdi:Complemento>
+    <cfdi:Addenda>
+        <fst3:Contrato xmlns:fst3="http://facturasoftesc.com/ns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://facturasoftesc.com/ns http://facturasoftesc.com/ns/fst3.xsd" Comentario="{data['leyenda_legal']}"></fst3:Contrato>
+    </cfdi:Addenda>
 </cfdi:Comprobante>""".strip()
 
     def _generar_pdf_con_diseno(self, data, uuid, qr_bytes, s_sat, s_emi, c_sat):
@@ -560,6 +569,7 @@ class BillingService:
                 "licencia": data["licencia"],
                 "nombre": data["nombre_operador"],
             },
+            "leyenda_legal": data["leyenda_legal"],  # 🚀 LEYENDA PASADA AL PDF
         }
         pdf_path = self.storage_dir / f"{uuid}.pdf"
         pisa.CreatePDF(

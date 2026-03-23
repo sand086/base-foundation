@@ -1,5 +1,5 @@
 // src/pages/SettingsPage.tsx
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,13 +8,13 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Textarea } from "@/components/ui/textarea"; // 🚀 IMPORTANTE: Asegúrate de tener este componente
 import { useAdminActions } from "@/hooks/useAdminActions";
 import { cn } from "@/lib/utils";
 import axiosClient from "@/api/axiosClient";
 
 import { TiposUnidadConfig } from "@/features/configuracion/TiposUnidadConfig";
 import { RutasAutorizadasConfig } from "@/features/configuracion/RutasAutorizadasConfig";
-
 import { SatCatalogsConfig } from "@/features/configuracion/SatCatalogsConfig";
 
 import {
@@ -42,6 +42,11 @@ import {
   CheckCircle2,
   Download,
   Lock,
+  Tags,
+  ShieldCheck,
+  FileText,
+  RotateCcw,
+  AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { SystemConfig } from "@/types/api.types";
@@ -53,6 +58,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 type ConfigCategory =
   | "empresa"
@@ -83,7 +89,7 @@ const categories: {
     id: "facturacion",
     label: "Facturación (SAT)",
     icon: FileSignature,
-    description: "Certificados CSD y Timbrado",
+    description: "Certificados, Leyendas y Catálogos",
   },
   {
     id: "catalogos",
@@ -98,6 +104,9 @@ const categories: {
     description: "Canales de alerta",
   },
 ];
+
+// 🚀 LEYENDA LEGAL EXTRAÍDA DEL OCR DE RAPID-3T
+const LEYENDA_DEFAULT = `Condiciones de prestación de servicios que ampara la CARTA DE PORTE O COMPROBANTE PARA EL TRANSPORTE DE MERCANCÍAS. PRIMERA.- Para los efectos del presente contrato de transporte se denomina 'Transportista' al que realiza el servicio de transportación y 'Remitente' o 'Expedidor' al usuario que contrate el servicio o remite la mercancía. SEGUNDA.- El 'Remitente' o 'Expedidor' es responsable de que la información proporcionada al 'Transportista' sea veraz y que la documentación que entregue para efectos del transporte sea la correcta. TERCERA.- El 'Remitente' o 'Expedidor' debe declarar al 'Transportista' el tipo de mercancía o efectos de que se trate, peso, medidas y/o número de la carga que entrega para su transporte y, en su caso, el valor de la misma. La carga que se entregue a granel será pesada por el 'Transportista' en el primer punto donde haya báscula apropiada o, en su defecto, aforada en metros cúbicos con la conformidad del 'Remitente' o 'Expedidor'. CUARTA.- Para efectos del transporte, el 'Remitente' o 'Expedidor' deberá entregar al 'Transportista' los documentos que las leyes y reglamentos exijan para llevar a cabo el servicio, en caso de no cumplirse con estos requisitos el 'Transportista' está obligado a rehusar el transporte de las mercancías. QUINTA.- Si por sospecha de falsedad en la declaración del contenido de un bulto el 'Transportista' deseare proceder a su reconocimiento, podrá hacerlo ante testigos y con asistencia del 'Remitente' o 'Expedidor' o del consignatario. Si este último no concurriere, se solicitará la presencia de un inspector de la Secretaría de Comunicaciones y Transportes, y se levantará el acta correspondiente. El 'Transportista' tendrá en todo caso, la obligación de dejar los bultos en el estado en que se encontraban antes del reconocimiento. SEXTA.- El 'Transportista' deberá recoger y entregar la carga precisamente en los domicilios que señale el 'Remitente' o 'Expedidor' ajustándose a los términos y condiciones convenidos. El 'Transportista' sólo está obligado a llevar la carga al domicilio del consignatario para su entrega una sola vez. Si ésta no fuera recibida se dejará aviso de que la mercancía queda a disposición del interesado en las bodegas que indique el 'Transportista'. SÉPTIMA.- Si la carga no fuere retirada dentro de los 30 días hábiles siguientes a aquél en que hubiere sido puesta a disposición del consignatario, el 'Transportista' podrá solicitar la venta en subasta pública con arreglo a lo que dispone el Código de Comercio. OCTAVA.- El 'Transportista' y el 'Remitente' o 'Expedidor' negociarán libremente el precio del servicio, tomando en cuenta su tipo, característica de los embarques, volumen, regularidad, clase de carga y sistema de pago. NOVENA.- Si el 'Remitente' o 'Expedidor' desea que el 'Transportista' asuma la responsabilidad por el valor de las mercancías o efectos que él declare y que cubra toda clase de riesgos, inclusive los derivados de caso fortuito o de fuerza mayor, las partes deberán convenir un cargo adicional, equivalente al valor de la prima del seguro que se contrate, el cual se deberá expresar en la Carta de Porte. DÉCIMA.- Cuando el importe del flete no incluya el cargo adicional, la responsabilidad del 'Transportista' queda expresamente limitada a la cantidad equivalente a 15 días del salario mínimo vigente en el Distrito Federal por tonelada o cuando se trate de embarques cuyo peso sea mayor de 200 kg., pero menor de 1000 kg; y a 4 días de salario mínimo por remesa cuando se trate de embarques con peso hasta de 200 kg. DÉCIMA PRIMERA.- El precio del transporte deberá pagarse en origen, salvo convenio entre las partes de pago en destino. Cuando el transporte se hubiere concertado 'Flete por Cobrar' la entrega de las mercancías o efectos se hará contra el pago del flete y el 'Transportista' tendrá derecho a retenerlos mientras no se le cubra el precio convenido. DÉCIMA SEGUNDA.- Si al momento de la entrega resultare algún faltante o avería, el consignatario deberá hacerla constar en ese acto en la Carta de Porte y formular su reclamación por escrito al 'Transportista' dentro de las 24 horas siguientes. DÉCIMA TERCERA.- El 'Transportista' queda eximido de la obligación de recibir mercancías o efectos para su transporte, en los siguientes casos: a) Cuando se trate de carga que por su naturaleza, peso, volumen, embalaje defectuoso o cualquier otra circunstancia no pueda transportarse sin destruirse o sin causar daño a los demás artículos o al material rodante, salvo que la empresa de que se trate tenga el equipo adecuado. b) Las mercancías cuyo transporte haya sido prohibido por disposiciones legales o reglamentarias. Cuando tales disposiciones no prohíban precisamente el transporte de determinadas mercancías, pero sí ordenen la presentación de ciertos documentos para que puedan ser transportadas, el 'Remitente' o 'Expedidor' estará obligado a entregar al 'Transportista' los documentos correspondientes. DÉCIMA CUARTA.- Los casos no previstos en las presentes condiciones y las quejas derivadas de su aplicación se someterán por la vía administrativa a la Secretaría de Comunicaciones y Transportes. DÉCIMA QUINTA.- Para el caso de que el 'Remitente' o 'Expedidor' contrate carro por entero, este aceptará la responsabilidad solidaria para con el 'Transportista' mediante la figura de la corresponsabilidad que contempla el artículo 10 del Reglamento Sobre el Peso, Dimensiones y Capacidad de los Vehículos de Autotransporte que Transitan en los Caminos y Puentes de Jurisdicción Federal, por lo que el 'Remitente' o 'Expedidor' queda obligado a verificar que la carga y el vehículo que la transporta, cumplan con el peso y dimensiones máximas establecidos en la NOM-012-SCT-2-2014. Para el caso de incumplimiento e inobservancia a las disposiciones que regulan el peso y dimensiones, por parte del 'Remitente' o 'Expedidor', este será corresponsable de las infracciones y multas que la Secretaría de Comunicaciones y Transportes y la Policía Federal impongan al 'Transportista' por cargar las unidades con exceso de peso.`;
 
 const DEFAULT_CONFIGS: SystemConfig[] = [
   {
@@ -177,6 +186,14 @@ const DEFAULT_CONFIGS: SystemConfig[] = [
     tipo: "number",
     is_public: false,
   },
+  // 🚀 INCLUIMOS LA LEYENDA COMO CONFIGURACIÓN POR DEFECTO
+  {
+    key: "sat_leyenda_legal",
+    value: LEYENDA_DEFAULT,
+    grupo: "facturacion",
+    tipo: "string",
+    is_public: false,
+  },
 ];
 
 const SettingsPage = () => {
@@ -193,6 +210,10 @@ const SettingsPage = () => {
   const [csdPassword, setCsdPassword] = useState("");
   const [isUploadingCsd, setIsUploadingCsd] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Referencias para inputs de archivo ocultos (Solución al bug del Finder)
+  const cerInputRef = useRef<HTMLInputElement>(null);
+  const keyInputRef = useRef<HTMLInputElement>(null);
 
   // ESTADOS PARA DESCARGA SEGURA DE CSD
   const [downloadModal, setDownloadModal] = useState<{
@@ -261,9 +282,23 @@ const SettingsPage = () => {
   );
 
   const handleConfigChange = (key: string, value: string) => {
-    setLocalConfig((prev) =>
-      prev.map((c) => (c.key === key ? { ...c, value } : c)),
-    );
+    setLocalConfig((prev) => {
+      // Si la key no existe en prev (porque no vino de la BD ni de DEFAULT), la añadimos
+      const exists = prev.find((c) => c.key === key);
+      if (!exists) {
+        return [
+          ...prev,
+          {
+            key,
+            value,
+            grupo: activeCategory,
+            tipo: "string",
+            is_public: false,
+          },
+        ];
+      }
+      return prev.map((c) => (c.key === key ? { ...c, value } : c));
+    });
   };
 
   const handleSaveAll = async () => {
@@ -334,7 +369,6 @@ const SettingsPage = () => {
     }
   };
 
-  // 🚀 FUNCIÓN DE DESCARGA SEGURA CORREGIDA
   const handleDownloadCsdSecure = async () => {
     if (!downloadPassword || !downloadModal.type) return;
 
@@ -344,7 +378,6 @@ const SettingsPage = () => {
     formData.append("file_type", downloadModal.type);
 
     try {
-      // 1. Configuramos responseType a 'blob' para recibir el archivo crudo
       const response = await axiosClient.post(
         "/billing/csd/download",
         formData,
@@ -353,7 +386,6 @@ const SettingsPage = () => {
         },
       );
 
-      // 2. Creamos un enlace falso y forzamos la descarga
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
       link.href = url;
@@ -361,8 +393,6 @@ const SettingsPage = () => {
       link.setAttribute("download", `Certificado_SAT_Respaldo${extension}`);
       document.body.appendChild(link);
       link.click();
-
-      // 3. Limpieza
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
 
@@ -407,8 +437,9 @@ const SettingsPage = () => {
         description="Administra los parámetros globales de la plataforma"
       >
         <Button
+          type="button"
           onClick={handleSaveAll}
-          disabled={isLoading || activeCategory === "facturacion"}
+          disabled={isLoading}
           className="bg-brand-navy hover:bg-brand-navy/90 text-white gap-2 rounded-xl h-11 px-6 shadow-md"
         >
           {isLoading ? (
@@ -426,6 +457,7 @@ const SettingsPage = () => {
             const Icon = cat.icon;
             return (
               <button
+                type="button"
                 key={cat.id}
                 onClick={() => setActiveCategory(cat.id)}
                 className={cn(
@@ -466,7 +498,7 @@ const SettingsPage = () => {
         <Card className="flex-1 overflow-hidden rounded-2xl border-slate-200 shadow-sm">
           <ScrollArea className="h-full">
             <CardContent className="p-6 md:p-8 space-y-8">
-              {/* Sección Empresa */}
+              {/* SECCIÓN EMPRESA */}
               {activeCategory === "empresa" && (
                 <div className="space-y-6">
                   <div className="space-y-4">
@@ -487,6 +519,7 @@ const SettingsPage = () => {
                       </div>
                       <div className="space-y-2">
                         <Button
+                          type="button"
                           variant="outline"
                           size="sm"
                           className="rounded-lg font-bold"
@@ -513,7 +546,7 @@ const SettingsPage = () => {
                 </div>
               )}
 
-              {/* Renderizado Dinámico */}
+              {/* Renderizado Dinámico para Empresa y Operación */}
               {(activeCategory === "empresa" ||
                 activeCategory === "operacion") && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
@@ -577,205 +610,332 @@ const SettingsPage = () => {
                 </div>
               )}
 
-              {/* FACTURACIÓN SAT CON CSD GUARDADO */}
+              {/* 🚀 NUEVA SECCIÓN: FACTURACIÓN SAT (3 PESTAÑAS INTERNAS) */}
               {activeCategory === "facturacion" && (
-                <div className="space-y-6 max-w-3xl animate-in fade-in duration-300">
+                <div className="space-y-6 w-full animate-in fade-in duration-300">
                   <div>
                     <h3 className="text-lg font-black text-brand-navy flex items-center gap-2">
-                      <FileSignature className="h-5 w-5 text-emerald-600" />{" "}
-                      Certificados de Sello Digital (CSD)
+                      <FileSignature className="h-5 w-5 text-emerald-600" />
+                      Facturación SAT y Complementos
                     </h3>
                     <p className="text-sm text-slate-500 mt-1">
-                      Sube los archivos proporcionados por el SAT para poder
-                      emitir Cartas Porte y Facturas 4.0.
+                      Configura tus certificados, catálogos y términos legales
+                      para la emisión de CFDI y Carta Porte.
                     </p>
                   </div>
 
-                  {/* Info Actual y Descarga */}
-                  {savedCsdInfo && (
-                    <div className="bg-emerald-50 border border-emerald-200 p-5 rounded-xl flex items-start gap-4 shadow-sm">
-                      <CheckCircle2 className="h-6 w-6 text-emerald-600 shrink-0 mt-1" />
-                      <div className="w-full">
-                        <h4 className="text-sm font-bold text-emerald-800 mb-2">
-                          Certificados Activos en el Servidor
-                        </h4>
-                        <div className="flex flex-col sm:flex-row gap-4 text-xs font-mono text-emerald-700">
-                          <div className="flex items-center justify-between bg-white border border-emerald-100 rounded px-3 py-2 w-full sm:w-1/2">
-                            <span className="truncate pr-2">
-                              <b className="text-emerald-900">CER:</b>{" "}
-                              {savedCsdInfo.cerName}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 hover:bg-emerald-100 hover:text-emerald-800 shrink-0"
-                              onClick={() =>
-                                setDownloadModal({ open: true, type: "cer" })
-                              }
-                            >
-                              <Download className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                          <div className="flex items-center justify-between bg-white border border-emerald-100 rounded px-3 py-2 w-full sm:w-1/2">
-                            <span className="truncate pr-2">
-                              <b className="text-emerald-900">KEY:</b>{" "}
-                              {savedCsdInfo.keyName}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 hover:bg-emerald-100 hover:text-emerald-800 shrink-0"
-                              onClick={() =>
-                                setDownloadModal({ open: true, type: "key" })
-                              }
-                            >
-                              <Download className="h-3.5 w-3.5" />
-                            </Button>
+                  <Tabs defaultValue="sellos" className="w-full">
+                    <TabsList className="grid w-full grid-cols-3 h-12 bg-slate-100 p-1.5 rounded-xl shadow-inner mb-6">
+                      <TabsTrigger
+                        value="sellos"
+                        type="button" // Previene el bug del form/finder
+                        className="rounded-lg font-bold text-xs gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm text-brand-navy"
+                      >
+                        <ShieldCheck className="h-4 w-4 hidden sm:block" />{" "}
+                        Sellos CSD
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="catalogo"
+                        type="button" // Previene el bug del form/finder
+                        className="rounded-lg font-bold text-xs gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm text-brand-navy"
+                      >
+                        <Tags className="h-4 w-4 hidden sm:block" /> Catálogo
+                        ProdServ
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="leyenda"
+                        type="button" // Previene el bug del form/finder
+                        className="rounded-lg font-bold text-xs gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm text-brand-navy"
+                      >
+                        <FileText className="h-4 w-4 hidden sm:block" />{" "}
+                        Leyendas y Contratos
+                      </TabsTrigger>
+                    </TabsList>
+
+                    {/* SUB-PESTAÑA 1: SELLOS CSD */}
+                    <TabsContent
+                      value="sellos"
+                      className="space-y-6 animate-in fade-in"
+                    >
+                      {savedCsdInfo && (
+                        <div className="bg-emerald-50 border border-emerald-200 p-5 rounded-xl flex items-start gap-4 shadow-sm">
+                          <CheckCircle2 className="h-6 w-6 text-emerald-600 shrink-0 mt-1" />
+                          <div className="w-full">
+                            <h4 className="text-sm font-bold text-emerald-800 mb-2">
+                              Certificados Activos en el Servidor
+                            </h4>
+                            <div className="flex flex-col sm:flex-row gap-4 text-xs font-mono text-emerald-700">
+                              <div className="flex items-center justify-between bg-white border border-emerald-100 rounded px-3 py-2 w-full sm:w-1/2">
+                                <span className="truncate pr-2">
+                                  <b className="text-emerald-900">CER:</b>{" "}
+                                  {savedCsdInfo.cerName}
+                                </span>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 hover:bg-emerald-100 hover:text-emerald-800 shrink-0"
+                                  onClick={() =>
+                                    setDownloadModal({
+                                      open: true,
+                                      type: "cer",
+                                    })
+                                  }
+                                >
+                                  <Download className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                              <div className="flex items-center justify-between bg-white border border-emerald-100 rounded px-3 py-2 w-full sm:w-1/2">
+                                <span className="truncate pr-2">
+                                  <b className="text-emerald-900">KEY:</b>{" "}
+                                  {savedCsdInfo.keyName}
+                                </span>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 hover:bg-emerald-100 hover:text-emerald-800 shrink-0"
+                                  onClick={() =>
+                                    setDownloadModal({
+                                      open: true,
+                                      type: "key",
+                                    })
+                                  }
+                                >
+                                  <Download className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </div>
-                  )}
+                      )}
 
-                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-sm space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-3">
-                        <Label className="font-bold text-slate-700">
-                          Reemplazar Certificado (.CER) *
-                        </Label>
-                        <div
-                          className={cn(
-                            "border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center text-center transition-colors bg-white",
-                            cerFile
-                              ? "border-emerald-400 bg-emerald-50/30"
-                              : "border-slate-300 hover:border-brand-navy",
-                          )}
-                        >
-                          {cerFile ? (
-                            <>
-                              <FileCheck className="h-8 w-8 text-emerald-500 mb-2" />
-                              <p className="text-xs font-bold text-emerald-700">
-                                {cerFile.name}
-                              </p>
-                              <p
-                                className="text-[10px] text-slate-500 cursor-pointer mt-1 hover:underline"
-                                onClick={() => setCerFile(null)}
-                              >
-                                Remover
-                              </p>
-                            </>
-                          ) : (
-                            <>
-                              <Upload className="h-6 w-6 text-slate-400 mb-2" />
-                              <p className="text-xs text-slate-500 font-medium">
-                                Haz click para subir nuevo
-                              </p>
+                      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-sm space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {/* SUBIR CER (Usando Ref para aislar el evento de click) */}
+                          <div className="space-y-3">
+                            <Label className="font-bold text-slate-700">
+                              Reemplazar Certificado (.CER) *
+                            </Label>
+                            <div
+                              onClick={() =>
+                                !cerFile && cerInputRef.current?.click()
+                              }
+                              className={cn(
+                                "border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center text-center transition-colors bg-white",
+                                cerFile
+                                  ? "border-emerald-400 bg-emerald-50/30"
+                                  : "border-slate-300 hover:border-brand-navy cursor-pointer",
+                              )}
+                            >
                               <input
                                 type="file"
-                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                className="hidden"
                                 accept=".cer"
+                                ref={cerInputRef}
                                 onChange={(e) =>
                                   setCerFile(e.target.files?.[0] || null)
                                 }
                               />
-                            </>
-                          )}
-                        </div>
-                      </div>
+                              {cerFile ? (
+                                <>
+                                  <FileCheck className="h-8 w-8 text-emerald-500 mb-2" />
+                                  <p className="text-xs font-bold text-emerald-700">
+                                    {cerFile.name}
+                                  </p>
+                                  <p
+                                    className="text-[10px] text-slate-500 cursor-pointer mt-1 hover:underline relative z-10"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setCerFile(null);
+                                      if (cerInputRef.current)
+                                        cerInputRef.current.value = "";
+                                    }}
+                                  >
+                                    Remover
+                                  </p>
+                                </>
+                              ) : (
+                                <>
+                                  <Upload className="h-6 w-6 text-slate-400 mb-2" />
+                                  <p className="text-xs text-slate-500 font-medium">
+                                    Haz click para subir nuevo
+                                  </p>
+                                </>
+                              )}
+                            </div>
+                          </div>
 
-                      <div className="space-y-3">
-                        <Label className="font-bold text-slate-700">
-                          Reemplazar Clave (.KEY) *
-                        </Label>
-                        <div
-                          className={cn(
-                            "border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center text-center transition-colors bg-white",
-                            keyFile
-                              ? "border-emerald-400 bg-emerald-50/30"
-                              : "border-slate-300 hover:border-brand-navy",
-                          )}
-                        >
-                          {keyFile ? (
-                            <>
-                              <FileCheck className="h-8 w-8 text-emerald-500 mb-2" />
-                              <p className="text-xs font-bold text-emerald-700">
-                                {keyFile.name}
-                              </p>
-                              <p
-                                className="text-[10px] text-slate-500 cursor-pointer mt-1 hover:underline"
-                                onClick={() => setKeyFile(null)}
-                              >
-                                Remover
-                              </p>
-                            </>
-                          ) : (
-                            <>
-                              <Upload className="h-6 w-6 text-slate-400 mb-2" />
-                              <p className="text-xs text-slate-500 font-medium">
-                                Haz click para subir nuevo
-                              </p>
+                          {/* SUBIR KEY (Usando Ref para aislar el evento de click) */}
+                          <div className="space-y-3">
+                            <Label className="font-bold text-slate-700">
+                              Reemplazar Clave (.KEY) *
+                            </Label>
+                            <div
+                              onClick={() =>
+                                !keyFile && keyInputRef.current?.click()
+                              }
+                              className={cn(
+                                "border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center text-center transition-colors bg-white",
+                                keyFile
+                                  ? "border-emerald-400 bg-emerald-50/30"
+                                  : "border-slate-300 hover:border-brand-navy cursor-pointer",
+                              )}
+                            >
                               <input
                                 type="file"
-                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                className="hidden"
                                 accept=".key"
+                                ref={keyInputRef}
                                 onChange={(e) =>
                                   setKeyFile(e.target.files?.[0] || null)
                                 }
                               />
-                            </>
-                          )}
+                              {keyFile ? (
+                                <>
+                                  <FileCheck className="h-8 w-8 text-emerald-500 mb-2" />
+                                  <p className="text-xs font-bold text-emerald-700">
+                                    {keyFile.name}
+                                  </p>
+                                  <p
+                                    className="text-[10px] text-slate-500 cursor-pointer mt-1 hover:underline relative z-10"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setKeyFile(null);
+                                      if (keyInputRef.current)
+                                        keyInputRef.current.value = "";
+                                    }}
+                                  >
+                                    Remover
+                                  </p>
+                                </>
+                              ) : (
+                                <>
+                                  <Upload className="h-6 w-6 text-slate-400 mb-2" />
+                                  <p className="text-xs text-slate-500 font-medium">
+                                    Haz click para subir nuevo
+                                  </p>
+                                </>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </div>
 
-                    <div className="space-y-3 pt-4 border-t border-slate-200">
-                      <Label className="font-bold text-slate-700">
-                        Contraseña de la Clave Privada *
-                      </Label>
-                      <div className="relative">
-                        <Input
-                          type={showPassword ? "text" : "password"}
-                          value={csdPassword}
-                          onChange={(e) => setCsdPassword(e.target.value)}
-                          placeholder="Escribe la contraseña..."
-                          className="h-11 bg-white border-slate-300 font-mono pr-12"
-                        />
-                        <button
+                        <div className="space-y-3 pt-4 border-t border-slate-200 md:col-span-2">
+                          <Label className="font-bold text-slate-700">
+                            Contraseña de la Clave Privada *
+                          </Label>
+                          <div className="relative">
+                            <Input
+                              type={showPassword ? "text" : "password"}
+                              value={csdPassword}
+                              onChange={(e) => setCsdPassword(e.target.value)}
+                              placeholder="Escribe la contraseña..."
+                              className="h-11 bg-white border-slate-300 font-mono pr-12"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowPassword(!showPassword)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-brand-navy"
+                            >
+                              {showPassword ? (
+                                <EyeOff className="h-5 w-5" />
+                              ) : (
+                                <Eye className="h-5 w-5" />
+                              )}
+                            </button>
+                          </div>
+                          <p className="text-[10px] text-slate-400 font-medium mt-1">
+                            Atención: Esta clave es requerida para poder emitir
+                            los timbres en cada viaje.
+                          </p>
+                        </div>
+
+                        <Button
                           type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-brand-navy"
+                          className="w-full bg-brand-navy hover:bg-brand-navy/90 text-white font-bold h-12 rounded-xl shadow-md md:col-span-2"
+                          disabled={
+                            isUploadingCsd ||
+                            !cerFile ||
+                            !keyFile ||
+                            !csdPassword
+                          }
+                          onClick={handleUploadCsd}
                         >
-                          {showPassword ? (
-                            <EyeOff className="h-5 w-5" />
+                          {isUploadingCsd ? (
+                            <Loader2 className="h-5 w-5 mr-2 animate-spin" />
                           ) : (
-                            <Eye className="h-5 w-5" />
+                            <Save className="h-5 w-5 mr-2" />
                           )}
-                        </button>
+                          {isUploadingCsd
+                            ? "Subiendo archivos y asegurando..."
+                            : "Actualizar Certificados SAT en Servidor"}
+                        </Button>
                       </div>
-                      <p className="text-[10px] text-slate-400 font-medium mt-1">
-                        Atención: Esta clave es requerida para poder emitir los
-                        timbres en cada viaje.
-                      </p>
-                    </div>
+                    </TabsContent>
 
-                    <Button
-                      className="w-full bg-brand-navy hover:bg-brand-navy/90 text-white font-bold h-12 rounded-xl shadow-md"
-                      disabled={
-                        isUploadingCsd || !cerFile || !keyFile || !csdPassword
-                      }
-                      onClick={handleUploadCsd}
+                    {/* SUB-PESTAÑA 2: CATÁLOGO PRODSERV */}
+                    <TabsContent
+                      value="catalogo"
+                      className="space-y-6 animate-in fade-in"
                     >
-                      {isUploadingCsd ? (
-                        <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                      ) : (
-                        <Save className="h-5 w-5 mr-2" />
-                      )}
-                      {isUploadingCsd
-                        ? "Subiendo archivos y asegurando..."
-                        : "Actualizar Certificados SAT en Servidor"}
-                    </Button>
-                  </div>
-                  <SatCatalogsConfig />
+                      <SatCatalogsConfig />
+                    </TabsContent>
+
+                    {/* SUB-PESTAÑA 3: DATOS COMPLEMENTARIOS (LEYENDAS) */}
+                    <TabsContent
+                      value="leyenda"
+                      className="space-y-4 animate-in fade-in"
+                    >
+                      <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-100 rounded-lg text-amber-800 text-[11px] font-medium shadow-sm">
+                        <AlertCircle className="h-4 w-4 shrink-0" />
+                        Este texto aparecerá en el nodo de Addenda del XML y en
+                        la última página de la representación impresa (PDF).
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black uppercase text-slate-500">
+                          Contenido de Cláusulas Legales
+                        </Label>
+                        <Textarea
+                          value={
+                            localConfig.find(
+                              (c) => c.key === "sat_leyenda_legal",
+                            )?.value || ""
+                          }
+                          onChange={(e) =>
+                            handleConfigChange(
+                              "sat_leyenda_legal",
+                              e.target.value,
+                            )
+                          }
+                          className="min-h-[400px] font-mono text-[11px] leading-relaxed bg-slate-50 focus:bg-white transition-colors p-4 rounded-xl border-slate-200 focus:border-brand-navy"
+                          placeholder="Pega aquí las cláusulas del contrato..."
+                        />
+                      </div>
+
+                      <div className="flex justify-end gap-4 pt-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() =>
+                            handleConfigChange(
+                              "sat_leyenda_legal",
+                              LEYENDA_DEFAULT,
+                            )
+                          }
+                          className="text-slate-500 font-bold text-xs uppercase"
+                        >
+                          <RotateCcw className="h-3 w-3 mr-2" /> Restablecer
+                          Contrato Rapid-3T
+                        </Button>
+                        <p className="text-[10px] text-slate-400 italic flex items-center">
+                          Haz click en "Guardar Cambios Generales" arriba para
+                          aplicar.
+                        </p>
+                      </div>
+                    </TabsContent>
+                  </Tabs>
                 </div>
               )}
 
@@ -862,6 +1022,7 @@ const SettingsPage = () => {
           </div>
           <DialogFooter className="flex gap-2">
             <Button
+              type="button"
               variant="outline"
               onClick={() => setDownloadModal({ open: false, type: null })}
               className="rounded-xl"
@@ -869,6 +1030,7 @@ const SettingsPage = () => {
               Cancelar
             </Button>
             <Button
+              type="button"
               onClick={handleDownloadCsdSecure}
               disabled={isDownloading || !downloadPassword}
               className="bg-brand-navy hover:bg-brand-navy/90 text-white rounded-xl font-bold"
