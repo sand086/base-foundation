@@ -32,7 +32,6 @@ from sqlalchemy.dialects.postgresql import JSONB, DOUBLE_PRECISION
 
 from app.db.database import Base
 
-
 # =========================================================
 # ENUMS
 # =========================================================
@@ -62,6 +61,11 @@ class UnitType(str, PyEnum):
 class Currency(str, PyEnum):
     MXN = "MXN"
     USD = "USD"
+
+
+class SettlementConceptType(str, PyEnum):
+    INGRESO = "ingreso"
+    DEDUCCION = "deduccion"
 
 
 class UnitStatus(str, PyEnum):
@@ -621,6 +625,7 @@ class Trip(AuditMixin, Base):
     descripcion_mercancia = Column(String(255), default="Carga General")
     peso_toneladas = Column(Float, default=0.0)
     es_material_peligroso = Column(Boolean, default=False)
+    referencia = Column(String(100), nullable=True)
     clase_imo = Column(String(50), nullable=True)
     sat_clave_producto = Column(String(20), default="78101802")
     sat_clave_unidad = Column(String(10), default="E48")
@@ -1362,6 +1367,11 @@ class ReceivableInvoice(AuditMixin, Base):
         pg_enum(InvoiceStatus, "invoicestatus"), default=InvoiceStatus.PENDIENTE
     )
 
+    # CAMPOS PARA CANCELACIÓN SAT
+    motivo_cancelacion = Column(String(5), nullable=True)  # Ej: "01", "02"
+    acuse_cancelacion_url = Column(String(500), nullable=True)
+    fecha_cancelacion = Column(DateTime(timezone=True), nullable=True)
+
     pdf_url = Column(String(500))
     xml_url = Column(String(500))
 
@@ -1462,3 +1472,40 @@ class Notification(AuditMixin, Base):
     reference_id = Column(String(50), nullable=True)
 
     user = relationship("User", foreign_keys=[user_id])
+
+
+# =========================================================
+# NUEVOS CATÁLOGOS OPERATIVOS
+# =========================================================
+
+
+class LicenseTypeCatalog(AuditMixin, Base):
+    __tablename__ = "license_types_catalog"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nombre = Column(String(100), nullable=False, unique=True)  # Ej: Federal Tipo A
+    descripcion = Column(Text, nullable=True)
+    activo = Column(Boolean, default=True, server_default="true")
+
+
+class SettlementConceptCatalog(AuditMixin, Base):
+    __tablename__ = "settlement_concepts_catalog"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nombre = Column(String(100), nullable=False, unique=True)  # Ej: Viáticos, Maniobras
+    tipo = Column(
+        pg_enum(SettlementConceptType, "settlementconcepttype"),
+        nullable=False,
+        default=SettlementConceptType.INGRESO,
+    )
+    descripcion = Column(String(255), nullable=True)
+    activo = Column(Boolean, default=True, server_default="true")
+
+
+class InsurerCatalog(AuditMixin, Base):
+    __tablename__ = "insurers_catalog"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nombre = Column(String(100), nullable=False, unique=True)  # Ej: Quálitas, AXA
+    telefono_siniestros = Column(String(50), nullable=True)
+    activo = Column(Boolean, default=True, server_default="true")

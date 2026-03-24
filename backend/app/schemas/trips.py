@@ -325,6 +325,10 @@ class ReceivableInvoiceCreate(BaseModel):
     forma_pago: str = Field(default="03")  # Transferencia electrónica de fondos
     uso_cfdi: str = Field(default="G03")  # Gastos en general
 
+    motivo_cancelacion: Optional[str] = None
+    acuse_cancelacion_url: Optional[str] = None
+    fecha_cancelacion: Optional[datetime] = None
+
     @validator("uuid_relacionado")
     def validate_relacion_04(cls, v, values):
         """Regla de validación crítica: Si hay relación 04, el UUID es obligatorio"""

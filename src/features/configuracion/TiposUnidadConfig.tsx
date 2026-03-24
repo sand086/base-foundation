@@ -163,7 +163,7 @@ export function TiposUnidadConfig() {
   };
 
   return (
-    <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
+    <Card className="border-0 shadow-none bg-transparent">
       <CardHeader className="bg-slate-50/50 border-b border-slate-100">
         <div className="flex items-center justify-between">
           <div>

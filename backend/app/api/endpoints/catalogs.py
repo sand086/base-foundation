@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.models import models
+from app.models.models import RecordStatus
 from pydantic import BaseModel
 from app.schemas import catalogs as schemas
 from typing import List
@@ -126,8 +127,27 @@ def update_system_config_bulk(
             config.value = item.value
             config.updated_by_id = current_user.id
         else:
+            # 🚀 LÓGICA INTELIGENTE PARA QA:
+            # Si la llave nueva es de QA (ej. empresa_rfc_qa), buscamos la base para heredar su grupo
+            base_key = item.key.replace("_qa", "")
+            base_config = (
+                db.query(models.SystemConfig)
+                .filter(models.SystemConfig.key == base_key)
+                .first()
+            )
+
+            grupo = (
+                base_config.grupo if base_config and base_config.grupo else "general"
+            )
+            tipo = base_config.tipo if base_config and base_config.tipo else "string"
+
             new_config = models.SystemConfig(
-                key=item.key, value=item.value, created_by_id=current_user.id
+                key=item.key,
+                value=item.value,
+                grupo=grupo,
+                tipo=tipo,
+                is_public=False,  # Para QA lo ideal es que no sea public
+                created_by_id=current_user.id,
             )
             db.add(new_config)
 
@@ -155,7 +175,6 @@ def create_route_catalog(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_active_user),
 ):
-    # 🚀 FASE 1: Verificación de unicidad amigable
     existing = (
         db.query(models.RateTemplate)
         .filter(
@@ -322,3 +341,123 @@ def delete_module(
     config.updated_by_id = current_user.id
     db.commit()
     return filtered_modules
+
+
+# =========================================================
+# CATÁLOGO: TIPOS DE LICENCIA
+# =========================================================
+
+
+@router.get("/license-types", response_model=List[schemas.LicenseTypeBase])
+def get_license_types(db: Session = Depends(get_db)):
+    return (
+        db.query(models.LicenseTypeCatalog)
+        .filter(models.LicenseTypeCatalog.record_status != RecordStatus.ELIMINADO)
+        .all()
+    )
+
+
+@router.post("/license-types/bulk")
+def save_license_types_bulk(
+    tipos: List[schemas.LicenseTypeCreate],
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    for item in tipos:
+        db_item = (
+            db.query(models.LicenseTypeCatalog)
+            .filter(models.LicenseTypeCatalog.id == item.id)
+            .first()
+            if item.id
+            else None
+        )
+        if db_item:
+            for key, value in item.model_dump().items():
+                setattr(db_item, key, value)
+            db_item.updated_by_id = current_user.id
+        else:
+            new_item = models.LicenseTypeCatalog(**item.model_dump())
+            new_item.created_by_id = current_user.id
+            db.add(new_item)
+    db.commit()
+    return {"message": "Catálogo de licencias actualizado"}
+
+
+# =========================================================
+# CATÁLOGO: CONCEPTOS DE PAGO
+# =========================================================
+
+
+@router.get("/settlement-concepts", response_model=List[schemas.SettlementConceptBase])
+def get_settlement_concepts(db: Session = Depends(get_db)):
+    return (
+        db.query(models.SettlementConceptCatalog)
+        .filter(models.SettlementConceptCatalog.record_status != RecordStatus.ELIMINADO)
+        .all()
+    )
+
+
+@router.post("/settlement-concepts/bulk")
+def save_settlement_concepts_bulk(
+    conceptos: List[schemas.SettlementConceptCreate],
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    for item in conceptos:
+        db_item = (
+            db.query(models.SettlementConceptCatalog)
+            .filter(models.SettlementConceptCatalog.id == item.id)
+            .first()
+            if item.id
+            else None
+        )
+        if db_item:
+            for key, value in item.model_dump().items():
+                setattr(db_item, key, value)
+            db_item.updated_by_id = current_user.id
+        else:
+            new_item = models.SettlementConceptCatalog(**item.model_dump())
+            new_item.created_by_id = current_user.id
+            db.add(new_item)
+    db.commit()
+    return {"message": "Catálogo de conceptos actualizado"}
+
+
+# =========================================================
+# CATÁLOGO: ASEGURADORAS
+# =========================================================
+
+
+@router.get("/insurers", response_model=List[schemas.InsurerBase])
+def get_insurers(db: Session = Depends(get_db)):
+    return (
+        db.query(models.InsurerCatalog)
+        .filter(models.InsurerCatalog.record_status != RecordStatus.ELIMINADO)
+        .all()
+    )
+
+
+@router.post("/insurers/bulk")
+def save_insurers_bulk(
+    insurers: List[schemas.InsurerCreate],
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    for item in insurers:
+        db_item = (
+            db.query(models.InsurerCatalog)
+            .filter(models.InsurerCatalog.id == item.id)
+            .first()
+            if item.id
+            else None
+        )
+        if db_item:
+            for key, value in item.model_dump().items():
+                setattr(db_item, key, value)
+            db_item.updated_by_id = current_user.id
+        else:
+            new_item = models.InsurerCatalog(**item.model_dump())
+            new_item.created_by_id = current_user.id
+            db.add(new_item)
+    db.commit()
+    return {"message": "Catálogo de aseguradoras actualizado"}

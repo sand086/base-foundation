@@ -14,6 +14,7 @@ import {
   Info,
   Box,
   CalendarDays,
+  Container,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -78,6 +79,7 @@ type WizardData = {
   peso_toneladas: number;
   es_material_peligroso: boolean;
   clase_imo: string;
+  contenedor: string;
 
   // Recursos
   unitId: string;
@@ -197,6 +199,7 @@ export const DespachoWizard = () => {
     peso_toneladas: 0,
     es_material_peligroso: false,
     clase_imo: "",
+    contenedor: "",
 
     unitId: "",
     remolque1Id: "",
@@ -377,6 +380,7 @@ export const DespachoWizard = () => {
         peso_toneladas: Number(data.peso_toneladas),
         es_material_peligroso: data.es_material_peligroso,
         clase_imo: data.es_material_peligroso ? data.clase_imo : null,
+        referencia: data.contenedor || null,
 
         tarifa_base: Number(infoTarifa.base || 0),
         costo_casetas: Number(infoTarifa.casetas || 0),
@@ -391,17 +395,13 @@ export const DespachoWizard = () => {
 
         payload.initial_leg = {
           unit_id: parseInt(data.unitId, 10),
-          leg_type: data.leg_type,
+          leg_type: "ruta_carretera",
           operator_id: parseInt(data.driverId, 10),
-          odometro_inicial: null,
-          nivel_tanque_inicial: null,
-          anticipo_casetas: isRoadLeg ? Number(data.anticipo_casetas || 0) : 0,
-          anticipo_viaticos: isRoadLeg
-            ? Number(data.anticipo_viaticos || 0)
-            : 0,
-          anticipo_combustible: isRoadLeg
-            ? Number(data.anticipo_combustible || 0)
-            : 0,
+          odometro_inicial: 0, // Ajustado a 0 por default si el backend lo requiere como numérico
+          nivel_tanque_inicial: 0,
+          anticipo_casetas: Number(data.anticipo_casetas || 0),
+          anticipo_viaticos: Number(data.anticipo_viaticos || 0),
+          anticipo_combustible: Number(data.anticipo_combustible || 0),
         };
       }
 
@@ -442,7 +442,8 @@ export const DespachoWizard = () => {
       data.unitId &&
       data.driverId &&
       data.remolque1Id &&
-      data.descripcion_mercancia,
+      data.descripcion_mercancia &&
+      data.contenedor,
     );
     const isEquipValid = isFullTrip
       ? Boolean(isBasicValid && data.dollyId && data.remolque2Id)
@@ -703,13 +704,13 @@ export const DespachoWizard = () => {
               </div>
             </div>
 
-            {/* 🚀 FASE 2: MERCANCÍA SE MOVIÓ AL PASO 2 */}
-            <div className="space-y-4 bg-slate-50 p-6 rounded-xl border border-slate-200 mb-6">
+            {/* 🚀 NUEVO: DATOS DE LA CARGA Y CONTENEDOR */}
+            <div className="space-y-4 bg-slate-50 p-6 rounded-xl border border-slate-200 mb-6 shadow-sm">
               <h4 className="text-sm font-black text-brand-navy uppercase tracking-widest flex items-center gap-2 mb-2">
                 <Box className="h-4 w-4" /> Información de la Mercancía
               </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="space-y-2 md:col-span-2">
                   <Label>Descripción de la Carga (Catálogo SAT) *</Label>
                   <SearchableSelect
                     items={availableSatProducts}
@@ -737,7 +738,7 @@ export const DespachoWizard = () => {
                   <Label>Peso Estimado (Ton)</Label>
                   <Input
                     type="number"
-                    placeholder="Ej: 3.5"
+                    placeholder="Ej: 25.5"
                     value={data.peso_toneladas || ""}
                     onChange={(e) =>
                       setData((p) => ({
@@ -748,52 +749,78 @@ export const DespachoWizard = () => {
                   />
                 </div>
               </div>
-            </div>
 
-            <div className="flex items-center gap-4 bg-indigo-50 p-4 rounded-xl border border-indigo-100 shadow-sm">
-              <Label className="text-sm font-black text-indigo-900 uppercase tracking-widest flex items-center gap-2">
-                <Clock className="h-5 w-5" /> Fase Inicial del Viaje:
-              </Label>
-              <Select
-                value={data.leg_type}
-                onValueChange={(val) =>
-                  setData((p) => ({ ...p, leg_type: val }))
-                }
-              >
-                <SelectTrigger className="h-12 text-sm font-bold bg-white border-indigo-200 w-full max-w-[400px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem
-                    value="carga_muelle"
-                    className="font-bold text-indigo-900 py-3"
-                  >
-                    1. Carga Inicial (Movimiento en Puerto / Patio)
-                  </SelectItem>
-                  <SelectItem
-                    value="ruta_carretera"
-                    className="font-bold text-emerald-900 py-3"
-                  >
-                    2. Ruta Directa (Viaje a Destino por Carretera)
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+              {/* 🚀 CAMPO CRÍTICO: CONTENEDOR PARA LA CARTA PORTE */}
+              <div className="pt-2">
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2 font-bold text-brand-navy">
+                    <Container className="h-4 w-4" /> Número de Contenedor /
+                    Desglose *
+                  </Label>
+                  <Input
+                    placeholder="Ej: CMA U 1521457"
+                    value={data.contenedor}
+                    onChange={(e) =>
+                      setData((p) => ({
+                        ...p,
+                        contenedor: e.target.value.toUpperCase(),
+                      }))
+                    }
+                    className="font-mono text-lg uppercase bg-white border-blue-200 focus-visible:ring-blue-500 h-12"
+                  />
+                  <p className="text-[10px] text-slate-500">
+                    * Este número se inyectará en la descripción del concepto de
+                    la Carta Porte de $1 MXN.
+                  </p>
+                </div>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="space-y-4 bg-slate-50 p-5 rounded-2xl border border-slate-200">
+              {/* OPERADOR Y TRACTOR */}
+              <div className="space-y-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                <div>
+                  <h4 className="text-sm font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
+                    <User className="h-4 w-4" /> Ejecutor del Viaje
+                  </h4>
+                </div>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="font-bold text-slate-700">
+                      Tractocamión Asignado *
+                    </Label>
+                    <SearchableSelect
+                      items={availableTractos}
+                      value={data.unitId}
+                      onSelect={(v) => setData((p) => ({ ...p, unitId: v }))}
+                      placeholder="Buscar económico o placa..."
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-bold text-slate-700">
+                      Operador / Chófer *
+                    </Label>
+                    <SearchableSelect
+                      items={availableOperators}
+                      value={data.driverId}
+                      onSelect={(v) => setData((p) => ({ ...p, driverId: v }))}
+                      placeholder="Buscar por nombre..."
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* CHASIS Y REMOLQUES */}
+              <div className="space-y-4 bg-slate-50 p-5 rounded-2xl border border-slate-200 shadow-sm">
                 <div>
                   <h4 className="text-sm font-black text-brand-navy uppercase tracking-widest flex items-center gap-2">
-                    <Box className="h-4 w-4" /> Equipos de Arrastre
+                    <LinkIcon className="h-4 w-4" /> Equipos de Arrastre
                   </h4>
-                  <p className="text-[11px] text-slate-500 font-medium mt-1">
-                    Estos chasis amparan la carga durante TODO el viaje.
-                  </p>
                 </div>
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label className="flex items-center gap-2 font-bold text-slate-700">
-                      <LinkIcon className="h-3.5 w-3.5" /> Remolque / Chasis 1 *
+                      Remolque / Chasis 1 *
                     </Label>
                     <SearchableSelect
                       items={availableRemolques}
@@ -808,8 +835,7 @@ export const DespachoWizard = () => {
                     <>
                       <div className="space-y-2 pt-2 border-t border-slate-200">
                         <Label className="flex items-center gap-2 font-bold text-rose-600">
-                          <LinkIcon className="h-3.5 w-3.5" /> Dolly
-                          (Convertidor) *
+                          Dolly (Convertidor) *
                         </Label>
                         <SearchableSelect
                           items={availableDollies}
@@ -822,8 +848,7 @@ export const DespachoWizard = () => {
                       </div>
                       <div className="space-y-2">
                         <Label className="flex items-center gap-2 font-bold text-rose-600">
-                          <LinkIcon className="h-3.5 w-3.5" /> Remolque / Chasis
-                          2 *
+                          Remolque / Chasis 2 *
                         </Label>
                         <SearchableSelect
                           items={availableRemolques}
@@ -836,45 +861,6 @@ export const DespachoWizard = () => {
                       </div>
                     </>
                   )}
-                </div>
-              </div>
-
-              <div className="space-y-6">
-                <div className="space-y-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                  <div>
-                    <h4 className="text-sm font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
-                      <User className="h-4 w-4" /> Ejecutor de la Fase Inicial
-                    </h4>
-                    <p className="text-[11px] text-slate-500 font-medium mt-1">
-                      Este operador y tractor pueden ser relevados más adelante.
-                    </p>
-                  </div>
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label className="font-bold text-slate-700">
-                        Tractocamión Asignado *
-                      </Label>
-                      <SearchableSelect
-                        items={availableTractos}
-                        value={data.unitId}
-                        onSelect={(v) => setData((p) => ({ ...p, unitId: v }))}
-                        placeholder="Buscar económico o placa..."
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="font-bold text-slate-700">
-                        Operador / Chófer *
-                      </Label>
-                      <SearchableSelect
-                        items={availableOperators}
-                        value={data.driverId}
-                        onSelect={(v) =>
-                          setData((p) => ({ ...p, driverId: v }))
-                        }
-                        placeholder="Buscar por nombre..."
-                      />
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>

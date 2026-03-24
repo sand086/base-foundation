@@ -527,6 +527,7 @@ export interface TripCreatePayload {
   costo_casetas?: number;
   status: TripStatus;
   start_date: string;
+  referencia?: string;
   initial_leg: TripLegCreatePayload;
 }
 
@@ -735,4 +736,26 @@ export interface RegisterPaymentPayload {
   metodo_pago: string;
   referencia: string | null;
   cuenta_retiro: number;
+}
+
+export interface LicenseType {
+  id?: number;
+  nombre: string;
+  descripcion?: string;
+  activo: boolean;
+}
+
+export interface SettlementConcept {
+  id?: number;
+  nombre: string;
+  tipo: "ingreso" | "deduccion";
+  descripcion?: string;
+  activo: boolean;
+}
+
+export interface Insurer {
+  id?: number;
+  nombre: string;
+  telefono_siniestros?: string;
+  activo: boolean;
 }

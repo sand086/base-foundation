@@ -6,12 +6,15 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
+from cryptography import x509
+from cryptography.hazmat.backends import default_backend
 
 from app.db.database import get_db
 from app.schemas.trips import ReceivableInvoiceCreate
 from app.services.billing_service import BillingService
-from app.models.models import SystemConfig
+from app.models import models
 from app.api.endpoints.auth import get_current_active_user
+from app.core.security import verify_password
 
 router = APIRouter()
 
@@ -102,70 +105,81 @@ def download_invoice_pdf(uuid: str, db: Session = Depends(get_db)):
     )
 
 
+@router.post("/update-params")
+def update_sat_params(data: dict, db: Session = Depends(get_db)):
+    """
+    Endpoint para la Pestaña 3: Guarda la leyenda legal y otros textos.
+    Recibe un dict: {"sat_leyenda_legal": "TEXTO LARGO...", "sat_ppd_default": "true"}
+    """
+    for key, value in data.items():
+        db_conf = (
+            db.query(models.SystemConfig).filter(models.SystemConfig.key == key).first()
+        )
+        if db_conf:
+            db_conf.value = str(value)
+        else:
+            db.add(
+                models.SystemConfig(
+                    key=key, value=str(value), grupo="sat", tipo="string"
+                )
+            )
+    db.commit()
+    return {"status": "success"}
+
+
 @router.post("/csd")
 def upload_csd_files(
     cer_file: UploadFile = File(...),
     key_file: UploadFile = File(...),
     password: str = Form(...),
+    environment: str = Form("PROD"),  # 🚀 Recibimos el ambiente
     db: Session = Depends(get_db),
 ):
-    """
-    Recibe los certificados .cer y .key y los guarda en el servidor con un timestamp.
-    """
-    if not cer_file.filename.endswith(".cer") or not key_file.filename.endswith(".key"):
-        raise HTTPException(
-            status_code=400, detail="Los archivos deben ser .cer y .key válidos"
-        )
+    suffix = "_qa" if environment == "QA" else ""
 
-    base_path = Path(os.getenv("APP_BASE_PATH", Path(__file__).resolve().parents[3]))
+    # Validaciones de extensión
+    if not cer_file.filename.endswith(".cer") or not key_file.filename.endswith(".key"):
+        raise HTTPException(status_code=400, detail="Archivos inválidos")
+
+    # Definir carpetas
+    base_path = Path(os.getenv("APP_BASE_PATH", "./"))
     cert_dir = Path(os.getenv("CERT_DIR", base_path / "certs"))
     cert_dir.mkdir(parents=True, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    cer_filename = f"CSD_{timestamp}.cer"
-    key_filename = f"CSD_{timestamp}.key"
+    cer_path = cert_dir / f"CSD_{environment}_{timestamp}.cer"
+    key_path = cert_dir / f"CSD_{environment}_{timestamp}.key"
 
-    cer_path = cert_dir / cer_filename
-    key_path = cert_dir / key_filename
-
+    # Guardar archivos físicamente
     with open(cer_path, "wb") as buffer:
         shutil.copyfileobj(cer_file.file, buffer)
     with open(key_path, "wb") as buffer:
         shutil.copyfileobj(key_file.file, buffer)
 
-    configs_to_update = [
-        {
-            "key": "sat_cert_path",
-            "value": str(cer_path),
-            "grupo": "facturacion",
-            "tipo": "string",
-        },
-        {
-            "key": "sat_key_path",
-            "value": str(key_path),
-            "grupo": "facturacion",
-            "tipo": "string",
-        },
-        {
-            "key": "sat_key_password",
-            "value": password,
-            "grupo": "facturacion",
-            "tipo": "string",
-        },
-    ]
+    # Actualizar llaves dinámicas en la BD
+    configs = {
+        f"sat_cert_path{suffix}": str(cer_path),
+        f"sat_key_path{suffix}": str(key_path),
+        f"sat_key_password{suffix}": password,
+    }
 
-    for conf in configs_to_update:
-        db_conf = db.query(SystemConfig).filter(SystemConfig.key == conf["key"]).first()
+    for key, value in configs.items():
+        db_conf = (
+            db.query(models.SystemConfig).filter(models.SystemConfig.key == key).first()
+        )
         if db_conf:
-            db_conf.value = conf["value"]
+            db_conf.value = value
         else:
-            db_conf = SystemConfig(**conf, is_public=False)
-            db.add(db_conf)
+            db.add(
+                models.SystemConfig(
+                    key=key, value=value, grupo="facturacion", tipo="string"
+                )
+            )
 
     db.commit()
     return {
         "status": "success",
-        "message": "Certificados CSD actualizados correctamente",
+        "message": f"Certificados de {environment} actualizados",
     }
 
 
@@ -173,42 +187,114 @@ def upload_csd_files(
 def download_csd_secure(
     password: str = Form(...),
     file_type: str = Form(...),
+    environment: str = Form(...),
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(
+        get_current_active_user
+    ),  # 🚀 Obtenemos al usuario logueado
+):
+    # 1. VALIDAR CONTRASEÑA DEL USUARIO (Logueo)
+    if not verify_password(password, current_user.password_hash):
+        raise HTTPException(
+            status_code=401,
+            detail="Tu contraseña de acceso es incorrecta. Verificación fallida.",
+        )
+
+    # 2. SELECCIONAR SUFIJO SEGÚN AMBIENTE
+    suffix = "_qa" if environment == "QA" else ""
+
+    # 3. BUSCAR LA RUTA FÍSICA EN LA DB
+    key_name = (
+        f"sat_cert_path{suffix}" if file_type == "cer" else f"sat_key_path{suffix}"
+    )
+    path_conf = (
+        db.query(models.SystemConfig)
+        .filter(models.SystemConfig.key == key_name)
+        .first()
+    )
+
+    if not path_conf or not Path(path_conf.value).exists():
+        raise HTTPException(
+            status_code=404, detail="El archivo físico no existe en el servidor."
+        )
+
+    # 4. ENVIAR ARCHIVO PARA DESCARGA
+    return FileResponse(
+        path=path_conf.value,
+        filename=Path(path_conf.value).name,
+        media_type="application/octet-stream",
+    )
+
+
+@router.post("/csd/test")
+def test_csd_connection(
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
 ):
     """
-    Descarga segura de los certificados CSD.
-    Requiere la contraseña del sello digital.
+    Verifica que los certificados existan, lee la fecha de caducidad del .cer
+    y simula la conexión con el PAC.
     """
-    db_pass = (
-        db.query(SystemConfig).filter(SystemConfig.key == "sat_key_password").first()
+    environment = payload.get("environment", "PROD")
+    suffix = "_qa" if environment == "QA" else ""
+
+    cer_conf = (
+        db.query(models.SystemConfig).filter_by(key=f"sat_cert_path{suffix}").first()
+    )
+    key_conf = (
+        db.query(models.SystemConfig).filter_by(key=f"sat_key_path{suffix}").first()
+    )
+    pass_conf = (
+        db.query(models.SystemConfig).filter_by(key=f"sat_key_password{suffix}").first()
     )
 
-    if not db_pass or db_pass.value != password:
-        raise HTTPException(status_code=401, detail="Contraseña del SAT incorrecta.")
-
-    if file_type == "cer":
-        path_conf = (
-            db.query(SystemConfig).filter(SystemConfig.key == "sat_cert_path").first()
-        )
-    elif file_type == "key":
-        path_conf = (
-            db.query(SystemConfig).filter(SystemConfig.key == "sat_key_path").first()
-        )
-    else:
-        raise HTTPException(status_code=400, detail="Tipo de archivo inválido.")
-
-    if not path_conf or not path_conf.value:
+    if not cer_conf or not key_conf or not pass_conf:
         raise HTTPException(
-            status_code=404, detail="El archivo solicitado no está configurado."
+            status_code=400,
+            detail=f"Faltan certificados configurados para el ambiente {environment}",
         )
 
-    file_path = Path(path_conf.value)
+    cer_path = Path(cer_conf.value)
 
-    if not file_path.exists():
+    if not cer_path.exists():
         raise HTTPException(
-            status_code=404, detail="El archivo físico no se encuentra en el servidor."
+            status_code=404,
+            detail="El archivo de certificado (.cer) no se encuentra físicamente en el servidor.",
         )
 
-    return FileResponse(
-        path=file_path, filename=file_path.name, media_type="application/octet-stream"
-    )
+    # 🚀 LECTURA REAL DEL CERTIFICADO PARA SACAR LA FECHA
+    try:
+        with open(cer_path, "rb") as cert_file:
+            cert_data = cert_file.read()
+            # El SAT usa formato DER
+            cert = x509.load_der_x509_certificate(cert_data, default_backend())
+
+            # Fechas en UTC
+            not_valid_before = cert.not_valid_before_utc
+            not_valid_after = cert.not_valid_after_utc
+
+            ahora = datetime.now(not_valid_after.tzinfo)
+            dias_restantes = (not_valid_after - ahora).days
+
+            estado = "VIGENTE"
+            if dias_restantes < 0:
+                estado = "CADUCADO"
+            elif dias_restantes <= 30:
+                estado = "POR VENCER"
+
+            return {
+                "status": "success",
+                "message": f"Conexión simulada exitosa con PAC ({environment})",
+                "cert_info": {
+                    "valido_desde": not_valid_before.isoformat(),
+                    "valido_hasta": not_valid_after.isoformat(),
+                    "dias_restantes": dias_restantes,
+                    "estado": estado,
+                },
+            }
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"El archivo .cer es inválido o está corrupto: {str(e)}",
+        )

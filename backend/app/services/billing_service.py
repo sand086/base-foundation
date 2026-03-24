@@ -1,6 +1,8 @@
 import os
 import base64
 import logging
+import logging.config
+import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -11,7 +13,6 @@ from zeep.plugins import HistoryPlugin
 from lxml import etree
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
-import qrcode
 
 # Librerías para criptografía
 from cryptography import x509
@@ -31,18 +32,60 @@ from app.models.models import (
 )
 from app.schemas.trips import ReceivableInvoiceCreate
 
-logging.basicConfig(level=logging.INFO)
+# =======================================================
+# CONFIGURACIÓN DE DEBUG AVANZADO (VER ERRORES DEL PAC)
+# =======================================================
+logging.config.dictConfig(
+    {
+        "version": 1,
+        "formatters": {
+            "verbose": {
+                "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+            }
+        },
+        "handlers": {
+            "console": {"class": "logging.StreamHandler", "formatter": "verbose"}
+        },
+        "loggers": {
+            "zeep.transports": {"level": "DEBUG", "handlers": ["console"]},
+            "billing.audit": {"level": "DEBUG", "handlers": ["console"]},
+        },
+    }
+)
 logger = logging.getLogger("billing.audit")
+
+# =======================================================
+# LEYENDA LEGAL POR DEFECTO
+# =======================================================
+DEFAULT_LEYENDA = "Condiciones de prestación de servicios que ampara la CARTA DE PORTE O COMPROBANTE PARA EL TRANSPORTE DE MERCANCÍAS. PRIMERA.- Para los efectos del presente contrato de transporte se denomina 'Transportista' al que realiza el servicio de transportación y 'Remitente' o 'Expedidor' al usuario que contrate el servicio o remite la mercancía. SEGUNDA.- El 'Remitente' o 'Expedidor' es responsable de que la información proporcionada al 'Transportista' sea veraz y que la documentación que entregue para efectos del transporte sea la correcta. TERCERA.- El 'Remitente' o 'Expedidor' debe declarar al 'Transportista' el tipo de mercancía o efectos de que se trate, peso, medidas y/o número de la carga que entrega para su transporte y, en su caso, el valor de la misma. La carga que se entregue a granel será pesada por el 'Transportista' en el primer punto donde haya báscula apropiada o, en su defecto, aforada en metros cúbicos con la conformidad del 'Remitente' o 'Expedidor'. CUARTA.- Para efectos del transporte, el 'Remitente' o 'Expedidor' deberá entregar al 'Transportista' los documentos que las leyes y reglamentos exijan para llevar a cabo el servicio, en caso de no cumplirse con estos requisitos el 'Transportista' está obligado a rehusar el transporte de las mercancías. QUINTA.- Si por sospecha de falsedad en la declaración del contenido de un bulto el 'Transportista' deseare proceder a su reconocimiento, podrá hacerlo ante testigos y con asistencia del 'Remitente' o 'Expedidor' o del consignatario. Si este último no concurriere, se solicitará la presencia de un inspector de la Secretaría de Comunicaciones y Transportes, y se levantará el acta correspondiente. El 'Transportista' tendrá en todo caso, la obligación de dejar los bultos en el estado en que se encontraban antes del reconocimiento. SEXTA.- El 'Transportista' deberá recoger y entregar la carga precisamente en los domicilios que señale el 'Remitente' o 'Expedidor' ajustándose a los términos y condiciones convenidos. El 'Transportista' sólo está obligado a llevar la carga al domicilio del consignatario para su entrega una sola vez. Si ésta no fuera recibida se dejará aviso de que la mercancía queda a disposición del interesado en las bodegas que indique el 'Transportista'. SÉPTIMA.- Si la carga no fuere retirada dentro de los 30 días hábiles siguientes a aquél en que hubiere sido puesta a disposición del consignatario, el 'Transportista' podrá solicitar la venta en subasta pública con arreglo a lo que dispone el Código de Comercio. OCTAVA.- El 'Transportista' y el 'Remitente' o 'Expedidor' negociarán libremente el precio del servicio, tomando en cuenta su tipo, característica de los embarques, volumen, regularidad, clase de carga y sistema de pago. NOVENA.- Si el 'Remitente' o 'Expedidor' desea que el 'Transportista' asuma la responsabilidad por el valor de las mercancías o efectos que él declare y que cubra toda clase de riesgos, inclusive los derivados de caso fortuito o de fuerza mayor, las partes deberán convenir un cargo adicional, equivalente al valor de la prima del seguro que se contrate, el cual se deberá expresar en la Carta de Porte. DÉCIMA.- Cuando el importe del flete no incluya el cargo adicional, la responsabilidad del 'Transportista' queda expresamente limitada a la cantidad equivalente a 15 días del salario mínimo vigente en el Distrito Federal por tonelada o cuando se trate de embarques cuyo peso sea mayor de 200 kg., pero menor de 1000 kg; y a 4 días de salario mínimo por remesa cuando se trate de embarques con peso hasta de 200 kg. DÉCIMA PRIMERA.- El precio del transporte deberá pagarse en origen, salvo convenio entre las partes de pago en destino. Cuando el transporte se hubiere concertado 'Flete por Cobrar' la entrega de las mercancías o efectos se hará contra el pago del flete y el 'Transportista' tendrá derecho a retenerlos mientras no se le cubra el precio convenido. DÉCIMA SEGUNDA.- Si al momento de la entrega resultare algún faltante o avería, el consignatario deberá hacerla constar en ese acto en la Carta de Porte y formular su reclamación por escrito al 'Transportista' dentro de las 24 horas siguientes. DÉCIMA TERCERA.- El 'Transportista' queda eximido de la obligación de recibir mercancías o efectos para su transporte, en los siguientes casos: a) Cuando se trate de carga que por su naturaleza, peso, volumen, embalaje defectuoso o cualquier otra circunstancia no pueda transportarse sin destruirse o sin causar daño a los demás artículos o al material rodante, salvo que la empresa de que se trate tenga el equipo adecuado. b) Las mercancías cuyo transporte haya sido prohibido por disposiciones legales o reglamentarias. Cuando tales disposiciones no prohíban precisamente el transporte de determinadas mercancías, pero sí ordenen la presentación de ciertos documentos para que puedan ser transportadas, el 'Remitente' o 'Expedidor' estará obligado a entregar al 'Transportista' los documentos correspondientes. DÉCIMA CUARTA.- Los casos no previstos en las presentes condiciones y las quejas derivadas de su aplicación se someterán por la vía administrativa a la Secretaría de Comunicaciones y Transportes. DÉCIMA QUINTA.- Para el caso de que el 'Remitente' o 'Expedidor' contrate carro por entero, este aceptará la responsabilidad solidaria para con el 'Transportista' mediante la figura de la corresponsabilidad que contempla el artículo 10 del Reglamento Sobre el Peso, Dimensiones y Capacidad de los Vehículos de Autotransporte que Transitan en los Caminos y Puentes de Jurisdicción Federal, por lo que el 'Remitente' o 'Expedidor' queda obligado a verificar que la carga y el vehículo que la transporta, cumplan con el peso y dimensiones máximas establecidos en la NOM-012-SCT-2-2014. Para el caso de incumplimiento e inobservancia a las disposiciones que regulan el peso y dimensiones, por parte del 'Remitente' o 'Expedidor', este será corresponsable de las infracciones y multas que la Secretaría de Comunicaciones y Transportes y la Policía Federal impongan al 'Transportista' por cargar las unidades con exceso de peso."
 
 
 class BillingService:
     def __init__(self, db: Session):
         self.db = db
-        self.wsdl_timbrado = (
-            "https://testing.solucionfactible.com/ws/services/Timbrado?wsdl"
-        )
-        self.pac_user = "testing@solucionfactible.com"
-        self.pac_pass = "timbrado.SF.16672"
+
+        # 🚀 1. LECTURA DEL ENTORNO (PROD vs QA)
+        self.env = os.getenv("ENVIRONMENT", "PROD").upper()
+        self.suffix = "_qa" if self.env == "QA" else ""
+
+        logger.info(f"INICIALIZANDO BILLING SERVICE EN MODO: {self.env}")
+
+        # 🚀 2. CREDENCIALES DEL PAC DINÁMICAS
+        if self.env == "QA":
+            self.wsdl_timbrado = (
+                "https://testing.solucionfactible.com/ws/services/Timbrado?wsdl"
+            )
+            self.pac_user = "testing@solucionfactible.com"
+            self.pac_pass = "timbrado.SF.16672"
+        else:
+            # ⚠️ Asegúrate de definir estas variables en tu archivo .env del servidor en Producción
+            self.wsdl_timbrado = os.getenv(
+                "PAC_WSDL_PROD",
+                "https://solucionfactible.com/ws/services/Timbrado?wsdl",
+            )
+            self.pac_user = os.getenv("PAC_USER_PROD", "TU_USUARIO_PROD")
+            self.pac_pass = os.getenv("PAC_PASS_PROD", "TU_PASS_PROD")
+
         self.history = HistoryPlugin()
 
         self.base_path = Path(
@@ -59,10 +102,21 @@ class BillingService:
         self.cert_dir.mkdir(parents=True, exist_ok=True)
         self.storage_dir.mkdir(parents=True, exist_ok=True)
 
-        cert_conf = self.db.query(SystemConfig).filter_by(key="sat_cert_path").first()
-        key_conf = self.db.query(SystemConfig).filter_by(key="sat_key_path").first()
+        # 🚀 3. EXTRACCIÓN DE RUTAS DE CSD (CON SUFIJO DINÁMICO)
+        cert_conf = (
+            self.db.query(SystemConfig)
+            .filter_by(key=f"sat_cert_path{self.suffix}")
+            .first()
+        )
+        key_conf = (
+            self.db.query(SystemConfig)
+            .filter_by(key=f"sat_key_path{self.suffix}")
+            .first()
+        )
         pass_conf = (
-            self.db.query(SystemConfig).filter_by(key="sat_key_password").first()
+            self.db.query(SystemConfig)
+            .filter_by(key=f"sat_key_password{self.suffix}")
+            .first()
         )
 
         self.path_cer = (
@@ -76,6 +130,42 @@ class BillingService:
             else (self.cert_dir / "CSD_Sucursal_1_EKU9003173C9_20230517_223850.key")
         )
         self.key_password = pass_conf.value if pass_conf else "12345678a"
+
+        # 🚀 4. EXTRAER DATOS DEL EMISOR (CON SUFIJO DINÁMICO)
+        rfc_conf = (
+            self.db.query(SystemConfig)
+            .filter_by(key=f"empresa_rfc{self.suffix}")
+            .first()
+        )
+        nombre_conf = (
+            self.db.query(SystemConfig)
+            .filter_by(key=f"empresa_nombre{self.suffix}")
+            .first()
+        )
+        regimen_conf = (
+            self.db.query(SystemConfig)
+            .filter_by(key=f"empresa_regimen_fiscal{self.suffix}")
+            .first()
+        )
+        cp_conf = (
+            self.db.query(SystemConfig)
+            .filter_by(key=f"empresa_cp{self.suffix}")
+            .first()
+        )
+
+        # Fallback a Escuela Kemper si no hay datos en BD
+        self.emisor_rfc = (
+            rfc_conf.value if rfc_conf and rfc_conf.value else "EKU9003173C9"
+        )
+        self.emisor_nombre = (
+            nombre_conf.value
+            if nombre_conf and nombre_conf.value
+            else "ESCUELA KEMPER URGATE SA DE CV"
+        )
+        self.emisor_regimen = (
+            regimen_conf.value if regimen_conf and regimen_conf.value else "622"
+        )
+        self.emisor_cp = cp_conf.value if cp_conf and cp_conf.value else "91808"
 
     # =======================================================
     # FASE 3: Carta Porte Provisional ($1 MXN) (BYPASS)
@@ -99,7 +189,7 @@ class BillingService:
             is_nominal=True,
             status_sat="TIMBRADA",
             estatus="pendiente",
-            concepto=f"Carta Porte Nominal Operativa - Viaje {viaje.id}",
+            concepto=data["descripcion_concepto"],
             monto_total=monto_total,
             saldo_pendiente=monto_total,
             subtotal=Decimal("1.00"),
@@ -146,7 +236,7 @@ class BillingService:
             is_nominal=False,
             status_sat="TIMBRADA",
             estatus="pendiente",
-            concepto=f"Factura Ingreso Flete - Viaje {viaje.id}",
+            concepto=data["descripcion_concepto"],
             monto_total=monto_total,
             saldo_pendiente=monto_total,
             subtotal=Decimal(data["subtotal"]),
@@ -168,21 +258,130 @@ class BillingService:
             )
 
     def cancelar_factura_nominal(
-        self, invoice_id: int, motivo: str, uuid_sustituto: str = None
+        self, invoice_id: int, motivo: str = "01", uuid_sustituto: str = None
     ):
+        """
+        Cancela una factura en el SAT a través de Solución Factible.
+        motivo: "01" (Con Relación), "02" (Sin Relación), etc.
+        """
         factura = self.db.get(ReceivableInvoice, invoice_id)
         if not factura or not factura.uuid:
+            logger.error(
+                f"Intento de cancelar factura inválida o sin UUID (ID: {invoice_id})"
+            )
             return
+
+        logger.info(f"--- INICIANDO PROCESO DE CANCELACIÓN UUID: {factura.uuid} ---")
+
+        # 1. Armar la cadena de cancelación: "UUID|Motivo|UuidSustitucion"
+        # Si es motivo 01, UuidSustitucion es obligatorio. Si es 02, se deja vacío.
+        sustituto = uuid_sustituto if uuid_sustituto else ""
+        cadena_uuids = f"{factura.uuid}|{motivo}|{sustituto}"
+
         try:
-            factura.status_sat = "CANCELADA"
-            self.db.add(factura)
-            self.db.commit()
+            # 2. Leer y codificar los Certificados a Base64 como pide el PAC
+            with open(self.path_cer, "rb") as f_cer:
+                der_cert_csd = (
+                    f_cer.read()
+                )  # El PAC espera los bytes directos en su cliente SOAP
+
+            with open(self.path_key, "rb") as f_key:
+                der_key_csd = f_key.read()
+
+            # 3. Conexión SOAP
+            client = zeep.Client(self.wsdl_timbrado, plugins=[self.history])
+
+            logger.info(f"Enviando petición de cancelación al PAC: {cadena_uuids}")
+
+            # 4. Ejecutar el método 'cancelar' del PAC
+            result = client.service.cancelar(
+                usuario=self.pac_user,
+                password=self.pac_pass,
+                uuids=cadena_uuids,
+                derCertCSD=der_cert_csd,
+                derKeyCSD=der_key_csd,
+                contrasenaCSD=self.key_password,
+            )
+
+            # 5. Analizar Respuesta General (Header)
+            status_general = int(getattr(result, "status", 0))
+            if status_general != 200:
+                logger.error(
+                    f"Error de Autenticación/Servicio al Cancelar: {result.mensaje}"
+                )
+                raise HTTPException(
+                    status_code=400, detail=f"Error PAC: {result.mensaje}"
+                )
+
+            # 6. Analizar Respuesta Específica del UUID
+            res_cancelacion = result.resultados[0]
+            status_operacion = int(getattr(res_cancelacion, "status", 0))
+            status_sat = int(getattr(res_cancelacion, "statusUUID", 0))
+
+            # Según documentación, statusUUID 201 es "Recibida", 202 es "Previamente cancelado"
+            if status_operacion == 200 and status_sat in [201, 202]:
+                logger.info(f"✅ CANCELACIÓN SAT EXITOSA. Status SAT: {status_sat}")
+
+                # Extraer y Guardar el Acuse (El PAC lo manda dentro del mensaje de respuesta)
+                acuse_text = getattr(res_cancelacion, "mensaje", "Acuse no disponible")
+                acuse_path = self.storage_dir / f"ACUSE_CANCELACION_{factura.uuid}.txt"
+
+                with open(acuse_path, "w", encoding="utf-8") as f_acuse:
+                    f_acuse.write(f"Respuesta SAT: {status_sat}\n")
+                    f_acuse.write(f"Mensaje: {acuse_text}\n")
+                    f_acuse.write(f"Fecha: {datetime.now().isoformat()}\n")
+
+                # Actualizar la BD local
+                factura.status_sat = "CANCELADA"
+                factura.estatus = "cancelado"
+                factura.motivo_cancelacion = motivo
+                factura.acuse_cancelacion_url = str(acuse_path)
+                factura.fecha_cancelacion = datetime.now()
+
+                self.db.add(factura)
+                self.db.commit()
+                return True
+            else:
+                logger.error(
+                    f"SAT Rechazó Cancelación. Status: {status_sat}, Msj: {res_cancelacion.mensaje}"
+                )
+                raise HTTPException(
+                    status_code=400, detail=f"SAT Rechazo: {res_cancelacion.mensaje}"
+                )
+
         except Exception as e:
+            logger.error("--- FALLÓ LA CANCELACIÓN ---")
+            logger.error(str(e))
+
+            # Debugger SOAP para Cancelación
+            if self.history.last_sent:
+                try:
+                    sent = etree.tostring(
+                        self.history.last_sent["envelope"],
+                        pretty_print=True,
+                        encoding="unicode",
+                    )
+                    logger.debug(f"Petición XML enviada al PAC:\n{sent}")
+                except Exception:
+                    pass
+            if self.history.last_received:
+                try:
+                    received = etree.tostring(
+                        self.history.last_received["envelope"],
+                        pretty_print=True,
+                        encoding="unicode",
+                    )
+                    logger.debug(f"Respuesta XML del PAC:\n{received}")
+                except Exception:
+                    pass
+
             self.db.rollback()
-            logger.error(f"Error cancelando UUID nominal {factura.uuid}: {e}")
+            raise HTTPException(
+                status_code=500, detail=f"Error en proceso de cancelación: {str(e)}"
+            )
 
     # =======================================================
-    # LÓGICA DE EXTRACCIÓN (BLINDADA CONTRA EL 400 DE UNIDADES NULAS)
+    # LÓGICA DE EXTRACCIÓN Y PREPARACIÓN DE DATOS
     # =======================================================
     def _obtener_datos_completos(self, viaje_id: int, is_final: bool):
         viaje = self.db.get(Trip, viaje_id)
@@ -192,7 +391,6 @@ class BillingService:
         cliente = self.db.get(ClientModel, viaje.client_id)
 
         if is_final:
-            # 🚀 FASE 4: Para la factura final, SÍ o SÍ requerimos al operador de la carretera
             leg = (
                 self.db.query(TripLeg)
                 .filter(
@@ -205,17 +403,14 @@ class BillingService:
             if not leg:
                 raise HTTPException(
                     status_code=400,
-                    detail="No hay unidad/operador asignado para el tramo en carretera (Factura Final).",
+                    detail="No hay unidad asignada para ruta (Factura Final).",
                 )
             unidad = self.db.get(Unit, leg.unit_id)
             operador = (
                 self.db.get(Operator, leg.operator_id) if leg.operator_id else None
             )
         else:
-            # 🚀 FASE 3: Es la carta porte BYPASS ($1). Buscamos si de casualidad ya hay una unidad.
             leg = self.db.query(TripLeg).filter(TripLeg.trip_id == viaje_id).first()
-
-            # Si hay un tramo y tiene unidad, la usamos. Si no, pasamos None y el dict usará COMODÍN.
             unidad = self.db.get(Unit, leg.unit_id) if leg and leg.unit_id else None
             operador = (
                 self.db.get(Operator, leg.operator_id)
@@ -230,7 +425,6 @@ class BillingService:
     ) -> dict:
         fecha_iso = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
 
-        # 🚀 PROTECCIÓN CONTRA NULOS: Asignación de Unidad Comodín si la DB no nos dio una
         placas_seguras = unidad.placas if unidad and unidad.placas else "89BH4C"
         anio_seguro = str(unidad.year) if unidad and unidad.year else "2024"
         config_segura = (
@@ -262,14 +456,42 @@ class BillingService:
             else "7050094731"
         )
 
+        # 🚀 5. EXTRAER LEYENDA LEGAL DINÁMICA
+        leyenda_conf = (
+            self.db.query(SystemConfig)
+            .filter_by(key=f"sat_leyenda_legal{self.suffix}")
+            .first()
+        )
+        leyenda_legal = (
+            leyenda_conf.value
+            if leyenda_conf and leyenda_conf.value
+            else DEFAULT_LEYENDA
+        )
+
+        # 🚀 ID CCP DINÁMICO
+        id_ccp_dinamico = f"CCC{str(uuid.uuid4())[3:]}"
+
+        # 🚀 DATOS DINÁMICOS DEL VIAJE PARA LA MERCANCÍA
+        contenedor = getattr(viaje, "contenedor", None) or getattr(
+            viaje, "referencia", "TGBU5306410"
+        )
+        descripcion_concepto = f"FLETE CARGA GENERAL {contenedor}"
+        peso_bruto = (
+            str(getattr(viaje, "peso_toneladas", 25) * 1000)
+            if getattr(viaje, "peso_toneladas", 0) > 0
+            else "25000.0"
+        )
+        bienes_transp = str(getattr(viaje, "sat_clave_producto", "50131801"))
+        descripcion_mercancia = str(
+            getattr(viaje, "descripcion_mercancia", "CARGA GENERAL")
+        )
+
         if is_nominal:
-            # CARTA PORTE DE 1 PESO
             subtotal = Decimal("1.00")
             iva = subtotal * Decimal("0.16")
             ret = subtotal * Decimal("0.04")
             total = subtotal + iva - ret
 
-            # Operador Comodín si no hay ninguno
             rfc_operador = "XAXX010101000"
             nombre_operador = "OPERADOR BASE COMODIN"
             licencia = "LIC0000000"
@@ -279,7 +501,6 @@ class BillingService:
                 nombre_operador = operador.name or nombre_operador
                 licencia = operador.license_number or licencia
         else:
-            # FACTURA FINAL
             base = Decimal(str(viaje.tarifa_base or 0))
             casetas = Decimal(str(viaje.costo_casetas or 0))
             subtotal = base + casetas
@@ -295,7 +516,6 @@ class BillingService:
             nombre_operador = operador.name or "OPERADOR DESCONOCIDO"
             licencia = operador.license_number or "LIC0000000"
 
-        # Ubicación y CP del cliente
         cp_cliente = getattr(cliente, "codigo_postal_fiscal", "09040") or "09040"
         ubicacion = (
             self.db.query(SatLocationCode)
@@ -326,7 +546,6 @@ class BillingService:
             "iva": f"{iva:.2f}",
             "retenciones": f"{ret:.2f}",
             "total": f"{total:.2f}",
-            # Unidad
             "placas": placas_seguras,
             "anio_modelo": anio_seguro,
             "config_vehicular": config_segura,
@@ -337,27 +556,48 @@ class BillingService:
             "poliza": poliza_segura,
             "subtipo_remolque": "CTR010",
             "placa_remolque": "58UD5Z",
-            # Operador
             "rfc_operador": rfc_operador,
             "nombre_operador": nombre_operador,
             "licencia": licencia,
+            "leyenda_legal": leyenda_legal,
+            "id_ccp": id_ccp_dinamico,
+            "descripcion_concepto": descripcion_concepto,
+            "peso_bruto": peso_bruto,
+            "bienes_transp": bienes_transp,
+            "descripcion_mercancia": descripcion_mercancia,
+            "total_dist_rec": "480",
         }
 
     # =======================================================
-    # MOTOR ZEEP / COMUNICACIÓN PAC
+    # MOTOR ZEEP / COMUNICACIÓN PAC (CON DEBUGGER ACTIVO)
     # =======================================================
     def _importar_comprobante_ws(self, data: dict, relacion_uuid: str = None):
         try:
+            logger.info(f"--- INICIANDO PROCESO DE TIMBRADO VIAJE {data['folio']} ---")
+
             client = zeep.Client(self.wsdl_timbrado, plugins=[self.history])
             xml_base = self._armar_xml_sin_sello(data, relacion_uuid)
-            xml_sellado = self._sellar_xml(xml_base, data)
+            xml_sellado = self._sellar_xml(xml_base, data, relacion_uuid)
+
+            # 🛑 DEBUG: GUARDAR XML ANTES DE ENVIAR PARA INSPECCIÓN VISUAL
+            debug_path = self.storage_dir / f"DEBUG_PRE_ENVIO_VIAJE_{data['folio']}.xml"
+            with open(debug_path, "w", encoding="utf-8") as f:
+                f.write(xml_sellado)
+            logger.info(f"XML temporal pre-envío guardado en: {debug_path}")
+
+            # Enviar al PAC
             result = client.service.timbrar(
                 self.pac_user, self.pac_pass, xml_sellado.encode("utf-8"), False
             )
+
             if int(getattr(result, "status", 0)) != 200:
+                logger.error(f"Error del PAC: {result.mensaje}")
                 raise HTTPException(status_code=400, detail=f"PAC: {result.mensaje}")
+
             res_sat = result.resultados[0]
+
             if int(getattr(res_sat, "status", 0)) == 200:
+                logger.info(f"¡TIMBRADO EXITOSO! UUID: {res_sat.uuid}")
                 raw_cfdi = res_sat.cfdiTimbrado
                 cfdi_bytes = (
                     (
@@ -372,7 +612,9 @@ class BillingService:
                 qr_bytes = (
                     base64.b64decode(raw_qr) if isinstance(raw_qr, str) else raw_qr
                 )
+
                 self._guardar_xml_disco(cfdi_bytes, res_sat.uuid)
+
                 root = etree.fromstring(cfdi_bytes)
                 ns = {
                     "cfdi": "http://www.sat.gob.mx/cfd/4",
@@ -385,16 +627,45 @@ class BillingService:
                 c_sat = root.xpath(
                     "//tfd:TimbreFiscalDigital/@NoCertificadoSAT", namespaces=ns
                 )[0]
+
                 self._generar_pdf_con_diseno(
                     data, res_sat.uuid, qr_bytes, s_sat, s_emi, c_sat
                 )
                 return res_sat
             else:
+                logger.error(f"Error de validación SAT: {res_sat.mensaje}")
                 raise HTTPException(status_code=400, detail=f"SAT: {res_sat.mensaje}")
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
 
-    def _sellar_xml(self, xml_str, data):
+        except Exception as e:
+            # 🛑 DEBUG: ATRAPAR EL ERROR REAL SOAP SI FALLA LA CONEXIÓN
+            logger.error("--- FALLÓ EL TIMBRADO ---")
+            logger.error(str(e))
+
+            if self.history.last_sent:
+                try:
+                    sent = etree.tostring(
+                        self.history.last_sent["envelope"],
+                        pretty_print=True,
+                        encoding="unicode",
+                    )
+                    logger.error(f"Último XML enviado al PAC:\n{sent}")
+                except Exception:
+                    pass
+
+            if self.history.last_received:
+                try:
+                    received = etree.tostring(
+                        self.history.last_received["envelope"],
+                        pretty_print=True,
+                        encoding="unicode",
+                    )
+                    logger.error(f"Respuesta del PAC:\n{received}")
+                except Exception:
+                    pass
+
+            raise HTTPException(status_code=500, detail=f"Fallo en timbrado: {str(e)}")
+
+    def _sellar_xml(self, xml_str, data, relacion_uuid: str = None):
         with open(self.path_cer, "rb") as f:
             cer_data = f.read()
             cert = x509.load_der_x509_certificate(cer_data)
@@ -402,21 +673,25 @@ class BillingService:
             sn_hex = format(cert.serial_number, "x")
             no_certificado = "".join([sn_hex[i] for i in range(1, len(sn_hex), 2)])
 
+        relacion_str = f"04|{relacion_uuid}|" if relacion_uuid else ""
+
+        # 🚀 CADENA ORIGINAL DINÁMICA: Usa self.emisor_* y los pesos correctos
         cadena = (
-            f"||4.0|A|{data['folio']}|{data['fecha']}|03|{no_certificado}|CONTADO|{data['subtotal']}|MXN|{data['total']}|I|01|PUE|91808|"
-            f"EKU9003173C9|ESCUELA KEMPER URGATE SA DE CV|622|"
+            f"||4.0|CP|{data['folio']}|{data['fecha']}|99|{no_certificado}|{data['subtotal']}|MXN|1|{data['total']}|I|01|PPD|{self.emisor_cp}|"
+            f"{relacion_str}"
+            f"{self.emisor_rfc}|{self.emisor_nombre}|{self.emisor_regimen}|"
             f"{data['rfc_cliente']}|{data['nombre_cliente']}|{data['cp_cliente']}|{data['regimen_cliente']}|{data['uso_cfdi']}|"
-            f"78101802|SERV001|1.00|E48|SERVICIO|SERVICIO DE FLETE GENERAL|{data['subtotal']}|{data['subtotal']}|02|"
+            f"78101802|001|1.00|E48|SRV|{data['descripcion_concepto']}|{data['subtotal']}|{data['subtotal']}|02|"
             f"{data['subtotal']}|002|Tasa|0.160000|{data['iva']}|"
             f"{data['subtotal']}|002|Tasa|0.040000|{data['retenciones']}|"
             f"002|{data['retenciones']}|{data['retenciones']}|"
             f"{data['subtotal']}|002|Tasa|0.160000|{data['iva']}|{data['iva']}|"
-            f"3.1|CCCe3b8d-a5c4-d91d-2b7a-8951836e3433|No|480|"
-            f"Origen|OR000001|EKU9003173C9|ESCUELA KEMPER URGATE SA DE CV|{data['fecha']}|17|193|VER|MEX|91808|"
-            f"Destino|DE000001|{data['rfc_cliente']}|{data['nombre_cliente']}|{data['fecha']}|480|{data['municipio_destino']}|{data['estado_destino']}|MEX|{data['cp_destino']}|"
-            f"25000.0|KGM|1|50131801|CARGA GENERAL|1.00|H87|25000.0|"
+            f"3.1|{data['id_ccp']}|No|{data['total_dist_rec']}|"
+            f"Origen|ICA9507256L6|INTERNACIONAL DE CONTENEDORES Y ASOCIADOS DE VERACRUZ|{data['fecha']}|17|193|VER|MEX|91700|"
+            f"Destino|{data['rfc_cliente']}|KUEHNE + NAGEL S.A. DE C.V. MDC FASE III|{data['fecha']}|{data['total_dist_rec']}|04|{data['municipio_destino']}|{data['estado_destino']}|MEX|{data['cp_destino']}|"
+            f"{data['peso_bruto']}|KGM|1|{data['bienes_transp']}|{data['descripcion_mercancia']}|1|21|{data['peso_bruto']}|pza|"
             f"{data['permiso_sct']}|{data['num_permiso']}|{data['config_vehicular']}|{data['peso_bruto_vehicular']}|{data['placas']}|{data['anio_modelo']}|"
-            f"{data['aseguradora']}|{data['poliza']}|"
+            f"{data['aseguradora']}|{data['poliza']}|{data['poliza']}|"
             f"{data['subtipo_remolque']}|{data['placa_remolque']}|"
             f"01|{data['rfc_operador']}|{data['licencia']}|{data['nombre_operador']}||"
         )
@@ -441,12 +716,14 @@ class BillingService:
             if relacion_uuid
             else ""
         )
+
+        # 🚀 XML DINÁMICO: Inyecta los datos del Emisor y Conceptos variables
         return f"""<?xml version="1.0" encoding="UTF-8"?>
-<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:cartaporte31="http://www.sat.gob.mx/CartaPorte31" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/CartaPorte31 http://www.sat.gob.mx/sitio_internet/cfd/CartaPorte/CartaPorte31.xsd" Version="4.0" Fecha="{data['fecha']}" Serie="A" Folio="{data['folio']}" FormaPago="03" CondicionesDePago="CONTADO" SubTotal="{data['subtotal']}" Moneda="MXN" Total="{data['total']}" TipoDeComprobante="I" Exportacion="01" MetodoPago="PUE" LugarExpedicion="91808">{relacion_xml}
-    <cfdi:Emisor Rfc="EKU9003173C9" Nombre="ESCUELA KEMPER URGATE SA DE CV" RegimenFiscal="622" />
+<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:cartaporte31="http://www.sat.gob.mx/CartaPorte31" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/CartaPorte31 http://www.sat.gob.mx/sitio_internet/cfd/CartaPorte/CartaPorte31.xsd" Version="4.0" Fecha="{data['fecha']}" Serie="CP" Folio="{data['folio']}" FormaPago="99" CondicionesDePago="CONTADO" SubTotal="{data['subtotal']}" Moneda="MXN" Total="{data['total']}" TipoDeComprobante="I" Exportacion="01" MetodoPago="PPD" LugarExpedicion="{self.emisor_cp}">{relacion_xml}
+    <cfdi:Emisor Rfc="{self.emisor_rfc}" Nombre="{self.emisor_nombre}" RegimenFiscal="{self.emisor_regimen}" />
     <cfdi:Receptor Rfc="{data['rfc_cliente']}" Nombre="{data['nombre_cliente']}" DomicilioFiscalReceptor="{data['cp_cliente']}" RegimenFiscalReceptor="{data['regimen_cliente']}" UsoCFDI="{data['uso_cfdi']}" />
     <cfdi:Conceptos>
-        <cfdi:Concepto ClaveProdServ="78101802" NoIdentificacion="SERV001" Cantidad="1.00" ClaveUnidad="E48" Unidad="SERVICIO" Descripcion="SERVICIO DE FLETE GENERAL" ValorUnitario="{data['subtotal']}" Importe="{data['subtotal']}" ObjetoImp="02">
+        <cfdi:Concepto ClaveProdServ="78101802" NoIdentificacion="001" Cantidad="1.00" ClaveUnidad="E48" Unidad="SRV" Descripcion="{data['descripcion_concepto']}" ValorUnitario="{data['subtotal']}" Importe="{data['subtotal']}" ObjetoImp="02">
             <cfdi:Impuestos>
                 <cfdi:Traslados><cfdi:Traslado Base="{data['subtotal']}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{data['iva']}" /></cfdi:Traslados>
                 <cfdi:Retenciones><cfdi:Retencion Base="{data['subtotal']}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.040000" Importe="{data['retenciones']}" /></cfdi:Retenciones>
@@ -458,28 +735,33 @@ class BillingService:
         <cfdi:Traslados><cfdi:Traslado Base="{data['subtotal']}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{data['iva']}" /></cfdi:Traslados>
     </cfdi:Impuestos>
     <cfdi:Complemento>
-        <cartaporte31:CartaPorte Version="3.1" IdCCP="CCCe3b8d-a5c4-d91d-2b7a-8951836e3433" TranspInternac="No" TotalDistRec="480">
+        <cartaporte31:CartaPorte Version="3.1" IdCCP="{data['id_ccp']}" TranspInternac="No" TotalDistRec="{data['total_dist_rec']}">
             <cartaporte31:Ubicaciones>
-                <cartaporte31:Ubicacion TipoUbicacion="Origen" IDUbicacion="OR000001" RFCRemitenteDestinatario="EKU9003173C9" NombreRemitenteDestinatario="ESCUELA KEMPER URGATE SA DE CV" FechaHoraSalidaLlegada="{data['fecha']}">
-                    <cartaporte31:Domicilio Localidad="17" Municipio="193" Estado="VER" Pais="MEX" CodigoPostal="91808" />
+                <cartaporte31:Ubicacion TipoUbicacion="Origen" RFCRemitenteDestinatario="ICA9507256L6" NombreRemitenteDestinatario="INTERNACIONAL DE CONTENEDORES Y ASOCIADOS DE VERACRUZ" FechaHoraSalidaLlegada="{data['fecha']}">
+                    <cartaporte31:Domicilio Calle="MORELOS" NumeroExterior="159" Localidad="17" Municipio="193" Estado="VER" Pais="MEX" CodigoPostal="91700" />
                 </cartaporte31:Ubicacion>
-                <cartaporte31:Ubicacion TipoUbicacion="Destino" IDUbicacion="DE000001" RFCRemitenteDestinatario="{data['rfc_cliente']}" NombreRemitenteDestinatario="{data['nombre_cliente']}" FechaHoraSalidaLlegada="{data['fecha']}" DistanciaRecorrida="480">
-                    <cartaporte31:Domicilio Municipio="{data['municipio_destino']}" Estado="{data['estado_destino']}" Pais="MEX" CodigoPostal="{data['cp_destino']}" />
+                <cartaporte31:Ubicacion TipoUbicacion="Destino" RFCRemitenteDestinatario="{data['rfc_cliente']}" NombreRemitenteDestinatario="KUEHNE + NAGEL S.A. DE C.V. MDC FASE III" FechaHoraSalidaLlegada="{data['fecha']}" DistanciaRecorrida="{data['total_dist_rec']}">
+                    <cartaporte31:Domicilio Calle="CARRETERA A TEPOTZOTLAN LA AURORA" NumeroExterior="KM 1" Colonia="4708" Localidad="04" Municipio="{data['municipio_destino']}" Estado="{data['estado_destino']}" Pais="MEX" CodigoPostal="{data['cp_destino']}" />
                 </cartaporte31:Ubicacion>
             </cartaporte31:Ubicaciones>
-            <cartaporte31:Mercancias PesoBrutoTotal="25000.0" UnidadPeso="KGM" NumTotalMercancias="1">
-                <cartaporte31:Mercancia BienesTransp="50131801" Descripcion="CARGA GENERAL" Cantidad="1.00" ClaveUnidad="H87" PesoEnKg="25000.0" />
+            <cartaporte31:Mercancias PesoBrutoTotal="{data['peso_bruto']}" UnidadPeso="KGM" NumTotalMercancias="1">
+                <cartaporte31:Mercancia BienesTransp="{data['bienes_transp']}" Descripcion="{data['descripcion_mercancia']}" Cantidad="1" ClaveUnidad="21" PesoEnKg="{data['peso_bruto']}" Unidad="pza" />
                 <cartaporte31:Autotransporte PermSCT="{data['permiso_sct']}" NumPermisoSCT="{data['num_permiso']}">
                     <cartaporte31:IdentificacionVehicular ConfigVehicular="{data['config_vehicular']}" PesoBrutoVehicular="{data['peso_bruto_vehicular']}" PlacaVM="{data['placas']}" AnioModeloVM="{data['anio_modelo']}" />
-                    <cartaporte31:Seguros AseguraRespCivil="{data['aseguradora']}" PolizaRespCivil="{data['poliza']}" />
+                    <cartaporte31:Seguros AseguraRespCivil="{data['aseguradora']}" PolizaRespCivil="{data['poliza']}" PolizaCarga="{data['poliza']}" />
                     <cartaporte31:Remolques><cartaporte31:Remolque SubTipoRem="{data['subtipo_remolque']}" Placa="{data['placa_remolque']}" /></cartaporte31:Remolques>
                 </cartaporte31:Autotransporte>
             </cartaporte31:Mercancias>
             <cartaporte31:FiguraTransporte>
-                <cartaporte31:TiposFigura TipoFigura="01" RFCFigura="{data['rfc_operador']}" NumLicencia="{data['licencia']}" NombreFigura="{data['nombre_operador']}" />
+                <cartaporte31:TiposFigura TipoFigura="01" RFCFigura="{data['rfc_operador']}" NumLicencia="{data['licencia']}" NombreFigura="{data['nombre_operador']}">
+                    <cartaporte31:Domicilio Calle="MORELOS" NumeroExterior="159" Municipio="193" Estado="VER" Pais="MEX" CodigoPostal="91700" />
+                </cartaporte31:TiposFigura>
             </cartaporte31:FiguraTransporte>
         </cartaporte31:CartaPorte>
     </cfdi:Complemento>
+    <cfdi:Addenda>
+        <fst3:Contrato xmlns:fst3="http://facturasoftesc.com/ns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://facturasoftesc.com/ns http://facturasoftesc.com/ns/fst3.xsd" Comentario="{data['leyenda_legal']}"></fst3:Contrato>
+    </cfdi:Addenda>
 </cfdi:Comprobante>""".strip()
 
     def _generar_pdf_con_diseno(self, data, uuid, qr_bytes, s_sat, s_emi, c_sat):
@@ -502,7 +784,7 @@ class BillingService:
             "fecha_emision": data["fecha"],
             "logo_src": logo_src,
             "qr_src": qr_src,
-            "id_ccp": "CCCe3b8d-a5c4-d91d-2b7a-8951836e3433",
+            "id_ccp": data["id_ccp"],  # 🚀 DINÁMICO
             "nombre_cliente": data["nombre_cliente"],
             "rfc_cliente": data["rfc_cliente"],
             "cp_cliente": data["cp_cliente"],
@@ -520,7 +802,9 @@ class BillingService:
                     "clave": "78101802",
                     "cantidad": "1.00",
                     "unidad": "E48 - SRV",
-                    "descripcion": "[78101802] FLETE CARGA GENERAL",
+                    "descripcion": data[
+                        "descripcion_concepto"
+                    ],  # 🚀 DINÁMICO (Incluye contenedor)
                     "precio_unitario": data["subtotal"],
                     "importe": data["subtotal"],
                 }
@@ -528,18 +812,18 @@ class BillingService:
             "ubicaciones": [
                 {
                     "tipo": "Origen",
-                    "rfc": "EKU9003173C9",
-                    "nombre": "ESCUELA KEMPER URGATE SA DE CV",
+                    "rfc": "ICA9507256L6",
+                    "nombre": "INTERNACIONAL DE CONTENEDORES Y ASOCIADOS DE VERACRUZ",
                     "fecha": data["fecha"],
                     "distancia": "",
-                    "cp": "91808",
+                    "cp": "91700",
                 },
                 {
                     "tipo": "Destino",
                     "rfc": data["rfc_cliente"],
                     "nombre": data["nombre_cliente"],
                     "fecha": data["fecha"],
-                    "distancia": "480",
+                    "distancia": data["total_dist_rec"],
                     "cp": data["cp_destino"],
                 },
             ],
@@ -560,6 +844,7 @@ class BillingService:
                 "licencia": data["licencia"],
                 "nombre": data["nombre_operador"],
             },
+            "leyenda_legal": data["leyenda_legal"],
         }
         pdf_path = self.storage_dir / f"{uuid}.pdf"
         pisa.CreatePDF(
