@@ -51,6 +51,7 @@ import {
   FileText,
   Undo,
   Link2Off,
+  Container,
 } from "lucide-react";
 import { Trip, TripLeg } from "@/types/api.types";
 import { useTrips } from "@/hooks/useTrips";
@@ -111,6 +112,18 @@ export function TripDetailsModal({
       currency: "MXN",
       minimumFractionDigits: 2,
     }).format(val || 0);
+
+  const isFullTrip = useMemo(() => {
+    if (!trip) return false;
+    const configTarifa = (trip as any).tipo_unidad?.toLowerCase() || "";
+    const configStr = (trip.route_name || "").toLowerCase();
+    return (
+      configStr.includes("full") ||
+      configTarifa.includes("full") ||
+      configTarifa.includes("9ejes") ||
+      Boolean(trip.dolly_id)
+    );
+  }, [trip]);
 
   useEffect(() => {
     if (open) loadTerminals();
@@ -370,6 +383,25 @@ export function TripDetailsModal({
                     : "TIMBRAR CARTA PORTE ($1)"}
                 </Button>
               </div>
+            </div>
+
+            {/* 🚀 AQUÍ AÑADIMOS EL CONTENEDOR EN LA VISTA SUPERIOR */}
+            <div className="flex items-center flex-wrap gap-2 font-bold text-slate-600 uppercase text-sm tracking-widest mt-4 pt-4 border-t border-slate-200">
+              <span className="flex items-center gap-1">
+                <MapPin className="h-4 w-4 text-emerald-400" />
+                {trip.origin}
+              </span>
+              <span className="text-slate-300">→</span>
+              <span>{trip.destination}</span>
+              <Badge className="ml-2 bg-white text-primary border border-slate-300 shadow-sm tracking-widest px-2 py-0.5">
+                {isFullTrip ? "FULL / 9 EJES" : "SENCILLO / 5 EJES"}
+              </Badge>
+              {(trip as any).referencia && (
+                <Badge className="ml-2 bg-blue-50 text-blue-700 border border-blue-200 shadow-sm tracking-widest px-2 py-0.5 flex items-center gap-1">
+                  <Container className="h-3 w-3" /> CONTENEDOR:{" "}
+                  {(trip as any).referencia}
+                </Badge>
+              )}
             </div>
           </DialogHeader>
 

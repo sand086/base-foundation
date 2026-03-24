@@ -37,6 +37,7 @@ import {
   ShieldCheck,
   TrendingDown,
   Ticket,
+  Container,
 } from "lucide-react";
 import { useUnits } from "@/hooks/useUnits";
 import { useOperators } from "@/hooks/useOperators";
@@ -314,14 +315,23 @@ export function NextLegModal({
                   Despacho de Viaje #{tripPadre.public_id || tripPadre.id}
                 </DialogTitle>
               </div>
-              <div className="flex items-center gap-2 font-bold text-slate-600 uppercase text-sm tracking-widest mt-11">
-                <MapPin className="h-4 w-4 text-emerald-400" />{" "}
-                {tripPadre.origin}
+              <div className="flex items-center flex-wrap gap-2 font-bold text-slate-600 uppercase text-sm tracking-widest mt-11">
+                <span className="flex items-center gap-1">
+                  <MapPin className="h-4 w-4 text-emerald-400" />
+                  {tripPadre.origin}
+                </span>
                 <ArrowRight className="h-4 w-4 text-emerald-400" />
-                {tripPadre.destination}
+                <span>{tripPadre.destination}</span>
                 <Badge className="ml-3 bg-white/10 text-primary border-white/20 tracking-widest">
                   {isFullTrip ? "FULL / 9 EJES" : "SENCILLO / 5 EJES"}
                 </Badge>
+                {/* 🚀 NUEVO: MOSTRAR EL CONTENEDOR SI EXISTE */}
+                {(tripPadre as any).referencia && (
+                  <Badge className="ml-2 bg-blue-100 text-blue-800 border-blue-200 tracking-widest shadow-sm flex items-center gap-1">
+                    <Container className="h-3 w-3" />
+                    CONTENEDOR: {(tripPadre as any).referencia}
+                  </Badge>
+                )}
               </div>
             </div>
             <div className="flex flex-col items-end gap-2">

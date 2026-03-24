@@ -58,3 +58,43 @@ class ModuleSchema(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# --- SCHEMAS PARA LICENCIAS ---
+class LicenseTypeBase(BaseModel):
+    id: Optional[int] = None
+    nombre: str
+    descripcion: Optional[str] = None
+    activo: bool = True
+    model_config = ConfigDict(from_attributes=True)
+
+
+class LicenseTypeCreate(LicenseTypeBase):
+    pass
+
+
+# --- SCHEMAS PARA CONCEPTOS DE PAGO ---
+class SettlementConceptBase(BaseModel):
+    id: Optional[int] = None
+    nombre: str
+    tipo: str  # 'ingreso' o 'deduccion'
+    descripcion: Optional[str] = None
+    activo: bool = True
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SettlementConceptCreate(SettlementConceptBase):
+    pass
+
+
+# --- SCHEMAS PARA ASEGURADORAS ---
+class InsurerBase(BaseModel):
+    id: Optional[int] = None
+    nombre: str
+    telefono_siniestros: Optional[str] = None
+    activo: bool = True
+    model_config = ConfigDict(from_attributes=True)
+
+
+class InsurerCreate(InsurerBase):
+    pass
