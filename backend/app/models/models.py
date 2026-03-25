@@ -1349,7 +1349,7 @@ class ReceivableInvoice(AuditMixin, Base):
     uuid = Column(String(36), unique=True, nullable=True)
     folio_interno = Column(String(50))
     is_nominal = Column(Boolean, default=False)
-    status_sat = Column(String(20), default="PROVISIONAL")
+    status_sat = Column(String(50), default="PROVISIONAL")
     uuid_relacionado = Column(String(36), nullable=True)
 
     subtotal = Column(Float, default=0.0)

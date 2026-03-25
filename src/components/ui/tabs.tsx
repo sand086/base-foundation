@@ -1,3 +1,5 @@
+"use client";
+
 import * as React from "react";
 import * as TabsPrimitive from "@radix-ui/react-tabs";
 
@@ -12,8 +14,8 @@ const TabsList = React.forwardRef<
   <TabsPrimitive.List
     ref={ref}
     className={cn(
-      // BASE: Fondo un poco más notorio y un borde sutil para que resalte en fondos blancos
-      "inline-flex h-10 items-center justify-center rounded-md bg-muted/80 border border-border/40 p-1 text-muted-foreground",
+      // Estética Tahoe: El "riel" de las pestañas
+      "inline-flex h-12 items-center justify-center rounded-2xl bg-slate-100/80 p-1.5 text-slate-500 shadow-inner border border-slate-200/50 backdrop-blur-md",
       className,
     )}
     {...props}
@@ -28,19 +30,18 @@ const TabsTrigger = React.forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      // BASE ORIGINAL
-      "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all",
+      // Base: Tipografía nítida y transiciones suaves
+      "inline-flex items-center justify-center whitespace-nowrap rounded-[10px] px-4 py-2 text-sm font-bold tracking-tight ring-offset-background transition-all duration-300 ease-in-out haptic-press",
 
-      // NUEVO: Hover (si pasas el mouse y no está activo, se ve que es clickeable)
-      "hover:bg-background/50 hover:text-foreground",
+      // Hover: Sutil cambio de color antes de clickear
+      "hover:text-slate-700",
 
-      // NUEVO: Estado activo mejorado (sombra un poco más fuerte y texto en negrita)
-      "data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-md data-[state=active]:font-semibold",
+      // Estado Activo (Premium Tahoe): La pestaña se "eleva" y brilla con el color de marca
+      "data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-[0_2px_10px_rgba(0,0,0,0.08)] data-[state=active]:scale-[1.02]",
 
-      // ACCESIBILIDAD
-      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+      // Accesibilidad con el halo Rojo Kemper
+      "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/10 disabled:pointer-events-none disabled:opacity-50",
 
-      // Las clases que envíes desde otros componentes (className) mandan sobre las de arriba
       className,
     )}
     {...props}
@@ -55,7 +56,8 @@ const TabsContent = React.forwardRef<
   <TabsPrimitive.Content
     ref={ref}
     className={cn(
-      "mt-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+      // Animación de entrada: El contenido aparece con un suave fade y sube 4px
+      "mt-4 ring-offset-background focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/10 animate-in fade-in slide-in-from-bottom-2 duration-300",
       className,
     )}
     {...props}

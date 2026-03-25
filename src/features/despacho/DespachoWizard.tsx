@@ -13,6 +13,7 @@ import {
   User,
   Info,
   Box,
+  RotateCcw,
   CalendarDays,
   Container,
 } from "lucide-react";
@@ -395,7 +396,7 @@ export const DespachoWizard = () => {
 
         payload.initial_leg = {
           unit_id: parseInt(data.unitId, 10),
-          leg_type: "ruta_carretera",
+          leg_type: data.leg_type,
           operator_id: parseInt(data.driverId, 10),
           odometro_inicial: 0, // Ajustado a 0 por default si el backend lo requiere como numérico
           nivel_tanque_inicial: 0,
@@ -704,6 +705,75 @@ export const DespachoWizard = () => {
               </div>
             </div>
 
+            <div className="flex flex-col items-center bg-indigo-50/40 p-4 rounded-2xl border border-indigo-100 mb-4 shadow-sm">
+              {/* Título Centrado */}
+              <div className="flex items-center gap-2 mb-3">
+                <RotateCcw className="h-3.5 w-3.5 text-brand-navy opacity-70" />
+                <span className="text-[11px] font-black text-brand-navy uppercase tracking-widest">
+                  Modalidad de Inicio
+                </span>
+              </div>
+
+              {/* Selector Tipo Switch / Segmented Control */}
+              <div className="flex bg-slate-200/50 p-1 rounded-xl w-full max-w-[300px] border border-slate-200">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setData((p) => ({ ...p, leg_type: "carga_muelle" }))
+                  }
+                  className={cn(
+                    "flex-1 flex items-center justify-center gap-2 h-9 rounded-lg font-bold text-[10px] uppercase transition-all",
+                    data.leg_type === "carga_muelle"
+                      ? "bg-brand-navy text-success shadow-md scale-[1.02]"
+                      : "text-slate-500 hover:text-brand-navy",
+                  )}
+                >
+                  <Box
+                    className={cn(
+                      "h-3.5 w-3.5",
+                      data.leg_type === "carga_muelle"
+                        ? "text-success"
+                        : "text-slate-400",
+                    )}
+                  />
+                  Patio
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setData((p) => ({ ...p, leg_type: "ruta_carretera" }))
+                  }
+                  className={cn(
+                    "flex-1 flex items-center justify-center gap-2 h-9 rounded-lg font-bold text-[10px] uppercase transition-all",
+                    data.leg_type === "ruta_carretera"
+                      ? "bg-emerald-600 text-success shadow-md scale-[1.02]"
+                      : "text-slate-500 hover:text-emerald-600",
+                  )}
+                >
+                  <Truck
+                    className={cn(
+                      "h-3.5 w-3.5",
+                      data.leg_type === "ruta_carretera"
+                        ? "text-success"
+                        : "text-slate-400",
+                    )}
+                  />
+                  Carretera
+                </button>
+              </div>
+
+              {/* Leyenda Dinámica e Informativa */}
+              <div className="mt-3 flex items-start gap-1.5 px-4">
+                <Info className="h-3 w-3 text-indigo-600 mt-0.5 shrink-0" />
+                <p className="text-[10px] text-center text-indigo-800/70 font-medium leading-tight italic">
+                  {data.leg_type === "ruta_carretera"
+                    ? "El sistema solicitará casetas, diésel y viáticos en el paso de Finanzas."
+                    : "Movimiento local: no se requerirá registro de anticipos ni vales de diésel."}
+                </p>
+              </div>
+            </div>
+
             {/* 🚀 NUEVO: DATOS DE LA CARGA Y CONTENEDOR */}
             <div className="space-y-4 bg-slate-50 p-6 rounded-xl border border-slate-200 mb-6 shadow-sm">
               <h4 className="text-sm font-black text-brand-navy uppercase tracking-widest flex items-center gap-2 mb-2">
@@ -912,7 +982,7 @@ export const DespachoWizard = () => {
                     </span>
                   </div>
                   <Separator className="my-4 bg-emerald-200" />
-                  <div className="flex justify-between items-center mt-6 bg-emerald-500 p-5 rounded-2xl text-white shadow-lg">
+                  <div className="flex justify-between items-center mt-6 bg-emerald-500 p-5 rounded-2xl text-success shadow-lg">
                     <span className="font-black uppercase tracking-widest">
                       TOTAL NETO:
                     </span>
@@ -1027,7 +1097,7 @@ export const DespachoWizard = () => {
               </Button>
               <ActionButton
                 type="button"
-                className="bg-emerald-600 hover:bg-emerald-700 shadow-xl shadow-emerald-600/20 font-black px-8 text-white"
+                className="bg-emerald-600 hover:bg-emerald-700 shadow-xl shadow-emerald-600/20 font-black px-8 text-success"
                 onClick={(e) => {
                   e.preventDefault();
                   handleCreate("en_transito");

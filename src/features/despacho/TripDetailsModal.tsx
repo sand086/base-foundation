@@ -105,6 +105,7 @@ export function TripDetailsModal({
   const [isUndoing, setIsUndoing] = useState(false);
 
   const [localUuid, setLocalUuid] = useState<string | null>(null);
+  const [finalUuid, setFinalUuid] = useState<string | null>(null);
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("es-MX", {
@@ -750,22 +751,55 @@ export function TripDetailsModal({
                                   </p>
                                 </div>
                                 <Button
-                                  className="bg-emerald-500 hover:bg-emerald-600 text-white font-black px-8 h-12 shadow-xl disabled:opacity-30 uppercase tracking-widest text-[10px]"
-                                  disabled={isStamping || !localUuid}
-                                  onClick={() =>
-                                    handleStampFinal(
-                                      trip.id,
-                                      localUuid!,
-                                      refreshTrips,
-                                    )
+                                  variant="ghost"
+                                  className={cn(
+                                    "font-black px-8 h-12 shadow-xl disabled:opacity-30 uppercase tracking-widest text-[10px] text-white transition-colors",
+                                    finalUuid
+                                      ? "bg-blue-600 hover:bg-blue-700 hover:text-white"
+                                      : "bg-emerald-500 hover:bg-emerald-600",
+                                  )}
+                                  disabled={
+                                    isStamping || (!localUuid && !finalUuid)
                                   }
+                                  onClick={() => {
+                                    if (finalUuid) {
+                                      // Si ya tenemos el UUID final, solo lo descargamos
+                                      handleDownloadStampedPDF(finalUuid);
+                                    } else {
+                                      // Si no, mandamos a timbrar la factura final
+                                      handleStampFinal(
+                                        trip.id,
+                                        localUuid!,
+                                        (responseData: any) => {
+                                          // Obtenemos el UUID que nos regresa el backend
+                                          const generatedFinalUuid =
+                                            responseData?.data?.uuid ||
+                                            responseData?.uuid;
+                                          if (generatedFinalUuid) {
+                                            setFinalUuid(generatedFinalUuid); // Lo guardamos en memoria
+                                            handleDownloadStampedPDF(
+                                              generatedFinalUuid,
+                                            ); // Lo descargamos automáticamente
+                                            toast.success(
+                                              "¡FACTURA FINAL GENERADA Y DESCARGADA!",
+                                            );
+                                          }
+                                          refreshTrips();
+                                        },
+                                      );
+                                    }
+                                  }}
                                 >
                                   {isStamping ? (
                                     <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                                  ) : finalUuid ? (
+                                    <FileText className="h-5 w-5 mr-2" />
                                   ) : (
                                     <Activity className="h-5 w-5 mr-2" />
                                   )}
-                                  Timbrar Factura Final
+                                  {finalUuid
+                                    ? "Descargar Factura Final"
+                                    : "Timbrar Factura Final"}
                                 </Button>
                               </div>
                             </div>

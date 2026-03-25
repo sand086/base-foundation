@@ -64,13 +64,11 @@ class BillingService:
     def __init__(self, db: Session):
         self.db = db
 
-        # 🚀 1. LECTURA DEL ENTORNO (PROD vs QA)
         self.env = os.getenv("ENVIRONMENT", "PROD").upper()
         self.suffix = "_qa" if self.env == "QA" else ""
 
         logger.info(f"INICIALIZANDO BILLING SERVICE EN MODO: {self.env}")
 
-        # 🚀 2. CREDENCIALES DEL PAC DINÁMICAS
         if self.env == "QA":
             self.wsdl_timbrado = (
                 "https://testing.solucionfactible.com/ws/services/Timbrado?wsdl"
@@ -78,7 +76,6 @@ class BillingService:
             self.pac_user = "testing@solucionfactible.com"
             self.pac_pass = "timbrado.SF.16672"
         else:
-            # ⚠️ Asegúrate de definir estas variables en tu archivo .env del servidor en Producción
             self.wsdl_timbrado = os.getenv(
                 "PAC_WSDL_PROD",
                 "https://solucionfactible.com/ws/services/Timbrado?wsdl",
@@ -102,7 +99,6 @@ class BillingService:
         self.cert_dir.mkdir(parents=True, exist_ok=True)
         self.storage_dir.mkdir(parents=True, exist_ok=True)
 
-        # 🚀 3. EXTRACCIÓN DE RUTAS DE CSD (CON SUFIJO DINÁMICO)
         cert_conf = (
             self.db.query(SystemConfig)
             .filter_by(key=f"sat_cert_path{self.suffix}")
@@ -131,7 +127,6 @@ class BillingService:
         )
         self.key_password = pass_conf.value if pass_conf else "12345678a"
 
-        # 🚀 4. EXTRAER DATOS DEL EMISOR (CON SUFIJO DINÁMICO)
         rfc_conf = (
             self.db.query(SystemConfig)
             .filter_by(key=f"empresa_rfc{self.suffix}")
@@ -153,7 +148,6 @@ class BillingService:
             .first()
         )
 
-        # Fallback a Escuela Kemper si no hay datos en BD
         self.emisor_rfc = (
             rfc_conf.value if rfc_conf and rfc_conf.value else "EKU9003173C9"
         )
@@ -168,7 +162,7 @@ class BillingService:
         self.emisor_cp = cp_conf.value if cp_conf and cp_conf.value else "91808"
 
     # =======================================================
-    # FASE 3: Carta Porte Provisional ($1 MXN) (BYPASS)
+    # FACTURACIÓN
     # =======================================================
     def generar_carta_porte_nominal(
         self, invoice_data: ReceivableInvoiceCreate
@@ -260,10 +254,6 @@ class BillingService:
     def cancelar_factura_nominal(
         self, invoice_id: int, motivo: str = "01", uuid_sustituto: str = None
     ):
-        """
-        Cancela una factura en el SAT a través de Solución Factible.
-        motivo: "01" (Con Relación), "02" (Sin Relación), etc.
-        """
         factura = self.db.get(ReceivableInvoice, invoice_id)
         if not factura or not factura.uuid:
             logger.error(
@@ -273,27 +263,20 @@ class BillingService:
 
         logger.info(f"--- INICIANDO PROCESO DE CANCELACIÓN UUID: {factura.uuid} ---")
 
-        # 1. Armar la cadena de cancelación: "UUID|Motivo|UuidSustitucion"
-        # Si es motivo 01, UuidSustitucion es obligatorio. Si es 02, se deja vacío.
         sustituto = uuid_sustituto if uuid_sustituto else ""
         cadena_uuids = f"{factura.uuid}|{motivo}|{sustituto}"
 
         try:
-            # 2. Leer y codificar los Certificados a Base64 como pide el PAC
             with open(self.path_cer, "rb") as f_cer:
-                der_cert_csd = (
-                    f_cer.read()
-                )  # El PAC espera los bytes directos en su cliente SOAP
+                der_cert_csd = f_cer.read()
 
             with open(self.path_key, "rb") as f_key:
                 der_key_csd = f_key.read()
 
-            # 3. Conexión SOAP
             client = zeep.Client(self.wsdl_timbrado, plugins=[self.history])
 
             logger.info(f"Enviando petición de cancelación al PAC: {cadena_uuids}")
 
-            # 4. Ejecutar el método 'cancelar' del PAC
             result = client.service.cancelar(
                 usuario=self.pac_user,
                 password=self.pac_pass,
@@ -303,7 +286,6 @@ class BillingService:
                 contrasenaCSD=self.key_password,
             )
 
-            # 5. Analizar Respuesta General (Header)
             status_general = int(getattr(result, "status", 0))
             if status_general != 200:
                 logger.error(
@@ -313,16 +295,14 @@ class BillingService:
                     status_code=400, detail=f"Error PAC: {result.mensaje}"
                 )
 
-            # 6. Analizar Respuesta Específica del UUID
             res_cancelacion = result.resultados[0]
             status_operacion = int(getattr(res_cancelacion, "status", 0))
             status_sat = int(getattr(res_cancelacion, "statusUUID", 0))
 
-            # Según documentación, statusUUID 201 es "Recibida", 202 es "Previamente cancelado"
-            if status_operacion == 200 and status_sat in [201, 202]:
+            # 🚀 AQUÍ ESTÁ LA MAGIA DEL FIX: Aceptamos 204 como "El SAT está lento" y continuamos.
+            if status_operacion == 200 and status_sat in [201, 202, 211]:
                 logger.info(f"✅ CANCELACIÓN SAT EXITOSA. Status SAT: {status_sat}")
 
-                # Extraer y Guardar el Acuse (El PAC lo manda dentro del mensaje de respuesta)
                 acuse_text = getattr(res_cancelacion, "mensaje", "Acuse no disponible")
                 acuse_path = self.storage_dir / f"ACUSE_CANCELACION_{factura.uuid}.txt"
 
@@ -331,8 +311,9 @@ class BillingService:
                     f_acuse.write(f"Mensaje: {acuse_text}\n")
                     f_acuse.write(f"Fecha: {datetime.now().isoformat()}\n")
 
-                # Actualizar la BD local
-                factura.status_sat = "CANCELADA"
+                factura.status_sat = (
+                    "CANCELADA" if status_sat != 211 else "EN_PROCESO_CANCELACION"
+                )
                 factura.estatus = "cancelado"
                 factura.motivo_cancelacion = motivo
                 factura.acuse_cancelacion_url = str(acuse_path)
@@ -341,6 +322,18 @@ class BillingService:
                 self.db.add(factura)
                 self.db.commit()
                 return True
+
+            elif status_operacion == 200 and status_sat == 204:
+                logger.warning(
+                    f"⚠️ EL SAT ESTÁ LENTO: El UUID {factura.uuid} aún no es cancelable (204). Se marcará como pendiente de cancelar."
+                )
+
+                factura.status_sat = "PENDIENTE_CANCELACION"
+                factura.motivo_cancelacion = motivo
+                self.db.add(factura)
+                self.db.commit()
+                return True  # Devolvemos True para no interrumpir a React!
+
             else:
                 logger.error(
                     f"SAT Rechazó Cancelación. Status: {status_sat}, Msj: {res_cancelacion.mensaje}"
@@ -353,7 +346,6 @@ class BillingService:
             logger.error("--- FALLÓ LA CANCELACIÓN ---")
             logger.error(str(e))
 
-            # Debugger SOAP para Cancelación
             if self.history.last_sent:
                 try:
                     sent = etree.tostring(
@@ -456,7 +448,6 @@ class BillingService:
             else "7050094731"
         )
 
-        # 🚀 5. EXTRAER LEYENDA LEGAL DINÁMICA
         leyenda_conf = (
             self.db.query(SystemConfig)
             .filter_by(key=f"sat_leyenda_legal{self.suffix}")
@@ -468,20 +459,23 @@ class BillingService:
             else DEFAULT_LEYENDA
         )
 
-        # 🚀 ID CCP DINÁMICO
         id_ccp_dinamico = f"CCC{str(uuid.uuid4())[3:]}"
 
-        # 🚀 DATOS DINÁMICOS DEL VIAJE PARA LA MERCANCÍA
-        contenedor = getattr(viaje, "contenedor", None) or getattr(
-            viaje, "referencia", "TGBU5306410"
-        )
-        descripcion_concepto = f"FLETE CARGA GENERAL {contenedor}"
+        contenedor = getattr(viaje, "referencia", "") or ""
+        contenedor_str = f" {contenedor}".strip() if contenedor else ""
+        descripcion_concepto = f"FLETE CARGA GENERAL{contenedor_str}".strip()
+
         peso_bruto = (
             str(getattr(viaje, "peso_toneladas", 25) * 1000)
             if getattr(viaje, "peso_toneladas", 0) > 0
             else "25000.0"
         )
-        bienes_transp = str(getattr(viaje, "sat_clave_producto", "50131801"))
+
+        bienes_transp_raw = str(getattr(viaje, "sat_clave_producto", "50131801"))
+        bienes_transp = (
+            "31111501" if bienes_transp_raw == "78101802" else bienes_transp_raw
+        )
+
         descripcion_mercancia = str(
             getattr(viaje, "descripcion_mercancia", "CARGA GENERAL")
         )
@@ -579,13 +573,11 @@ class BillingService:
             xml_base = self._armar_xml_sin_sello(data, relacion_uuid)
             xml_sellado = self._sellar_xml(xml_base, data, relacion_uuid)
 
-            # 🛑 DEBUG: GUARDAR XML ANTES DE ENVIAR PARA INSPECCIÓN VISUAL
             debug_path = self.storage_dir / f"DEBUG_PRE_ENVIO_VIAJE_{data['folio']}.xml"
             with open(debug_path, "w", encoding="utf-8") as f:
                 f.write(xml_sellado)
             logger.info(f"XML temporal pre-envío guardado en: {debug_path}")
 
-            # Enviar al PAC
             result = client.service.timbrar(
                 self.pac_user, self.pac_pass, xml_sellado.encode("utf-8"), False
             )
@@ -636,34 +628,41 @@ class BillingService:
                 logger.error(f"Error de validación SAT: {res_sat.mensaje}")
                 raise HTTPException(status_code=400, detail=f"SAT: {res_sat.mensaje}")
 
+        except HTTPException as http_exc:
+            logger.error(f"Rechazo del SAT/PAC: {http_exc.detail}")
+            raise http_exc
+
         except Exception as e:
-            # 🛑 DEBUG: ATRAPAR EL ERROR REAL SOAP SI FALLA LA CONEXIÓN
-            logger.error("--- FALLÓ EL TIMBRADO ---")
+            logger.error("--- FALLÓ EL TIMBRADO (ERROR INTERNO) ---")
             logger.error(str(e))
 
-            if self.history.last_sent:
-                try:
+            try:
+                if self.history.last_sent:
                     sent = etree.tostring(
                         self.history.last_sent["envelope"],
                         pretty_print=True,
                         encoding="unicode",
                     )
                     logger.error(f"Último XML enviado al PAC:\n{sent}")
-                except Exception:
-                    pass
+            except Exception:
+                logger.debug(
+                    "El error ocurrió antes de enviar la petición SOAP al PAC."
+                )
 
-            if self.history.last_received:
-                try:
+            try:
+                if self.history.last_received:
                     received = etree.tostring(
                         self.history.last_received["envelope"],
                         pretty_print=True,
                         encoding="unicode",
                     )
                     logger.error(f"Respuesta del PAC:\n{received}")
-                except Exception:
-                    pass
+            except Exception:
+                pass
 
-            raise HTTPException(status_code=500, detail=f"Fallo en timbrado: {str(e)}")
+            raise HTTPException(
+                status_code=500, detail=f"Fallo interno del servidor: {str(e)}"
+            )
 
     def _sellar_xml(self, xml_str, data, relacion_uuid: str = None):
         with open(self.path_cer, "rb") as f:
@@ -675,9 +674,8 @@ class BillingService:
 
         relacion_str = f"04|{relacion_uuid}|" if relacion_uuid else ""
 
-        # 🚀 CADENA ORIGINAL DINÁMICA: Usa self.emisor_* y los pesos correctos
         cadena = (
-            f"||4.0|CP|{data['folio']}|{data['fecha']}|99|{no_certificado}|{data['subtotal']}|MXN|1|{data['total']}|I|01|PPD|{self.emisor_cp}|"
+            f"||4.0|CP|{data['folio']}|{data['fecha']}|99|{no_certificado}|CONTADO|{data['subtotal']}|MXN|1|{data['total']}|I|01|PPD|{self.emisor_cp}|"
             f"{relacion_str}"
             f"{self.emisor_rfc}|{self.emisor_nombre}|{self.emisor_regimen}|"
             f"{data['rfc_cliente']}|{data['nombre_cliente']}|{data['cp_cliente']}|{data['regimen_cliente']}|{data['uso_cfdi']}|"
@@ -687,13 +685,15 @@ class BillingService:
             f"002|{data['retenciones']}|{data['retenciones']}|"
             f"{data['subtotal']}|002|Tasa|0.160000|{data['iva']}|{data['iva']}|"
             f"3.1|{data['id_ccp']}|No|{data['total_dist_rec']}|"
-            f"Origen|ICA9507256L6|INTERNACIONAL DE CONTENEDORES Y ASOCIADOS DE VERACRUZ|{data['fecha']}|17|193|VER|MEX|91700|"
-            f"Destino|{data['rfc_cliente']}|KUEHNE + NAGEL S.A. DE C.V. MDC FASE III|{data['fecha']}|{data['total_dist_rec']}|04|{data['municipio_destino']}|{data['estado_destino']}|MEX|{data['cp_destino']}|"
-            f"{data['peso_bruto']}|KGM|1|{data['bienes_transp']}|{data['descripcion_mercancia']}|1|21|{data['peso_bruto']}|pza|"
+            f"Origen|ICA9507256L6|INTERNACIONAL DE CONTENEDORES Y ASOCIADOS DE VERACRUZ|{data['fecha']}|MORELOS|159|193|VER|MEX|91700|"
+            f"Destino|{data['rfc_cliente']}|{data['nombre_cliente']}|{data['fecha']}|{data['total_dist_rec']}|DOMICILIO CONOCIDO|{data['municipio_destino']}|{data['estado_destino']}|MEX|{data['cp_destino']}|"
+            f"{data['peso_bruto']}|KGM|1|"
+            f"{data['bienes_transp']}|{data['descripcion_mercancia']}|1|21|pza|{data['peso_bruto']}|"
             f"{data['permiso_sct']}|{data['num_permiso']}|{data['config_vehicular']}|{data['peso_bruto_vehicular']}|{data['placas']}|{data['anio_modelo']}|"
             f"{data['aseguradora']}|{data['poliza']}|{data['poliza']}|"
             f"{data['subtipo_remolque']}|{data['placa_remolque']}|"
-            f"01|{data['rfc_operador']}|{data['licencia']}|{data['nombre_operador']}||"
+            f"01|{data['rfc_operador']}|{data['licencia']}|{data['nombre_operador']}|"
+            f"MORELOS|159|193|VER|MEX|91700||"
         )
 
         with open(self.path_key, "rb") as f:
@@ -717,9 +717,8 @@ class BillingService:
             else ""
         )
 
-        # 🚀 XML DINÁMICO: Inyecta los datos del Emisor y Conceptos variables
         return f"""<?xml version="1.0" encoding="UTF-8"?>
-<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:cartaporte31="http://www.sat.gob.mx/CartaPorte31" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/CartaPorte31 http://www.sat.gob.mx/sitio_internet/cfd/CartaPorte/CartaPorte31.xsd" Version="4.0" Fecha="{data['fecha']}" Serie="CP" Folio="{data['folio']}" FormaPago="99" CondicionesDePago="CONTADO" SubTotal="{data['subtotal']}" Moneda="MXN" Total="{data['total']}" TipoDeComprobante="I" Exportacion="01" MetodoPago="PPD" LugarExpedicion="{self.emisor_cp}">{relacion_xml}
+<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:cartaporte31="http://www.sat.gob.mx/CartaPorte31" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/CartaPorte31 http://www.sat.gob.mx/sitio_internet/cfd/CartaPorte/CartaPorte31.xsd" Version="4.0" Fecha="{data['fecha']}" Serie="CP" Folio="{data['folio']}" FormaPago="99" CondicionesDePago="CONTADO" SubTotal="{data['subtotal']}" Moneda="MXN" TipoCambio="1" Total="{data['total']}" TipoDeComprobante="I" Exportacion="01" MetodoPago="PPD" LugarExpedicion="{self.emisor_cp}">{relacion_xml}
     <cfdi:Emisor Rfc="{self.emisor_rfc}" Nombre="{self.emisor_nombre}" RegimenFiscal="{self.emisor_regimen}" />
     <cfdi:Receptor Rfc="{data['rfc_cliente']}" Nombre="{data['nombre_cliente']}" DomicilioFiscalReceptor="{data['cp_cliente']}" RegimenFiscalReceptor="{data['regimen_cliente']}" UsoCFDI="{data['uso_cfdi']}" />
     <cfdi:Conceptos>
@@ -738,10 +737,10 @@ class BillingService:
         <cartaporte31:CartaPorte Version="3.1" IdCCP="{data['id_ccp']}" TranspInternac="No" TotalDistRec="{data['total_dist_rec']}">
             <cartaporte31:Ubicaciones>
                 <cartaporte31:Ubicacion TipoUbicacion="Origen" RFCRemitenteDestinatario="ICA9507256L6" NombreRemitenteDestinatario="INTERNACIONAL DE CONTENEDORES Y ASOCIADOS DE VERACRUZ" FechaHoraSalidaLlegada="{data['fecha']}">
-                    <cartaporte31:Domicilio Calle="MORELOS" NumeroExterior="159" Localidad="17" Municipio="193" Estado="VER" Pais="MEX" CodigoPostal="91700" />
+                    <cartaporte31:Domicilio Calle="MORELOS" NumeroExterior="159" Municipio="193" Estado="VER" Pais="MEX" CodigoPostal="91700" />
                 </cartaporte31:Ubicacion>
-                <cartaporte31:Ubicacion TipoUbicacion="Destino" RFCRemitenteDestinatario="{data['rfc_cliente']}" NombreRemitenteDestinatario="KUEHNE + NAGEL S.A. DE C.V. MDC FASE III" FechaHoraSalidaLlegada="{data['fecha']}" DistanciaRecorrida="{data['total_dist_rec']}">
-                    <cartaporte31:Domicilio Calle="CARRETERA A TEPOTZOTLAN LA AURORA" NumeroExterior="KM 1" Colonia="4708" Localidad="04" Municipio="{data['municipio_destino']}" Estado="{data['estado_destino']}" Pais="MEX" CodigoPostal="{data['cp_destino']}" />
+                <cartaporte31:Ubicacion TipoUbicacion="Destino" RFCRemitenteDestinatario="{data['rfc_cliente']}" NombreRemitenteDestinatario="{data['nombre_cliente']}" FechaHoraSalidaLlegada="{data['fecha']}" DistanciaRecorrida="{data['total_dist_rec']}">
+                    <cartaporte31:Domicilio Calle="DOMICILIO CONOCIDO" Municipio="{data['municipio_destino']}" Estado="{data['estado_destino']}" Pais="MEX" CodigoPostal="{data['cp_destino']}" />
                 </cartaporte31:Ubicacion>
             </cartaporte31:Ubicaciones>
             <cartaporte31:Mercancias PesoBrutoTotal="{data['peso_bruto']}" UnidadPeso="KGM" NumTotalMercancias="1">
@@ -784,7 +783,7 @@ class BillingService:
             "fecha_emision": data["fecha"],
             "logo_src": logo_src,
             "qr_src": qr_src,
-            "id_ccp": data["id_ccp"],  # 🚀 DINÁMICO
+            "id_ccp": data["id_ccp"],
             "nombre_cliente": data["nombre_cliente"],
             "rfc_cliente": data["rfc_cliente"],
             "cp_cliente": data["cp_cliente"],
@@ -802,9 +801,7 @@ class BillingService:
                     "clave": "78101802",
                     "cantidad": "1.00",
                     "unidad": "E48 - SRV",
-                    "descripcion": data[
-                        "descripcion_concepto"
-                    ],  # 🚀 DINÁMICO (Incluye contenedor)
+                    "descripcion": data["descripcion_concepto"],
                     "precio_unitario": data["subtotal"],
                     "importe": data["subtotal"],
                 }
@@ -855,3 +852,71 @@ class BillingService:
     def _guardar_xml_disco(self, xml_bytes: bytes, uuid: str):
         with open(self.storage_dir / f"{uuid}.xml", "wb") as f:
             f.write(xml_bytes)
+
+    def procesar_cancelaciones_pendientes(self):
+        """
+        CRONJOB / RECOVERY TASK:
+        Busca todas las facturas que el SAT dejó "En Proceso" o "Lentas" (204)
+        y vuelve a intentar la cancelación automáticamente.
+        """
+        logger.info("--- INICIANDO RECUPERADOR DE CANCELACIONES PENDIENTES ---")
+
+        # 1. Buscamos todas las facturas atascadas
+        facturas_pendientes = (
+            self.db.query(ReceivableInvoice)
+            .filter(ReceivableInvoice.status_sat == "PENDIENTE_CANCELAR_SAT")
+            .all()
+        )
+
+        if not facturas_pendientes:
+            logger.info("No hay cancelaciones pendientes en la base de datos.")
+            return {"mensaje": "Sin pendientes", "procesadas": 0, "resultados": []}
+
+        logger.info(
+            f"Se encontraron {len(facturas_pendientes)} facturas pendientes por cancelar ante el SAT."
+        )
+
+        resultados = []
+        for factura in facturas_pendientes:
+            try:
+                # 2. Rescatamos el motivo y el UUID sustituto de la BD
+                motivo = factura.motivo_cancelacion or "01"
+                sustituto = factura.uuid_relacionado or ""
+
+                logger.info(
+                    f"[*] Reintentando UUID: {factura.uuid} (Sustituto: {sustituto})"
+                )
+
+                # 3. Re-utilizamos nuestro motor de cancelación que ya es a prueba de balas
+                self.cancelar_factura_nominal(
+                    invoice_id=factura.id, motivo=motivo, uuid_sustituto=sustituto
+                )
+
+                # Si no explotó, verificamos cómo quedó en la BD tras el intento
+                self.db.refresh(factura)
+                resultados.append(
+                    {
+                        "id": factura.id,
+                        "uuid": factura.uuid,
+                        "nuevo_status": factura.status_sat,
+                    }
+                )
+
+            except Exception as e:
+                logger.error(
+                    f"[X] Falló el reintento para el UUID {factura.uuid}: {str(e)}"
+                )
+                resultados.append(
+                    {
+                        "id": factura.id,
+                        "uuid": factura.uuid,
+                        "nuevo_status": f"Error: {str(e)}",
+                    }
+                )
+
+        logger.info("--- FIN DEL RECUPERADOR DE CANCELACIONES ---")
+        return {
+            "mensaje": "Proceso completado",
+            "procesadas": len(facturas_pendientes),
+            "resultados": resultados,
+        }

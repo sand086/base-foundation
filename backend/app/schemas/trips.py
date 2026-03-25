@@ -123,6 +123,7 @@ class TripBase(ORMBase):
     client_id: int
     sub_client_id: int
     tariff_id: Optional[int] = None
+    referencia: Optional[str] = Field(default=None, max_length=100)
 
     remolque_1_id: Optional[int] = None
     dolly_id: Optional[int] = None
