@@ -65,59 +65,44 @@ def get_trip(db: Session, trip_id: str):
 
 def create_trip(db: Session, trip: schemas.TripCreate):
     """
-    1. Crea el Viaje Padre (con remolques, tarifa y fecha programada).
+    1. Crea el Viaje Padre desempaquetando el esquema (no pierdes datos).
     2. Si trae un Tramo Inicial (No es Standby), crea el TripLeg y bloquea recursos.
     """
 
-    # 1. Recuperar la tarifa oficial de la BD si existe un tariff_id
-    # Esto soluciona el error de los $1,804 vs $5,382
-    official_base_rate = trip.tarifa_base
-    official_toll_cost = trip.costo_casetas
+    # 1. Extraemos TODOS los datos del frontend, ignorando 'initial_leg' para que no rompa SQLAlchemy
+    # Esto asegura que peso, referencia, descripcion_mercancia, etc., pasen directo a la BD.
+    trip_data = trip.model_dump(exclude={"initial_leg"})
 
-    # 2. Crear el Viaje Padre con montos validados
-    db_trip = models.Trip(
-        client_id=trip.client_id,
-        sub_client_id=trip.sub_client_id,
-        tariff_id=trip.tariff_id,
-        remolque_1_id=trip.remolque_1_id,
-        dolly_id=trip.dolly_id,
-        remolque_2_id=trip.remolque_2_id,
-        origin=trip.origin,
-        destination=trip.destination,
-        route_name=trip.route_name,
-        status=trip.status,
-        tarifa_base=official_base_rate,
-        costo_casetas=official_toll_cost,
-        start_date=trip.start_date,
-        fecha_programada=trip.fecha_programada,
-    )
+    # 2. Creamos el Viaje Padre
+    db_trip = models.Trip(**trip_data)
     db.add(db_trip)
-    db.flush()
+    db.flush()  # Hace el insert para generar el db_trip.id
 
-    # 2. Solo si trae initial_leg (Si se le dio click a DESPACHAR AHORA)
     # 3. Lógica para el Tramo Inicial (Leg)
     if trip.initial_leg:
         leg_data = trip.initial_leg
-        # Los anticipos NO restan del cobro al cliente, solo afectan la utilidad interna
+
+        # Calculamos el neto a pagar basado en la tarifa y los anticipos
+        monto_pagar = (trip.tarifa_base or 0) - (
+            (leg_data.anticipo_casetas or 0)
+            + (leg_data.anticipo_viaticos or 0)
+            + (leg_data.anticipo_combustible or 0)
+        )
+
         db_leg = models.TripLeg(
             trip_id=db_trip.id,
             leg_type=leg_data.leg_type,
-            status=trip.status,
+            status=db_trip.status,
             unit_id=leg_data.unit_id,
             operator_id=leg_data.operator_id,
             anticipo_casetas=leg_data.anticipo_casetas,
             anticipo_viaticos=leg_data.anticipo_viaticos,
             anticipo_combustible=leg_data.anticipo_combustible,
-            # El saldo del operador se calcula con la tarifa base
-            saldo_operador=(official_base_rate or 0)
-            - (
-                (leg_data.anticipo_casetas or 0)
-                + (leg_data.anticipo_viaticos or 0)
-                + (leg_data.anticipo_combustible or 0)
-            ),
+            # 🚀 CORRECCIÓN: Usamos monto_neto_pagado en lugar del campo inexistente saldo_operador
+            monto_neto_pagado=monto_pagar,
             odometro_inicial=leg_data.odometro_inicial,
             nivel_tanque_inicial=leg_data.nivel_tanque_inicial,
-            start_date=trip.start_date,
+            start_date=db_trip.start_date,
         )
         db.add(db_leg)
 
@@ -151,10 +136,9 @@ def create_trip(db: Session, trip: schemas.TripCreate):
                 .first()
             )
             if operator:
-                operator.status = models.OperatorStatus.EN_RUTA  # o EN_RUTA
+                operator.status = models.OperatorStatus.EN_RUTA
                 db.add(operator)
 
-    # Si fue Standby, brinca todo lo anterior y solo guarda el viaje padre
     db.commit()
     db.refresh(db_trip)
     return db_trip

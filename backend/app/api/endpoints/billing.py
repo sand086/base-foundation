@@ -298,3 +298,15 @@ def test_csd_connection(
             status_code=400,
             detail=f"El archivo .cer es inválido o está corrupto: {str(e)}",
         )
+
+
+@router.post("/retry-cancellations", summary="Reintentar Cancelaciones Pendientes SAT")
+def retry_pending_cancellations(db: Session = Depends(get_db)):
+    """
+    Este endpoint busca facturas con status 'PENDIENTE_CANCELAR_SAT'
+    y vuelve a mandar la petición SOAP de cancelación al PAC.
+    Ideal para configurar en un CRONJOB (ej. cada hora).
+    """
+    service = BillingService(db)
+    resultado = service.procesar_cancelaciones_pendientes()
+    return resultado
