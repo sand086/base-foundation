@@ -23,7 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 
-
 # carpetas publicas y archivos generados
 /public
 /build
@@ -39,5 +38,5 @@ backend/.env.*
 /node_modules
 /.pnp
 /vendor
-/backend/venv/
-backend/.env
+backend/venv/
+/backend/app/certs/
