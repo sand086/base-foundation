@@ -3,684 +3,1015 @@
   <head>
     <meta charset="UTF-8" />
     <style>
-      /* 1. CONFIGURACIÓN DE MARCOS PARA EVITAR DEFORMACIONES */
+      /* 1. GEOMETRÍA ASEGURADA */
       @page {
         size: letter;
-        margin-top: 4.8cm; /* Espacio exacto para el encabezado */
-        margin-bottom: 10cm; /* IMPORTANTE: Aumentado para que no pise el footer gigante */
-        margin-left: 1cm;
-        margin-right: 1cm;
-
-        /* Marco del Encabezado Fijo */
-        @frame header_frame {
-          -pdf-frame-content: header_content;
-          left: 1cm;
-          width: 19.5cm;
-          top: 0.8cm;
-          height: 4cm;
-        }
-
-        /* Marco del Pie de Página Fijo */
-        @frame footer_frame {
-          -pdf-frame-content: footer_content;
-          left: 1cm;
-          width: 19.5cm;
-          bottom: 0.5cm;
-          height: 9.5cm; /* IMPORTANTE: Altura aumentada para los sellos largos */
-        }
+        margin: 0.5cm;
       }
 
-      /* 2. ESTILOS GLOBALES E IDÉNTICOS A LA IMAGEN */
       body {
-        font-family: Helvetica, Arial, sans-serif;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+          Arial, sans-serif;
         font-size: 7.5pt;
-        color: #000;
-      }
-
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        table-layout: fixed; /* Ayuda a que las columnas respeten su ancho */
-      }
-      td,
-      th {
-        vertical-align: top;
-      }
-
-      /* Utilidad para romper palabras muy largas */
-      .break-text {
-        word-wrap: break-word;
-        word-break: break-all;
-        overflow-wrap: break-word;
+        color: #333333;
+        margin: 0;
+        padding-top: 8cm;
+        padding-bottom: 9.5cm;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        text-rendering: optimizeLegibility;
       }
 
       .bold {
-        font-weight: bold;
+        font-weight: 700;
       }
-      .red {
-        color: #d32f2f;
+      .text-primary {
+        color: #be0811;
       }
-      .center {
-        text-align: center;
+      .text-action {
+        color: #009740;
+      }
+      .text-dark {
+        color: #333333;
+      }
+      .text-muted {
+        color: #666666;
       }
       .right {
         text-align: right;
       }
-
-      /* Líneas divisorias sutiles tipo factura original */
-      .line-top {
-        border-top: 0.5px solid #000;
+      .center {
+        text-align: center;
       }
-      .line-bottom {
-        border-bottom: 0.5px solid #000;
-      }
-
-      .bg-gray {
-        background-color: #f0f0f0;
+      table {
+        width: 100%;
+        border-collapse: collapse;
       }
 
-      /* Cajas y Fondos */
-      .box td {
+      /* ====== HEADER ====== */
+      header {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 7.5cm;
+        background: white;
+      }
+
+      .header-container {
+        border-bottom: 1px solid #e5e7eb;
+        padding-bottom: 6px;
+        margin-bottom: 8px;
+      }
+      .logo-img {
+        max-height: 40px;
+        max-width: 140px;
+        object-fit: contain;
+      }
+      .header-company {
+        font-size: 16pt;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        background: linear-gradient(
+          135deg,
+          #be0811 0%,
+          rgba(190, 8, 17, 0.8) 100%
+        );
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      .folio-badge {
+        border: 1px solid #e5e7eb;
+        border-radius: 0.75rem;
+        background: #fafafa;
+        overflow: hidden;
+      }
+      .folio-badge-title {
+        background: #f4f4f5;
         padding: 4px;
-        border: 0.5px solid #000;
-      }
-
-      .label {
         font-size: 7pt;
-        color: #000;
+        text-transform: uppercase;
+        color: #666666;
+        border-bottom: 1px solid #e5e7eb;
+        font-weight: 600;
+      }
+      .folio-badge-content {
+        padding: 4px;
       }
 
+      .bento-card {
+        border: 1px solid #e5e7eb;
+        border-radius: 0.5rem;
+        background: white;
+        padding: 6px 8px;
+        margin-bottom: 4px;
+      }
+      .bento-card-header {
+        font-size: 6.5pt;
+        color: #be0811;
+        text-transform: uppercase;
+        font-weight: 700;
+        margin-bottom: 4px;
+        padding-bottom: 2px;
+        border-bottom: 1px solid #f3f4f6;
+      }
+      .bento-card-header.green {
+        color: #009740;
+      } /* Para Destino */
+
+      .grid-table td {
+        padding: 2px 4px;
+        font-size: 6.5pt;
+        vertical-align: top;
+      }
+      .grid-label {
+        color: #666666;
+        font-weight: 600;
+        font-size: 5.5pt;
+        text-transform: uppercase;
+        display: block;
+        margin-bottom: 1px;
+      }
+
+      /* ====== FOOTER ====== */
+      footer {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 8.5cm;
+        background: white;
+      }
+
+      .elegant-divider {
+        height: 1px;
+        background: #e5e7eb;
+        margin: 4px 0;
+        position: relative;
+      }
+      .elegant-divider::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 80px;
+        height: 100%;
+        background: #be0811;
+      }
+
+      .sat-table {
+        width: 100%;
+        text-align: center;
+        margin-bottom: 4px;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.4rem;
+        overflow: hidden;
+      }
+      .sat-table td {
+        padding: 4px;
+        font-size: 7pt;
+      }
+      .sat-table-header {
+        background: #fafafa;
+        color: #333333;
+        font-weight: 700;
+        border-bottom: 1px solid #e5e7eb;
+      }
+      .sat-table-header td {
+        border-right: 1px solid #e5e7eb;
+      }
+
+      .sello-wrapper {
+        margin-bottom: 6px;
+      }
+      .sello-title {
+        font-size: 7pt;
+        font-weight: 800;
+        text-transform: uppercase;
+        color: #333333;
+      }
       .sello-text {
-        font-size: 5pt;
-        font-family: "Courier New", Courier, monospace;
-        /* IMPORTANTE: Fuerza el corte de los sellos gigantes */
-        word-wrap: break-word;
+        font-size: 7pt;
+        font-family: "Courier New", monospace;
         word-break: break-all;
-        line-height: 1.1;
+        color: #475569;
+        line-height: 1.2;
+        background: #f8fafc;
+        padding: 4px;
+        border: 1px solid #e5e7eb;
+        border-top: none;
+        border-radius: 0 0 4px 4px;
+      }
+
+      .line-emisor {
+        border-top: 2px solid #be0811;
+        margin-top: 2px;
+        width: 100%;
+        display: block;
+      }
+      .line-sat {
+        border-top: 2px solid #009740;
+        margin-top: 2px;
+        width: 100%;
+        display: block;
+      }
+      .line-cadena {
+        border-top: 2px solid #1a4f36;
+        margin-top: 2px;
+        width: 100%;
+        display: block;
+      }
+
+      /* ====== MAIN ====== */
+      .table-main {
+        table-layout: fixed;
+        border-collapse: separate;
+        border-spacing: 0;
+      }
+      .table-main thead td {
+        background: #fafafa;
+        color: #666666;
+        font-weight: 600;
+        padding: 6px;
+        font-size: 6.5pt;
+        text-transform: uppercase;
+        border-bottom: 1px solid #e5e7eb;
+      }
+      .table-main thead td:first-child {
+        border-top-left-radius: 0.5rem;
+      }
+      .table-main thead td:last-child {
+        border-top-right-radius: 0.5rem;
+      }
+      .table-main tbody td {
+        padding: 6px;
+        border-bottom: 1px solid #f3f4f6;
+        vertical-align: top;
+      }
+
+      .section-title-main {
+        background: #0f172a;
+        color: white;
+        padding: 4px 8px;
+        font-weight: 800;
+        font-size: 7.5pt;
+        text-transform: uppercase;
+        border-radius: 4px;
+        margin-top: 15px;
+        margin-bottom: 8px;
+        display: inline-block;
+      }
+
+      .addenda-box {
+        margin-top: 15px;
+        font-size: 6pt;
+        color: #64748b;
+        text-align: justify;
+        line-height: 1.3;
+        border-top: 1px dashed #cbd5e1;
+        padding-top: 8px;
+      }
+
+      .page-number::before {
+        content: counter(page);
+      }
+      .page-count::before {
+        content: counter(pages);
       }
     </style>
   </head>
   <body>
-    <div id="header_content">
-      <div class="right" style="font-size: 7pt; margin-bottom: 5px">
-        Página <pdf:pagenumber /> de <pdf:pagecount />
-      </div>
-      <table width="100%" cellpadding="0" cellspacing="0" border="0">
-        <tr>
-          <td width="35%" valign="middle">
-            {% if logo_src %}
-            <img src="{{ logo_src }}" height="55" style="margin-bottom: 6px" />
-            {% else %}
-            <div
-              style="
-                font-size: 16pt;
-                color: #1a4f36;
-                font-style: italic;
-                font-weight: bold;
-              "
-            >
-              Rápidos 3T
-            </div>
-            <div style="font-size: 7pt; color: #555">
-              Transporte de Carga Pesada ®
-            </div>
-            {% endif %}
-          </td>
-
-          <td width="35%" valign="top">
-            <div style="margin-bottom: 4px">RAPIDOS 3T</div>
-            <div style="margin-bottom: 10px">RTX110624KP5</div>
-            <div>DESARROLLO URBANO, MANZANA 3, LOTE 10</div>
-            <div>Y 11, COL. RENACIMIENTO,C.P. 91808,</div>
-            <div>VERACRUZ, VER.</div>
-            <div>Tel. 2291000240</div>
-          </td>
-
-          <td width="30%" valign="top">
-            <table width="100%" cellpadding="2" cellspacing="0" border="0">
-              <tr>
-                <td width="40%" style="padding-bottom: 4px">CFDI No.</td>
-                <td width="60%" class="bold red" style="padding-bottom: 4px">
-                  CP{{ folio_interno }}
-                </td>
-              </tr>
-              <tr>
-                <td style="padding-bottom: 4px">
-                  Fecha y Hora<br />de Emisión.
-                </td>
-                <td style="padding-bottom: 4px">{{ fecha_emision }}</td>
-              </tr>
-              <tr>
-                <td style="padding-bottom: 4px">No. Certificado.</td>
-                <td style="padding-bottom: 4px">{{ cert_sat }}</td>
-              </tr>
-              <tr>
-                <td>Lugar<br />expedición.</td>
-                <td>91808</td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-      </table>
-    </div>
-    <hr />
-
-    <div style="padding: 4px 0; margin-bottom: 10px">
-      <div class="bold" style="font-size: 9pt; margin-bottom: 4px">
-        DATOS DEL CLIETE
+    <header>
+      <div class="header-container">
+        <table style="table-layout: fixed">
+          <tr>
+            <td width="25%" valign="middle">
+              {% if logo_src %}
+              <img
+                src="{{ logo_src }}"
+                class="logo-img"
+                alt="Logo de la Empresa"
+              />
+              {% else %}
+              <div class="header-company">Rápidos 3T</div>
+              {% endif %}
+            </td>
+            <td width="45%" style="font-size: 7pt; line-height: 1.3">
+              <div class="bold text-dark" style="font-size: 8.5pt">
+                TRANSPORTE DE CARGA PESADA
+              </div>
+              <div><span class="bold text-muted">RFC:</span> RTX110624KP5</div>
+              <div>DESARROLLO URBANO, MANZANA 3, LOTE 10 Y 11</div>
+              <div>COL. RENACIMIENTO, C.P. 91808 | VERACRUZ, VER.</div>
+              <div>
+                <span class="bold text-muted">Lugar de expedición:</span> 91808
+                | <span class="bold text-muted">Tel:</span> 2291000240
+              </div>
+              <div>
+                <span class="bold text-muted">Régimen Fiscal:</span> 624
+                (Coordinados)
+              </div>
+            </td>
+            <td width="30%" valign="top">
+              <div
+                class="right text-muted"
+                style="font-size: 6.5pt; margin-bottom: 4px; font-weight: 600"
+              >
+                Página <span class="page-number"></span> de
+                <span class="page-count"></span>
+              </div>
+              <div class="folio-badge center">
+                <div class="folio-badge-title">CFDI (INGRESO)</div>
+                <div class="folio-badge-content">
+                  <div class="text-primary bold" style="font-size: 11pt">
+                    CP-16595
+                  </div>
+                  <div style="font-size: 5.5pt; color: #666666">
+                    Fecha y Hora de Emisión: 2026-03-02T10:31:54
+                  </div>
+                  <div style="font-size: 5.5pt; color: #666666">
+                    No. Certificado: 00001000000717643613
+                  </div>
+                </div>
+              </div>
+            </td>
+          </tr>
+        </table>
       </div>
 
-      <table width="100%" cellpadding="0" cellspacing="0" border="0">
-        <tr style="margin: 0px; padding: 0px">
-          <td width="15%">Nombre:</td>
-
-          <td width="85%">{{ nombre_cliente }}</td>
-        </tr>
-
-        <tr style="margin: 0px; padding: 0px">
-          <td>RFC:</td>
-
-          <td>{{ rfc_cliente }}</td>
-        </tr>
-
-        <tr style="margin: 0px; padding: 0px">
-          <td>Dirección:</td>
-
-          <td></td>
-        </tr>
-
-        <tr style="margin: 0px; padding: 0px">
-          <td>Código Postal:</td>
-
-          <td>{{ cp_cliente }}</td>
+      <table style="table-layout: fixed">
+        <tr>
+          <td width="50%" style="padding-right: 4px" valign="top">
+            <div class="bento-card">
+              <div class="bento-card-header">Datos del Cliente</div>
+              <table class="grid-table">
+                <tr>
+                  <td width="50%">
+                    <span class="grid-label">Nombre</span>
+                    <span class="bold text-dark">EAGLE EXPRESS CARGO</span>
+                  </td>
+                  <td width="50%">
+                    <span class="grid-label">RFC</span>
+                    <span class="bold text-dark">EEC1406167F9</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td colspan="2">
+                    <span class="grid-label">Dirección</span>
+                    <span style="color: transparent">Sin información</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td><span class="grid-label">Código Postal</span>15530</td>
+                  <td>
+                    <span class="grid-label">Régimen Fiscal</span>601 (General
+                    de Ley Personas Morales)
+                  </td>
+                </tr>
+              </table>
+            </div>
+          </td>
+          <td width="50%" style="padding-left: 4px" valign="top">
+            <div class="bento-card">
+              <div class="bento-card-header">Datos del Comprobante</div>
+              <table class="grid-table">
+                <tr>
+                  <td width="33%">
+                    <span class="grid-label">Uso del CFDI</span>G03 (Gastos en
+                    general.)
+                  </td>
+                  <td width="33%">
+                    <span class="grid-label">Método de Pago</span>PPD (Pago en
+                    parcialidades o diferido)
+                  </td>
+                  <td width="34%">
+                    <span class="grid-label">Tipo Comprobante</span>I (Ingreso)
+                  </td>
+                </tr>
+                <tr>
+                  <td><span class="grid-label">Moneda</span>MXN (TC: 1)</td>
+                  <td>
+                    <span class="grid-label">Forma de Pago</span>99 (Por
+                    definir)
+                  </td>
+                  <td>
+                    <span class="grid-label">Condiciones de Pago</span>En 15
+                    Días
+                  </td>
+                </tr>
+              </table>
+            </div>
+          </td>
         </tr>
       </table>
+    </header>
 
-      <table
-        width="100%"
-        cellpadding="0"
-        cellspacing="0"
-        border="0"
-        style="margin-top: 8px"
-      >
-        <tr style="margin: 0px; padding: 0px; border-bottom: 1px solid #000">
-          <td width="15%">Régimen Fiscal:</td>
-
-          <td width="85%" class="bold">
-            {{ regimen_cliente }} ( General de Ley de Personas Morales )
-          </td>
-        </tr>
-      </table>
-    </div>
-
-    <div class="line-bottom" style="padding-bottom: 8px; margin-bottom: 15px">
-      <table width="100%" cellpadding="0" cellspacing="0" border="0">
-        <tr>
-          <td width="20%">
-            <div style="margin-bottom: 4px">Moneda:</div>
-            <div class="bold">MXN TC 1</div>
-          </td>
-          <td width="30%">
-            <div style="margin-bottom: 4px">Método de Pago:</div>
-            <div class="bold">PUE (Pago en una sola<br />exhibición)</div>
-          </td>
-          <td width="25%">
-            <div style="margin-bottom: 4px">Uso del CFDI:</div>
-            <div class="bold">{{ uso_cfdi }}</div>
-          </td>
-          <td width="25%">
-            <div style="margin-bottom: 4px">Tipo Comprobante:</div>
-            <div class="bold">I (Ingreso)</div>
-          </td>
-        </tr>
-      </table>
-    </div>
-
-    <table
-      width="100%"
-      cellpadding="0"
-      cellspacing="0"
-      border="0"
-      style="margin-bottom: 10px"
-    >
-      <tr>
-        <td width="50%">
-          Forma de Pago: 03 (Transferencia electrónica de fondos)
-        </td>
-        <td width="50%">Condiciones de Pago: CONTADO</td>
-      </tr>
-    </table>
-
-    <table
-      width="100%"
-      cellpadding="4"
-      cellspacing="0"
-      border="0"
-      style="margin-bottom: 10px"
-    >
-      <thead>
-        <tr class="line-top line-bottom bold">
-          <td width="15%" class="center" style="padding: 4px 0">Código</td>
-          <td width="40%" style="padding: 4px 0">Descripción</td>
-          <td width="10%" class="center" style="padding: 4px 0">Cantidad</td>
-          <td width="15%" class="center" style="padding: 4px 0">Unidad</td>
-          <td width="10%" class="center" style="padding: 4px 0">
-            Precio<br />Unitario
-          </td>
-          <td width="10%" class="right" style="padding: 4px 0">Importe</td>
-        </tr>
-      </thead>
-      <tbody>
-        {% for c in conceptos %}
-        <tr>
-          <td class="center" style="padding-top: 6px">{{ c.clave }}</td>
-          <td style="padding-top: 6px">{{ c.descripcion }}</td>
-          <td class="center" style="padding-top: 6px">{{ c.cantidad }}</td>
-          <td class="center" style="padding-top: 6px">{{ c.unidad }}</td>
-          <td class="center" style="padding-top: 6px">
-            $ {{ c.precio_unitario }}
-          </td>
-          <td class="right" style="padding-top: 6px">$ {{ c.importe }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-
-    <table
-      width="100%"
-      cellpadding="2"
-      cellspacing="0"
-      border="0"
-      style="margin-top: 15px"
-    >
-      <tr>
-        <td width="60%"></td>
-        <td width="40%">
-          <table width="100%" cellpadding="2" cellspacing="0" border="0">
-            <tr>
-              <td width="60%" class="bold right" style="padding-bottom: 4px">
-                SubTotal:
-              </td>
-              <td width="40%" class="right" style="padding-bottom: 4px">
-                $ {{ subtotal }}
-              </td>
-            </tr>
-            <tr>
-              <td class="bold right" style="padding-bottom: 4px">IVA:</td>
-              <td class="right" style="padding-bottom: 4px">
-                ($ {{ retenciones }})
-              </td>
-            </tr>
-            <tr>
-              <td class="bold right" style="padding-bottom: 4px">IVA 16%:</td>
-              <td class="right" style="padding-bottom: 4px">$ {{ iva }}</td>
-            </tr>
-            <tr>
-              <td class="bold right" style="padding-top: 4px">TOTAL:</td>
-              <td class="bold right" style="padding-top: 4px">$ {{ total }}</td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-
-    <div style="page-break-before: always"></div>
-
-    <div
-      class="bold center"
-      style="font-size: 9.5pt; margin-bottom: 10px; margin-top: 10px"
-    >
-      COMPLEMENTO CARTA PORTE
-    </div>
-
-    <table
-      width="100%"
-      cellpadding="0"
-      cellspacing="0"
-      border="0"
-      style="margin-bottom: 20px"
-    >
-      <tr>
-        <td width="20%" class="center" style="padding-bottom: 4px">Version:</td>
-        <td width="20%" class="center" style="padding-bottom: 4px">
-          TranspInternac:
-        </td>
-        <td width="20%" class="center" style="padding-bottom: 4px">
-          EntradaSalidaMerc:
-        </td>
-        <td width="20%" class="center" style="padding-bottom: 4px">
-          ViaEntradaSalida:
-        </td>
-        <td width="20%" class="center" style="padding-bottom: 4px">
-          TotalDistRec:
-        </td>
-      </tr>
-      <tr class="line-top">
-        <td class="center bold" style="padding-top: 4px; padding-bottom: 8px">
-          3.1
-        </td>
-        <td class="center bold" style="padding-top: 4px; padding-bottom: 8px">
-          No
-        </td>
-        <td
-          class="center bold"
-          style="padding-top: 4px; padding-bottom: 8px"
-        ></td>
-        <td
-          class="center bold"
-          style="padding-top: 4px; padding-bottom: 8px"
-        ></td>
-        <td class="center bold" style="padding-top: 4px; padding-bottom: 8px">
-          480
-        </td>
-      </tr>
-      <tr>
-        <td class="center" style="padding-top: 6px; padding-bottom: 4px">
-          IdCCP:
-        </td>
-        <td class="center" style="padding-top: 6px; padding-bottom: 4px">
-          RegistroISTMO:
-        </td>
-        <td class="center" style="padding-top: 6px; padding-bottom: 4px">
-          UbicacionPoloOrigen:
-        </td>
-        <td class="center" style="padding-top: 6px; padding-bottom: 4px">
-          UbicacionPoloDestino:
-        </td>
-        <td class="center" style="padding-top: 6px; padding-bottom: 4px">
-          PaisOrigenDestino:
-        </td>
-      </tr>
-      <tr class="line-top line-bottom">
-        <td
-          class="center bold break-text"
-          style="padding-top: 4px; padding-bottom: 8px"
-        >
-          {{ id_ccp[:24] }}<br />
-          {{ id_ccp[24:] }}
-        </td>
-
-        <td
-          class="center bold"
-          style="padding-top: 4px; padding-bottom: 8px"
-        ></td>
-        <td
-          class="center bold"
-          style="padding-top: 4px; padding-bottom: 8px"
-        ></td>
-        <td
-          class="center bold"
-          style="padding-top: 4px; padding-bottom: 8px"
-        ></td>
-        <td
-          class="center bold"
-          style="padding-top: 4px; padding-bottom: 8px"
-        ></td>
-      </tr>
-    </table>
-
-    <div class="bold" style="margin-bottom: 8px; font-size: 8pt">
-      UBICACION:
-    </div>
-
-    {% for u in ubicaciones %}
-    <table
-      width="100%"
-      cellpadding="0"
-      cellspacing="0"
-      border="0"
-      style="margin-bottom: 20px"
-    >
-      <tr>
-        <td width="16.6%" class="center" style="padding-bottom: 4px">
-          TipoUbicacion:
-        </td>
-        <td width="16.6%" class="center" style="padding-bottom: 4px">
-          FechaHoraSalidaLlegada:
-        </td>
-        <td width="16.6%" class="center" style="padding-bottom: 4px">
-          IDUbicacion:
-        </td>
-        <td width="16.6%" class="center" style="padding-bottom: 4px">
-          StationName
-        </td>
-        <td width="16.6%" class="center" style="padding-bottom: 4px">
-          TipoEstacion:
-        </td>
-        <td width="16.6%" class="center" style="padding-bottom: 4px">
-          DistanciaRecorrida:
-        </td>
-      </tr>
-      <tr class="line-top">
-        <td class="center bold" style="padding-top: 4px; padding-bottom: 8px">
-          {{ u.tipo }}
-        </td>
-        <td
-          class="center bold break-text"
-          style="padding-top: 4px; padding-bottom: 8px"
-        >
-          {{ u.fecha }}
-        </td>
-        <td
-          class="center bold"
-          style="padding-top: 4px; padding-bottom: 8px"
-        ></td>
-        <td
-          class="center bold"
-          style="padding-top: 4px; padding-bottom: 8px"
-        ></td>
-        <td
-          class="center bold"
-          style="padding-top: 4px; padding-bottom: 8px"
-        ></td>
-        <td class="center bold" style="padding-top: 4px; padding-bottom: 8px">
-          {{ u.distancia }}
-        </td>
-      </tr>
-      <tr>
-        <td
-          class="center break-text"
-          style="padding-top: 6px; padding-bottom: 4px"
-        >
-          RFCRemitenteDestinatari<br />o:
-        </td>
-        <td
-          class="center break-text"
-          style="padding-top: 6px; padding-bottom: 4px"
-        >
-          NombreRemitenteDestina<br />tario:
-        </td>
-        <td class="center" style="padding-top: 6px; padding-bottom: 4px">
-          NumRegIdTrib:
-        </td>
-        <td class="center" style="padding-top: 6px; padding-bottom: 4px">
-          ResidenciaFiscal:
-        </td>
-        <td class="center" style="padding-top: 6px; padding-bottom: 4px">
-          NumEstacion:
-        </td>
-        <td class="center" style="padding-top: 6px; padding-bottom: 4px">
-          NavegacionTrafico:
-        </td>
-      </tr>
-      <tr class="line-top line-bottom">
-        <td
-          class="center bold break-text"
-          style="padding-top: 4px; padding-bottom: 8px"
-        >
-          {{ u.rfc }}
-        </td>
-        <td
-          class="center bold break-text"
-          style="padding-top: 4px; padding-bottom: 8px"
-        >
-          {{ u.nombre }}
-        </td>
-        <td
-          class="center bold"
-          style="padding-top: 4px; padding-bottom: 8px"
-        ></td>
-        <td
-          class="center bold"
-          style="padding-top: 4px; padding-bottom: 8px"
-        ></td>
-        <td
-          class="center bold"
-          style="padding-top: 4px; padding-bottom: 8px"
-        ></td>
-        <td
-          class="center bold"
-          style="padding-top: 4px; padding-bottom: 8px"
-        ></td>
-      </tr>
-    </table>
-    {% endfor %}
-
-    <div class="bold" style="margin-bottom: 4px">
-      MERCANCIAS AUTOTRANSPORTE:
-    </div>
-    <table
-      width="100%"
-      class="line-bottom"
-      cellpadding="4"
-      cellspacing="0"
-      border="0"
-      style="margin-bottom: 15px; padding-bottom: 8px"
-    >
-      <thead>
-        <tr class="line-top line-bottom">
-          <td class="bold">Permiso SCT</td>
-          <td class="bold">Num. Permiso</td>
-          <td class="bold">Configuración</td>
-          <td class="bold">Placas</td>
-          <td class="bold">Año</td>
-          <td class="bold">Peso Bruto</td>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td style="padding-top: 4px">{{ autotransporte.permiso }}</td>
-          <td style="padding-top: 4px" class="break-text">
-            {{ autotransporte.num_permiso }}
-          </td>
-          <td style="padding-top: 4px">{{ autotransporte.configuracion }}</td>
-          <td style="padding-top: 4px">{{ autotransporte.placas }}</td>
-          <td style="padding-top: 4px">{{ autotransporte.anio }}</td>
-          <td style="padding-top: 4px">{{ autotransporte.peso }} t</td>
-        </tr>
-        <tr>
-          <td colspan="6" style="padding-top: 8px" class="break-text">
-            <span class="bold">Aseguradora:</span> {{ autotransporte.aseguradora
-            }} &nbsp;&nbsp;|&nbsp;&nbsp; <span class="bold">Póliza:</span> {{
-            autotransporte.poliza }} &nbsp;&nbsp;|&nbsp;&nbsp;
-            <span class="bold">Remolque:</span> {{ autotransporte.remolque }}
-            ({{ autotransporte.placa_remolque }}) &nbsp;&nbsp;|&nbsp;&nbsp;
-            <span class="bold">Operador:</span> {{ operador.nombre }} ({{
-            operador.rfc }})
-          </td>
-        </tr>
-      </tbody>
-    </table>
-    <div id="footer_content">
-      <div class="bold" style="font-size: 8pt; margin-bottom: 2px">
+    <footer>
+      <div class="bold text-dark" style="font-size: 7.5pt; margin-bottom: 2px">
         Importe con Letra:
       </div>
-      <div style="font-size: 7pt; margin-bottom: 4px">
-        (*** UN PESOS 12/100 MXN ***)
+      <div style="font-size: 7pt; margin-bottom: 4px; color: #666666">
+        (*** TREINTA Y CINCO MIL OCHOCIENTOS CUARENTA PESOS 00/100 MXN ***)
       </div>
-      <div
-        class="bold"
-        style="
-          font-size: 8pt;
-          margin-bottom: 2px;
-          padding-bottom: 2px;
-          border-bottom: 1.5px solid #000;
-        "
-      >
+      <div class="bold" style="font-size: 7.5pt; color: #333333">
         Este documento es una representación impresa de un CFDI.
       </div>
 
-      <table
-        width="100%"
-        cellpadding="0"
-        cellspacing="0"
-        border="0"
-        style="margin-top: 4px"
-      >
+      <div class="elegant-divider"></div>
+
+      <table style="table-layout: fixed; width: 100%">
         <tr>
-          <td width="20%" valign="top" align="left">
-            <img src="{{ qr_src }}" style="width: 3.5cm; height: 3.5cm" />
-          </td>
-
-          <td width="80%" valign="top" style="padding-left: 10px">
-            <table
-              width="100%"
-              cellpadding="2"
-              cellspacing="0"
-              border="0"
-              style="margin-bottom: 6px"
-            >
-              <thead>
-                <tr
-                  class="bold center"
-                  style="border-bottom: 1px solid #000; font-size: 7pt"
-                >
-                  <td width="10%" style="padding-bottom: 2px">Versión</td>
-                  <td width="35%" style="padding-bottom: 2px">Folio Fiscal</td>
-                  <td width="25%" style="padding-bottom: 2px">
-                    No. Certificado SAT
-                  </td>
-                  <td width="30%" style="padding-bottom: 2px">
-                    Fecha y Hora Certificación
-                  </td>
-                </tr>
-              </thead>
-              <tbody>
-                <tr class="center" style="font-size: 7pt">
-                  <td style="padding-top: 2px">4.0</td>
-                  <td style="padding-top: 2px">{{ uuid }}</td>
-                  <td style="padding-top: 2px">{{ cert_sat }}</td>
-                  <td style="padding-top: 2px">{{ fecha_emision }}</td>
-                </tr>
-              </tbody>
-            </table>
-
-            <div class="bold" style="font-size: 8pt; margin-bottom: 2px">
-              Sello Digital del Emisor:
-            </div>
+          <td style="width: 120px; vertical-align: top">
             <div
-              class="sello-text"
               style="
-                margin-bottom: 8px;
-                font-size: 7.5pt;
-                word-wrap: break-word;
+                background: white;
+                border: 1px solid #e5e7eb;
+                border-radius: 0.5rem;
+                padding: 4px;
+                display: inline-block;
               "
             >
-              {{ sello_emisor|safe }}
+              <div
+                style="
+                  width: 100px;
+                  height: 100px;
+                  background: #eee;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  font-size: 8pt;
+                  color: #999;
+                "
+              >
+                [ QR CODE ]
+              </div>
+            </div>
+          </td>
+          <td style="vertical-align: top; padding-left: 8px">
+            <table class="sat-table">
+              <tr class="sat-table-header">
+                <td style="width: 10%">Versión</td>
+                <td style="width: 40%">Folio Fiscal</td>
+                <td style="width: 25%">No. Certificado SAT</td>
+                <td style="width: 25%">Fecha y Hora Certificación</td>
+              </tr>
+              <tr>
+                <td class="bold text-dark">4.0</td>
+                <td class="bold text-dark">
+                  94FBAB5B-DDAF-4858-84EC-F23AA4CDC611
+                </td>
+                <td class="bold text-dark">00001000000719545303</td>
+                <td class="bold text-dark">2026-03-02T12:36:24</td>
+              </tr>
+            </table>
+
+            <div class="sello-wrapper">
+              <div class="sello-title">Sello Digital del Emisor</div>
+              <div class="line-emisor"></div>
+              <div class="sello-text">
+                M085BkYeJH+LmnkY75WIziDPCQp917lel30V7PeXTMx8Y7+sYeReZTt6l8FPSDtIMDAKDAZQzPw1zTBpbzZYkw57pTjlxtLOTkiStgu<br />hrZHMLuuKV3aAXlyrA1+eN6AeFolyysC3Y3YM2p8mh29esBK2KZJFh6eCzRA6ZX0g+2gYCp691n8BjPXzFXzJFedrtytiMRHq+A+My...
+              </div>
             </div>
           </td>
         </tr>
       </table>
 
-      <div class="bold" style="font-size: 8pt; margin-bottom: 2px">
-        Sello Digital del SAT:
-      </div>
-      <div
-        class="sello-text"
-        style="margin-bottom: 8px; font-size: 7.5pt; word-wrap: break-word"
-      >
-        {{ sello_sat|safe }}
+      <div class="sello-wrapper">
+        <div class="sello-title">Sello Digital del SAT</div>
+        <div class="line-sat"></div>
+        <div class="sello-text">
+          Gi/zO5izu35e5+j24Fx7DQn1 6RpiGS8i9k+ttZG/MMh0p7z1f2PJatkD/VUOX3pU1
+          n7HeBjOU7q+1ZMxOEpg5tLFJZgB9l+0+TQbvCXrCklizxmuvHSskkYMgDHZG7/r2gcB13Nu7F...
+        </div>
       </div>
 
-      <div class="bold" style="font-size: 7pt; margin-bottom: 2px">
-        Cadena Original del Complemento de Certificación digital del SAT:
+      <div class="sello-wrapper" style="margin-bottom: 0">
+        <div class="sello-title">
+          Cadena Original del Complemento de Certificación digital del SAT
+        </div>
+        <div class="line-cadena"></div>
+        <div class="sello-text">
+          ||1.1|94FBAB5B-DDAF-4858-84EC-F23AA4CDC611|2026-03-02T12:36:24|L501306189R5|M085BkYeJH+LmnkY75WIziDPCQp917lel30V7PeXTMx8Y7+sYeReZTt6l8FPSDtIMDaK...
+        </div>
       </div>
+    </footer>
+
+    <main>
+      <table class="table-main">
+        <thead>
+          <tr>
+            <td width="12%" class="center">CÓDIGO</td>
+            <td width="48%">DESCRIPCIÓN</td>
+            <td width="12%" class="center">CANTIDAD</td>
+            <td width="14%" class="right">PRECIO UNITARIO</td>
+            <td width="14%" class="right">IMPORTE</td>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="center text-muted bold">001 [78101802]</td>
+            <td>
+              <span class="bold text-dark">FLETE CARGA GENERAL</span><br />
+              <span style="font-size: 6pt; color: #666666">MSBU6763609</span>
+            </td>
+            <td class="center">
+              <span class="bold text-dark">1.00</span><br />
+              <span style="font-size: 5.5pt" class="text-muted">E48 - SRV</span>
+            </td>
+            <td class="right text-dark">$ 32,000.00</td>
+            <td class="right bold text-dark">$ 32,000.00</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <table style="margin-top: 15px; width: 100%; table-layout: fixed">
+        <tr>
+          <td width="65%"></td>
+          <td width="35%">
+            <div class="bento-card" style="padding: 8px">
+              <table style="font-size: 7.5pt">
+                <tr>
+                  <td class="right text-muted" width="50%">SubTotal:</td>
+                  <td class="right bold text-dark">$ 32,000.00</td>
+                </tr>
+                <tr>
+                  <td class="right text-muted">IVA 16%:</td>
+                  <td class="right bold text-dark">$ 5,120.00</td>
+                </tr>
+                <tr>
+                  <td class="right text-muted">Retención IVA (4%):</td>
+                  <td class="right text-primary">-$ 1,280.00</td>
+                </tr>
+                <tr>
+                  <td colspan="2">
+                    <div
+                      style="border-top: 1px solid #e5e7eb; margin: 4px 0"
+                    ></div>
+                  </td>
+                </tr>
+                <tr style="font-size: 11pt; color: #333333">
+                  <td class="right bold">TOTAL:</td>
+                  <td class="right bold text-action">$ 35,840.00</td>
+                </tr>
+              </table>
+            </div>
+          </td>
+        </tr>
+      </table>
+
+      <div class="section-title-main">Complemento Carta Porte 3.1</div>
+
+      <table style="table-layout: fixed; margin-bottom: 5px">
+        <tr>
+          <td width="100%" valign="top">
+            <div class="bento-card">
+              <table class="grid-table">
+                <tr>
+                  <td width="20%">
+                    <span class="grid-label">Versión</span
+                    ><span class="bold text-dark">3.1</span>
+                  </td>
+                  <td width="25%">
+                    <span class="grid-label">IdCCP</span
+                    ><span
+                      class="bold text-dark"
+                      style="font-family: monospace; font-size: 6pt"
+                      >Cccds70e-0d86-23a7-7081-33a6cde46b2e</span
+                    >
+                  </td>
+                  <td width="20%">
+                    <span class="grid-label">Distancia Total Recorrida</span
+                    ><span class="bold text-dark">480 KM</span>
+                  </td>
+                  <td width="20%">
+                    <span class="grid-label">Transp. Internacional</span
+                    ><span class="bold text-dark">No</span>
+                  </td>
+                  <td width="15%">
+                    <span class="grid-label">Vía Entrada/Salida</span
+                    ><span class="bold text-dark">N/A</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td colspan="2">
+                    <span class="grid-label">RegistroISTMO</span
+                    ><span class="bold text-dark">No aplica</span>
+                  </td>
+                  <td colspan="3">
+                    <span class="grid-label">Polo Origen / Destino / País</span
+                    ><span class="bold text-dark">N/A</span>
+                  </td>
+                </tr>
+              </table>
+            </div>
+          </td>
+        </tr>
+      </table>
+
       <div
-        class="sello-text"
-        style="margin-bottom: 8px; font-size: 8pt; word-wrap: break-word"
+        class="bold text-primary"
+        style="font-size: 7.5pt; margin-top: 8px; margin-bottom: 4px"
       >
-        {{ cadena_original|safe }}
+        Ubicaciones
       </div>
-    </div>
+
+      <div class="bento-card" style="margin-bottom: 6px">
+        <div class="bento-card-header">Origen</div>
+        <table class="grid-table">
+          <tr>
+            <td width="15%">
+              <span class="grid-label">ID Ubicación</span
+              ><span class="text-dark">Origen</span>
+            </td>
+            <td width="25%">
+              <span class="grid-label">RFC Remitente</span
+              ><span class="bold text-dark">EEC1406167F9</span>
+            </td>
+            <td width="35%">
+              <span class="grid-label">Nombre Remitente</span
+              ><span class="bold text-dark">ALBANY</span>
+            </td>
+            <td width="25%">
+              <span class="grid-label">Fecha/Hora Salida</span
+              ><span class="text-dark">2026-03-02T00:00:00</span>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <span class="grid-label">Tipo Estación</span
+              ><span class="text-dark">N/A</span>
+            </td>
+            <td>
+              <span class="grid-label">Nombre Estación</span
+              ><span class="text-dark">N/A</span>
+            </td>
+            <td>
+              <span class="grid-label">Navegación / Tráfico</span
+              ><span class="text-dark">N/A</span>
+            </td>
+            <td>
+              <span class="grid-label">NumRegIdTrib / Residencia</span
+              ><span class="text-dark">N/A</span>
+            </td>
+          </tr>
+          <tr>
+            <td colspan="4">
+              <span class="grid-label">Domicilio Origen</span
+              ><span class="text-dark"
+                >CARRETERA TLALNEPANTLA CUAUTITLAN K.M. 18 S/N, C.P. 54879, MEX,
+                MEX.</span
+              >
+            </td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="bento-card" style="margin-bottom: 6px">
+        <div class="bento-card-header green">Destino</div>
+        <table class="grid-table">
+          <tr>
+            <td width="15%">
+              <span class="grid-label">ID Ubicación</span
+              ><span class="text-dark">Destino</span>
+            </td>
+            <td width="25%">
+              <span class="grid-label">RFC Destinatario</span
+              ><span class="bold text-dark">ICA9507256L6</span>
+            </td>
+            <td width="35%">
+              <span class="grid-label">Nombre Destinatario</span
+              ><span class="bold text-dark"
+                >INTERNACIONAL DE CONTENEDORES Y ASOCIADOS DE VERACRUZ</span
+              >
+            </td>
+            <td width="25%">
+              <span class="grid-label">Fecha/Hora Llegada</span
+              ><span class="text-dark">2026-03-02T00:00:00</span>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <span class="grid-label">Distancia Recorrida</span
+              ><span class="bold text-dark">480 KM</span>
+            </td>
+            <td>
+              <span class="grid-label">Tipo Estación</span
+              ><span class="text-dark">N/A</span>
+            </td>
+            <td>
+              <span class="grid-label">Nombre Estación</span
+              ><span class="text-dark">N/A</span>
+            </td>
+            <td>
+              <span class="grid-label">NumRegIdTrib / Residencia</span
+              ><span class="text-dark">N/A</span>
+            </td>
+          </tr>
+          <tr>
+            <td colspan="4">
+              <span class="grid-label">Domicilio Destino</span
+              ><span class="text-dark"
+                >MORELOS 159 17, VER, C.P. 91700, MEX.</span
+              >
+            </td>
+          </tr>
+        </table>
+      </div>
+
+      <div
+        class="bold text-primary"
+        style="font-size: 7.5pt; margin-top: 8px; margin-bottom: 4px"
+      >
+        Mercancías y Autotransporte
+      </div>
+
+      <table style="table-layout: fixed; margin-bottom: 5px">
+        <tr>
+          <td width="100%" valign="top">
+            <div class="bento-card">
+              <table class="grid-table">
+                <tr>
+                  <td width="25%">
+                    <span class="grid-label">Peso Bruto Total</span
+                    ><span class="bold text-dark">3400 KGM</span>
+                  </td>
+                  <td width="25%">
+                    <span class="grid-label">Unidad Peso</span
+                    ><span class="text-dark">KGM</span>
+                  </td>
+                  <td width="25%">
+                    <span class="grid-label">Num. Total Mercancías</span
+                    ><span class="text-dark">1</span>
+                  </td>
+                  <td width="25%">
+                    <span class="grid-label"
+                      >Cargo por Tasación / Logística</span
+                    ><span class="text-dark">N/A</span>
+                  </td>
+                </tr>
+              </table>
+              <div style="border-top: 1px dashed #cbd5e1; margin: 4px 0"></div>
+
+              <table class="grid-table">
+                <tr>
+                  <td width="20%">
+                    <span class="grid-label">Bienes Transp.</span
+                    ><span class="bold text-dark">53141606 - Bobinas</span>
+                  </td>
+                  <td width="30%">
+                    <span class="grid-label">Descripción</span
+                    ><span class="text-dark">BOBINAS</span>
+                  </td>
+                  <td width="15%">
+                    <span class="grid-label">Cantidad</span
+                    ><span class="text-dark">1</span>
+                  </td>
+                  <td width="20%">
+                    <span class="grid-label">Clave/Unidad</span
+                    ><span class="text-dark"
+                      >21 - Contenedor de 40 pies / pza</span
+                    >
+                  </td>
+                  <td width="15%">
+                    <span class="grid-label">Peso en Kg</span
+                    ><span class="text-dark">3400</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <span class="grid-label">Valor Mercancía</span
+                    ><span class="text-dark">N/A</span>
+                  </td>
+                  <td>
+                    <span class="grid-label">Moneda / Fracción Arancelaria</span
+                    ><span class="text-dark">N/A</span>
+                  </td>
+                  <td>
+                    <span class="grid-label">Material Peligroso</span
+                    ><span class="text-dark">N/A</span>
+                  </td>
+                  <td colspan="2">
+                    <span class="grid-label"
+                      >Embalaje / Dimensiones / UUID Com. Ext.</span
+                    ><span class="text-dark">N/A</span>
+                  </td>
+                </tr>
+              </table>
+            </div>
+          </td>
+        </tr>
+      </table>
+
+      <table style="table-layout: fixed; margin-bottom: 5px">
+        <tr>
+          <td width="50%" style="padding-right: 4px" valign="top">
+            <div class="bento-card">
+              <div class="bento-card-header">Autotransporte Federal</div>
+              <table class="grid-table">
+                <tr>
+                  <td colspan="2">
+                    <span class="grid-label">Permiso SCT</span
+                    ><span class="text-dark"
+                      >TPAF01 - Autotransporte Federal de carga general.</span
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td width="50%">
+                    <span class="grid-label">Num Permiso SCT</span
+                    ><span class="bold text-dark"
+                      >3066RTX02122011230301020</span
+                    >
+                  </td>
+                  <td width="50%">
+                    <span class="grid-label">Config Vehicular</span
+                    ><span class="text-dark"
+                      >T3S3 (10 llantas tracto, 12 semirremolque)</span
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <span class="grid-label">Placa VM</span
+                    ><span class="bold text-dark">03BG8H</span>
+                  </td>
+                  <td>
+                    <span class="grid-label"
+                      >Año Modelo VM / Peso Bruto Vehicular</span
+                    ><span class="text-dark">2025 / 3.20</span>
+                  </td>
+                </tr>
+              </table>
+            </div>
+          </td>
+          <td width="50%" style="padding-left: 4px" valign="top">
+            <div class="bento-card">
+              <div class="bento-card-header">Seguros y Remolques</div>
+              <table class="grid-table">
+                <tr>
+                  <td width="50%">
+                    <span class="grid-label">Asegura Resp. Civil</span
+                    ><span class="bold text-dark">QUALITAS</span>
+                  </td>
+                  <td width="50%">
+                    <span class="grid-label">Póliza Resp. Civil</span
+                    ><span class="text-dark">7050094731</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <span class="grid-label"
+                      >Asegura Medio Ambiente / Carga</span
+                    ><span class="text-dark">QUALITAS / N/A</span>
+                  </td>
+                  <td>
+                    <span class="grid-label">Póliza Medio Ambiente / Prima</span
+                    ><span class="text-dark">7050094731 / 0</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td colspan="2">
+                    <span class="grid-label">Remolques (SubTipo - Placa)</span
+                    ><span class="text-dark"
+                      >CTR010 - Chasis Portacontenedor - 58UD5Z</span
+                    >
+                  </td>
+                </tr>
+              </table>
+            </div>
+          </td>
+        </tr>
+      </table>
+
+      <div class="bento-card" style="margin-bottom: 5px">
+        <div class="bento-card-header">Figura Transporte</div>
+        <table class="grid-table">
+          <tr>
+            <td width="20%">
+              <span class="grid-label">Tipo Figura</span
+              ><span class="bold text-dark">01 - Operador</span>
+            </td>
+            <td width="20%">
+              <span class="grid-label">RFC Figura</span
+              ><span class="bold text-dark">QUAA850329VEA</span>
+            </td>
+            <td width="40%">
+              <span class="grid-label">Nombre Figura</span
+              ><span class="bold text-dark">ABIEL QUEZADA AZAMAR</span>
+            </td>
+            <td width="20%">
+              <span class="grid-label">Num. Licencia</span
+              ><span class="text-dark">VER0136802</span>
+            </td>
+          </tr>
+          <tr>
+            <td colspan="4">
+              <span class="grid-label">Domicilio Figura</span
+              ><span class="text-dark">N/A</span>
+            </td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="addenda-box">
+        <span class="bold text-dark">ADDENDA:</span>
+        <br />
+        &lt;fst3:Contrato xmlns:fst3="http://facturasoftesc.com/ns"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://facturasoftesc.com/ns
+        http://facturasoftesc.com/ns/fst3.xsd" Comentario="Condiciones de
+        prestación de servicios que ampara la CARTA DE PORTE O COMPROBANTE PARA
+        EL TRANSPORTE DE MERCANCÍAS. PRIMERA.- Para los efectos del presente
+        contrato de transporte se denomina 'Transportista' al que realiza el
+        servicio de transportación y 'Remitente' o 'Expedidor' al usuario que
+        contrate el servicio o remite la mercancía. SEGUNDA.- El 'Remitente' o
+        'Expedidor' es responsable de que la información proporcionada al
+        'Transportista' sea veraz y que la documentación que entregue para
+        efectos del transporte sea la correcta. TERCERA.- El 'Remitente' o
+        'Expedidor' debe declarar al 'Transportista' el tipo de mercancía o
+        efectos de que se trate, peso, medidas y/o número de la carga que
+        entrega para su transporte y, en su caso, el valor de la misma. La carga
+        que se entregue a granel será pesada por el 'Transportista' en el primer
+        punto donde haya báscula apropiada o, en su defecto, aforada en metros
+        cúbicos con la conformidad del 'Remitente' o 'Expedidor'. CUARTA.- Para
+        efectos del transporte, el 'Remitente' o 'Expedidor' deberá entregar al
+        'Transportista' los documentos que las leyes y reglamentos exijan para
+        llevar a cabo el servicio, en caso de no cumplirse con estos requisitos
+        el 'Transportista' está obligado a rehusar el transporte de las
+        mercancías. QUINTA.- Si por sospecha de falsedad en la declaración del
+        contenido de un bulto el 'Transportista' deseare proceder a su
+        reconocimiento, podrá hacerlo ante testigos y con asistencia del
+        'Remitente' o 'Expedidor' o del consignatario. Si este último no
+        concurriere, se solicitará la presencia de un inspector de la Secretaría
+        de Comunicaciones y Transportes, y se levantará el acta correspondiente.
+        El 'Transportista' tendrá en todo caso, la obligación de dejar los
+        bultos en el estado en que se encontraban antes del reconocimiento.
+        SEXTA.- El 'Transportista' deberá recoger y entregar la carga
+        precisamente en los domicilios que señale el 'Remitente' o 'Expedidor'
+        ajustándose a los términos y condiciones convenidos. El 'Transportista'
+        sólo está obligado a llevar la carga al domicilio del consignatario para
+        su entrega una sola vez. Si ésta no fuera recibida se dejará aviso de
+        que la mercancía queda a disposición del interesado en las bodegas que
+        indique el 'Transportista'. SÉPTIMA.- Si la carga no fuere retirada
+        dentro de los 30 días hábiles siguientes a aquél en que hubiere sido
+        puesta a disposición del consignatario, el 'Transportista' podrá
+        solicitar la venta en subasta pública con arreglo a lo que dispone el
+        Código de Comercio. OCTAVA.- El 'Transportista' y el 'Remitente' o
+        'Expedidor' negociarán libremente el precio del servicio, tomando en
+        cuenta su tipo, característica de los embarques, volumen, regularidad,
+        clase de carga y sistema de pago. NOVENA.- Si el 'Remitente' o
+        'Expedidor' desea que el 'Transportista' asuma la responsabilidad por el
+        valor de las mercancías o efectos que él declare y que cubra toda clase
+        de riesgos, inclusive los derivados de caso fortuito o de fuerza mayor,
+        las partes deberán convenir un cargo adicional, equivalente al valor de
+        la prima del seguro que se contrate, el cual se deberá expresar en la
+        Carta de Porte. DÉCIMA.- Cuando el importe del flete no incluya el cargo
+        adicional, la responsabilidad del 'Transportista' queda expresamente
+        limitada a la cantidad equivalente a 15 días del salario mínimo vigente
+        en el Distrito Federal por tonelada o cuando se trate de embarques cuyo
+        peso sea mayor de 200 kg., pero menor de 1000 kg; y a 4 días de salario
+        mínimo por remesa cuando se trate de embarques con peso hasta de 200 kg.
+        DÉCIMA PRIMERA.- El precio del transporte deberá pagarse en origen,
+        salvo convenio entre las partes de pago en destino. Cuando el transporte
+        se hubiere concertado 'Flete por Cobrar' la entrega de las mercancías o
+        efectos se hará contra el pago del flete y el 'Transportista' tendrá
+        derecho a retenerlos mientras no se le cubra el precio convenido. DÉCIMA
+        SEGUNDA.- Si al momento de la entrega resultare algún faltante o avería,
+        el consignatario deberá hacerla constar en ese acto en la Carta de Porte
+        y formular su reclamación por escrito al 'Transportista' dentro de las
+        24 horas siguientes. DÉCIMA TERCERA.- El 'Transportista' queda eximido
+        de la obligación de recibir mercancías o efectos para su transporte, en
+        los siguientes casos: a) Cuando se trate de carga que por su naturaleza,
+        peso, volumen, embalaje defectuoso o cualquier otra circunstancia no
+        pueda transportarse sin destruirse o sin causar daño a los demás
+        artículos o al material rodante, salvo que la empresa de que se trate
+        tenga el equipo adecuado. b) Las mercancías cuyo transporte haya sido
+        prohibido por disposiciones legales o reglamentarias. Cuando tales
+        disposiciones no prohíban precisamente el transporte de determinadas
+        mercancías, pero sí ordenen la presentación de ciertos documentos para
+        que puedan ser transportadas, el 'Remitente' o 'Expedidor' estará
+        obligado a entregar al 'Transportista' los documentos correspondientes.
+        DÉCIMA CUARTA.- Los casos no previstos en las presentes condiciones y
+        las quejas derivadas de su aplicación se someterán por la vía
+        administrativa a la Secretaría de Comunicaciones y Transportes. DÉCIMA
+        QUINTA.- Para el caso de que el 'Remitente' o 'Expedidor' contrate carro
+        por entero, este aceptará la responsabilidad solidaria para con el
+        'Transportista' mediante la figura de la corresponsabilidad que
+        contempla el artículo 10 del Reglamento Sobre el Peso, Dimensiones y
+        Capacidad de los Vehículos de Autotransporte que Transitan en los
+        Caminos y Puentes de Jurisdicción Federal, por lo que el 'Remitente' o
+        'Expedidor' queda obligado a verificar que la carga y el vehículo que la
+        transporta, cumplan con el peso y dimensiones máximas establecidos en la
+        NOM-012-SCT-2-2014. Para el caso de incumplimiento e inobservancia a las
+        disposiciones que regulan el peso y dimensiones, por parte del
+        'Remitente' o 'Expedidor', este será corresponsable de las infracciones
+        y multas que la Secretaría de Comunicaciones y Transportes y la Policía
+        Federal impongan al 'Transportista' por cargar las unidades con exceso
+        de peso."&gt;&lt;/fst3:Contrato&gt;
+      </div>
+    </main>
   </body>
 </html>

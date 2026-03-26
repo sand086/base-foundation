@@ -3,6 +3,9 @@ import shutil
 from pathlib import Path
 from datetime import datetime
 
+from weasyprint import HTML
+from jinja2 import Environment, FileSystemLoader
+
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
@@ -17,6 +20,99 @@ from app.api.endpoints.auth import get_current_active_user
 from app.core.security import verify_password
 
 router = APIRouter()
+
+
+@router.get("/test-invoice-pro")
+def test_invoice_pro():
+    try:
+        CURRENT_FILE = Path(__file__).resolve()
+        APP_DIR = CURRENT_FILE.parents[2]
+
+        template_path = APP_DIR / "templates" / "carta_porte.html"
+        storage_dir = APP_DIR / "storage" / "xml_timbrados"
+        storage_dir.mkdir(parents=True, exist_ok=True)
+        output_pdf = storage_dir / "TEST_EAGLE.pdf"
+
+        def chunk_b64(text, length):
+            if not text:
+                return ""
+            text = str(text).replace(" ", "").replace("\n", "").replace("\r", "")
+            return " ".join([text[i : i + length] for i in range(0, len(text), length)])
+
+        # DATOS COMPLETOS SIN ABREVIATURAS
+        context = {
+            "rfc_emisor": "RTX110624KP5",
+            "cert_emisor": "00001000000717643613",
+            "folio_interno": "16595",
+            "fecha_emision": "2026-03-02T10:31:54",
+            # Datos Cliente (Completos)
+            "nombre_cliente": "EAGLE EXPRESS CARGO",
+            "rfc_cliente": "EEC1406167F9",
+            "direccion_cliente": "",  # Dejamos el espacio como en tu texto
+            "cp_cliente": "15530",
+            "regimen_cliente": "601 (General de Ley Personas Morales)",
+            # Datos Comprobante (Completos)
+            "moneda": "MXN",
+            "tc": "1",
+            "metodo_pago": "PPD (Pago en parcialidades o diferido)",
+            "forma_pago": "99 (Por definir)",
+            "uso_cfdi": "G03 (Gastos en general.)",
+            "tipo_comprobante": "I (Ingreso)",
+            "condiciones_pago": "En 15 Días",
+            # Footer SAT
+            "uuid": "94FBAB5B-DDAF-4858-84EC-F23AA4CDC611",
+            "cert_sat": "00001000000719545303",
+            "fecha_certificacion": "2026-03-02T12:36:24",
+            "qr_src": "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://verificacfdi.facturaelectronica.sat.gob.mx/",
+            "sello_emisor": chunk_b64(
+                "M085BkYeJH+LmnkY75WIziDPCQp917lel30V7PeXTMx8Y7+sYeReZTt6l8FPSDtIMDAKDAZQzPw1zTBpbzZYkw57pTjlxtLOTkiStguhrZHMLuuKV3aAXlyrA1+eN6AeFolyysC3Y3YM2p8mh29esBK2KZJFh6eCzRA6ZX0g+2gYCp691n8BjPXzFXzJFedrtytiMRHq+A+MyziBCnquGqgjzqxTu7quN7x+F4F619NC9JsBX561LwbeeHEkOsz+VK3YuJ9qiKjqHg770DSh5Sw++tpTaEbDowo4EpeQG4lFC6F165vk29XilalEne8SBa3coQmYTa90BU2GUBKB2uJg==",
+                112,
+            ),
+            "sello_sat": chunk_b64(
+                "Gi/zO5izu35e5+j24Fx7DQn16RpiGS8i9k+ttZG/MMh0p7z1f2PJatkD/VUOX3pU1n7HeBjOU7q+1ZMxOEpg5tLFJZgB9l+0+TQbvCXrCklizxmuvHSskkYMgDHZG7/r2gcB13Nu7FNuK1p2tK3x7VgaCZa9W4vWHFviGkyyWqM3NeLYFixEl+ZX3EVU7qgBmORqD6bN0zn8562sJV2n4+9mtoXb85B+C0Z16hM7uTjuyuDSawu4w+zAVBkzmuagBXvq20a4nzQsppB5o7laYf32IIVIILIKESGIKTV6UL1GmBs1C9sYusJJ784UKtwd8jEHVJ1svLzx57Mg57Ud6g==",
+                135,
+            ),
+            "cadena_original": chunk_b64(
+                "||1.1|94FBAB5B-DDAF-4858-84EC-F23AA4CDC611|2026-03-02T12:36:24|L501306189R5|M085BkYeJH+LmnkY75WIziDPCQp917lel30V7PeXTMx8Y7+sYeReZTt6l8FPSDtIMDaKDAZOzPw1zTBpbzZYkw57pTjixtLOTkiSftguhrZHMLuuKV3aAXlyrA1+eN6AeFolyysC3Y3YM2p8mh29esBK2KZJFh6eCzRA6ZX0g+2gYCp691n8BjPXzFXzJFe4rtytiMRHq+A+MJziBCnquGajzqxTu7quN7x+F4F619NC9JsBX561LwbeeHEkOsz+VK3YuJ9qiKjgHg770DSh5Sw++fpTaEbDowo4EpeQG4IFc6F165vk2gXilalEne8Ba3coQmYTa90BU2GUBkB2uJg==|00001000000719545303||",
+                135,
+            ),
+            # Totales y Leyenda
+            "importe_letra": "(*** TREINTA Y CINCO MIL OCHOCIENTOS CUARENTA PESOS 00/100 MXN ***)",
+            "subtotal": "32,000.00",
+            "iva": "5,120.00",
+            "retenciones": "1,280.00",
+            "total": "35,840.00",
+            "leyenda_legal": "Condiciones de prestación de servicios que ampara la CARTA DE PORTE O COMPROBANTE PARA EL TRANSPORTE DE MERCANCÍAS. PRIMERA.- Para los efectos del presente contrato de transporte se denomina 'Transportista' al que realiza el servicio de transportación y 'Remitente' o 'Expedidor' al usuario que contrate el servicio... [TEXTO ACORTADO PARA DEMO].",
+            "conceptos": [
+                {
+                    "clave": "78101802",
+                    "descripcion": "FLETE CARGA GENERAL",
+                    "detalles_extra": "MSBU6763609",
+                    "cantidad": "1.00",
+                    "unidad": "E48 - SRV",
+                    "precio": "32,000.00",
+                    "importe": "32,000.00",
+                }
+            ]
+            * 20,
+        }
+
+        env = Environment(loader=FileSystemLoader(str(template_path.parent)))
+        template = env.get_template(template_path.name)
+        html_out = template.render(context)
+
+        HTML(string=html_out).write_pdf(str(output_pdf))
+        return FileResponse(output_pdf, media_type="application/pdf")
+
+    except Exception as e:
+        import traceback
+
+        return {"error": str(e), "trace": traceback.format_exc()}
+
+
+@router.get("/debug-ping")
+def debug_ping():
+    return {"message": "El router de billing funciona"}
 
 
 @router.post("/stamp/nominal", response_model=dict)

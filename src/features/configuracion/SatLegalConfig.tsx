@@ -18,7 +18,9 @@ export function SatLegalConfig() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (currentLeyenda) setLeyenda(currentLeyenda);
+    if (currentLeyenda !== undefined && currentLeyenda !== null) {
+      setLeyenda(currentLeyenda);
+    }
   }, [currentLeyenda]);
 
   const handleSave = async () => {

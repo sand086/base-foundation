@@ -14,11 +14,22 @@ from lxml import etree
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-# Librerías para criptografía
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.serialization import load_der_private_key
+
+# Nuevas importaciones para PDF y QR HD
+import qrcode
+from jinja2 import Environment, FileSystemLoader
+from weasyprint import HTML
+
+try:
+    from num2words import num2words
+
+    HAS_NUM2WORDS = True
+except ImportError:
+    HAS_NUM2WORDS = False
 
 from app.models.models import (
     Trip,
@@ -32,9 +43,6 @@ from app.models.models import (
 )
 from app.schemas.trips import ReceivableInvoiceCreate
 
-# =======================================================
-# CONFIGURACIÓN DE DEBUG AVANZADO (VER ERRORES DEL PAC)
-# =======================================================
 logging.config.dictConfig(
     {
         "version": 1,
@@ -54,9 +62,6 @@ logging.config.dictConfig(
 )
 logger = logging.getLogger("billing.audit")
 
-# =======================================================
-# LEYENDA LEGAL POR DEFECTO
-# =======================================================
 DEFAULT_LEYENDA = "Condiciones de prestación de servicios que ampara la CARTA DE PORTE O COMPROBANTE PARA EL TRANSPORTE DE MERCANCÍAS. PRIMERA.- Para los efectos del presente contrato de transporte se denomina 'Transportista' al que realiza el servicio de transportación y 'Remitente' o 'Expedidor' al usuario que contrate el servicio o remite la mercancía. SEGUNDA.- El 'Remitente' o 'Expedidor' es responsable de que la información proporcionada al 'Transportista' sea veraz y que la documentación que entregue para efectos del transporte sea la correcta. TERCERA.- El 'Remitente' o 'Expedidor' debe declarar al 'Transportista' el tipo de mercancía o efectos de que se trate, peso, medidas y/o número de la carga que entrega para su transporte y, en su caso, el valor de la misma. La carga que se entregue a granel será pesada por el 'Transportista' en el primer punto donde haya báscula apropiada o, en su defecto, aforada en metros cúbicos con la conformidad del 'Remitente' o 'Expedidor'. CUARTA.- Para efectos del transporte, el 'Remitente' o 'Expedidor' deberá entregar al 'Transportista' los documentos que las leyes y reglamentos exijan para llevar a cabo el servicio, en caso de no cumplirse con estos requisitos el 'Transportista' está obligado a rehusar el transporte de las mercancías. QUINTA.- Si por sospecha de falsedad en la declaración del contenido de un bulto el 'Transportista' deseare proceder a su reconocimiento, podrá hacerlo ante testigos y con asistencia del 'Remitente' o 'Expedidor' o del consignatario. Si este último no concurriere, se solicitará la presencia de un inspector de la Secretaría de Comunicaciones y Transportes, y se levantará el acta correspondiente. El 'Transportista' tendrá en todo caso, la obligación de dejar los bultos en el estado en que se encontraban antes del reconocimiento. SEXTA.- El 'Transportista' deberá recoger y entregar la carga precisamente en los domicilios que señale el 'Remitente' o 'Expedidor' ajustándose a los términos y condiciones convenidos. El 'Transportista' sólo está obligado a llevar la carga al domicilio del consignatario para su entrega una sola vez. Si ésta no fuera recibida se dejará aviso de que la mercancía queda a disposición del interesado en las bodegas que indique el 'Transportista'. SÉPTIMA.- Si la carga no fuere retirada dentro de los 30 días hábiles siguientes a aquél en que hubiere sido puesta a disposición del consignatario, el 'Transportista' podrá solicitar la venta en subasta pública con arreglo a lo que dispone el Código de Comercio. OCTAVA.- El 'Transportista' y el 'Remitente' o 'Expedidor' negociarán libremente el precio del servicio, tomando en cuenta su tipo, característica de los embarques, volumen, regularidad, clase de carga y sistema de pago. NOVENA.- Si el 'Remitente' o 'Expedidor' desea que el 'Transportista' asuma la responsabilidad por el valor de las mercancías o efectos que él declare y que cubra toda clase de riesgos, inclusive los derivados de caso fortuito o de fuerza mayor, las partes deberán convenir un cargo adicional, equivalente al valor de la prima del seguro que se contrate, el cual se deberá expresar en la Carta de Porte. DÉCIMA.- Cuando el importe del flete no incluya el cargo adicional, la responsabilidad del 'Transportista' queda expresamente limitada a la cantidad equivalente a 15 días del salario mínimo vigente en el Distrito Federal por tonelada o cuando se trate de embarques cuyo peso sea mayor de 200 kg., pero menor de 1000 kg; y a 4 días de salario mínimo por remesa cuando se trate de embarques con peso hasta de 200 kg. DÉCIMA PRIMERA.- El precio del transporte deberá pagarse en origen, salvo convenio entre las partes de pago en destino. Cuando el transporte se hubiere concertado 'Flete por Cobrar' la entrega de las mercancías o efectos se hará contra el pago del flete y el 'Transportista' tendrá derecho a retenerlos mientras no se le cubra el precio convenido. DÉCIMA SEGUNDA.- Si al momento de la entrega resultare algún faltante o avería, el consignatario deberá hacerla constar en ese acto en la Carta de Porte y formular su reclamación por escrito al 'Transportista' dentro de las 24 horas siguientes. DÉCIMA TERCERA.- El 'Transportista' queda eximido de la obligación de recibir mercancías o efectos para su transporte, en los siguientes casos: a) Cuando se trate de carga que por su naturaleza, peso, volumen, embalaje defectuoso o cualquier otra circunstancia no pueda transportarse sin destruirse o sin causar daño a los demás artículos o al material rodante, salvo que la empresa de que se trate tenga el equipo adecuado. b) Las mercancías cuyo transporte haya sido prohibido por disposiciones legales o reglamentarias. Cuando tales disposiciones no prohíban precisamente el transporte de determinadas mercancías, pero sí ordenen la presentación de ciertos documentos para que puedan ser transportadas, el 'Remitente' o 'Expedidor' estará obligado a entregar al 'Transportista' los documentos correspondientes. DÉCIMA CUARTA.- Los casos no previstos en las presentes condiciones y las quejas derivadas de su aplicación se someterán por la vía administrativa a la Secretaría de Comunicaciones y Transportes. DÉCIMA QUINTA.- Para el caso de que el 'Remitente' o 'Expedidor' contrate carro por entero, este aceptará la responsabilidad solidaria para con el 'Transportista' mediante la figura de la corresponsabilidad que contempla el artículo 10 del Reglamento Sobre el Peso, Dimensiones y Capacidad de los Vehículos de Autotransporte que Transitan en los Caminos y Puentes de Jurisdicción Federal, por lo que el 'Remitente' o 'Expedidor' queda obligado a verificar que la carga y el vehículo que la transporta, cumplan con el peso y dimensiones máximas establecidos en la NOM-012-SCT-2-2014. Para el caso de incumplimiento e inobservancia a las disposiciones que regulan el peso y dimensiones, por parte del 'Remitente' o 'Expedidor', este será corresponsable de las infracciones y multas que la Secretaría de Comunicaciones y Transportes y la Policía Federal impongan al 'Transportista' por cargar las unidades con exceso de peso."
 
 
@@ -161,9 +166,6 @@ class BillingService:
         )
         self.emisor_cp = cp_conf.value if cp_conf and cp_conf.value else "91808"
 
-    # =======================================================
-    # FACTURACIÓN
-    # =======================================================
     def generar_carta_porte_nominal(
         self, invoice_data: ReceivableInvoiceCreate
     ) -> ReceivableInvoice:
@@ -195,12 +197,14 @@ class BillingService:
         )
         try:
             self.db.add(nueva_factura)
-            self.db.commit()
-            self.db.refresh(nueva_factura)
+
             if nueva_factura.uuid:
                 viaje.uuid_fiscal = nueva_factura.uuid
+                viaje.estatus = "facturado"
                 self.db.add(viaje)
-                self.db.commit()
+
+            self.db.commit()
+            self.db.refresh(nueva_factura)
             return nueva_factura
         except Exception:
             self.db.rollback()
@@ -274,7 +278,6 @@ class BillingService:
                 der_key_csd = f_key.read()
 
             client = zeep.Client(self.wsdl_timbrado, plugins=[self.history])
-
             logger.info(f"Enviando petición de cancelación al PAC: {cadena_uuids}")
 
             result = client.service.cancelar(
@@ -299,17 +302,15 @@ class BillingService:
             status_operacion = int(getattr(res_cancelacion, "status", 0))
             status_sat = int(getattr(res_cancelacion, "statusUUID", 0))
 
-            # 🚀 AQUÍ ESTÁ LA MAGIA DEL FIX: Aceptamos 204 como "El SAT está lento" y continuamos.
             if status_operacion == 200 and status_sat in [201, 202, 211]:
                 logger.info(f"✅ CANCELACIÓN SAT EXITOSA. Status SAT: {status_sat}")
-
                 acuse_text = getattr(res_cancelacion, "mensaje", "Acuse no disponible")
                 acuse_path = self.storage_dir / f"ACUSE_CANCELACION_{factura.uuid}.txt"
 
                 with open(acuse_path, "w", encoding="utf-8") as f_acuse:
-                    f_acuse.write(f"Respuesta SAT: {status_sat}\n")
-                    f_acuse.write(f"Mensaje: {acuse_text}\n")
-                    f_acuse.write(f"Fecha: {datetime.now().isoformat()}\n")
+                    f_acuse.write(
+                        f"Respuesta SAT: {status_sat}\nMensaje: {acuse_text}\nFecha: {datetime.now().isoformat()}\n"
+                    )
 
                 factura.status_sat = (
                     "CANCELADA" if status_sat != 211 else "EN_PROCESO_CANCELACION"
@@ -318,21 +319,31 @@ class BillingService:
                 factura.motivo_cancelacion = motivo
                 factura.acuse_cancelacion_url = str(acuse_path)
                 factura.fecha_cancelacion = datetime.now()
-
                 self.db.add(factura)
                 self.db.commit()
                 return True
 
             elif status_operacion == 200 and status_sat == 204:
                 logger.warning(
-                    f"⚠️ EL SAT ESTÁ LENTO: El UUID {factura.uuid} aún no es cancelable (204). Se marcará como pendiente de cancelar."
+                    f"⚠️ EL SAT ESTÁ LENTO: El UUID {factura.uuid} aún no es cancelable (204)."
                 )
-
                 factura.status_sat = "PENDIENTE_CANCELACION"
                 factura.motivo_cancelacion = motivo
                 self.db.add(factura)
                 self.db.commit()
-                return True  # Devolvemos True para no interrumpir a React!
+                return True
+
+            elif status_operacion == 200 and status_sat == 205 and self.env == "QA":
+                logger.warning(
+                    f"⚠️ [QA] El PAC no encontró el UUID {factura.uuid} (Status 205). Forzando cancelación local."
+                )
+                factura.status_sat = "CANCELADA_FORZADA_QA"
+                factura.estatus = "cancelado"
+                factura.motivo_cancelacion = motivo
+                factura.fecha_cancelacion = datetime.now()
+                self.db.add(factura)
+                self.db.commit()
+                return True
 
             else:
                 logger.error(
@@ -345,43 +356,16 @@ class BillingService:
         except Exception as e:
             logger.error("--- FALLÓ LA CANCELACIÓN ---")
             logger.error(str(e))
-
-            if self.history.last_sent:
-                try:
-                    sent = etree.tostring(
-                        self.history.last_sent["envelope"],
-                        pretty_print=True,
-                        encoding="unicode",
-                    )
-                    logger.debug(f"Petición XML enviada al PAC:\n{sent}")
-                except Exception:
-                    pass
-            if self.history.last_received:
-                try:
-                    received = etree.tostring(
-                        self.history.last_received["envelope"],
-                        pretty_print=True,
-                        encoding="unicode",
-                    )
-                    logger.debug(f"Respuesta XML del PAC:\n{received}")
-                except Exception:
-                    pass
-
             self.db.rollback()
             raise HTTPException(
                 status_code=500, detail=f"Error en proceso de cancelación: {str(e)}"
             )
 
-    # =======================================================
-    # LÓGICA DE EXTRACCIÓN Y PREPARACIÓN DE DATOS
-    # =======================================================
     def _obtener_datos_completos(self, viaje_id: int, is_final: bool):
         viaje = self.db.get(Trip, viaje_id)
         if not viaje:
             raise HTTPException(status_code=404, detail="Viaje no encontrado")
-
         cliente = self.db.get(ClientModel, viaje.client_id)
-
         if is_final:
             leg = (
                 self.db.query(TripLeg)
@@ -416,7 +400,6 @@ class BillingService:
         self, viaje, cliente, unidad, operador, is_nominal: bool
     ) -> dict:
         fecha_iso = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-
         placas_seguras = unidad.placas if unidad and unidad.placas else "89BH4C"
         anio_seguro = str(unidad.year) if unidad and unidad.year else "2024"
         config_segura = (
@@ -460,22 +443,18 @@ class BillingService:
         )
 
         id_ccp_dinamico = f"CCC{str(uuid.uuid4())[3:]}"
-
         contenedor = getattr(viaje, "referencia", "") or ""
         contenedor_str = f" {contenedor}".strip() if contenedor else ""
         descripcion_concepto = f"FLETE CARGA GENERAL{contenedor_str}".strip()
-
         peso_bruto = (
             str(getattr(viaje, "peso_toneladas", 25) * 1000)
             if getattr(viaje, "peso_toneladas", 0) > 0
             else "25000.0"
         )
-
         bienes_transp_raw = str(getattr(viaje, "sat_clave_producto", "50131801"))
         bienes_transp = (
             "31111501" if bienes_transp_raw == "78101802" else bienes_transp_raw
         )
-
         descripcion_mercancia = str(
             getattr(viaje, "descripcion_mercancia", "CARGA GENERAL")
         )
@@ -485,27 +464,27 @@ class BillingService:
             iva = subtotal * Decimal("0.16")
             ret = subtotal * Decimal("0.04")
             total = subtotal + iva - ret
-
-            rfc_operador = "XAXX010101000"
-            nombre_operador = "OPERADOR BASE COMODIN"
-            licencia = "LIC0000000"
-
-            if operador:
-                rfc_operador = operador.rfc or rfc_operador
-                nombre_operador = operador.name or nombre_operador
-                licencia = operador.license_number or licencia
+            rfc_operador = (
+                operador.rfc if operador and operador.rfc else "XAXX010101000"
+            )
+            nombre_operador = (
+                operador.name if operador and operador.name else "OPERADOR BASE COMODIN"
+            )
+            licencia = (
+                operador.license_number
+                if operador and operador.license_number
+                else "LIC0000000"
+            )
         else:
             base = Decimal(str(viaje.tarifa_base or 0))
             casetas = Decimal(str(viaje.costo_casetas or 0))
             subtotal = base + casetas
             iva, ret = (subtotal * Decimal("0.16"), subtotal * Decimal("0.04"))
             total = subtotal + iva - ret
-
             if not operador:
                 raise HTTPException(
                     status_code=400, detail="Operador faltante para la factura final."
                 )
-
             rfc_operador = operador.rfc or "XAXX010101000"
             nombre_operador = operador.name or "OPERADOR DESCONOCIDO"
             licencia = operador.license_number or "LIC0000000"
@@ -562,9 +541,6 @@ class BillingService:
             "total_dist_rec": "480",
         }
 
-    # =======================================================
-    # MOTOR ZEEP / COMUNICACIÓN PAC (CON DEBUGGER ACTIVO)
-    # =======================================================
     def _importar_comprobante_ws(self, data: dict, relacion_uuid: str = None):
         try:
             logger.info(f"--- INICIANDO PROCESO DE TIMBRADO VIAJE {data['folio']} ---")
@@ -576,14 +552,12 @@ class BillingService:
             debug_path = self.storage_dir / f"DEBUG_PRE_ENVIO_VIAJE_{data['folio']}.xml"
             with open(debug_path, "w", encoding="utf-8") as f:
                 f.write(xml_sellado)
-            logger.info(f"XML temporal pre-envío guardado en: {debug_path}")
 
             result = client.service.timbrar(
                 self.pac_user, self.pac_pass, xml_sellado.encode("utf-8"), False
             )
 
             if int(getattr(result, "status", 0)) != 200:
-                logger.error(f"Error del PAC: {result.mensaje}")
                 raise HTTPException(status_code=400, detail=f"PAC: {result.mensaje}")
 
             res_sat = result.resultados[0]
@@ -600,10 +574,6 @@ class BillingService:
                     if isinstance(raw_cfdi, str)
                     else raw_cfdi
                 )
-                raw_qr = res_sat.qrCode
-                qr_bytes = (
-                    base64.b64decode(raw_qr) if isinstance(raw_qr, str) else raw_qr
-                )
 
                 self._guardar_xml_disco(cfdi_bytes, res_sat.uuid)
 
@@ -612,54 +582,64 @@ class BillingService:
                     "cfdi": "http://www.sat.gob.mx/cfd/4",
                     "tfd": "http://www.sat.gob.mx/TimbreFiscalDigital",
                 }
-                s_sat = root.xpath(
-                    "//tfd:TimbreFiscalDigital/@SelloSAT", namespaces=ns
-                )[0]
+
+                tfd_node = root.xpath("//tfd:TimbreFiscalDigital", namespaces=ns)[0]
+                tfd_version = tfd_node.get("Version", "1.1")
+                tfd_fecha = tfd_node.get("FechaTimbrado")
+                tfd_rfc_prov = tfd_node.get("RfcProvCertif")
+                tfd_sello_cfd = tfd_node.get("SelloCFD")
+                c_sat = tfd_node.get("NoCertificadoSAT")
+                s_sat = tfd_node.get("SelloSAT")
                 s_emi = root.xpath("//cfdi:Comprobante/@Sello", namespaces=ns)[0]
-                c_sat = root.xpath(
-                    "//tfd:TimbreFiscalDigital/@NoCertificadoSAT", namespaces=ns
-                )[0]
+
+                cadena_original = f"||{tfd_version}|{res_sat.uuid}|{tfd_fecha}|{tfd_rfc_prov}|{tfd_sello_cfd}|{c_sat}||"
+
+                if HAS_NUM2WORDS:
+                    entero = int(float(data["total"]))
+                    decimales = int(round((float(data["total"]) - entero) * 100))
+                    texto = num2words(entero, lang="es").upper()
+                    importe_letra = f"(*** {texto} PESOS {decimales:02d}/100 MXN ***)"
+                else:
+                    importe_letra = f"(*** {data['total']} MXN ***)"
+
+                # ==========================================
+                # NUEVA GENERACIÓN DE QR EN ALTA CALIDAD
+                # ==========================================
+                sello_ocho = s_emi[-8:] if s_emi else "00000000"
+                qr_string = (
+                    f"https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?"
+                    f"id={res_sat.uuid}&re={self.emisor_rfc}&rr={data['rfc_cliente']}"
+                    f"&tt={data['total']}&fe={sello_ocho}"
+                )
+
+                qr = qrcode.QRCode(version=1, box_size=10, border=2)
+                qr.add_data(qr_string)
+                qr.make(fit=True)
+                img_qr = qr.make_image(fill_color="black", back_color="white")
+
+                buffer = BytesIO()
+                img_qr.save(buffer, format="PNG")
+                qr_bytes = buffer.getvalue()
+                # ==========================================
 
                 self._generar_pdf_con_diseno(
-                    data, res_sat.uuid, qr_bytes, s_sat, s_emi, c_sat
+                    data,
+                    res_sat.uuid,
+                    qr_bytes,
+                    s_sat,
+                    s_emi,
+                    c_sat,
+                    cadena_original,
+                    importe_letra,
                 )
                 return res_sat
             else:
-                logger.error(f"Error de validación SAT: {res_sat.mensaje}")
                 raise HTTPException(status_code=400, detail=f"SAT: {res_sat.mensaje}")
 
         except HTTPException as http_exc:
-            logger.error(f"Rechazo del SAT/PAC: {http_exc.detail}")
             raise http_exc
-
         except Exception as e:
-            logger.error("--- FALLÓ EL TIMBRADO (ERROR INTERNO) ---")
-            logger.error(str(e))
-
-            try:
-                if self.history.last_sent:
-                    sent = etree.tostring(
-                        self.history.last_sent["envelope"],
-                        pretty_print=True,
-                        encoding="unicode",
-                    )
-                    logger.error(f"Último XML enviado al PAC:\n{sent}")
-            except Exception:
-                logger.debug(
-                    "El error ocurrió antes de enviar la petición SOAP al PAC."
-                )
-
-            try:
-                if self.history.last_received:
-                    received = etree.tostring(
-                        self.history.last_received["envelope"],
-                        pretty_print=True,
-                        encoding="unicode",
-                    )
-                    logger.error(f"Respuesta del PAC:\n{received}")
-            except Exception:
-                pass
-
+            self.db.rollback()
             raise HTTPException(
                 status_code=500, detail=f"Fallo interno del servidor: {str(e)}"
             )
@@ -716,7 +696,6 @@ class BillingService:
             if relacion_uuid
             else ""
         )
-
         return f"""<?xml version="1.0" encoding="UTF-8"?>
 <cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:cartaporte31="http://www.sat.gob.mx/CartaPorte31" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/CartaPorte31 http://www.sat.gob.mx/sitio_internet/cfd/CartaPorte/CartaPorte31.xsd" Version="4.0" Fecha="{data['fecha']}" Serie="CP" Folio="{data['folio']}" FormaPago="99" CondicionesDePago="CONTADO" SubTotal="{data['subtotal']}" Moneda="MXN" TipoCambio="1" Total="{data['total']}" TipoDeComprobante="I" Exportacion="01" MetodoPago="PPD" LugarExpedicion="{self.emisor_cp}">{relacion_xml}
     <cfdi:Emisor Rfc="{self.emisor_rfc}" Nombre="{self.emisor_nombre}" RegimenFiscal="{self.emisor_regimen}" />
@@ -763,10 +742,9 @@ class BillingService:
     </cfdi:Addenda>
 </cfdi:Comprobante>""".strip()
 
-    def _generar_pdf_con_diseno(self, data, uuid, qr_bytes, s_sat, s_emi, c_sat):
-        from jinja2 import Environment, FileSystemLoader
-        from xhtml2pdf import pisa
-
+    def _generar_pdf_con_diseno(
+        self, data, uuid, qr_bytes, s_sat, s_emi, c_sat, cadena_original, importe_letra
+    ):
         logo_path = self.templates_dir / "assets" / "logo-black.png"
         logo_src = (
             f"data:image/png;base64,{base64.b64encode(open(logo_path, 'rb').read()).decode('utf-8')}"
@@ -777,6 +755,15 @@ class BillingService:
 
         env = Environment(loader=FileSystemLoader(str(self.templates_dir)))
         template = env.get_template("carta_porte.html")
+
+        def chunk_b64(text, length=105):
+            if not text:
+                return ""
+            # 1. Limpiamos cualquier espacio o salto de línea fantasma
+            text = str(text).replace(" ", "").replace("\n", "").replace("\r", "")
+            # 2. Insertamos un espacio cada 105 caracteres para que el PDF pueda hacer el salto de línea
+            return " ".join([text[i : i + length] for i in range(0, len(text), length)])
+
         context = {
             "uuid": uuid,
             "folio_interno": data["folio"],
@@ -790,8 +777,10 @@ class BillingService:
             "regimen_cliente": data["regimen_cliente"],
             "uso_cfdi": data["uso_cfdi"],
             "cert_sat": c_sat,
-            "sello_sat": s_sat,
-            "sello_emisor": s_emi,
+            "sello_sat": chunk_b64(s_sat),
+            "sello_emisor": chunk_b64(s_emi),
+            "cadena_original": chunk_b64(cadena_original),
+            "importe_letra": importe_letra,
             "subtotal": data["subtotal"],
             "iva": data["iva"],
             "retenciones": data["retenciones"],
@@ -843,10 +832,20 @@ class BillingService:
             },
             "leyenda_legal": data["leyenda_legal"],
         }
+
+        # Generar el HTML renderizado
+        html_out = template.render(context)
+
         pdf_path = self.storage_dir / f"{uuid}.pdf"
-        pisa.CreatePDF(
-            BytesIO(template.render(context).encode("utf-8")), dest=open(pdf_path, "wb")
-        )
+
+        # ----------------------------------------------------
+        # NUEVA GENERACIÓN CON WEASYPRINT
+        # ----------------------------------------------------
+        HTML(string=html_out, base_url=str(self.templates_dir)).write_pdf(pdf_path)
+        print(f"DEBUG: Sello Emisor len: {len(s_emi)}")
+        with open(self.storage_dir / "DEBUG_FACTURA.html", "w", encoding="utf-8") as f:
+            f.write(html_out)
+
         return pdf_path
 
     def _guardar_xml_disco(self, xml_bytes: bytes, uuid: str):
@@ -854,45 +853,23 @@ class BillingService:
             f.write(xml_bytes)
 
     def procesar_cancelaciones_pendientes(self):
-        """
-        CRONJOB / RECOVERY TASK:
-        Busca todas las facturas que el SAT dejó "En Proceso" o "Lentas" (204)
-        y vuelve a intentar la cancelación automáticamente.
-        """
         logger.info("--- INICIANDO RECUPERADOR DE CANCELACIONES PENDIENTES ---")
-
-        # 1. Buscamos todas las facturas atascadas
         facturas_pendientes = (
             self.db.query(ReceivableInvoice)
             .filter(ReceivableInvoice.status_sat == "PENDIENTE_CANCELAR_SAT")
             .all()
         )
-
         if not facturas_pendientes:
-            logger.info("No hay cancelaciones pendientes en la base de datos.")
             return {"mensaje": "Sin pendientes", "procesadas": 0, "resultados": []}
-
-        logger.info(
-            f"Se encontraron {len(facturas_pendientes)} facturas pendientes por cancelar ante el SAT."
-        )
 
         resultados = []
         for factura in facturas_pendientes:
             try:
-                # 2. Rescatamos el motivo y el UUID sustituto de la BD
                 motivo = factura.motivo_cancelacion or "01"
                 sustituto = factura.uuid_relacionado or ""
-
-                logger.info(
-                    f"[*] Reintentando UUID: {factura.uuid} (Sustituto: {sustituto})"
-                )
-
-                # 3. Re-utilizamos nuestro motor de cancelación que ya es a prueba de balas
                 self.cancelar_factura_nominal(
                     invoice_id=factura.id, motivo=motivo, uuid_sustituto=sustituto
                 )
-
-                # Si no explotó, verificamos cómo quedó en la BD tras el intento
                 self.db.refresh(factura)
                 resultados.append(
                     {
@@ -901,11 +878,7 @@ class BillingService:
                         "nuevo_status": factura.status_sat,
                     }
                 )
-
             except Exception as e:
-                logger.error(
-                    f"[X] Falló el reintento para el UUID {factura.uuid}: {str(e)}"
-                )
                 resultados.append(
                     {
                         "id": factura.id,
@@ -914,7 +887,6 @@ class BillingService:
                     }
                 )
 
-        logger.info("--- FIN DEL RECUPERADOR DE CANCELACIONES ---")
         return {
             "mensaje": "Proceso completado",
             "procesadas": len(facturas_pendientes),

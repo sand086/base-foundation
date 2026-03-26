@@ -330,7 +330,7 @@ class ReceivableInvoiceCreate(BaseModel):
     acuse_cancelacion_url: Optional[str] = None
     fecha_cancelacion: Optional[datetime] = None
 
-    @validator("uuid_relacionado")
+    @validator("uuid_relacionado", always=True)
     def validate_relacion_04(cls, v, values):
         """Regla de validación crítica: Si hay relación 04, el UUID es obligatorio"""
         if values.get("tipo_relacion") == "04" and not v:
