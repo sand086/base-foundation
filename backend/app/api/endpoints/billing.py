@@ -18,6 +18,7 @@ from app.services.billing_service import BillingService
 from app.models import models
 from app.api.endpoints.auth import get_current_active_user
 from app.core.security import verify_password
+import base64
 
 router = APIRouter()
 
@@ -25,33 +26,46 @@ router = APIRouter()
 @router.get("/test-invoice-pro")
 def test_invoice_pro():
     try:
+        # 1. Definir rutas base dinámicamente
         CURRENT_FILE = Path(__file__).resolve()
+        # Asumiendo que billing.py está en app/api/endpoints/
         APP_DIR = CURRENT_FILE.parents[2]
 
-        template_path = APP_DIR / "templates" / "carta_porte.html"
-        storage_dir = APP_DIR / "storage" / "xml_timbrados"
+        base_path = Path(os.getenv("APP_BASE_PATH", APP_DIR))
+        templates_dir = Path(os.getenv("TEMPLATES_DIR", base_path / "templates"))
+
+        template_path = templates_dir / "carta_porte.html"
+        storage_dir = base_path / "storage" / "xml_timbrados"
         storage_dir.mkdir(parents=True, exist_ok=True)
+
         output_pdf = storage_dir / "TEST_EAGLE.pdf"
 
+        # 2. Cargar Logo en Base64
+        logo_path = templates_dir / "assets" / "logo-black.png"
+        logo_src = ""
+        if logo_path.exists():
+            with open(logo_path, "rb") as image_file:
+                encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
+                logo_src = f"data:image/png;base64,{encoded_string}"
+
+        # 3. Funciones auxiliares
         def chunk_b64(text, length):
             if not text:
                 return ""
             text = str(text).replace(" ", "").replace("\n", "").replace("\r", "")
             return " ".join([text[i : i + length] for i in range(0, len(text), length)])
 
-        # DATOS COMPLETOS SIN ABREVIATURAS
+        # 4. Contexto de Datos
         context = {
             "rfc_emisor": "RTX110624KP5",
             "cert_emisor": "00001000000717643613",
             "folio_interno": "16595",
             "fecha_emision": "2026-03-02T10:31:54",
-            # Datos Cliente (Completos)
             "nombre_cliente": "EAGLE EXPRESS CARGO",
             "rfc_cliente": "EEC1406167F9",
-            "direccion_cliente": "",  # Dejamos el espacio como en tu texto
+            "direccion_cliente": "",
             "cp_cliente": "15530",
             "regimen_cliente": "601 (General de Ley Personas Morales)",
-            # Datos Comprobante (Completos)
             "moneda": "MXN",
             "tc": "1",
             "metodo_pago": "PPD (Pago en parcialidades o diferido)",
@@ -59,7 +73,6 @@ def test_invoice_pro():
             "uso_cfdi": "G03 (Gastos en general.)",
             "tipo_comprobante": "I (Ingreso)",
             "condiciones_pago": "En 15 Días",
-            # Footer SAT
             "uuid": "94FBAB5B-DDAF-4858-84EC-F23AA4CDC611",
             "cert_sat": "00001000000719545303",
             "fecha_certificacion": "2026-03-02T12:36:24",
@@ -76,13 +89,13 @@ def test_invoice_pro():
                 "||1.1|94FBAB5B-DDAF-4858-84EC-F23AA4CDC611|2026-03-02T12:36:24|L501306189R5|M085BkYeJH+LmnkY75WIziDPCQp917lel30V7PeXTMx8Y7+sYeReZTt6l8FPSDtIMDaKDAZOzPw1zTBpbzZYkw57pTjixtLOTkiSftguhrZHMLuuKV3aAXlyrA1+eN6AeFolyysC3Y3YM2p8mh29esBK2KZJFh6eCzRA6ZX0g+2gYCp691n8BjPXzFXzJFe4rtytiMRHq+A+MJziBCnquGajzqxTu7quN7x+F4F619NC9JsBX561LwbeeHEkOsz+VK3YuJ9qiKjgHg770DSh5Sw++fpTaEbDowo4EpeQG4IFc6F165vk2gXilalEne8Ba3coQmYTa90BU2GUBkB2uJg==|00001000000719545303||",
                 135,
             ),
-            # Totales y Leyenda
             "importe_letra": "(*** TREINTA Y CINCO MIL OCHOCIENTOS CUARENTA PESOS 00/100 MXN ***)",
             "subtotal": "32,000.00",
             "iva": "5,120.00",
             "retenciones": "1,280.00",
             "total": "35,840.00",
-            "leyenda_legal": "Condiciones de prestación de servicios que ampara la CARTA DE PORTE O COMPROBANTE PARA EL TRANSPORTE DE MERCANCÍAS. PRIMERA.- Para los efectos del presente contrato de transporte se denomina 'Transportista' al que realiza el servicio de transportación y 'Remitente' o 'Expedidor' al usuario que contrate el servicio... [TEXTO ACORTADO PARA DEMO].",
+            "leyenda_legal": "Condiciones de prestación de servicios que ampara la CARTA DE PORTE...",
+            "logo_src": logo_src,
             "conceptos": [
                 {
                     "clave": "78101802",
@@ -94,9 +107,10 @@ def test_invoice_pro():
                     "importe": "32,000.00",
                 }
             ]
-            * 20,
+            * 2,
         }
 
+        # 5. Renderizado y PDF
         env = Environment(loader=FileSystemLoader(str(template_path.parent)))
         template = env.get_template(template_path.name)
         html_out = template.render(context)

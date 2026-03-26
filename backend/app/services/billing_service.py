@@ -759,90 +759,94 @@ class BillingService:
         def chunk_b64(text, length=105):
             if not text:
                 return ""
-            # 1. Limpiamos cualquier espacio o salto de línea fantasma
             text = str(text).replace(" ", "").replace("\n", "").replace("\r", "")
-            # 2. Insertamos un espacio cada 105 caracteres para que el PDF pueda hacer el salto de línea
             return " ".join([text[i : i + length] for i in range(0, len(text), length)])
 
+        # AQUÍ ES DONDE PASA LA MAGIA: Mapeamos los datos reales al HTML
         context = {
+            "rfc_emisor": self.emisor_rfc,
             "uuid": uuid,
             "folio_interno": data["folio"],
             "fecha_emision": data["fecha"],
             "logo_src": logo_src,
             "qr_src": qr_src,
-            "id_ccp": data["id_ccp"],
+            # Datos Cliente y CFDI
             "nombre_cliente": data["nombre_cliente"],
             "rfc_cliente": data["rfc_cliente"],
             "cp_cliente": data["cp_cliente"],
             "regimen_cliente": data["regimen_cliente"],
+            "direccion_cliente": data.get("direccion_cliente", "Domicilio Conocido"),
             "uso_cfdi": data["uso_cfdi"],
+            "metodo_pago": (
+                "PPD" if data["total"] > "1.50" else "PUE"
+            ),  # Ejemplo dinámico
+            "tipo_comprobante": "I (Ingreso)",
+            "moneda": "MXN",
+            "tc": "1",
+            "forma_pago": "99 (Por definir)",
+            "condiciones_pago": "Contado",
+            # Certificados y Sellos
             "cert_sat": c_sat,
+            "cert_emisor": "00001000000000000000",  # Puedes extraer el real del certificado
             "sello_sat": chunk_b64(s_sat),
             "sello_emisor": chunk_b64(s_emi),
             "cadena_original": chunk_b64(cadena_original),
             "importe_letra": importe_letra,
+            # Totales
             "subtotal": data["subtotal"],
             "iva": data["iva"],
             "retenciones": data["retenciones"],
             "total": data["total"],
+            # Conceptos de la tabla
             "conceptos": [
                 {
                     "clave": "78101802",
                     "cantidad": "1.00",
                     "unidad": "E48 - SRV",
                     "descripcion": data["descripcion_concepto"],
-                    "precio_unitario": data["subtotal"],
+                    "detalles_extra": f"Viaje Folio: {data['folio']}",
+                    "precio": data["subtotal"],
                     "importe": data["subtotal"],
                 }
             ],
-            "ubicaciones": [
-                {
-                    "tipo": "Origen",
-                    "rfc": "ICA9507256L6",
-                    "nombre": "INTERNACIONAL DE CONTENEDORES Y ASOCIADOS DE VERACRUZ",
-                    "fecha": data["fecha"],
-                    "distancia": "",
-                    "cp": "91700",
-                },
-                {
-                    "tipo": "Destino",
-                    "rfc": data["rfc_cliente"],
-                    "nombre": data["nombre_cliente"],
-                    "fecha": data["fecha"],
-                    "distancia": data["total_dist_rec"],
-                    "cp": data["cp_destino"],
-                },
-            ],
-            "autotransporte": {
-                "permiso": data["permiso_sct"],
-                "num_permiso": data["num_permiso"],
-                "configuracion": data["config_vehicular"],
-                "peso": data["peso_bruto_vehicular"],
-                "placas": data["placas"],
-                "anio": data["anio_modelo"],
-                "aseguradora": data["aseguradora"],
-                "poliza": data["poliza"],
-                "remolque": data["subtipo_remolque"],
-                "placa_remolque": data["placa_remolque"],
-            },
-            "operador": {
-                "rfc": data["rfc_operador"],
-                "licencia": data["licencia"],
-                "nombre": data["nombre_operador"],
-            },
+            # Datos Carta Porte
+            "id_ccp": data["id_ccp"],
+            "distancia_total": data["total_dist_rec"],
+            # Ubicaciones (Asumiendo que ALBANY es el origen fijo en tu flujo)
+            "remitente_nombre": "ALBANY",
+            "remitente_rfc": "EEC1406167F9",
+            "fecha_salida": data["fecha"],
+            "domicilio_origen": "CARRETERA TLALNEPANTLA CUAUTITLAN K.M. 18 S/N, C.P. 54879, MEX.",
+            "destinatario_nombre": data["nombre_cliente"],
+            "destinatario_rfc": data["rfc_cliente"],
+            "fecha_llegada": data["fecha"],
+            "domicilio_destino": f"{data['municipio_destino']}, {data['estado_destino']}, C.P. {data['cp_destino']}, MEX.",
+            # Transporte y Seguros
+            "permiso_sct": data["permiso_sct"],
+            "num_permiso_sct": data["num_permiso"],
+            "config_vehicular": data["config_vehicular"],
+            "placas": data["placas"],
+            "anio_modelo": data["anio_modelo"],
+            "aseguradora": data["aseguradora"],
+            "poliza": data["poliza"],
+            # Mercancías y Operador
+            "peso_bruto": data["peso_bruto"],
+            "bienes_transp": data["bienes_transp"],
+            "descripcion_mercancia": data["descripcion_mercancia"],
+            "subtipo_remolque": data["subtipo_remolque"],
+            "placa_remolque": data["placa_remolque"],
+            "operador_rfc": data["rfc_operador"],
+            "operador_nombre": data["nombre_operador"],
+            "operador_licencia": data["licencia"],
             "leyenda_legal": data["leyenda_legal"],
         }
 
-        # Generar el HTML renderizado
         html_out = template.render(context)
-
         pdf_path = self.storage_dir / f"{uuid}.pdf"
 
-        # ----------------------------------------------------
-        # NUEVA GENERACIÓN CON WEASYPRINT
-        # ----------------------------------------------------
+        # Generación del PDF con WeasyPrint
         HTML(string=html_out, base_url=str(self.templates_dir)).write_pdf(pdf_path)
-        print(f"DEBUG: Sello Emisor len: {len(s_emi)}")
+
         with open(self.storage_dir / "DEBUG_FACTURA.html", "w", encoding="utf-8") as f:
             f.write(html_out)
 
