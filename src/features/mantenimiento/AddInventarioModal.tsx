@@ -19,23 +19,23 @@ import {
 } from "@/components/ui/select";
 import { Package, Save, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-// Usamos el tipo REAL del servicio
 import { InventoryItem } from "@/services/maintenanceService";
 
 interface AddInventarioModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   itemToEdit?: InventoryItem | null;
-  onSave: (item: any) => Promise<void>; // Ajustado para ser async
+  onSave: (item: any) => Promise<void>;
 }
 
+// 1. CORRECCIÓN: Las opciones internas deben ser en minúsculas para coincidir con el backend
 const categories = [
-  "Motor",
-  "Frenos",
-  "Eléctrico",
-  "Suspensión",
-  "Transmisión",
-  "General",
+  { value: "motor", label: "Motor" },
+  { value: "frenos", label: "Frenos" },
+  { value: "eléctrico", label: "Eléctrico" },
+  { value: "suspensión", label: "Suspensión" },
+  { value: "transmisión", label: "Transmisión" },
+  { value: "general", label: "General" },
 ];
 
 export function AddInventarioModal({
@@ -46,11 +46,11 @@ export function AddInventarioModal({
 }: AddInventarioModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Estado local usando snake_case para facilitar el envío
+  // 2. CORRECCIÓN: El valor por defecto inicial ahora es minúscula
   const [formData, setFormData] = useState({
     sku: "",
     descripcion: "",
-    categoria: "General",
+    categoria: "general",
     stock_actual: 0,
     stock_minimo: 0,
     ubicacion: "",
@@ -62,17 +62,18 @@ export function AddInventarioModal({
       setFormData({
         sku: itemToEdit.sku,
         descripcion: itemToEdit.descripcion,
-        categoria: itemToEdit.categoria,
+        categoria: itemToEdit.categoria, // Asumimos que viene en minúscula del backend
         stock_actual: itemToEdit.stock_actual,
         stock_minimo: itemToEdit.stock_minimo,
         ubicacion: itemToEdit.ubicacion,
         precio_unitario: itemToEdit.precio_unitario,
       });
     } else {
+      // 3. CORRECCIÓN: Reiniciar a minúscula
       setFormData({
         sku: "",
         descripcion: "",
-        categoria: "General",
+        categoria: "general",
         stock_actual: 0,
         stock_minimo: 0,
         ubicacion: "",
@@ -86,10 +87,8 @@ export function AddInventarioModal({
     setIsSubmitting(true);
 
     try {
-      // Enviamos los datos tal cual (ya están en snake_case)
       await onSave({
         ...formData,
-        // Si es edición, el ID se maneja en el padre, aquí solo enviamos el payload
       });
 
       toast.success(
@@ -101,7 +100,6 @@ export function AddInventarioModal({
 
       onOpenChange(false);
     } catch (error) {
-      // El error ya lo maneja el hook usualmente, pero por seguridad
       console.error(error);
     } finally {
       setIsSubmitting(false);
@@ -135,7 +133,7 @@ export function AddInventarioModal({
                 }
                 placeholder="REF-001"
                 required
-                disabled={!!itemToEdit} // SKU no editable usualmente
+                disabled={!!itemToEdit}
               />
             </div>
             <div className="space-y-2">
@@ -147,12 +145,17 @@ export function AddInventarioModal({
                 }
               >
                 <SelectTrigger>
-                  <SelectValue />
+                  {/* Buscamos el label bonito para mostrar */}
+                  <SelectValue placeholder="Seleccione...">
+                    {categories.find((c) => c.value === formData.categoria)
+                      ?.label || formData.categoria}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
+                  {/* 4. CORRECCIÓN: Renderizamos usando value (minúscula) y label (mayúscula) */}
                   {categories.map((cat) => (
-                    <SelectItem key={cat} value={cat}>
-                      {cat}
+                    <SelectItem key={cat.value} value={cat.value}>
+                      {cat.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
