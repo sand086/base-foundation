@@ -1,0 +1,318 @@
+/* ==========================================================================
+   HOJA DE ESTILOS: FACTURA CARTA PORTE (SaaS Style)
+   ========================================================================== */
+
+/* [1. HOJA FÍSICA Y MÁRGENES] 
+   Aquí controlas dónde se corta el texto en el PDF para no pisar el header/footer */
+@page {
+  size: letter;
+  margin-top: 6.5cm; /* Si el logo es muy alto, sube este número */
+  margin-bottom: 10cm; /* La "pared" invisible que protege tus sellos del SAT */
+  margin-left: 0.5cm;
+  margin-right: 0.5cm;
+}
+
+body {
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+  font-size: 7.5pt;
+  color: #333333;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* El bloque principal de datos que fluye. Para pegarlo más al header, usa margen negativo */
+main {
+  margin-top: -0.2cm;
+}
+
+/* [2. COLORES Y UTILIDADES GLOBALES] */
+.bold {
+  font-weight: 700;
+}
+.text-primary {
+  color: #be0811;
+} /* Tu rojo corporativo */
+.text-action {
+  color: #009740;
+} /* Verde para totales */
+.text-dark {
+  color: #1e293b;
+} /* Oscuro elegante para textos fuertes */
+.text-muted {
+  color: #64748b;
+} /* Gris para etiquetas y textos secundarios */
+.right {
+  text-align: right;
+}
+.center {
+  text-align: center;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+/* ==========================================================================
+   [3. CABECERA (HEADER FIJO)]
+   ========================================================================== */
+header {
+  position: fixed;
+  top: -6cm; /* Anclado en el margen superior de @page */
+  left: 0;
+  right: 0;
+  background: white;
+}
+
+/* Contenedor del Logo y Datos de Empresa */
+.header-container {
+  border-bottom: 2px solid #f1f5f9; /* La línea gris sutil debajo de los datos de empresa */
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+}
+
+/* Si quieres mover el logo, altera margin-top o margin-left */
+.logo-img {
+  max-height: 155px;
+  max-width: 200px;
+  object-fit: contain;
+  margin-top: 5px;
+  margin-left: 18px;
+}
+
+.header-company {
+  font-size: 16pt;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #be0811;
+}
+
+/* [4. INSIGNIA DEL FOLIO TIPO WIDGET] */
+.folio-badge {
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  background: #ffffff;
+  overflow: hidden;
+}
+.folio-badge-title {
+  background: #0f172a; /* Fondo azul marino del encabezado del folio */
+  padding: 5px;
+  font-size: 6.5pt;
+  text-transform: uppercase;
+  color: #ffffff;
+  letter-spacing: 1px;
+  font-weight: 700;
+}
+.folio-badge-content {
+  padding: 6px;
+}
+
+/* ==========================================================================
+   [5. TARJETAS (BENTO CARDS)]
+   Controla las cajas de "Datos del Cliente", "Ubicación", etc.
+   ========================================================================== */
+.bento-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  background: white;
+  margin-bottom: 6px; /* Espacio ENTRE una tarjeta y otra */
+  overflow: hidden;
+}
+
+/* El título de la tarjeta (Ej: "Datos del Cliente") */
+.bento-card-header {
+  background: #f8fafc;
+  font-size: 6.5pt;
+  color: #0f172a;
+  text-transform: uppercase;
+  font-weight: 800;
+  padding: 5px 8px; /* Espacio interno del título */
+
+  /* 👇 AQUÍ CONTROLAS EL ESPACIO ENTRE LA LÍNEA Y EL CONTENIDO DE LA TARJETA */
+  border-bottom: 1px solid #e2e8f0; /* Esta es la línea separadora */
+
+  border-left: 3px solid #be0811; /* La barrita roja lateral */
+}
+
+/* [6. TEXTOS Y DATOS DENTRO DE LAS TARJETAS (Grid Table)] */
+.grid-table td {
+  /* 👇 AQUÍ CONTROLAS EL ESPACIO INTERNO DE LOS DATOS */
+  padding: 5px 8px; /* Primer número: arriba/abajo. Segundo: izq/der */
+  font-size: 6.5pt;
+  border-bottom: 1px solid #f8fafc; /* Líneas tenues que separan los renglones */
+}
+.grid-table tr:last-child td {
+  border-bottom: none;
+}
+.grid-label {
+  color: #64748b; /* Color de los subtítulos (ej: "Régimen Fiscal") */
+  font-weight: 600;
+  font-size: 5.5pt;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  display: block;
+  margin-bottom: 3px; /* Espacio entre el subtítulo y el dato real (Ej: entre "RFC" y el número) */
+}
+
+/* ==========================================================================
+   [7. PIE DE PÁGINA (FOOTER FIJO)]
+   ========================================================================== */
+footer {
+  position: fixed;
+  bottom: -9.5cm; /* Anclado al margen inferior de @page */
+  left: 0;
+  right: 0;
+  background: white;
+}
+
+/* Línea roja y gris encima del QR */
+.elegant-divider {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 4px 0;
+  position: relative;
+}
+.elegant-divider::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 80px;
+  height: 100%;
+  background: #be0811;
+}
+
+/* Tabla pequeña de Certificaciones (UUID, Fecha, etc.) */
+.sat-table {
+  width: 100%;
+  text-align: center;
+  margin-bottom: 4px;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.4rem;
+  overflow: hidden;
+}
+.sat-table td {
+  padding: 4px;
+  font-size: 7pt;
+}
+.sat-table-header {
+  background: #fafafa;
+  color: #333333;
+  font-weight: 700;
+  border-bottom: 1px solid #e5e7eb;
+}
+.sat-table-header td {
+  border-right: 1px solid #e5e7eb;
+}
+
+/* [8. LÍNEAS DE COLORES Y CAJAS DE SELLOS SAT] */
+.sello-wrapper {
+  margin-bottom: 6px;
+}
+.sello-title {
+  font-size: 7pt;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #333333;
+}
+.sello-text {
+  font-size: 7pt;
+  font-family: "Courier New", monospace;
+  word-break: break-all;
+  color: #475569;
+  line-height: 1.2;
+  background: #f8fafc;
+  padding: 4px;
+  border: 1px solid #e5e7eb;
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+}
+/* Colores de las barritas de los sellos */
+.line-emisor {
+  border-top: 2px solid #be0811;
+  margin-top: 2px;
+  width: 100%;
+  display: block;
+}
+.line-sat {
+  border-top: 2px solid #009740;
+  margin-top: 2px;
+  width: 100%;
+  display: block;
+}
+.line-cadena {
+  border-top: 2px solid #1a4f36;
+  margin-top: 2px;
+  width: 100%;
+  display: block;
+}
+
+/* ==========================================================================
+   [9. TABLA PRINCIPAL DE CONCEPTOS (MAIN)]
+   ========================================================================== */
+.table-main {
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin-top: 8px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+}
+.table-main thead td {
+  background: #0f172a; /* Azul marino oscuro para los títulos de la tabla */
+  color: #ffffff;
+  font-weight: 600;
+  padding: 6px;
+  font-size: 6.5pt;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.table-main thead td:first-child {
+  border-top-left-radius: 0.4rem;
+  border-bottom-left-radius: 0.4rem;
+}
+.table-main thead td:last-child {
+  border-top-right-radius: 0.4rem;
+  border-bottom-right-radius: 0.4rem;
+}
+.table-main tbody td {
+  padding: 8px 6px;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: top;
+}
+
+/* Etiqueta roja de "Complemento Carta Porte 3.1" */
+.section-title-main {
+  background: #be0811;
+  color: white;
+  padding: 4px 10px;
+  font-weight: 800;
+  font-size: 7.5pt;
+  text-transform: uppercase;
+  border-radius: 4px;
+  margin-top: 15px;
+  margin-bottom: 8px;
+  display: inline-block;
+  box-shadow: 0 2px 4px rgba(190, 8, 17, 0.2);
+}
+
+.addenda-box {
+  margin-top: 15px;
+  font-size: 6pt;
+  color: #64748b;
+  text-align: justify;
+  line-height: 1.4;
+  border-top: 1px dashed #cbd5e1;
+  padding-top: 8px;
+}
+
+.page-number::before {
+  content: counter(page);
+}
+.page-count::before {
+  content: counter(pages);
+}
