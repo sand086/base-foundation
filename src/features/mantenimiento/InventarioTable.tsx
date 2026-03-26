@@ -82,6 +82,9 @@ export const InventarioTable = () => {
   };
 
   const getCategoryBadge = (categoria: string) => {
+    // Convierte "motor" a "Motor" para el diseño
+    const categoryName = categoria.charAt(0).toUpperCase() + categoria.slice(1);
+
     const colors: Record<string, string> = {
       Motor: "bg-blue-100 text-blue-700 border-blue-200",
       Frenos: "bg-red-100 text-red-700 border-red-200",
@@ -92,14 +95,13 @@ export const InventarioTable = () => {
       <Badge
         className={cn(
           "hover:bg-opacity-100",
-          colors[categoria] || colors.General,
+          colors[categoryName] || colors.General,
         )}
       >
-        {categoria}
+        {categoryName}
       </Badge>
     );
   };
-
   // Handlers conectados al hook
   const handleSave = async (itemData: any) => {
     let success = false;
