@@ -824,7 +824,7 @@ class InventoryItem(AuditMixin, Base):
     __tablename__ = "inventory_items"
 
     id = Column(Integer, primary_key=True, index=True)
-    sku = Column(String(50), unique=True, nullable=False, index=True)
+    sku = Column(String(50), nullable=False, index=True)
     descripcion = Column(String(200), nullable=False)
 
     categoria = Column(

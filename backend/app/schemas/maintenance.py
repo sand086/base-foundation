@@ -3,10 +3,8 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
-
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from app.models.models import InventoryCategory, RecordStatus, WorkOrderStatus
-
 
 # =========================================================
 # Base helper
@@ -39,13 +37,20 @@ class InventoryItemCreate(ORMBase):
     descripcion: str = Field(..., max_length=200)
     categoria: InventoryCategory = InventoryCategory.GENERAL
 
+    # --- AGREGA ESTE ESCUDO ---
+    @field_validator("categoria", mode="before")
+    @classmethod
+    def force_lowercase(cls, value):
+        if isinstance(value, str):
+            return value.lower()
+        return value
+
+    # --------------------------
+
     stock_actual: int = 0
     stock_minimo: int = 5
-
     ubicacion: Optional[str] = Field(default=None, max_length=100)
     precio_unitario: float = 0.0
-
-    model_config = ConfigDict(extra="ignore")
 
 
 class InventoryItemUpdate(ORMBase):

@@ -87,8 +87,10 @@ export function AddInventarioModal({
     setIsSubmitting(true);
 
     try {
+      // AQUÍ ESTÁ LA MAGIA: Forzamos la minúscula sin importar qué tenga el estado
       await onSave({
         ...formData,
+        categoria: formData.categoria.toLowerCase(),
       });
 
       toast.success(

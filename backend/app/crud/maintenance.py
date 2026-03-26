@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import time
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -16,7 +17,6 @@ print("models loaded from =>", getattr(models, "__file__", None))
  """
 
 from app.schemas import maintenance as schemas
-
 
 # -----------------------------
 # Helpers
@@ -76,6 +76,21 @@ def get_inventory_item(db: Session, item_id: int):
 
 
 def create_inventory_item(db: Session, item_in: schemas.InventoryItemCreate):
+    # Buscar si ya existe uno activo con ese SKU
+    existe = (
+        db.query(models.InventoryItem)
+        .filter(
+            models.InventoryItem.sku == item_in.sku,
+            models.InventoryItem.record_status != models.RecordStatus.ELIMINADO.value,
+        )
+        .first()
+    )
+
+    if existe:
+        raise HTTPException(
+            status_code=400, detail="El SKU ya existe en un artículo activo."
+        )
+
     db_item = models.InventoryItem(**item_in.model_dump())
     db.add(db_item)
     db.commit()
@@ -98,6 +113,7 @@ def delete_inventory_item(db: Session, item_id: int):
     # Soft delete: record_status = E
     item = get_inventory_item(db, item_id)
     item.record_status = models.RecordStatus.ELIMINADO.value
+    item.sku = f"{item.sku}_DEL_{int(time.time())}"
     db.commit()
     return True
 
@@ -155,10 +171,19 @@ def update_mechanic(db: Session, mechanic_id: int, mechanic_in: schemas.Mechanic
 
 
 def delete_mechanic(db: Session, mechanic_id: int):
-    # soft: lo marcamos inactivo + record_status
     db_mech = get_mechanic(db, mechanic_id)
     db_mech.activo = False
     db_mech.record_status = models.RecordStatus.ELIMINADO.value
+
+    # Liberamos RFC, NSS y Email (los que tengan unique=True en tu modelo)
+    timestamp = int(time.time())
+    if db_mech.rfc:
+        db_mech.rfc = f"{db_mech.rfc}_DEL_{timestamp}"
+    if db_mech.email:
+        db_mech.email = f"del_{timestamp}_{db_mech.email}"
+    if db_mech.nss:
+        db_mech.nss = f"{db_mech.nss}_DEL_{timestamp}"
+
     db.commit()
     return True
 
