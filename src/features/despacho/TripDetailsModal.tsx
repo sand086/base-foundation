@@ -759,27 +759,38 @@ export function TripDetailsModal({
                                       : "bg-emerald-500 hover:bg-emerald-600",
                                   )}
                                   disabled={
-                                    isStamping || (!localUuid && !finalUuid)
+                                    isStamping ||
+                                    (!localUuid &&
+                                      !finalUuid &&
+                                      !trip.uuid_fiscal) // 👈 FIX 1: Evita que el botón se bloquee por error
                                   }
                                   onClick={() => {
                                     if (finalUuid) {
-                                      // Si ya tenemos el UUID final, solo lo descargamos
                                       handleDownloadStampedPDF(finalUuid);
                                     } else {
-                                      // Si no, mandamos a timbrar la factura final
+                                      // 🚀 FIX 2: Busca el UUID en localUuid, o si no, directo del trip
+                                      const uuidToRelate =
+                                        localUuid || trip.uuid_fiscal;
+
+                                      if (!uuidToRelate) {
+                                        toast.error(
+                                          "Error: No se encontró el UUID de la Carta Porte original.",
+                                        );
+                                        return;
+                                      }
+
                                       handleStampFinal(
                                         trip.id,
-                                        localUuid!,
+                                        uuidToRelate, // 👈 Se envía el valor seguro
                                         (responseData: any) => {
-                                          // Obtenemos el UUID que nos regresa el backend
                                           const generatedFinalUuid =
                                             responseData?.data?.uuid ||
                                             responseData?.uuid;
                                           if (generatedFinalUuid) {
-                                            setFinalUuid(generatedFinalUuid); // Lo guardamos en memoria
+                                            setFinalUuid(generatedFinalUuid);
                                             handleDownloadStampedPDF(
                                               generatedFinalUuid,
-                                            ); // Lo descargamos automáticamente
+                                            );
                                             toast.success(
                                               "¡FACTURA FINAL GENERADA Y DESCARGADA!",
                                             );
