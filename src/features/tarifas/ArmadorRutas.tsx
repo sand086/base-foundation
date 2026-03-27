@@ -962,7 +962,7 @@ export const ArmadorRutas: React.FC = () => {
           </div>
 
           <div className="mt-6 p-4 bg-brand-navy rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-inner">
-            <span className="text-brand-navy/60 text-[10px] uppercase font-black tracking-[0.2em] flex items-center gap-2 text-white/60">
+            <span className="text-brand-navy/60 text-[10px] uppercase font-black tracking-[0.2em] flex items-center gap-2 text-brand-secondary">
               <RouteIcon className="h-4 w-4 text-brand-red" /> Identificador
               Oficial:
             </span>

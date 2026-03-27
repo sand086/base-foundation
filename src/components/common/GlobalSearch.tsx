@@ -11,6 +11,8 @@ import {
   FileText,
   Calculator,
   CalendarPlus,
+  Search,
+  Command as CommandIcon,
 } from "lucide-react";
 import {
   CommandDialog,
@@ -21,6 +23,8 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command";
+import { DialogTitle } from "@/components/ui/dialog"; // Importación para accesibilidad
+import { cn } from "@/lib/utils";
 
 interface SearchItem {
   title: string;
@@ -53,7 +57,6 @@ const searchItems: SearchItem[] = [
     category: "Navegación",
     keywords: ["asignar", "viaje", "programar"],
   },
-
   // Clients
   {
     title: "Catálogo de Clients",
@@ -76,7 +79,6 @@ const searchItems: SearchItem[] = [
     category: "Clients",
     keywords: ["precios", "costos"],
   },
-
   // Flota
   {
     title: "Unidades",
@@ -113,7 +115,6 @@ const searchItems: SearchItem[] = [
     category: "Mecanicos",
     keywords: ["mecanicos", "reparacion", "servicio"],
   },
-
   // Combustible
   {
     title: "Cargas de Combustible",
@@ -129,7 +130,6 @@ const searchItems: SearchItem[] = [
     category: "Combustible",
     keywords: ["rendimiento", "ecm"],
   },
-
   // Finanzas
   {
     title: "Liquidación de Viajes",
@@ -152,7 +152,6 @@ const searchItems: SearchItem[] = [
     category: "Finanzas",
     keywords: ["banco", "pagos"],
   },
-
   // Admin
   {
     title: "Usuarios",
@@ -182,7 +181,6 @@ const searchItems: SearchItem[] = [
   },
 ];
 
-// Export a function to open the search from outside
 let openSearchFn: (() => void) | null = null;
 
 export function openGlobalSearch() {
@@ -193,10 +191,8 @@ export function GlobalSearch() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
 
-  // Register the open function for external access
   openSearchFn = () => setOpen(true);
 
-  // Keyboard shortcut handler
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
@@ -218,7 +214,6 @@ export function GlobalSearch() {
     [navigate],
   );
 
-  // Group items by category
   const groupedItems = searchItems.reduce(
     (acc, item) => {
       if (!acc[item.category]) {
@@ -231,38 +226,108 @@ export function GlobalSearch() {
   );
 
   return (
-    <CommandDialog open={open} onOpenChange={setOpen}>
-      <CommandInput placeholder="Buscar módulos, clients, unidades..." />
-      <CommandList>
-        <CommandEmpty>No se encontraron resultados.</CommandEmpty>
+    <CommandDialog
+      open={open}
+      onOpenChange={setOpen}
+      // Aplicamos la animación Tahoe y el estilo de panel de cristal
+      className="max-w-[650px] p-0 overflow-hidden border-none bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl animate-modal-show shadow-2xl rounded-2xl"
+    >
+      {/* 🛠 CORRECCIÓN ACCESIBILIDAD: Título invisible para lectores de pantalla */}
+      <DialogTitle className="sr-only">Buscador Global Spotlight</DialogTitle>
+
+      <div className="relative border-b border-slate-200 dark:border-white/10 px-2 py-1">
+        <CommandInput
+          placeholder="Buscar módulos, clientes, unidades..."
+          className="h-14 border-none bg-transparent focus:ring-0 text-[14px] font-medium placeholder:text-slate-400 dark:placeholder:text-white/30"
+        />
+        <div className="absolute right-6 top-1/2 -translate-y-1/2 flex items-center gap-1.5 opacity-40">
+          <CommandIcon className="h-3.5 w-3.5" />
+          <span className="text-[10px] font-black uppercase tracking-widest">
+            SPOTLIGHT
+          </span>
+        </div>
+      </div>
+
+      <CommandList className="max-h-[450px] custom-scrollbar p-2">
+        <CommandEmpty className="py-12 text-center">
+          <div className="flex flex-col items-center gap-3">
+            <Search className="h-8 w-8 text-slate-200 dark:text-white/10" />
+            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
+              Sin coincidencias encontradas
+            </p>
+          </div>
+        </CommandEmpty>
 
         {Object.entries(groupedItems).map(([category, items], idx) => (
           <div key={category}>
-            <CommandGroup heading={category}>
+            <CommandGroup
+              heading={
+                <span className="px-2 text-[10px] font-black uppercase tracking-[0.2em] text-brand-red mb-2 block">
+                  {category}
+                </span>
+              }
+            >
               {items.map((item) => (
                 <CommandItem
                   key={item.path}
                   value={`${item.title} ${item.keywords?.join(" ") || ""}`}
                   onSelect={() => handleSelect(item.path)}
-                  className="cursor-pointer"
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-3 rounded-xl cursor-pointer transition-all duration-200",
+                    "hover:bg-slate-100 dark:hover:bg-white/5",
+                    "data-[selected=true]:bg-brand-red data-[selected=true]:text-white data-[selected=true]:shadow-lg",
+                  )}
                 >
-                  <item.icon className="mr-3 h-4 w-4 opacity-60" />
-                  <span>{item.title}</span>
+                  <div
+                    className={cn(
+                      "p-2 rounded-lg bg-slate-100 dark:bg-white/5 group-data-[selected=true]:bg-white/20",
+                      "transition-colors",
+                    )}
+                  >
+                    <item.icon className="h-4 w-4" />
+                  </div>
+                  <span className="text-[13px] font-medium tracking-tight">
+                    {item.title}
+                  </span>
                 </CommandItem>
               ))}
             </CommandGroup>
-            {idx < Object.keys(groupedItems).length - 1 && <CommandSeparator />}
+            {idx < Object.keys(groupedItems).length - 1 && (
+              <CommandSeparator className="my-2 bg-slate-200 dark:bg-white/5 mx-2" />
+            )}
           </div>
         ))}
       </CommandList>
 
-      {/* Keyboard hint */}
-      <div className="border-t border-white/10 px-4 py-2 text-xs text-white/40 flex items-center justify-between">
-        <span>Navega con ↑↓ • Selecciona con Enter</span>
-        <span className="flex items-center gap-1">
-          <kbd className="px-1.5 py-0.5 rounded bg-white/10 font-mono">ESC</kbd>
-          <span>para cerrar</span>
-        </span>
+      {/* FOOTER: Safari Style Bar */}
+      <div className="bg-slate-50 dark:bg-black/20 px-6 py-4 border-t border-slate-200 dark:border-white/10 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5">
+            <kbd className="px-1.5 py-0.5 rounded bg-white dark:bg-white/10 border border-slate-200 dark:border-white/10 text-[9px] font-black shadow-sm">
+              ↑↓
+            </kbd>
+            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+              Navegar
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <kbd className="px-1.5 py-0.5 rounded bg-white dark:bg-white/10 border border-slate-200 dark:border-white/10 text-[9px] font-black shadow-sm">
+              ENTER
+            </kbd>
+            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+              Seleccionar
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <kbd className="px-1.5 py-0.5 rounded bg-white dark:bg-white/10 border border-slate-200 dark:border-white/10 text-[9px] font-black shadow-sm">
+            ESC
+          </kbd>
+          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+            Cerrar
+          </span>
+        </div>
       </div>
     </CommandDialog>
   );

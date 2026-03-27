@@ -173,7 +173,7 @@ export function EditUserModal({
               <DialogTitle className="text-2xl font-black heading-crisp text-white text-shadow-premium uppercase tracking-tighter">
                 Editar Usuario
               </DialogTitle>
-              <span className="text-[10px] font-bold text-white/40 uppercase tracking-[0.3em] mt-1">
+              <span className="text-[10px] font-bold text-brand-secondary uppercase tracking-[0.3em] mt-1">
                 Panel de Control de Perfil
               </span>
             </div>

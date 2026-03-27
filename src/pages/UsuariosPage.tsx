@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { PageHeader } from "@/components/ui/page-header";
-import { Card, CardContent } from "@/components/ui/card"; // Usaremos solo Card y CardContent para las métricas
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -54,8 +54,15 @@ import { userService } from "@/services/userService";
 import { toast } from "sonner";
 
 const UsuariosPage = () => {
-  const { users, isLoading, createUser, toggleStatus, resetPassword } =
-    useUsers();
+  // 🚀 FIX: Agregamos fetchUsers aquí para poder llamarlo después de editar
+  const {
+    users,
+    isLoading,
+    createUser,
+    toggleStatus,
+    resetPassword,
+    fetchUsers,
+  } = useUsers();
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -76,7 +83,6 @@ const UsuariosPage = () => {
       activos: users.filter((u) => u.estado === "activo").length,
       admins: users.filter((u) => u.rol?.toLowerCase().includes("admin"))
         .length,
-      // Suponemos que el backend devuelve un booleano en algún campo (por ej. is_2fa_enabled o twoFactorEnabled)
       con2FA: users.filter((u: any) => u.twoFactorEnabled || u.is_2fa_enabled)
         .length,
     };
@@ -121,7 +127,25 @@ const UsuariosPage = () => {
 
   const handleEditUser = async (userData: any, avatarFile?: File) => {
     try {
-      await userService.update(userData.id, userData);
+      // 🚀 TRADUCCIÓN DE CAMPOS: Frontend (React) -> Backend (FastAPI)
+      const apiData: any = {
+        nombre: userData.nombre,
+        apellido: userData.apellidos, // FastAPI espera 'apellido'
+        email: userData.email,
+        telefono: userData.telefono,
+        puesto: userData.puesto,
+        role_id: userData.rol ? Number(userData.rol) : null, // FastAPI espera 'role_id' como número
+        activo: userData.estado === "activo", // Convierte "activo" a booleano true/false
+        is_2fa_enabled: userData.twoFactorEnabled, // FastAPI espera 'is_2fa_enabled'
+      };
+
+      // Solo enviamos el password si realmente escribieron uno nuevo
+      if (userData.password && userData.password.trim() !== "") {
+        apiData.password = userData.password;
+      }
+
+      // Enviamos el apiData mapeado en lugar del userData crudo
+      await userService.update(userData.id, apiData);
 
       if (avatarFile) {
         await userService.uploadAvatar(userData.id, avatarFile);
@@ -131,7 +155,9 @@ const UsuariosPage = () => {
       }
 
       setIsEditModalOpen(false);
-      toast.info("La tabla se actualizará en unos segundos...");
+
+      // Refrescar la tabla para ver los cambios de inmediato
+      await fetchUsers();
     } catch (error: any) {
       console.error("Error updating user:", error);
       toast.error("Error al actualizar usuario");
@@ -428,10 +454,8 @@ const UsuariosPage = () => {
         open={showResetPasswordDialog}
         onOpenChange={setShowResetPasswordDialog}
       >
-        {/* Ya no necesitas poner glass-panel aquí, el componente base lo hace */}
         <AlertDialogContent>
           <AlertDialogHeader>
-            {/* El componente base ya lo hace font-black, uppercase y text-brand-navy */}
             <AlertDialogTitle>Seguridad de Acceso</AlertDialogTitle>
             <AlertDialogDescription>
               ¿Confirmas el reseteo de contraseña para{" "}
@@ -449,11 +473,9 @@ const UsuariosPage = () => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            {/* El diseño de Cancelar ya viene del base */}
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleResetPasswordConfirm}
-              // Solo dejamos el color y tamaño
               className="btn-primary-gradient h-10 px-6 border-none"
             >
               Confirmar Reset
@@ -488,7 +510,6 @@ const UsuariosPage = () => {
             <AlertDialogAction
               onClick={handleToggleStatusConfirm}
               className={cn(
-                // Solo dejamos el tamaño y la lógica del color destructivo/éxito
                 "h-10 px-6 border-none text-white",
                 selectedUser?.estado === "activo"
                   ? "bg-destructive hover:bg-destructive/90"
