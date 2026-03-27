@@ -4,27 +4,43 @@ import { cn } from "@/lib/utils";
 
 export interface ActionButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   asChild?: boolean;
-  variant?: string;
+  variant?: "primary" | "outline" | "ghost"; // Añadimos variantes para flexibilidad
   size?: "sm" | "md" | "lg";
 }
 
 const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProps>(
-  ({ className, asChild = false, size = "md", ...props }, ref) => {
+  (
+    { className, asChild = false, variant = "primary", size = "md", ...props },
+    ref,
+  ) => {
     const Comp = asChild ? Slot : "button";
 
     const sizeStyles = {
-      sm: "h-8 px-3 text-xs",
-      md: "h-9 px-4 text-sm",
-      lg: "h-10 px-6 text-sm",
+      sm: "h-8 px-3 text-xs rounded-lg",
+      md: "h-10 px-5 text-sm rounded-xl", // Radios más orgánicos para macOS Tahoe
+      lg: "h-12 px-8 text-base rounded-2xl",
     };
 
     return (
       <Comp
         className={cn(
-          "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium transition-colors",
-          "bg-emerald-600 text-white hover:bg-emerald-700",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2",
-          "disabled:pointer-events-none disabled:opacity-50",
+          // Estructura base
+          "inline-flex items-center justify-center gap-2 whitespace-nowrap font-semibold transition-all duration-200",
+          "focus-ring", // Clase de enfoque definida en tu CSS
+          "disabled:pointer-events-none disabled:opacity-40 disabled:grayscale",
+
+          // IDENTIDAD: Comportamiento Háptico
+          "haptic-press active:brightness-90",
+
+          // IDENTIDAD: Estilos de Variante
+          variant === "primary" && [
+            "btn-action-gradient", // Tu gradiente 3D verde de marca
+            "text-white text-shadow-premium", // Sombra de texto para legibilidad premium
+          ],
+
+          variant === "outline" &&
+            "border-2 border-action text-action hover:bg-action/5 bg-transparent",
+
           sizeStyles[size],
           className,
         )}

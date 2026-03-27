@@ -1,5 +1,16 @@
+"use client";
+
 import * as React from "react";
 import { cn } from "@/lib/utils";
+
+/**
+ * Liquid Glass DataTable - macOS Tahoe / Industrial Edition
+ * * Mejoras aplicadas:
+ * 1. Theme Awareness: Reacciona dinámicamente al switch Light/Dark.
+ * 2. Visual Depth: Header estilo "Instrument Panel" (Oscuro siempre para contraste).
+ * 3. Haptic Feedback: Filas con sutil desplazamiento y cambio de color al hover.
+ * 4. Ultra-Precision: Tipografía industrial con espaciado expansivo.
+ */
 
 interface DataTableProps extends React.HTMLAttributes<HTMLTableElement> {
   children: React.ReactNode;
@@ -8,17 +19,29 @@ interface DataTableProps extends React.HTMLAttributes<HTMLTableElement> {
 const DataTable = React.forwardRef<HTMLTableElement, DataTableProps>(
   ({ className, children, ...props }, ref) => {
     return (
-      <div className="relative w-full overflow-auto rounded-md border">
-        <table
-          ref={ref}
-          className={cn("w-full caption-bottom text-sm", className)}
-          {...props}
-        >
-          {children}
-        </table>
+      <div
+        className={cn(
+          "relative w-full overflow-hidden rounded-2xl transition-all duration-500",
+          "glass-panel shadow-[0_20px_50px_rgba(0,0,0,0.1)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.3)]",
+          "bg-white/60 dark:bg-brand-navy/30 backdrop-blur-xl border border-white/20 dark:border-white/10",
+        )}
+      >
+        <div className="overflow-auto custom-scrollbar max-h-[75vh]">
+          <table
+            ref={ref}
+            className={cn(
+              "w-full caption-bottom text-sm border-collapse",
+              "table-staggered", // Activa animaciones de entrada de index.css
+              className,
+            )}
+            {...props}
+          >
+            {children}
+          </table>
+        </div>
       </div>
     );
-  }
+  },
 );
 DataTable.displayName = "DataTable";
 
@@ -26,7 +49,16 @@ const DataTableHeader = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
 >(({ className, ...props }, ref) => (
-  <thead ref={ref} className={cn("bg-gray-50", className)} {...props} />
+  <thead
+    ref={ref}
+    className={cn(
+      // Mantenemos el Header oscuro tipo "Dashboard Industrial" en ambos modos
+      "bg-brand-navy/95 dark:bg-black/60 backdrop-blur-md sticky top-0 z-20",
+      "border-b border-white/10 shadow-sm",
+      className,
+    )}
+    {...props}
+  />
 ));
 DataTableHeader.displayName = "DataTableHeader";
 
@@ -36,7 +68,10 @@ const DataTableBody = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <tbody
     ref={ref}
-    className={cn("[&_tr:last-child]:border-0", className)}
+    className={cn(
+      "divide-y divide-slate-200/50 dark:divide-white/5 bg-transparent",
+      className,
+    )}
     {...props}
   />
 ));
@@ -49,8 +84,13 @@ const DataTableRow = React.forwardRef<
   <tr
     ref={ref}
     className={cn(
-      "border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted",
-      className
+      "interactive-row transition-all duration-300 group outline-none",
+      // Hover: Sutil elevación y cambio de fondo
+      "hover:bg-slate-500/[0.05] dark:hover:bg-white/[0.03]",
+      // Selección: Glow sutil en el borde izquierdo (Muy Apple)
+      "data-[state=selected]:bg-brand-red/[0.05] relative",
+      "data-[state=selected]:before:absolute data-[state=selected]:before:left-0 data-[state=selected]:before:top-0 data-[state=selected]:before:h-full data-[state=selected]:before:w-1 data-[state=selected]:before:bg-brand-red",
+      className,
     )}
     {...props}
   />
@@ -64,8 +104,11 @@ const DataTableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      "h-10 px-3 py-2 text-left align-middle font-semibold text-slate-600 uppercase text-xs tracking-wider",
-      className
+      "h-12 px-5 py-4 text-left align-middle transition-colors",
+      // Tipografía de Control Industrial
+      "text-[10px] font-black uppercase tracking-[0.25em]",
+      "text-white/60 hover:text-white group/head",
+      className,
     )}
     {...props}
   />
@@ -78,7 +121,13 @@ const DataTableCell = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <td
     ref={ref}
-    className={cn("px-3 py-2 align-middle text-sm text-slate-700", className)}
+    className={cn(
+      "px-5 py-4 align-middle transition-all duration-300",
+      // Tipografía Tahoe: Legibilidad Máxima
+      "text-[13px] font-medium text-slate-700 dark:text-white/70 tracking-tight",
+      "group-hover:text-slate-900 dark:group-hover:text-white group-hover:translate-x-0.5",
+      className,
+    )}
     {...props}
   />
 ));

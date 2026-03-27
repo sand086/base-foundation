@@ -254,7 +254,7 @@ export function AuditLogPanel({ open, onOpenChange }: AuditLogPanelProps) {
                 <span className="text-2xl font-black heading-crisp text-white text-shadow-premium uppercase tracking-tighter">
                   Log de Auditoría
                 </span>
-                <span className="text-[10px] font-bold text-white/40 uppercase tracking-[0.3em]">
+                <span className="text-[10px] font-bold text-brand-secondary uppercase tracking-[0.3em]">
                   Monitoreo de Seguridad de Sistema
                 </span>
               </div>

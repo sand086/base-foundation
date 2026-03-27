@@ -328,7 +328,7 @@ export function AddTicketModal({
 
     return [
       {
-        label: "📍 Carga Local / Pendiente de Asignar (Sin Viaje)",
+        label: "Carga Local / Pendiente de Asignar (Sin Viaje)",
         value: "none",
       },
       ...list,

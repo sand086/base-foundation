@@ -1,8 +1,14 @@
 import type { Config } from "tailwindcss";
+import tailwindcssAnimate from "tailwindcss-animate";
 
 export default {
   darkMode: ["class"],
-  content: ["./pages/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./app/**/*.{ts,tsx}", "./src/**/*.{ts,tsx}"],
+  content: [
+    "./pages/**/*.{ts,tsx}",
+    "./components/**/*.{ts,tsx}",
+    "./app/**/*.{ts,tsx}",
+    "./src/**/*.{ts,tsx}",
+  ],
   prefix: "",
   theme: {
     container: {
@@ -63,6 +69,7 @@ export default {
           green: "hsl(var(--brand-green))",
           dark: "hsl(var(--brand-dark))",
           black: "hsl(var(--brand-black))",
+          navy: "#0B1120",
         },
         // TMS Status Colors
         status: {
@@ -79,7 +86,7 @@ export default {
           "info-bg": "hsl(var(--status-info-bg))",
           "info-border": "hsl(var(--status-info-border))",
         },
-        // Action Button Colors (Brand Green)
+        // Action Button Colors
         action: {
           DEFAULT: "hsl(var(--action))",
           hover: "hsl(var(--action-hover))",
@@ -114,5 +121,5 @@ export default {
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [tailwindcssAnimate],
 } satisfies Config;

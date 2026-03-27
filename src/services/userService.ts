@@ -42,6 +42,10 @@ export const userService = {
     });
     return data;
   },
+  delete: async (id: string) => {
+    const { data } = await axiosClient.delete(`/users/${id}`);
+    return data;
+  },
 
   async uploadAvatar(userId: string | number, file: File) {
     const formData = new FormData();

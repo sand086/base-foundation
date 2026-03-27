@@ -150,7 +150,7 @@ export default function TwoFactorAuth() {
                 Verificación de Seguridad
               </h1>
 
-              <p className="mt-3 text-base text-white/60 leading-relaxed">
+              <p className="mt-3 text-base text-brand-secondary leading-relaxed">
                 Hola <span className="text-white font-medium">{userName}</span>,
                 ingresa el código de tu aplicación autenticadora.
               </p>

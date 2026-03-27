@@ -135,7 +135,7 @@ export default function Login() {
             <form onSubmit={handleSubmit} className="mt-8 space-y-4">
               {/* Username */}
               <div className="relative group">
-                <User className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40 transition-all duration-300 group-focus-within:text-white group-focus-within:scale-110" />
+                <User className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-secondary transition-all duration-300 group-focus-within:text-white group-focus-within:scale-110" />
                 <Input
                   id="username"
                   type="email"
@@ -144,13 +144,13 @@ export default function Login() {
                   onChange={(e) => setUsername(e.target.value)}
                   required
                   autoComplete="username"
-                  className="login-input h-12 rounded-xl border border-white/20 bg-white/10 pl-11 pr-4 text-[15px] text-white placeholder:text-white/40 transition-all duration-300 focus:bg-white/15 focus:border-white/30 focus:shadow-[0_0_20px_rgba(255,255,255,0.1)] focus-visible:ring-0 focus-visible:ring-offset-0 hover:bg-white/12 hover:border-white/25"
+                  className="login-input h-12 rounded-xl border border-white/20 bg-white/10 pl-11 pr-4 text-[15px] text-white placeholder:text-brand-secondary transition-all duration-300 focus:bg-white/15 focus:border-white/30 focus:shadow-[0_0_20px_rgba(255,255,255,0.1)] focus-visible:ring-0 focus-visible:ring-offset-0 hover:bg-white/12 hover:border-white/25"
                 />
               </div>
 
               {/* Password */}
               <div className="relative group">
-                <Lock className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40 transition-all duration-300 group-focus-within:text-white group-focus-within:scale-110" />
+                <Lock className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-secondary transition-all duration-300 group-focus-within:text-white group-focus-within:scale-110" />
                 <Input
                   id="password"
                   type={showPass ? "text" : "password"}
@@ -159,12 +159,12 @@ export default function Login() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   autoComplete="current-password"
-                  className="login-input h-12 rounded-xl border border-white/20 bg-white/10 pl-11 pr-12 text-[15px] text-white placeholder:text-white/40 transition-all duration-300 focus:bg-white/15 focus:border-white/30 focus:shadow-[0_0_20px_rgba(255,255,255,0.1)] focus-visible:ring-0 focus-visible:ring-offset-0 hover:bg-white/12 hover:border-white/25"
+                  className="login-input h-12 rounded-xl border border-white/20 bg-white/10 pl-11 pr-12 text-[15px] text-white placeholder:text-brand-secondary transition-all duration-300 focus:bg-white/15 focus:border-white/30 focus:shadow-[0_0_20px_rgba(255,255,255,0.1)] focus-visible:ring-0 focus-visible:ring-offset-0 hover:bg-white/12 hover:border-white/25"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPass((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex h-9 w-9 items-center justify-center rounded-lg text-white/40 transition-all duration-300 hover:bg-white/10 hover:text-white active:scale-95"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex h-9 w-9 items-center justify-center rounded-lg text-brand-secondary transition-all duration-300 hover:bg-white/10 hover:text-white active:scale-95"
                 >
                   {showPass ? (
                     <EyeOff className="h-5 w-5" />
@@ -176,7 +176,7 @@ export default function Login() {
 
               {/* Extras */}
               <div className="flex items-center justify-between pt-1 text-sm">
-                <label className="flex cursor-pointer items-center gap-2 text-white/60 hover:text-white/80 transition-colors">
+                <label className="flex cursor-pointer items-center gap-2 text-brand-secondary hover:text-white/80 transition-colors">
                   <input
                     type="checkbox"
                     checked={remember}
@@ -211,7 +211,7 @@ export default function Login() {
                 )}
               </Button>
 
-              <div className="pt-3 text-center text-[11px] text-white/60">
+              <div className="pt-3 text-center text-[11px] text-brand-secondary">
                 ¿No tienes acceso? Comunícate con el soporte técnico o con el
                 administrador. <small>admin@transportes.com</small>
               </div>

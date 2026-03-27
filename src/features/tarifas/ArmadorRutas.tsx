@@ -688,7 +688,7 @@ export const ArmadorRutas: React.FC = () => {
                   <td class="text-center"><b style="color: #64748b;">${i + 1}</b></td>
                   <td>
                     <span style="font-weight: 900; color: #0f172a; font-size: 14px;">${seg.nombre_segmento.toUpperCase()}</span><br/>
-                    <span style="color: #64748b; font-size: 10px; font-weight: bold; letter-spacing: 1px; text-transform: uppercase;">${seg.toll_booth_id ? "📍 CASETA DE PEAJE SCT" : "🛣️ TRAMO LIBRE"}</span>
+                    <span style="color: #64748b; font-size: 10px; font-weight: bold; letter-spacing: 1px; text-transform: uppercase;">${seg.toll_booth_id ? "CASETA DE PEAJE SCT" : "TRAMO LIBRE"}</span>
                   </td>
                   <td style="font-weight: bold; color: #475569; text-transform: uppercase;">${seg.carretera || "-"} ${seg.estado ? `(${seg.estado})` : ""}</td>
                   <td class="text-right font-mono" style="font-size: 15px; font-weight: bold; color: #0f172a;">$${Number(isFull ? seg.costo_momento_full : seg.costo_momento_sencillo).toFixed(2)}</td>
@@ -962,7 +962,7 @@ export const ArmadorRutas: React.FC = () => {
           </div>
 
           <div className="mt-6 p-4 bg-brand-navy rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-inner">
-            <span className="text-brand-navy/60 text-[10px] uppercase font-black tracking-[0.2em] flex items-center gap-2 text-white/60">
+            <span className="text-brand-navy/60 text-[10px] uppercase font-black tracking-[0.2em] flex items-center gap-2 text-brand-secondary">
               <RouteIcon className="h-4 w-4 text-brand-red" /> Identificador
               Oficial:
             </span>
@@ -1257,7 +1257,7 @@ export const ArmadorRutas: React.FC = () => {
                             {t.tramo}
                             {((t as any).carretera || (t as any).estado) && (
                               <span className="block mt-0.5 text-slate-500">
-                                📍 {(t as any).carretera}{" "}
+                                {(t as any).carretera}{" "}
                                 {(t as any).carretera && (t as any).estado
                                   ? "•"
                                   : ""}{" "}
@@ -1470,8 +1470,8 @@ export const ArmadorRutas: React.FC = () => {
                                   )}
                                 >
                                   {seg.toll_booth_id
-                                    ? "📍 CASETA DE PEAJE SCT"
-                                    : "🛣️ TRAMO LIBRE"}
+                                    ? "CASETA DE PEAJE SCT"
+                                    : "TRAMO LIBRE"}
                                 </Badge>
                               </div>
                               {(seg.carretera || seg.estado) && (

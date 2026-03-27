@@ -207,7 +207,7 @@ export function UpdateStatusModal({
     () => [
       {
         value: "en_transito",
-        label: "📍 Reporte de Posición (Normal)",
+        label: "Reporte de Posición (Normal)",
         color: "bg-blue-500",
       },
       {

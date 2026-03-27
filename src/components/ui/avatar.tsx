@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import AvatarDefault from "@/assets/img/usuarios/avatar3.png";
 
 const DEFAULT_AVATAR_SRC = AvatarDefault;
+
 const Avatar = React.forwardRef<
   React.ElementRef<typeof AvatarPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Root>
@@ -13,6 +14,9 @@ const Avatar = React.forwardRef<
     ref={ref}
     className={cn(
       "relative flex h-10 w-10 shrink-0 overflow-hidden rounded-full",
+      // IDENTIDAD: Efecto de cristal y elevación sutil
+      "border border-white/20 shadow-sm glass-surface",
+      "transition-transform duration-200 haptic-press cursor-pointer",
       className,
     )}
     {...props}
@@ -31,7 +35,11 @@ const AvatarImage = React.forwardRef<
   <AvatarPrimitive.Image
     ref={ref}
     src={src ?? DEFAULT_AVATAR_SRC}
-    className={cn("aspect-square h-full w-full", className)}
+    // IDENTIDAD: Animación de entrada suave
+    className={cn(
+      "aspect-square h-full w-full object-cover animate-data-loaded",
+      className,
+    )}
     {...props}
   />
 ));
@@ -44,7 +52,10 @@ const AvatarFallback = React.forwardRef<
   <AvatarPrimitive.Fallback
     ref={ref}
     className={cn(
-      "flex h-full w-full items-center justify-center rounded-full bg-muted",
+      "flex h-full w-full items-center justify-center rounded-full font-medium uppercase",
+      // IDENTIDAD: Gradiente sutil en lugar de color gris plano
+      "bg-gradient-to-br from-muted to-muted/30 text-muted-foreground",
+      "animate-pulse-slow", // Animación lenta de tu CSS
       className,
     )}
     {...props}
