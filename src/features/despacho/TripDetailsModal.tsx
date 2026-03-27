@@ -282,7 +282,7 @@ export function TripDetailsModal({
         {
           status: "entregado",
           location: selectedTerminal,
-          comments: `📍 LLEGADA REGISTRADA: El equipo fue entregado en: ${selectedTerminal}.`,
+          comments: `LLEGADA REGISTRADA: El equipo fue entregado en: ${selectedTerminal}.`,
         },
         true,
       );

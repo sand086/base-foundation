@@ -135,7 +135,7 @@ def seed_sat_catalogs():
             nueva_loc = SatLocationCode(**loc)
             db.add(nueva_loc)
             print(
-                f"📍 Ubicación agregada: CP {loc['codigo_postal']} ({loc['estado_clave']})"
+                f"Ubicación agregada: CP {loc['codigo_postal']} ({loc['estado_clave']})"
             )
 
     db.commit()

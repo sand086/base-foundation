@@ -688,7 +688,7 @@ export const ArmadorRutas: React.FC = () => {
                   <td class="text-center"><b style="color: #64748b;">${i + 1}</b></td>
                   <td>
                     <span style="font-weight: 900; color: #0f172a; font-size: 14px;">${seg.nombre_segmento.toUpperCase()}</span><br/>
-                    <span style="color: #64748b; font-size: 10px; font-weight: bold; letter-spacing: 1px; text-transform: uppercase;">${seg.toll_booth_id ? "📍 CASETA DE PEAJE SCT" : "🛣️ TRAMO LIBRE"}</span>
+                    <span style="color: #64748b; font-size: 10px; font-weight: bold; letter-spacing: 1px; text-transform: uppercase;">${seg.toll_booth_id ? "CASETA DE PEAJE SCT" : "TRAMO LIBRE"}</span>
                   </td>
                   <td style="font-weight: bold; color: #475569; text-transform: uppercase;">${seg.carretera || "-"} ${seg.estado ? `(${seg.estado})` : ""}</td>
                   <td class="text-right font-mono" style="font-size: 15px; font-weight: bold; color: #0f172a;">$${Number(isFull ? seg.costo_momento_full : seg.costo_momento_sencillo).toFixed(2)}</td>
@@ -1257,7 +1257,7 @@ export const ArmadorRutas: React.FC = () => {
                             {t.tramo}
                             {((t as any).carretera || (t as any).estado) && (
                               <span className="block mt-0.5 text-slate-500">
-                                📍 {(t as any).carretera}{" "}
+                                {(t as any).carretera}{" "}
                                 {(t as any).carretera && (t as any).estado
                                   ? "•"
                                   : ""}{" "}
@@ -1470,8 +1470,8 @@ export const ArmadorRutas: React.FC = () => {
                                   )}
                                 >
                                   {seg.toll_booth_id
-                                    ? "📍 CASETA DE PEAJE SCT"
-                                    : "🛣️ TRAMO LIBRE"}
+                                    ? "CASETA DE PEAJE SCT"
+                                    : "TRAMO LIBRE"}
                                 </Badge>
                               </div>
                               {(seg.carretera || seg.estado) && (
