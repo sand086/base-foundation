@@ -2,9 +2,18 @@ import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
 import { cn } from "@/lib/utils";
 
+/**
+ * ActionButton - macOS Tahoe / Industrial Edition
+ * Refactorización Senior:
+ * 1. Theme Awareness: Soporte nativo para Dark Mode.
+ * 2. Haptic Feedback: Física de presión active:scale-[0.96].
+ * 3. Estética: Gradientes 3D para acciones primarias y bordes HD para outline.
+ * 4. Tipografía: Tracking expansivo en tamaño LG para look industrial.
+ */
+
 export interface ActionButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   asChild?: boolean;
-  variant?: "primary" | "outline" | "ghost"; // Añadimos variantes para flexibilidad
+  variant?: "primary" | "outline" | "ghost";
   size?: "sm" | "md" | "lg";
 }
 
@@ -15,31 +24,42 @@ const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProps>(
   ) => {
     const Comp = asChild ? Slot : "button";
 
+    // Mapeo de tamaños con tipografía de precisión
     const sizeStyles = {
-      sm: "h-8 px-3 text-xs rounded-lg",
-      md: "h-10 px-5 text-sm rounded-xl", // Radios más orgánicos para macOS Tahoe
-      lg: "h-12 px-8 text-base rounded-2xl",
+      sm: "h-8 px-3 text-[11px] font-bold rounded-lg",
+      md: "h-10 px-5 text-[13px] font-bold rounded-xl",
+      lg: "h-12 px-8 text-[13px] font-black uppercase tracking-[0.2em] rounded-2xl",
     };
 
     return (
       <Comp
         className={cn(
-          // Estructura base
-          "inline-flex items-center justify-center gap-2 whitespace-nowrap font-semibold transition-all duration-200",
-          "focus-ring", // Clase de enfoque definida en tu CSS
+          // ESTRUCTURA BASE
+          "inline-flex items-center justify-center gap-2 whitespace-nowrap transition-all duration-300 outline-none",
           "disabled:pointer-events-none disabled:opacity-40 disabled:grayscale",
 
-          // IDENTIDAD: Comportamiento Háptico
-          "haptic-press active:brightness-90",
+          // COMPORTAMIENTO HÁPTICO (macOS Style)
+          "haptic-press active:scale-[0.96] hover:brightness-110",
 
-          // IDENTIDAD: Estilos de Variante
+          // VARIANTES DE DISEÑO
           variant === "primary" && [
-            "btn-action-gradient", // Tu gradiente 3D verde de marca
-            "text-white text-shadow-premium", // Sombra de texto para legibilidad premium
+            "btn-action-gradient text-white", // Tu gradiente verde 3D
+            "shadow-[0_4px_15px_rgba(0,151,64,0.3)] dark:shadow-[0_4px_20px_rgba(0,151,64,0.15)]",
+            "border-none text-shadow-premium",
           ],
 
-          variant === "outline" &&
-            "border-2 border-action text-action hover:bg-action/5 bg-transparent",
+          variant === "outline" && [
+            "bg-transparent border-2",
+            "border-brand-green/30 dark:border-brand-green/20",
+            "text-brand-green dark:text-emerald-400",
+            "hover:bg-brand-green/5 dark:hover:bg-emerald-500/10",
+          ],
+
+          variant === "ghost" && [
+            "bg-transparent",
+            "text-brand-green dark:text-emerald-400",
+            "hover:bg-brand-green/10 dark:hover:bg-emerald-500/20",
+          ],
 
           sizeStyles[size],
           className,
@@ -50,6 +70,7 @@ const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProps>(
     );
   },
 );
+
 ActionButton.displayName = "ActionButton";
 
 export { ActionButton };

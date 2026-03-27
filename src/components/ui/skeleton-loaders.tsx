@@ -1,5 +1,21 @@
 import { cn } from "@/lib/utils";
 
+/**
+ * Skeletons UI - macOS Tahoe / Industrial Edition
+ * Refactorización:
+ * 1. Liquid Shimmer: Efecto de barrido de luz direccional (no solo pulso).
+ * 2. Glassmorphism: Contenedores con backdrop-blur y bordes HD.
+ * 3. Industrial Layout: Proporciones exactas de la "Instrument Edition".
+ */
+
+// Clase base para el efecto de brillo animado
+const shimmerClass = cn(
+  "relative overflow-hidden rounded-md",
+  "bg-slate-200/50 dark:bg-white/5",
+  "before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_2s_infinite]",
+  "before:bg-gradient-to-r before:from-transparent before:via-white/20 dark:before:via-white/5 before:to-transparent",
+);
+
 // ============================================
 // KPI Card Skeleton
 // ============================================
@@ -7,23 +23,24 @@ export function KPISkeleton({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        "glass-card rounded-xl p-6 space-y-4",
-        className
+        "glass-panel rounded-2xl p-6 space-y-5 transition-all duration-500",
+        "bg-white/60 dark:bg-brand-navy/40 border border-slate-200/60 dark:border-white/10 shadow-sm",
+        className,
       )}
     >
       {/* Icon + Title row */}
       <div className="flex items-center justify-between">
-        <div className="h-4 w-24 rounded-md glass-shimmer" />
-        <div className="h-8 w-8 rounded-lg glass-shimmer" />
+        <div className={cn("h-3 w-24", shimmerClass)} />
+        <div className={cn("h-10 w-10 rounded-xl", shimmerClass)} />
       </div>
-      
+
       {/* Main value */}
-      <div className="h-9 w-32 rounded-md glass-shimmer" />
-      
+      <div className={cn("h-10 w-32", shimmerClass)} />
+
       {/* Trend indicator */}
-      <div className="flex items-center gap-2">
-        <div className="h-4 w-12 rounded-md glass-shimmer" />
-        <div className="h-4 w-20 rounded-md glass-shimmer" />
+      <div className="flex items-center gap-2 pt-2">
+        <div className={cn("h-4 w-12 rounded-full", shimmerClass)} />
+        <div className={cn("h-3 w-20", shimmerClass)} />
       </div>
     </div>
   );
@@ -45,31 +62,38 @@ export function DashboardKPIsSkeleton({ count = 4 }: { count?: number }) {
 // ============================================
 // Chart Skeleton
 // ============================================
-export function ChartSkeleton({ 
+export function ChartSkeleton({
   className,
-  height = "h-[300px]" 
-}: { 
+  height = "h-[300px]",
+}: {
   className?: string;
   height?: string;
 }) {
   return (
     <div
       className={cn(
-        "glass-card rounded-xl p-6 space-y-4",
-        className
+        "glass-panel rounded-2xl p-6 space-y-6 transition-all duration-500",
+        "bg-white/60 dark:bg-brand-navy/40 border border-slate-200/60 dark:border-white/10",
+        className,
       )}
     >
       {/* Chart header */}
       <div className="flex items-center justify-between">
-        <div className="space-y-2">
-          <div className="h-5 w-32 rounded-md glass-shimmer" />
-          <div className="h-3 w-48 rounded-md glass-shimmer" />
+        <div className="space-y-3">
+          <div className={cn("h-5 w-40", shimmerClass)} />
+          <div className={cn("h-3 w-64 opacity-60", shimmerClass)} />
         </div>
-        <div className="h-8 w-24 rounded-md glass-shimmer" />
+        <div className={cn("h-10 w-28 rounded-xl", shimmerClass)} />
       </div>
-      
-      {/* Chart area */}
-      <div className={cn("rounded-lg glass-shimmer", height)} />
+
+      {/* Chart area: Hollowed Glass Effect */}
+      <div
+        className={cn(
+          "rounded-2xl border border-slate-200/30 dark:border-white/5",
+          height,
+          shimmerClass,
+        )}
+      />
     </div>
   );
 }
@@ -77,43 +101,45 @@ export function ChartSkeleton({
 // ============================================
 // Table Skeleton
 // ============================================
-export function TableSkeleton({ 
+export function TableSkeleton({
   rows = 5,
   columns = 4,
-  className 
-}: { 
+  className,
+}: {
   rows?: number;
   columns?: number;
   className?: string;
 }) {
   return (
-    <div className={cn("glass-card rounded-xl overflow-hidden", className)}>
-      {/* Table header */}
-      <div className="bg-muted/30 px-4 py-3 flex gap-4">
+    <div
+      className={cn(
+        "glass-panel rounded-2xl overflow-hidden border border-slate-200/60 dark:border-white/10 shadow-xl",
+        "bg-white/40 dark:bg-brand-navy/20 backdrop-blur-md",
+        className,
+      )}
+    >
+      {/* Table header: Estilo Instrument Panel Oscuro (Match con DataTable real) */}
+      <div className="bg-brand-navy/95 dark:bg-black/60 px-6 py-4 flex gap-6 border-b border-white/10">
         {Array.from({ length: columns }).map((_, i) => (
-          <div 
-            key={i} 
-            className="h-4 rounded-md glass-shimmer"
+          <div
+            key={i}
+            className={cn("h-3 opacity-30", shimmerClass)}
             style={{ width: `${100 / columns}%` }}
           />
         ))}
       </div>
-      
+
       {/* Table rows */}
-      <div className="divide-y divide-border/50">
+      <div className="divide-y divide-slate-200/50 dark:divide-white/5">
         {Array.from({ length: rows }).map((_, rowIdx) => (
-          <div 
-            key={rowIdx} 
-            className="px-4 py-3 flex gap-4"
-            style={{ animationDelay: `${rowIdx * 50}ms` }}
-          >
+          <div key={rowIdx} className="px-6 py-4 flex gap-6 items-center">
             {Array.from({ length: columns }).map((_, colIdx) => (
-              <div 
-                key={colIdx} 
-                className="h-4 rounded-md glass-shimmer"
-                style={{ 
-                  width: colIdx === 0 ? '30%' : `${70 / (columns - 1)}%`,
-                  animationDelay: `${(rowIdx * columns + colIdx) * 30}ms`
+              <div
+                key={colIdx}
+                className={cn("h-4", shimmerClass)}
+                style={{
+                  width: colIdx === 0 ? "35%" : `${65 / (columns - 1)}%`,
+                  opacity: 1 - rowIdx * 0.1, // Desvanecimiento gradual premium
                 }}
               />
             ))}
@@ -129,16 +155,16 @@ export function TableSkeleton({
 // ============================================
 export function DashboardSkeleton() {
   return (
-    <div className="space-y-6 animate-page-enter">
+    <div className="space-y-8 animate-page-enter">
       {/* Page header skeleton */}
       <div className="flex items-center justify-between">
-        <div className="space-y-2">
-          <div className="h-8 w-48 rounded-md glass-shimmer" />
-          <div className="h-4 w-64 rounded-md glass-shimmer" />
+        <div className="space-y-3">
+          <div className={cn("h-9 w-64", shimmerClass)} />
+          <div className={cn("h-4 w-80 opacity-60", shimmerClass)} />
         </div>
-        <div className="flex gap-2">
-          <div className="h-9 w-24 rounded-md glass-shimmer" />
-          <div className="h-9 w-32 rounded-md glass-shimmer" />
+        <div className="flex gap-3">
+          <div className={cn("h-11 w-28 rounded-xl", shimmerClass)} />
+          <div className={cn("h-11 w-36 rounded-xl", shimmerClass)} />
         </div>
       </div>
 
@@ -146,7 +172,7 @@ export function DashboardSkeleton() {
       <DashboardKPIsSkeleton count={4} />
 
       {/* Charts row */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-2">
         <ChartSkeleton />
         <ChartSkeleton />
       </div>
@@ -158,74 +184,16 @@ export function DashboardSkeleton() {
 }
 
 // ============================================
-// Page Loading Skeleton
+// Inline Helpers
 // ============================================
-export function PageSkeleton({ 
-  showHeader = true,
-  showTable = true,
-  tableRows = 8 
-}: { 
-  showHeader?: boolean;
-  showTable?: boolean;
-  tableRows?: number;
-}) {
-  return (
-    <div className="space-y-6 animate-page-enter">
-      {showHeader && (
-        <div className="flex items-center justify-between">
-          <div className="space-y-2">
-            <div className="h-8 w-48 rounded-md glass-shimmer" />
-            <div className="h-4 w-72 rounded-md glass-shimmer" />
-          </div>
-          <div className="h-9 w-32 rounded-md glass-shimmer" />
-        </div>
-      )}
-
-      {showTable && <TableSkeleton rows={tableRows} columns={6} />}
-    </div>
-  );
-}
-
-// ============================================
-// Card Content Skeleton
-// ============================================
-export function CardContentSkeleton({ lines = 3 }: { lines?: number }) {
-  return (
-    <div className="space-y-3">
-      {Array.from({ length: lines }).map((_, i) => (
-        <div 
-          key={i} 
-          className="h-4 rounded-md glass-shimmer"
-          style={{ 
-            width: i === lines - 1 ? '60%' : '100%',
-            animationDelay: `${i * 100}ms`
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
-// ============================================
-// Inline Skeleton (for text placeholders)
-// ============================================
-export function InlineSkeleton({ 
+export function InlineSkeleton({
   width = "w-24",
   height = "h-4",
-  className 
-}: { 
+  className,
+}: {
   width?: string;
   height?: string;
   className?: string;
 }) {
-  return (
-    <span 
-      className={cn(
-        "inline-block rounded glass-shimmer",
-        width,
-        height,
-        className
-      )} 
-    />
-  );
+  return <span className={cn(shimmerClass, width, height, className)} />;
 }

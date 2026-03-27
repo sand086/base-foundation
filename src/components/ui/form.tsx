@@ -1,3 +1,5 @@
+"use client";
+
 import * as React from "react";
 import * as LabelPrimitive from "@radix-ui/react-label";
 import { Slot } from "@radix-ui/react-slot";
@@ -78,10 +80,10 @@ const FormItem = React.forwardRef<
 
   return (
     <FormItemContext.Provider value={{ id }}>
-      {/* IDENTIDAD: Animación de entrada por fila */}
+      {/* IDENTIDAD: Animación fluida de entrada por fila (Tahoe UI) */}
       <div
         ref={ref}
-        className={cn("space-y-1.5 animate-row-enter", className)}
+        className={cn("space-y-2 animate-row-enter w-full", className)}
         {...props}
       />
     </FormItemContext.Provider>
@@ -98,10 +100,10 @@ const FormLabel = React.forwardRef<
   return (
     <Label
       ref={ref}
-      // IDENTIDAD: Label que cambia al Brand Red si hay error
+      // REGLA DE ORO: Tipografía Industrial + Reacción al Dark Mode y Errores
       className={cn(
-        "font-semibold tracking-tight transition-colors duration-200",
-        error && "text-[hsl(var(--brand-red))]",
+        "text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 transition-colors duration-300",
+        error && "text-brand-red dark:text-brand-red",
         className,
       )}
       htmlFor={formItemId}
@@ -128,13 +130,12 @@ const FormControl = React.forwardRef<
           : `${formDescriptionId} ${formMessageId}`
       }
       aria-invalid={!!error}
-      // IDENTIDAD: El control (input) recibe bordes rojos automáticos si hay error
-      className={
-        cn[
-          error &&
-            "border-[hsl(var(--brand-red))/50] bg-[hsl(var(--brand-red))/5]"
-        ]
-      }
+      // CORRECCIÓN CRÍTICA: Se cambió cn[] por cn()
+      // IDENTIDAD: Inyecta bordes y glow de error directo al Input/Select hijo
+      className={cn(
+        error &&
+          "border-brand-red/60 focus-visible:ring-brand-red/50 bg-brand-red/5 dark:bg-brand-red/10 dark:border-brand-red/50 dark:focus-visible:ring-brand-red/50",
+      )}
       {...props}
     />
   );
@@ -151,8 +152,9 @@ const FormDescription = React.forwardRef<
     <p
       ref={ref}
       id={formDescriptionId}
+      // IDENTIDAD: Datos secundarios con tracking-tight para alta legibilidad
       className={cn(
-        "text-[11px] text-muted-foreground/60 leading-none",
+        "text-[11px] font-medium tracking-tight text-slate-500 dark:text-slate-400 leading-relaxed",
         className,
       )}
       {...props}
@@ -174,9 +176,9 @@ const FormMessage = React.forwardRef<
     <p
       ref={ref}
       id={formMessageId}
-      // IDENTIDAD: Mensaje de error con tipografía micro-branding y animación
+      // REGLA DE ORO: Alerta de Error con tipografía Industrial e In-Animation
       className={cn(
-        "text-[10px] font-black uppercase tracking-widest text-[hsl(var(--brand-red))] animate-page-enter mt-1 ml-1",
+        "text-[9px] font-black uppercase tracking-[0.2em] text-brand-red dark:text-brand-red animate-in fade-in slide-in-from-top-1 mt-1.5 ml-1",
         className,
       )}
       {...props}

@@ -7,6 +7,10 @@ import { cn } from "@/lib/utils";
 
 const Tabs = TabsPrimitive.Root;
 
+/**
+ * TabsList - El Riel Industrial
+ * Refactorización: Glassmorphism HD y bordes de alta definición.
+ */
 const TabsList = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.List>,
   React.ComponentPropsWithoutRef<typeof TabsPrimitive.List>
@@ -14,8 +18,11 @@ const TabsList = React.forwardRef<
   <TabsPrimitive.List
     ref={ref}
     className={cn(
-      // Estética Tahoe: El "riel" de las pestañas
-      "inline-flex h-12 items-center justify-center rounded-2xl bg-slate-100/80 p-1.5 text-slate-500 shadow-inner border border-slate-200/50 backdrop-blur-md",
+      "inline-flex h-12 items-center justify-center rounded-2xl p-1.5 transition-all duration-300",
+      // REGLA: Glassmorphism + Reactividad
+      "bg-slate-100/50 dark:bg-brand-navy/40 backdrop-blur-xl",
+      // REGLA: Bordes HD
+      "border border-slate-200/80 dark:border-white/10 shadow-inner",
       className,
     )}
     {...props}
@@ -23,6 +30,10 @@ const TabsList = React.forwardRef<
 ));
 TabsList.displayName = TabsPrimitive.List.displayName;
 
+/**
+ * TabsTrigger - El Selector Táctil
+ * Refactorización: Tipografía industrial y estado activo con Identidad de Marca.
+ */
 const TabsTrigger = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.Trigger>,
   React.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger>
@@ -30,17 +41,20 @@ const TabsTrigger = React.forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      // Base: Tipografía nítida y transiciones suaves
-      "inline-flex items-center justify-center whitespace-nowrap rounded-[10px] px-4 py-2 text-sm font-bold tracking-tight ring-offset-background transition-all duration-300 ease-in-out haptic-press",
+      // BASE: Tipografía Industrial Estricta (Regla de Oro)
+      "inline-flex items-center justify-center whitespace-nowrap rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 ease-out haptic-press outline-none",
 
-      // Hover: Sutil cambio de color antes de clickear
-      "hover:text-slate-700",
+      // COLORES ESTÁNDAR
+      "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white",
 
-      // Estado Activo (Premium Tahoe): La pestaña se "eleva" y brilla con el color de marca
-      "data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-[0_2px_10px_rgba(0,0,0,0.08)] data-[state=active]:scale-[1.02]",
+      // ESTADO ACTIVO (Premium Tahoe): Elevación y Brand Red
+      "data-[state=active]:bg-white dark:data-[state=active]:bg-white/10",
+      "data-[state=active]:text-brand-red dark:data-[state=active]:text-white",
+      "data-[state=active]:shadow-[0_4px_12px_rgba(0,0,0,0.08)] dark:data-[state=active]:shadow-[0_4px_12px_rgba(0,0,0,0.3)]",
+      "data-[state=active]:scale-[1.02]",
 
-      // Accesibilidad con el halo Rojo Kemper
-      "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/10 disabled:pointer-events-none disabled:opacity-50",
+      // ACCESIBILIDAD
+      "focus-visible:ring-2 focus-visible:ring-brand-red/50 disabled:pointer-events-none disabled:opacity-30",
 
       className,
     )}
@@ -49,6 +63,10 @@ const TabsTrigger = React.forwardRef<
 ));
 TabsTrigger.displayName = TabsPrimitive.Trigger.displayName;
 
+/**
+ * TabsContent - El Panel de Datos
+ * Refactorización: Animación de entrada Tahoe (Fade + Slide).
+ */
 const TabsContent = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof TabsPrimitive.Content>
@@ -56,8 +74,9 @@ const TabsContent = React.forwardRef<
   <TabsPrimitive.Content
     ref={ref}
     className={cn(
-      // Animación de entrada: El contenido aparece con un suave fade y sube 4px
-      "mt-4 ring-offset-background focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/10 animate-in fade-in slide-in-from-bottom-2 duration-300",
+      "mt-4 outline-none",
+      // ANIMACIÓN: Entrada suave desde arriba para contenido de sistema
+      "animate-in fade-in slide-in-from-top-2 duration-500",
       className,
     )}
     {...props}

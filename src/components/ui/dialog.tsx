@@ -21,7 +21,8 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      "fixed inset-0 z-50 modal-glow-overlay backdrop-blur-md",
+      // IDENTIDAD: Fondo oscuro con desenfoque de cristal para aislar el modal
+      "fixed inset-0 z-50 bg-black/60 dark:bg-black/80 backdrop-blur-md",
       "data-[state=open]:animate-in data-[state=closed]:animate-out",
       "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       className,
@@ -43,32 +44,33 @@ const DialogContent = React.forwardRef<
         // POSICIONAMIENTO: Centrado absoluto
         "fixed left-[50%] top-[50%] z-50 grid w-full translate-x-[-50%] translate-y-[-50%]",
 
-        // ESTILO TAHOE: Glassmorphism y Elevación
-        "glass-panel modal-glow overflow-hidden",
-        "rounded-2xl border-none shadow-2xl",
+        // ESTILO TAHOE: Glassmorphism Líquido y Bordes HD
+        "bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl",
+        "border border-slate-200/80 dark:border-white/10 shadow-2xl",
+        "rounded-2xl overflow-hidden",
 
-        // ANIMACIÓN CORREGIDA: Usamos 'animate-modal-show' para evitar el salto desde la esquina
+        // ANIMACIÓN: Efecto de escala y entrada sutil
         "data-[state=open]:animate-modal-show",
         "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
 
         // Layout base
-        "max-w-lg p-0 gap-0",
+        "max-w-lg p-0 gap-0 duration-300",
         className,
       )}
       {...props}
     >
-      {/* Brillo de luz (Spotlight) interno para profundidad */}
-      <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-white/15 to-transparent z-0" />
+      {/* Brillo de luz (Spotlight) interno para profundidad de materiales Apple */}
+      <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-white/20 dark:from-white/5 to-transparent z-0" />
 
-      {/* Contenedor Real del Contenido para que respete el Z-index sobre el brillo */}
+      {/* Contenedor Real para respetar el Z-index */}
       <div className="relative z-10 flex flex-col h-full w-full">
         {children}
       </div>
 
-      {/* Botón de cerrar estilo macOS */}
-      <DialogPrimitive.Close className="absolute right-5 top-5 z-50 rounded-full p-2 opacity-40 transition-all hover:opacity-100 hover:bg-white/10 hover:scale-110 active:scale-95 focus:outline-none focus:ring-2 focus:ring-white/20">
-        <X className="h-4 w-4" />
-        <span className="sr-only">Close</span>
+      {/* Botón de cerrar estilo macOS Circular */}
+      <DialogPrimitive.Close className="absolute right-4 top-4 z-50 rounded-full p-2 text-slate-400 dark:text-white/40 transition-all duration-300 hover:text-brand-red dark:hover:text-brand-red hover:bg-white/10 dark:hover:bg-black/20 hover:scale-110 active:scale-95 focus:outline-none focus:ring-2 focus:ring-brand-red/50">
+        <X className="h-4 w-4 stroke-[3px]" />
+        <span className="sr-only">Cerrar</span>
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>
   </DialogPortal>
@@ -81,7 +83,7 @@ const DialogHeader = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex flex-col space-y-1.5 text-center sm:text-left p-6 pb-2",
+      "flex flex-col space-y-1.5 text-center sm:text-left p-8 pb-4 relative z-10",
       className,
     )}
     {...props}
@@ -95,7 +97,9 @@ const DialogFooter = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-3 p-6 pt-2",
+      // TAHOE MAGIC: Footer tipo "Control Bar" con fondo diferenciado
+      "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-3 p-6 pt-4",
+      "bg-slate-50/50 dark:bg-black/20 backdrop-blur-md border-t border-slate-200/80 dark:border-white/10 relative z-10",
       className,
     )}
     {...props}
@@ -110,7 +114,8 @@ const DialogTitle = React.forwardRef<
   <DialogPrimitive.Title
     ref={ref}
     className={cn(
-      "text-xl heading-crisp text-gradient-title tracking-tight",
+      // Tipografía Industrial Premium: Black, tracking tight y colores de tema
+      "text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white heading-crisp",
       className,
     )}
     {...props}
@@ -125,7 +130,8 @@ const DialogDescription = React.forwardRef<
   <DialogPrimitive.Description
     ref={ref}
     className={cn(
-      "text-[14px] leading-relaxed text-muted-foreground/90 font-medium",
+      // Descripción: Tipografía de datos nítida (13px)
+      "text-[13px] leading-relaxed text-slate-500 dark:text-slate-400 font-medium tracking-tight",
       className,
     )}
     {...props}

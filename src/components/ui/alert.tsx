@@ -4,32 +4,54 @@ import { cn } from "@/lib/utils";
 
 /**
  * Alert variants - macOS Tahoe / Industrial Edition
- * Implementa glassmorphism con bordes de luz y gradientes de estado.
+ * Implementa glassmorphism con bordes HD y gradientes de estado responsivos al tema.
  */
 const alertVariants = cva(
-  // Base: Glassmorphism con bordes HD y tipografía optimizada para lectura rápida
-  "relative w-full rounded-xl border p-4 backdrop-blur-md transition-all duration-300 [&>svg~*]:pl-8 [&>svg+div]:translate-y-[-1px] [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:h-5 [&>svg]:w-5 animate-in fade-in slide-in-from-top-2",
+  // BASE: Glassmorphism Líquido, Bordes HD, y posicionamiento del SVG
+  "relative w-full rounded-xl border p-4 backdrop-blur-xl transition-all duration-300 ease-out [&>svg~*]:pl-8 [&>svg+div]:translate-y-[-1px] [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:h-5 [&>svg]:w-5 animate-in fade-in slide-in-from-top-2",
   {
     variants: {
       variant: {
-        // Estilo neutral: Navy profundo con transparencia
-        default:
-          "glass-panel border-white/10 text-brand-navy shadow-lg [&>svg]:text-brand-navy/70",
-
-        // Estilo Crítico: Brand Red con glow sutil
-        destructive:
-          "bg-status-danger-bg/40 border-status-danger/30 text-status-danger shadow-[0_4px_20px_rgba(190,8,17,0.1)] [&>svg]:text-status-danger",
-
-        // Estilo Éxito: Brand Green industrial
-        success:
-          "bg-status-success-bg/40 border-status-success/30 text-status-success shadow-[0_4px_20px_rgba(0,151,64,0.1)] [&>svg]:text-status-success",
-
-        // Estilo Advertencia: Amber/Oro
-        warning:
-          "bg-status-warning-bg/40 border-status-warning/30 text-status-warning shadow-[0_4px_20px_rgba(147,88,10,0.1)] [&>svg]:text-status-warning",
-
-        // Estilo Información: Sky/Navy
-        info: "bg-status-info-bg/40 border-status-info/30 text-status-info shadow-[0_4px_20px_rgba(37,99,235,0.1)] [&>svg]:text-status-info",
+        // DEFAULT: Neutral, blanco/navy
+        default: [
+          "bg-white/90 dark:bg-brand-navy/95",
+          "border-slate-200/80 dark:border-white/10",
+          "text-brand-navy dark:text-slate-200",
+          "shadow-sm dark:shadow-2xl",
+          "[&>svg]:text-slate-500 dark:[&>svg]:text-slate-400",
+        ],
+        // DESTRUCTIVE (Error/Crítico): Brand Red
+        destructive: [
+          "bg-status-danger-bg/80 dark:bg-status-danger/10",
+          "border-status-danger/30 dark:border-status-danger/20",
+          "text-status-danger dark:text-red-400",
+          "shadow-[0_4px_20px_rgba(190,8,17,0.1)] dark:shadow-[0_4px_20px_rgba(190,8,17,0.2)]",
+          "[&>svg]:text-status-danger dark:[&>svg]:text-red-400",
+        ],
+        // SUCCESS (Éxito): Brand Green
+        success: [
+          "bg-status-success-bg/80 dark:bg-status-success/10",
+          "border-status-success/30 dark:border-status-success/20",
+          "text-status-success dark:text-emerald-400",
+          "shadow-[0_4px_20px_rgba(0,151,64,0.1)] dark:shadow-[0_4px_20px_rgba(0,151,64,0.2)]",
+          "[&>svg]:text-status-success dark:[&>svg]:text-emerald-400",
+        ],
+        // WARNING (Advertencia/Pendiente): Amber
+        warning: [
+          "bg-status-warning-bg/80 dark:bg-status-warning/10",
+          "border-status-warning/30 dark:border-status-warning/20",
+          "text-status-warning dark:text-amber-500",
+          "shadow-[0_4px_20px_rgba(147,88,10,0.1)] dark:shadow-[0_4px_20px_rgba(147,88,10,0.2)]",
+          "[&>svg]:text-status-warning dark:[&>svg]:text-amber-500",
+        ],
+        // INFO (Informativo): Blue
+        info: [
+          "bg-status-info-bg/80 dark:bg-status-info/10",
+          "border-status-info/30 dark:border-status-info/20",
+          "text-status-info dark:text-blue-400",
+          "shadow-[0_4px_20px_rgba(37,99,235,0.1)] dark:shadow-[0_4px_20px_rgba(37,99,235,0.2)]",
+          "[&>svg]:text-status-info dark:[&>svg]:text-blue-400",
+        ],
       },
     },
     defaultVariants: {
@@ -38,17 +60,21 @@ const alertVariants = cva(
   },
 );
 
-const Alert = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement> & VariantProps<typeof alertVariants>
->(({ className, variant, ...props }, ref) => (
-  <div
-    ref={ref}
-    role="alert"
-    className={cn(alertVariants({ variant }), className)}
-    {...props}
-  />
-));
+export interface AlertProps
+  extends
+    React.HTMLAttributes<HTMLDivElement>,
+    VariantProps<typeof alertVariants> {}
+
+const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
+  ({ className, variant, ...props }, ref) => (
+    <div
+      ref={ref}
+      role="alert"
+      className={cn(alertVariants({ variant }), className)}
+      {...props}
+    />
+  ),
+);
 Alert.displayName = "Alert";
 
 const AlertTitle = React.forwardRef<
@@ -58,8 +84,8 @@ const AlertTitle = React.forwardRef<
   <h5
     ref={ref}
     className={cn(
-      // Tipografía Industrial: Negrita, tracking ajustado y uppercase sutil opcional
-      "mb-1 font-black leading-none tracking-tighter text-[13px] uppercase",
+      // Tipografía Industrial: Negrita, tracking ancho y uppercase obligatorio
+      "mb-1.5 text-[10px] font-black uppercase tracking-[0.2em] leading-none",
       className,
     )}
     {...props}
@@ -74,8 +100,8 @@ const AlertDescription = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      // Descripción: Alta legibilidad con opacidad táctica
-      "text-[11px] font-medium opacity-90 [&_p]:leading-relaxed tracking-tight",
+      // Descripción: Datos con tracking-tight y font-medium, ligeramente atenuado para jerarquía visual
+      "text-[12px] font-medium tracking-tight opacity-90 [&_p]:leading-relaxed",
       className,
     )}
     {...props}

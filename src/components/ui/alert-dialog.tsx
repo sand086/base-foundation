@@ -16,8 +16,8 @@ const AlertDialogOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AlertDialogPrimitive.Overlay
     className={cn(
-      // AQUI ESTÁ EL CAMBIO: Negro profundo al 80% para asegurar la oscuridad, con blur sutil
-      "fixed inset-0 z-50 bg-black/60 backdrop-blur-sm",
+      // IDENTIDAD: Oscuridad profunda con blur para centrar la atención, soporta Dark Mode nativo
+      "fixed inset-0 z-50 bg-black/60 dark:bg-black/80 backdrop-blur-md",
       "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       className,
     )}
@@ -37,8 +37,9 @@ const AlertDialogContent = React.forwardRef<
       ref={ref}
       className={cn(
         "fixed left-[50%] top-[50%] z-50 grid w-full max-w-md translate-x-[-50%] translate-y-[-50%] gap-0",
-        // Tahoe Magic: Estilo Liquid Glass, sin bordes toscos, sombra profunda
-        "glass-panel border border-white/40 shadow-2xl sm:rounded-2xl overflow-hidden",
+        // TAHOE MAGIC: Glassmorphism Líquido y Bordes HD
+        "bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl",
+        "border border-slate-200/80 dark:border-white/10 shadow-2xl sm:rounded-2xl overflow-hidden",
         "duration-300 ease-out",
         "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]",
         className,
@@ -69,9 +70,9 @@ const AlertDialogFooter = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      // Tahoe Magic: Footer separado tipo barra Safari
+      // TAHOE MAGIC: Footer separado tipo barra Safari inferior con Dark Mode
       "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-3 p-4 sm:px-6",
-      "bg-slate-50/50 backdrop-blur-md border-t border-slate-200/60 dark:border-white/10 relative z-10",
+      "bg-slate-50/50 dark:bg-black/20 backdrop-blur-xl border-t border-slate-200/80 dark:border-white/10 relative z-10",
       className,
     )}
     {...props}
@@ -86,8 +87,8 @@ const AlertDialogTitle = React.forwardRef<
   <AlertDialogPrimitive.Title
     ref={ref}
     className={cn(
-      // Tahoe Magic: Título industrial, negro, mayúsculas
-      "text-xl font-black uppercase tracking-tighter text-brand-navy heading-crisp",
+      // TAHOE MAGIC: Título industrial, negro/blanco puro, mayúsculas
+      "text-xl font-black uppercase tracking-tighter text-brand-navy dark:text-white heading-crisp",
       className,
     )}
     {...props}
@@ -102,8 +103,8 @@ const AlertDialogDescription = React.forwardRef<
   <AlertDialogPrimitive.Description
     ref={ref}
     className={cn(
-      // Tahoe Magic: Texto secundario nítido y legible
-      "text-sm font-medium text-slate-500 leading-relaxed mt-2",
+      // TAHOE MAGIC: Texto secundario nítido Apple-style (13px)
+      "text-[13px] font-medium text-slate-500 dark:text-slate-400 leading-relaxed mt-2",
       className,
     )}
     {...props}
@@ -120,8 +121,8 @@ const AlertDialogAction = React.forwardRef<
     ref={ref}
     className={cn(
       buttonVariants(),
-      // Tahoe Magic: Botón de acción con tracking ancho y fuente negra
-      "font-black uppercase text-[11px] tracking-widest shadow-md active:scale-95 transition-transform",
+      // TAHOE MAGIC: Botón principal de alerta con tipografía industrial y Haptic Press
+      "font-black uppercase text-[11px] tracking-[0.2em] shadow-md haptic-press transition-all duration-300",
       className,
     )}
     {...props}
@@ -137,9 +138,9 @@ const AlertDialogCancel = React.forwardRef<
     ref={ref}
     className={cn(
       buttonVariants({ variant: "outline" }),
-      "mt-2 sm:mt-0 glass-card border-slate-200 hover:bg-white/80",
-      // Tahoe Magic: Botón de cancelar sutil pero premium
-      "font-black uppercase text-[11px] tracking-widest text-slate-500",
+      // TAHOE MAGIC: Botón fantasma adaptativo a temas
+      "mt-2 sm:mt-0 bg-transparent border-slate-200/80 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/5",
+      "font-black uppercase text-[11px] tracking-[0.2em] text-slate-500 dark:text-slate-400 haptic-press transition-all duration-300",
       className,
     )}
     {...props}
