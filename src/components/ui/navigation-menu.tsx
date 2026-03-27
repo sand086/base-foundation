@@ -1,3 +1,5 @@
+"use client";
+
 import * as React from "react";
 import * as NavigationMenuPrimitive from "@radix-ui/react-navigation-menu";
 import { cva } from "class-variance-authority";
@@ -40,9 +42,12 @@ NavigationMenuList.displayName = NavigationMenuPrimitive.List.displayName;
 
 const NavigationMenuItem = NavigationMenuPrimitive.Item;
 
-// Estilo actualizado: Bordes más orgánicos (Tahoe), efecto háptico y tipografía Apple
+/**
+ * Trigger Style - macOS Tahoe / Industrial Premium
+ * Refactorización: Tipografía técnica, respuesta háptica y estados de cristal.
+ */
 const navigationMenuTriggerStyle = cva(
-  "group inline-flex h-10 w-max items-center justify-center rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200 haptic-press hover:bg-white/10 hover:text-accent-foreground focus:bg-white/10 focus:outline-none disabled:pointer-events-none disabled:opacity-50 data-[active]:bg-white/5 data-[state=open]:bg-white/10",
+  "group inline-flex h-10 w-max items-center justify-center rounded-xl px-4 py-2 text-sm font-bold tracking-tight transition-all duration-300 outline-none haptic-press disabled:pointer-events-none disabled:opacity-40 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white focus:bg-slate-100 dark:focus:bg-white/5 data-[active]:bg-slate-100/50 dark:data-[active]:bg-white/5 data-[state=open]:bg-slate-100/80 dark:data-[state=open]:bg-white/10",
 );
 
 const NavigationMenuTrigger = React.forwardRef<
@@ -56,7 +61,7 @@ const NavigationMenuTrigger = React.forwardRef<
   >
     {children}{" "}
     <ChevronDown
-      className="relative top-[1px] ml-1 h-3.5 w-3.5 transition-transform duration-300 group-data-[state=open]:rotate-180"
+      className="relative top-[1px] ml-1 h-3.5 w-3.5 transition-transform duration-300 group-data-[state=open]:rotate-180 text-slate-400 dark:text-white/40"
       aria-hidden="true"
     />
   </NavigationMenuPrimitive.Trigger>
@@ -80,19 +85,29 @@ NavigationMenuContent.displayName = NavigationMenuPrimitive.Content.displayName;
 
 const NavigationMenuLink = NavigationMenuPrimitive.Link;
 
+/**
+ * Viewport
+ */
 const NavigationMenuViewport = React.forwardRef<
   React.ElementRef<typeof NavigationMenuPrimitive.Viewport>,
   React.ComponentPropsWithoutRef<typeof NavigationMenuPrimitive.Viewport>
 >(({ className, ...props }, ref) => (
   <div className={cn("absolute left-0 top-full flex justify-center")}>
     <NavigationMenuPrimitive.Viewport
+      ref={ref}
       className={cn(
-        "origin-top-center relative mt-2 overflow-hidden rounded-xl glass-panel animate-modal-show shadow-2xl md:w-[var(--radix-navigation-menu-viewport-width)] h-[var(--radix-navigation-menu-viewport-height)]",
+        "origin-top-center relative mt-2 overflow-hidden shadow-2xl transition-all duration-300",
+        "bg-white/95 dark:bg-brand-navy/98 backdrop-blur-2xl",
+        "border border-slate-200/80 dark:border-white/10 rounded-2xl",
+        "md:w-[var(--radix-navigation-menu-viewport-width)] h-[var(--radix-navigation-menu-viewport-height)]",
+        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95",
         className,
       )}
-      ref={ref}
       {...props}
-    />
+    >
+      {/* Brillo interno Spotlight Apple-style */}
+      <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-white/10 dark:from-white/5 to-transparent z-0" />
+    </NavigationMenuPrimitive.Viewport>
   </div>
 ));
 NavigationMenuViewport.displayName =
@@ -110,8 +125,8 @@ const NavigationMenuIndicator = React.forwardRef<
     )}
     {...props}
   >
-    {/* El indicador ahora usa el Brand Red definido en tu CSS */}
-    <div className="relative top-[60%] h-2 w-2 rotate-45 rounded-tl-sm bg-[hsl(var(--brand-red))] shadow-sm" />
+    {/* IDENTIDAD: Indicador en Brand Red con sombra de estado */}
+    <div className="relative top-[60%] h-2.5 w-2.5 rotate-45 rounded-tl-[2px] bg-brand-red shadow-[0_0_10px_rgba(190,8,17,0.4)]" />
   </NavigationMenuPrimitive.Indicator>
 ));
 NavigationMenuIndicator.displayName =

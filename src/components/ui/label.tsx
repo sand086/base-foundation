@@ -7,21 +7,24 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const labelVariants = cva(
-  "text-sm font-semibold leading-none transition-colors duration-200",
+  // BASE: Transiciones suaves de 300ms para cambios de estado y foco
+  "text-sm font-semibold leading-none transition-colors duration-300 ease-out",
   {
     variants: {
       variant: {
-        // Estándar: Gris oscuro elegante
-        default: "text-slate-700 tracking-tight",
-        // Brand: Vibe Tahoe Industrial (la que usamos en los modales)
+        // ESTÁNDAR: Textos nítidos con soporte dark mode
+        default: "text-slate-700 dark:text-slate-200 tracking-tight",
+
+        // REGLA DE ORO (BRAND): Tipografía Industrial de macOS Tahoe
         brand:
-          "text-slate-400 font-black uppercase text-[10px] tracking-[0.2em]",
-        // Muted: Para descripciones secundarias
-        muted: "text-slate-500 font-medium",
+          "text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400",
+
+        // MUTED: Para descripciones o labels secundarios
+        muted: "text-slate-500 dark:text-slate-400 font-medium tracking-tight",
       },
       state: {
         disabled:
-          "peer-disabled:cursor-not-allowed peer-disabled:opacity-50 peer-disabled:text-slate-600",
+          "peer-disabled:cursor-not-allowed peer-disabled:opacity-40 peer-disabled:grayscale",
       },
     },
     defaultVariants: {
@@ -46,7 +49,7 @@ const Label = React.forwardRef<
     ref={ref}
     className={cn(
       labelVariants({ variant }),
-      "peer-disabled:cursor-not-allowed peer-disabled:opacity-50 flex items-center",
+      "peer-disabled:cursor-not-allowed peer-disabled:opacity-40 flex items-center",
       className,
     )}
     {...props}
@@ -54,10 +57,10 @@ const Label = React.forwardRef<
     {/* Renderizamos los hijos (el texto del label) */}
     {children}
 
-    {/* 2. La Magia del Asterisco Tahoe */}
+    {/* 2. La Magia del Asterisco Tahoe (IDENTIDAD DE MARCA) */}
     {required && (
       <span
-        className="text-brand-red ml-1.5 text-[14px] leading-none select-none animate-pulse-slow font-bold"
+        className="text-brand-red dark:text-brand-red ml-1.5 text-[14px] leading-none select-none animate-pulse-slow font-black"
         title="Este campo es obligatorio"
       >
         *

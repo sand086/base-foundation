@@ -1,10 +1,21 @@
+"use client";
+
 import * as React from "react";
 import * as AvatarPrimitive from "@radix-ui/react-avatar";
 import { cn } from "@/lib/utils";
 
+// Imagen por defecto del sistema
 import AvatarDefault from "@/assets/img/usuarios/avatar3.png";
 
 const DEFAULT_AVATAR_SRC = AvatarDefault;
+
+/**
+ * Avatar UI - macOS Tahoe / Industrial Edition
+ * Refactorización:
+ * 1. Estética: Glassmorphism HD con bordes de luz.
+ * 2. Feedback: Efecto háptico al presionar (haptic-press).
+ * 3. Fallback: Tipografía industrial de alta precisión.
+ */
 
 const Avatar = React.forwardRef<
   React.ElementRef<typeof AvatarPrimitive.Root>,
@@ -14,9 +25,11 @@ const Avatar = React.forwardRef<
     ref={ref}
     className={cn(
       "relative flex h-10 w-10 shrink-0 overflow-hidden rounded-full",
-      // IDENTIDAD: Efecto de cristal y elevación sutil
-      "border border-white/20 shadow-sm glass-surface",
-      "transition-transform duration-200 haptic-press cursor-pointer",
+      // 💎 GLASSMORPHISM & BORDERS HD
+      "bg-white/50 dark:bg-white/5 backdrop-blur-md",
+      "border border-slate-200 dark:border-white/10 shadow-sm",
+      // ⚡ INTERACCIÓN HÁPTICA
+      "transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer",
       className,
     )}
     {...props}
@@ -35,9 +48,9 @@ const AvatarImage = React.forwardRef<
   <AvatarPrimitive.Image
     ref={ref}
     src={src ?? DEFAULT_AVATAR_SRC}
-    // IDENTIDAD: Animación de entrada suave
+    // 🎞️ ANIMACIÓN: Entrada fluida de datos
     className={cn(
-      "aspect-square h-full w-full object-cover animate-data-loaded",
+      "aspect-square h-full w-full object-cover animate-data-loaded transition-opacity duration-500",
       className,
     )}
     {...props}
@@ -52,10 +65,13 @@ const AvatarFallback = React.forwardRef<
   <AvatarPrimitive.Fallback
     ref={ref}
     className={cn(
-      "flex h-full w-full items-center justify-center rounded-full font-medium uppercase",
-      // IDENTIDAD: Gradiente sutil en lugar de color gris plano
-      "bg-gradient-to-br from-muted to-muted/30 text-muted-foreground",
-      "animate-pulse-slow", // Animación lenta de tu CSS
+      "flex h-full w-full items-center justify-center rounded-full uppercase",
+      // 🛠️ TIPOGRAFÍA INDUSTRIAL
+      "text-[11px] font-black tracking-[0.15em]",
+      // 🌓 COLORS & THEME (Reactividad Total)
+      "bg-gradient-to-br from-slate-100 to-slate-200 dark:from-brand-navy dark:to-black",
+      "text-slate-500 dark:text-white/60",
+      "animate-pulse-slow",
       className,
     )}
     {...props}

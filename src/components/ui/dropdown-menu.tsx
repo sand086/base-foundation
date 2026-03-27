@@ -6,16 +6,20 @@ import { Check, ChevronRight, Circle } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
+/**
+ * DropdownMenu UI - macOS Tahoe / Industrial Edition
+ * Refactorización:
+ * 1. Estética: Glassmorphism puro (backdrop-blur-2xl) con bordes HD.
+ * 2. Reactividad: Soporte total Dark/Light Mode.
+ * 3. Selección: Brand Red para ítems activos con efecto de elevación.
+ * 4. Tipografía: Labels industriales con tracking expansivo.
+ */
+
 const DropdownMenu = DropdownMenuPrimitive.Root;
-
 const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
-
 const DropdownMenuGroup = DropdownMenuPrimitive.Group;
-
 const DropdownMenuPortal = DropdownMenuPrimitive.Portal;
-
 const DropdownMenuSub = DropdownMenuPrimitive.Sub;
-
 const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup;
 
 const DropdownMenuSubTrigger = React.forwardRef<
@@ -27,8 +31,11 @@ const DropdownMenuSubTrigger = React.forwardRef<
   <DropdownMenuPrimitive.SubTrigger
     ref={ref}
     className={cn(
-      "flex cursor-default select-none items-center rounded-md px-3 py-2 text-[12px] font-medium outline-none transition-colors",
-      "focus:bg-brand-red/10 focus:text-brand-red data-[state=open]:bg-brand-red/10 data-[state=open]:text-brand-red",
+      "flex cursor-default select-none items-center rounded-lg px-3 py-2 text-[12px] font-medium outline-none transition-all",
+      // 🌓 LIGHT/DARK REACITIVITY
+      "text-slate-700 dark:text-white/70",
+      "focus:bg-brand-red/10 dark:focus:bg-brand-red/20 focus:text-brand-red",
+      "data-[state=open]:bg-brand-red/10 dark:data-[state=open]:bg-brand-red/20 data-[state=open]:text-brand-red",
       inset && "pl-9",
       className,
     )}
@@ -48,9 +55,10 @@ const DropdownMenuSubContent = React.forwardRef<
   <DropdownMenuPrimitive.SubContent
     ref={ref}
     className={cn(
-      "z-50 min-w-[10rem] overflow-hidden rounded-xl glass-panel shadow-2xl p-1.5",
-      // 🛠 CORRECCIÓN: Animaciones nativas de Radix que respetan las físicas
-      "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+      "z-50 min-w-[10rem] overflow-hidden rounded-xl border p-1.5 shadow-2xl backdrop-blur-2xl",
+      // 🌓 COLORS
+      "bg-white/90 dark:bg-brand-navy/95 border-slate-200/60 dark:border-white/10",
+      "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
       className,
     )}
     {...props}
@@ -68,8 +76,9 @@ const DropdownMenuContent = React.forwardRef<
       ref={ref}
       sideOffset={sideOffset}
       className={cn(
-        "z-50 min-w-[12rem] overflow-hidden rounded-xl glass-panel shadow-2xl p-1.5",
-        // 🛠 CORRECCIÓN: Eliminado 'animate-modal-show' e implementadas animaciones nativas
+        "z-50 min-w-[12rem] overflow-hidden rounded-2xl border p-1.5 shadow-2xl backdrop-blur-2xl",
+        // 🌓 COLORS
+        "bg-white/90 dark:bg-brand-navy/95 border-slate-200/60 dark:border-white/10",
         "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
         className,
       )}
@@ -88,7 +97,10 @@ const DropdownMenuItem = React.forwardRef<
   <DropdownMenuPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex cursor-default select-none items-center rounded-lg px-3 py-2 text-[12px] font-medium outline-none transition-all duration-200",
+      "relative flex cursor-pointer select-none items-center rounded-lg px-3 py-2 text-[12px] font-medium outline-none transition-all duration-200",
+      // 🌓 TEXT COLORS
+      "text-slate-700 dark:text-white/80",
+      // 🎯 SELECTION: BRAND RED
       "focus:bg-brand-red focus:text-white focus:shadow-[0_4px_12px_rgba(190,8,17,0.3)] focus:scale-[1.02]",
       "data-[disabled]:pointer-events-none data-[disabled]:opacity-30",
       inset && "pl-9",
@@ -106,8 +118,10 @@ const DropdownMenuCheckboxItem = React.forwardRef<
   <DropdownMenuPrimitive.CheckboxItem
     ref={ref}
     className={cn(
-      "relative flex cursor-default select-none items-center rounded-lg py-2 pl-9 pr-3 text-[12px] font-medium outline-none transition-colors",
-      "focus:bg-brand-red/10 focus:text-brand-red data-[disabled]:pointer-events-none data-[disabled]:opacity-30",
+      "relative flex cursor-default select-none items-center rounded-lg py-2.5 pl-9 pr-3 text-[12px] font-medium outline-none transition-all",
+      "text-slate-700 dark:text-white/80",
+      "focus:bg-brand-red focus:text-white",
+      "data-[disabled]:pointer-events-none data-[disabled]:opacity-30",
       className,
     )}
     checked={checked}
@@ -131,8 +145,9 @@ const DropdownMenuRadioItem = React.forwardRef<
   <DropdownMenuPrimitive.RadioItem
     ref={ref}
     className={cn(
-      "relative flex cursor-default select-none items-center rounded-lg py-2 pl-9 pr-3 text-[12px] font-medium outline-none transition-colors",
-      "focus:bg-brand-red/10 focus:text-brand-red data-[disabled]:pointer-events-none data-[disabled]:opacity-30",
+      "relative flex cursor-default select-none items-center rounded-lg py-2.5 pl-9 pr-3 text-[12px] font-medium outline-none transition-all",
+      "text-slate-700 dark:text-white/80",
+      "focus:bg-brand-red focus:text-white",
       className,
     )}
     {...props}
@@ -156,7 +171,9 @@ const DropdownMenuLabel = React.forwardRef<
   <DropdownMenuPrimitive.Label
     ref={ref}
     className={cn(
-      "px-3 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500",
+      "px-3 py-2 text-brand-red",
+      // 🛠 TIPOGRAFÍA INDUSTRIAL
+      "text-[10px] font-black uppercase tracking-[0.2em]",
       inset && "pl-9",
       className,
     )}
@@ -171,7 +188,10 @@ const DropdownMenuSeparator = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DropdownMenuPrimitive.Separator
     ref={ref}
-    className={cn("-mx-1.5 my-1.5 h-px bg-slate-200", className)}
+    className={cn(
+      "-mx-1.5 my-1.5 h-px bg-slate-200/60 dark:bg-white/10",
+      className,
+    )}
     {...props}
   />
 ));
