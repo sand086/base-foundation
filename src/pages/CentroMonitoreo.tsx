@@ -348,7 +348,7 @@ export default function CentroMonitoreo() {
   const renderSortIcon = (key: string) => {
     if (sortConfig?.key !== key)
       return (
-        <ArrowUpDown className="h-3 w-3 text-slate-400 ml-1 inline-block" />
+        <ArrowUpDown className="h-3 w-3 text-slate-600 ml-1 inline-block" />
       );
     return sortConfig.direction === "asc" ? (
       <ArrowUp className="h-3 w-3 text-brand-navy ml-1 inline-block" />
@@ -602,7 +602,7 @@ export default function CentroMonitoreo() {
                 Folio / ID
               </Label>
               <div className="relative">
-                <Search className="absolute left-2.5 top-2 h-4 w-4 text-slate-400" />
+                <Search className="absolute left-2.5 top-2 h-4 w-4 text-slate-600" />
                 <Input
                   placeholder="Buscar..."
                   className="pl-8 h-9 "
@@ -826,7 +826,7 @@ export default function CentroMonitoreo() {
                 <DataTableRow>
                   <DataTableCell
                     colSpan={9}
-                    className="h-[400px] text-center text-slate-400"
+                    className="h-[400px] text-center text-slate-600"
                   >
                     <Search className="h-10 w-10 opacity-20 mx-auto mb-3" />
                     <p className="text-sm font-medium">
@@ -852,7 +852,7 @@ export default function CentroMonitoreo() {
                         {trip.public_id || trip.id}
                       </p>
                       <div className="flex items-center gap-1 mt-1">
-                        <Truck className="h-3 w-3 text-slate-400 shrink-0" />
+                        <Truck className="h-3 w-3 text-slate-600 shrink-0" />
                         <span className="text-[12px] font-bold text-slate-500 uppercase tracking-widest">
                           {getTripConfig(trip)}
                         </span>
@@ -868,7 +868,7 @@ export default function CentroMonitoreo() {
                         {getClientName(trip)}
                       </p>
                       <div className="flex items-center gap-1 mt-1 text-[12px] font-medium text-slate-500">
-                        <MapPin className="h-3 w-3 text-slate-400 shrink-0" />
+                        <MapPin className="h-3 w-3 text-slate-600 shrink-0" />
                         <span className="truncate max-w-[180px]">
                           {trip.origin} → {trip.destination}
                         </span>
@@ -902,7 +902,7 @@ export default function CentroMonitoreo() {
                     {/* COLUMNA 5: DIESEL */}
                     <DataTableCell className="py-2">
                       <div className="flex items-center gap-1.5  font-semibold text-slate-600">
-                        <Fuel className="h-6 w-6 text-slate-400" />
+                        <Fuel className="h-6 w-6 text-slate-600" />
                         <span className="font-mono">
                           {formatMoney(finanzas.diesel)}
                         </span>
@@ -915,7 +915,7 @@ export default function CentroMonitoreo() {
                         className="flex items-center gap-1.5  font-semibold text-slate-600"
                         title="Suma de Viáticos y Casetas de Operador"
                       >
-                        <Ticket className="h-6 w-6 text-slate-400" />
+                        <Ticket className="h-6 w-6 text-slate-600" />
                         <span className="font-mono">
                           {formatMoney(finanzas.casetasOp + finanzas.viaticos)}
                         </span>
@@ -954,7 +954,7 @@ export default function CentroMonitoreo() {
                           align="end"
                           className="w-52 shadow-xl border-slate-200"
                         >
-                          <DropdownMenuLabel className="text-[12px] uppercase font-bold text-slate-400 tracking-wider">
+                          <DropdownMenuLabel className="text-[12px] uppercase font-bold text-slate-600 tracking-wider">
                             Gestión del Viaje
                           </DropdownMenuLabel>
                           <DropdownMenuSeparator />
@@ -966,7 +966,7 @@ export default function CentroMonitoreo() {
                             }}
                             className="cursor-pointer  font-medium text-slate-700"
                           >
-                            <FolderOpen className="mr-2 h-4 w-4 text-slate-400" />{" "}
+                            <FolderOpen className="mr-2 h-4 w-4 text-slate-600" />{" "}
                             <span>Visualizar / Editar Info</span>
                           </DropdownMenuItem>
 
@@ -981,7 +981,7 @@ export default function CentroMonitoreo() {
                               }}
                               className="cursor-pointer  font-medium text-slate-700"
                             >
-                              <Edit2 className="mr-2 h-4 w-4 text-slate-400" />{" "}
+                              <Edit2 className="mr-2 h-4 w-4 text-slate-600" />{" "}
                               <span>Reportar Novedad GPS</span>
                             </DropdownMenuItem>
                           )}
@@ -993,7 +993,7 @@ export default function CentroMonitoreo() {
                             }}
                             className="cursor-pointer  font-medium text-slate-700"
                           >
-                            <Printer className="mr-2 h-4 w-4 text-slate-400" />{" "}
+                            <Printer className="mr-2 h-4 w-4 text-slate-600" />{" "}
                             <span>Imprimir C. Porte / Recibo</span>
                           </DropdownMenuItem>
 
@@ -1007,7 +1007,7 @@ export default function CentroMonitoreo() {
                             }}
                             className="cursor-pointer  font-medium text-slate-700"
                           >
-                            <Mail className="mr-2 h-4 w-4 text-slate-400" />{" "}
+                            <Mail className="mr-2 h-4 w-4 text-slate-600" />{" "}
                             <span>Enviar Información por Correo</span>
                           </DropdownMenuItem>
 

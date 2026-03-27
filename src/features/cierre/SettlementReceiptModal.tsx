@@ -84,7 +84,7 @@ export function SettlementReceiptModal({
           <div className="grid grid-cols-2 gap-4 text-sm bg-slate-50 p-4 rounded-xl border border-slate-100">
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <Receipt className="h-4 w-4 text-slate-400" />
+                <Receipt className="h-4 w-4 text-slate-600" />
                 <span className="text-slate-500 uppercase text-[10px] font-bold tracking-wider">
                   Folio Viaje:
                 </span>
@@ -93,7 +93,7 @@ export function SettlementReceiptModal({
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <User className="h-4 w-4 text-slate-400" />
+                <User className="h-4 w-4 text-slate-600" />
                 <span className="text-slate-500 uppercase text-[10px] font-bold tracking-wider">
                   Operador:
                 </span>
@@ -102,7 +102,7 @@ export function SettlementReceiptModal({
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <Truck className="h-4 w-4 text-slate-400" />
+                <Truck className="h-4 w-4 text-slate-600" />
                 <span className="text-slate-500 uppercase text-[10px] font-bold tracking-wider">
                   Unidad:
                 </span>
@@ -114,7 +114,7 @@ export function SettlementReceiptModal({
 
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <MapPin className="h-4 w-4 text-slate-400" />
+                <MapPin className="h-4 w-4 text-slate-600" />
                 <span className="text-slate-500 uppercase text-[10px] font-bold tracking-wider">
                   Ruta:
                 </span>
@@ -126,7 +126,7 @@ export function SettlementReceiptModal({
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-slate-400" />
+                <Calendar className="h-4 w-4 text-slate-600" />
                 <span className="text-slate-500 uppercase text-[10px] font-bold tracking-wider">
                   Fecha:
                 </span>
@@ -163,7 +163,7 @@ export function SettlementReceiptModal({
                       {concepto.descripcion}
                     </span>
                     {concepto.referencia && (
-                      <span className="text-slate-400 text-xs ml-2 italic">
+                      <span className="text-slate-600 text-xs ml-2 italic">
                         ({concepto.referencia})
                       </span>
                     )}
@@ -209,7 +209,7 @@ export function SettlementReceiptModal({
                       {concepto.descripcion}
                     </span>
                     {concepto.referencia && (
-                      <span className="text-slate-400 text-xs ml-2 italic">
+                      <span className="text-slate-600 text-xs ml-2 italic">
                         ({concepto.referencia})
                       </span>
                     )}
@@ -250,7 +250,7 @@ export function SettlementReceiptModal({
           </div>
 
           {/* Footer del recibo */}
-          <div className="text-center text-xs text-slate-400 pt-6 border-t border-dashed">
+          <div className="text-center text-xs text-slate-600 pt-6 border-t border-dashed">
             <p>
               Este documento es un comprobante de liquidación generado y
               validado automáticamente.

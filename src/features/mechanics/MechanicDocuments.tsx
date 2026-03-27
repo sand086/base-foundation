@@ -261,7 +261,7 @@ export function MechanicDocuments({ mechanic }: Props) {
 
         {isLoadingDocs ? (
           <div className="flex justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+            <Loader2 className="h-6 w-6 animate-spin text-slate-600" />
           </div>
         ) : documents.length === 0 ? (
           <div className="text-center py-10 border-2 border-dashed rounded-xl bg-slate-50">
@@ -288,7 +288,7 @@ export function MechanicDocuments({ mechanic }: Props) {
                     <p className="text-xs text-muted-foreground truncate">
                       {doc.nombre_archivo}
                     </p>
-                    <p className=" text-slate-400">
+                    <p className=" text-slate-600">
                       {new Date(doc.subido_en).toLocaleDateString()}
                     </p>
                   </div>

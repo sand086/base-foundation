@@ -230,7 +230,7 @@ export default function FlotaUnidades() {
 
           if (!esRemolque) {
             return (
-              <span className="text-xs text-slate-400 font-medium italic">
+              <span className="text-xs text-slate-600 font-medium italic">
                 N/A (Tracto)
               </span>
             );
@@ -324,14 +324,14 @@ export default function FlotaUnidades() {
                 }
                 className="rounded-lg cursor-pointer"
               >
-                <Eye className="h-4 w-4 mr-3 text-slate-400" />{" "}
+                <Eye className="h-4 w-4 mr-3 text-slate-600" />{" "}
                 <span className="font-medium">Ver Expediente</span>
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => handleEdit(row)}
                 className="rounded-lg cursor-pointer"
               >
-                <Edit className="h-4 w-4 mr-3 text-slate-400" />{" "}
+                <Edit className="h-4 w-4 mr-3 text-slate-600" />{" "}
                 <span className="font-medium">Editar Unidad</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator className="my-1" />
@@ -404,7 +404,7 @@ export default function FlotaUnidades() {
           <div className="grid gap-4 md:grid-cols-4">
             <Card className="border-l-4 border-l-green-500 shadow-sm hover:shadow-md transition-shadow">
               <CardContent className="p-5">
-                <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
+                <p className="text-xs font-black text-slate-600 uppercase tracking-widest mb-1">
                   Disponibles
                 </p>
                 <p className="text-3xl font-black text-green-600">
@@ -414,7 +414,7 @@ export default function FlotaUnidades() {
             </Card>
             <Card className="border-l-4 border-l-blue-600 shadow-sm hover:shadow-md transition-shadow">
               <CardContent className="p-5">
-                <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
+                <p className="text-xs font-black text-slate-600 uppercase tracking-widest mb-1">
                   En Ruta
                 </p>
                 <p className="text-3xl font-black text-blue-600">{enRuta}</p>
@@ -422,7 +422,7 @@ export default function FlotaUnidades() {
             </Card>
             <Card className="border-l-4 border-l-yellow-500 shadow-sm hover:shadow-md transition-shadow">
               <CardContent className="p-5">
-                <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
+                <p className="text-xs font-black text-slate-600 uppercase tracking-widest mb-1">
                   Mantenimiento
                 </p>
                 <p className="text-3xl font-black text-yellow-600">
@@ -434,7 +434,7 @@ export default function FlotaUnidades() {
               <CardContent className="p-5">
                 <div className="flex justify-between items-center">
                   <div>
-                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
+                    <p className="text-xs font-black text-slate-600 uppercase tracking-widest mb-1">
                       Bloqueadas
                     </p>
                     <p className="text-3xl font-black text-red-600">

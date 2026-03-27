@@ -50,12 +50,12 @@ export function MechanicsTable({
         <div className="flex flex-col text-sm space-y-1">
           {row.telefono && (
             <div className="flex items-center gap-1.5">
-              <Phone className="h-3 w-3 text-slate-400" /> {row.telefono}
+              <Phone className="h-3 w-3 text-slate-600" /> {row.telefono}
             </div>
           )}
           {row.email && (
             <div className="flex items-center gap-1.5">
-              <Mail className="h-3 w-3 text-slate-400" /> {row.email}
+              <Mail className="h-3 w-3 text-slate-600" /> {row.email}
             </div>
           )}
         </div>

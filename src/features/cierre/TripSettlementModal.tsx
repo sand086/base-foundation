@@ -199,7 +199,7 @@ export default function TripSettlementModal({
         <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* CONTROL DE RENDIMIENTO */}
           <div className="space-y-4">
-            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+            <h3 className="text-xs font-black text-slate-600 uppercase tracking-widest flex items-center gap-2">
               <TrendingUp className="h-4 w-4" /> Rendimiento
             </h3>
             <Card className="border-slate-200 shadow-sm">
@@ -228,7 +228,7 @@ export default function TripSettlementModal({
                   </div>
                 </div>
                 <div className="bg-slate-900 text-white p-3 rounded-xl flex justify-between items-center">
-                  <span className="text-[10px] font-black uppercase text-slate-400">
+                  <span className="text-[10px] font-black uppercase text-slate-600">
                     Distancia:
                   </span>
                   <span className="text-xl font-black font-mono">
@@ -238,7 +238,7 @@ export default function TripSettlementModal({
                 <div
                   className={`p-4 rounded-2xl text-center border-2 ${rendimientoReal < 2.2 ? "bg-rose-50 border-rose-200" : "bg-emerald-50 border-emerald-200"}`}
                 >
-                  <p className="text-[9px] font-black uppercase text-slate-400 mb-1">
+                  <p className="text-[9px] font-black uppercase text-slate-600 mb-1">
                     Rendimiento Real
                   </p>
                   <p
@@ -312,7 +312,7 @@ export default function TripSettlementModal({
 
             <div className="bg-brand-navy p-6 rounded-2xl flex justify-between items-center shadow-2xl border-t-4 border-emerald-500">
               <div className="text-white">
-                <p className="text-slate-400 font-black uppercase text-[10px] tracking-widest">
+                <p className="text-slate-600 font-black uppercase text-[10px] tracking-widest">
                   Saldo Neto a Pagar
                 </p>
                 <p className="text-xs">{activeLegs[0]?.operator?.name}</p>

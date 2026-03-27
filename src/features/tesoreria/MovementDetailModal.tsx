@@ -65,7 +65,7 @@ export function MovementDetailModal({
           {/* Header with Amount */}
           <div className="flex items-center justify-between p-4 rounded-xl border border-slate-100 bg-white shadow-sm">
             <div>
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+              <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">
                 Monto de la Operación
               </p>
               <p
@@ -84,7 +84,7 @@ export function MovementDetailModal({
 
           {/* Concepto */}
           <div className="px-1">
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">
+            <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest mb-1">
               Concepto de la Transacción
             </p>
             <p className="text-base font-bold text-slate-800 leading-snug">
@@ -107,7 +107,7 @@ export function MovementDetailModal({
               <p className="font-bold text-slate-700 leading-tight">
                 {movement.banco}
               </p>
-              <p className="text-xs text-slate-400 font-mono mt-0.5">
+              <p className="text-xs text-slate-600 font-mono mt-0.5">
                 ••{movement.cuenta_bancaria.slice(-4)}
               </p>
             </div>
@@ -158,7 +158,7 @@ export function MovementDetailModal({
           {/* Auditoría (Registrado Por) */}
           <div className="grid grid-cols-2 gap-4 px-1">
             <div>
-              <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">
+              <div className="flex items-center gap-1.5 text-[10px] text-slate-600 font-bold uppercase tracking-widest mb-1">
                 <User className="h-3 w-3" /> Registrado por
               </div>
               <p className="font-bold text-slate-600 text-xs">
@@ -166,7 +166,7 @@ export function MovementDetailModal({
               </p>
             </div>
             <div>
-              <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">
+              <div className="flex items-center gap-1.5 text-[10px] text-slate-600 font-bold uppercase tracking-widest mb-1">
                 <FileText className="h-3 w-3" /> Fecha Registro
               </div>
               <p className="font-bold text-slate-600 text-xs">
@@ -205,7 +205,7 @@ export function MovementDetailModal({
                   Validado por tesorería el {movement.fecha_conciliacion}
                 </p>
               ) : (
-                <p className="text-[11px] font-medium text-slate-400 mt-0.5">
+                <p className="text-[11px] font-medium text-slate-600 mt-0.5">
                   Esperando validación contra estado de cuenta
                 </p>
               )}

@@ -36,6 +36,7 @@ import {
   ChevronsRight,
   CalendarIcon,
   X,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -244,19 +245,19 @@ export function EnhancedDataTable<T extends Record<string, any>>({
 
   const getSortIcon = (key: string) => {
     if (sortConfig?.key !== key)
-      return <ChevronsUpDown className="h-3.5 w-3.5" />;
+      return <ChevronsUpDown className="h-3.5 w-3.5 text-slate-300 ml-2" />;
     if (sortConfig.direction === "asc")
-      return <ChevronUp className="h-3.5 w-3.5" />;
-    return <ChevronDown className="h-3.5 w-3.5" />;
+      return <ChevronUp className="h-3.5 w-3.5 text-emerald-500 ml-2" />;
+    return <ChevronDown className="h-3.5 w-3.5 text-emerald-500 ml-2" />;
   };
 
   return (
     <div className={cn("space-y-4", className)}>
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-3">
+      {/* TOOLBAR TAHOE */}
+      <div className="flex flex-wrap items-center gap-3 mb-6">
         {/* Global Search */}
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <div className="relative flex-1 min-w-[250px] max-w-sm">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input
             placeholder={searchPlaceholder}
             value={globalSearch}
@@ -264,33 +265,41 @@ export function EnhancedDataTable<T extends Record<string, any>>({
               setGlobalSearch(e.target.value);
               setCurrentPage(1);
             }}
-            className="pl-9 h-9"
+            className="pl-10 h-10 glass-card border-slate-200 shadow-sm focus:ring-brand-red/20 font-medium"
           />
         </div>
 
-        {/* Filters Button */}
+        {/* Filters Button & Popover */}
         <Popover open={showFilters} onOpenChange={setShowFilters}>
           <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" className="h-9 gap-2">
-              <Filter className="h-4 w-4" />
+            <Button
+              variant="outline"
+              className="h-10 px-4 glass-card border-slate-200 text-[11px] font-black uppercase tracking-widest text-slate-600 hover:text-brand-navy shadow-sm transition-all"
+            >
+              <Filter className="h-4 w-4 mr-2" />
               Filtros
               {hasActiveFilters && (
-                <Badge variant="secondary" className="ml-1 h-5 px-1.5">
+                <Badge className="ml-2 h-5 px-1.5 bg-brand-red text-white border-none shadow-sm">
                   {Object.keys(columnFilters).length + (globalSearch ? 1 : 0)}
                 </Badge>
               )}
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-80" align="start">
+          <PopoverContent
+            className="w-80 glass-panel border-white/20 shadow-2xl p-5"
+            align="start"
+          >
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="font-medium text-sm">Filtros Avanzados</h4>
+              <div className="flex items-center justify-between border-b border-slate-200/50 pb-3">
+                <h4 className="text-[11px] font-black text-brand-navy uppercase tracking-[0.2em]">
+                  Filtros Avanzados
+                </h4>
                 {hasActiveFilters && (
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={clearFilters}
-                    className="h-7 text-xs"
+                    className="h-7 text-[9px] font-bold uppercase tracking-widest text-rose-500 hover:bg-rose-50"
                   >
                     <X className="h-3 w-3 mr-1" />
                     Limpiar
@@ -298,8 +307,8 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                 )}
               </div>
 
-              <ScrollArea className="max-h-[300px]">
-                <div className="space-y-3">
+              <ScrollArea className="max-h-[300px] pr-3 custom-scrollbar">
+                <div className="space-y-5">
                   {columns.map((col) => {
                     const key = col.key as string;
                     const colType = col.type || "text";
@@ -312,7 +321,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                       };
                       return (
                         <div key={key} className="space-y-2">
-                          <label className="text-xs font-medium text-muted-foreground">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                             {col.header}
                           </label>
                           <div className="grid grid-cols-2 gap-2">
@@ -320,17 +329,16 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                               <PopoverTrigger asChild>
                                 <Button
                                   variant="outline"
-                                  size="sm"
-                                  className="h-8 text-xs justify-start"
+                                  className="h-9 glass-card border-slate-200 text-xs justify-start font-medium text-slate-600"
                                 >
-                                  <CalendarIcon className="h-3 w-3 mr-1" />
+                                  <CalendarIcon className="h-3 w-3 mr-2 text-slate-400" />
                                   {dateFilter.from
                                     ? format(dateFilter.from, "dd/MM/yy")
                                     : "Desde"}
                                 </Button>
                               </PopoverTrigger>
                               <PopoverContent
-                                className="w-auto p-0"
+                                className="w-auto p-0 glass-panel border-white/20"
                                 align="start"
                               >
                                 <Calendar
@@ -354,17 +362,16 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                               <PopoverTrigger asChild>
                                 <Button
                                   variant="outline"
-                                  size="sm"
-                                  className="h-8 text-xs justify-start"
+                                  className="h-9 glass-card border-slate-200 text-xs justify-start font-medium text-slate-600"
                                 >
-                                  <CalendarIcon className="h-3 w-3 mr-1" />
+                                  <CalendarIcon className="h-3 w-3 mr-2 text-slate-400" />
                                   {dateFilter.to
                                     ? format(dateFilter.to, "dd/MM/yy")
                                     : "Hasta"}
                                 </Button>
                               </PopoverTrigger>
                               <PopoverContent
-                                className="w-auto p-0"
+                                className="w-auto p-0 glass-panel border-white/20"
                                 align="start"
                               >
                                 <Calendar
@@ -393,19 +400,19 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                       const selectedStatuses =
                         (columnFilters[key]?.value as string[]) || [];
                       return (
-                        <div key={key} className="space-y-2">
-                          <label className="text-xs font-medium text-muted-foreground">
+                        <div key={key} className="space-y-2.5">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                             {col.header}
                           </label>
-                          <div className="flex flex-wrap gap-1.5">
+                          <div className="flex flex-wrap gap-2">
                             {col.statusOptions.map((status) => (
                               <div
                                 key={status}
                                 className={cn(
-                                  "flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs cursor-pointer transition-colors",
+                                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-bold uppercase tracking-widest cursor-pointer transition-all",
                                   selectedStatuses.includes(status)
-                                    ? "bg-primary text-primary-foreground border-primary"
-                                    : "hover:bg-muted",
+                                    ? "bg-brand-navy text-white border-brand-navy shadow-md"
+                                    : "bg-white/50 text-slate-500 border-slate-200 hover:bg-slate-50",
                                 )}
                                 onClick={() => {
                                   const newSelected = selectedStatuses.includes(
@@ -433,7 +440,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                               >
                                 <Checkbox
                                   checked={selectedStatuses.includes(status)}
-                                  className="h-3 w-3"
+                                  className="h-3 w-3 border-current"
                                 />
                                 {status}
                               </div>
@@ -455,47 +462,44 @@ export function EnhancedDataTable<T extends Record<string, any>>({
         <div className="flex items-center gap-2 ml-auto">
           <Button
             variant="outline"
-            size="sm"
-            className="h-9 gap-2"
+            className="h-10 px-4 glass-card border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-800 shadow-sm transition-all"
             onClick={handleCopyToClipboard}
           >
-            <Copy className="h-4 w-4" />
+            <Copy className="h-3.5 w-3.5 mr-2" />
             Copiar
           </Button>
           <Button
             variant="outline"
-            size="sm"
-            className="h-9 gap-2"
+            className="h-10 px-4 glass-card border-slate-200 text-[10px] font-black uppercase tracking-widest text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 shadow-sm transition-all"
             onClick={handleExportExcel}
           >
-            <Download className="h-4 w-4" />
+            <Download className="h-3.5 w-3.5 mr-2" />
             Excel
           </Button>
         </div>
       </div>
 
-      {/* Table - Liquid Glass Style */}
-      <div className="relative w-full overflow-hidden rounded-2xl border border-white/10 shadow-lg">
-        <div className="overflow-auto max-h-[500px]">
+      {/* TABLE: Liquid Glass Style */}
+      <div className="relative w-full overflow-hidden rounded-2xl border border-white/40 bg-white/30 backdrop-blur-sm shadow-xl liquid-glass-table">
+        <div className="overflow-auto max-h-[60vh] custom-scrollbar">
           <table className="w-full caption-bottom text-sm">
-            <thead className="sticky top-0 z-20 backdrop-blur-md bg-white/85 dark:bg-black/85 shadow-sm border-b border-white/20">
+            <thead className="sticky top-0 z-20 backdrop-blur-xl bg-slate-900/5 border-b border-white/20">
               <tr>
                 {columns.map((col) => (
                   <th
                     key={col.key as string}
                     className={cn(
-                      "h-12 p-4 text-left align-middle",
-                      "font-semibold text-muted-foreground",
-                      "uppercase text-xs tracking-wider",
+                      "h-12 px-6 text-left align-middle",
+                      "text-[10px] font-black uppercase tracking-[0.2em] text-slate-500",
                       col.sortable !== false &&
-                        "cursor-pointer select-none hover:text-foreground transition-colors",
+                        "cursor-pointer select-none hover:text-brand-navy transition-colors",
                       col.width,
                     )}
                     onClick={() =>
                       col.sortable !== false && handleSort(col.key as string)
                     }
                   >
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center">
                       {col.header}
                       {col.sortable !== false && getSortIcon(col.key as string)}
                     </div>
@@ -504,11 +508,22 @@ export function EnhancedDataTable<T extends Record<string, any>>({
               </tr>
             </thead>
             <tbody className="[&_tr:last-child]:border-0 table-staggered">
-              {paginatedData.length === 0 ? (
+              {isLoading ? (
+                <tr>
+                  <td colSpan={columns.length} className="p-12 text-center">
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <Loader2 className="h-8 w-8 animate-spin text-brand-red/50" />
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+                        Cargando datos...
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+              ) : paginatedData.length === 0 ? (
                 <tr>
                   <td
                     colSpan={columns.length}
-                    className="p-4 py-8 text-center text-muted-foreground"
+                    className="p-12 text-center text-[11px] font-bold uppercase tracking-widest text-slate-400"
                   >
                     No se encontraron registros
                   </td>
@@ -518,9 +533,9 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                   <tr
                     key={idx}
                     className={cn(
-                      "border-b border-muted/30 dark:border-white/5",
-                      "transition-colors duration-200",
-                      "hover:bg-muted/40 dark:hover:bg-white/5",
+                      "border-b border-white/10 dark:border-white/5 interactive-row",
+                      "transition-colors duration-200 ease-out",
+                      "hover:bg-white/50",
                       onRowClick && "cursor-pointer",
                     )}
                     onClick={() => onRowClick?.(row)}
@@ -528,7 +543,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                     {columns.map((col) => (
                       <td
                         key={col.key as string}
-                        className="p-4 align-middle text-sm"
+                        className="px-6 py-4 align-middle text-sm font-medium text-slate-700"
                       >
                         {col.render
                           ? col.render(getValue(row, col.key as string), row)
@@ -541,75 +556,91 @@ export function EnhancedDataTable<T extends Record<string, any>>({
             </tbody>
           </table>
         </div>
-      </div>
 
-      {/* Pagination */}
-      <div className="flex flex-wrap items-center justify-between gap-4 text-sm">
-        <div className="flex items-center gap-2">
-          <span className="text-muted-foreground">Mostrar</span>
-          <Select
-            value={String(pageSize)}
-            onValueChange={(val) => {
-              setPageSize(val === "all" ? -1 : Number(val));
-              setCurrentPage(1);
-            }}
-          >
-            <SelectTrigger className="h-8 w-[70px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="10">10</SelectItem>
-              <SelectItem value="20">20</SelectItem>
-              <SelectItem value="50">50</SelectItem>
-              <SelectItem value="100">100</SelectItem>
-              <SelectItem value="all">Todos</SelectItem>
-            </SelectContent>
-          </Select>
-          <span className="text-muted-foreground">
-            de {sortedData.length} registros
-          </span>
-        </div>
+        {/* PAGINATION: Tahoe Footer Style */}
+        <div className="flex flex-wrap items-center justify-between gap-4 px-6 py-4 border-t border-white/20 bg-white/50 backdrop-blur-md">
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+              Mostrar
+            </span>
+            <Select
+              value={String(pageSize)}
+              onValueChange={(val) => {
+                setPageSize(val === "all" ? -1 : Number(val));
+                setCurrentPage(1);
+              }}
+            >
+              <SelectTrigger className="h-8 w-[80px] glass-card border-slate-200 font-bold text-xs shadow-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="glass-panel border-white/20">
+                <SelectItem value="10" className="font-semibold text-xs">
+                  10
+                </SelectItem>
+                <SelectItem value="20" className="font-semibold text-xs">
+                  20
+                </SelectItem>
+                <SelectItem value="50" className="font-semibold text-xs">
+                  50
+                </SelectItem>
+                <SelectItem value="100" className="font-semibold text-xs">
+                  100
+                </SelectItem>
+                <SelectItem value="all" className="font-semibold text-xs">
+                  Todos
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+              de {sortedData.length} registros
+            </span>
+          </div>
 
-        <div className="flex items-center gap-1">
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setCurrentPage(1)}
-            disabled={currentPage === 1 || pageSize === -1}
-          >
-            <ChevronsLeft className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-            disabled={currentPage === 1 || pageSize === -1}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span className="px-3 text-muted-foreground">
-            Página {currentPage} de {totalPages}
-          </span>
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-            disabled={currentPage === totalPages || pageSize === -1}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setCurrentPage(totalPages)}
-            disabled={currentPage === totalPages || pageSize === -1}
-          >
-            <ChevronsRight className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-1.5">
+            <span className="px-4 text-[10px] font-black uppercase tracking-[0.2em] text-brand-navy">
+              Página {currentPage} de {totalPages}
+            </span>
+            <div className="flex items-center gap-1 ml-2">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 glass-card border-slate-200 text-slate-500 hover:text-brand-navy hover:bg-white"
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1 || pageSize === -1}
+              >
+                <ChevronsLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 glass-card border-slate-200 text-slate-500 hover:text-brand-navy hover:bg-white"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1 || pageSize === -1}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 glass-card border-slate-200 text-slate-500 hover:text-brand-navy hover:bg-white"
+                onClick={() =>
+                  setCurrentPage((p) => Math.min(totalPages, p + 1))
+                }
+                disabled={currentPage === totalPages || pageSize === -1}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 glass-card border-slate-200 text-slate-500 hover:text-brand-navy hover:bg-white"
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages || pageSize === -1}
+              >
+                <ChevronsRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

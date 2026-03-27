@@ -479,22 +479,30 @@ const RolesPermisosPage: React.FC = () => {
     <div className="p-6 space-y-6">
       <PageHeader
         title="Roles y Permisos"
-        description="Define responsabilidades y controla qué puede ver/editar cada perfil en el sistema."
-      />
+        description="Define permisos por acción para cada módulo (lectura, edición,
+                eliminación, exportación)."
+        icon={<Shield className="h-8 w-8 text-brand-red" />}
+      >
+        {/* Los botones "Ver Actividad", "Crear Permiso" y "Nuevo Rol" van AQUÍ */}
+        <Button
+          variant="outline"
+          onClick={() => setShowAuditLogPanel(true)}
+          className="gap-2"
+        >
+          <History className="h-4 w-4" /> Ver Actividad
+        </Button>
+        <Button
+          onClick={openNewRoleEditor}
+          className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2"
+        >
+          <Plus className="h-4 w-4" /> Nuevo Rol
+        </Button>
+      </PageHeader>
 
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="flex items-center gap-2 mb-3">
-                <Shield className="h-5 w-5" /> Perfiles de Acceso
-              </CardTitle>
-
-              <CardDescription>
-                Define permisos por acción para cada módulo (lectura, edición,
-                eliminación, exportación).
-              </CardDescription>
-
               {/* DEBUG: rol real del usuario */}
               {/*               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <Badge
@@ -526,14 +534,6 @@ const RolesPermisosPage: React.FC = () => {
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
-                onClick={() => setShowAuditLogPanel(true)}
-                className="gap-2"
-              >
-                <History className="h-4 w-4" /> Ver Actividad
-              </Button>
-
-              <Button
-                variant="outline"
                 onClick={() => setShowCreatePermissionModal(true)}
                 className="gap-2"
               >
@@ -546,13 +546,6 @@ const RolesPermisosPage: React.FC = () => {
                 className="gap-2"
               >
                 <Settings className="h-4 w-4" /> Administrar Módulos
-              </Button>
-
-              <Button
-                onClick={openNewRoleEditor}
-                className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2"
-              >
-                <Plus className="h-4 w-4" /> Nuevo Rol
               </Button>
             </div>
           </div>

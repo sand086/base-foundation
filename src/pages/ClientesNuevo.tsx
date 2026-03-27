@@ -49,16 +49,6 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-
-import {
-  DataTable,
-  DataTableHeader,
-  DataTableBody,
-  DataTableRow,
-  DataTableHead,
-  DataTableCell,
-} from "@/components/ui/data-table";
-
 import {
   Table,
   TableBody,
@@ -67,7 +57,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
 import {
   Dialog,
   DialogContent,
@@ -83,9 +72,7 @@ import { cn } from "@/lib/utils";
 import { useTiposUnidad } from "@/hooks/useTiposUnidad";
 import { useClients } from "@/hooks/useClients";
 import { useSystemConfig } from "@/hooks/useSystemConfig";
-
 import { DocumentUploadManager } from "@/features/flota/DocumentUploadManager";
-
 import { clientService } from "@/services/clientService";
 import type { Client, RateTemplate } from "@/types/api.types";
 import { tollService } from "@/services/tollService";
@@ -94,22 +81,16 @@ import { tollService } from "@/services/tollService";
  * Types / Interfaces del Form
  * ========================= */
 
-//  Tarifa autorizada (con nuevos campos)
 interface TarifaAutorizada {
   id: string;
-  rate_template_id?: number | null; // ligar a la ruta real
+  rate_template_id?: number | null;
   nombreRuta: string;
   tipoUnidad: string;
   tarifaBase: number;
   costoCasetas: number;
-
-  //  ahora se aplican desde globales del paso 3 (se guardan al backend)
   iva_porcentaje: number;
   retencion_porcentaje: number;
-
-  //  nuevo: km para rentabilidad
   distancia_km?: number;
-
   moneda: "MXN" | "USD";
   vigencia: string;
 }
@@ -126,7 +107,6 @@ interface FiscalDataForm {
   email: string;
   contratoUrl: string;
   dias_credito: number;
-
   constancia_fiscal_url?: string;
   acta_constitutiva_url?: string;
   comprobante_domicilio_url?: string;
@@ -256,22 +236,15 @@ const safeToInt = (value: string): number => {
 
 const todayISO = () => new Date().toISOString().split("T")[0];
 
-/**
- *  Totales usando los porcentajes del objeto tarifa (que inyectamos desde globales)
- * Nota: acá NO “hardcodeamos” 16/4: respetamos tarifa.iva_porcentaje / retencion_porcentaje
- */
 const calcularTotalesTarifa = (tarifa: TarifaAutorizada) => {
   const base = Number(tarifa.tarifaBase || 0);
   const casetas = Number(tarifa.costoCasetas || 0);
   const subtotal = base + casetas;
-
   const ivaPct = Number(tarifa.iva_porcentaje ?? 16) / 100;
   const retPct = Number(tarifa.retencion_porcentaje ?? 4) / 100;
-
   const iva = subtotal * ivaPct;
   const ret = subtotal * retPct;
   const total = subtotal + iva - ret;
-
   return { subtotal, iva, ret, total };
 };
 
@@ -294,7 +267,7 @@ export default function ClientsNew() {
   const [loadingData, setLoadingData] = useState(false);
   const { clients, isLoading: loadingClients } = useClients();
 
-  // 🚀 1. TRAEMOS LOS PARÁMETROS GLOBALES
+  // PARÁMETROS GLOBALES
   const { valueAsNumber: defaultIva, isLoading: isLoadingConfig } =
     useSystemConfig("iva_porcentaje");
   const { valueAsNumber: defaultRetencion } = useSystemConfig(
@@ -305,18 +278,16 @@ export default function ClientsNew() {
   );
   const { value: defaultMoneda } = useSystemConfig("moneda_base");
 
-  // Estados originales
   const [globalIVA, setGlobalIVA] = useState<number>(16);
   const [globalRetencion, setGlobalRetencion] = useState<number>(4);
 
-  // 🚀 2. PRE-LLENADO INTELIGENTE (Solo si es un cliente NUEVO)
+  // PRE-LLENADO
   useEffect(() => {
     if (!isEditMode && !isLoadingConfig) {
       setGlobalIVA(defaultIva || 16);
       setGlobalRetencion(defaultRetencion || 4);
       setFiscalData((prev) => ({
         ...prev,
-        // Pre-llenar solo si está en 0 (recién inicializado)
         dias_credito:
           prev.dias_credito === 0 ? defaultCredito || 15 : prev.dias_credito,
       }));
@@ -329,8 +300,6 @@ export default function ClientsNew() {
     isLoadingConfig,
   ]);
 
-  // 🚀 3. DROPDOWN DE CRÉDITO DINÁMICO
-  // Si en Settings ponen "45 días", esto asegura que aparezca en el menú
   const dynamicOpcionesDiasCredito = useMemo(() => {
     const base = [
       { value: 0, label: "Contado" },
@@ -339,14 +308,13 @@ export default function ClientsNew() {
       { value: 45, label: "45 días" },
       { value: 60, label: "60 días" },
     ];
-    // Si el default de la BD no está en la lista base, lo agregamos
     if (defaultCredito > 0 && !base.find((o) => o.value === defaultCredito)) {
       base.push({
         value: defaultCredito,
         label: `${defaultCredito} días (Default)`,
       });
     }
-    return base.sort((a, b) => a.value - b.value); // Ordenar de menor a mayor
+    return base.sort((a, b) => a.value - b.value);
   }, [defaultCredito]);
 
   const [fiscalData, setFiscalData] = useState<FiscalDataForm>({
@@ -385,26 +353,19 @@ export default function ClientsNew() {
   const [searchQuery, setSearchQuery] = useState("");
   const [rutasFiltradas, setRutasFiltradas] = useState<RateTemplate[]>([]);
 
-  /** =========================
-   * Validaciones
-   * ========================= */
-
   const validateRFC = (rfc: string): boolean =>
     rfc.length >= 12 && rfc.length <= 13;
-
   const validateCodigoPostal = (cp: string): boolean => /^\d{5}$/.test(cp);
+
   const validateTarifas = (): boolean => {
     for (const sub of subClientes) {
       for (const tarifa of sub.tarifas) {
-        // 1. Validar que la ruta NO esté vacía
         if (!tarifa.nombreRuta || tarifa.nombreRuta.trim() === "") {
           toast.error("Ruta no seleccionada", {
-            description: `El destino "${sub.nombre}" tiene una fila sin ruta del catálogo.`,
+            description: `El destino "${sub.nombre}" tiene una fila sin ruta.`,
           });
           return false;
         }
-
-        // 2. Validar que el monto sea un número válido (aunque sea 0)
         if (typeof tarifa.tarifaBase !== "number" || isNaN(tarifa.tarifaBase)) {
           toast.error("Monto inválido", {
             description: `La ruta ${tarifa.nombreRuta} necesita un valor numérico.`,
@@ -418,40 +379,30 @@ export default function ClientsNew() {
 
   const calcularInfoTarifa = (tarifa: TarifaAutorizada) => {
     const base = Number(tarifa.tarifaBase || 0);
-
-    // 🚀 LA REGLA: IVA y Retención se calculan SOLO sobre el Flete Base
     const iva = base * (globalIVA / 100);
     const ret = base * (globalRetencion / 100);
-
-    // 🚀 EL TOTAL: No incluye casetas, solo flete base + impuestos
     const total = base + iva - ret;
     const rentabilidad = tarifa.distancia_km ? base / tarifa.distancia_km : 0;
-
     return { subtotal: base, iva, ret, total, rentabilidad };
   };
 
   const handleSearchRoutes = async (term: string) => {
     setSearchQuery(term);
     try {
-      // Llamada al backend con el filtro de búsqueda
       const data = await tollService.getTemplates(term);
       setRutasFiltradas(data ?? []);
     } catch (e) {
-      console.error("Error buscando rutas:", e);
+      console.error(e);
     }
   };
 
-  // 🚀 FUNCIÓN PARA RECARGAR CATÁLOGO Y ACTUALIZAR PRECIOS MANUALMENTE
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleRefreshTariffs = async () => {
     setIsRefreshing(true);
     try {
-      // 1. Volvemos a traer las rutas del servidor
       const nuevasRutas = await tollService.getTemplates();
       setRutasDisponibles(nuevasRutas ?? []);
-
-      // 2. Aplicamos la lógica de actualización a los subclientes actuales
       setSubClientes((prevSubs) =>
         prevSubs.map((sub) => ({
           ...sub,
@@ -475,8 +426,7 @@ export default function ClientsNew() {
         })),
       );
       toast.success("Catálogo sincronizado", {
-        description:
-          "Los precios se actualizaron con los datos más recientes del servidor.",
+        description: "Precios actualizados con los datos del servidor.",
       });
     } catch (error) {
       toast.error("Error al sincronizar");
@@ -485,17 +435,12 @@ export default function ClientsNew() {
     }
   };
 
-  /** =========================
-   * Cargar datos (READ)
-   * ========================= */
-
   useEffect(() => {
     const loadRutas = async () => {
       try {
         const data = await tollService.getTemplates();
         setRutasDisponibles(data ?? []);
       } catch (e) {
-        console.error(e);
         toast.error("No se pudieron cargar las rutas");
       }
     };
@@ -503,23 +448,18 @@ export default function ClientsNew() {
   }, []);
 
   useEffect(() => {
-    if (isRoutePickerOpen) {
-      // Si el modal se abre, buscamos con vacío para traer las primeras 50 por default
-      handleSearchRoutes("");
-    }
+    if (isRoutePickerOpen) handleSearchRoutes("");
   }, [isRoutePickerOpen]);
 
   useEffect(() => {
     const loadClientData = async () => {
       if (!clientId) return;
-
       const id = parseInt(clientId);
       if (isNaN(id)) return;
 
       setLoadingData(true);
       try {
         const data = await clientService.getClient(id);
-
         setFiscalData({
           razonSocial: data.razon_social,
           rfc: data.rfc,
@@ -538,7 +478,6 @@ export default function ClientsNew() {
             (data as any).comprobante_domicilio_url || "",
         });
 
-        // sub_clients + tariffs
         const mappedSubClients: SubClienteForm[] = (data.sub_clients || []).map(
           (sub: any) => ({
             id: sub.id.toString(),
@@ -552,7 +491,7 @@ export default function ClientsNew() {
             contacto: sub.contacto || "",
             telefono: sub.telefono || "",
             horarioRecepcion: sub.horario_recepcion || "",
-            horarioCita: sub.horario_cita || "", // si existe, si no queda ""
+            horarioCita: sub.horario_cita || "",
             diasCredito: Number(sub.dias_credito || 0),
             requiereContrato: Boolean(sub.requiere_contrato),
             convenioEspecial: Boolean(sub.convenio_especial),
@@ -574,36 +513,27 @@ export default function ClientsNew() {
         );
 
         setSubClientes(mappedSubClients);
-
-        //  Inicializamos globales tomando el primer tariff (si existe)
         const firstTar = mappedSubClients.flatMap((s) => s.tarifas)[0];
         if (firstTar) {
           setGlobalIVA(Number(firstTar.iva_porcentaje ?? 16));
           setGlobalRetencion(Number(firstTar.retencion_porcentaje ?? 4));
         }
-
         toast.info(`Cliente cargado: ${data.razon_social}`);
       } catch (error) {
-        console.error("Error cargando cliente:", error);
         toast.error("Error al cargar los datos del cliente");
         navigate("/clients");
       } finally {
         setLoadingData(false);
       }
     };
-
     void loadClientData();
   }, [clientId, navigate]);
-
-  /** =========================
-   * CRUD SubClientes (local)
-   * ========================= */
 
   const addSubCliente = () => {
     const newSub: SubClienteForm = {
       ...emptySubCliente,
       id: `SUB-${Date.now()}`,
-      diasCredito: defaultCredito || 15, // 🚀 Hereda los días de crédito globales por defecto
+      diasCredito: defaultCredito || 15,
     };
     setSubClientes((prev) => [...prev, newSub]);
     setEditingSubCliente(newSub);
@@ -620,7 +550,6 @@ export default function ClientsNew() {
       updated[index] = { ...updated[index], [field]: value };
       return updated;
     });
-
     if (editingIndex === index) {
       setEditingSubCliente((prev) =>
         prev ? { ...prev, [field]: value } : prev,
@@ -637,10 +566,6 @@ export default function ClientsNew() {
     toast.success("Subcliente eliminado");
   };
 
-  /** =========================
-   * CRUD Tarifas (local)
-   * ========================= */
-
   const addTarifa = (subClienteIndex: number) => {
     setSubClientes((prev) => {
       const updated = [...prev];
@@ -649,10 +574,9 @@ export default function ClientsNew() {
         id: `TAR-${Date.now()}`,
         iva_porcentaje: globalIVA,
         retencion_porcentaje: globalRetencion,
-        moneda: (defaultMoneda as "MXN" | "USD") || "MXN", // 🚀 Hereda la moneda global
+        moneda: (defaultMoneda as "MXN" | "USD") || "MXN",
         vigencia: todayISO(),
       };
-
       updated[subClienteIndex] = {
         ...updated[subClienteIndex],
         tarifas: [...updated[subClienteIndex].tarifas, newTarifa],
@@ -690,27 +614,46 @@ export default function ClientsNew() {
     toast.success("Tarifa eliminada");
   };
 
-  /** =========================
-   * UI helpers
-   * ========================= */
-
   const getOperationBadge = (tipo: string) => {
     switch (tipo?.toLowerCase()) {
       case "nacional":
-        return <Badge className="bg-emerald-500 text-white">Nacional</Badge>;
+        return (
+          <Badge
+            variant="outline"
+            className="text-[9px] uppercase tracking-widest font-black bg-emerald-500/10 text-emerald-600 border-emerald-200"
+          >
+            Nacional
+          </Badge>
+        );
       case "importación":
-        return <Badge className="bg-blue-500 text-white">Importación</Badge>;
+        return (
+          <Badge
+            variant="outline"
+            className="text-[9px] uppercase tracking-widest font-black bg-blue-500/10 text-blue-600 border-blue-200"
+          >
+            Importación
+          </Badge>
+        );
       case "exportación":
-        return <Badge className="bg-amber-500 text-white">Exportación</Badge>;
+        return (
+          <Badge
+            variant="outline"
+            className="text-[9px] uppercase tracking-widest font-black bg-amber-500/10 text-amber-600 border-amber-200"
+          >
+            Exportación
+          </Badge>
+        );
       default:
-        return <Badge variant="outline">Sin definir</Badge>;
+        return (
+          <Badge
+            variant="outline"
+            className="text-[9px] uppercase tracking-widest font-black"
+          >
+            Sin definir
+          </Badge>
+        );
     }
   };
-
-  /** =========================
-   * Guardar (CREATE/UPDATE)
-   *  actualizaciones: distancia_km + globalIVA/globalRetención + vigencia default
-   * ========================= */
 
   const handleSave = async () => {
     if (!fiscalData.razonSocial || !fiscalData.rfc) {
@@ -737,11 +680,9 @@ export default function ClientsNew() {
         contrato_url: fiscalData.contratoUrl,
         estatus: "activo",
         dias_credito: Number(fiscalData.dias_credito || 0),
-        // (si tu backend ya recibe URLs directas en client)
         constancia_fiscal_url: fiscalData.constancia_fiscal_url || null,
         acta_constitutiva_url: fiscalData.acta_constitutiva_url || null,
         comprobante_domicilio_url: fiscalData.comprobante_domicilio_url || null,
-
         sub_clients: subClientes.map((sub) => ({
           id: sub.id.startsWith("SUB-") ? 0 : safeToInt(sub.id),
           client_id: 0,
@@ -759,7 +700,6 @@ export default function ClientsNew() {
           dias_credito: Number(sub.diasCredito || 0),
           requiere_contrato: sub.requiereContrato,
           convenio_especial: sub.convenioEspecial,
-
           tariffs: sub.tarifas.map((t) => ({
             id: t.id.startsWith("TAR-") ? 0 : safeToInt(t.id),
             sub_client_id: 0,
@@ -768,14 +708,9 @@ export default function ClientsNew() {
             tipo_unidad: t.tipoUnidad,
             tarifa_base: t.tarifaBase,
             costo_casetas: t.costoCasetas,
-
-            //  NUEVO: km para rentabilidad
             distancia_km: Number(t.distancia_km || 0),
-
-            //  NUEVO: % globales
             iva_porcentaje: Number(globalIVA),
             retencion_porcentaje: Number(globalRetencion),
-
             moneda: t.moneda,
             vigencia: t.vigencia?.trim() ? t.vigencia : todayISO(),
             estatus: "activa",
@@ -790,14 +725,10 @@ export default function ClientsNew() {
         await clientService.createClient(payload);
         toast.success("Cliente creado con éxito");
       }
-
       navigate("/clients");
     } catch (error: any) {
-      console.error("Error completo:", error);
-
       const detail = error.response?.data?.detail;
       let errorMessage = "Error al guardar cliente";
-
       if (Array.isArray(detail)) {
         errorMessage = detail
           .map((err) => `${err.loc?.[err.loc.length - 1]}: ${err.msg}`)
@@ -805,167 +736,129 @@ export default function ClientsNew() {
       } else if (typeof detail === "string") {
         errorMessage = detail;
       }
-
       toast.error("Error de Validación", { description: errorMessage });
     }
   };
 
-  // 🚀 NUEVO FILTRO: Muestra solo las rutas que coinciden con el tipo de unidad de la fila
-  const rutasParaModal = useMemo(() => {
-    if (!activePickerIndex) return [];
-    const { subIdx, tarIdx } = activePickerIndex;
-    const currentTarifa = subClientes[subIdx]?.tarifas?.[tarIdx];
-    if (!currentTarifa) return [];
-
-    // Detectamos si la tarifa de esta fila es Full o Sencillo
-    const isFullTariff =
-      currentTarifa.tipoUnidad.toLowerCase().includes("full") ||
-      currentTarifa.tipoUnidad.toLowerCase().includes("9");
-
-    return rutasFiltradas.filter((r) => {
-      // Detectamos cómo se guardó la ruta en el armador
-      const isFullRoute = r.tipo_unidad === "9ejes" || r.tipo_unidad === "full";
-
-      // Si la fila es full, mostramos solo las rutas full. Si es sencillo, solo sencillos.
-      return isFullTariff === isFullRoute;
-    });
-  }, [rutasFiltradas, activePickerIndex, subClientes]);
-
-  // 🚀 FILTRO: Solo muestra rutas del catálogo que coinciden con la unidad de la fila
   const rutasFiltradasParaModal = useMemo(() => {
     if (!activePickerIndex) return [];
     const { subIdx, tarIdx } = activePickerIndex;
     const currentTarifa = subClientes[subIdx]?.tarifas?.[tarIdx];
     if (!currentTarifa) return [];
-
-    // Detectamos si el usuario eligió "Full/9 ejes" en el Select de la fila
     const esFilaFull =
       currentTarifa.tipoUnidad.toLowerCase().includes("full") ||
       currentTarifa.tipoUnidad.toLowerCase().includes("9");
 
     return rutasFiltradas.filter((r) => {
       const esRutaFull = r.tipo_unidad === "9ejes" || r.tipo_unidad === "full";
-      // Solo dejamos pasar las rutas que coinciden con la fila
       return esFilaFull === esRutaFull;
     });
   }, [rutasFiltradas, activePickerIndex, subClientes]);
 
-  /** =========================
-   * Gating por pasos
-   * ========================= */
-
   const canProceed =
     fiscalData.razonSocial && fiscalData.rfc && validateRFC(fiscalData.rfc);
-
   const canProceedStep2 =
     subClientes.length > 0 &&
     subClientes.every((s) => s.nombre && s.direccion && s.ciudad);
 
-  /** =========================
-   * Render loading
-   * ========================= */
-
   if (loadingData) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 space-y-4">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="text-muted-foreground">Cargando datos del cliente...</p>
+      <div className="flex flex-col items-center justify-center h-[60vh] space-y-4">
+        <Loader2 className="h-10 w-10 animate-spin text-brand-red" />
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+          Cargando datos del cliente...
+        </p>
       </div>
     );
   }
 
-  /** =========================
-   * JSX
-   * ========================= */
-
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center gap-4">
+    <div className="space-y-6 max-w-6xl mx-auto p-4 md:p-8 animate-page-enter">
+      {/* 🚀 HEADER TAHOE */}
+      <div className="flex items-center gap-4 mb-8">
         <Button
-          variant="ghost"
+          variant="outline"
           size="icon"
           onClick={() => navigate("/clients")}
+          className="glass-card shadow-sm h-10 w-10"
         >
-          <ArrowLeft className="h-5 w-5" />
+          <ArrowLeft className="h-5 w-5 text-slate-600" />
         </Button>
-
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Users className="h-6 w-6" />{" "}
+          <h1 className="text-3xl font-black uppercase tracking-tighter text-brand-navy drop-shadow-sm heading-crisp flex items-center gap-3">
+            <Users className="h-7 w-7 text-brand-red" />
             {isEditMode ? "Editar Cliente" : "Alta de Cliente"}
           </h1>
-          <p className="text-muted-foreground">
-            Wizard de registro - Paso {step} de 3
+          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400 mt-1">
+            Asistente de registro comercial - Paso {step} de 3
           </p>
         </div>
       </div>
 
-      {/* Step Indicator */}
-      <div className="flex items-center gap-4">
+      {/* 🚀 STEP INDICATOR TAHOE */}
+      <div className="flex items-center gap-4 bg-white/40 backdrop-blur-md p-4 rounded-2xl border border-white/20 shadow-sm">
         <div
-          className={`flex items-center gap-2 ${step >= 1 ? "text-primary" : "text-muted-foreground"}`}
+          className={`flex items-center gap-3 ${step >= 1 ? "text-brand-navy" : "text-slate-400"}`}
         >
           <div
-            className={`w-8 h-8 rounded-full flex items-center justify-center font-medium ${
-              step >= 1 ? "bg-primary text-primary-foreground" : "bg-muted"
-            }`}
+            className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs shadow-sm ${step >= 1 ? "bg-brand-navy text-white shadow-brand-navy/30" : "bg-white/50 border border-slate-200"}`}
           >
             {step > 1 ? <Check className="h-4 w-4" /> : "1"}
           </div>
-          <span className="font-medium hidden sm:block">Datos Fiscales</span>
+          <span className="font-black uppercase text-[10px] tracking-widest hidden sm:block">
+            Datos Fiscales
+          </span>
         </div>
-
-        <div className="flex-1 h-0.5 bg-border" />
-
+        <div className="flex-1 h-[2px] bg-gradient-to-r from-brand-navy/20 to-slate-200/50 rounded-full" />
         <div
-          className={`flex items-center gap-2 ${step >= 2 ? "text-primary" : "text-muted-foreground"}`}
+          className={`flex items-center gap-3 ${step >= 2 ? "text-brand-navy" : "text-slate-400"}`}
         >
           <div
-            className={`w-8 h-8 rounded-full flex items-center justify-center font-medium ${
-              step >= 2 ? "bg-primary text-primary-foreground" : "bg-muted"
-            }`}
+            className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs shadow-sm ${step >= 2 ? "bg-brand-navy text-white shadow-brand-navy/30" : "bg-white/50 border border-slate-200"}`}
           >
             {step > 2 ? <Check className="h-4 w-4" /> : "2"}
           </div>
-          <span className="font-medium hidden sm:block">Destinos</span>
+          <span className="font-black uppercase text-[10px] tracking-widest hidden sm:block">
+            Destinos
+          </span>
         </div>
-
-        <div className="flex-1 h-0.5 bg-border" />
-
+        <div className="flex-1 h-[2px] bg-gradient-to-r from-brand-navy/20 to-slate-200/50 rounded-full" />
         <div
-          className={`flex items-center gap-2 ${step >= 3 ? "text-primary" : "text-muted-foreground"}`}
+          className={`flex items-center gap-3 ${step >= 3 ? "text-brand-navy" : "text-slate-400"}`}
         >
           <div
-            className={`w-8 h-8 rounded-full flex items-center justify-center font-medium ${
-              step >= 3 ? "bg-primary text-primary-foreground" : "bg-muted"
-            }`}
+            className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs shadow-sm ${step >= 3 ? "bg-brand-navy text-white shadow-brand-navy/30" : "bg-white/50 border border-slate-200"}`}
           >
             3
           </div>
-          <span className="font-medium hidden sm:block">
+          <span className="font-black uppercase text-[10px] tracking-widest hidden sm:block">
             Tarifas y Convenios
           </span>
         </div>
       </div>
 
-      {/* Step 1: Fiscal Data */}
+      {/* 🚀 STEP 1: DATOS FISCALES */}
       {step === 1 && (
-        <Card>
-          <CardHeader>
+        <Card
+          variant="glass"
+          className="animate-in fade-in slide-in-from-bottom-4 duration-500"
+        >
+          <CardHeader className="bg-brand-navy/5 border-b border-white/20">
             <CardTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5" />
+              <Building2 className="h-5 w-5 text-brand-navy" />
               Datos Fiscales (Receptor CFDI 4.0)
             </CardTitle>
             <CardDescription>
-              Información fiscal del cliente para facturación electrónica
+              Información corporativa base para emisión de facturas
+              electrónicas.
             </CardDescription>
           </CardHeader>
-
-          <CardContent className="space-y-6">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Razón Social *</Label>
+          <CardContent className="space-y-6 pt-6">
+            <div className="grid grid-cols-2 gap-6">
+              <div className="space-y-1.5">
+                <Label variant="brand" required>
+                  Razón Social
+                </Label>
                 <Input
                   placeholder="Empresa S.A. de C.V."
                   value={fiscalData.razonSocial}
@@ -975,11 +868,13 @@ export default function ClientsNew() {
                       razonSocial: e.target.value,
                     })
                   }
+                  className="h-11 glass-card font-medium"
                 />
               </div>
-
-              <div className="space-y-2">
-                <Label>RFC * (12-13 caracteres)</Label>
+              <div className="space-y-1.5">
+                <Label variant="brand" required>
+                  RFC (12-13 CARACTERES)
+                </Label>
                 <Input
                   placeholder="XXX000000XXX"
                   value={fiscalData.rfc}
@@ -991,59 +886,56 @@ export default function ClientsNew() {
                   }
                   maxLength={13}
                   className={cn(
-                    "font-mono",
+                    "h-11 font-mono font-bold uppercase",
                     fiscalData.rfc &&
                       !validateRFC(fiscalData.rfc) &&
-                      "border-destructive focus-visible:ring-destructive",
+                      "border-destructive bg-destructive/5",
                   )}
                 />
                 {fiscalData.rfc && !validateRFC(fiscalData.rfc) && (
-                  <p className="text-[12px] text-destructive">
-                    RFC debe tener 12-13 caracteres
+                  <p className="text-[9px] font-black text-destructive uppercase tracking-widest mt-1">
+                    RFC inválido
                   </p>
                 )}
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label>Régimen Fiscal *</Label>
+            <div className="grid grid-cols-3 gap-6">
+              <div className="space-y-1.5">
+                <Label variant="brand" required>
+                  Régimen Fiscal
+                </Label>
                 <Select
                   value={fiscalData.regimenFiscal}
-                  onValueChange={(value) =>
-                    setFiscalData({ ...fiscalData, regimenFiscal: value })
+                  onValueChange={(v) =>
+                    setFiscalData({ ...fiscalData, regimenFiscal: v })
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="h-11 glass-card font-bold">
                     <SelectValue placeholder="Seleccionar..." />
                   </SelectTrigger>
-                  <SelectContent className="bg-popover border shadow-lg z-50">
+                  <SelectContent className="glass-panel">
                     <SelectItem value="601">601 - General de Ley</SelectItem>
                     <SelectItem value="603">
-                      603 - Personas Morales sin Fines de Lucro
+                      603 - Sin Fines de Lucro
                     </SelectItem>
-                    <SelectItem value="612">
-                      612 - Personas Físicas con Actividades Empresariales
-                    </SelectItem>
-                    <SelectItem value="626">
-                      626 - Régimen Simplificado de Confianza
-                    </SelectItem>
+                    <SelectItem value="612">612 - Personas Físicas</SelectItem>
+                    <SelectItem value="626">626 - RESICO</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-
-              <div className="space-y-2">
-                <Label>Uso de CFDI</Label>
+              <div className="space-y-1.5">
+                <Label variant="brand">Uso de CFDI</Label>
                 <Select
                   value={fiscalData.usoCFDI}
-                  onValueChange={(value) =>
-                    setFiscalData({ ...fiscalData, usoCFDI: value })
+                  onValueChange={(v) =>
+                    setFiscalData({ ...fiscalData, usoCFDI: v })
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="h-11 glass-card font-bold">
                     <SelectValue placeholder="Seleccionar..." />
                   </SelectTrigger>
-                  <SelectContent className="bg-popover border shadow-lg z-50">
+                  <SelectContent className="glass-panel">
                     <SelectItem value="G03">G03 - Gastos en general</SelectItem>
                     <SelectItem value="P01">P01 - Por definir</SelectItem>
                     <SelectItem value="S01">
@@ -1052,31 +944,36 @@ export default function ClientsNew() {
                   </SelectContent>
                 </Select>
               </div>
-
-              <div className="space-y-2">
-                <Label>Código Postal Fiscal *</Label>
+              <div className="space-y-1.5">
+                <Label variant="brand" required>
+                  Código Postal Fiscal
+                </Label>
                 <Input
                   placeholder="00000"
                   value={fiscalData.codigoPostalFiscal}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/\D/g, "").slice(0, 5);
-                    setFiscalData({ ...fiscalData, codigoPostalFiscal: value });
-                  }}
+                  onChange={(e) =>
+                    setFiscalData({
+                      ...fiscalData,
+                      codigoPostalFiscal: e.target.value
+                        .replace(/\D/g, "")
+                        .slice(0, 5),
+                    })
+                  }
                   maxLength={5}
                   className={cn(
-                    "font-mono",
+                    "h-11 font-mono font-bold",
                     fiscalData.codigoPostalFiscal &&
                       !validateCodigoPostal(fiscalData.codigoPostalFiscal) &&
-                      "border-destructive",
+                      "border-destructive bg-destructive/5",
                   )}
                 />
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label>Dirección Fiscal</Label>
+            <div className="space-y-1.5">
+              <Label variant="brand">Dirección Fiscal Completa</Label>
               <Input
-                placeholder="Av. Ejemplo 123, Col. Centro, Ciudad, Estado, CP"
+                placeholder="Av. Ejemplo 123, Col. Centro, Ciudad, Estado..."
                 value={fiscalData.direccionFiscal}
                 onChange={(e) =>
                   setFiscalData({
@@ -1084,14 +981,15 @@ export default function ClientsNew() {
                     direccionFiscal: e.target.value,
                   })
                 }
+                className="h-11 glass-card font-medium"
               />
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label>Contacto Principal</Label>
+            <div className="grid grid-cols-3 gap-6">
+              <div className="space-y-1.5">
+                <Label variant="brand">Contacto Principal</Label>
                 <Input
-                  placeholder="Lic. Juan Pérez"
+                  placeholder="Ing. Roberto Salinas"
                   value={fiscalData.contactoPrincipal}
                   onChange={(e) =>
                     setFiscalData({
@@ -1099,22 +997,22 @@ export default function ClientsNew() {
                       contactoPrincipal: e.target.value,
                     })
                   }
+                  className="h-11 glass-card"
                 />
               </div>
-
-              <div className="space-y-2">
-                <Label>Teléfono</Label>
+              <div className="space-y-1.5">
+                <Label variant="brand">Teléfono Directo</Label>
                 <Input
                   placeholder="55 1234 5678"
                   value={fiscalData.telefono}
                   onChange={(e) =>
                     setFiscalData({ ...fiscalData, telefono: e.target.value })
                   }
+                  className="h-11 font-mono glass-card"
                 />
               </div>
-
-              <div className="space-y-2">
-                <Label>Email</Label>
+              <div className="space-y-1.5">
+                <Label variant="brand">Email Institucional</Label>
                 <Input
                   type="email"
                   placeholder="contacto@empresa.com"
@@ -1122,23 +1020,24 @@ export default function ClientsNew() {
                   onChange={(e) =>
                     setFiscalData({ ...fiscalData, email: e.target.value })
                   }
+                  className="h-11 font-bold text-brand-navy glass-card"
                 />
               </div>
             </div>
 
             {/* Documentos Obligatorios */}
-            <div className="space-y-4">
-              <h4 className="text-sm font-semibold text-foreground flex items-center gap-2 border-b pb-2">
-                <FileCheck className="h-4 w-4 text-primary" />
+            <div className="space-y-4 pt-6 border-t border-slate-200/50">
+              <h4 className="text-[12px] font-black uppercase tracking-widest text-brand-navy flex items-center gap-2">
+                <FileCheck className="h-4 w-4 text-emerald-500" />
                 Documentación del Cliente
               </h4>
 
               {!isEditMode ? (
-                <div className="p-8 border-2 border-dashed rounded-xl bg-muted/30 text-center">
-                  <AlertTriangle className="h-8 w-8 text-amber-500 mx-auto mb-2" />
-                  <p className="text-sm font-medium">
+                <div className="p-8 border border-dashed border-slate-300 rounded-2xl bg-white/40 text-center flex flex-col items-center justify-center gap-2 shadow-sm">
+                  <AlertTriangle className="h-6 w-6 text-amber-500" />
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
                     Guarda el cliente primero para habilitar la carga de
-                    documentos.
+                    documentos físicos.
                   </p>
                 </div>
               ) : (
@@ -1147,7 +1046,7 @@ export default function ClientsNew() {
                     entityId={parseInt(clientId!)}
                     entityType="client"
                     docType="constancia_fiscal"
-                    docLabel="Constancia de Situación Fiscal"
+                    docLabel="Constancia Fiscal"
                     currentUrl={fiscalData.constancia_fiscal_url}
                     onUploadSuccess={(url) => {
                       setFiscalData((prev) => ({
@@ -1160,7 +1059,6 @@ export default function ClientsNew() {
                       }));
                     }}
                   />
-
                   <DocumentUploadManager
                     entityId={parseInt(clientId!)}
                     entityType="client"
@@ -1178,7 +1076,6 @@ export default function ClientsNew() {
                       }));
                     }}
                   />
-
                   <DocumentUploadManager
                     entityId={parseInt(clientId!)}
                     entityType="client"
@@ -1201,22 +1098,24 @@ export default function ClientsNew() {
             </div>
 
             {/* Documentación Adicional */}
-            <div className="space-y-4 mt-8">
-              <div className="flex items-center justify-between border-b pb-2">
-                <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                  <Paperclip className="h-4 w-4 text-primary" />
-                  Documentos Adicionales y Soporte
+            <div className="space-y-4 pt-6 border-t border-slate-200/50">
+              <div className="flex items-center justify-between">
+                <h4 className="text-[12px] font-black uppercase tracking-widest text-brand-navy flex items-center gap-2">
+                  <Paperclip className="h-4 w-4 text-blue-500" />
+                  Soporte Adicional
                 </h4>
-                <Badge variant="outline" className=" uppercase">
+                <Badge
+                  variant="outline"
+                  className="text-[9px] uppercase tracking-widest"
+                >
                   Expediente Libre
                 </Badge>
               </div>
 
               {!isEditMode ? (
-                <div className="p-6 border-2 border-dashed rounded-xl bg-muted/20 text-center">
-                  <p className="text-[12px] text-muted-foreground">
-                    El repositorio de documentos adicionales se activa después
-                    del primer guardado.
+                <div className="p-6 border border-dashed border-slate-300 rounded-2xl bg-white/40 text-center shadow-sm">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    El repositorio se activa después del primer guardado.
                   </p>
                 </div>
               ) : (
@@ -1225,26 +1124,27 @@ export default function ClientsNew() {
                     entityId={parseInt(clientId!)}
                     entityType="client"
                     docType="adicional"
-                    docLabel="Repositorio de Archivos"
+                    docLabel="Repositorio Libre"
                     currentUrl={fiscalData.contratoUrl}
                     accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.csv,.txt,.doc,.docx"
                     onUploadSuccess={(url) => {
                       setFiscalData((prev) => ({ ...prev, contratoUrl: url }));
-                      toast.success("Documento añadido a la lista");
+                      toast.success("Documento adicional guardado");
                     }}
                   />
-
-                  <Card className="bg-primary/5 border-primary/10">
-                    <CardContent className="p-4 flex gap-3 items-start">
-                      <AlertTriangle className="h-5 w-5 text-primary mt-0.5" />
+                  <Card
+                    variant="flat"
+                    className="bg-blue-50/50 border-blue-100"
+                  >
+                    <CardContent className="p-4 flex gap-3">
+                      <AlertTriangle className="h-5 w-5 text-blue-500 shrink-0" />
                       <div className="space-y-1">
-                        <p className="text-[12px] font-bold uppercase">
-                          Formatos Soportados
+                        <p className="text-[10px] font-black uppercase tracking-widest text-blue-800">
+                          Soporte Multiformato
                         </p>
-                        <p className=" text-muted-foreground leading-relaxed">
-                          Puedes cargar contratos, anexos, tablas de precios o
-                          identificaciones. Soporta: PDF, Imágenes, Excel
-                          (XLSX/CSV) y Texto plano.
+                        <p className="text-xs font-medium text-blue-600/80 leading-relaxed">
+                          Puedes subir contratos, anexos o catálogos en PDF,
+                          Imágenes o Excel.
                         </p>
                       </div>
                     </CardContent>
@@ -1253,385 +1153,418 @@ export default function ClientsNew() {
               )}
             </div>
 
-            <div className="flex justify-end pt-4">
-              <Button onClick={() => setStep(2)} disabled={!canProceed}>
-                Siguiente
+            <div className="flex justify-end pt-6 border-t border-slate-200/50 mt-8">
+              <Button
+                onClick={() => setStep(2)}
+                disabled={!canProceed}
+                className="btn-primary-gradient h-11 px-10 text-[11px] font-black uppercase tracking-widest"
+              >
+                Siguiente Paso <ArrowRight className="h-4 w-4 ml-2" />
               </Button>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Step 2: Sub-Clients */}
+      {/* 🚀 STEP 2: DESTINOS / SUBCLIENTES */}
       {step === 2 && (
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <MapPin className="h-5 w-5" />
-                    Subclientes y Direcciones de Entrega
-                  </CardTitle>
-                  <CardDescription>
-                    Agrega las sucursales, plantas o ubicaciones de entrega del
-                    cliente "{fiscalData.razonSocial}"
-                  </CardDescription>
+        <Card
+          variant="glass"
+          className="animate-in fade-in slide-in-from-bottom-4 duration-500"
+        >
+          <CardHeader className="bg-brand-navy/5 border-b border-white/20 flex flex-row items-center justify-between pb-4">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <MapPin className="h-5 w-5 text-brand-navy" />
+                Destinos de Entrega
+              </CardTitle>
+              <CardDescription>
+                Registra plantas, almacenes o ubicaciones clave para{" "}
+                <strong className="text-brand-navy">
+                  {fiscalData.razonSocial}
+                </strong>
+                .
+              </CardDescription>
+            </div>
+            <Button
+              onClick={addSubCliente}
+              className="btn-primary-gradient h-10 px-6 text-[10px] font-black uppercase tracking-widest shadow-md"
+            >
+              <Plus className="h-3 w-3 mr-2" /> Nuevo Destino
+            </Button>
+          </CardHeader>
+
+          <CardContent className="pt-6">
+            {subClientes.length === 0 ? (
+              <div className="text-center py-16 border border-dashed border-slate-300 rounded-2xl bg-white/40 shadow-sm flex flex-col items-center">
+                <div className="h-16 w-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
+                  <MapPin className="h-8 w-8 text-slate-400" />
                 </div>
+                <h3 className="font-black text-slate-700 text-lg uppercase tracking-tight">
+                  Cero Destinos Configurados
+                </h3>
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1 mb-6">
+                  Debes agregar al menos una ubicación para continuar.
+                </p>
                 <Button
                   onClick={addSubCliente}
-                  className="gap-2 bg-action hover:bg-action-hover text-action-foreground"
+                  variant="outline"
+                  className="glass-card font-black uppercase tracking-widest text-[10px] h-11"
                 >
-                  <Plus className="h-4 w-4" /> Agregar Destino
+                  <Plus className="h-4 w-4 mr-2" /> Crear Primer Destino
                 </Button>
               </div>
-            </CardHeader>
-
-            <CardContent>
-              {subClientes.length === 0 ? (
-                <div className="text-center py-12 border-2 border-dashed rounded-lg bg-muted/20">
-                  <MapPin className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
-                  <h3 className="font-semibold text-lg mb-1">
-                    Sin subclientes registrados
-                  </h3>
-                  <p className="text-muted-foreground text-sm mb-4">
-                    Agrega ubicaciones de entrega como plantas, almacenes o
-                    sucursales
-                  </p>
-                  <Button variant="outline" onClick={addSubCliente}>
-                    <Plus className="h-4 w-4 mr-2" /> Agregar primer destino
-                  </Button>
-                </div>
-              ) : (
-                <Accordion
-                  type="single"
-                  collapsible
-                  className="space-y-2"
-                  value={
-                    editingIndex !== null ? `sub-${editingIndex}` : undefined
-                  }
-                >
-                  {subClientes.map((sub, idx) => (
-                    <AccordionItem
-                      key={sub.id}
-                      value={`sub-${idx}`}
-                      className={cn(
-                        "border rounded-lg overflow-hidden transition-all",
-                        editingIndex === idx ? "ring-2 ring-primary" : "",
-                      )}
-                    >
-                      <AccordionTrigger className="px-4 py-3 hover:bg-muted/50 [&[data-state=open]]:bg-muted/50">
-                        <div className="flex items-center gap-4 flex-1 text-left">
-                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium text-sm">
-                            {idx + 1}
-                          </div>
-                          <div className="flex-1">
-                            <p className="font-semibold">
-                              {sub.nombre || (
-                                <span className="text-muted-foreground italic">
-                                  Nombre del destino...
-                                </span>
-                              )}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              {sub.ciudad && sub.estado
-                                ? `${sub.ciudad}, ${sub.estado}`
-                                : "Sin ubicación"}
-                            </p>
-                          </div>
-                          {sub.tipoOperacion &&
-                            getOperationBadge(sub.tipoOperacion)}
+            ) : (
+              <Accordion
+                type="single"
+                collapsible
+                className="space-y-4"
+                value={
+                  editingIndex !== null ? `sub-${editingIndex}` : undefined
+                }
+              >
+                {subClientes.map((sub, idx) => (
+                  <AccordionItem
+                    key={sub.id}
+                    value={`sub-${idx}`}
+                    className={cn(
+                      "glass-card rounded-2xl overflow-hidden border transition-all",
+                      editingIndex === idx
+                        ? "border-brand-navy shadow-md"
+                        : "border-slate-200/60",
+                    )}
+                  >
+                    <AccordionTrigger className="px-6 py-4 hover:bg-slate-50/50 hover:no-underline [&[data-state=open]]:bg-slate-50/80 transition-colors">
+                      <div className="flex items-center gap-4 flex-1 text-left">
+                        <div className="w-10 h-10 rounded-xl bg-brand-navy/5 border border-brand-navy/10 flex items-center justify-center text-brand-navy font-black">
+                          {idx + 1}
                         </div>
-                      </AccordionTrigger>
+                        <div className="flex-1">
+                          <p className="font-black text-brand-navy text-sm uppercase tracking-tight">
+                            {sub.nombre || (
+                              <span className="text-slate-400">
+                                NOMBRE DEL DESTINO PENDIENTE
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">
+                            {sub.ciudad && sub.estado
+                              ? `${sub.ciudad}, ${sub.estado}`
+                              : "UBICACIÓN SIN DEFINIR"}
+                          </p>
+                        </div>
+                        {sub.tipoOperacion &&
+                          getOperationBadge(sub.tipoOperacion)}
+                      </div>
+                    </AccordionTrigger>
 
-                      <AccordionContent className="px-4 pb-4">
-                        <div className="space-y-4 pt-4 border-t">
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label>Nombre del Destino *</Label>
-                              <Input
-                                placeholder="Ej: Planta Norte Monterrey"
-                                value={sub.nombre}
-                                onChange={(e) =>
-                                  updateSubCliente(
-                                    idx,
-                                    "nombre",
-                                    e.target.value,
-                                  )
-                                }
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label>Alias (corto)</Label>
-                              <Input
-                                placeholder="Ej: Planta Norte"
-                                value={sub.alias}
-                                onChange={(e) =>
-                                  updateSubCliente(idx, "alias", e.target.value)
-                                }
-                              />
-                            </div>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label>Dirección Completa *</Label>
+                    <AccordionContent className="px-6 pb-6">
+                      <div className="space-y-6 pt-6 border-t border-slate-200/50">
+                        <div className="grid grid-cols-2 gap-6">
+                          <div className="space-y-1.5">
+                            <Label variant="brand" required>
+                              Nombre del Destino
+                            </Label>
                             <Input
-                              placeholder="Av. Industrial 123, Parque Industrial..."
-                              value={sub.direccion}
+                              placeholder="Ej: Planta Norte Monterrey"
+                              value={sub.nombre}
+                              onChange={(e) =>
+                                updateSubCliente(idx, "nombre", e.target.value)
+                              }
+                              className="h-11 glass-card font-medium"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label variant="brand">Alias (Uso Interno)</Label>
+                            <Input
+                              placeholder="Ej: Planta Norte"
+                              value={sub.alias}
+                              onChange={(e) =>
+                                updateSubCliente(idx, "alias", e.target.value)
+                              }
+                              className="h-11 glass-card"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label variant="brand" required>
+                            Dirección Completa
+                          </Label>
+                          <Input
+                            placeholder="Av. Industrial 123..."
+                            value={sub.direccion}
+                            onChange={(e) =>
+                              updateSubCliente(idx, "direccion", e.target.value)
+                            }
+                            className="h-11 glass-card font-medium"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-4 gap-6">
+                          <div className="space-y-1.5">
+                            <Label variant="brand" required>
+                              Ciudad
+                            </Label>
+                            <Input
+                              placeholder="Monterrey"
+                              value={sub.ciudad}
+                              onChange={(e) =>
+                                updateSubCliente(idx, "ciudad", e.target.value)
+                              }
+                              className="h-11 glass-card font-medium"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label variant="brand">Estado</Label>
+                            <Select
+                              value={sub.estado}
+                              onValueChange={(v) =>
+                                updateSubCliente(idx, "estado", v)
+                              }
+                            >
+                              <SelectTrigger className="h-11 glass-card font-bold">
+                                <SelectValue placeholder="Seleccionar..." />
+                              </SelectTrigger>
+                              <SelectContent className="glass-panel max-h-[30vh]">
+                                {estadosMexico.map((edo) => (
+                                  <SelectItem key={edo} value={edo}>
+                                    {edo}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label variant="brand">C.P.</Label>
+                            <Input
+                              placeholder="64000"
+                              value={sub.codigoPostal}
                               onChange={(e) =>
                                 updateSubCliente(
                                   idx,
-                                  "direccion",
+                                  "codigoPostal",
+                                  e.target.value.replace(/\D/g, "").slice(0, 5),
+                                )
+                              }
+                              maxLength={5}
+                              className="h-11 glass-card font-mono"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label variant="brand">Operación</Label>
+                            <Select
+                              value={sub.tipoOperacion}
+                              onValueChange={(v) =>
+                                updateSubCliente(idx, "tipoOperacion", v)
+                              }
+                            >
+                              <SelectTrigger className="h-11 glass-card font-bold">
+                                <SelectValue placeholder="Seleccionar..." />
+                              </SelectTrigger>
+                              <SelectContent className="glass-panel">
+                                <SelectItem value="nacional">
+                                  Nacional
+                                </SelectItem>
+                                <SelectItem value="importacion">
+                                  Importación
+                                </SelectItem>
+                                <SelectItem value="exportacion">
+                                  Exportación
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-4 gap-6 pt-4 border-t border-slate-100">
+                          <div className="space-y-1.5">
+                            <Label
+                              variant="brand"
+                              className="flex items-center gap-1.5"
+                            >
+                              <Users className="h-3 w-3 text-slate-400" />{" "}
+                              Contacto
+                            </Label>
+                            <Input
+                              placeholder="Ing. Roberto"
+                              value={sub.contacto}
+                              onChange={(e) =>
+                                updateSubCliente(
+                                  idx,
+                                  "contacto",
                                   e.target.value,
                                 )
                               }
+                              className="h-11 glass-card"
                             />
                           </div>
-
-                          <div className="grid grid-cols-4 gap-4">
-                            <div className="space-y-2">
-                              <Label>Ciudad *</Label>
-                              <Input
-                                placeholder="Monterrey"
-                                value={sub.ciudad}
-                                onChange={(e) =>
-                                  updateSubCliente(
-                                    idx,
-                                    "ciudad",
-                                    e.target.value,
-                                  )
-                                }
-                              />
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label>Estado</Label>
-                              <Select
-                                value={sub.estado}
-                                onValueChange={(value) =>
-                                  updateSubCliente(idx, "estado", value)
-                                }
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Seleccionar..." />
-                                </SelectTrigger>
-                                <SelectContent className="bg-popover border shadow-lg z-50 max-h-60">
-                                  {estadosMexico.map((edo) => (
-                                    <SelectItem key={edo} value={edo}>
-                                      {edo}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label>Código Postal</Label>
-                              <Input
-                                placeholder="64000"
-                                value={sub.codigoPostal}
-                                onChange={(e) =>
-                                  updateSubCliente(
-                                    idx,
-                                    "codigoPostal",
-                                    e.target.value
-                                      .replace(/\D/g, "")
-                                      .slice(0, 5),
-                                  )
-                                }
-                                maxLength={5}
-                              />
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label>Tipo Operación</Label>
-                              <Select
-                                value={sub.tipoOperacion}
-                                onValueChange={(value) =>
-                                  updateSubCliente(idx, "tipoOperacion", value)
-                                }
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Seleccionar..." />
-                                </SelectTrigger>
-                                <SelectContent className="bg-popover border shadow-lg z-50">
-                                  <SelectItem value="nacional">
-                                    Nacional
-                                  </SelectItem>
-                                  {/* Cambiamos el value a sin acento para que la DB lo acepte */}
-                                  <SelectItem value="importacion">
-                                    Importación
-                                  </SelectItem>
-                                  <SelectItem value="exportacion">
-                                    Exportación
-                                  </SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-4 gap-4">
-                            <div className="space-y-2">
-                              <Label className="flex items-center gap-1">
-                                <Users className="h-3 w-3" /> Contacto
-                              </Label>
-                              <Input
-                                placeholder="Ing. Roberto Salinas"
-                                value={sub.contacto}
-                                onChange={(e) =>
-                                  updateSubCliente(
-                                    idx,
-                                    "contacto",
-                                    e.target.value,
-                                  )
-                                }
-                              />
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label className="flex items-center gap-1">
-                                <Phone className="h-3 w-3" /> Teléfono
-                              </Label>
-                              <Input
-                                placeholder="81 5555 4444"
-                                value={sub.telefono}
-                                onChange={(e) =>
-                                  updateSubCliente(
-                                    idx,
-                                    "telefono",
-                                    e.target.value,
-                                  )
-                                }
-                              />
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label className="flex items-center gap-1">
-                                <Clock className="h-3 w-3" /> Horario Recepción
-                              </Label>
-                              <Input
-                                placeholder="Lun-Vie 7:00-17:00"
-                                value={sub.horarioRecepcion}
-                                onChange={(e) =>
-                                  updateSubCliente(
-                                    idx,
-                                    "horarioRecepcion",
-                                    e.target.value,
-                                  )
-                                }
-                              />
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label className="flex items-center gap-1">
-                                <Calendar className="h-3 w-3" /> Horario de Cita
-                              </Label>
-                              <Input
-                                placeholder="Ej: 08:00-10:00"
-                                value={sub.horarioCita}
-                                onChange={(e) =>
-                                  updateSubCliente(
-                                    idx,
-                                    "horarioCita",
-                                    e.target.value,
-                                  )
-                                }
-                              />
-                            </div>
-                          </div>
-
-                          <div className="flex justify-end pt-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                              onClick={() => removeSubCliente(idx)}
+                          <div className="space-y-1.5">
+                            <Label
+                              variant="brand"
+                              className="flex items-center gap-1.5"
                             >
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Eliminar destino
-                            </Button>
+                              <Phone className="h-3 w-3 text-slate-400" />{" "}
+                              Teléfono
+                            </Label>
+                            <Input
+                              placeholder="81 5555 4444"
+                              value={sub.telefono}
+                              onChange={(e) =>
+                                updateSubCliente(
+                                  idx,
+                                  "telefono",
+                                  e.target.value,
+                                )
+                              }
+                              className="h-11 glass-card font-mono"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label
+                              variant="brand"
+                              className="flex items-center gap-1.5"
+                            >
+                              <Clock className="h-3 w-3 text-slate-400" />{" "}
+                              Horario Recepción
+                            </Label>
+                            <Input
+                              placeholder="7:00 - 17:00"
+                              value={sub.horarioRecepcion}
+                              onChange={(e) =>
+                                updateSubCliente(
+                                  idx,
+                                  "horarioRecepcion",
+                                  e.target.value,
+                                )
+                              }
+                              className="h-11 glass-card"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label
+                              variant="brand"
+                              className="flex items-center gap-1.5"
+                            >
+                              <Calendar className="h-3 w-3 text-slate-400" />{" "}
+                              Horario Cita
+                            </Label>
+                            <Input
+                              placeholder="8:00 - 10:00"
+                              value={sub.horarioCita}
+                              onChange={(e) =>
+                                updateSubCliente(
+                                  idx,
+                                  "horarioCita",
+                                  e.target.value,
+                                )
+                              }
+                              className="h-11 glass-card"
+                            />
                           </div>
                         </div>
-                      </AccordionContent>
-                    </AccordionItem>
-                  ))}
-                </Accordion>
-              )}
-            </CardContent>
-          </Card>
 
-          <div className="flex justify-between pt-4">
-            <Button variant="outline" onClick={() => setStep(1)}>
-              <ArrowLeft className="h-4 w-4 mr-2" /> Anterior
-            </Button>
-            <Button onClick={() => setStep(3)} disabled={!canProceedStep2}>
-              Siguiente: Tarifas
-            </Button>
-          </div>
-        </div>
+                        <div className="flex justify-end pt-4">
+                          <Button
+                            variant="ghost"
+                            className="text-[10px] font-black uppercase tracking-widest text-rose-500 hover:bg-rose-50 hover:text-rose-600 h-9"
+                            onClick={() => removeSubCliente(idx)}
+                          >
+                            <Trash2 className="h-3 w-3 mr-2" /> Eliminar Destino
+                          </Button>
+                        </div>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            )}
+
+            <div className="flex items-center justify-between pt-8 border-t border-slate-200/50 mt-8">
+              <Button
+                variant="outline"
+                className="h-11 glass-card px-8 text-[11px] font-black uppercase tracking-widest text-slate-500"
+                onClick={() => setStep(1)}
+              >
+                <ArrowLeft className="h-4 w-4 mr-2" /> Atrás
+              </Button>
+              <Button
+                onClick={() => setStep(3)}
+                disabled={!canProceedStep2}
+                className="btn-primary-gradient h-11 px-10 text-[11px] font-black uppercase tracking-widest"
+              >
+                Siguiente Paso <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
+      {/* 🚀 STEP 3: TARIFAS Y CONVENIOS */}
       {step === 3 && (
         <div className="space-y-6 animate-in fade-in duration-500">
-          {/*  1. CONFIGURACIÓN GLOBAL: IVA, RETENCIÓN Y CRÉDITO */}
-          <Card className="bg-slate-50 border-2 border-dashed border-slate-200">
+          {/* CONFIGURACIÓN GLOBAL */}
+          <Card
+            variant="glass"
+            className="bg-gradient-to-br from-slate-50 to-white border-2 border-dashed border-slate-200 shadow-sm"
+          >
             <CardContent className="pt-6">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
                 <div className="space-y-1.5">
-                  <Label className=" font-black uppercase text-primary">
+                  <Label variant="brand" className="text-primary">
                     IVA Trasladado (%)
                   </Label>
                   <Input
                     type="number"
-                    className="h-9 bg-white font-mono"
+                    className="h-11 bg-white font-mono font-bold"
                     value={globalIVA}
                     onChange={(e) => setGlobalIVA(Number(e.target.value))}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className=" font-black uppercase text-rose-600">
+                  <Label variant="brand" className="text-rose-600">
                     Retención IVA (%)
                   </Label>
                   <Input
                     type="number"
-                    className="h-9 bg-white font-mono"
+                    className="h-11 bg-white font-mono font-bold"
                     value={globalRetencion}
                     onChange={(e) => setGlobalRetencion(Number(e.target.value))}
                   />
                 </div>
-
-                {/*  DÍAS DE CRÉDITO GENERAL */}
                 <div className="space-y-1.5">
-                  <Label className=" font-black uppercase text-slate-600">
-                    Días de Crédito (General)
+                  <Label variant="brand" className="text-slate-600">
+                    Crédito Global (Días)
                   </Label>
                   <Select
-                    // Convertimos el número a string para que el Select lo pueda pintar
                     value={String(fiscalData.dias_credito)}
                     onValueChange={(val) =>
                       setFiscalData((prev) => ({
                         ...prev,
-                        dias_credito: parseInt(val, 10) || 0, // Lo guardamos como número real
+                        dias_credito: parseInt(val, 10) || 0,
                       }))
                     }
                   >
-                    <SelectTrigger className="h-9 bg-white">
-                      <SelectValue placeholder="Seleccionar crédito..." />
+                    <SelectTrigger className="h-11 bg-white font-bold">
+                      <SelectValue placeholder="Seleccionar..." />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="glass-panel">
                       {dynamicOpcionesDiasCredito.map((op) => (
-                        <SelectItem key={op.value} value={String(op.value)}>
+                        <SelectItem
+                          key={op.value}
+                          value={String(op.value)}
+                          className="font-semibold"
+                        >
                           {op.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-
-                <div className=" flex justify-end gap-2">
+                <div className="flex justify-end gap-2">
                   <Button
                     variant="outline"
-                    className="h-9 bg-white border-slate-300 text-slate-600 font-bold hover:bg-slate-100 shadow-sm"
+                    className="h-11 bg-white border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-600 shadow-sm w-full"
                     onClick={handleRefreshTariffs}
                     disabled={isRefreshing}
                   >
@@ -1640,29 +1573,28 @@ export default function ClientsNew() {
                     ) : (
                       <Repeat className="h-4 w-4 mr-2 text-primary" />
                     )}
-                    Sincronizar Catálogo
+                    Sincronizar
                   </Button>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* 2. LISTADO DE SUBCLIENTES */}
+          {/* LISTADO DE TARIFAS POR SUBCLIENTE */}
           {subClientes.map((sub, idx) => (
             <Card
               key={sub.id}
-              className="shadow-sm border-slate-200 overflow-hidden"
+              variant="glass"
+              className="overflow-hidden border border-slate-200/60"
             >
-              <CardHeader className="py-3 bg-slate-100/50 border-b flex flex-row items-center justify-between">
-                <CardTitle className="text-sm font-bold flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-slate-400" />{" "}
-                  {sub.nombre || "Destino sin nombre"}
+              <CardHeader className="py-4 bg-brand-navy/5 border-b border-white/20 flex flex-row items-center justify-between">
+                <CardTitle className="text-sm font-black uppercase tracking-tight flex items-center gap-2 text-brand-navy">
+                  <MapPin className="h-4 w-4 text-brand-red" />{" "}
+                  {sub.nombre || "DESTINO SIN NOMBRE"}
                 </CardTitle>
-
-                {/*  CRÉDITO POR SUBCLIENTE (Opcional si es diferente al general) */}
-                <div className="flex items-center gap-2">
-                  <Label className="text-[12px] uppercase font-bold text-slate-500">
-                    Crédito Destino:
+                <div className="flex items-center gap-3">
+                  <Label className="text-[10px] uppercase font-black tracking-widest text-slate-500">
+                    Crédito Excepción:
                   </Label>
                   <Select
                     value={String(sub.diasCredito)}
@@ -1670,12 +1602,16 @@ export default function ClientsNew() {
                       updateSubCliente(idx, "diasCredito", parseInt(v))
                     }
                   >
-                    <SelectTrigger className="h-7 w-32  bg-white">
+                    <SelectTrigger className="h-8 w-32 bg-white font-bold text-xs shadow-sm">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="glass-panel">
                       {opcionesDiasCredito.map((op) => (
-                        <SelectItem key={op.value} value={String(op.value)}>
+                        <SelectItem
+                          key={op.value}
+                          value={String(op.value)}
+                          className="font-semibold text-xs"
+                        >
                           {op.label}
                         </SelectItem>
                       ))}
@@ -1684,232 +1620,231 @@ export default function ClientsNew() {
                 </div>
               </CardHeader>
 
-              <CardContent className="pt-4 space-y-4">
-                {sub.tarifas.map((tarifa, tIdx) => {
-                  const info = calcularInfoTarifa(tarifa);
-                  return (
-                    <div
-                      key={tarifa.id}
-                      className="relative grid grid-cols-12 gap-4 items-stretch border-2 p-4 rounded-2xl bg-white hover:border-primary/30 hover:shadow-md transition-all group"
-                    >
-                      {/* 1. TIPO DE CONFIGURACIÓN */}
-                      <div className="col-span-2 flex flex-col justify-center space-y-1.5">
-                        <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
-                          1. Tipo
-                        </Label>
-                        <Select
-                          value={tarifa.tipoUnidad}
-                          onValueChange={(nuevaUnidad) => {
-                            updateTarifa(idx, tIdx, "tipoUnidad", nuevaUnidad);
-                            updateTarifa(idx, tIdx, "rate_template_id", null);
-                            updateTarifa(idx, tIdx, "nombreRuta", "");
-                            updateTarifa(idx, tIdx, "costoCasetas", 0);
-                            toast.info(
-                              "Tipo actualizado. Por favor selecciona la ruta.",
-                            );
-                          }}
-                        >
-                          <SelectTrigger className="h-10 font-bold border-slate-200 bg-slate-50/50 text-sm">
-                            <SelectValue placeholder="Tipo..." />
-                          </SelectTrigger>
-                          <SelectContent className="z-[200]">
-                            <SelectItem value="sencillo">
-                              Sencillo (5 Ejes)
-                            </SelectItem>
-                            <SelectItem value="full">
-                              Doble / Full (9 Ejes)
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      {/* 2. BUSCADOR DE RUTA */}
-                      <div className="col-span-3 flex flex-col justify-center space-y-1.5">
-                        <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
-                          2. Ruta autorizada
-                        </Label>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "w-full h-10 justify-start font-bold border-slate-200 text-[12px]",
-                            !tarifa.nombreRuta &&
-                              "text-rose-500 border-rose-200 bg-rose-50 hover:bg-rose-100",
-                          )}
-                          onClick={() => {
-                            setActivePickerIndex({ subIdx: idx, tarIdx: tIdx });
-                            setIsRoutePickerOpen(true);
-                          }}
-                        >
-                          <Route className="h-4 w-4 mr-2 shrink-0 text-slate-500" />
-                          <span className="truncate">
-                            {tarifa.nombreRuta || "SELECCIONAR RUTA..."}
-                          </span>
-                        </Button>
-                      </div>
-                      {/* 4. DESGLOSE INTERNO (CASETAS E IMPUESTOS) */}
-                      <div className="col-span-3 flex flex-col justify-center px-4 border-l border-r border-slate-100 bg-slate-50/30 rounded-lg py-1 space-y-1">
-                        {/* Casetas como referencia de costo interno */}
-                        <div className="flex justify-between items-center">
-                          <span className="text-[12px] font-bold text-status-success uppercase">
-                            Casetas (Gasto):
-                          </span>
-                          <span className="text-[12px] font-mono font-bold text-status-success">
-                            ${tarifa.costoCasetas.toLocaleString()}
-                          </span>
+              <CardContent className="pt-6 space-y-4 bg-white/40">
+                {sub.tarifas.length === 0 ? (
+                  <p className="text-center text-[10px] font-bold uppercase tracking-widest text-slate-400 py-4">
+                    No hay rutas asignadas a este destino
+                  </p>
+                ) : (
+                  sub.tarifas.map((tarifa, tIdx) => {
+                    const info = calcularInfoTarifa(tarifa);
+                    return (
+                      <div
+                        key={tarifa.id}
+                        className="relative grid grid-cols-1 md:grid-cols-12 gap-4 items-stretch border border-slate-200/80 p-4 rounded-2xl bg-white/80 backdrop-blur-sm shadow-sm hover:shadow-md transition-all group"
+                      >
+                        {/* 1. TIPO DE CONFIGURACIÓN */}
+                        <div className="col-span-2 flex flex-col justify-center space-y-1.5">
+                          <Label variant="brand">1. Configuración</Label>
+                          <Select
+                            value={tarifa.tipoUnidad}
+                            onValueChange={(v) => {
+                              updateTarifa(idx, tIdx, "tipoUnidad", v);
+                              updateTarifa(idx, tIdx, "rate_template_id", null);
+                              updateTarifa(idx, tIdx, "nombreRuta", "");
+                              updateTarifa(idx, tIdx, "costoCasetas", 0);
+                              toast.info(
+                                "Tipo actualizado. Selecciona ruta de nuevo.",
+                              );
+                            }}
+                          >
+                            <SelectTrigger className="h-10 font-bold border-slate-200 bg-slate-50">
+                              <SelectValue placeholder="Tipo..." />
+                            </SelectTrigger>
+                            <SelectContent className="glass-panel z-[200]">
+                              <SelectItem value="sencillo">
+                                Sencillo (5 Ejes)
+                              </SelectItem>
+                              <SelectItem value="full">
+                                Doble / Full (9 Ejes)
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
 
-                        <Separator className="opacity-50" />
-
-                        {/* Impuestos reales a facturar */}
-                        <div className="flex justify-between items-center">
-                          <span className="text-[12px] font-bold text-slate-500 uppercase">
-                            IVA ({globalIVA}%):
-                          </span>
-                          <span className="text-[12px] font-mono font-bold text-primary">
-                            +$
-                            {info.iva.toLocaleString("es-MX", {
-                              minimumFractionDigits: 2,
-                            })}
-                          </span>
+                        {/* 2. RUTA AUTORIZADA */}
+                        <div className="col-span-3 flex flex-col justify-center space-y-1.5">
+                          <Label variant="brand">2. Ruta Matriz (SCT)</Label>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full h-10 justify-start font-bold border-slate-200 text-xs shadow-sm",
+                              !tarifa.nombreRuta &&
+                                "text-rose-500 border-rose-200 bg-rose-50",
+                            )}
+                            onClick={() => {
+                              setActivePickerIndex({
+                                subIdx: idx,
+                                tarIdx: tIdx,
+                              });
+                              setIsRoutePickerOpen(true);
+                            }}
+                          >
+                            <Route className="h-4 w-4 mr-2 shrink-0 text-slate-400" />
+                            <span className="truncate">
+                              {tarifa.nombreRuta || "VINCULAR RUTA..."}
+                            </span>
+                          </Button>
                         </div>
 
-                        <div className="flex justify-between items-center">
-                          <span className="text-[12px] font-bold text-slate-500 uppercase">
-                            Ret ({globalRetencion}%):
-                          </span>
-                          <span className="text-[12px] font-mono font-bold text-rose-600">
-                            -$
-                            {info.ret.toLocaleString("es-MX", {
-                              minimumFractionDigits: 2,
-                            })}
-                          </span>
+                        {/* 3. DESGLOSE INTERNO */}
+                        <div className="col-span-3 flex flex-col justify-center px-4 border-l border-r border-slate-100 bg-slate-50/50 rounded-xl space-y-1.5">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">
+                              Casetas (Ref):
+                            </span>
+                            <span className="text-xs font-mono font-bold text-emerald-600">
+                              ${tarifa.costoCasetas.toLocaleString()}
+                            </span>
+                          </div>
+                          <Separator className="opacity-50" />
+                          <div className="flex justify-between items-center">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                              IVA ({globalIVA}%):
+                            </span>
+                            <span className="text-xs font-mono font-bold text-primary">
+                              +${" "}
+                              {info.iva.toLocaleString("es-MX", {
+                                minimumFractionDigits: 2,
+                              })}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                              Ret ({globalRetencion}%):
+                            </span>
+                            <span className="text-xs font-mono font-bold text-rose-500">
+                              -${" "}
+                              {info.ret.toLocaleString("es-MX", {
+                                minimumFractionDigits: 2,
+                              })}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* 4. FLETE BASE (INPUT) */}
+                        <div className="col-span-2 flex flex-col justify-center space-y-1.5">
+                          <Label variant="brand" className="text-brand-navy">
+                            3. Flete a Cobrar
+                          </Label>
+                          <div className="relative">
+                            <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                            <Input
+                              type="number"
+                              value={tarifa.tarifaBase || ""}
+                              onChange={(e) =>
+                                updateTarifa(
+                                  idx,
+                                  tIdx,
+                                  "tarifaBase",
+                                  Number(e.target.value),
+                                )
+                              }
+                              className="h-10 pl-8 text-sm font-black border-slate-200 bg-white focus-visible:ring-brand-navy shadow-sm"
+                            />
+                          </div>
+                        </div>
+
+                        {/* 5. TOTAL A FACTURAR */}
+                        <div className="col-span-2 flex items-center gap-3">
+                          <div className="flex-1 bg-brand-navy p-3 rounded-xl text-right shadow-md flex flex-col justify-center h-full">
+                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                              Total Factura
+                            </p>
+                            <p className="text-lg font-black text-white font-mono leading-none">
+                              $
+                              {info.total.toLocaleString("es-MX", {
+                                minimumFractionDigits: 2,
+                              })}
+                            </p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-10 w-10 shrink-0 text-slate-300 hover:text-white hover:bg-destructive rounded-xl shadow-sm bg-white border border-slate-200"
+                            onClick={() => removeTarifa(idx, tIdx)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                       </div>
+                    );
+                  })
+                )}
 
-                      {/* 3. FLETE BASE (LO QUE SE COBRA) */}
-                      <div className="col-span-2 flex flex-col justify-center space-y-1.5">
-                        <Label className="text-[10px] font-black uppercase text-primary tracking-wider">
-                          3. Flete Base
-                        </Label>
-                        <div className="relative">
-                          <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                          <Input
-                            type="number"
-                            value={tarifa.tarifaBase || ""}
-                            onChange={(e) =>
-                              updateTarifa(
-                                idx,
-                                tIdx,
-                                "tarifaBase",
-                                Number(e.target.value),
-                              )
-                            }
-                            className="h-10 pl-8 text-sm font-black border-slate-200 focus-visible:ring-primary"
-                          />
-                        </div>
-                      </div>
-
-                      {/* 5. TOTAL A FACTURAR + ELIMINAR */}
-                      <div className="col-span-2 flex items-center gap-2">
-                        {/* Caja de Total */}
-                        <div className="flex-1 bg-brand-navy p-2.5 rounded-xl text-right shadow-md border border-slate-800 flex flex-col justify-center h-full">
-                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">
-                            A Facturar
-                          </p>
-                          <p className="text-base font-black text-primary font-mono leading-none">
-                            $
-                            {info.total.toLocaleString("es-MX", {
-                              minimumFractionDigits: 2,
-                            })}
-                          </p>
-                        </div>
-
-                        {/* Botón de eliminar con mejor visibilidad */}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-10 w-10 shrink-0 text-slate-300 hover:text-white hover:bg-destructive rounded-xl transition-all shadow-sm"
-                          onClick={() => removeTarifa(idx, tIdx)}
-                        >
-                          <Trash2 className="h-5 w-5" />
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {/* BOTÓN PARA AÑADIR NUEVA FILA */}
                 <Button
                   variant="ghost"
                   size="lg"
-                  className="w-full border-dashed border-2 border-slate-200 h-14 text-slate-500 hover:text-primary hover:border-primary/50 hover:bg-primary/5 transition-all rounded-2xl"
+                  className="w-full border-dashed border-2 border-slate-200 h-12 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-brand-navy hover:border-brand-navy/30 hover:bg-brand-navy/5 rounded-xl transition-all"
                   onClick={() => addTarifa(idx)}
                 >
-                  <PlusCircle className="h-5 w-5 mr-2" />
-                  <span className="font-bold uppercase tracking-tight">
-                    Añadir nueva ruta autorizada a este destino
-                  </span>
+                  <PlusCircle className="h-4 w-4 mr-2" /> Añadir ruta comercial
                 </Button>
               </CardContent>
             </Card>
           ))}
-          {/* MODAL DE BÚSQUEDA SCT (Ahora filtra columnas según Sencillo o Full) */}
+
+          {/* 🚀 MODAL RUTAS SCT (LIQUID GLASS) */}
           <Dialog open={isRoutePickerOpen} onOpenChange={setIsRoutePickerOpen}>
-            <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col p-0 border-none shadow-2xl">
-              <DialogHeader className="p-6 pb-2 bg-slate-900 text-white">
-                <DialogTitle className="text-xl font-bold flex items-center gap-2">
-                  <Route className="h-6 w-6 text-primary" /> Catálogo SCT
-                </DialogTitle>
-                <div className="relative mt-4">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <Input
-                    placeholder="Buscar por origen o destino..."
-                    value={searchQuery}
-                    onChange={(e) => handleSearchRoutes(e.target.value)}
-                    className="pl-10 h-11 bg-white/10 border-white/20 text-white placeholder:text-slate-400 focus:bg-white focus:text-slate-900"
-                    autoFocus
-                  />
+            <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col p-0 glass-panel border-none shadow-2xl">
+              <DialogHeader className="p-6 pb-4 bg-brand-navy/95 backdrop-blur-md text-white border-b border-white/10">
+                <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent pointer-events-none" />
+                <div className="relative z-10 space-y-4">
+                  <DialogTitle className="text-2xl font-black uppercase tracking-tighter heading-crisp flex items-center gap-2 text-white text-shadow-premium">
+                    <Route className="h-6 w-6 text-brand-red" /> Catálogo Matriz
+                    SCT
+                  </DialogTitle>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <Input
+                      placeholder="Buscar por origen o destino..."
+                      value={searchQuery}
+                      onChange={(e) => handleSearchRoutes(e.target.value)}
+                      className="pl-10 h-11 bg-white/10 border-white/20 text-white placeholder:text-slate-400 focus:bg-white focus:text-brand-navy font-bold shadow-inner"
+                      autoFocus
+                    />
+                  </div>
                 </div>
               </DialogHeader>
 
-              <div className="flex-1 overflow-y-auto px-6 py-4 bg-slate-50">
-                <div className="border rounded-xl bg-white overflow-hidden shadow-sm">
+              <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50 custom-scrollbar">
+                <div className="border border-white/40 rounded-2xl bg-white/60 backdrop-blur-sm shadow-xl overflow-hidden liquid-glass-table">
                   <Table>
-                    <TableHeader className="bg-slate-100/80">
-                      <TableRow>
-                        <TableHead className="font-bold uppercase">
-                          Ruta Autorizada
+                    <TableHeader className="bg-slate-900/5 backdrop-blur-md border-b border-white/20">
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 h-12 pl-6">
+                          Ruta Registrada
                         </TableHead>
-                        {/* 🚀 Encabezado dinámico */}
-                        {activePickerIndex &&
-                        (subClientes[activePickerIndex.subIdx]?.tarifas[
-                          activePickerIndex.tarIdx
-                        ]?.tipoUnidad?.includes("full") ||
-                          subClientes[activePickerIndex.subIdx]?.tarifas[
+                        <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 h-12 text-right">
+                          {activePickerIndex &&
+                          (subClientes[activePickerIndex.subIdx]?.tarifas[
                             activePickerIndex.tarIdx
-                          ]?.tipoUnidad?.includes("9")) ? (
-                          <TableHead className="text-right font-bold uppercase text-emerald-700">
-                            Costo Full Autorizado
-                          </TableHead>
-                        ) : (
-                          <TableHead className="text-right font-bold uppercase text-blue-700">
-                            Costo Sencillo Autorizado
-                          </TableHead>
-                        )}
-                        <TableHead className="text-right font-bold uppercase">
-                          Acciones
+                          ]?.tipoUnidad?.includes("full") ||
+                            subClientes[activePickerIndex.subIdx]?.tarifas[
+                              activePickerIndex.tarIdx
+                            ]?.tipoUnidad?.includes("9")) ? (
+                            <span className="text-emerald-700">
+                              Costo Full (Ref)
+                            </span>
+                          ) : (
+                            <span className="text-blue-700">
+                              Costo Sencillo (Ref)
+                            </span>
+                          )}
+                        </TableHead>
+                        <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 h-12 text-right pr-6">
+                          Acción
                         </TableHead>
                       </TableRow>
                     </TableHeader>
-                    <TableBody>
+                    <TableBody className="table-staggered">
                       {rutasFiltradasParaModal.length === 0 ? (
                         <TableRow>
                           <TableCell
                             colSpan={3}
-                            className="text-center py-20 text-slate-400 italic"
+                            className="text-center py-16 text-[10px] font-bold uppercase tracking-widest text-slate-400"
                           >
-                            No hay rutas armadas en el catálogo para esta
-                            configuración.
+                            No hay rutas compatibles con esta configuración.
                           </TableCell>
                         </TableRow>
                       ) : (
@@ -1920,32 +1855,30 @@ export default function ClientsNew() {
                           return (
                             <TableRow
                               key={r.id}
-                              className="cursor-pointer hover:bg-primary/5 transition-colors group"
+                              className="cursor-pointer hover:bg-white/60 transition-colors border-b border-white/10 interactive-row"
                             >
-                              <TableCell className="py-3">
-                                <div className="flex flex-col gap-0.5">
-                                  <span className="font-black text-slate-900 text-sm uppercase tracking-tight">
+                              <TableCell className="py-4 pl-6">
+                                <div className="flex flex-col gap-1">
+                                  <span className="font-black text-brand-navy text-sm uppercase tracking-tight">
                                     {r.origen}
                                   </span>
-                                  <div className="flex flex-wrap items-center gap-x-2 text-muted-foreground font-medium text-[11px]">
+                                  <div className="flex flex-wrap items-center gap-x-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
                                     {r.destino && r.destino !== "N/A" && (
-                                      <span>Hacia: {r.destino}</span>
+                                      <span className="text-brand-red">
+                                        ➔ {r.destino}
+                                      </span>
                                     )}
                                     <span className="text-slate-300">•</span>
-                                    <span className="font-mono">
+                                    <span className="font-mono text-slate-500">
                                       {r.distancia_total_km} KM
                                     </span>
                                   </div>
                                 </div>
                               </TableCell>
-
-                              {/* 🚀 Solo una celda de costo */}
                               <TableCell
                                 className={cn(
-                                  "text-right font-mono text-[12px] font-bold",
-                                  isFull
-                                    ? "text-emerald-600 bg-emerald-50/20"
-                                    : "text-blue-600 bg-blue-50/20",
+                                  "text-right font-mono text-[12px] font-black py-4",
+                                  isFull ? "text-emerald-600" : "text-blue-600",
                                 )}
                               >
                                 $
@@ -1956,11 +1889,9 @@ export default function ClientsNew() {
                                   minimumFractionDigits: 2,
                                 })}
                               </TableCell>
-
-                              <TableCell className="text-right">
+                              <TableCell className="text-right py-4 pr-6">
                                 <Button
-                                  size="sm"
-                                  className="h-7 uppercase font-black shadow-sm"
+                                  className="h-8 bg-brand-navy hover:bg-brand-navy/90 text-white text-[9px] font-black uppercase tracking-widest shadow-md rounded-lg"
                                   onClick={() => {
                                     if (!activePickerIndex) return;
                                     const { subIdx, tarIdx } =
@@ -1968,7 +1899,6 @@ export default function ClientsNew() {
                                     const costo = isFull
                                       ? r.costo_total_full
                                       : r.costo_total_sencillo;
-
                                     updateTarifa(
                                       subIdx,
                                       tarIdx,
@@ -1994,12 +1924,10 @@ export default function ClientsNew() {
                                       r.distancia_total_km,
                                     );
                                     setIsRoutePickerOpen(false);
-                                    toast.success(
-                                      "Ruta vinculada correctamente",
-                                    );
+                                    toast.success("Ruta vinculada al convenio");
                                   }}
                                 >
-                                  Seleccionar
+                                  Vincular
                                 </Button>
                               </TableCell>
                             </TableRow>
@@ -2013,14 +1941,18 @@ export default function ClientsNew() {
             </DialogContent>
           </Dialog>
 
-          <div className="flex justify-between pt-6 border-t">
-            <Button variant="outline" size="lg" onClick={() => setStep(2)}>
-              Anterior
+          {/* 🚀 FOOTER FINAL */}
+          <div className="flex items-center justify-between pt-8 border-t border-slate-200 mt-12 mb-12">
+            <Button
+              variant="outline"
+              className="h-12 glass-card px-8 text-[11px] font-black uppercase tracking-widest text-slate-500"
+              onClick={() => setStep(2)}
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" /> Paso Anterior
             </Button>
             <Button
-              size="lg"
               onClick={handleSave}
-              className="bg-primary hover:bg-primary/90 text-white px-12 shadow-lg shadow-primary/20"
+              className="btn-primary-gradient h-12 px-12 text-[11px] font-black uppercase tracking-[0.2em] shadow-2xl active:scale-95 transition-all"
             >
               <Check className="h-4 w-4 mr-2" /> GUARDAR CONVENIO FINAL
             </Button>

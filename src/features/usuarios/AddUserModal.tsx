@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import {
   Dialog,
   DialogContent,
@@ -16,47 +18,52 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useRoles } from "@/hooks/useRoles";
-import { UserPlus } from "lucide-react";
+import { UserPlus, Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+// 1. ESQUEMA DE VALIDACIÓN ZOD
+const userSchema = z.object({
+  nombre: z.string().min(2, "El nombre es demasiado corto"),
+  apellidos: z.string().min(2, "Los apellidos son requeridos"),
+  email: z.string().email("Correo electrónico no válido"),
+  telefono: z
+    .string()
+    .min(10, "Mínimo 10 dígitos")
+    .optional()
+    .or(z.literal("")),
+  puesto: z.string().min(2, "Especifica el puesto"),
+  rol: z.string().min(1, "Selecciona un rol de seguridad"),
+  password: z.string().min(8, "La contraseña requiere mínimo 8 caracteres"),
+});
+
+export type UserFormData = z.infer<typeof userSchema>;
 
 interface AddUserModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: UserFormData) => void;
-}
-
-// Interfaz actualizada para que coincida exactamente con la edición
-export interface UserFormData {
-  nombre: string;
-  apellidos: string;
-  email: string;
-  telefono: string;
-  puesto: string;
-  rol: string;
-  password: string;
+  isSaving?: boolean; // Agregado para feedback de carga
 }
 
 export function AddUserModal({
   open,
   onOpenChange,
   onSubmit,
+  isSaving = false,
 }: AddUserModalProps) {
   const { roles } = useRoles();
 
-  const [formData, setFormData] = useState<UserFormData>({
-    nombre: "",
-    apellidos: "",
-    email: "",
-    telefono: "",
-    puesto: "",
-    rol: "",
-    password: "",
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSubmit(formData);
-    // Limpiar formulario
-    setFormData({
+  // 2. CONFIGURACIÓN DE REACT HOOK FORM
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    reset,
+    formState: { errors },
+  } = useForm<UserFormData>({
+    resolver: zodResolver(userSchema),
+    defaultValues: {
       nombre: "",
       apellidos: "",
       email: "",
@@ -64,186 +71,223 @@ export function AddUserModal({
       puesto: "",
       rol: "",
       password: "",
-    });
+    },
+  });
+
+  const selectedRol = watch("rol");
+
+  const handleFormSubmit = (data: UserFormData) => {
+    onSubmit(data);
+    reset();
     onOpenChange(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[550px]">
-        <DialogHeader className="pb-4 border-b">
-          <DialogTitle className="flex items-center gap-2 text-foreground">
-            <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center">
-              <UserPlus className="h-4 w-4 text-primary" />
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        if (!v) reset();
+        onOpenChange(v);
+      }}
+    >
+      <DialogContent className="sm:max-w-[550px] p-0 overflow-hidden glass-panel border-none shadow-2xl animate-modal-show">
+        {/* HEADER: Navy Premium con Text Shadow para legibilidad */}
+        <DialogHeader className="px-8 py-6 bg-brand-navy/95 backdrop-blur-md shrink-0 relative overflow-hidden border-b border-white/10">
+          <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent pointer-events-none" />
+
+          <div className="relative z-10 flex items-center gap-4">
+            <div className="icon-plate p-2.5 rounded-xl">
+              <UserPlus className="h-5 w-5 text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.4)]" />
             </div>
-            Agregar Nuevo Usuario
-          </DialogTitle>
+            <div className="flex flex-col">
+              {/* text-white con shadow para que no se pierda */}
+              <DialogTitle className="text-2xl font-black heading-crisp text-white text-shadow-premium uppercase tracking-tighter">
+                Nuevo Usuario
+              </DialogTitle>
+              <span className="text-[10px] font-bold text-white/40 uppercase tracking-[0.3em] mt-1">
+                Gestión de Acceso al Sistema
+              </span>
+            </div>
+          </div>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 pt-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label
-                htmlFor="nombre"
-                className="text-xs font-medium text-muted-foreground uppercase tracking-wide"
-              >
+        {/* FORM BODY: Cristal translúcido con Validaciones */}
+        <form
+          onSubmit={handleSubmit(handleFormSubmit)}
+          className="p-8 space-y-5 bg-white/40 backdrop-blur-sm"
+        >
+          <div className="grid grid-cols-2 gap-5">
+            {/* Nombre */}
+            <div className="space-y-1.5">
+              <Label variant="brand" required>
                 Nombre
               </Label>
               <Input
-                id="nombre"
+                {...register("nombre")}
                 placeholder="Ej: Carlos"
-                value={formData.nombre}
-                onChange={(e) =>
-                  setFormData({ ...formData, nombre: e.target.value })
-                }
-                required
-                className="h-9 text-sm"
+                className={cn(
+                  "h-11 glass-card border-slate-200 focus:ring-brand-red/20 font-medium",
+                  errors.nombre &&
+                    "border-brand-red/50 bg-destructive/5 animate-pulse-danger",
+                )}
               />
+              {errors.nombre && (
+                <p className="text-brand-red text-[9px] font-black uppercase tracking-widest mt-1 ml-1 animate-in fade-in slide-in-from-top-1">
+                  {errors.nombre.message}
+                </p>
+              )}
             </div>
-            <div className="space-y-2">
-              <Label
-                htmlFor="apellidos"
-                className="text-xs font-medium text-muted-foreground uppercase tracking-wide"
-              >
+
+            {/* Apellidos */}
+            <div className="space-y-1.5">
+              <Label variant="brand" required>
                 Apellidos
               </Label>
               <Input
-                id="apellidos"
-                placeholder="Ej: Mendoza García"
-                value={formData.apellidos}
-                onChange={(e) =>
-                  setFormData({ ...formData, apellidos: e.target.value })
-                }
-                required
-                className="h-9 text-sm"
+                {...register("apellidos")}
+                placeholder="Ej: Mendoza"
+                className={cn(
+                  "h-11 glass-card border-slate-200 focus:ring-brand-red/20 font-medium",
+                  errors.apellidos &&
+                    "border-brand-red/50 bg-destructive/5 animate-pulse-danger",
+                )}
               />
+              {errors.apellidos && (
+                <p className="text-brand-red text-[9px] font-black uppercase tracking-widest mt-1 ml-1 animate-in fade-in slide-in-from-top-1">
+                  {errors.apellidos.message}
+                </p>
+              )}
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label
-              htmlFor="email"
-              className="text-xs font-medium text-muted-foreground uppercase tracking-wide"
-            >
+          {/* Email */}
+          <div className="space-y-1.5">
+            <Label variant="brand" required>
               Correo Electrónico
             </Label>
             <Input
-              id="email"
+              {...register("email")}
               type="email"
               placeholder="usuario@rapidos3t.com"
-              value={formData.email}
-              onChange={(e) =>
-                setFormData({ ...formData, email: e.target.value })
-              }
-              required
-              className="h-9 text-sm"
+              className={cn(
+                "h-11 glass-card border-slate-200 focus:ring-brand-red/20 font-bold text-brand-navy",
+                errors.email && "border-brand-red/50 bg-destructive/5",
+              )}
             />
+            {errors.email && (
+              <p className="text-brand-red text-[9px] font-black uppercase tracking-widest mt-1 ml-1 animate-in fade-in slide-in-from-top-1">
+                {errors.email.message}
+              </p>
+            )}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label
-                htmlFor="telefono"
-                className="text-xs font-medium text-muted-foreground uppercase tracking-wide"
-              >
-                Teléfono
-              </Label>
+          <div className="grid grid-cols-2 gap-5">
+            {/* Teléfono */}
+            <div className="space-y-1.5">
+              <Label variant="brand">Teléfono</Label>
               <Input
-                id="telefono"
-                placeholder="Ej: 55 1234 5678"
-                value={formData.telefono}
-                onChange={(e) =>
-                  setFormData({ ...formData, telefono: e.target.value })
-                }
-                className="h-9 text-sm"
+                {...register("telefono")}
+                placeholder="55 1234 5678"
+                className="h-11 glass-card border-slate-200 focus:ring-brand-red/20 font-mono"
               />
             </div>
-            <div className="space-y-2">
-              <Label
-                htmlFor="puesto"
-                className="text-xs font-medium text-muted-foreground uppercase tracking-wide"
-              >
-                Puesto
-              </Label>
+
+            {/* Puesto */}
+            <div className="space-y-1.5">
+              <Label variant="brand">Puesto</Label>
               <Input
-                id="puesto"
+                {...register("puesto")}
                 placeholder="Ej: Despachador"
-                value={formData.puesto}
-                onChange={(e) =>
-                  setFormData({ ...formData, puesto: e.target.value })
-                }
-                className="h-9 text-sm"
+                className={cn(
+                  "h-11 glass-card border-slate-200 focus:ring-brand-red/20 font-medium",
+                  errors.puesto && "border-brand-red/50 bg-destructive/5",
+                )}
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label
-                htmlFor="rol"
-                className="text-xs font-medium text-muted-foreground uppercase tracking-wide"
-              >
-                Rol
+          <div className="grid grid-cols-2 gap-5">
+            {/* Rol Select */}
+            <div className="space-y-1.5">
+              <Label variant="brand" required>
+                Rol de Seguridad
               </Label>
               <Select
-                value={formData.rol}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, rol: value })
-                }
-                required
+                onValueChange={(v) => setValue("rol", v)}
+                value={selectedRol}
               >
-                <SelectTrigger className="h-9 text-sm">
-                  <SelectValue placeholder="Seleccionar rol" />
+                <SelectTrigger
+                  className={cn(
+                    "h-11 glass-card border-slate-200 font-bold text-slate-700 shadow-sm",
+                    errors.rol && "border-brand-red/50 bg-destructive/5",
+                  )}
+                >
+                  <SelectValue placeholder="Seleccionar..." />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="glass-panel border-white/20">
                   {roles.map((rol) => (
                     <SelectItem
                       key={rol.id}
                       value={rol.id.toString()}
-                      className="text-sm"
+                      className="font-semibold"
                     >
                       {rol.nombre}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {errors.rol && (
+                <p className="text-brand-red text-[9px] font-black uppercase tracking-widest mt-1 ml-1 animate-in fade-in slide-in-from-top-1">
+                  {errors.rol.message}
+                </p>
+              )}
             </div>
-            <div className="space-y-2">
-              <Label
-                htmlFor="password"
-                className="text-xs font-medium text-muted-foreground uppercase tracking-wide"
-              >
+
+            {/* Password */}
+            <div className="space-y-1.5">
+              <Label variant="brand" required className="text-brand-red">
                 Contraseña
               </Label>
               <Input
-                id="password"
+                {...register("password")}
                 type="password"
-                placeholder="Mínimo 8 caracteres"
-                value={formData.password}
-                onChange={(e) =>
-                  setFormData({ ...formData, password: e.target.value })
-                }
-                required
-                minLength={8}
-                className="h-9 text-sm"
+                placeholder="••••••••"
+                className={cn(
+                  "h-11 glass-card border-brand-red/20 focus:ring-brand-red/20 font-mono",
+                  errors.password && "border-brand-red/50 bg-destructive/5",
+                )}
               />
+              {errors.password && (
+                <p className="text-brand-red text-[9px] font-black uppercase tracking-widest mt-1 ml-1 animate-in fade-in slide-in-from-top-1">
+                  {errors.password.message}
+                </p>
+              )}
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t">
+          {/* FOOTER: Barra estilo Safari con desenfoque */}
+          <div className="flex justify-end gap-4 pt-6 border-t border-white/20">
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               onClick={() => onOpenChange(false)}
-              className="h-9 text-sm"
+              className="h-11 px-6 text-[11px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 hover:bg-transparent"
             >
               Cancelar
             </Button>
             <Button
               type="submit"
-              className="h-9 text-sm bg-primary hover:bg-primary/90 text-primary-foreground"
+              disabled={isSaving}
+              className="btn-primary-gradient h-11 px-10 font-black uppercase text-[11px] tracking-[0.2em] shadow-lg active:scale-95 transition-transform"
             >
-              Guardar Usuario
+              {isSaving ? (
+                <div className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Guardando...</span>
+                </div>
+              ) : (
+                "Guardar Usuario"
+              )}
             </Button>
           </div>
         </form>

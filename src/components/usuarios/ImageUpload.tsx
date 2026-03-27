@@ -126,7 +126,7 @@ export function ImageUpload({
             alt="Profile Preview"
             className="object-cover"
           />
-          <AvatarFallback className="text-2xl bg-slate-100 text-slate-400 font-bold uppercase">
+          <AvatarFallback className="text-2xl bg-slate-100 text-slate-600 font-bold uppercase">
             {fallback}
           </AvatarFallback>
         </Avatar>

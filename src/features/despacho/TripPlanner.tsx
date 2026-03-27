@@ -347,7 +347,7 @@ function KanbanCard({
         <CardContent className="p-3.5">
           <div className="flex justify-between items-start mb-3">
             <div className="pr-2">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">
+              <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest block mb-0.5">
                 {legTypeShort[leg.leg_type] || "TRAMO"}
               </span>
               <span className="text-xs font-black text-slate-800 uppercase leading-tight line-clamp-2">
@@ -374,13 +374,13 @@ function KanbanCard({
 
           <div className="flex items-center justify-between mb-3 gap-2">
             <div className="flex items-center gap-1.5 text-[10px] font-black text-brand-navy bg-white border border-slate-200 px-2 py-1 rounded-md shadow-sm w-1/2">
-              <Truck className="h-3 w-3 text-slate-400 shrink-0" />
+              <Truck className="h-3 w-3 text-slate-600 shrink-0" />
               <span className="truncate">
                 ECO-{leg.unit?.numero_economico || "N/A"}
               </span>
             </div>
             <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600 bg-white border border-slate-200 px-2 py-1 rounded-md shadow-sm w-1/2">
-              <User className="h-3 w-3 text-slate-400 shrink-0" />
+              <User className="h-3 w-3 text-slate-600 shrink-0" />
               <span className="truncate">
                 {leg.operator?.name?.split(" ")[0] || "S/A"}
               </span>
@@ -452,7 +452,7 @@ function KanbanColumn({
           >
             <Icon className="h-5 w-5" /> {column.title}
           </div>
-          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+          <p className="text-[11px] font-bold text-slate-600 uppercase tracking-widest mt-0.5">
             {column.subtitle}
           </p>
         </div>
@@ -465,7 +465,7 @@ function KanbanColumn({
       </div>
       <div className="flex flex-col gap-3 overflow-y-auto pr-1 min-h-[200px] pb-10 custom-scrollbar">
         {items.length === 0 ? (
-          <div className="p-8 border-2 border-dashed border-slate-300/50 rounded-xl text-center text-slate-400 text-sm font-medium bg-white/50">
+          <div className="p-8 border-2 border-dashed border-slate-300/50 rounded-xl text-center text-slate-600 text-sm font-medium bg-white/50">
             Mueve un servicio aquí
           </div>
         ) : (
@@ -761,7 +761,7 @@ export const TripPlanner = () => {
                   <DataTableRow>
                     <DataTableCell
                       colSpan={6}
-                      className="text-center py-16 text-slate-400"
+                      className="text-center py-16 text-slate-600"
                     >
                       <div className="flex flex-col items-center justify-center">
                         <Truck className="h-12 w-12 mb-3 opacity-20" />
@@ -826,11 +826,11 @@ export const TripPlanner = () => {
                         <DataTableCell>
                           <div className="flex flex-col gap-1.5">
                             <div className="flex items-center gap-2 text-xs font-bold text-brand-navy">
-                              <Truck className="h-3.5 w-3.5 text-slate-400" />{" "}
+                              <Truck className="h-3.5 w-3.5 text-slate-600" />{" "}
                               {leg.unit?.numero_economico || "Sin Unidad"}
                             </div>
                             <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
-                              <User className="h-3.5 w-3.5 text-slate-400" />{" "}
+                              <User className="h-3.5 w-3.5 text-slate-600" />{" "}
                               {leg.operator?.name || "Sin Operador"}
                             </div>
                           </div>
@@ -859,7 +859,7 @@ export const TripPlanner = () => {
                                 onClick={() => setTripToView(tripPadre)}
                                 className="rounded-lg cursor-pointer py-2"
                               >
-                                <Eye className="h-4 w-4 mr-3 text-slate-400" />{" "}
+                                <Eye className="h-4 w-4 mr-3 text-slate-600" />{" "}
                                 <span className="font-medium">
                                   Abrir Centro de Mando
                                 </span>

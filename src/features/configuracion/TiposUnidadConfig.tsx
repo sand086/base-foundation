@@ -189,7 +189,7 @@ export function TiposUnidadConfig() {
 
       <CardContent className="p-6">
         {loading ? (
-          <div className="flex justify-center items-center py-12 text-slate-400">
+          <div className="flex justify-center items-center py-12 text-slate-600">
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>
         ) : (
@@ -213,7 +213,7 @@ export function TiposUnidadConfig() {
                       <h4 className="font-bold text-slate-800">
                         {tipo.nombre}
                       </h4>
-                      <p className="text-[10px] text-slate-400 font-mono">
+                      <p className="text-[10px] text-slate-600 font-mono">
                         ID: {tipo.id}
                       </p>
                     </div>
@@ -247,7 +247,7 @@ export function TiposUnidadConfig() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 text-slate-400 hover:text-brand-navy"
+                      className="h-8 w-8 text-slate-600 hover:text-brand-navy"
                       onClick={() => handleEdit(tipo)}
                     >
                       <Pencil className="h-4 w-4" />
@@ -255,7 +255,7 @@ export function TiposUnidadConfig() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50"
+                      className="h-8 w-8 text-slate-600 hover:text-red-600 hover:bg-red-50"
                       onClick={() => setDeleteId(tipo.id)}
                     >
                       <Trash2 className="h-4 w-4" />

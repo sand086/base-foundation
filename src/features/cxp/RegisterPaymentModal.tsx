@@ -295,7 +295,7 @@ export function RegisterPaymentModal({
                       <span className="font-bold text-slate-700">
                         {acc.alias}
                       </span>
-                      <span className="text-[10px] text-slate-400 font-mono mt-0.5 ml-1">
+                      <span className="text-[10px] text-slate-600 font-mono mt-0.5 ml-1">
                         ••{acc.numero_cuenta.slice(-4)}
                       </span>
                     </div>

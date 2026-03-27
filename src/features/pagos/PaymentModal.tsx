@@ -144,7 +144,7 @@ export function PaymentModal({
                 Monto a Pagar
               </Label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600">
                   $
                 </span>
                 <Input
@@ -205,7 +205,7 @@ export function PaymentModal({
             {/* Saldo Preview */}
             {selectedAccount && (
               <div className="p-3 bg-slate-50 rounded-xl border border-dashed flex justify-between items-center">
-                <span className="text-[10px] uppercase font-bold text-slate-400">
+                <span className="text-[10px] uppercase font-bold text-slate-600">
                   Saldo Disponible:
                 </span>
                 <span className="font-mono font-bold text-brand-navy">

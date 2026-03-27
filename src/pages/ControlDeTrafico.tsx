@@ -238,7 +238,7 @@ export default function ControlDeTrafico() {
           <div className="p-4 border-b border-slate-100 bg-white space-y-3 z-10 shadow-sm">
             {/* BUSCADOR */}
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-600" />
               <Input
                 placeholder="Buscar por unidad, cliente, ruta..."
                 className="pl-9 h-11 bg-slate-50 border-slate-200 rounded-xl focus-visible:ring-brand-navy/20 transition-all"
@@ -255,7 +255,7 @@ export default function ControlDeTrafico() {
                   "flex-1 text-[11px] font-black py-2 rounded-lg transition-all duration-200 uppercase tracking-wider",
                   filterType === "activos"
                     ? "bg-white shadow-sm text-brand-navy ring-1 ring-slate-200/50"
-                    : "text-slate-400 hover:text-slate-600",
+                    : "text-slate-600 hover:text-slate-600",
                 )}
               >
                 En Curso
@@ -266,7 +266,7 @@ export default function ControlDeTrafico() {
                   "flex-1 text-[11px] font-black py-2 rounded-lg transition-all duration-200 uppercase tracking-wider",
                   filterType === "completados"
                     ? "bg-white shadow-sm text-brand-navy ring-1 ring-slate-200/50"
-                    : "text-slate-400 hover:text-slate-600",
+                    : "text-slate-600 hover:text-slate-600",
                 )}
               >
                 Completados
@@ -277,7 +277,7 @@ export default function ControlDeTrafico() {
                   "flex-1 text-[11px] font-black py-2 rounded-lg transition-all duration-200 uppercase tracking-wider",
                   filterType === "todos"
                     ? "bg-white shadow-sm text-brand-navy ring-1 ring-slate-200/50"
-                    : "text-slate-400 hover:text-slate-600",
+                    : "text-slate-600 hover:text-slate-600",
                 )}
               >
                 Todos
@@ -288,12 +288,12 @@ export default function ControlDeTrafico() {
           <ScrollArea className="flex-1 px-3 py-2 bg-slate-50/30">
             <div className="space-y-3 pb-4 pt-2">
               {isLoading ? (
-                <div className="p-8 flex flex-col items-center justify-center text-slate-400 space-y-3 mt-10">
+                <div className="p-8 flex flex-col items-center justify-center text-slate-600 space-y-3 mt-10">
                   <Activity className="h-8 w-8 animate-pulse text-blue-500" />
                   <p className="text-sm font-bold">Localizando flota...</p>
                 </div>
               ) : filteredTrips.length === 0 ? (
-                <div className="p-8 flex flex-col items-center justify-center text-slate-400 space-y-3 mt-10">
+                <div className="p-8 flex flex-col items-center justify-center text-slate-600 space-y-3 mt-10">
                   <div className="bg-slate-100 p-4 rounded-full mb-2">
                     <Filter className="h-8 w-8 text-slate-300" />
                   </div>
@@ -302,7 +302,7 @@ export default function ControlDeTrafico() {
                     <span className="text-brand-navy">"{filterType}"</span>
                   </p>
                   {search && (
-                    <p className="text-[11px] text-slate-400 mt-1">
+                    <p className="text-[11px] text-slate-600 mt-1">
                       que coincidan con "{search}"
                     </p>
                   )}
@@ -324,7 +324,7 @@ export default function ControlDeTrafico() {
                         <span className="font-black text-brand-navy text-sm tracking-tight">
                           {trip.public_id || `TRP-${trip.id}`}
                         </span>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                        <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mt-0.5">
                           {trip.client?.razon_social?.substring(0, 22) ||
                             "Sin Cliente"}
                         </span>
@@ -368,7 +368,7 @@ export default function ControlDeTrafico() {
                         {trip.legs?.[0]?.unit?.numero_economico || "N/A"}
                       </div>
                       <div className="flex items-center text-[10px] font-bold text-slate-500 uppercase tracking-widest truncate">
-                        <User className="h-3 w-3 mr-1.5 text-slate-400" />
+                        <User className="h-3 w-3 mr-1.5 text-slate-600" />
                         {trip.legs?.[0]?.operator?.name?.split(" ")[0] || "N/A"}
                       </div>
                     </div>
@@ -388,7 +388,7 @@ export default function ControlDeTrafico() {
               <div className="h-20 w-20 bg-slate-100 rounded-full flex items-center justify-center mb-2 shadow-inner">
                 <Navigation className="h-10 w-10 text-slate-300" />
               </div>
-              <p className="text-sm font-bold text-slate-400">
+              <p className="text-sm font-bold text-slate-600">
                 Selecciona un viaje para ver su bitácora operativa
               </p>
             </div>
@@ -412,7 +412,7 @@ export default function ControlDeTrafico() {
                     </Badge>
                   </div>
                   <div className="flex items-center text-sm text-slate-500 font-medium gap-2">
-                    <User className="h-4 w-4 text-slate-400" />
+                    <User className="h-4 w-4 text-slate-600" />
                     Cliente:{" "}
                     <span className="font-bold text-slate-700">
                       {selectedTrip.client?.razon_social || "Ruta Libre"}
@@ -442,7 +442,7 @@ export default function ControlDeTrafico() {
                         <Truck className="h-6 w-6" />
                       </div>
                       <div className="flex-1">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">
                           Tractocamión Asignado
                         </p>
                         <p className="text-lg font-black text-brand-navy leading-tight mt-0.5">
@@ -470,7 +470,7 @@ export default function ControlDeTrafico() {
                         <User className="h-6 w-6" />
                       </div>
                       <div className="flex-1">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">
                           Operador en Turno
                         </p>
                         <p className="text-lg font-black text-brand-navy leading-tight mt-0.5 truncate">
@@ -478,7 +478,7 @@ export default function ControlDeTrafico() {
                         </p>
                         {activeLeg?.operator?.phone && (
                           <p className="text-xs font-bold text-slate-500 mt-1.5 flex items-center gap-1.5">
-                            <Phone className="h-3.5 w-3.5 text-slate-400" />
+                            <Phone className="h-3.5 w-3.5 text-slate-600" />
                             {activeLeg.operator.phone}
                           </p>
                         )}
@@ -494,7 +494,7 @@ export default function ControlDeTrafico() {
                     </h3>
 
                     {timelineEvents.length === 0 ? (
-                      <div className="text-center p-10 bg-slate-50 rounded-xl border border-dashed border-slate-300 text-slate-400">
+                      <div className="text-center p-10 bg-slate-50 rounded-xl border border-dashed border-slate-300 text-slate-600">
                         <CalendarDays className="h-10 w-10 mx-auto mb-3 opacity-30 text-slate-500" />
                         <p className="text-sm font-bold text-slate-500">
                           Sin historial registrado
@@ -547,7 +547,7 @@ export default function ControlDeTrafico() {
                                       <Button
                                         variant="ghost"
                                         size="icon"
-                                        className="h-7 w-7 text-slate-400 hover:text-slate-600"
+                                        className="h-7 w-7 text-slate-600 hover:text-slate-600"
                                       >
                                         <MoreVertical className="h-4 w-4" />
                                       </Button>

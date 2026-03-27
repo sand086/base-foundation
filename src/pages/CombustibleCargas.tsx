@@ -248,7 +248,7 @@ const CombustibleCargas = () => {
             <span className="font-bold text-slate-700">
               {new Date(String(v)).toLocaleDateString("es-MX")}
             </span>
-            <span className="text-[10px] text-slate-400 font-mono">
+            <span className="text-[10px] text-slate-600 font-mono">
               {new Date(String(v)).toLocaleTimeString("es-MX", {
                 hour: "2-digit",
                 minute: "2-digit",
@@ -361,14 +361,14 @@ const CombustibleCargas = () => {
                 onClick={() => setCargaToView(row)}
                 className="cursor-pointer"
               >
-                <Eye className="h-4 w-4 mr-2 text-slate-400" />
+                <Eye className="h-4 w-4 mr-2 text-slate-600" />
                 Detalles
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => setCargaToEdit(row)}
                 className="cursor-pointer"
               >
-                <Pencil className="h-4 w-4 mr-2 text-slate-400" />
+                <Pencil className="h-4 w-4 mr-2 text-slate-600" />
                 Editar
               </DropdownMenuItem>
               <DropdownMenuSeparator />
@@ -406,7 +406,7 @@ const CombustibleCargas = () => {
         {/* FILTROS DE AUDITORÍA */}
         <div className="flex items-center gap-3 bg-white p-2 rounded-2xl border shadow-sm">
           <div className="flex items-center gap-2 border-r pr-4 pl-2">
-            <Search className="h-4 w-4 text-slate-400" />
+            <Search className="h-4 w-4 text-slate-600" />
             <Input
               placeholder="Buscar unidad o estación..."
               className="border-none shadow-none focus-visible:ring-0 text-xs w-[250px]"
@@ -434,7 +434,7 @@ const CombustibleCargas = () => {
               className="h-8 w-8 hover:bg-slate-100 rounded-lg"
               onClick={() => setSelectedUnitId("all")}
             >
-              <FilterX className="h-4 w-4 text-slate-400" />
+              <FilterX className="h-4 w-4 text-slate-600" />
             </Button>
           )}
         </div>
@@ -446,7 +446,7 @@ const CombustibleCargas = () => {
           <CardContent className="p-5">
             <div className="flex justify-between items-center">
               <div className="space-y-1">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">
+                <p className="text-[10px] font-black text-slate-600 uppercase tracking-tighter">
                   Litros (7 días)
                 </p>
                 <p className="text-2xl font-black text-brand-navy">
@@ -467,7 +467,7 @@ const CombustibleCargas = () => {
           <CardContent className="p-5">
             <div className="flex justify-between items-center">
               <div className="space-y-1">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">
+                <p className="text-[10px] font-black text-slate-600 uppercase tracking-tighter">
                   Inversión Semanal
                 </p>
                 <p className="text-2xl font-black text-emerald-600">
@@ -488,7 +488,7 @@ const CombustibleCargas = () => {
           <CardContent className="p-5">
             <div className="flex justify-between items-center">
               <div className="space-y-1">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">
+                <p className="text-[10px] font-black text-slate-600 uppercase tracking-tighter">
                   Rendimiento Real
                 </p>
                 <p className="text-2xl font-black text-blue-600">
@@ -500,7 +500,7 @@ const CombustibleCargas = () => {
                 <BarChart3 className="h-5 w-5" />
               </div>
             </div>
-            <p className="text-[10px] text-slate-400 mt-2">
+            <p className="text-[10px] text-slate-600 mt-2">
               Diferencia de odómetros / Litros
             </p>
           </CardContent>

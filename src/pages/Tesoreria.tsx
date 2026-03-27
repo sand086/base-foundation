@@ -333,7 +333,7 @@ export default function Tesoreria() {
                   >
                     {mov.concepto}
                   </p>
-                  <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+                  <p className="text-[10px] text-slate-600 font-mono mt-0.5">
                     REF: {mov.referencia_bancaria}
                   </p>
                 </td>
@@ -376,7 +376,7 @@ export default function Tesoreria() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-slate-400 hover:text-brand-navy"
+                        className="h-8 w-8 text-slate-600 hover:text-brand-navy"
                       >
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>
@@ -389,7 +389,7 @@ export default function Tesoreria() {
                         onClick={() => handleViewMovement(mov)}
                         className="gap-2 cursor-pointer font-medium text-slate-600 rounded-lg"
                       >
-                        <Eye className="h-4 w-4 text-slate-400" />
+                        <Eye className="h-4 w-4 text-slate-600" />
                         Ver Detalle
                       </DropdownMenuItem>
                       <DropdownMenuSeparator className="my-1" />
@@ -409,7 +409,7 @@ export default function Tesoreria() {
         </table>
 
         {filteredMovimientos.length === 0 && !isLoading && (
-          <div className="p-12 text-center text-slate-400 flex flex-col items-center gap-2">
+          <div className="p-12 text-center text-slate-600 flex flex-col items-center gap-2">
             <Landmark className="h-10 w-10 opacity-20" />
             <span className="font-bold">No hay movimientos registrados</span>
             <span className="text-xs">

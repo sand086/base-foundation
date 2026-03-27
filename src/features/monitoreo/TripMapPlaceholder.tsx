@@ -70,7 +70,7 @@ export function TripMapPlaceholder({
         ) : (
           <div className="flex flex-col items-center justify-center gap-3 bg-white/80 backdrop-blur-sm border border-slate-200 px-6 py-5 rounded-2xl shadow-sm text-slate-500 max-w-xs w-full">
             <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center mb-1">
-              <Map className="h-5 w-5 text-slate-400" />
+              <Map className="h-5 w-5 text-slate-600" />
             </div>
             <span className="text-sm font-medium">
               Esperando datos de telemetría...
