@@ -507,7 +507,7 @@ export default function CombustibleConciliacion() {
                       {auditResult.diferenciaLitros > 0 ? "+" : ""}
                       {auditResult.diferenciaLitros.toFixed(2)} L
                     </p>
-                    <p className="text-xs font-bold text-slate-400 mt-3">
+                    <p className="text-xs font-bold text-slate-600 mt-3">
                       Tolerancia permitida: ±
                       {auditResult.toleranciaPermitida.toFixed(2)} L
                     </p>
@@ -520,7 +520,7 @@ export default function CombustibleConciliacion() {
                     <p className="text-4xl font-black font-mono text-brand-navy">
                       {auditResult.rendimientoKmL.toFixed(2)}
                     </p>
-                    <p className="text-xs font-bold text-slate-400 mt-3">
+                    <p className="text-xs font-bold text-slate-600 mt-3">
                       Kilómetros por Litro (Km/L)
                     </p>
                   </div>
@@ -576,7 +576,7 @@ export default function CombustibleConciliacion() {
                   )}
                   TICKET DE CONCILIACIÓN
                 </DialogTitle>
-                <p className="text-xs font-mono text-slate-400 mt-1">
+                <p className="text-xs font-mono text-slate-600 mt-1">
                   {new Date().toLocaleString("es-MX")}
                 </p>
               </DialogHeader>

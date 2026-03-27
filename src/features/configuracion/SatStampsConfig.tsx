@@ -236,7 +236,7 @@ export function SatStampsConfig({
                     <FileCheck className="h-5 w-5" />
                   </div>
                   <div className="overflow-hidden">
-                    <p className="text-[9px] uppercase font-black text-slate-400">
+                    <p className="text-[9px] uppercase font-black text-slate-600">
                       Descargar Certificado
                     </p>
                     <p className="text-[10px] font-mono text-slate-600 truncate">
@@ -254,7 +254,7 @@ export function SatStampsConfig({
                     <Key className="h-5 w-5" />
                   </div>
                   <div className="overflow-hidden">
-                    <p className="text-[9px] uppercase font-black text-slate-400">
+                    <p className="text-[9px] uppercase font-black text-slate-600">
                       Descargar Llave Privada
                     </p>
                     <p className="text-[10px] font-mono text-slate-600 truncate">
@@ -383,7 +383,7 @@ export function SatStampsConfig({
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-600"
                   >
                     {showPassword ? (
                       <EyeOff className="h-4 w-4" />
@@ -448,7 +448,7 @@ export function SatStampsConfig({
               <button
                 type="button"
                 onClick={() => setShowDownloadPassword(!showDownloadPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-brand-navy transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 hover:text-brand-navy transition-colors"
               >
                 {showDownloadPassword ? (
                   <EyeOff className="h-4 w-4" />

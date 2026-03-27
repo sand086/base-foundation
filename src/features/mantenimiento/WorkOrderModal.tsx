@@ -345,7 +345,7 @@ export const WorkOrderModal = ({
                 })}
               </div>
             ) : (
-              <div className="text-center py-6 text-slate-400 border border-dashed rounded-lg">
+              <div className="text-center py-6 text-slate-600 border border-dashed rounded-lg">
                 <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
                 <p className="text-sm">No hay refacciones asignadas</p>
               </div>

@@ -312,7 +312,7 @@ export function TruckChassisSVG({
                         {status.label}
                       </LocalBadge>
                     </div>
-                    <p className="text-[10px] text-slate-400 mt-1">
+                    <p className="text-[10px] text-slate-600 mt-1">
                       ID: {tire.codigo_interno}
                     </p>
                   </div>

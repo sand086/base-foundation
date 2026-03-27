@@ -270,7 +270,7 @@ export function SatCatalogsConfig() {
         {/* BARRA DE HERRAMIENTAS (Buscador y Botones) */}
         <div className="flex flex-col sm:flex-row gap-3 pt-4 items-center justify-between">
           <div className="relative w-full sm:max-w-xs">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-600" />
             <Input
               placeholder="Buscar por clave o descripción..."
               value={searchTerm}
@@ -303,7 +303,7 @@ export function SatCatalogsConfig() {
 
       <CardContent className="p-0">
         {loading ? (
-          <div className="flex justify-center items-center py-12 text-slate-400">
+          <div className="flex justify-center items-center py-12 text-slate-600">
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>
         ) : processedData.length === 0 ? (
@@ -376,7 +376,7 @@ export function SatCatalogsConfig() {
                           type="button"
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8 text-slate-400 hover:text-brand-navy"
+                          className="h-8 w-8 text-slate-600 hover:text-brand-navy"
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
@@ -389,7 +389,7 @@ export function SatCatalogsConfig() {
                           type="button"
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50"
+                          className="h-8 w-8 text-slate-600 hover:text-red-600 hover:bg-red-50"
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
@@ -521,7 +521,7 @@ export function SatCatalogsConfig() {
                 }
                 className="rounded-lg font-mono"
               />
-              <p className="text-[10px] text-slate-400 mt-1">
+              <p className="text-[10px] text-slate-600 mt-1">
                 Valores válidos según el SAT: "0", "1", "0,1".
               </p>
             </div>

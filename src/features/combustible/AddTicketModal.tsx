@@ -125,7 +125,7 @@ function SearchableSelect({
               {selectedItem.label}
             </span>
           ) : (
-            <span className="text-slate-400">{placeholder}</span>
+            <span className="text-slate-600">{placeholder}</span>
           )}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
@@ -571,7 +571,7 @@ export function AddTicketModal({
             {/* LADO IZQUIERDO: VINCULACIÓN OPERATIVA */}
             <div className="space-y-6">
               <div className="space-y-4">
-                <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2 border-b pb-2">
+                <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-600 flex items-center gap-2 border-b pb-2">
                   <MapPin className="h-4 w-4 text-brand-navy" /> 1. Vinculación
                   Operativa
                 </h3>
@@ -630,7 +630,7 @@ export function AddTicketModal({
                           onChange={(e) => setDateFrom(e.target.value)}
                           title="Desde"
                         />
-                        <span className="text-[10px] text-slate-400">-</span>
+                        <span className="text-[10px] text-slate-600">-</span>
                         <Input
                           type="date"
                           className="h-9 text-xs bg-white shadow-sm border-slate-300 px-1"
@@ -695,7 +695,7 @@ export function AddTicketModal({
                     }
                     className="h-11 font-mono text-sm bg-white shadow-sm border-slate-300"
                   />
-                  <p className="text-[10px] text-slate-400 italic">
+                  <p className="text-[10px] text-slate-600 italic">
                     No es obligatorio, pero se recomienda para cálculo exacto de
                     rendimiento.
                   </p>
@@ -706,7 +706,7 @@ export function AddTicketModal({
             {/* LADO DERECHO: DATOS DEL TICKET Y FOTO */}
             <div className="space-y-6">
               <div className="space-y-4">
-                <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2 border-b pb-2">
+                <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-600 flex items-center gap-2 border-b pb-2">
                   <Fuel className="h-4 w-4 text-amber-500" /> 2. Carga Física y
                   Evidencia
                 </h3>
@@ -816,7 +816,7 @@ export function AddTicketModal({
                             : "border-slate-300",
                         )}
                       />
-                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-600 font-bold">
                         L
                       </span>
                     </div>
@@ -832,7 +832,7 @@ export function AddTicketModal({
                       Precio Unitario *
                     </Label>
                     <div className="relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-600 font-bold">
                         $
                       </span>
                       <Input
@@ -907,7 +907,7 @@ export function AddTicketModal({
                         </span>
                       </div>
                     ) : (
-                      <div className="flex flex-col items-center gap-2 text-slate-400 group-hover:text-blue-500 transition-colors">
+                      <div className="flex flex-col items-center gap-2 text-slate-600 group-hover:text-blue-500 transition-colors">
                         <div className="h-12 w-12 bg-slate-100 rounded-full flex items-center justify-center group-hover:bg-blue-100 transition-colors">
                           <Camera className="h-6 w-6" />
                         </div>

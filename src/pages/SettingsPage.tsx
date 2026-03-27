@@ -636,7 +636,7 @@ const SettingsPage = () => {
                                       ? "Activo"
                                       : "Inactivo"}
                                   </p>
-                                  <p className="text-[10px] text-slate-400">
+                                  <p className="text-[10px] text-slate-600">
                                     {meta.description}
                                   </p>
                                 </div>
@@ -673,7 +673,7 @@ const SettingsPage = () => {
                                     </option>
                                   ))}
                                 </select>
-                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
+                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-600">
                                   <svg
                                     className="h-4 w-4 fill-current"
                                     viewBox="0 0 20 20"
@@ -704,7 +704,7 @@ const SettingsPage = () => {
                                   )}
                                 />
                                 {isPercentage && (
-                                  <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-1 text-slate-400">
+                                  <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-1 text-slate-600">
                                     <Separator
                                       orientation="vertical"
                                       className="h-4 mr-1"
@@ -715,7 +715,7 @@ const SettingsPage = () => {
                               </div>
                             )}
                             {!hasError && meta.description && (
-                              <p className="text-[10px] text-slate-400 px-1 mt-1 font-medium flex items-center gap-1">
+                              <p className="text-[10px] text-slate-600 px-1 mt-1 font-medium flex items-center gap-1">
                                 <Info className="h-3 w-3" /> {meta.description}
                               </p>
                             )}

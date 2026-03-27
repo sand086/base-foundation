@@ -576,7 +576,7 @@ export default function CierreViaje() {
               </div>
               <div className="overflow-x-auto overflow-y-auto flex-1 custom-scrollbar">
                 <table className="w-full text-sm text-left">
-                  <thead className="text-[10px] text-slate-400 font-bold uppercase tracking-widest bg-slate-50/80 border-b sticky top-0 z-10 backdrop-blur-sm">
+                  <thead className="text-[10px] text-slate-600 font-bold uppercase tracking-widest bg-slate-50/80 border-b sticky top-0 z-10 backdrop-blur-sm">
                     <tr>
                       {activeTab === "pendientes" && (
                         <th
@@ -612,7 +612,7 @@ export default function CierreViaje() {
                           colSpan={activeTab === "historico" ? 5 : 5}
                           className="px-6 py-16 text-center bg-white"
                         >
-                          <div className="flex flex-col items-center justify-center text-slate-400">
+                          <div className="flex flex-col items-center justify-center text-slate-600">
                             {activeTab === "pendientes" ? (
                               <Calculator className="h-10 w-10 mb-3 opacity-20" />
                             ) : (
@@ -719,7 +719,7 @@ export default function CierreViaje() {
                                 {legTypeLabels[leg.leg_type] || leg.leg_type}
                               </Badge>
                               <div className="text-[10px] text-slate-500 font-bold flex items-center gap-1">
-                                <Truck className="h-3 w-3 text-slate-400" />{" "}
+                                <Truck className="h-3 w-3 text-slate-600" />{" "}
                                 Eco: {leg.unit?.numero_economico}
                               </div>
                             </td>
@@ -746,7 +746,7 @@ export default function CierreViaje() {
                                       minimumFractionDigits: 2,
                                     })}
                                   </span>
-                                  <div className="text-[9px] text-slate-400 uppercase tracking-widest flex items-center gap-1 mt-0.5">
+                                  <div className="text-[9px] text-slate-600 uppercase tracking-widest flex items-center gap-1 mt-0.5">
                                     <CheckCircle className="h-3 w-3 text-emerald-500" />{" "}
                                     Liquidado
                                   </div>
@@ -764,7 +764,7 @@ export default function CierreViaje() {
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    className="h-8 w-8 p-0 text-slate-400 hover:text-brand-navy hover:bg-slate-100 rounded-full"
+                                    className="h-8 w-8 p-0 text-slate-600 hover:text-brand-navy hover:bg-slate-100 rounded-full"
                                     title="Ver y Reimprimir Recibo"
                                     // onClick={() => handleViewReceipt(leg)}
                                   >
@@ -773,7 +773,7 @@ export default function CierreViaje() {
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    className="h-8 w-8 p-0 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-full"
+                                    className="h-8 w-8 p-0 text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded-full"
                                     title="Reabrir Liquidación (Editar)"
                                     // onClick={() => handleReopenSettlement(leg)}
                                   >
@@ -807,7 +807,7 @@ export default function CierreViaje() {
                 </CardHeader>
                 <CardContent className="pt-5 space-y-4">
                   {isLoadingPreview ? (
-                    <div className="flex flex-col items-center justify-center py-6 text-slate-400">
+                    <div className="flex flex-col items-center justify-center py-6 text-slate-600">
                       <Loader2 className="h-8 w-8 animate-spin mb-2 text-amber-500" />
                       <p className="text-sm font-medium">
                         Cruzando vales vs telemetría...
@@ -885,7 +885,7 @@ export default function CierreViaje() {
                       {/* Resumen */}
                       <div className="bg-slate-100 p-4 rounded-xl text-xs space-y-2 font-mono">
                         {/* 🚀 3. MOSTRAMOS LAS REGLAS ACTUALES */}
-                        <div className="mb-3 pb-2 border-b border-slate-200 flex justify-between items-center text-[9px] text-slate-400 font-sans uppercase font-black tracking-widest">
+                        <div className="mb-3 pb-2 border-b border-slate-200 flex justify-between items-center text-[9px] text-slate-600 font-sans uppercase font-black tracking-widest">
                           <span>Regla Activa: {rendimientoEsperado} km/L</span>
                           <span>Tolerancia: {toleranciaPct * 100}%</span>
                         </div>
@@ -1002,7 +1002,7 @@ export default function CierreViaje() {
                     <div className="space-y-4">
                       {/* Ingresos */}
                       <div className="space-y-2">
-                        <div className="flex justify-between items-center text-xs font-bold text-slate-400 uppercase tracking-widest border-b pb-1">
+                        <div className="flex justify-between items-center text-xs font-bold text-slate-600 uppercase tracking-widest border-b pb-1">
                           <span>Ingresos</span>
                           <Button
                             variant="ghost"
@@ -1043,7 +1043,7 @@ export default function CierreViaje() {
 
                       {/* Deducciones */}
                       <div className="space-y-2">
-                        <div className="flex justify-between items-center text-xs font-bold text-slate-400 uppercase tracking-widest border-b pb-1">
+                        <div className="flex justify-between items-center text-xs font-bold text-slate-600 uppercase tracking-widest border-b pb-1">
                           <span>Deducciones</span>
                           <Button
                             variant="ghost"
@@ -1097,7 +1097,7 @@ export default function CierreViaje() {
                   {/* Gran Total */}
                   <div className="bg-slate-900 p-6">
                     <div className="flex items-center justify-between mb-4">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-600">
                         Neto a Depositar
                       </span>
                       <span className="text-3xl font-black font-mono text-white tracking-tighter">
@@ -1166,7 +1166,7 @@ export default function CierreViaje() {
             <div className="space-y-2">
               <Label>Monto (MXN) *</Label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-slate-400">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-slate-600">
                   $
                 </span>
                 <Input
@@ -1249,7 +1249,7 @@ export default function CierreViaje() {
                   <p className="text-slate-500 text-xs font-mono font-bold print:text-slate-600">
                     RFC: {empresaRFC || "XAXX010101000"}
                   </p>
-                  <p className="text-slate-400 text-[10px] max-w-sm mt-0.5 leading-tight print:text-slate-500">
+                  <p className="text-slate-600 text-[10px] max-w-sm mt-0.5 leading-tight print:text-slate-500">
                     {empresaDireccion} • Tel: {empresaTelefono}
                   </p>
                 </div>
@@ -1273,7 +1273,7 @@ export default function CierreViaje() {
               <div className="md:col-span-7 print:col-span-7 space-y-4">
                 <div className="grid grid-cols-2 gap-3 print:gap-6">
                   <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm print:shadow-none print:border-slate-300">
-                    <span className="text-[12px] uppercase font-bold tracking-widest text-slate-400 mb-1 block print:text-slate-500">
+                    <span className="text-[12px] uppercase font-bold tracking-widest text-slate-600 mb-1 block print:text-slate-500">
                       Operador Asignado
                     </span>
                     <span
@@ -1284,12 +1284,12 @@ export default function CierreViaje() {
                     </span>
                   </div>
                   <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm print:shadow-none print:border-slate-300">
-                    <span className="text-[12px] uppercase font-bold tracking-widest text-slate-400 mb-1 block print:text-slate-500">
+                    <span className="text-[12px] uppercase font-bold tracking-widest text-slate-600 mb-1 block print:text-slate-500">
                       Movimientos
                     </span>
                     <span className="font-bold text-slate-700 text-sm block print:text-black">
                       {selectedLegsData.length}{" "}
-                      <span className="font-normal text-slate-400 print:text-slate-500">
+                      <span className="font-normal text-slate-600 print:text-slate-500">
                         tramos
                       </span>
                     </span>
@@ -1308,7 +1308,7 @@ export default function CierreViaje() {
                       </p>
                       <p className="font-bold text-slate-800 text-sm print:text-black">
                         {previewData?.total_kms || 0}{" "}
-                        <span className="text-slate-400 text-xs">km</span>
+                        <span className="text-slate-600 text-xs">km</span>
                       </p>
                     </div>
                     <div>
@@ -1317,7 +1317,7 @@ export default function CierreViaje() {
                       </p>
                       <p className="font-bold text-slate-800 text-sm print:text-black">
                         {previewData?.consumo_esperado || 0}{" "}
-                        <span className="text-slate-400 text-xs">L</span>
+                        <span className="text-slate-600 text-xs">L</span>
                       </p>
                     </div>
                     <div>
@@ -1326,7 +1326,7 @@ export default function CierreViaje() {
                       </p>
                       <p className="font-bold text-slate-800 text-sm print:text-black">
                         {previewData?.consumo_real || 0}{" "}
-                        <span className="text-slate-400 text-xs">L</span>
+                        <span className="text-slate-600 text-xs">L</span>
                       </p>
                     </div>
                   </div>
@@ -1336,7 +1336,7 @@ export default function CierreViaje() {
               {/* COLUMNA DERECHA: Dinero y Desglose */}
               <div className="md:col-span-5 print:col-span-5 flex flex-col justify-between">
                 <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm space-y-3 flex-1 mb-4 print:shadow-none print:border-slate-300">
-                  <h4 className="text-[12px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100 pb-2 mb-3 print:text-slate-600 print:border-slate-300">
+                  <h4 className="text-[12px] font-black uppercase tracking-widest text-slate-600 border-b border-slate-100 pb-2 mb-3 print:text-slate-600 print:border-slate-300">
                     Desglose Financiero
                   </h4>
 
@@ -1395,7 +1395,7 @@ export default function CierreViaje() {
                 <div className="relative bg-slate-900 p-4 sm:p-5 rounded-xl shadow-lg flex justify-between items-center overflow-hidden shrink-0 print:bg-white print:border-2 print:border-slate-800 print:shadow-none">
                   <div className="absolute inset-0 bg-gradient-to-r from-brand-navy to-slate-900 z-0 print:hidden"></div>
                   <div className="relative z-10">
-                    <span className="block text-[10px] sm:text-[12px] text-slate-400 font-bold uppercase tracking-widest mb-1 print:text-slate-600">
+                    <span className="block text-[10px] sm:text-[12px] text-slate-600 font-bold uppercase tracking-widest mb-1 print:text-slate-600">
                       Total a Depositar
                     </span>
                     <span className="text-2xl sm:text-3xl font-black font-mono text-white tracking-tight print:text-black">
@@ -1427,7 +1427,7 @@ export default function CierreViaje() {
                       {selectedLegsData[0]?.operator?.name ||
                         "Firma del Operador"}
                     </p>
-                    <p className="text-[8px] text-slate-400 font-medium mt-0.5 print:text-slate-500">
+                    <p className="text-[8px] text-slate-600 font-medium mt-0.5 print:text-slate-500">
                       Recibe
                     </p>
                   </div>
@@ -1440,14 +1440,14 @@ export default function CierreViaje() {
                     <p className="text-[12px] font-bold text-slate-600 mt-1 truncate print:text-black">
                       Depto. Finanzas / Despacho
                     </p>
-                    <p className="text-[8px] text-slate-400 font-medium mt-0.5 print:text-slate-500">
+                    <p className="text-[8px] text-slate-600 font-medium mt-0.5 print:text-slate-500">
                       Entrega
                     </p>
                   </div>
                 </div>
               </div>
 
-              <p className="text-[8px] text-slate-400 text-center leading-relaxed px-4 md:px-12 print:text-slate-500 print:max-w-2xl print:mx-auto">
+              <p className="text-[8px] text-slate-600 text-center leading-relaxed px-4 md:px-12 print:text-slate-500 print:max-w-2xl print:mx-auto">
                 Este documento ampara la liquidación de los movimientos
                 descritos. Al firmar, el operador acepta de conformidad los
                 descuentos y pagos realizados, no reservándose acción ni derecho
@@ -1473,7 +1473,7 @@ export default function CierreViaje() {
               variant="outline"
               onClick={() => window.print()}
             >
-              <Printer className="h-5 w-5 text-slate-400" /> Imprimir Documento
+              <Printer className="h-5 w-5 text-slate-600" /> Imprimir Documento
             </Button>
           </DialogFooter>
         </DialogContent>

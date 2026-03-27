@@ -119,7 +119,7 @@ export function SupplierModal({
         <div className="space-y-6 pt-4">
           {/* SECCIÓN 1: DATOS GENERALES */}
           <div className="space-y-4">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2 border-b pb-2">
+            <h3 className="text-xs font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2 border-b pb-2">
               <Building2 className="h-3 w-3" /> Datos Generales
             </h3>
             <div className="grid grid-cols-2 gap-4">
@@ -221,7 +221,7 @@ export function SupplierModal({
 
           {/* SECCIÓN 2: CONTACTO Y UBICACIÓN */}
           <div className="space-y-4">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2 border-b pb-2">
+            <h3 className="text-xs font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2 border-b pb-2">
               <Phone className="h-3 w-3" /> Contacto y Ubicación
             </h3>
             <div className="grid grid-cols-2 gap-4">
@@ -278,7 +278,7 @@ export function SupplierModal({
 
           {/* SECCIÓN 3: DATOS BANCARIOS */}
           <div className="space-y-4">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2 border-b pb-2">
+            <h3 className="text-xs font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2 border-b pb-2">
               <CreditCard className="h-3 w-3" /> Datos Bancarios
             </h3>
             <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-lg border">

@@ -302,48 +302,73 @@ export function NextLegModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[900px] bg-slate-50 p-0 overflow-hidden rounded-2xl shadow-2xl border-none">
-        {/* HEADER INDUSTRIAL CON ORIGEN, DESTINO Y CONFIGURACIÓN */}
-        <DialogHeader className="p-6 bg-brand-navy shrink-0 mt-5">
-          <div className="flex justify-between items-center">
-            <div className="space-y-2">
-              <div className="flex items-center gap-3">
-                <div className="bg-gray-300 p-2 rounded-lg">
-                  <Truck className="h-6 w-6 text-brand-navy" />
+      {/* 1. DialogContent: Eliminamos bg-slate-50 y aplicamos glass-panel. 
+      Aumentamos a max-w-[1000px] para que los datos respiren.
+  */}
+      <DialogContent className="sm:max-w-[1000px] p-0 overflow-hidden glass-panel border-none shadow-2xl animate-page-enter">
+        {/* HEADER INDUSTRIAL: Ahora con profundidad 3D. 
+        Eliminamos mt-5 y usamos bg-brand-navy/95 translúcido.
+    */}
+        <DialogHeader className="p-8 bg-brand-navy/95 backdrop-blur-md shrink-0 relative overflow-hidden">
+          {/* Brillo sutil de fondo exclusivo para el header */}
+          <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent pointer-events-none" />
+
+          <div className="relative z-10 flex justify-between items-center">
+            <div className="space-y-4">
+              <div className="flex items-center gap-4">
+                <div className="bg-white/10 p-3 rounded-xl backdrop-blur-md border border-white/20 shadow-xl">
+                  <Truck className="h-7 w-7 text-brand-primary" />
                 </div>
-                <DialogTitle className="text-2xl font-black uppercase tracking-tighter">
-                  Despacho de Viaje #{tripPadre.public_id || tripPadre.id}
-                </DialogTitle>
+                <div>
+                  <DialogTitle className="text-3xl font-black uppercase tracking-tighter text-brand-primary">
+                    Despacho de Viaje <span className="opacity-50">#</span>
+                    {tripPadre.public_id || tripPadre.id}
+                  </DialogTitle>
+                  <p className="text-[10px] font-bold text-brand-primary/40 uppercase tracking-[0.3em] mt-1">
+                    Logística Operativa Crítica
+                  </p>
+                </div>
               </div>
-              <div className="flex items-center flex-wrap gap-2 font-bold text-slate-600 uppercase text-sm tracking-widest mt-11">
-                <span className="flex items-center gap-1">
-                  <MapPin className="h-4 w-4 text-emerald-400" />
+
+              <div className="flex items-center flex-wrap gap-3 font-bold text-brand-primary/70 uppercase text-xs tracking-widest pt-2">
+                <span className="flex items-center gap-1.5 bg-white/5 px-4 py-2 rounded-full border border-white/10">
+                  <MapPin className="h-3.5 w-3.5 text-emerald-400" />
                   {tripPadre.origin}
                 </span>
-                <ArrowRight className="h-4 w-4 text-emerald-400" />
-                <span>{tripPadre.destination}</span>
-                <Badge className="ml-3 bg-white/10 text-primary border-white/20 tracking-widest">
+                <ArrowRight className="h-4 w-4 text-brand-primary/20" />
+                <span className="flex items-center gap-1.5 bg-white/5 px-4 py-2 rounded-full border border-white/10">
+                  <MapPin className="h-3.5 w-3.5 text-rose-400" />
+                  {tripPadre.destination}
+                </span>
+
+                <Badge className="ml-3 bg-white/10 text-brand-primary border-white/20 tracking-widest">
                   {isFullTrip ? "FULL / 9 EJES" : "SENCILLO / 5 EJES"}
                 </Badge>
-                {/* 🚀 NUEVO: MOSTRAR EL CONTENEDOR SI EXISTE */}
+
+                {/* REFERENCIA / CONTENEDOR */}
                 {(tripPadre as any).referencia && (
-                  <Badge className="ml-2 bg-blue-100 text-blue-800 border-blue-200 tracking-widest shadow-sm flex items-center gap-1">
-                    <Container className="h-3 w-3" />
+                  <Badge className="ml-2 bg-blue-500/20 text-blue-200 border-blue-500/30 tracking-widest shadow-sm flex items-center gap-1.5">
+                    <Container className="h-3.5 w-3.5" />
                     CONTENEDOR: {(tripPadre as any).referencia}
                   </Badge>
                 )}
               </div>
             </div>
-            <div className="flex flex-col items-end gap-2">
+
+            <div className="flex flex-col items-end gap-3">
               <Badge
-                variant={cpGenerada ? "success" : "destructive"}
-                className="px-4 py-1.5  uppercase text-[11px] tracking-widest"
+                className={cn(
+                  "px-4 py-1.5 uppercase text-[10px] font-black tracking-widest border-none shadow-lg",
+                  cpGenerada
+                    ? "bg-status-success text-white"
+                    : "bg-status-danger text-white animate-pulse-danger",
+                )}
               >
                 {cpGenerada ? "CP $1 MXN GENERADA" : "CP $1 MXN PENDIENTE"}
               </Badge>
-              {/* 🚀 BOTÓN MODIFICADO PARA TIMBRAR Y LUEGO DESCARGAR */}
+
               <Button
-                size="sm"
+                size="lg"
                 onClick={() =>
                   localUuid
                     ? handleDownloadStampedPDF(localUuid)
@@ -351,16 +376,16 @@ export function NextLegModal({
                 }
                 disabled={isStamping}
                 className={cn(
-                  "font-black h-8 text-[11px] uppercase shadow-lg shadow-emerald-900/20",
+                  "font-black px-8 h-12 text-[11px] uppercase tracking-[0.15em] shadow-2xl transition-all duration-300",
                   localUuid
-                    ? "bg-blue-600 hover:bg-blue-500 "
-                    : "bg-emerald-600 hover:bg-emerald-500 ",
+                    ? "bg-white text-brand-navy hover:bg-white/90"
+                    : "btn-action-gradient text-white animate-pulse-glow",
                 )}
               >
                 {isStamping ? (
-                  <Loader2 className="h-3 w-3 animate-spin mr-2" />
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 ) : (
-                  <FileText className="h-3 w-3 mr-2" />
+                  <FileText className="h-4 w-4 mr-2" />
                 )}
                 {localUuid ? "DESCARGAR CARTA PORTE" : "TIMBRAR BYPASS ($1)"}
               </Button>
@@ -368,52 +393,60 @@ export function NextLegModal({
           </div>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-0 overflow-y-auto max-h-[70vh] custom-scrollbar">
-          {/* PANEL IZQUIERDO: FINANZAS (PACTADO VS GASTADO) */}
-          <div className="md:col-span-4 bg-white p-6 border-r border-slate-200 space-y-6">
-            <div className="space-y-3">
-              <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                <ShieldCheck className="h-3 w-3 text-brand-navy" /> Negocio
-                Pactado (Cliente)
+        {/* BODY: Grid principal.
+        Usamos glass-surface para la izquierda y bg-white/40 para la derecha.
+    */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-0 overflow-y-auto max-h-[75vh] custom-scrollbar bg-transparent">
+          {/* PANEL IZQUIERDO: FINANZAS */}
+          <div className="md:col-span-4 glass-surface p-8 border-r border-white/10 space-y-8">
+            <div className="space-y-4">
+              <h4 className="text-[11px] font-black text-brand-navy/60 uppercase tracking-[0.2em] flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-primary" /> Negocio Pactado
               </h4>
-              <Card className="border-none bg-slate-50 shadow-none">
-                <CardContent className="p-4 space-y-2.5">
-                  <div className="flex justify-between items-center text-[12px] font-bold text-slate-600">
+
+              <Card className="glass-card border-none p-0 overflow-hidden shadow-lg">
+                <CardContent className="p-5 space-y-3">
+                  <div className="flex justify-between items-center text-xs font-bold text-slate-500">
                     <span>Flete Base:</span>
                     <span className="font-mono text-slate-900">
                       {formatCurrency(finanzas.base)}
                     </span>
                   </div>
-                  <div className="flex justify-between items-center text-[12px] font-bold text-slate-600">
+                  <div className="flex justify-between items-center text-xs font-bold text-slate-500">
                     <span>Casetas Pactadas:</span>
                     <span className="font-mono text-blue-600">
                       {formatCurrency(finanzas.casetasPactadas)}
                     </span>
                   </div>
-                  <Separator />
-                  <div className="flex justify-between items-center text-[11px] font-bold text-slate-400">
-                    <span>Subtotal:</span>
-                    <span className="font-mono text-slate-600">
-                      {formatCurrency(finanzas.subtotal)}
-                    </span>
+
+                  <Separator className="bg-slate-200/50" />
+
+                  <div className="space-y-2 pt-1">
+                    <div className="flex justify-between items-center text-[10px] font-bold text-slate-600">
+                      <span>Subtotal:</span>
+                      <span className="font-mono text-slate-600">
+                        {formatCurrency(finanzas.subtotal)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-[10px] font-bold text-slate-600">
+                      <span>IVA (16%):</span>
+                      <span className="font-mono">
+                        {formatCurrency(finanzas.iva)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-[10px] font-bold text-slate-600">
+                      <span>Retención (4%):</span>
+                      <span className="font-mono text-rose-500">
+                        -{formatCurrency(finanzas.retencion)}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center text-[11px] font-bold text-slate-400">
-                    <span>IVA (16%):</span>
-                    <span className="font-mono">
-                      {formatCurrency(finanzas.iva)}
+
+                  <div className="bg-brand-navy/5 p-4 rounded-xl border border-brand-navy/10 mt-4">
+                    <span className="text-[9px] font-black text-brand-navy/40 uppercase block mb-1">
+                      Total Factura
                     </span>
-                  </div>
-                  <div className="flex justify-between items-center text-[11px] font-bold text-slate-400">
-                    <span>Retención (4%):</span>
-                    <span className="font-mono text-rose-500">
-                      -{formatCurrency(finanzas.retencion)}
-                    </span>
-                  </div>
-                  <div className="bg-brand-navy/5 p-3 rounded-lg flex justify-between items-center mt-2 border border-brand-navy/10">
-                    <span className="text-[11px] font-black text-brand-navy uppercase tracking-tighter">
-                      Total Factura:
-                    </span>
-                    <span className="text-base font-black text-brand-navy font-mono">
+                    <span className="text-2xl font-black text-brand-navy font-mono tracking-tighter">
                       {formatCurrency(finanzas.total)}
                     </span>
                   </div>
@@ -421,25 +454,26 @@ export function NextLegModal({
               </Card>
             </div>
 
-            <div className="space-y-3">
-              <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                <TrendingDown className="h-3 w-3 text-rose-600" /> Utilidad
-                Estimada (Tramo)
+            <div className="space-y-4">
+              <h4 className="text-[11px] font-black text-rose-500 uppercase tracking-[0.2em] flex items-center gap-2">
+                <TrendingDown className="h-4 w-4 text-primary" /> Utilidad
+                Estimada
               </h4>
-              <Card className="border border-rose-100 bg-rose-50/30 shadow-none">
-                <CardContent className="p-4 space-y-3">
-                  <div className="flex justify-between items-center text-[12px] font-bold text-slate-500">
+
+              <Card className="glass-card border-rose-100 bg-rose-50/20 p-0 shadow-sm">
+                <CardContent className="p-5">
+                  <div className="flex justify-between items-center text-xs font-bold text-slate-500 mb-4">
                     <span>Gasto Operativo:</span>
                     <span className="font-mono text-rose-600">
                       -{formatCurrency(gastoOperativoActual)}
                     </span>
                   </div>
-                  <Separator className="bg-rose-100" />
-                  <div className="flex justify-between items-center pt-1">
-                    <span className="text-[11px] font-black text-emerald-700 uppercase tracking-tight">
-                      Utilidad Neta:
+                  <Separator className="bg-rose-100/50 mb-4" />
+                  <div>
+                    <span className="text-[9px] font-black text-emerald-700 uppercase block mb-1">
+                      Utilidad Neta Estimada
                     </span>
-                    <span className="text-lg font-black text-emerald-700 font-mono">
+                    <span className="text-3xl font-black text-emerald-700 font-mono tracking-tighter">
                       {formatCurrency(finanzas.total - gastoOperativoActual)}
                     </span>
                   </div>
@@ -447,15 +481,16 @@ export function NextLegModal({
               </Card>
             </div>
 
-            {/* 🚀 BOTÓN PRINCIPAL ACTUALIZADO (Con lógica de descarga) */}
-            <Card className="bg-slate-900 text-primary border-none shadow-lg">
-              <CardContent className="p-4 space-y-3">
-                <h5 className="text-[9px] font-black uppercase text-emerald-400 tracking-widest">
+            {/* PROTOCOLO BYPASS */}
+            <Card className="bg-slate-900 border-none shadow-2xl overflow-hidden relative group">
+              <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent pointer-events-none" />
+              <CardContent className="p-6 space-y-4 relative z-10">
+                <h5 className="text-[10px] font-black uppercase text-emerald-400 tracking-[0.2em]">
                   Protocolo Bypass
                 </h5>
-                <p className="text-[11px] text-slate-600 leading-tight">
+                <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
                   Genera la Carta Porte de $1 para liberar la unidad
-                  inmediatamente. El operador real se asigna abajo.
+                  inmediatamente.
                 </p>
                 <Button
                   onClick={() =>
@@ -465,10 +500,10 @@ export function NextLegModal({
                   }
                   disabled={isStamping}
                   className={cn(
-                    "w-full h-10 font-black text-[11px] uppercase shadow-lg transition-colors",
+                    "w-full h-11 font-black text-[10px] uppercase tracking-widest shadow-lg transition-all",
                     localUuid
-                      ? "bg-blue-600 hover:bg-blue-500 shadow-blue-900/20"
-                      : "bg-emerald-600 hover:bg-emerald-500 shadow-emerald-900/20",
+                      ? "bg-blue-600 hover:bg-blue-500"
+                      : "bg-emerald-600 hover:bg-emerald-500 shadow-emerald-900/40",
                   )}
                 >
                   {isStamping ? (
@@ -484,37 +519,38 @@ export function NextLegModal({
             </Card>
           </div>
 
-          {/* PANEL DERECHO: ASIGNACIÓN OPERATIVA (FASE 2) */}
-          <div className="md:col-span-8 p-6 space-y-8">
-            <div className="grid grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <Label className="text-[11px] font-black uppercase text-slate-500 tracking-wider">
+          {/* PANEL DERECHO: FORMULARIO */}
+          <div className="md:col-span-8 p-10 space-y-10 bg-white/40 backdrop-blur-sm relative">
+            <div className="grid grid-cols-2 gap-8">
+              <div className="space-y-3">
+                <Label className="text-[11px] font-black uppercase text-slate-600 tracking-widest ml-1">
                   Fase Operativa
                 </Label>
                 <Select
                   value={formData.leg_type}
                   onValueChange={(v: any) =>
-                    setFormData((p) => ({ ...p, leg_type: v }))
+                    setFormData((p: any) => ({ ...p, leg_type: v }))
                   }
                 >
-                  <SelectTrigger className="h-11 font-bold border-slate-300">
+                  <SelectTrigger className="h-12 glass-card border-slate-200 font-bold text-slate-700 shadow-sm">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="carga_muelle">
+                  <SelectContent className="glass-panel">
+                    <SelectItem value="carga_muelle" className="font-bold">
                       1. CARGA PATIO / MUELLE
                     </SelectItem>
-                    <SelectItem value="ruta_carretera">
+                    <SelectItem value="ruta_carretera" className="font-bold">
                       2. RUTA CARRETERA
                     </SelectItem>
-                    <SelectItem value="entrega_vacio">
+                    <SelectItem value="entrega_vacio" className="font-bold">
                       3. RETORNO DE VACÍO
                     </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label className="text-[11px] font-black uppercase text-slate-500 tracking-wider">
+
+              <div className="space-y-3">
+                <Label className="text-[11px] font-black uppercase text-slate-600 tracking-widest ml-1">
                   Operador
                 </Label>
                 <Select
@@ -522,13 +558,13 @@ export function NextLegModal({
                     formData.operator_id ? String(formData.operator_id) : ""
                   }
                   onValueChange={(v) =>
-                    setFormData((p) => ({ ...p, operator_id: Number(v) }))
+                    setFormData((p: any) => ({ ...p, operator_id: Number(v) }))
                   }
                 >
-                  <SelectTrigger className="h-11 font-bold border-slate-300">
+                  <SelectTrigger className="h-12 glass-card border-slate-200 font-bold shadow-sm">
                     <SelectValue placeholder="Asignar Operador..." />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="glass-panel">
                     {operadores.map((o: any) => (
                       <SelectItem key={o.id} value={String(o.id)}>
                         {o.name.toUpperCase()}
@@ -539,22 +575,26 @@ export function NextLegModal({
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-[11px] font-black uppercase text-slate-500 tracking-wider">
+            <div className="space-y-3">
+              <Label className="text-[11px] font-black uppercase text-slate-600 tracking-widest ml-1">
                 Unidad (Tractocamión)
               </Label>
               <Select
                 value={formData.unit_id ? String(formData.unit_id) : ""}
                 onValueChange={(v) =>
-                  setFormData((p) => ({ ...p, unit_id: Number(v) }))
+                  setFormData((p: any) => ({ ...p, unit_id: Number(v) }))
                 }
               >
-                <SelectTrigger className="h-11 font-black text-brand-navy border-slate-400 shadow-sm">
+                <SelectTrigger className="h-12 glass-card border-slate-400 text-brand-navy font-black shadow-md">
                   <SelectValue placeholder="Seleccionar unidad de tracción..." />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="glass-panel">
                   {availableTractos.map((u: any) => (
-                    <SelectItem key={u.id} value={String(u.id)}>
+                    <SelectItem
+                      key={u.id}
+                      value={String(u.id)}
+                      className="font-bold"
+                    >
                       ECO-{u.numero_economico} [{u.placas}]
                     </SelectItem>
                   ))}
@@ -562,115 +602,149 @@ export function NextLegModal({
               </Select>
             </div>
 
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-6 shadow-sm">
-              <div className="col-span-3 border-b pb-2 flex items-center justify-between">
-                <h5 className="text-[11px] font-black text-brand-navy uppercase tracking-widest flex items-center gap-2">
-                  <Box className="h-4 w-4" /> Configuración de Arrastre
+            {/* CONFIGURACIÓN DE ARRASTRE */}
+            <div className="glass-card p-8 border-white shadow-xl space-y-8 relative">
+              <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                <h5 className="text-[11px] font-black text-brand-navy uppercase tracking-[0.2em] flex items-center gap-2">
+                  <Box className="h-4 w-4 text-brand-red" /> Configuración de
+                  Arrastre
                 </h5>
                 {isFullTrip && (
-                  <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-100 border-none font-black text-[9px]">
-                    DOBLE ARTICULADO
+                  <Badge className="bg-rose-100 text-rose-700 font-black text-[9px] border-none px-3">
+                    DOBLE ARTICULADO (FULL)
                   </Badge>
                 )}
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-[9px] font-bold text-slate-500 uppercase">
-                  Chasis 1
-                </Label>
-                <Select
-                  value={
-                    formData.remolque_1_id ? String(formData.remolque_1_id) : ""
-                  }
-                  onValueChange={(v) =>
-                    setFormData((p) => ({ ...p, remolque_1_id: Number(v) }))
-                  }
-                >
-                  <SelectTrigger className="h-9 text-[12px] font-bold">
-                    <SelectValue placeholder="R1" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableRemolques.map((u: any) => (
-                      <SelectItem key={u.id} value={String(u.id)}>
-                        ECO-{u.numero_economico} {u.is_loaded ? "📦" : "➖"}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
+                <div className="space-y-2.5">
+                  <Label className="text-[9px] font-bold text-slate-500 uppercase ml-1">
+                    Chasis 1
+                  </Label>
+                  <Select
+                    value={
+                      formData.remolque_1_id
+                        ? String(formData.remolque_1_id)
+                        : ""
+                    }
+                    onValueChange={(v) =>
+                      setFormData((p: any) => ({
+                        ...p,
+                        remolque_1_id: Number(v),
+                      }))
+                    }
+                  >
+                    <SelectTrigger className="h-10 font-bold border-slate-200 bg-slate-50/50">
+                      <SelectValue placeholder="R1" />
+                    </SelectTrigger>
+                    <SelectContent className="glass-panel">
+                      {availableRemolques.map((u: any) => (
+                        <SelectItem
+                          key={u.id}
+                          value={String(u.id)}
+                          className="font-bold"
+                        >
+                          ECO-{u.numero_economico} {u.is_loaded ? "📦" : "➖"}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {isFullTrip && (
+                  <>
+                    <div className="space-y-2.5">
+                      <Label className="text-[9px] font-bold text-rose-600 uppercase ml-1">
+                        Dolly
+                      </Label>
+                      <Select
+                        value={
+                          formData.dolly_id ? String(formData.dolly_id) : ""
+                        }
+                        onValueChange={(v) =>
+                          setFormData((p: any) => ({
+                            ...p,
+                            dolly_id: Number(v),
+                          }))
+                        }
+                      >
+                        <SelectTrigger className="h-10 font-bold border-rose-200 bg-rose-50 text-rose-700">
+                          <SelectValue placeholder="Dolly" />
+                        </SelectTrigger>
+                        <SelectContent className="glass-panel">
+                          {availableDollies.map((u: any) => (
+                            <SelectItem
+                              key={u.id}
+                              value={String(u.id)}
+                              className="font-bold"
+                            >
+                              ECO-{u.numero_economico}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2.5">
+                      <Label className="text-[9px] font-bold text-rose-600 uppercase ml-1">
+                        Chasis 2
+                      </Label>
+                      <Select
+                        value={
+                          formData.remolque_2_id
+                            ? String(formData.remolque_2_id)
+                            : ""
+                        }
+                        onValueChange={(v) =>
+                          setFormData((p: any) => ({
+                            ...p,
+                            remolque_2_id: Number(v),
+                          }))
+                        }
+                      >
+                        <SelectTrigger className="h-10 font-bold border-rose-200 bg-rose-50 text-rose-700">
+                          <SelectValue placeholder="R2" />
+                        </SelectTrigger>
+                        <SelectContent className="glass-panel">
+                          {availableRemolques.map((u: any) => (
+                            <SelectItem
+                              key={u.id}
+                              value={String(u.id)}
+                              className="font-bold"
+                            >
+                              ECO-{u.numero_economico}{" "}
+                              {u.is_loaded ? "📦" : "➖"}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                )}
               </div>
-              {isFullTrip && (
-                <>
-                  <div className="space-y-1.5">
-                    <Label className="text-[9px] font-bold text-rose-600 uppercase">
-                      Dolly
-                    </Label>
-                    <Select
-                      value={formData.dolly_id ? String(formData.dolly_id) : ""}
-                      onValueChange={(v) =>
-                        setFormData((p) => ({ ...p, dolly_id: Number(v) }))
-                      }
-                    >
-                      <SelectTrigger className="h-9 text-[12px] border-rose-200 bg-rose-50 text-rose-700 font-bold">
-                        <SelectValue placeholder="Dolly" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableDollies.map((u: any) => (
-                          <SelectItem key={u.id} value={String(u.id)}>
-                            ECO-{u.numero_economico}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-[9px] font-bold text-rose-600 uppercase">
-                      Chasis 2
-                    </Label>
-                    <Select
-                      value={
-                        formData.remolque_2_id
-                          ? String(formData.remolque_2_id)
-                          : ""
-                      }
-                      onValueChange={(v) =>
-                        setFormData((p) => ({ ...p, remolque_2_id: Number(v) }))
-                      }
-                    >
-                      <SelectTrigger className="h-9 text-[12px] border-rose-200 bg-rose-50 text-rose-700 font-bold">
-                        <SelectValue placeholder="R2" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableRemolques.map((u: any) => (
-                          <SelectItem key={u.id} value={String(u.id)}>
-                            ECO-{u.numero_economico} {u.is_loaded ? "📦" : "➖"}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </>
-              )}
             </div>
 
             {/* ANTICIPOS OPERATIVOS */}
             {isRoadLeg && (
-              <div className="bg-amber-50 p-6 rounded-2xl border border-amber-200 space-y-4 shadow-inner">
-                <h4 className="text-[11px] font-black text-amber-800 uppercase tracking-widest flex items-center gap-2">
-                  <DollarSign className="h-4 w-4" /> Registro de Anticipos y
-                  Vales (Opcional)
+              <div className="bg-amber-500/5 p-8 rounded-3xl border border-amber-500/10 space-y-6 shadow-inner relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-1 bg-amber-400 h-full" />
+                <h4 className="text-[11px] font-black text-amber-700 uppercase tracking-[0.2em] flex items-center gap-2">
+                  <DollarSign className="h-4 w-4 text-primary" /> Registro de
+                  Anticipos y Vales
                 </h4>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  <div className="space-y-2">
-                    <Label className="text-[9px] font-bold text-slate-600 uppercase">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
+                  <div className="space-y-2.5">
+                    <Label className="text-[9px] font-bold text-slate-600 uppercase ml-1">
                       Casetas
                     </Label>
                     <div className="relative">
-                      <DollarSign className="absolute left-2.5 top-2.5 h-3 w-3 text-slate-400" />
+                      <DollarSign className="text-slate-600  absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 " />
                       <Input
                         type="number"
-                        className="pl-7 h-9 font-mono bg-white text-[12px] border-amber-100"
+                        className="pl-9 h-11 glass-card border-amber-200/50 font-mono text-sm bg-white"
                         value={formData.anticipo_casetas || ""}
                         onChange={(e) =>
-                          setFormData((p) => ({
+                          setFormData((p: any) => ({
                             ...p,
                             anticipo_casetas: Number(e.target.value),
                           }))
@@ -678,18 +752,18 @@ export function NextLegModal({
                       />
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label className="text-[9px] font-bold text-slate-600 uppercase">
+                  <div className="space-y-2.5">
+                    <Label className="text-[9px] font-bold text-slate-600 uppercase ml-1">
                       Diesel
                     </Label>
                     <div className="relative">
-                      <DollarSign className="absolute left-2.5 top-2.5 h-3 w-3 text-slate-400" />
+                      <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-600" />
                       <Input
                         type="number"
-                        className="pl-7 h-9 font-mono bg-white text-[12px] border-amber-100"
+                        className="pl-9 h-11 glass-card border-amber-200/50 font-mono text-sm bg-white"
                         value={formData.anticipo_combustible || ""}
                         onChange={(e) =>
-                          setFormData((p) => ({
+                          setFormData((p: any) => ({
                             ...p,
                             anticipo_combustible: Number(e.target.value),
                           }))
@@ -697,18 +771,18 @@ export function NextLegModal({
                       />
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label className="text-[9px] font-bold text-slate-600 uppercase">
+                  <div className="space-y-2.5">
+                    <Label className="text-[9px] font-bold text-slate-600 uppercase ml-1">
                       Viáticos
                     </Label>
                     <div className="relative">
-                      <DollarSign className="absolute left-2.5 top-2.5 h-3 w-3 text-slate-400" />
+                      <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-600" />
                       <Input
                         type="number"
-                        className="pl-7 h-9 font-mono bg-white text-[12px] border-amber-100"
+                        className="pl-9 h-11 glass-card border-amber-200/50 font-mono text-sm bg-white"
                         value={formData.anticipo_viaticos || ""}
                         onChange={(e) =>
-                          setFormData((p) => ({
+                          setFormData((p: any) => ({
                             ...p,
                             anticipo_viaticos: Number(e.target.value),
                           }))
@@ -716,18 +790,18 @@ export function NextLegModal({
                       />
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label className="text-[9px] font-bold text-brand-navy uppercase flex items-center gap-1">
+                  <div className="space-y-2.5">
+                    <Label className="text-[9px] font-bold text-brand-navy uppercase flex items-center gap-1 ml-1">
                       <Ticket className="h-3 w-3" /> Vale / Otros
                     </Label>
                     <div className="relative">
-                      <DollarSign className="absolute left-2.5 top-2.5 h-3 w-3 text-blue-400" />
+                      <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-blue-400" />
                       <Input
                         type="number"
-                        className="pl-7 h-9 font-mono bg-blue-50 border-blue-200 text-sm"
+                        className="pl-9 h-11 glass-card border-blue-200 bg-blue-50/50 font-mono text-sm"
                         value={formData.otros_anticipos || ""}
                         onChange={(e) =>
-                          setFormData((p) => ({
+                          setFormData((p: any) => ({
                             ...p,
                             otros_anticipos: Number(e.target.value),
                           }))
@@ -741,30 +815,35 @@ export function NextLegModal({
           </div>
         </div>
 
-        <DialogFooter className="p-4 bg-slate-50 border-t border-slate-200 flex justify-between sm:justify-between items-center rounded-b-2xl">
-          <div className="flex items-center gap-2 px-2 text-slate-400">
-            <Info className="h-4 w-4" />
-            <span className="text-[9px] font-bold uppercase tracking-tight">
+        {/* FOOTER: Estilo barra inferior de Safari. 
+        Transparente con blur.
+    */}
+        <DialogFooter className="p-6 bg-white/80 backdrop-blur-xl border-t border-white/20 flex justify-between items-center px-10">
+          <div className="flex items-center gap-3 px-2">
+            <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse-slow shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-600">
               Validación Física Requerida
             </span>
           </div>
-          <div className="flex gap-3">
+
+          <div className="flex gap-4">
             <Button
               variant="ghost"
               onClick={() => onOpenChange(false)}
-              className="font-bold uppercase text-[11px]"
+              className="font-bold uppercase text-[11px] tracking-widest text-slate-500 hover:text-slate-700 hover:bg-transparent"
             >
               Cancelar
             </Button>
+
             <Button
               onClick={handleIniciarTramo}
               disabled={loading || !cpGenerada}
-              className="bg-brand-navy hover:bg-brand-navy/90 text-primary font-black uppercase text-[11px] tracking-widest px-10 h-10 shadow-lg shadow-brand-navy/20"
+              className="btn-primary-gradient px-12 h-12 font-black uppercase text-[11px] tracking-[0.2em] shadow-2xl"
             >
               {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                <Loader2 className="h-5 w-5 animate-spin mr-2" />
               ) : (
-                <CheckCircle2 className="h-4 w-4 mr-2" />
+                <CheckCircle2 className="h-5 w-5 mr-2" />
               )}
               Iniciar Despacho Real
             </Button>

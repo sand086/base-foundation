@@ -342,7 +342,7 @@ export function UpdateStatusModal({
         <form onSubmit={handleSubmit} className="space-y-5 p-6 bg-white">
           {/* TIPO DE EVENTO */}
           <div className="space-y-2">
-            <Label className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+            <Label className="text-[11px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-1.5">
               <Navigation className="h-3.5 w-3.5" /> Motivo de Actualización *
             </Label>
             <Select
@@ -405,7 +405,7 @@ export function UpdateStatusModal({
           {/* UBICACIÓN CON GEOAPIFY */}
           <div className="space-y-3 border border-slate-100 bg-slate-50/30 p-3 rounded-xl">
             <div className="space-y-2">
-              <Label className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+              <Label className="text-[11px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-1.5">
                 <MapPin className="h-3.5 w-3.5" /> Ubicación o Referencia *
               </Label>
               <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
@@ -434,7 +434,7 @@ export function UpdateStatusModal({
                 >
                   <Command>
                     <div className="relative border-b">
-                      <Search className="absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
+                      <Search className="absolute left-3 top-3.5 h-4 w-4 text-slate-600" />
                       <CommandInput
                         placeholder="Escribe para buscar en el mapa..."
                         value={searchLocationQuery}
@@ -625,16 +625,16 @@ export function UpdateStatusModal({
           {!eventToEdit && (
             <div className="grid grid-cols-3 gap-3 p-4 bg-slate-50 border border-slate-100 rounded-xl mt-2">
               <div className="col-span-3 pb-2 border-b border-slate-200/60 mb-1">
-                <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center justify-between">
+                <Label className="text-[10px] font-black text-slate-600 uppercase tracking-widest flex items-center justify-between">
                   Telemetría{" "}
-                  <span className="font-normal text-[9px] text-slate-400 bg-white px-1.5 py-0.5 rounded shadow-sm border border-slate-100 italic">
+                  <span className="font-normal text-[9px] text-slate-600 bg-white px-1.5 py-0.5 rounded shadow-sm border border-slate-100 italic">
                     Actualización de Unidad
                   </span>
                 </Label>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-[11px] font-bold text-slate-600 flex items-center gap-1.5">
-                  <Gauge className="h-3.5 w-3.5 text-slate-400" /> Odómetro
+                  <Gauge className="h-3.5 w-3.5 text-slate-600" /> Odómetro
                 </Label>
                 <Input
                   type="number"
@@ -686,7 +686,7 @@ export function UpdateStatusModal({
 
           {/* COMENTARIOS */}
           <div className="space-y-2 mt-2">
-            <Label className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+            <Label className="text-[11px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-1.5">
               <MessageSquare className="h-3.5 w-3.5" /> Detalles / Novedades{" "}
               {isIncidentUI && <span className="text-red-500">*</span>}
             </Label>

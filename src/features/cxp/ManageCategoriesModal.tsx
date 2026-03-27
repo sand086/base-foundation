@@ -83,7 +83,7 @@ export function ManageCategoriesModal({
                     size="icon"
                     variant="ghost"
                     onClick={() => setEditingId(null)}
-                    className="h-8 w-8 text-slate-400"
+                    className="h-8 w-8 text-slate-600"
                   >
                     <X className="h-4 w-4" />
                   </Button>

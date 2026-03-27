@@ -733,7 +733,7 @@ export const DespachoWizard = () => {
                       "h-3.5 w-3.5",
                       data.leg_type === "carga_muelle"
                         ? "text-success"
-                        : "text-slate-400",
+                        : "text-slate-600",
                     )}
                   />
                   Patio
@@ -756,7 +756,7 @@ export const DespachoWizard = () => {
                       "h-3.5 w-3.5",
                       data.leg_type === "ruta_carretera"
                         ? "text-success"
-                        : "text-slate-400",
+                        : "text-slate-600",
                     )}
                   />
                   Carretera
@@ -1007,7 +1007,7 @@ export const DespachoWizard = () => {
                         Casetas
                       </Label>
                       <div className="relative">
-                        <span className="absolute left-3 top-3 text-slate-400 font-bold">
+                        <span className="absolute left-3 top-3 text-slate-600 font-bold">
                           $
                         </span>
                         <Input
@@ -1028,7 +1028,7 @@ export const DespachoWizard = () => {
                         Vale de Diésel
                       </Label>
                       <div className="relative">
-                        <span className="absolute left-3 top-3 text-slate-400 font-bold">
+                        <span className="absolute left-3 top-3 text-slate-600 font-bold">
                           $
                         </span>
                         <Input
@@ -1050,7 +1050,7 @@ export const DespachoWizard = () => {
                         Viáticos Operador
                       </Label>
                       <div className="relative">
-                        <span className="absolute left-3 top-3 text-slate-400 font-bold">
+                        <span className="absolute left-3 top-3 text-slate-600 font-bold">
                           $
                         </span>
                         <Input

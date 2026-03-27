@@ -92,7 +92,7 @@ export const StandByTrips = () => {
                   </span>
                   {/* 🚀 FASE 2: Título basado en el Nombre de la Ruta armada */}
                   <h3 className="font-black text-slate-800 text-sm leading-tight flex items-center gap-1.5 uppercase tracking-tighter">
-                    <RouteIcon className="h-3.5 w-3.5 text-slate-400" />
+                    <RouteIcon className="h-3.5 w-3.5 text-slate-600" />
                     {trip.route_name || `${trip.origin} - ${trip.destination}`}
                   </h3>
                 </div>
@@ -105,7 +105,7 @@ export const StandByTrips = () => {
               </div>
 
               <div className="flex items-center justify-between text-[11px]">
-                <span className="text-slate-400 font-mono">
+                <span className="text-slate-600 font-mono">
                   ID: #{trip.public_id || trip.id}
                 </span>
                 {trip.fecha_programada && (
@@ -117,13 +117,13 @@ export const StandByTrips = () => {
 
               <div className="grid grid-cols-2 gap-3 text-[11px] text-slate-600 bg-slate-50 p-2 rounded border border-slate-100">
                 <div className="flex items-center gap-1.5">
-                  <Truck className="h-3 w-3 text-slate-400" />
+                  <Truck className="h-3 w-3 text-slate-600" />
                   <span className="font-semibold truncate">
                     {trip.remolque_1?.numero_economico || "Sin unidad"}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <User className="h-3 w-3 text-slate-400" />
+                  <User className="h-3 w-3 text-slate-600" />
                   <span className="truncate font-semibold">
                     {trip.legs?.[0]?.operator?.name?.split(" ")[0] ||
                       "Sin asignar"}
@@ -149,7 +149,7 @@ export const StandByTrips = () => {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="text-slate-400 hover:text-destructive hover:bg-red-50 h-9 w-9 transition-colors"
+                  className="text-slate-600 hover:text-destructive hover:bg-red-50 h-9 w-9 transition-colors"
                   onClick={(e) => {
                     e.stopPropagation();
                     setTripToDelete(trip); // 🚀 Abre el Dialog bonito

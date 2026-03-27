@@ -25,9 +25,10 @@ export const userService = {
     return data;
   },
 
+  // Aseguramos que devuelva el objeto actualizado
   update: async (id: string, user: Partial<UserData>) => {
     const { data } = await axiosClient.put(`/users/${id}`, user);
-    return data;
+    return data; // Debe retornar { success: true, user: {...} }
   },
 
   toggleStatus: async (id: string) => {
@@ -42,24 +43,16 @@ export const userService = {
     return data;
   },
 
-  delete: async (id: string) => {
-    const { data } = await axiosClient.delete(`/users/${id}`);
-    return data;
-  },
-
-  async uploadAvatar(userId: number, file: File) {
+  async uploadAvatar(userId: string | number, file: File) {
     const formData = new FormData();
     formData.append("file", file);
-
-    const response = await axiosClient.post(
+    const { data } = await axiosClient.post(
       `/users/${userId}/avatar`,
       formData,
       {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
+        headers: { "Content-Type": "multipart/form-data" },
       },
     );
-    return response.data;
+    return data;
   },
 };

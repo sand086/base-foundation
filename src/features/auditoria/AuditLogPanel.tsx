@@ -235,137 +235,164 @@ export function AuditLogPanel({ open, onOpenChange }: AuditLogPanelProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[1100px] h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
-        {/* Header */}
-        <DialogHeader className="px-6 py-4 border-b bg-muted/30">
-          <DialogTitle className="flex items-center justify-between text-foreground">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center">
-                <History className="h-4 w-4 text-primary" />
+      {/* CONTAINER: Aplicamos glass-panel, modal-glow y la animación de entrada.
+    Mantenemos el tamaño sm:max-w-[1100px] y h-[90vh].
+  */}
+      <DialogContent className="sm:max-w-[1100px] h-[90vh] flex flex-col p-0 gap-0 overflow-hidden glass-panel border-none shadow-2xl animate-page-enter">
+        {/* HEADER PREMIUM: Usamos el Deep Navy con transparencia y spotlight.
+      Aplicamos text-shadow-premium para que el texto blanco resalte.
+    */}
+        <DialogHeader className="px-8 py-6 bg-brand-navy/95 backdrop-blur-md shrink-0 relative overflow-hidden border-b border-white/10">
+          <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent pointer-events-none" />
+
+          <DialogTitle className="relative z-10 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="icon-plate p-2.5 rounded-xl">
+                <History className="h-6 w-6 text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
               </div>
-              <span className="text-xl">Log de Auditoría</span>
+              <div className="flex flex-col">
+                <span className="text-2xl font-black heading-crisp text-white text-shadow-premium uppercase tracking-tighter">
+                  Log de Auditoría
+                </span>
+                <span className="text-[10px] font-bold text-white/40 uppercase tracking-[0.3em]">
+                  Monitoreo de Seguridad de Sistema
+                </span>
+              </div>
             </div>
           </DialogTitle>
         </DialogHeader>
 
-        {/* Filters Area */}
-        <div className="flex flex-wrap items-center gap-3 p-4 border-b bg-background z-10">
-          <div className="relative flex-1 min-w-[250px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        {/* FILTERS AREA: Estilo "Tahoe" con fondo translúcido y blur.
+      Los inputs y selects ahora usan glass-card.
+    */}
+        <div className="flex flex-wrap items-center gap-4 p-5 bg-white/40 backdrop-blur-md border-b border-white/20 z-10">
+          <div className="relative flex-1 min-w-[300px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input
               placeholder="Buscar por usuario, acción, IP o detalles..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 h-9 w-full"
+              className="pl-10 h-11 glass-card border-slate-200/60 focus:ring-brand-red/20 focus:border-brand-red transition-all font-medium"
             />
           </div>
 
-          <Select value={moduleFilter} onValueChange={setModuleFilter}>
-            <SelectTrigger className="w-[180px] h-9">
-              <Filter className="h-4 w-4 mr-2" />
-              <SelectValue placeholder="Módulo" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos los Módulos</SelectItem>
-              {modules
-                .filter((m) => m !== "all")
-                .map((modulo) => (
-                  <SelectItem key={modulo} value={modulo}>
-                    {modulo}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2">
+            <Select value={moduleFilter} onValueChange={setModuleFilter}>
+              <SelectTrigger className="w-[180px] h-11 glass-card border-slate-200/60 font-bold text-slate-600">
+                <Filter className="h-4 w-4 mr-2 text-slate-400" />
+                <SelectValue placeholder="Módulo" />
+              </SelectTrigger>
+              <SelectContent className="glass-panel border-white/20">
+                <SelectItem value="all" className="font-bold">
+                  Todos los Módulos
+                </SelectItem>
+                {modules
+                  .filter((m) => m !== "all")
+                  .map((modulo) => (
+                    <SelectItem
+                      key={modulo}
+                      value={modulo}
+                      className="capitalize"
+                    >
+                      {modulo}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
 
-          <Select value={actionFilter} onValueChange={setActionFilter}>
-            <SelectTrigger className="w-[160px] h-9">
-              <SelectValue placeholder="Acción" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas las Acciones</SelectItem>
-              <SelectItem value="crear">Crear</SelectItem>
-              <SelectItem value="editar">Editar</SelectItem>
-              <SelectItem value="eliminar">Eliminar</SelectItem>
-              <SelectItem value="ver">Ver</SelectItem>
-              <SelectItem value="exportar">Exportar</SelectItem>
-              <SelectItem value="login">Login</SelectItem>
-              <SelectItem value="logout">Logout</SelectItem>
-              <SelectItem value="seguridad">Seguridad</SelectItem>
-            </SelectContent>
-          </Select>
+            <Select value={actionFilter} onValueChange={setActionFilter}>
+              <SelectTrigger className="w-[160px] h-11 glass-card border-slate-200/60 font-bold text-slate-600">
+                <SelectValue placeholder="Acción" />
+              </SelectTrigger>
+              <SelectContent className="glass-panel border-white/20">
+                <SelectItem value="all" className="font-bold">
+                  Todas las Acciones
+                </SelectItem>
+                <SelectItem value="crear">Crear</SelectItem>
+                <SelectItem value="editar">Editar</SelectItem>
+                <SelectItem value="eliminar">Eliminar</SelectItem>
+                <SelectItem value="login">Login</SelectItem>
+                {/* ... otras opciones ... */}
+              </SelectContent>
+            </Select>
 
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-9 gap-2 whitespace-nowrap"
-            onClick={fetchLogs}
-            disabled={isLoading}
-          >
-            <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
-            Actualizar
-          </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-11 px-4 gap-2 glass-card border-slate-200/60 hover:bg-white/60 text-slate-600 font-bold transition-all"
+              onClick={fetchLogs}
+              disabled={isLoading}
+            >
+              <RefreshCw
+                className={cn("h-4 w-4", isLoading && "animate-spin")}
+              />
+              Actualizar
+            </Button>
+          </div>
         </div>
 
-        {/* Data Table with Scroll */}
-        <div className="flex-1 overflow-hidden relative">
+        {/* DATA TABLE: Liquid Glass Table.
+      Header de tabla con contraste y filas con animación staggered.
+    */}
+        <div className="flex-1 overflow-hidden relative bg-transparent">
           <ScrollArea className="h-full w-full">
-            <div className="min-w-[900px] p-4">
-              <div className="rounded-md border bg-card">
-                <Table>
-                  <TableHeader className="bg-muted/50 sticky top-0 backdrop-blur-sm shadow-sm">
-                    <TableRow>
-                      <TableHead className="w-[160px]">Fecha / Hora</TableHead>
-                      <TableHead className="w-[180px]">Usuario</TableHead>
-                      <TableHead className="w-[130px]">Acción</TableHead>
-                      <TableHead className="w-[120px]">Módulo</TableHead>
-                      <TableHead>Detalles</TableHead>
-                      <TableHead className="w-[130px] text-right">
+            <div className="min-w-[900px] p-6">
+              <div className="rounded-2xl border border-white/20 bg-white/30 backdrop-blur-sm overflow-hidden shadow-xl">
+                <Table className="liquid-glass-table">
+                  <TableHeader className="bg-slate-900/5 sticky top-0 backdrop-blur-md">
+                    <TableRow className="hover:bg-transparent border-b border-white/20">
+                      <TableHead className="w-[160px] text-[10px] font-black uppercase tracking-widest text-slate-500">
+                        Fecha / Hora
+                      </TableHead>
+                      <TableHead className="w-[180px] text-[10px] font-black uppercase tracking-widest text-slate-500">
+                        Usuario
+                      </TableHead>
+                      <TableHead className="w-[130px] text-[10px] font-black uppercase tracking-widest text-slate-500">
+                        Acción
+                      </TableHead>
+                      <TableHead className="w-[120px] text-[10px] font-black uppercase tracking-widest text-slate-500">
+                        Módulo
+                      </TableHead>
+                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                        Detalles
+                      </TableHead>
+                      <TableHead className="w-[130px] text-right text-[10px] font-black uppercase tracking-widest text-slate-500">
                         IP / Disp.
                       </TableHead>
                     </TableRow>
                   </TableHeader>
-                  <TableBody>
+
+                  <TableBody className="table-staggered">
                     {isLoading ? (
                       <TableRow>
-                        <TableCell
-                          colSpan={6}
-                          className="h-32 text-center text-muted-foreground"
-                        >
-                          <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
-                          Cargando registros de auditoría...
-                        </TableCell>
-                      </TableRow>
-                    ) : filteredLogs.length === 0 ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={6}
-                          className="h-32 text-center text-muted-foreground"
-                        >
-                          No se encontraron registros con los filtros aplicados.
+                        <TableCell colSpan={6} className="h-64 text-center">
+                          <div className="flex flex-col items-center gap-3">
+                            <Loader2 className="h-8 w-8 animate-spin text-brand-red/50" />
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                              Sincronizando registros...
+                            </span>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ) : (
                       filteredLogs.map((log) => (
                         <TableRow
                           key={log.id}
-                          className="hover:bg-muted/30 transition-colors"
+                          className="hover:bg-white/40 transition-all border-b border-white/10 interactive-row"
                         >
-                          <TableCell className="font-mono text-[11px] text-muted-foreground whitespace-nowrap">
-                            <div className="flex items-center gap-1.5">
-                              <Clock className="h-3 w-3" />
+                          <TableCell className="font-mono text-[11px] text-slate-500">
+                            <div className="flex items-center gap-2">
+                              <Clock className="h-3 w-3 text-emerald-500" />
                               {log.fechaHora}
                             </div>
                           </TableCell>
 
                           <TableCell>
-                            <div className="flex items-center gap-2">
-                              <div className="h-6 w-6 rounded-full bg-secondary flex items-center justify-center  font-bold">
+                            <div className="flex items-center gap-3">
+                              <div className="h-7 w-7 rounded-lg bg-brand-navy text-white flex items-center justify-center font-black text-[10px] shadow-lg">
                                 {log.usuario.substring(0, 2).toUpperCase()}
                               </div>
-                              <span
-                                className="text-sm font-medium truncate max-w-[120px]"
-                                title={log.usuario}
-                              >
+                              <span className="text-sm font-bold text-slate-700">
                                 {log.usuario}
                               </span>
                             </div>
@@ -375,55 +402,42 @@ export function AuditLogPanel({ open, onOpenChange }: AuditLogPanelProps) {
                             <Badge
                               variant="outline"
                               className={cn(
-                                "gap-1.5 whitespace-nowrap pr-2",
-                                getActionColor(log.tipoAccion),
+                                "gap-1.5 whitespace-nowrap font-black text-[9px] uppercase tracking-tighter px-2.5 py-1 shadow-sm",
+                                getActionColor(log.tipoAccion), // Asegura que esta función devuelva colores de tu CSS como bg-status-success-bg
                               )}
                             >
                               {getActionIcon(log.tipoAccion)}
-                              <span className="capitalize">
-                                {log.tipoAccion}
-                              </span>
+                              {log.tipoAccion}
                             </Badge>
                           </TableCell>
 
                           <TableCell>
-                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-100/50 px-2 py-0.5 rounded border border-slate-200/50">
                               {log.modulo}
                             </span>
                           </TableCell>
 
                           <TableCell className="max-w-[300px]">
-                            <p
-                              className="text-sm font-medium truncate"
-                              title={log.accion}
-                            >
+                            <p className="text-sm font-semibold text-slate-600 truncate">
                               {log.accion}
                             </p>
                             {log.detalles && (
-                              <p
-                                className="text-[11px] text-muted-foreground truncate mt-0.5"
-                                title={log.detalles}
-                              >
+                              <p className="text-[10px] text-slate-400 font-medium truncate mt-0.5">
                                 {log.detalles}
                               </p>
                             )}
                           </TableCell>
 
                           <TableCell className="text-right">
-                            <div className="flex flex-col items-end gap-1">
-                              <div className="flex items-center gap-1 text-[11px] font-mono text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">
-                                <Globe className="h-3 w-3" />
+                            <div className="flex flex-col items-end gap-1.5">
+                              <div className="flex items-center gap-1.5 text-[10px] font-mono font-bold text-slate-500 bg-white/50 px-2 py-1 rounded-md border border-white/40 shadow-sm">
+                                <Globe className="h-3 w-3 text-blue-400" />
                                 {log.ip}
                               </div>
                               {log.dispositivo && (
-                                <div
-                                  className="flex items-center gap-1  text-muted-foreground max-w-[100px] truncate"
-                                  title={log.dispositivo}
-                                >
-                                  <Laptop className="h-3 w-3 flex-shrink-0" />
-                                  <span className="truncate">
-                                    {log.dispositivo.split(" ")[0]}
-                                  </span>
+                                <div className="flex items-center gap-1 text-[9px] font-black text-slate-400 uppercase tracking-tighter">
+                                  <Laptop className="h-3 w-3" />
+                                  {log.dispositivo.split(" ")[0]}
                                 </div>
                               )}
                             </div>
@@ -438,20 +452,29 @@ export function AuditLogPanel({ open, onOpenChange }: AuditLogPanelProps) {
           </ScrollArea>
         </div>
 
-        {/* Footer */}
-        <div className="px-6 py-3 border-t bg-muted/30 flex items-center justify-between text-xs text-muted-foreground">
-          <span>
-            Mostrando{" "}
-            <strong className="text-foreground">{filteredLogs.length}</strong>{" "}
-            de {uiLogs.length} registros
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+        {/* FOOTER: Safari-Style Status Bar.
+         */}
+        <div className="px-8 py-4 border-t border-white/20 bg-white/60 backdrop-blur-xl flex items-center justify-between text-xs">
+          <div className="flex items-center gap-2">
+            <span className="text-slate-400 font-medium uppercase tracking-widest text-[10px]">
+              Registros Filtrados:
+              <strong className="text-slate-700 ml-1.5 bg-white/80 px-2 py-0.5 rounded shadow-sm">
+                {filteredLogs.length}
+              </strong>
             </span>
-            Conexión activa
-          </span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 px-3 py-1 bg-emerald-500/10 rounded-full border border-emerald-500/20">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">
+                En Vivo
+              </span>
+            </div>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

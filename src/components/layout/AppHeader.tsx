@@ -173,7 +173,7 @@ export function AppHeader() {
 
             <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
               {notifications.length === 0 ? (
-                <div className="p-6 text-center text-slate-400 text-xs">
+                <div className="p-6 text-center text-slate-600 text-xs">
                   No tienes notificaciones
                 </div>
               ) : (
@@ -193,7 +193,7 @@ export function AppHeader() {
                         )}
                         {notif.title}
                       </span>
-                      <span className="text-[9px] text-slate-400 font-medium">
+                      <span className="text-[9px] text-slate-600 font-medium">
                         {new Date(notif.created_at).toLocaleTimeString([], {
                           hour: "2-digit",
                           minute: "2-digit",
@@ -256,13 +256,13 @@ export function AppHeader() {
               onClick={() => navigate("/perfil")}
               className="text-xs cursor-pointer py-2.5"
             >
-              <UserIcon className="h-4 w-4 mr-2 text-slate-400" /> Mi Perfil
+              <UserIcon className="h-4 w-4 mr-2 text-slate-600" /> Mi Perfil
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={() => navigate("/configuracion")}
               className="text-xs cursor-pointer py-2.5"
             >
-              <Settings className="h-4 w-4 mr-2 text-slate-400" /> Configuración
+              <Settings className="h-4 w-4 mr-2 text-slate-600" /> Configuración
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem

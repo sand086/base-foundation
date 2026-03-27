@@ -66,7 +66,7 @@ export function SupplierDetailSheet({
           </div>
 
           <div>
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest border-b pb-2 mb-3">
+            <h3 className="text-xs font-bold text-slate-600 uppercase tracking-widest border-b pb-2 mb-3">
               Contacto
             </h3>
             <div className="space-y-3">
@@ -122,7 +122,7 @@ export function SupplierDetailSheet({
           </div>
 
           <div>
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest border-b pb-2 mb-3">
+            <h3 className="text-xs font-bold text-slate-600 uppercase tracking-widest border-b pb-2 mb-3">
               Datos Bancarios
             </h3>
             <div className="bg-slate-50 p-4 rounded-lg border space-y-3">

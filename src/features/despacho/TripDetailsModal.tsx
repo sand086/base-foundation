@@ -409,7 +409,7 @@ export function TripDetailsModal({
           <div className="flex flex-1 overflow-hidden flex-col lg:flex-row">
             <div className="w-full lg:w-[30%] bg-slate-50 border-r border-slate-200 p-6 space-y-6 overflow-y-auto">
               <div className="space-y-2">
-                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-2">
                   <RouteIcon className="h-3 w-3" /> Ruta de Servicio
                 </h3>
                 <div className="bg-white border rounded-xl p-4 shadow-sm space-y-4 text-xs">
@@ -417,7 +417,7 @@ export function TripDetailsModal({
                     <div className="absolute left-2.5 top-2 bottom-2 w-0.5 bg-slate-100" />
                     <div className="mb-4">
                       <div className="absolute -left-[27px] top-1 w-3 h-3 bg-blue-500 rounded-full ring-4 ring-white" />
-                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                      <p className="text-[9px] font-bold text-slate-600 uppercase tracking-wider">
                         Origen
                       </p>
                       <p className="font-black text-slate-800 uppercase">
@@ -426,7 +426,7 @@ export function TripDetailsModal({
                     </div>
                     <div>
                       <div className="absolute -left-[27px] top-1 w-3 h-3 bg-emerald-500 rounded-full ring-4 ring-white" />
-                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                      <p className="text-[9px] font-bold text-slate-600 uppercase tracking-wider">
                         Destino Final
                       </p>
                       <p className="font-black text-slate-800 uppercase">
@@ -438,7 +438,7 @@ export function TripDetailsModal({
               </div>
               <Separator />
               <div className="space-y-2">
-                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-2">
                   <Box className="h-3 w-3" /> Equipos Asignados
                 </h3>
                 <div className="grid grid-cols-1 gap-2">
@@ -498,7 +498,7 @@ export function TripDetailsModal({
                   <div className="p-6">
                     <TabsContent value="fases" className="m-0 space-y-4">
                       <div className="flex justify-between items-center mb-4">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">
                           Secuencia Operativa
                         </p>
                         {trip.legs && trip.legs.length > 0 && (
@@ -531,7 +531,7 @@ export function TripDetailsModal({
                         >
                           <CardContent className="p-4 flex justify-between items-center bg-white">
                             <div className="space-y-1">
-                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                              <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">
                                 Fase {idx + 1}{" "}
                                 {leg.id === activeLeg?.id && "(ACTUAL)"}
                               </p>
@@ -540,11 +540,11 @@ export function TripDetailsModal({
                               </h4>
                               <div className="flex items-center gap-3 text-xs font-medium text-slate-600 pt-1">
                                 <span className="flex items-center gap-1">
-                                  <User className="h-3 w-3 text-slate-400" />{" "}
+                                  <User className="h-3 w-3 text-slate-600" />{" "}
                                   {leg.operator?.name || "S/A"}
                                 </span>
                                 <span className="flex items-center gap-1">
-                                  <Truck className="h-3 w-3 text-slate-400" />{" "}
+                                  <Truck className="h-3 w-3 text-slate-600" />{" "}
                                   ECO-{leg.unit?.numero_economico || "N/A"}
                                 </span>
                               </div>
@@ -611,8 +611,8 @@ export function TripDetailsModal({
                       >
                         <CardHeader className="p-5 border-b flex justify-between items-center bg-white rounded-t-xl shadow-sm">
                           <CardTitle className="text-sm font-black uppercase text-emerald-800 flex items-center gap-2">
-                            <FileText className="h-4 w-4" /> Pre-Factura
-                            Comercial (Cobro al Cliente)
+                            <FileText className="h-4 w-4 text-primary" />{" "}
+                            Pre-Factura Comercial (Cobro al Cliente)
                           </CardTitle>
                           {!isEditing ? (
                             <div className="flex gap-2">
@@ -741,10 +741,10 @@ export function TripDetailsModal({
                               <div className="bg-slate-900 p-6 rounded-2xl border-t-4 border-emerald-500 flex flex-col sm:flex-row items-center justify-between gap-6 mt-10 shadow-2xl">
                                 <div className="text-left">
                                   <h4 className="text-emerald-400 font-black text-sm uppercase tracking-tighter flex items-center gap-2">
-                                    <CheckCircle2 className="h-4 w-4" /> Emisión
-                                    Factura 4.0
+                                    <CheckCircle2 className="h-4 w-4 text-primary" />{" "}
+                                    Emisión Factura 4.0
                                   </h4>
-                                  <p className="text-[10px] text-slate-400 max-w-xs leading-relaxed mt-1 italic">
+                                  <p className="text-[10px] text-slate-600 max-w-xs leading-relaxed mt-1 italic">
                                     Genera la factura real del servicio
                                     aplicando Sustitución (04) de la Carta Porte
                                     Bypass.
@@ -834,7 +834,7 @@ export function TripDetailsModal({
                         </Button>
                       </div>
                       {allEvents.length === 0 ? (
-                        <div className="text-center py-12 text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-300 italic font-medium tracking-tight">
+                        <div className="text-center py-12 text-slate-600 bg-slate-50 rounded-2xl border border-dashed border-slate-300 italic font-medium tracking-tight">
                           El viaje aún no cuenta con movimientos reportados
                         </div>
                       ) : (
@@ -845,7 +845,7 @@ export function TripDetailsModal({
                               className="flex gap-4 border-b border-slate-100 pb-4 last:border-0 items-start group hover:bg-slate-50 p-2 rounded-lg transition-colors"
                             >
                               <div className="p-2 bg-slate-100 rounded-full group-hover:bg-brand-navy transition-colors">
-                                <Clock className="h-4 w-4 text-slate-400 group-hover:text-white" />
+                                <Clock className="h-4 w-4 text-slate-600 group-hover:text-white" />
                               </div>
                               <div className="flex-1">
                                 <div className="flex justify-between items-center">

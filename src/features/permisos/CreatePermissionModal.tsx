@@ -194,33 +194,48 @@ export function CreatePermissionModal({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader className="pb-4 border-b">
-          <DialogTitle className="flex items-center gap-2 text-foreground">
-            <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center">
-              <Key className="h-4 w-4 text-primary" />
+      {/* CONTAINER: Estandarizado con glass-panel y la animación corregida */}
+      <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden glass-panel border-none shadow-2xl animate-modal-show">
+        {/* HEADER: Deep Navy con Spotlight y Placa de Icono */}
+        <DialogHeader className="px-8 py-6 bg-brand-navy/95 backdrop-blur-md shrink-0 relative overflow-hidden border-b border-white/10">
+          <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent pointer-events-none" />
+
+          <div className="relative z-10 flex items-center gap-4">
+            <div className="icon-plate p-2.5 rounded-xl">
+              <Key className="h-5 w-5 text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.4)]" />
             </div>
-            Crear Nuevo Permiso
-          </DialogTitle>
-          <DialogDescription className="text-sm">
-            Selecciona el módulo y la acción para generar automáticamente el
-            permiso.
-          </DialogDescription>
+            <div className="flex flex-col">
+              <DialogTitle className="text-2xl font-black heading-crisp text-slate-600 text-shadow-premium uppercase tracking-tighter">
+                Nuevo Permiso
+              </DialogTitle>
+              <DialogDescription className="text-[10px] font-bold text-slate-600 uppercase tracking-[0.3em] mt-1">
+                Generación de Llave de Acceso
+              </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-5 pt-4">
+        {/* FORM BODY: Fondo de cristal translúcido */}
+        <form
+          onSubmit={handleSubmit}
+          className="p-8 space-y-6 bg-white/40 backdrop-blur-sm"
+        >
           {/* Module Select */}
           <div className="space-y-2">
-            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Módulo
+            <Label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">
+              Módulo del Sistema
             </Label>
             <Select value={selectedModulo} onValueChange={handleModuloChange}>
-              <SelectTrigger className="h-10">
+              <SelectTrigger className="h-12 glass-card border-slate-200 focus:ring-brand-red/20 font-bold text-slate-700 shadow-sm">
                 <SelectValue placeholder="Selecciona un módulo..." />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="glass-panel border-white/20">
                 {modules.map((modulo) => (
-                  <SelectItem key={modulo.id} value={modulo.id}>
+                  <SelectItem
+                    key={modulo.id}
+                    value={modulo.id}
+                    className="font-semibold"
+                  >
                     {modulo.nombre}
                   </SelectItem>
                 ))}
@@ -230,61 +245,64 @@ export function CreatePermissionModal({
 
           {/* Action Select */}
           <div className="space-y-2">
-            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Acción
+            <Label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">
+              Acción a Permitir
             </Label>
             <Select value={selectedAccion} onValueChange={handleAccionChange}>
-              <SelectTrigger className="h-10">
+              <SelectTrigger className="h-12 glass-card border-slate-200 font-bold text-slate-700 shadow-sm">
                 <SelectValue placeholder="Selecciona una acción..." />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="glass-panel border-white/20">
                 {acciones.map((accion) => (
                   <SelectItem key={accion.id} value={accion.id}>
-                    <div className="flex flex-col">
-                      <span>{accion.nombre}</span>
-                    </div>
+                    <span className="font-semibold">{accion.nombre}</span>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
 
-          {/* Custom Action Input (only if "Otro" is selected) */}
+          {/* Custom Action Input */}
           {selectedAccion === "otro" && (
-            <div className="space-y-2">
-              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Especificar Acción
+            <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+              <Label className="text-[10px] font-black text-brand-red uppercase tracking-[0.2em] ml-1">
+                Especificar Acción Personalizada
               </Label>
               <Input
                 value={customAccion}
                 onChange={(e) => handleCustomAccionChange(e.target.value)}
-                placeholder="Ej: Aprobar solicitudes, Generar reportes..."
-                className="h-10"
+                placeholder="Ej: Aprobar solicitudes..."
+                className="h-12 glass-card border-brand-red/20 focus:ring-brand-red/20 font-medium"
               />
             </div>
           )}
 
-          {/* Generated Key Preview */}
+          {/* Generated Key Preview: Usamos un diseño de "Tarjeta Industrial" */}
           {generatedKey && (
-            <div className="p-4 bg-muted/50 rounded-lg border border-dashed space-y-3">
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-primary" />
-                <span className="text-sm font-medium">Permiso Generado</span>
+            <div className="p-5 bg-slate-900 rounded-2xl border border-white/10 shadow-2xl space-y-4 relative overflow-hidden group">
+              <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent pointer-events-none" />
+
+              <div className="flex items-center gap-2 relative z-10">
+                <Sparkles className="h-4 w-4 text-emerald-400 animate-pulse" />
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-400">
+                  Permiso Generado
+                </span>
               </div>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground w-16">
+
+              <div className="space-y-3 relative z-10">
+                <div className="flex items-center gap-3 bg-black/40 p-3 rounded-xl border border-white/5 shadow-inner">
+                  <span className="text-[9px] font-black text-slate-500 uppercase w-12">
                     Key:
                   </span>
-                  <code className="text-sm font-mono bg-background px-2 py-1 rounded border">
+                  <code className="text-sm font-mono font-bold text-slate-600 tracking-tight">
                     {generatedKey}
                   </code>
                 </div>
-                <div className="flex items-start gap-2">
-                  <span className="text-xs text-muted-foreground w-16">
+                <div className="flex items-start gap-3 px-3">
+                  <span className="text-[9px] font-black text-slate-500 uppercase w-12 mt-1">
                     Desc:
                   </span>
-                  <span className="text-sm text-foreground">
+                  <span className="text-xs text-slate-300 font-medium leading-relaxed">
                     {getDescripcion()}
                   </span>
                 </div>
@@ -292,33 +310,34 @@ export function CreatePermissionModal({
             </div>
           )}
 
-          {/* Info Box */}
-          <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-900">
-            <AlertCircle className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
-            <p className="text-xs text-blue-700 dark:text-blue-300">
+          {/* Info Box: Estilo Tahoe Alert */}
+          <div className="flex items-start gap-3 p-4 bg-blue-500/5 rounded-2xl border border-blue-500/10 backdrop-blur-sm">
+            <AlertCircle className="h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0" />
+            <p className="text-[11px] text-blue-700/80 font-semibold leading-relaxed">
               El permiso se agregará automáticamente a la matriz y podrá
               asignarse a cualquier rol del sistema.
             </p>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t">
+          {/* FOOTER: Barra de acciones Safari-style */}
+          <div className="flex justify-end gap-3 pt-6 border-t border-white/20">
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               onClick={handleClose}
-              className="h-9 text-sm"
+              className="h-11 px-6 text-[11px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 hover:bg-transparent"
             >
               Cancelar
             </Button>
             <Button
               type="submit"
               disabled={isSaving || !generatedKey}
-              className="h-9 text-sm bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
+              className="btn-primary-gradient h-11 px-8 font-black uppercase text-[11px] tracking-[0.2em] shadow-lg disabled:opacity-50"
             >
               {isSaving ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Creando...
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Procesando...
                 </>
               ) : (
                 "Crear Permiso"

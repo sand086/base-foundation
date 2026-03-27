@@ -15,7 +15,7 @@ export interface AuditLog {
 export const auditService = {
   getAll: async (): Promise<AuditLog[]> => {
     // Ya apuntamos al endpoint real de FastAPI
-    const { data } = await axiosClient.get("/audit-logs");
+    const { data } = await axiosClient.get("/users/audit-logs");
     return data;
   },
 };

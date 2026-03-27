@@ -381,7 +381,7 @@ export default function CuentasPorCobrar() {
                 }}
                 className="rounded-lg"
               >
-                <Eye className="h-4 w-4 mr-2 text-slate-400" /> Ver Detalle
+                <Eye className="h-4 w-4 mr-2 text-slate-600" /> Ver Detalle
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -469,7 +469,7 @@ export default function CuentasPorCobrar() {
                 }}
                 className="rounded-lg cursor-pointer py-2"
               >
-                <Plus className="h-4 w-4 mr-3 text-slate-400" />{" "}
+                <Plus className="h-4 w-4 mr-3 text-slate-600" />{" "}
                 <span className="font-medium">Crear Factura Manual</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -481,7 +481,7 @@ export default function CuentasPorCobrar() {
       <div className="grid gap-4 md:grid-cols-4">
         <Card className="border-l-4 border-l-emerald-500 shadow-sm hover:shadow-md transition-shadow">
           <CardContent className="p-5">
-            <p className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mb-1">
+            <p className="text-xs font-black text-slate-600 uppercase tracking-widest flex items-center gap-1.5 mb-1">
               <CheckCircle2 className="h-4 w-4 text-emerald-500" /> Corriente
               (Al Día)
             </p>
@@ -495,7 +495,7 @@ export default function CuentasPorCobrar() {
         </Card>
         <Card className="border-l-4 border-l-amber-400 shadow-sm hover:shadow-md transition-shadow">
           <CardContent className="p-5">
-            <p className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mb-1">
+            <p className="text-xs font-black text-slate-600 uppercase tracking-widest flex items-center gap-1.5 mb-1">
               <Clock className="h-4 w-4 text-amber-500" /> Vencido 1-30 Días
             </p>
             <p className="text-2xl font-black text-amber-600">
@@ -508,7 +508,7 @@ export default function CuentasPorCobrar() {
         </Card>
         <Card className="border-l-4 border-l-orange-500 shadow-sm hover:shadow-md transition-shadow">
           <CardContent className="p-5">
-            <p className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mb-1">
+            <p className="text-xs font-black text-slate-600 uppercase tracking-widest flex items-center gap-1.5 mb-1">
               <AlertCircle className="h-4 w-4 text-orange-500" /> Vencido 31-60
               Días
             </p>
@@ -522,7 +522,7 @@ export default function CuentasPorCobrar() {
         </Card>
         <Card className="border-l-4 border-l-red-600 shadow-sm hover:shadow-md transition-shadow">
           <CardContent className="p-5">
-            <p className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mb-1">
+            <p className="text-xs font-black text-slate-600 uppercase tracking-widest flex items-center gap-1.5 mb-1">
               <Ban className="h-4 w-4 text-red-500" /> Cartera Vencida (+90)
             </p>
             <p className="text-2xl font-black text-red-700">

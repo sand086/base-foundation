@@ -140,7 +140,7 @@ export function TireHistorySheet({
             <div className="grid grid-cols-2 gap-4">
               <Card className="border-none bg-slate-100/50 shadow-none">
                 <CardContent className="p-4">
-                  <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+                  <div className="flex items-center gap-2 text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-1">
                     <Truck className="h-3 w-3" /> Ubicación
                   </div>
                   <p className="font-bold text-slate-700">
@@ -153,7 +153,7 @@ export function TireHistorySheet({
 
               <Card className="border-none bg-slate-100/50 shadow-none">
                 <CardContent className="p-4">
-                  <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+                  <div className="flex items-center gap-2 text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-1">
                     <DollarSign className="h-3 w-3" /> Inversión
                   </div>
                   <p className="font-bold text-slate-700">
@@ -164,7 +164,7 @@ export function TireHistorySheet({
 
               <Card className="border-none bg-slate-100/50 shadow-none">
                 <CardContent className="p-4">
-                  <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+                  <div className="flex items-center gap-2 text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-1">
                     <Gauge className="h-3 w-3" /> Recorrido
                   </div>
                   <p className="font-bold text-slate-700">
@@ -175,7 +175,7 @@ export function TireHistorySheet({
 
               <Card className="border-none bg-slate-100/50 shadow-none">
                 <CardContent className="p-4">
-                  <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+                  <div className="flex items-center gap-2 text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-1">
                     <RefreshCw className="h-3 w-3" /> Identificador DOT
                   </div>
                   <p className="font-bold text-slate-700 font-mono">
@@ -206,12 +206,12 @@ export function TireHistorySheet({
                       {tire.profundidad_actual}mm
                     </span>
                   </span>
-                  <span className="text-slate-400">
+                  <span className="text-slate-600">
                     Original: {tire.profundidad_original}mm
                   </span>
                 </div>
                 <Progress value={lifePercentage} className="h-3 rounded-full" />
-                <p className="text-[11px] text-center font-bold text-slate-400 italic">
+                <p className="text-[11px] text-center font-bold text-slate-600 italic">
                   Estimado del {lifePercentage}% de remanente operativo
                 </p>
               </div>
@@ -220,7 +220,7 @@ export function TireHistorySheet({
             {/* Compras / Proveedor */}
             <div className="grid grid-cols-2 gap-6 px-2 text-sm">
               <div>
-                <span className="text-xs font-bold text-slate-400 uppercase">
+                <span className="text-xs font-bold text-slate-600 uppercase">
                   Fecha Compra
                 </span>
                 <p className="font-bold text-slate-700">
@@ -232,7 +232,7 @@ export function TireHistorySheet({
                 </p>
               </div>
               <div>
-                <span className="text-xs font-bold text-slate-400 uppercase">
+                <span className="text-xs font-bold text-slate-600 uppercase">
                   Precio Unitario
                 </span>
                 <p className="font-bold text-brand-green">
@@ -240,7 +240,7 @@ export function TireHistorySheet({
                 </p>
               </div>
               <div className="col-span-2">
-                <span className="text-xs font-bold text-slate-400 uppercase">
+                <span className="text-xs font-bold text-slate-600 uppercase">
                   Proveedor
                 </span>
                 <p className="font-bold text-slate-700">
@@ -262,7 +262,7 @@ export function TireHistorySheet({
                 <div className="absolute left-[11px] top-2 bottom-0 w-0.5 bg-slate-100" />
 
                 {sortedHistory.length === 0 ? (
-                  <div className="pl-10 py-4 text-sm text-slate-400 italic">
+                  <div className="pl-10 py-4 text-sm text-slate-600 italic">
                     No hay eventos registrados para este activo.
                   </div>
                 ) : (
@@ -291,7 +291,7 @@ export function TireHistorySheet({
                             >
                               {event.tipo}
                             </Badge>
-                            <span className="text-[10px] font-bold text-slate-400">
+                            <span className="text-[10px] font-bold text-slate-600">
                               {format(
                                 new Date(event.fecha),
                                 "dd MMM yyyy • HH:mm",
@@ -325,7 +325,7 @@ export function TireHistorySheet({
                             ) : null}
                           </div>
 
-                          <div className="flex items-center gap-1.5 text-[10px] text-slate-400 italic">
+                          <div className="flex items-center gap-1.5 text-[10px] text-slate-600 italic">
                             <Pencil className="h-2.5 w-2.5" />
                             Operador: {event.responsable || "Admin Sistema"}
                           </div>
