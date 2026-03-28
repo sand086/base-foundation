@@ -93,7 +93,7 @@ FormItem.displayName = "FormItem";
 
 const FormLabel = React.forwardRef<
   React.ElementRef<typeof LabelPrimitive.Root>,
-  React.ComponentPropsWithoutRef<typeof LabelPrimitive.Root>
+  React.ComponentPropsWithoutRef<typeof Label>
 >(({ className, ...props }, ref) => {
   const { error, formItemId } = useFormField();
 
@@ -107,7 +107,7 @@ const FormLabel = React.forwardRef<
         className,
       )}
       htmlFor={formItemId}
-      {...props}
+      {...props} // Ahora ...props trae "required" y "variant" sin que TypeScript llore
     />
   );
 });

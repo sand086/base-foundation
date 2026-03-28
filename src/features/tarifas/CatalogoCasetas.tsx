@@ -1,6 +1,9 @@
 // src/features/tarifas/CatalogoCasetas.tsx
 import * as React from "react";
 import { useEffect, useMemo, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import {
   Search,
   Plus,
@@ -21,10 +24,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
+import { Label } from "@/components/ui/label"; // Label genérico para fuera de forms
 
 import {
   Table,
@@ -70,37 +73,45 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+// Form Components (Tahoe UI)
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+
 import type { TollBooth } from "@/types/api.types";
 import { tollService } from "@/services/tollService";
 import { useSystemConfig } from "@/hooks/useSystemConfig";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-type FormaPago = "tag" | "efectivo" | "ambos";
-
-type TollForm = {
-  nombre: string;
-  carretera: string;
-  estado: string;
-  origen_tramo: string;
-  destino_tramo: string;
-  tramo: string;
-  costo_5_ejes_sencillo: number;
-  costo_9_ejes_full: number;
-  forma_pago: FormaPago;
-};
-
-const emptyForm = (): TollForm => ({
-  nombre: "",
-  carretera: "",
-  estado: "",
-  origen_tramo: "",
-  destino_tramo: "",
-  tramo: "",
-  costo_5_ejes_sencillo: 0,
-  costo_9_ejes_full: 0,
-  forma_pago: "ambos",
+// 🚀 1. ESQUEMA DE VALIDACIÓN ZOD
+const tollSchema = z.object({
+  nombre: z.string().min(2, "El nombre debe tener al menos 2 caracteres"),
+  carretera: z.string().optional(),
+  estado: z.string().optional(),
+  origen_tramo: z.string().optional(),
+  destino_tramo: z.string().optional(),
+  costo_5_ejes_sencillo: z.coerce
+    .number()
+    .min(0, "Debe ser un número positivo")
+    .optional()
+    .default(0),
+  costo_9_ejes_full: z.coerce
+    .number()
+    .min(0, "Debe ser un número positivo")
+    .optional()
+    .default(0),
+  forma_pago: z.enum(["tag", "efectivo", "ambos"], {
+    required_error: "Selecciona una forma de pago válida",
+  }),
 });
+
+type TollFormData = z.infer<typeof tollSchema>;
 
 const splitTramo = (tramoRaw: string) => {
   const tramo = (tramoRaw ?? "").trim();
@@ -132,9 +143,34 @@ export const CatalogoCasetas = () => {
     rutas_count: number;
   } | null>(null);
 
-  const [formData, setFormData] = useState<TollForm>(emptyForm());
+  // 🚀 2. REACT HOOK FORM
+  const form = useForm<TollFormData>({
+    resolver: zodResolver(tollSchema),
+    defaultValues: {
+      nombre: "",
+      carretera: "",
+      estado: "",
+      origen_tramo: "",
+      destino_tramo: "",
+      costo_5_ejes_sencillo: 0,
+      costo_9_ejes_full: 0,
+      forma_pago: "ambos",
+    },
+  });
 
-  // 🚀 CÁLCULO DE KPIs
+  const { watch, reset, setValue } = form;
+  const currentOrigen = watch("origen_tramo");
+  const currentDestino = watch("destino_tramo");
+  const currentNombre = watch("nombre");
+
+  const tramoGenerado = useMemo(() => {
+    if (showAdvanced && (currentOrigen || currentDestino)) {
+      return `${currentOrigen || ""} - ${currentDestino || ""}`.trim();
+    }
+    return currentNombre || "";
+  }, [currentOrigen, currentDestino, currentNombre, showAdvanced]);
+
+  // 🚀 KPIs
   const kpis = useMemo(() => {
     if (!tollBooths.length)
       return { total: 0, avgSencillo: 0, avgFull: 0, estados: 0 };
@@ -165,7 +201,7 @@ export const CatalogoCasetas = () => {
       return (
         <Badge
           variant="outline"
-          className="text-[9px] font-black uppercase tracking-widest bg-blue-500/10 text-blue-600 border-blue-200"
+          className="text-[9px] font-black uppercase tracking-widest bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-500/30"
         >
           Solo TAG
         </Badge>
@@ -174,7 +210,7 @@ export const CatalogoCasetas = () => {
       return (
         <Badge
           variant="outline"
-          className="text-[9px] font-black uppercase tracking-widest bg-amber-500/10 text-amber-600 border-amber-200"
+          className="text-[9px] font-black uppercase tracking-widest bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-500/30"
         >
           Efectivo
         </Badge>
@@ -182,7 +218,7 @@ export const CatalogoCasetas = () => {
     return (
       <Badge
         variant="outline"
-        className="text-[9px] font-black uppercase tracking-widest bg-emerald-500/10 text-emerald-600 border-emerald-200"
+        className="text-[9px] font-black uppercase tracking-widest bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/30"
       >
         Tag/Efectivo
       </Badge>
@@ -220,21 +256,18 @@ export const CatalogoCasetas = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm]);
 
-  useEffect(() => {
-    if (!showAdvanced) return;
-    if (formData.origen_tramo || formData.destino_tramo) {
-      setFormData((prev) => ({
-        ...prev,
-        tramo: `${prev.origen_tramo} - ${prev.destino_tramo}`.trim(),
-      }));
-    } else if (formData.tramo) {
-      setFormData((prev) => ({ ...prev, tramo: "" }));
-    }
-  }, [formData.origen_tramo, formData.destino_tramo, showAdvanced]);
-
   const handleOpenCreate = () => {
     setSelectedToll(null);
-    setFormData(emptyForm());
+    reset({
+      nombre: "",
+      carretera: "",
+      estado: "",
+      origen_tramo: "",
+      destino_tramo: "",
+      costo_5_ejes_sencillo: 0,
+      costo_9_ejes_full: 0,
+      forma_pago: "ambos",
+    });
     setShowAdvanced(false);
     setDialogOpen(true);
   };
@@ -243,14 +276,14 @@ export const CatalogoCasetas = () => {
     setSelectedToll(toll);
     const { tramo, origen, destino } = splitTramo(String(toll.tramo ?? ""));
     setShowAdvanced(Boolean(tramo.includes("-") && (origen || destino)));
+    type FormaPago = "tag" | "efectivo" | "ambos";
 
-    setFormData({
+    reset({
       nombre: toll.nombre ?? "",
       carretera: (toll as any).carretera ?? "",
       estado: (toll as any).estado ?? "",
       origen_tramo: origen,
       destino_tramo: destino,
-      tramo,
       costo_5_ejes_sencillo: toll.costo_5_ejes_sencillo ?? 0,
       costo_9_ejes_full: toll.costo_9_ejes_full ?? 0,
       forma_pago: ((toll as any).forma_pago ?? "ambos") as FormaPago,
@@ -258,41 +291,27 @@ export const CatalogoCasetas = () => {
     setDialogOpen(true);
   };
 
-  const handleSave = async () => {
-    if (!formData.nombre.trim()) {
-      toast.error("El Nombre de la caseta es obligatorio");
-      return;
-    }
+  // 🚀 3. ONSUBMIT CON ZOD
+  const onSubmit = async (data: TollFormData) => {
+    const finalTramo = tramoGenerado;
 
-    let finalTramo = formData.tramo.trim();
-    if (showAdvanced) {
-      if (formData.origen_tramo.trim() || formData.destino_tramo.trim()) {
-        if (!formData.origen_tramo.trim() || !formData.destino_tramo.trim()) {
-          toast.error("Completa Origen y Destino del tramo SCT");
-          return;
-        }
-        finalTramo = `${formData.origen_tramo.trim()} - ${formData.destino_tramo.trim()}`;
-      } else {
-        finalTramo = formData.nombre.trim();
+    if (showAdvanced && (data.origen_tramo || data.destino_tramo)) {
+      if (!data.origen_tramo || !data.destino_tramo) {
+        toast.error("Completa Origen y Destino del tramo SCT");
+        return;
       }
-    } else {
-      finalTramo = formData.nombre.trim();
     }
 
-    const payload: Partial<TollBooth> & {
-      carretera?: string;
-      estado?: string;
-      forma_pago?: FormaPago;
-    } = {
-      nombre: formData.nombre.trim(),
+    const payload = {
+      nombre: data.nombre.trim(),
       tramo: finalTramo,
-      costo_5_ejes_sencillo: Number(formData.costo_5_ejes_sencillo || 0),
+      costo_5_ejes_sencillo: data.costo_5_ejes_sencillo,
       costo_5_ejes_full: 0,
       costo_9_ejes_sencillo: 0,
-      costo_9_ejes_full: Number(formData.costo_9_ejes_full || 0),
-      carretera: formData.carretera.trim() || "",
-      estado: formData.estado.trim() || "",
-      forma_pago: formData.forma_pago,
+      costo_9_ejes_full: data.costo_9_ejes_full,
+      carretera: (data.carretera || "").trim(),
+      estado: (data.estado || "").trim(),
+      forma_pago: data.forma_pago,
     };
 
     setIsSubmitting(true);
@@ -384,7 +403,6 @@ export const CatalogoCasetas = () => {
     }
   };
 
-  // 🚀 AQUI ESTÁ EL FIX DE ESLINT
   const toggleRow = (id: number) => {
     const newSet = new Set(selectedRows);
     if (newSet.has(id)) {
@@ -406,69 +424,87 @@ export const CatalogoCasetas = () => {
   return (
     <div className="space-y-6">
       {/* 🚀 KPIs METRICS CARDS */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-        <Card variant="glass" className="p-5 flex items-center gap-4">
-          <div className="p-3 bg-brand-navy/5 rounded-xl border border-brand-navy/10">
-            <Route className="h-6 w-6 text-brand-navy" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+        {/* 1. TOTAL PEAJES */}
+        <Card
+          variant="default"
+          className="p-6 flex items-center gap-5 group hover:border-slate-300 dark:hover:border-white/20 transition-all cursor-default"
+        >
+          <div className="p-3.5 bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-white/10 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
+            <Route className="h-6 w-6 text-brand-navy dark:text-slate-300" />
           </div>
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          <div className="flex flex-col justify-center">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
               Total Peajes
             </p>
-            <p className="text-2xl font-black text-brand-navy leading-none mt-1">
+            <p className="text-3xl font-black text-slate-800 dark:text-white leading-none tracking-tighter">
               {kpis.total}
             </p>
           </div>
         </Card>
 
-        <Card variant="glass" className="p-5 flex items-center gap-4">
-          <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
-            <DollarSign className="h-6 w-6 text-emerald-600" />
+        {/* 2. COSTO PROMEDIO FULL */}
+        <Card
+          variant="default"
+          className="p-6 flex items-center gap-5 group hover:border-emerald-300 dark:hover:border-emerald-500/50 transition-all cursor-default"
+        >
+          <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl border border-emerald-100 dark:border-emerald-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
+            <DollarSign className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
           </div>
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-              Costo Prom. Full
+          <div className="flex flex-col justify-center">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
+              Promedio Full
             </p>
-            <p className="text-xl font-black text-emerald-600 font-mono leading-none mt-1">
+            <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono tracking-tighter leading-none mt-0.5">
               {formatCurrency(kpis.avgFull)}
             </p>
           </div>
         </Card>
 
-        <Card variant="glass" className="p-5 flex items-center gap-4">
-          <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20">
-            <Calculator className="h-6 w-6 text-blue-600" />
+        {/* 3. COSTO PROMEDIO SENCILLO */}
+        <Card
+          variant="default"
+          className="p-6 flex items-center gap-5 group hover:border-blue-300 dark:hover:border-blue-500/50 transition-all cursor-default"
+        >
+          <div className="p-3.5 bg-blue-50 dark:bg-blue-950/30 rounded-2xl border border-blue-100 dark:border-blue-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
+            <Calculator className="h-6 w-6 text-blue-600 dark:text-blue-400" />
           </div>
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-              Costo Prom. Sencillo
+          <div className="flex flex-col justify-center">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
+              Prom. Sencillo
             </p>
-            <p className="text-xl font-black text-blue-600 font-mono leading-none mt-1">
+            <p className="text-2xl font-black text-blue-600 dark:text-blue-400 font-mono tracking-tighter leading-none mt-0.5">
               {formatCurrency(kpis.avgSencillo)}
             </p>
           </div>
         </Card>
 
-        <Card variant="glass" className="p-5 flex items-center gap-4">
-          <div className="p-3 bg-amber-500/10 rounded-xl border border-amber-500/20">
-            <Map className="h-6 w-6 text-amber-600" />
+        {/* 4. COBERTURA NACIONAL */}
+        <Card
+          variant="default"
+          className="p-6 flex items-center gap-5 group hover:border-amber-300 dark:hover:border-amber-500/50 transition-all cursor-default"
+        >
+          <div className="p-3.5 bg-amber-50 dark:bg-amber-950/30 rounded-2xl border border-amber-100 dark:border-amber-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
+            <Map className="h-6 w-6 text-amber-600 dark:text-amber-400" />
           </div>
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          <div className="flex flex-col justify-center">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
               Cobertura Nacional
             </p>
-            <p className="text-2xl font-black text-amber-600 leading-none mt-1">
-              {kpis.estados}{" "}
-              <span className="text-xs font-bold text-amber-600/70">
+            <div className="flex items-baseline gap-1 mt-0.5">
+              <p className="text-3xl font-black text-amber-600 dark:text-amber-400 leading-none tracking-tighter">
+                {kpis.estados}
+              </p>
+              <span className="text-[10px] font-black text-amber-600/60 dark:text-amber-400/60 uppercase tracking-widest">
                 Estados
               </span>
-            </p>
+            </div>
           </div>
         </Card>
       </div>
 
       {/* 🚀 TOOLBAR TAHOE */}
-      <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-white/40 p-4 rounded-2xl border border-white/20 shadow-sm backdrop-blur-md">
+      <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-white/40 dark:bg-slate-900/40 p-4 rounded-2xl border border-white/20 dark:border-white/10 shadow-sm backdrop-blur-md">
         <div className="flex items-center gap-3 w-full md:max-w-md">
           <div className="relative flex-1">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -476,13 +512,13 @@ export const CatalogoCasetas = () => {
               placeholder="Buscar peaje, tramo o carretera..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 h-11 glass-card border-slate-200 shadow-sm focus:ring-brand-red/20 font-medium"
+              className="pl-10 h-11 border-slate-200 dark:border-white/10 shadow-sm focus:ring-brand-red/20 bg-white dark:bg-slate-900"
             />
           </div>
           <Button
             variant="outline"
             size="icon"
-            className="h-11 w-11 shrink-0 glass-card text-slate-500 hover:text-brand-navy shadow-sm"
+            className="h-11 w-11 shrink-0 text-slate-500 dark:text-slate-400"
             onClick={() => loadTolls(true)}
             disabled={isRefreshing}
           >
@@ -496,16 +532,18 @@ export const CatalogoCasetas = () => {
           {selectedRows.size > 0 && (
             <Button
               variant="destructive"
-              className="h-11 font-black uppercase text-[10px] tracking-widest animate-in fade-in zoom-in duration-200 shadow-lg shadow-destructive/20"
+              size="lg"
+              className="h-11 shadow-lg shadow-destructive/20 animate-in fade-in zoom-in duration-200 w-full sm:w-auto"
               onClick={() => setBulkDeleteDialogOpen(true)}
             >
               <Trash2 className="h-4 w-4 mr-2" /> Eliminar ({selectedRows.size})
             </Button>
           )}
-
           <Button
+            variant="default"
+            size="lg"
             onClick={handleOpenCreate}
-            className="btn-primary-gradient h-11 px-8 font-black uppercase text-[10px] tracking-[0.2em] shadow-lg shadow-brand-red/20 hover:-translate-y-0.5 transition-all"
+            className="h-11 shadow-lg shadow-brand-red/20 w-full sm:w-auto"
           >
             <Plus className="h-4 w-4 mr-2" /> Nueva Caseta
           </Button>
@@ -513,10 +551,10 @@ export const CatalogoCasetas = () => {
       </div>
 
       {/* 🚀 TABLA LIQUID GLASS */}
-      <div className="relative w-full overflow-hidden rounded-2xl border border-white/40 bg-white/30 backdrop-blur-sm shadow-xl liquid-glass-table">
+      <div className="relative w-full overflow-hidden rounded-2xl border border-slate-200/50 dark:border-white/10 bg-white/30 dark:bg-slate-950/30 backdrop-blur-sm shadow-xl liquid-glass-table">
         <div className="overflow-auto max-h-[60vh] custom-scrollbar">
           <Table className="w-full caption-bottom text-sm">
-            <TableHeader className="sticky top-0 z-20 backdrop-blur-xl bg-slate-900/5 border-b border-white/20">
+            <TableHeader className="sticky top-0 z-20 backdrop-blur-xl bg-slate-50/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-white/10">
               <TableRow className="hover:bg-transparent border-none">
                 <TableHead className="w-14 pl-6">
                   <Checkbox
@@ -552,7 +590,7 @@ export const CatalogoCasetas = () => {
                   <TableCell colSpan={6} className="p-16 text-center">
                     <div className="flex flex-col items-center justify-center gap-4">
                       <Loader2 className="h-8 w-8 animate-spin text-brand-red/50" />
-                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
                         Sincronizando Catálogo...
                       </span>
                     </div>
@@ -562,7 +600,7 @@ export const CatalogoCasetas = () => {
                 <TableRow>
                   <TableCell
                     colSpan={6}
-                    className="p-16 text-center text-[11px] font-bold uppercase tracking-widest text-slate-400"
+                    className="p-16 text-center text-[11px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500"
                   >
                     No se encontraron casetas registradas.
                   </TableCell>
@@ -572,27 +610,27 @@ export const CatalogoCasetas = () => {
                   <TableRow
                     key={t.id}
                     className={cn(
-                      "border-b border-white/10 interactive-row transition-all hover:bg-white/50",
-                      selectedRows.has(t.id) && "bg-white/60 dark:bg-white/10",
+                      "border-b border-slate-100 dark:border-white/5 interactive-row transition-all hover:bg-slate-50/50 dark:hover:bg-white/5",
+                      selectedRows.has(t.id) && "bg-slate-50 dark:bg-white/10",
                     )}
                   >
                     <TableCell className="w-14 pl-6">
                       <Checkbox
                         checked={selectedRows.has(t.id)}
                         onCheckedChange={() => toggleRow(t.id)}
-                        className="border-slate-300 data-[state=checked]:bg-brand-navy data-[state=checked]:border-brand-navy"
+                        className="border-slate-300 dark:border-slate-600 data-[state=checked]:bg-brand-navy data-[state=checked]:border-brand-navy"
                       />
                     </TableCell>
                     <TableCell className="py-4">
                       <div className="flex flex-col">
-                        <span className="font-black text-brand-navy text-sm uppercase tracking-tight">
+                        <span className="font-black text-brand-navy dark:text-slate-200 text-sm uppercase tracking-tight">
                           {t.nombre}
                         </span>
                         <div className="flex items-center gap-2 mt-1">
                           {(t as any).carretera && (
                             <Badge
                               variant="outline"
-                              className="text-[8px] font-black uppercase tracking-widest text-slate-500 bg-white/50 border-slate-200 shadow-sm"
+                              className="text-[8px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 bg-white/50 dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
                             >
                               Ruta {(t as any).carretera}
                             </Badge>
@@ -608,7 +646,7 @@ export const CatalogoCasetas = () => {
                     <TableCell className="py-4">
                       <Badge
                         variant="outline"
-                        className="font-mono text-[10px] bg-slate-50/80 text-slate-500 font-bold border-slate-200"
+                        className="font-mono text-[10px] bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 font-bold border-slate-200 dark:border-white/10"
                       >
                         {String(t.tramo ?? t.nombre)}
                       </Badge>
@@ -616,18 +654,18 @@ export const CatalogoCasetas = () => {
                     <TableCell className="py-4">
                       <div className="flex items-center gap-4">
                         <div className="flex flex-col border-l-2 border-blue-500 pl-3">
-                          <span className="text-slate-400 uppercase font-black tracking-widest text-[8px]">
+                          <span className="text-slate-400 dark:text-slate-500 uppercase font-black tracking-widest text-[8px]">
                             5 ejes (Sencillo)
                           </span>
-                          <span className="text-blue-600 font-mono font-bold text-sm">
+                          <span className="text-blue-600 dark:text-blue-400 font-mono font-bold text-sm">
                             {formatCurrency(t.costo_5_ejes_sencillo ?? 0)}
                           </span>
                         </div>
                         <div className="flex flex-col border-l-2 border-emerald-500 pl-3">
-                          <span className="text-slate-400 uppercase font-black tracking-widest text-[8px]">
+                          <span className="text-slate-400 dark:text-slate-500 uppercase font-black tracking-widest text-[8px]">
                             9 Ejes (Full)
                           </span>
-                          <span className="text-emerald-600 font-mono font-bold text-sm">
+                          <span className="text-emerald-600 dark:text-emerald-400 font-mono font-bold text-sm">
                             {formatCurrency(t.costo_9_ejes_full ?? 0)}
                           </span>
                         </div>
@@ -642,25 +680,25 @@ export const CatalogoCasetas = () => {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 hover:bg-white/80 rounded-xl transition-all shadow-sm border border-slate-200/50 bg-white/50"
+                            className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50"
                           >
-                            <MoreHorizontal className="h-4 w-4 text-slate-500" />
+                            <MoreHorizontal className="h-4 w-4 text-slate-500 dark:text-slate-400" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent
                           align="end"
-                          className="glass-panel border-white/20 min-w-[160px] z-50"
+                          className="glass-panel border-slate-200 dark:border-white/10 min-w-[160px] z-50 dark:bg-slate-900/90"
                         >
                           <DropdownMenuItem
-                            className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer"
+                            className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
                             onClick={() => handleOpenEdit(t)}
                           >
-                            <Edit className="h-4 w-4 text-blue-500" /> Editar
-                            Peaje
+                            <Edit className="h-4 w-4 text-blue-500 dark:text-blue-400" />{" "}
+                            Editar Peaje
                           </DropdownMenuItem>
-                          <DropdownMenuSeparator />
+                          <DropdownMenuSeparator className="dark:bg-white/10" />
                           <DropdownMenuItem
-                            className="gap-2 font-bold text-xs uppercase tracking-tight text-rose-600 cursor-pointer"
+                            className="gap-2 font-bold text-xs uppercase tracking-tight text-rose-600 dark:text-rose-500 cursor-pointer dark:focus:bg-rose-950/30"
                             onClick={() => handleAskDelete(t)}
                           >
                             <Trash2 className="h-4 w-4" /> Eliminar
@@ -676,350 +714,582 @@ export const CatalogoCasetas = () => {
         </div>
       </div>
 
-      {/* 🚀 DIALOG CREAR / EDITAR (GLASS PANEL) */}
+      {/* 🚀 DIALOG CREAR / EDITAR (FORMULARIO CON ZOD + RHF) */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-2xl p-0 glass-panel border-white/20 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-          <DialogHeader className="p-6 bg-brand-navy/95 backdrop-blur-md text-white border-b border-white/10 shrink-0">
-            <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent pointer-events-none" />
-            <DialogTitle className="relative z-10 flex items-center gap-2 text-2xl font-black uppercase tracking-tighter heading-crisp text-shadow-premium">
-              <MapPin className="h-6 w-6 text-brand-red" />
-              {selectedToll
-                ? "Editar Peaje Autorizado"
-                : "Alta de Nueva Caseta"}
+        <DialogContent className="w-[95vw] sm:max-w-2xl p-0 flex flex-col max-h-[90vh] bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 shadow-2xl rounded-2xl transition-all duration-300 overflow-hidden">
+          <DialogHeader className="p-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 z-10">
+            <DialogTitle className="flex items-center gap-3 text-slate-800 dark:text-white text-xl font-black">
+              <div
+                className={cn(
+                  "w-12 h-12 rounded-xl flex items-center justify-center shadow-inner shrink-0",
+                  selectedToll
+                    ? "bg-amber-100 dark:bg-amber-900/30"
+                    : "bg-emerald-100 dark:bg-emerald-900/30",
+                )}
+              >
+                <MapPin
+                  className={cn(
+                    "h-6 w-6",
+                    selectedToll
+                      ? "text-amber-600 dark:text-amber-400"
+                      : "text-emerald-600 dark:text-emerald-400",
+                  )}
+                />
+              </div>
+              <div className="flex flex-col">
+                {selectedToll
+                  ? "Editar Peaje Autorizado"
+                  : "Alta de Nueva Caseta"}
+                <span className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1 tracking-normal normal-case">
+                  Configure los parámetros operativos y tarifas para el
+                  enrutamiento SCT.
+                </span>
+              </div>
             </DialogTitle>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50 custom-scrollbar">
-            <div className="space-y-8">
-              {/* SECCIÓN 1: DATOS BÁSICOS */}
-              <div className="grid grid-cols-2 gap-6">
-                <div className="col-span-2 space-y-1.5">
-                  <Label variant="brand" required>
-                    Identificador / Nombre de la Caseta
-                  </Label>
-                  <Input
-                    placeholder="Ej: Caseta San Marcos"
-                    value={formData.nombre}
-                    onChange={(e) =>
-                      setFormData({ ...formData, nombre: e.target.value })
-                    }
-                    className="h-11 glass-card font-medium text-brand-navy"
+          {/* 🚀 FORMULARIO ENVOLTURA */}
+          <Form {...form}>
+            <form
+              onSubmit={form.handleSubmit(onSubmit)}
+              className="flex-1 overflow-y-auto flex flex-col custom-scrollbar"
+            >
+              <div className="flex-1 p-6 bg-slate-50/50 dark:bg-transparent space-y-8">
+                {/* SECCIÓN 1: DATOS BÁSICOS */}
+                <div className="grid grid-cols-2 gap-6">
+                  <FormField
+                    control={form.control}
+                    name="nombre"
+                    render={({ field }) => (
+                      <FormItem className="col-span-2">
+                        <FormLabel variant="brand" required>
+                          Identificador / Nombre de la Caseta
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder="Ej: Caseta San Marcos"
+                            className="h-11 bg-white dark:bg-slate-800/50 border-slate-200 dark:border-white/10 font-bold text-slate-800 dark:text-slate-100"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
-                </div>
-                <div className="space-y-1.5">
-                  <Label variant="brand">Carretera / Vía</Label>
-                  <Input
-                    placeholder="Ej: Mex 150D"
-                    value={formData.carretera}
-                    onChange={(e) =>
-                      setFormData({ ...formData, carretera: e.target.value })
-                    }
-                    className="h-11 glass-card font-mono uppercase font-bold"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label variant="brand">Estado Geográfico</Label>
-                  <Input
-                    placeholder="Ej: Puebla"
-                    value={formData.estado}
-                    onChange={(e) =>
-                      setFormData({ ...formData, estado: e.target.value })
-                    }
-                    className="h-11 glass-card font-medium"
-                  />
-                </div>
-                <div className="col-span-2 space-y-1.5 pt-2">
-                  <Label variant="brand">Método de Cobro Permitido</Label>
-                  <Select
-                    value={formData.forma_pago}
-                    onValueChange={(v) =>
-                      setFormData({ ...formData, forma_pago: v as FormaPago })
-                    }
-                  >
-                    <SelectTrigger className="h-11 glass-card font-bold w-full sm:w-1/2">
-                      <SelectValue placeholder="Seleccionar..." />
-                    </SelectTrigger>
-                    <SelectContent className="glass-panel">
-                      <SelectItem value="tag">
-                        Cobro Electrónico (TAG)
-                      </SelectItem>
-                      <SelectItem value="efectivo">Solo Efectivo</SelectItem>
-                      <SelectItem value="ambos">
-                        TAG y Efectivo Soportado
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
 
-              {/* SECCIÓN 2: COSTOS OPERATIVOS */}
-              <div className="space-y-4 pt-6 border-t border-slate-200/50">
-                <h4 className="text-[12px] font-black uppercase tracking-widest text-brand-navy flex items-center gap-2">
-                  <DollarSign className="h-4 w-4 text-emerald-500" /> Tarifas
-                  Operativas
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* 5 Ejes */}
-                  <div className="space-y-3 p-5 rounded-2xl glass-card border border-blue-200/60 bg-blue-50/30">
-                    <Label
-                      variant="brand"
-                      className="text-blue-800 border-b border-blue-100 pb-2 flex items-center gap-2"
-                    >
-                      <div className="w-2 h-2 rounded-full bg-blue-500" />{" "}
-                      Tarifa 5 ejes (Sencillo)
-                    </Label>
-                    <div className="relative">
-                      <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                      <Input
-                        type="number"
-                        value={formData.costo_5_ejes_sencillo || ""}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            costo_5_ejes_sencillo: Number(e.target.value),
-                          })
-                        }
-                        className="h-11 pl-9 bg-white font-mono font-bold text-sm border-blue-200 focus:border-blue-500 shadow-sm"
-                        placeholder="0.00"
-                        min={0}
-                        step="0.01"
-                      />
-                    </div>
-                  </div>
-                  {/* 9 Ejes */}
-                  <div className="space-y-3 p-5 rounded-2xl glass-card border border-emerald-200/60 bg-emerald-50/30">
-                    <Label
-                      variant="brand"
-                      className="text-emerald-800 border-b border-emerald-100 pb-2 flex items-center gap-2"
-                    >
-                      <div className="w-2 h-2 rounded-full bg-emerald-500" />{" "}
-                      Tarifa 9 Ejes (Full)
-                    </Label>
-                    <div className="relative">
-                      <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                      <Input
-                        type="number"
-                        value={formData.costo_9_ejes_full || ""}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            costo_9_ejes_full: Number(e.target.value),
-                          })
-                        }
-                        className="h-11 pl-9 bg-white font-mono font-bold text-sm border-emerald-200 focus:border-emerald-500 shadow-sm"
-                        placeholder="0.00"
-                        min={0}
-                        step="0.01"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
+                  <FormField
+                    control={form.control}
+                    name="carretera"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel variant="brand">Carretera / Vía</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder="Ej: Mex 150D"
+                            className="h-11 font-mono uppercase font-bold tracking-widest bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-100"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-              {/* SECCIÓN 3: AVANZADO SCT */}
-              <div className="mt-4 bg-white/40 border border-slate-200/60 rounded-2xl overflow-hidden transition-all duration-300 shadow-sm">
-                <div className="flex items-center justify-between p-4 bg-slate-100/50">
-                  <div className="flex items-center gap-2">
-                    <Route className="h-4 w-4 text-brand-red" />
-                    <span className="text-[11px] font-black uppercase tracking-widest text-slate-600">
-                      Configuración Avanzada (Homologación SCT)
-                    </span>
-                  </div>
-                  <Switch
-                    checked={showAdvanced}
-                    onCheckedChange={setShowAdvanced}
-                    className="data-[state=checked]:bg-brand-red"
+                  <FormField
+                    control={form.control}
+                    name="estado"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel variant="brand">Estado Geográfico</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder="Ej: Puebla"
+                            className="h-11 font-bold bg-white dark:bg-slate-800/50 border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="forma_pago"
+                    render={({ field }) => (
+                      <FormItem className="col-span-2">
+                        <FormLabel variant="brand" required>
+                          Método de Cobro Permitido
+                        </FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                          value={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="h-11 bg-white dark:bg-slate-800/50 border-slate-200 dark:border-white/10 font-bold w-full sm:w-1/2 text-slate-800 dark:text-slate-100">
+                              <SelectValue placeholder="Seleccionar..." />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-slate-200 dark:border-white/10">
+                            <SelectItem value="tag" className="font-bold">
+                              Cobro Electrónico (TAG)
+                            </SelectItem>
+                            <SelectItem value="efectivo" className="font-bold">
+                              Solo Efectivo
+                            </SelectItem>
+                            <SelectItem
+                              value="ambos"
+                              className="font-bold text-brand-blue dark:text-sky-400"
+                            >
+                              TAG y Efectivo Soportado
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
                 </div>
-                {showAdvanced && (
-                  <div className="p-5 grid grid-cols-2 gap-5 animate-in fade-in slide-in-from-top-2 duration-300">
-                    <div className="space-y-1.5">
-                      <Label variant="brand">Punto de Origen</Label>
-                      <Input
-                        placeholder="Ej: Cd. México"
-                        value={formData.origen_tramo}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            origen_tramo: e.target.value,
-                          })
-                        }
-                        className="h-10 glass-card"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label variant="brand">Punto de Destino</Label>
-                      <Input
-                        placeholder="Ej: Puebla"
-                        value={formData.destino_tramo}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            destino_tramo: e.target.value,
-                          })
-                        }
-                        className="h-10 glass-card"
-                      />
-                    </div>
-                    <div className="col-span-2 mt-2 bg-slate-100/50 p-3 rounded-xl text-center font-mono text-[11px] font-bold text-slate-500 border border-dashed border-slate-300">
-                      IDENTIFICADOR GENERADO:{" "}
-                      <span className="text-brand-navy">
-                        {formData.tramo || "Esperando datos..."}
+
+                {/* SECCIÓN 2: COSTOS OPERATIVOS */}
+                <div className="space-y-4 pt-6 border-t border-slate-200 dark:border-white/10">
+                  <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 flex items-center gap-2">
+                    <DollarSign className="h-3.5 w-3.5 text-emerald-500" />{" "}
+                    Tarifas Operativas
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="costo_5_ejes_sencillo"
+                      render={({ field }) => (
+                        <FormItem className="p-5 bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-white/10 rounded-xl transition-colors hover:border-blue-300 dark:hover:border-blue-500/50">
+                          <Label className="text-[9px] font-black text-slate-500 dark:text-slate-400 tracking-[0.2em] uppercase flex items-center gap-2">
+                            <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />{" "}
+                            Tarifa 5 ejes (Sencillo)
+                          </Label>
+                          <div className="relative mt-3 flex items-baseline gap-2">
+                            <span className="text-xl font-bold text-slate-400 dark:text-slate-500">
+                              $
+                            </span>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                {...field}
+                                onChange={(e) =>
+                                  field.onChange(parseFloat(e.target.value))
+                                }
+                                className="h-auto p-0 text-3xl font-mono font-black text-slate-800 dark:text-white bg-transparent dark:bg-transparent border-none focus-visible:ring-0 hover:border-transparent hover:shadow-none shadow-none"
+                                placeholder="0.00"
+                                min={0}
+                                step="0.01"
+                              />
+                            </FormControl>
+                          </div>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="costo_9_ejes_full"
+                      render={({ field }) => (
+                        <FormItem className="p-5 bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-white/10 rounded-xl transition-colors hover:border-emerald-300 dark:hover:border-emerald-500/50">
+                          <Label className="text-[9px] font-black text-slate-500 dark:text-slate-400 tracking-[0.2em] uppercase flex items-center gap-2">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />{" "}
+                            Tarifa 9 Ejes (Full)
+                          </Label>
+                          <div className="relative mt-3 flex items-baseline gap-2">
+                            <span className="text-xl font-bold text-slate-400 dark:text-slate-500">
+                              $
+                            </span>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                {...field}
+                                onChange={(e) =>
+                                  field.onChange(parseFloat(e.target.value))
+                                }
+                                className="h-auto p-0 text-3xl font-mono font-black text-slate-800 dark:text-white bg-transparent dark:bg-transparent border-none focus-visible:ring-0 hover:border-transparent hover:shadow-none shadow-none"
+                                placeholder="0.00"
+                                min={0}
+                                step="0.01"
+                              />
+                            </FormControl>
+                          </div>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+
+                {/* SECCIÓN 3: AVANZADO SCT */}
+                <div className="mt-4 bg-white/60 dark:bg-slate-800/30 border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden transition-all duration-300">
+                  <div className="flex items-center justify-between p-4 bg-slate-100/80 dark:bg-slate-900/50">
+                    <div className="flex items-center gap-2">
+                      <Route className="h-4 w-4 text-brand-red dark:text-brand-red/80" />
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300">
+                        Configuración Avanzada (Homologación SCT)
                       </span>
                     </div>
-                    <div className="col-span-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-center">
-                      Si lo dejas vacío, el sistema guardará el{" "}
-                      <b>Nombre principal</b> como identificador de tramo SCT.
-                    </div>
+                    <Switch
+                      checked={showAdvanced}
+                      onCheckedChange={setShowAdvanced}
+                      className="data-[state=checked]:bg-brand-red"
+                    />
                   </div>
-                )}
-              </div>
-            </div>
-          </div>
 
-          <DialogFooter className="bg-white/60 backdrop-blur-md p-5 border-t border-slate-200/60 shrink-0">
-            <Button
-              variant="outline"
-              onClick={() => setDialogOpen(false)}
-              className="h-11 px-8 text-[11px] font-black uppercase tracking-widest text-slate-500 glass-card border-slate-200 hover:bg-white"
-            >
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleSave}
-              disabled={isSubmitting}
-              className="btn-primary-gradient h-11 px-10 text-[11px] font-black uppercase tracking-[0.2em] shadow-lg active:scale-95 transition-all"
-            >
-              {isSubmitting ? (
-                <Loader2 className="animate-spin h-4 w-4 mr-2" />
-              ) : (
-                <Check className="h-4 w-4 mr-2" />
-              )}
-              {selectedToll ? "Actualizar Caseta" : "Confirmar Registro"}
-            </Button>
-          </DialogFooter>
+                  {showAdvanced && (
+                    <div className="p-5 grid grid-cols-2 gap-5 animate-in fade-in slide-in-from-top-2 duration-300">
+                      <FormField
+                        control={form.control}
+                        name="origen_tramo"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel variant="brand">
+                              Punto de Origen
+                            </FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                placeholder="Ej: Cd. México"
+                                className="h-10 bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="destino_tramo"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel variant="brand">
+                              Punto de Destino
+                            </FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                placeholder="Ej: Puebla"
+                                className="h-10 bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <div className="col-span-2 mt-2 bg-slate-100/50 dark:bg-slate-900/50 p-3 rounded-xl flex items-center justify-between border border-dashed border-slate-300 dark:border-white/20">
+                        <span className="font-mono text-[10px] font-bold text-slate-500 dark:text-slate-400 tracking-widest">
+                          IDENTIFICADOR GENERADO:
+                        </span>
+                        <span className="text-[11px] font-mono font-black text-brand-navy dark:text-white uppercase">
+                          {tramoGenerado || "Esperando datos..."}
+                        </span>
+                      </div>
+                      <div className="col-span-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 text-center">
+                        Si lo dejas vacío, el sistema guardará el{" "}
+                        <b className="text-slate-600 dark:text-slate-300">
+                          Nombre principal
+                        </b>{" "}
+                        como identificador de tramo SCT.
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* FOOTER DEL FORMULARIO */}
+              <DialogFooter className="p-6 sm:p-8 bg-slate-50/50 dark:bg-black/20 border-t border-slate-200 dark:border-white/10 shrink-0">
+                <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    onClick={() => setDialogOpen(false)}
+                    className="w-full sm:w-auto flex-shrink-0"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="default"
+                    size="lg"
+                    disabled={isSubmitting}
+                    className="w-full sm:w-auto flex-shrink-0"
+                  >
+                    {isSubmitting ? (
+                      <Loader2 className="animate-spin h-4 w-4 mr-2" />
+                    ) : (
+                      <Check className="h-4 w-4 mr-2" />
+                    )}
+                    {selectedToll ? "Actualizar Caseta" : "Confirmar Registro"}
+                  </Button>
+                </div>
+              </DialogFooter>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
 
-      {/* 🚀 ALERTS DIALOGS (USAN COMPONENTE BASE TAHOE) */}
+      {/* 🚀 ALERT DIALOG - SINGLE DELETE */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-rose-600 flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5" /> ¿Eliminar Caseta del
-              Catálogo?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
+        <AlertDialogContent className="w-[95vw] sm:max-w-2xl p-0 flex flex-col max-h-[90vh] bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 shadow-2xl rounded-2xl transition-all duration-300 overflow-hidden">
+          <AlertDialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0">
+            <div className="flex items-center gap-4 sm:gap-5">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center shadow-inner shrink-0">
+                <AlertTriangle className="h-7 w-7 sm:h-8 sm:w-8 text-rose-600 dark:text-rose-400" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <AlertDialogTitle className="text-rose-600 dark:text-rose-500 text-lg sm:text-2xl font-black uppercase tracking-tighter heading-crisp leading-none">
+                  Eliminar Recurso Crítico
+                </AlertDialogTitle>
+                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mt-1">
+                  Protocolo de Integridad de Catálogos • Rápidos 3T v2026
+                </p>
+              </div>
+            </div>
+          </AlertDialogHeader>
+
+          <div className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-6 custom-scrollbar bg-transparent">
+            <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block">
               {dependencies?.in_use ? (
-                <>
-                  <div className="mb-3">
-                    ⚠️ Esta caseta actualmente está{" "}
-                    <b>
-                      asignada en {dependencies.rutas_count} ruta(s) armada(s)
-                    </b>
-                    .
+                <div className="space-y-6">
+                  <div className="p-5 sm:p-6 bg-amber-50 dark:bg-amber-950/20 border-l-4 border-amber-500 rounded-r-2xl shadow-sm">
+                    <div className="flex items-center gap-2 mb-3">
+                      <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                      <h4 className="text-[10px] sm:text-[11px] font-black text-amber-800 dark:text-amber-400 uppercase tracking-widest">
+                        Conflicto de Dependencia Detectado
+                      </h4>
+                    </div>
+                    <p className="text-xs sm:text-sm leading-relaxed text-amber-900 dark:text-amber-200/80">
+                      Esta caseta está vinculada activamente en{" "}
+                      <b className="font-black underline">
+                        {dependencies.rutas_count} ruta(s) configuradas
+                      </b>
+                      . Al eliminarla, el sistema la reclasificará
+                      automáticamente como un{" "}
+                      <span className="font-mono font-bold italic bg-amber-200/50 dark:bg-amber-900/50 px-1 rounded">
+                        "Tramo Libre"
+                      </span>{" "}
+                      sin costo en los esquemas logísticos.
+                    </p>
                   </div>
-                  <p className="mb-4">
-                    ¿Deseas eliminarla también de esas rutas? (Se convertirá en
-                    un "Tramo Libre" sin costo en las plantillas).
+
+                  <div className="p-5 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/50 rounded-2xl">
+                    <div className="flex items-start gap-4">
+                      <div className="bg-emerald-500 rounded-full p-1.5 mt-0.5 shadow-lg shadow-emerald-500/20">
+                        <Check className="h-3 w-3 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] sm:text-[11px] font-black text-emerald-800 dark:text-emerald-300 uppercase tracking-widest mb-1">
+                          Protección de Datos Históricos
+                        </p>
+                        <p className="text-[11px] sm:text-[12px] font-medium text-emerald-700/80 dark:text-emerald-400/80 leading-snug">
+                          Las liquidaciones cerradas y viajes ya despachados{" "}
+                          <b>permanecerán intactos</b> para auditoría
+                          financiera.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="text-[10px] sm:text-[11px] font-bold text-slate-400 dark:text-slate-500 text-center uppercase tracking-[0.2em] pt-4 border-t border-slate-100 dark:border-white/5">
+                    Seleccione la acción de desvinculación técnica:
                   </p>
-                  <p className="text-emerald-700 bg-emerald-50 p-3 rounded-xl border border-emerald-200 font-medium text-xs leading-relaxed shadow-sm">
-                    Tranquilo, sin importar lo que elijas,{" "}
-                    <b>
-                      los viajes despachados y liquidaciones históricas NO se
-                      verán afectados
-                    </b>
-                    .
-                  </p>
-                </>
+                </div>
               ) : (
-                "Esta caseta no está en uso actualmente. Se eliminará permanentemente del catálogo. ¿Deseas continuar?"
+                <div className="text-center py-10 space-y-4">
+                  <div className="mx-auto w-16 h-1 bg-slate-200 dark:bg-slate-800 rounded-full mb-6" />
+                  <p className="text-lg sm:text-xl font-bold text-slate-800 dark:text-slate-100 uppercase tracking-tight">
+                    ¿Confirmar remoción definitiva?
+                  </p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm mx-auto leading-relaxed">
+                    Este recurso no presenta dependencias activas. Se eliminará
+                    permanentemente del catálogo de infraestructura operativa.
+                  </p>
+                </div>
               )}
             </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            {dependencies?.in_use ? (
-              <>
+          </div>
+
+          <AlertDialogFooter className="p-6 sm:p-8 bg-slate-50/50 dark:bg-black/20 border-t border-slate-200 dark:border-white/10 shrink-0">
+            <div className="flex flex-col-reverse sm:flex-row sm:flex-wrap justify-end items-stretch sm:items-center gap-3 w-full">
+              <AlertDialogCancel
+                variant="outline"
+                size="lg"
+                className="w-full sm:w-auto flex-shrink-0"
+              >
+                Abortar Operación
+              </AlertDialogCancel>
+
+              {dependencies?.in_use ? (
+                <div className="flex flex-col sm:flex-row flex-wrap gap-3 w-full sm:w-auto">
+                  <AlertDialogAction
+                    variant="info"
+                    size="lg"
+                    onClick={() => executeDelete(false)}
+                    disabled={isSubmitting}
+                    className="w-full sm:w-auto flex-shrink-0"
+                  >
+                    Gestión Manual
+                  </AlertDialogAction>
+                  <AlertDialogAction
+                    variant="destructive"
+                    size="lg"
+                    onClick={() => executeDelete(true)}
+                    disabled={isSubmitting}
+                    className="w-full sm:w-auto flex-shrink-0 shadow-rose-600/10"
+                  >
+                    {isSubmitting ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <Trash2 className="h-4 w-4 mr-2" />
+                    )}
+                    Limpiar y Borrar
+                  </AlertDialogAction>
+                </div>
+              ) : (
                 <AlertDialogAction
+                  variant="destructive"
+                  size="lg"
                   onClick={() => executeDelete(false)}
                   disabled={isSubmitting}
-                  className="bg-amber-500 hover:bg-amber-600 text-white border-none shadow-sm"
+                  className="w-full sm:w-auto flex-shrink-0 sm:px-12"
                 >
-                  No, lo haré manual
+                  {isSubmitting ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : (
+                    "Confirmar Borrado Técnico"
+                  )}
                 </AlertDialogAction>
-                <AlertDialogAction
-                  onClick={() => executeDelete(true)}
-                  disabled={isSubmitting}
-                  className="bg-destructive hover:bg-destructive/90 text-white border-none shadow-md"
-                >
-                  Sí, quitar de rutas
-                </AlertDialogAction>
-              </>
-            ) : (
-              <AlertDialogAction
-                onClick={() => executeDelete(false)}
-                disabled={isSubmitting}
-                className="bg-destructive hover:bg-destructive/90 text-white border-none shadow-md"
-              >
-                Eliminar Permanentemente
-              </AlertDialogAction>
-            )}
+              )}
+            </div>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* 🚀 ALERT DIALOG - BULK DELETE */}
       <AlertDialog
         open={bulkDeleteDialogOpen}
         onOpenChange={setBulkDeleteDialogOpen}
       >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-rose-600 flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5" /> ¿Eliminar{" "}
-              {selectedRows.size} casetas?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              <p className="mb-2">
-                Estás a punto de procesar múltiples casetas de forma simultánea.
-              </p>
-              <p className="mb-4">
-                Las casetas libres serán eliminadas. Aquellas que ya estén
-                asignadas a una ruta armada serán <b>ocultadas</b> del catálogo
-                para proteger tu información, pero{" "}
-                <b className="text-emerald-700">
-                  no afectarán los viajes en curso
-                </b>
-                .
-              </p>
-              <p>
-                ¿Deseas que el sistema también las{" "}
-                <b>elimine automáticamente de las rutas armadas</b> donde están
-                asignadas?
-              </p>
-            </AlertDialogDescription>
+        <AlertDialogContent className="w-[95vw] sm:max-w-2xl p-0 flex flex-col max-h-[90vh] bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 shadow-2xl rounded-2xl transition-all duration-300 overflow-hidden">
+          <AlertDialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0">
+            <div className="flex items-center gap-4 sm:gap-5">
+              <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center shadow-inner shrink-0">
+                <AlertTriangle className="h-7 w-7 sm:h-8 sm:w-8 text-rose-600 dark:text-rose-400" />
+                <div className="absolute -top-2 -right-2 bg-rose-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-md border-2 border-white dark:border-slate-900">
+                  {selectedRows.size}
+                </div>
+              </div>
+              <div className="flex flex-col gap-1">
+                <AlertDialogTitle className="text-rose-600 dark:text-rose-500 text-lg sm:text-2xl font-black uppercase tracking-tighter heading-crisp leading-none">
+                  Eliminación por Lotes
+                </AlertDialogTitle>
+                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mt-1">
+                  Protocolo de Borrado Masivo • Rápidos 3T v2026
+                </p>
+              </div>
+            </div>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => executeBulkDelete(false)}
-              disabled={isSubmitting}
-              className="bg-amber-500 hover:bg-amber-600 text-white border-none shadow-sm"
-            >
-              No, conservar en rutas
-            </AlertDialogAction>
-            <AlertDialogAction
-              onClick={() => executeBulkDelete(true)}
-              disabled={isSubmitting}
-              className="bg-destructive hover:bg-destructive/90 text-white border-none shadow-md"
-            >
-              {isSubmitting ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              ) : (
-                <Trash2 className="h-4 w-4 mr-2" />
-              )}
-              Sí, quitar de rutas
-            </AlertDialogAction>
+
+          <div className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-6 custom-scrollbar bg-transparent">
+            <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block">
+              <div className="space-y-6">
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Estás a punto de procesar{" "}
+                  <b className="text-slate-900 dark:text-white">
+                    {selectedRows.size} casetas
+                  </b>{" "}
+                  de forma simultánea. Por favor, revisa la lógica de impacto:
+                </p>
+
+                <div className="p-5 sm:p-6 bg-amber-50 dark:bg-amber-950/20 border-l-4 border-amber-500 rounded-r-2xl shadow-sm">
+                  <div className="flex items-center gap-2 mb-3">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                    <h4 className="text-[10px] sm:text-[11px] font-black text-amber-800 dark:text-amber-400 uppercase tracking-widest">
+                      Impacto en Rutas Armadas
+                    </h4>
+                  </div>
+                  <p className="text-xs sm:text-sm leading-relaxed text-amber-900 dark:text-amber-200/80">
+                    Las casetas libres se eliminarán permanentemente. Aquellas
+                    que ya estén asignadas a una ruta serán{" "}
+                    <b className="font-black underline">
+                      ocultadas del catálogo
+                    </b>{" "}
+                    para proteger la integridad estructural de las plantillas
+                    existentes.
+                  </p>
+                </div>
+
+                <div className="p-5 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/50 rounded-2xl">
+                  <div className="flex items-start gap-4">
+                    <div className="bg-emerald-500 rounded-full p-1.5 mt-0.5 shadow-lg shadow-emerald-500/20 shrink-0">
+                      <Check className="h-3 w-3 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] sm:text-[11px] font-black text-emerald-800 dark:text-emerald-300 uppercase tracking-widest mb-1">
+                        Protección Operativa
+                      </p>
+                      <p className="text-[11px] sm:text-[12px] font-medium text-emerald-700/80 dark:text-emerald-400/80 leading-snug">
+                        Esta operación en lote{" "}
+                        <b>no afectará los viajes en curso</b> ni alterará los
+                        costos calculados en liquidaciones previas.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-[10px] sm:text-[11px] font-bold text-slate-400 dark:text-slate-500 text-center uppercase tracking-[0.2em] pt-4 border-t border-slate-100 dark:border-white/5">
+                  ¿Deseas eliminar las casetas asignadas de sus rutas
+                  automáticamente?
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </div>
+
+          <AlertDialogFooter className="p-6 sm:p-8 bg-slate-50/50 dark:bg-black/20 border-t border-slate-200 dark:border-white/10 shrink-0">
+            <div className="flex flex-col-reverse sm:flex-row sm:flex-wrap justify-end items-stretch sm:items-center gap-3 w-full">
+              <AlertDialogCancel
+                variant="outline"
+                size="lg"
+                className="w-full sm:w-auto flex-shrink-0"
+              >
+                Abortar Operación
+              </AlertDialogCancel>
+
+              <div className="flex flex-col sm:flex-row flex-wrap gap-3 w-full sm:w-auto">
+                <AlertDialogAction
+                  variant="info"
+                  size="lg"
+                  onClick={() => executeBulkDelete(false)}
+                  disabled={isSubmitting}
+                  className="w-full sm:w-auto flex-shrink-0"
+                >
+                  Conservar en Rutas
+                </AlertDialogAction>
+
+                <AlertDialogAction
+                  variant="destructive"
+                  size="lg"
+                  onClick={() => executeBulkDelete(true)}
+                  disabled={isSubmitting}
+                  className="w-full sm:w-auto flex-shrink-0 shadow-rose-600/10"
+                >
+                  {isSubmitting ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : (
+                    <Trash2 className="h-4 w-4 mr-2" />
+                  )}
+                  Sí, Limpiar Todo
+                </AlertDialogAction>
+              </div>
+            </div>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

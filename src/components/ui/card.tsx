@@ -5,47 +5,53 @@ import { cn } from "@/lib/utils";
 
 /**
  * Kemper UI: Card Component
- * Estética: macOS Tahoe / Industrial Premium Design System
+ * Estética: macOS Tahoe / Flat Industrial Edition
  */
 
 const cardVariants = cva(
-  // Base: Transiciones suaves de 300ms, overflow hidden para el glassmorphism
+  // Base: Transiciones suaves, overflow hidden para mantener los bordes limpios
   "relative overflow-hidden transition-all duration-300 ease-out outline-none text-foreground",
   {
     variants: {
       variant: {
-        // Estándar: Limpio, glassmorphism con elevación suave y soporte total a Dark Mode
+        // 🚀 ESTÁNDAR (Mejorado): Blanco puro en modo claro para contrastar con el bg-slate-50 del layout.
+        // Sombras más definidas para "separarlo" del fondo.
         default: [
-          "bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl",
-          "border border-slate-200/80 dark:border-white/10",
-          "shadow-sm hover:shadow-md hover:-translate-y-0.5",
+          "bg-white dark:bg-[#151c2c]", // Contraste real contra el fondo del layout
+          "border border-slate-200 dark:border-white/10",
+          "shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] dark:shadow-[0_4px_20px_-4px_rgba(0,0,0,0.3)]",
+          "hover:shadow-[0_8px_30px_-4px_rgba(0,0,0,0.1)] dark:hover:shadow-[0_8px_30px_-4px_rgba(0,0,0,0.4)]",
         ],
-        // Glass: Estilo panel ultra-translúcido (Ideal para flotar sobre fondos Mesh/Auroras)
+
+        // 🚀 GLASS: Ultra-translúcido para flotar sobre elementos gráficos (mapas, gráficas)
         glass: [
-          "bg-white/40 dark:bg-black/40 backdrop-blur-xl",
-          "border border-white/40 dark:border-white/10",
+          "bg-white/60 dark:bg-[#0a0f1a]/60 backdrop-blur-2xl",
+          "border border-white/60 dark:border-white/10",
           "shadow-xl",
-          "before:absolute before:inset-0 before:bg-gradient-to-br before:from-white/20 dark:before:from-white/5 before:to-transparent before:pointer-events-none z-0",
+          "before:absolute before:inset-0 before:bg-gradient-to-br before:from-white/40 dark:before:from-white/5 before:to-transparent before:pointer-events-none z-0",
         ],
-        // Navy: Tarjetas oscuras premium (Ignora el modo claro, siempre es oscura)
+
+        // 🚀 NAVY: Tarjeta de impacto (Métricas principales)
         navy: [
-          "bg-brand-navy/95 backdrop-blur-xl",
-          "border border-white/10",
+          "bg-brand-navy dark:bg-black",
+          "border border-brand-navy/20 dark:border-white/10",
           "shadow-2xl text-white",
           "before:absolute before:inset-0 before:bg-gradient-to-br before:from-white/10 before:to-transparent before:pointer-events-none z-0",
         ],
-        // Interactive: Para tarjetas clickeables (Bento grids, selecciones) con Haptic Press
+
+        // 🚀 INTERACTIVE: Para Bento grids. Blanco puro que reacciona al mouse.
         interactive: [
-          "bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl cursor-pointer",
-          "border border-slate-200/80 dark:border-white/10",
-          "shadow-sm hover:shadow-md hover:-translate-y-1 hover:border-slate-300 dark:hover:border-white/20 hover:bg-white/95 dark:hover:bg-white/5",
-          "active:scale-[0.98]", // Haptic press
+          "bg-white dark:bg-[#151c2c] cursor-pointer",
+          "border border-slate-200 dark:border-white/10",
+          "shadow-sm hover:shadow-lg hover:-translate-y-1 hover:border-slate-300 dark:hover:border-white/20",
+          "active:scale-[0.98] haptic-press", // Haptic press
           "focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:border-brand-red",
         ],
-        // Flat: Elementos de fondo sin elevación
+
+        // 🚀 FLAT: Para elementos internos o agrupadores dentro de otras tarjetas
         flat: [
           "bg-slate-50/80 dark:bg-white/5",
-          "border border-slate-200/80 dark:border-white/5",
+          "border border-slate-200 dark:border-white/5",
           "shadow-none",
         ],
       },
@@ -91,7 +97,7 @@ const CardHeader = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    // Aseguramos el z-index relativo por si la Card tiene el brillo pseudo-elemento before
+    // Aseguramos el z-index relativo
     className={cn("flex flex-col space-y-1.5 p-6 relative z-10", className)}
     {...props}
   />
@@ -106,7 +112,7 @@ const CardTitle = React.forwardRef<
     ref={ref}
     className={cn(
       // Tahoe Crisp Typography: font-black, uppercase, tracking ajustado
-      "text-lg font-black uppercase tracking-tight text-slate-900 dark:text-white heading-crisp",
+      "text-lg font-black uppercase tracking-tighter text-brand-navy dark:text-white heading-crisp",
       className,
     )}
     {...props}
@@ -149,7 +155,8 @@ const CardFooter = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      "flex items-center p-6 pt-4 border-t border-slate-200/80 dark:border-white/10 relative z-10 bg-slate-50/50 dark:bg-black/20",
+      // 🚀 FIX: Footer distinguible. Gris súper claro en light mode, negro con opacidad en dark.
+      "flex items-center p-6 pt-4 border-t border-slate-100 dark:border-white/5 relative z-10 bg-slate-50/50 dark:bg-black/20",
       className,
     )}
     {...props}

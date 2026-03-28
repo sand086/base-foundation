@@ -2,74 +2,53 @@
 import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
-
 import { cn } from "@/lib/utils";
 
-/**
- * Button UI - macOS Tahoe / Industrial Edition
- * Refactorización:
- * 1. Haptic Press: active:scale-[0.96] para sensación táctil.
- * 2. Dark Mode: Clases dinámicas para bordes y fondos.
- * 3. Tipografía: Tracking expansivo en tamaños LG y XL.
- */
-
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-bold ring-offset-background transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 active:scale-[0.96] haptic-press outline-none",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-bold ring-offset-background transition-all duration-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 active:scale-[0.96] haptic-press outline-none",
   {
     variants: {
       variant: {
-        // 🔴 PRIMARY - Rojo Kemper / Brand Red
+        // 🔴 KEMPER RED: Usamos bg-brand-red en lugar del gradient faltante
         default:
-          "btn-primary-gradient text-white shadow-[0_4px_15px_rgba(190,8,17,0.4)] dark:shadow-[0_4px_20px_rgba(190,8,17,0.2)] border-none hover:brightness-110",
+          "bg-brand-red hover:bg-brand-red/90 dark:bg-brand-red dark:hover:bg-brand-red/90 text-white shadow-[0_4px_15px_rgba(190,8,17,0.3)] border-none",
 
-        // 🔵 SECONDARY - Navy Tahoe
+        // 🔵 NAVY TAHOE: Usamos bg-brand-navy nativo
         secondary:
-          "btn-secondary-gradient text-white shadow-lg border-none hover:brightness-125 dark:bg-brand-navy dark:border dark:border-white/10",
+          "bg-brand-navy hover:bg-brand-navy/90 text-white shadow-lg border-none dark:border-white/10",
 
-        // ⚪ TERTIARY - Estilo Cristalería macOS
+        // ⚪ CRISTALERÍA
         tertiary:
-          "bg-slate-100/80 dark:bg-white/5 text-slate-700 dark:text-white/70 border border-slate-200 dark:border-white/10 backdrop-blur-sm hover:bg-white dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white",
+          "bg-slate-100/80 dark:bg-white/5 text-slate-700 dark:text-white/70 border border-slate-200 dark:border-white/10 backdrop-blur-sm hover:bg-white dark:hover:bg-white/10",
 
-        // 🟢 SUCCESS - Verde Industrial
+        // 🟢 SUCCESS: Usamos emerald nativo en lugar del gradient
         success:
-          "btn-success-gradient text-white shadow-[0_4px_15px_rgba(0,151,64,0.3)] border-none hover:brightness-110",
+          "bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-700 text-white shadow-[0_4px_15px_rgba(0,151,64,0.2)] border-none",
 
-        // 🟠 WARNING - Ámbar de Alerta
+        // 🔵 INFO / CIAN
+        info: "bg-cyan-600 dark:bg-cyan-700 text-white shadow-[0_4px_15px_rgba(8,145,178,0.2)] border-none hover:bg-cyan-700 dark:hover:bg-cyan-800",
+
+        // 🟠 WARNING
         warning:
-          "btn-warning-gradient text-black font-black shadow-md border-none hover:brightness-110",
+          "bg-amber-500 dark:bg-amber-600 text-white shadow-[0_4px_15px_rgba(245,158,11,0.2)] border-none hover:bg-amber-600 dark:hover:bg-amber-700",
 
-        // 🔵 INFO - Azul de Datos
-        info: "btn-info-gradient text-white shadow-md border-none hover:brightness-110",
-
-        // 🔴 DANGER - Rojo Crítico
+        // ☣️ DESTRUCTIVE
         destructive:
-          "btn-danger-gradient text-white shadow-[0_4px_15px_rgba(225,29,72,0.4)] border-none hover:brightness-110",
+          "bg-slate-900 dark:bg-slate-950 text-rose-500 border border-rose-500/30 shadow-[0_4px_12px_rgba(0,0,0,0.3)] hover:bg-rose-600 hover:text-white hover:border-rose-600 hover:shadow-[0_0_20px_rgba(225,29,72,0.4)]",
 
-        // ✨ ACTION - Alias de Success
-        action:
-          "btn-success-gradient text-white shadow-md border-none hover:brightness-110",
-
-        // 🌑 DARK - Negro Carbón Premium
-        dark: "bg-slate-900 dark:bg-black text-white hover:bg-black dark:hover:bg-slate-900 shadow-xl border border-white/5",
-
-        // ⚪ WHITE - Blanco Puro
-        white:
-          "bg-white dark:bg-slate-100 text-slate-900 hover:bg-slate-50 shadow-md border border-slate-200 dark:border-transparent",
-
-        // Estilos Planos de Alta Definición
         outline:
-          "border border-slate-200 dark:border-white/10 bg-transparent hover:bg-slate-100 dark:hover:bg-white/5 text-slate-600 dark:text-white/60 hover:text-slate-900 dark:hover:text-white",
+          "border-2 border-slate-200 dark:border-white/10 bg-transparent hover:bg-slate-100 dark:hover:bg-white/5 text-slate-600 dark:text-slate-400 hover:text-brand-navy dark:hover:text-white",
 
         ghost:
-          "hover:bg-slate-100 dark:hover:bg-white/5 text-slate-600 dark:text-white/50 hover:text-slate-900 dark:hover:text-white",
+          "hover:bg-slate-100 dark:hover:bg-white/5 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white",
 
-        link: "text-brand-red underline-offset-4 hover:underline font-bold",
+        link: "text-brand-red underline-offset-4 hover:underline",
       },
       size: {
-        default: "h-10 px-6 py-2",
+        default: "h-11 px-6 py-2",
         sm: "h-9 rounded-lg px-3 text-xs",
-        lg: "h-12 rounded-xl px-8 text-[13px] font-black uppercase tracking-[0.15em]",
-        xl: "h-14 rounded-2xl px-10 text-[15px] font-black uppercase tracking-[0.2em]",
+        lg: "h-12 rounded-xl px-8 text-[11px] font-black uppercase tracking-[0.2em]",
+        xl: "h-14 rounded-2xl px-10 text-[13px] font-black uppercase tracking-[0.25em]",
         icon: "h-10 w-10 rounded-xl",
       },
     },

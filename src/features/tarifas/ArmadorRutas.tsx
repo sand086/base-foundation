@@ -43,7 +43,6 @@ import { CSS } from "@dnd-kit/utilities";
 // UI Components
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { ActionButton } from "@/components/ui/action-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -158,9 +157,9 @@ const SortableTableRow: React.FC<SortableRowProps> = ({
   return (
     <>
       {hasGap && (
-        <TableRow className="bg-amber-50/50 border-none h-8">
+        <TableRow className="bg-amber-50/50 dark:bg-amber-950/30 border-none h-8">
           <TableCell colSpan={showAdvanced ? 8 : 6} className="py-0">
-            <div className="flex items-center justify-center gap-2 text-[10px] font-black text-amber-600 uppercase tracking-[0.2em]">
+            <div className="flex items-center justify-center gap-2 text-[10px] font-black text-amber-600 dark:text-amber-500 uppercase tracking-[0.2em]">
               <AlertTriangle className="h-3.5 w-3.5" /> Discontinuidad detectada
               entre tramos
             </div>
@@ -172,19 +171,19 @@ const SortableTableRow: React.FC<SortableRowProps> = ({
         ref={setNodeRef}
         style={style}
         className={cn(
-          "group transition-all duration-200 border-b border-white/20 interactive-row",
+          "group transition-all duration-200 border-b border-slate-200/50 dark:border-white/10 interactive-row",
           isDragging
-            ? "bg-white shadow-2xl scale-[1.01]"
+            ? "bg-white dark:bg-slate-800 shadow-2xl scale-[1.01]"
             : seg.toll_booth_id
-              ? "bg-white/80"
-              : "bg-slate-50/40",
+              ? "bg-white/80 dark:bg-slate-900/80"
+              : "bg-slate-50/40 dark:bg-slate-950/40",
         )}
       >
         <TableCell className="w-12 pl-4">
           <div
             {...attributes}
             {...listeners}
-            className="cursor-grab active:cursor-grabbing p-2 text-slate-400 hover:text-brand-navy hover:bg-slate-100 rounded-lg transition-colors flex items-center justify-center"
+            className="cursor-grab active:cursor-grabbing p-2 text-slate-400 dark:text-slate-500 hover:text-brand-navy dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors flex items-center justify-center"
           >
             <GripVertical className="h-4 w-4" />
           </div>
@@ -193,7 +192,7 @@ const SortableTableRow: React.FC<SortableRowProps> = ({
         <TableCell className={showAdvanced ? "w-[30%]" : "w-[40%]"}>
           <div className="flex flex-col gap-1 py-1">
             <Input
-              className="h-9 text-xs font-black uppercase tracking-tight glass-card border-transparent hover:border-slate-200 focus:bg-white transition-all shadow-none focus:shadow-sm"
+              className="h-9 text-xs font-black uppercase tracking-tight bg-transparent border-transparent hover:border-slate-200 dark:hover:border-white/20 focus:bg-white dark:focus:bg-slate-950 transition-all shadow-none focus:shadow-sm"
               value={seg.nombre_segmento}
               onChange={(e) =>
                 updateSegment(idx, "nombre_segmento", e.target.value)
@@ -201,8 +200,8 @@ const SortableTableRow: React.FC<SortableRowProps> = ({
               placeholder="Ej: CDMX - PUEBLA"
             />
             {seg.toll_booth_id && (
-              <span className="text-[9px] font-black text-emerald-600 px-3 uppercase tracking-widest flex items-center gap-1">
-                <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />{" "}
+              <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 px-3 uppercase tracking-widest flex items-center gap-1">
+                <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400" />{" "}
                 Peaje Registrado
               </span>
             )}
@@ -213,7 +212,7 @@ const SortableTableRow: React.FC<SortableRowProps> = ({
           <>
             <TableCell className="w-20">
               <Input
-                className="h-9 uppercase text-[10px] font-bold text-center glass-card border-transparent hover:border-slate-200 focus:bg-white shadow-none"
+                className="h-9 uppercase text-[10px] font-bold text-center bg-transparent border-transparent hover:border-slate-200 dark:hover:border-white/20 focus:bg-white dark:focus:bg-slate-950 shadow-none"
                 value={seg.estado}
                 placeholder="EDO."
                 onChange={(e) => updateSegment(idx, "estado", e.target.value)}
@@ -222,7 +221,7 @@ const SortableTableRow: React.FC<SortableRowProps> = ({
 
             <TableCell className="w-28">
               <Input
-                className="h-9 uppercase text-[10px] font-bold glass-card border-transparent hover:border-slate-200 focus:bg-white shadow-none"
+                className="h-9 uppercase text-[10px] font-bold bg-transparent border-transparent hover:border-slate-200 dark:hover:border-white/20 focus:bg-white dark:focus:bg-slate-950 shadow-none"
                 value={seg.carretera}
                 placeholder="CARR."
                 onChange={(e) =>
@@ -237,7 +236,7 @@ const SortableTableRow: React.FC<SortableRowProps> = ({
           <div className="relative">
             <Input
               type="number"
-              className="h-9 w-full text-right font-mono font-bold text-xs glass-card border-transparent hover:border-slate-200 focus:bg-white shadow-none pr-8"
+              className="h-9 w-full text-right font-mono font-bold text-xs bg-transparent border-transparent hover:border-slate-200 dark:hover:border-white/20 focus:bg-white dark:focus:bg-slate-950 shadow-none pr-8"
               value={seg.distancia_km || ""}
               onChange={(e) =>
                 updateSegment(
@@ -247,7 +246,7 @@ const SortableTableRow: React.FC<SortableRowProps> = ({
                 )
               }
             />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-slate-400">
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-slate-400 dark:text-slate-500">
               KM
             </span>
           </div>
@@ -257,7 +256,7 @@ const SortableTableRow: React.FC<SortableRowProps> = ({
           <div className="relative">
             <Input
               type="number"
-              className="h-9 w-full text-right font-mono font-bold text-xs glass-card border-transparent hover:border-slate-200 focus:bg-white shadow-none pr-9"
+              className="h-9 w-full text-right font-mono font-bold text-xs bg-transparent border-transparent hover:border-slate-200 dark:hover:border-white/20 focus:bg-white dark:focus:bg-slate-950 shadow-none pr-9"
               value={seg.tiempo_minutos || ""}
               onChange={(e) =>
                 updateSegment(
@@ -267,19 +266,19 @@ const SortableTableRow: React.FC<SortableRowProps> = ({
                 )
               }
             />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-slate-400">
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-slate-400 dark:text-slate-500">
               MIN
             </span>
           </div>
         </TableCell>
 
         {!isFullUnit && (
-          <TableCell className="text-right font-mono font-black text-blue-700 text-sm bg-blue-50/30 pr-6">
+          <TableCell className="text-right font-mono font-black text-blue-700 dark:text-blue-400 text-sm bg-blue-50/30 dark:bg-blue-900/10 pr-6">
             {formatCurrency(seg.costo_s)}
           </TableCell>
         )}
         {isFullUnit && (
-          <TableCell className="text-right font-mono font-black text-emerald-700 text-sm bg-emerald-50/30 pr-6">
+          <TableCell className="text-right font-mono font-black text-emerald-700 dark:text-emerald-400 text-sm bg-emerald-50/30 dark:bg-emerald-900/10 pr-6">
             {formatCurrency(seg.costo_f)}
           </TableCell>
         )}
@@ -288,7 +287,7 @@ const SortableTableRow: React.FC<SortableRowProps> = ({
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 text-slate-300 hover:text-white hover:bg-destructive rounded-xl opacity-0 group-hover:opacity-100 transition-all shadow-sm"
+            className="h-8 w-8 text-slate-400 hover:text-white hover:bg-rose-600 rounded-xl opacity-0 group-hover:opacity-100 transition-all shadow-sm"
             onClick={() => removeSegment(idx)}
           >
             <Trash2 className="h-4 w-4" />
@@ -723,10 +722,10 @@ export const ArmadorRutas: React.FC = () => {
         header: "Nombre de Ruta",
         render: (_, row) => (
           <div className="flex flex-col gap-1 py-1">
-            <span className="font-black text-brand-navy text-sm uppercase tracking-tight">
+            <span className="font-black text-brand-navy dark:text-slate-200 text-sm uppercase tracking-tight">
               {row.origen}
             </span>
-            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest flex items-center gap-1">
+            <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest flex items-center gap-1">
               <MapPin className="h-3 w-3 text-brand-red" /> Hacia: {row.destino}
             </span>
           </div>
@@ -740,13 +739,13 @@ export const ArmadorRutas: React.FC = () => {
             return (
               <Badge
                 variant="outline"
-                className="bg-slate-50 text-slate-500 border-slate-200 text-[9px] uppercase tracking-widest font-black"
+                className="bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-white/10 text-[9px] uppercase tracking-widest font-black"
               >
                 Libre (Todos)
               </Badge>
             );
           return (
-            <span className="font-bold text-slate-700 uppercase text-xs">
+            <span className="font-bold text-slate-700 dark:text-slate-300 uppercase text-xs">
               {clients.find((c) => c.id === val)?.razon_social || val}
             </span>
           );
@@ -764,8 +763,8 @@ export const ArmadorRutas: React.FC = () => {
               className={cn(
                 "text-[9px] font-black uppercase tracking-widest shadow-sm",
                 isFullRoute
-                  ? "bg-emerald-500/10 text-emerald-700 border-emerald-200"
-                  : "bg-blue-500/10 text-blue-700 border-blue-200",
+                  ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/30"
+                  : "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-500/30",
               )}
             >
               {isFullRoute ? "FULL (9 EJES)" : "SENCILLO (5 EJES)"}
@@ -785,11 +784,11 @@ export const ArmadorRutas: React.FC = () => {
             <div className="flex flex-col gap-1">
               <Badge
                 variant="outline"
-                className="bg-slate-50 text-slate-600 text-[9px] uppercase font-bold tracking-widest border-slate-200 w-fit"
+                className="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[9px] uppercase font-bold tracking-widest border-slate-200 dark:border-white/10 w-fit"
               >
                 {total} Tramos ({numPeaje} Peajes)
               </Badge>
-              <span className="text-xs font-mono font-bold text-slate-500 ml-1">
+              <span className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400 ml-1">
                 {row.distancia_total_km} KM
               </span>
             </div>
@@ -809,7 +808,9 @@ export const ArmadorRutas: React.FC = () => {
             <span
               className={cn(
                 "font-mono font-black text-sm",
-                isFullRoute ? "text-emerald-600" : "text-blue-600",
+                isFullRoute
+                  ? "text-emerald-600 dark:text-emerald-400"
+                  : "text-blue-600 dark:text-blue-400",
               )}
             >
               {formatCurrency(Number(cost || 0))}
@@ -826,39 +827,42 @@ export const ArmadorRutas: React.FC = () => {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 hover:bg-slate-100 rounded-xl shadow-sm border border-slate-200/50 bg-white"
+                className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl shadow-sm border border-slate-200/50 dark:border-white/10 bg-white dark:bg-slate-900/50"
               >
-                <MoreVertical className="h-4 w-4 text-slate-500" />
+                <MoreVertical className="h-4 w-4 text-slate-500 dark:text-slate-400" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="end"
-              className="glass-panel border-white/20 min-w-[180px] z-50"
+              className="glass-panel border-white/20 min-w-[180px] z-50 dark:bg-slate-900/90"
             >
               <DropdownMenuItem
-                className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer"
+                className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
                 onClick={() => handleEditRoute(row)}
               >
-                <Pencil className="h-4 w-4 text-blue-500" /> Editar Ruta
+                <Pencil className="h-4 w-4 text-blue-500 dark:text-blue-400" />{" "}
+                Editar Ruta
               </DropdownMenuItem>
               <DropdownMenuItem
-                className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer"
+                className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
                 onClick={() => {
                   setSelectedRouteDetail(row);
                   setDetailModalOpen(true);
                 }}
               >
-                <Eye className="h-4 w-4 text-slate-500" /> Ver Detalles
+                <Eye className="h-4 w-4 text-slate-500 dark:text-slate-400" />{" "}
+                Ver Detalles
               </DropdownMenuItem>
               <DropdownMenuItem
-                className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer"
+                className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
                 onClick={() => handlePrintRoute(row)}
               >
-                <Printer className="h-4 w-4 text-brand-navy" /> Imprimir Hoja
+                <Printer className="h-4 w-4 text-brand-navy dark:text-slate-400" />{" "}
+                Imprimir Hoja
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
+              <DropdownMenuSeparator className="dark:bg-white/10" />
               <DropdownMenuItem
-                className="gap-2 font-bold text-xs uppercase tracking-tight text-rose-600 cursor-pointer"
+                className="gap-2 font-bold text-xs uppercase tracking-tight text-rose-600 dark:text-rose-500 cursor-pointer dark:focus:bg-rose-950/30"
                 onClick={() => {
                   setRouteToDelete(row);
                   setDeleteDialogOpen(true);
@@ -891,59 +895,59 @@ export const ArmadorRutas: React.FC = () => {
       id="form-rutas-top"
       ref={topFormRef}
     >
-      {/* 🚀 FORMULARIO PRINCIPAL TOP (GLASS) */}
+      {/* 🚀 FORMULARIO PRINCIPAL TOP */}
       <Card
-        variant="glass"
+        variant="default"
         className="overflow-hidden border-t-4 border-t-brand-navy shadow-xl"
       >
-        <CardHeader className="bg-white/40 border-b border-white/20 p-6 backdrop-blur-md">
+        <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-white/10 p-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-start">
             <div className="space-y-1.5">
-              <Label variant="brand" className="text-brand-navy">
+              <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-navy dark:text-slate-300">
                 <MapPin className="h-3 w-3 inline mr-1" /> Ciudad Origen *
               </Label>
               <Input
                 placeholder="Ej: VERACRUZ"
-                className="h-11 glass-card font-black text-brand-navy uppercase"
+                className="h-11 font-black uppercase"
                 value={origen}
                 onChange={(e) => setOrigen(e.target.value.toUpperCase())}
               />
             </div>
             <div className="space-y-1.5">
-              <Label variant="brand" className="text-brand-navy">
+              <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-navy dark:text-slate-300">
                 <MapPin className="h-3 w-3 inline mr-1" /> Ciudad Destino *
               </Label>
               <Input
                 placeholder="Ej: TOLUCA"
-                className="h-11 glass-card font-black text-brand-navy uppercase"
+                className="h-11 font-black uppercase"
                 value={destino}
                 onChange={(e) => setDestino(e.target.value.toUpperCase())}
               />
             </div>
             <div className="space-y-1.5">
-              <Label variant="brand">
+              <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-400">
                 <RouteIcon className="h-3 w-3 inline mr-1" /> Variante
                 (Opcional)
               </Label>
               <Input
                 placeholder="Ej: BRAUN-IMO"
-                className="h-11 glass-card font-bold uppercase"
+                className="h-11 font-bold uppercase"
                 value={variante}
                 onChange={(e) => setVariante(e.target.value.toUpperCase())}
               />
             </div>
             <div className="space-y-1.5">
-              <Label variant="brand" className="text-brand-navy">
+              <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-navy dark:text-slate-300">
                 <Truck className="h-3 w-3 inline mr-1" /> Configuración *
               </Label>
               <Select
                 value={configuracion}
                 onValueChange={(v: any) => setConfiguracion(v)}
               >
-                <SelectTrigger className="h-11 glass-card font-black uppercase text-brand-navy shadow-sm">
+                <SelectTrigger className="h-11 font-black uppercase text-brand-navy dark:text-white shadow-sm">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="glass-panel">
+                <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-slate-200 dark:border-white/10">
                   <SelectItem
                     value="5ejes"
                     className="font-bold uppercase text-xs"
@@ -961,8 +965,8 @@ export const ArmadorRutas: React.FC = () => {
             </div>
           </div>
 
-          <div className="mt-6 p-4 bg-brand-navy rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-inner">
-            <span className="text-brand-navy/60 text-[10px] uppercase font-black tracking-[0.2em] flex items-center gap-2 text-brand-secondary">
+          <div className="mt-6 p-4 bg-brand-navy dark:bg-slate-950 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-inner border border-brand-navy/20 dark:border-white/10">
+            <span className="text-brand-navy/60 dark:text-slate-500 text-[10px] uppercase font-black tracking-[0.2em] flex items-center gap-2">
               <RouteIcon className="h-4 w-4 text-brand-red" /> Identificador
               Oficial:
             </span>
@@ -976,17 +980,19 @@ export const ArmadorRutas: React.FC = () => {
             </span>
           </div>
 
-          <div className="mt-6 flex flex-col md:flex-row justify-between items-center gap-4 border-t border-slate-200/50 pt-6">
+          <div className="mt-6 flex flex-col md:flex-row justify-between items-center gap-4 border-t border-slate-200/50 dark:border-white/10 pt-6">
             <div className="flex items-center space-x-3 w-full md:w-auto">
-              <Label variant="brand">Cliente Exclusivo:</Label>
+              <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+                Cliente Exclusivo:
+              </Label>
               <Select
                 value={selectedCliente}
                 onValueChange={(v) => setSelectedCliente(v === "none" ? "" : v)}
               >
-                <SelectTrigger className="h-10 w-full md:w-[280px] glass-card font-bold text-xs">
+                <SelectTrigger className="h-10 w-full md:w-[280px] font-bold text-xs">
                   <SelectValue placeholder="Ruta libre (Sin cliente)" />
                 </SelectTrigger>
-                <SelectContent className="glass-panel max-h-[40vh]">
+                <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-slate-200 dark:border-white/10 max-h-[40vh]">
                   <SelectItem
                     value="none"
                     className="font-bold italic text-slate-500"
@@ -1007,7 +1013,7 @@ export const ArmadorRutas: React.FC = () => {
             </div>
             <Button
               variant="outline"
-              className="h-10 glass-card text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-brand-navy"
+              className="h-10 text-[10px] w-full md:w-auto"
               onClick={handleReverseRoute}
             >
               <Repeat className="h-4 w-4 mr-2 text-brand-red" /> Invertir
@@ -1017,7 +1023,7 @@ export const ArmadorRutas: React.FC = () => {
         </CardHeader>
 
         {/* TOOLBAR SECUNDARIO */}
-        <div className="bg-slate-900/5 backdrop-blur-md border-b border-white/20 p-4 flex justify-between items-center">
+        <div className="bg-slate-100/50 dark:bg-slate-900/30 border-b border-slate-200 dark:border-white/10 p-4 flex justify-between items-center">
           <div className="flex items-center space-x-3">
             <Switch
               id="advanced-mode"
@@ -1027,7 +1033,7 @@ export const ArmadorRutas: React.FC = () => {
             />
             <Label
               htmlFor="advanced-mode"
-              className="text-[10px] font-black uppercase tracking-widest text-slate-600 cursor-pointer mt-0.5"
+              className="text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-400 cursor-pointer mt-0.5"
             >
               Mostrar Datos Completos (Carr / Edo)
             </Label>
@@ -1036,7 +1042,7 @@ export const ArmadorRutas: React.FC = () => {
             variant="outline"
             onClick={handleAutoCalculate}
             disabled={isCalculating || segments.length === 0}
-            className="h-9 glass-card text-[10px] font-black uppercase tracking-widest text-blue-700 bg-blue-50/50 hover:bg-blue-100 border-blue-200 shadow-sm"
+            className="h-9 text-[10px] text-blue-700 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 border-blue-200 dark:border-blue-800/50 shadow-sm"
           >
             {isCalculating ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -1047,49 +1053,49 @@ export const ArmadorRutas: React.FC = () => {
           </Button>
         </div>
 
-        {/* 🚀 TABLA DND (LIQUID GLASS) */}
+        {/* 🚀 TABLA DND */}
         <CardContent className="p-0">
-          <div className="relative w-full overflow-hidden bg-slate-50/50 liquid-glass-table">
+          <div className="relative w-full overflow-hidden bg-slate-50/50 dark:bg-transparent">
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
               onDragEnd={handleDragEnd}
             >
               <Table className="w-full caption-bottom text-sm">
-                <TableHeader className="bg-slate-200/50">
-                  <TableRow className="border-b border-slate-300">
+                <TableHeader className="bg-slate-200/50 dark:bg-slate-900/80">
+                  <TableRow className="border-b border-slate-300 dark:border-white/10">
                     <TableHead className="w-12 pl-4"></TableHead>
                     <TableHead
                       className={cn(
-                        "text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 h-12",
+                        "text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 h-12",
                         showAdvanced ? "w-[30%]" : "w-[40%]",
                       )}
                     >
                       Tramo / Plaza
                     </TableHead>
                     {showAdvanced && (
-                      <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 h-12 w-20">
+                      <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 h-12 w-20">
                         Edo.
                       </TableHead>
                     )}
                     {showAdvanced && (
-                      <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 h-12 w-28">
+                      <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 h-12 w-28">
                         Carr.
                       </TableHead>
                     )}
-                    <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 h-12 text-right w-24 pr-4">
+                    <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 h-12 text-right w-24 pr-4">
                       Distancia
                     </TableHead>
-                    <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 h-12 text-right w-24 pr-4">
+                    <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 h-12 text-right w-24 pr-4">
                       Tiempo
                     </TableHead>
                     {!isFullUnit && (
-                      <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-700 h-12 text-right pr-6">
+                      <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-700 dark:text-blue-400 h-12 text-right pr-6">
                         Costo Sencillo
                       </TableHead>
                     )}
                     {isFullUnit && (
-                      <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700 h-12 text-right pr-6">
+                      <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700 dark:text-emerald-400 h-12 text-right pr-6">
                         Costo Full
                       </TableHead>
                     )}
@@ -1126,7 +1132,7 @@ export const ArmadorRutas: React.FC = () => {
                         colSpan={showAdvanced ? 8 : 6}
                         className="h-32 text-center"
                       >
-                        <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
                           Utiliza los botones de abajo para agregar tramos a la
                           ruta.
                         </p>
@@ -1136,8 +1142,8 @@ export const ArmadorRutas: React.FC = () => {
                 </TableBody>
 
                 {/* FOOTER TOTALES */}
-                <tfoot className="bg-brand-navy text-white sticky bottom-0 z-10 border-t-2 border-brand-red">
-                  <TableRow className="hover:bg-brand-navy border-none">
+                <tfoot className="bg-brand-navy dark:bg-slate-950 text-white sticky bottom-0 z-10 border-t-2 border-brand-red">
+                  <TableRow className="hover:bg-brand-navy dark:hover:bg-slate-950 border-none">
                     <TableCell
                       colSpan={showAdvanced ? 4 : 2}
                       className="text-right text-[10px] font-black uppercase tracking-[0.3em] text-white/70 py-4"
@@ -1170,8 +1176,8 @@ export const ArmadorRutas: React.FC = () => {
       </Card>
 
       {/* BOTONERAS DE ACCIÓN */}
-      <div className="flex flex-col md:flex-row justify-between items-center bg-white/60 backdrop-blur-md p-5 rounded-2xl border border-white/40 shadow-xl gap-4">
-        <div className="flex gap-4 w-full md:w-auto">
+      <div className="flex flex-col md:flex-row justify-between items-center bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-white/10 shadow-xl gap-4">
+        <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
           <Button
             onClick={() =>
               setSegments([
@@ -1190,119 +1196,123 @@ export const ArmadorRutas: React.FC = () => {
               ])
             }
             variant="outline"
-            className="flex-1 md:flex-none h-11 glass-card border-dashed border-2 border-slate-300 text-[11px] font-black uppercase tracking-widest text-slate-500 hover:text-brand-navy hover:border-brand-navy/50"
+            className="w-full sm:w-auto border-dashed border-2 text-[10px]"
           >
             <Plus className="h-4 w-4 mr-2" /> Tramo Libre
           </Button>
 
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="flex-1 md:flex-none h-11 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 shadow-sm text-[11px] font-black uppercase tracking-widest">
+              <Button variant="info" className="w-full sm:w-auto text-[10px]">
                 <MapPin className="h-4 w-4 mr-2" /> Insertar Caseta
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>Catálogo de Peajes</DialogTitle>
+            <DialogContent className="w-[95vw] sm:max-w-md p-0 flex flex-col max-h-[90vh] bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 shadow-2xl rounded-2xl overflow-hidden">
+              <DialogHeader className="p-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0">
+                <DialogTitle className="text-xl font-black uppercase tracking-tighter text-brand-navy dark:text-white heading-crisp">
+                  Catálogo de Peajes
+                </DialogTitle>
               </DialogHeader>
-              <div className="relative my-2">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <Input
-                  placeholder="Filtrar por nombre o tramo..."
-                  className="pl-10 h-11 glass-card font-medium"
-                  value={tollSearch}
-                  onChange={(e) => setTollSearch(e.target.value)}
-                />
-              </div>
-              <ScrollArea className="h-80 pr-4 custom-scrollbar">
-                <div className="space-y-2">
-                  {allTolls
-                    .filter(
-                      (t) =>
-                        t.nombre
-                          .toLowerCase()
-                          .includes(tollSearch.toLowerCase()) ||
-                        t.tramo
-                          .toLowerCase()
-                          .includes(tollSearch.toLowerCase()),
-                    )
-                    .map((t) => (
-                      <div
-                        key={t.id}
-                        className="p-3 border border-slate-200 rounded-xl flex justify-between items-center hover:border-brand-navy hover:shadow-md cursor-pointer group transition-all bg-white"
-                        onClick={() => {
-                          setSegments([
-                            ...segments,
-                            {
-                              tempId: genTempId(),
-                              nombre_segmento: t.nombre,
-                              estado: (t as any).estado || "",
-                              carretera: (t as any).carretera || "",
-                              distancia_km: 0,
-                              tiempo_minutos: 0,
-                              toll_booth_id: t.id,
-                              toll_nombre: t.nombre,
-                              costo_s: (t as any).costo_5_ejes_sencillo ?? 0,
-                              costo_f: (t as any).costo_9_ejes_full ?? 0,
-                            },
-                          ]);
-                          setDialogOpen(false);
-                        }}
-                      >
-                        <div className="flex-1 pr-4">
-                          <p className="text-xs font-black uppercase tracking-tight text-slate-700 group-hover:text-brand-navy">
-                            {t.nombre}
-                          </p>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 leading-tight">
-                            {t.tramo}
-                            {((t as any).carretera || (t as any).estado) && (
-                              <span className="block mt-0.5 text-slate-500">
-                                {(t as any).carretera}{" "}
-                                {(t as any).carretera && (t as any).estado
-                                  ? "•"
-                                  : ""}{" "}
-                                {(t as any).estado}
-                              </span>
-                            )}
-                          </p>
-                        </div>
-                        <div className="flex flex-col items-end gap-1.5 shrink-0">
-                          {!isFullUnit && (
-                            <Badge
-                              variant="secondary"
-                              className="font-mono text-[10px] bg-blue-50 text-blue-700 border-blue-200 px-2 py-0.5"
-                            >
-                              $
-                              {Number(
-                                (t as any).costo_5_ejes_sencillo ?? 0,
-                              ).toFixed(2)}
-                            </Badge>
-                          )}
-                          {isFullUnit && (
-                            <Badge
-                              variant="secondary"
-                              className="font-mono text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200 px-2 py-0.5"
-                            >
-                              $
-                              {Number(
-                                (t as any).costo_9_ejes_full ?? 0,
-                              ).toFixed(2)}
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+              <div className="p-6 bg-slate-50/50 dark:bg-transparent flex-1 overflow-hidden flex flex-col">
+                <div className="relative mb-4">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <Input
+                    placeholder="Filtrar por nombre o tramo..."
+                    className="pl-10 h-11 font-medium bg-white dark:bg-slate-800 border-slate-200 dark:border-white/10"
+                    value={tollSearch}
+                    onChange={(e) => setTollSearch(e.target.value)}
+                  />
                 </div>
-              </ScrollArea>
+                <ScrollArea className="flex-1 custom-scrollbar pr-4">
+                  <div className="space-y-2">
+                    {allTolls
+                      .filter(
+                        (t) =>
+                          t.nombre
+                            .toLowerCase()
+                            .includes(tollSearch.toLowerCase()) ||
+                          t.tramo
+                            .toLowerCase()
+                            .includes(tollSearch.toLowerCase()),
+                      )
+                      .map((t) => (
+                        <div
+                          key={t.id}
+                          className="p-4 border border-slate-200 dark:border-white/10 rounded-xl flex justify-between items-center hover:border-brand-navy dark:hover:border-white/30 hover:shadow-md cursor-pointer group transition-all bg-white dark:bg-slate-800/50"
+                          onClick={() => {
+                            setSegments([
+                              ...segments,
+                              {
+                                tempId: genTempId(),
+                                nombre_segmento: t.nombre,
+                                estado: (t as any).estado || "",
+                                carretera: (t as any).carretera || "",
+                                distancia_km: 0,
+                                tiempo_minutos: 0,
+                                toll_booth_id: t.id,
+                                toll_nombre: t.nombre,
+                                costo_s: (t as any).costo_5_ejes_sencillo ?? 0,
+                                costo_f: (t as any).costo_9_ejes_full ?? 0,
+                              },
+                            ]);
+                            setDialogOpen(false);
+                          }}
+                        >
+                          <div className="flex-1 pr-4">
+                            <p className="text-xs font-black uppercase tracking-tight text-slate-700 dark:text-slate-200 group-hover:text-brand-navy dark:group-hover:text-white">
+                              {t.nombre}
+                            </p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 leading-tight">
+                              {t.tramo}
+                              {((t as any).carretera || (t as any).estado) && (
+                                <span className="block mt-0.5 text-slate-500">
+                                  {(t as any).carretera}{" "}
+                                  {(t as any).carretera && (t as any).estado
+                                    ? "•"
+                                    : ""}{" "}
+                                  {(t as any).estado}
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                          <div className="flex flex-col items-end gap-1.5 shrink-0">
+                            {!isFullUnit && (
+                              <Badge
+                                variant="secondary"
+                                className="font-mono text-[10px] bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-500/30 px-2 py-0.5"
+                              >
+                                $
+                                {Number(
+                                  (t as any).costo_5_ejes_sencillo ?? 0,
+                                ).toFixed(2)}
+                              </Badge>
+                            )}
+                            {isFullUnit && (
+                              <Badge
+                                variant="secondary"
+                                className="font-mono text-[10px] bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/30 px-2 py-0.5"
+                              >
+                                $
+                                {Number(
+                                  (t as any).costo_9_ejes_full ?? 0,
+                                ).toFixed(2)}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </ScrollArea>
+              </div>
             </DialogContent>
           </Dialog>
         </div>
 
-        <div className="flex items-center gap-4 w-full md:w-auto mt-4 md:mt-0">
+        <div className="flex flex-col-reverse sm:flex-row items-center gap-4 w-full md:w-auto mt-4 md:mt-0">
           {editingRouteId && (
             <Button
               variant="ghost"
-              className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-destructive h-11"
+              className="w-full sm:w-auto h-12"
               onClick={() => {
                 setEditingRouteId(null);
                 setSegments([]);
@@ -1319,7 +1329,9 @@ export const ArmadorRutas: React.FC = () => {
           )}
           <Button
             onClick={handleSave}
-            className="btn-primary-gradient px-12 h-11 text-[11px] font-black uppercase tracking-[0.2em] shadow-xl shadow-brand-red/20 active:scale-95 transition-all w-full md:w-auto"
+            size="lg"
+            variant="default"
+            className="w-full sm:w-auto"
           >
             <Check className="h-4 w-4 mr-2" />
             {editingRouteId ? "Actualizar Ruta" : "Guardar Ruta"}
@@ -1327,14 +1339,14 @@ export const ArmadorRutas: React.FC = () => {
         </div>
       </div>
 
-      {/* 🚀 TABLA DE HISTORIAL (ENHANCED DATA TABLE) */}
-      <Card variant="glass" className="shadow-2xl border-none">
-        <CardHeader className="flex flex-row items-center justify-between border-b border-white/20 bg-brand-navy/95 backdrop-blur-md py-6 rounded-t-2xl">
-          <CardTitle className="text-xl font-black uppercase tracking-tighter text-white heading-crisp flex items-center gap-3">
+      {/* 🚀 TABLA DE HISTORIAL */}
+      <Card variant="default" className="shadow-2xl border-none">
+        <CardHeader className="flex flex-row items-center justify-between border-b border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-900/50 py-6 rounded-t-2xl">
+          <CardTitle className="text-xl font-black uppercase tracking-tighter text-brand-navy dark:text-white heading-crisp flex items-center gap-3">
             <RouteIcon className="h-6 w-6 text-brand-red" /> Directorio de Rutas
           </CardTitle>
         </CardHeader>
-        <CardContent className="pt-6 p-0 bg-white/40">
+        <CardContent className="pt-6 p-0 bg-white dark:bg-slate-950">
           <EnhancedDataTable
             data={rutasFiltradas}
             columns={historyColumns}
@@ -1346,60 +1358,103 @@ export const ArmadorRutas: React.FC = () => {
 
       {/* 🚀 MODAL ELIMINAR RUTA */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-rose-600 flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5" /> ¿Eliminar Plantilla de Ruta?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              <p className="mb-4">
-                Estás a punto de eliminar la ruta <b>{routeToDelete?.origen}</b>
-                .
-              </p>
-              <div className="text-emerald-700 bg-emerald-50 p-4 rounded-xl border border-emerald-200 font-medium text-xs leading-relaxed shadow-sm">
-                <b>Tranquilo:</b> Los viajes históricos despachados o liquidados
-                con esta ruta <b>NO se verán afectados</b>.
+        <AlertDialogContent className="w-[95vw] sm:max-w-2xl p-0 flex flex-col max-h-[90vh] bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 shadow-2xl rounded-2xl transition-all duration-300 overflow-hidden">
+          <AlertDialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0">
+            <div className="flex items-center gap-4 sm:gap-5">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center shadow-inner shrink-0">
+                <AlertTriangle className="h-7 w-7 sm:h-8 sm:w-8 text-rose-600 dark:text-rose-400" />
               </div>
-              <p className="mt-4">
-                Sin embargo, esta plantilla se desactivará y{" "}
-                <b>ya no podrá ser seleccionada</b> en despachos futuros.
-              </p>
-            </AlertDialogDescription>
+              <div className="flex flex-col gap-1">
+                <AlertDialogTitle className="text-rose-600 dark:text-rose-500 text-lg sm:text-2xl font-black uppercase tracking-tighter heading-crisp leading-none">
+                  Eliminar Plantilla de Ruta
+                </AlertDialogTitle>
+                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mt-1">
+                  Confirmación de Borrado • Catálogo 3T
+                </p>
+              </div>
+            </div>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleConfirmDelete}
-              className="bg-destructive text-white hover:bg-destructive/90 font-bold border-none shadow-md"
-            >
-              Sí, Eliminar Ruta
-            </AlertDialogAction>
+
+          <div className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-6 custom-scrollbar bg-transparent">
+            <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block">
+              <div className="space-y-6">
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Estás a punto de eliminar la ruta{" "}
+                  <b className="text-slate-900 dark:text-white uppercase">
+                    {routeToDelete?.origen}
+                  </b>
+                  .
+                </p>
+
+                <div className="p-5 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/50 rounded-2xl">
+                  <div className="flex items-start gap-4">
+                    <div className="bg-emerald-500 rounded-full p-1.5 mt-0.5 shadow-lg shadow-emerald-500/20">
+                      <Check className="h-3 w-3 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] sm:text-[11px] font-black text-emerald-800 dark:text-emerald-300 uppercase tracking-widest mb-1">
+                        Seguridad de Históricos
+                      </p>
+                      <p className="text-[11px] sm:text-[12px] font-medium text-emerald-700/80 dark:text-emerald-400/80 leading-snug">
+                        Los viajes históricos despachados o liquidados con esta
+                        ruta <b>NO se verán afectados</b>.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-sm text-slate-600 dark:text-slate-400 mt-4 border-l-4 border-amber-500 pl-4 py-1">
+                  Sin embargo, esta plantilla se desactivará y{" "}
+                  <b>ya no podrá ser seleccionada</b> en despachos futuros.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </div>
+
+          <AlertDialogFooter className="p-6 sm:p-8 bg-slate-50/50 dark:bg-black/20 border-t border-slate-200 dark:border-white/10 shrink-0">
+            <div className="flex flex-col-reverse sm:flex-row sm:flex-wrap justify-end items-stretch sm:items-center gap-3 w-full">
+              <AlertDialogCancel
+                variant="outline"
+                size="lg"
+                className="w-full sm:w-auto haptic-press"
+              >
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                variant="destructive"
+                size="lg"
+                onClick={handleConfirmDelete}
+                className="w-full sm:w-auto haptic-press shadow-rose-600/10"
+              >
+                <Trash2 className="h-4 w-4 mr-2" /> Sí, Eliminar Ruta
+              </AlertDialogAction>
+            </div>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       {/* 🚀 MODAL DETALLE DE RUTA */}
       <Dialog open={detailModalOpen} onOpenChange={setDetailModalOpen}>
-        <DialogContent className="sm:max-w-2xl p-0 overflow-hidden bg-slate-50 flex flex-col max-h-[85vh]">
-          <DialogHeader className="px-8 py-6 bg-white border-b border-slate-200 shrink-0">
+        <DialogContent className="w-[95vw] sm:max-w-3xl p-0 overflow-hidden bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 shadow-2xl rounded-2xl flex flex-col max-h-[90vh]">
+          <DialogHeader className="px-6 sm:px-8 py-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0">
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
               <DialogTitle className="flex flex-col gap-2">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
                   Bitácora de Control Operativo
                 </span>
-                <span className="text-2xl font-black text-brand-navy flex items-center gap-3 uppercase tracking-tighter">
+                <span className="text-xl sm:text-2xl font-black text-brand-navy dark:text-white flex items-center gap-3 uppercase tracking-tighter heading-crisp">
                   <RouteIcon className="h-6 w-6 text-brand-red" />
                   {selectedRouteDetail?.origen}
                 </span>
-                <div className="flex items-center gap-3 mt-1">
+                <div className="flex flex-wrap items-center gap-3 mt-1">
                   <Badge
                     variant="outline"
                     className={cn(
                       "text-[9px] font-black uppercase tracking-widest shadow-sm",
                       selectedRouteDetail?.tipo_unidad === "9ejes" ||
                         selectedRouteDetail?.tipo_unidad === "full"
-                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                        : "bg-blue-50 text-blue-700 border-blue-200",
+                        ? "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/30"
+                        : "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-500/30",
                     )}
                   >
                     {selectedRouteDetail?.tipo_unidad === "9ejes" ||
@@ -1407,14 +1462,15 @@ export const ArmadorRutas: React.FC = () => {
                       ? "FULL (9 Ejes)"
                       : "SENCILLO (5 Ejes)"}
                   </Badge>
-                  <span className="text-[11px] text-slate-500 font-bold font-mono tracking-widest">
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 font-bold font-mono tracking-widest bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md border border-slate-200 dark:border-white/10">
                     {selectedRouteDetail?.distancia_total_km || 0} KM TOTALES
                   </span>
                 </div>
               </DialogTitle>
               {selectedRouteDetail && (
                 <Button
-                  className="glass-card text-[10px] font-black uppercase tracking-widest text-slate-600 border-slate-200 shadow-sm hover:text-brand-navy h-10 px-6"
+                  variant="outline"
+                  className="w-full sm:w-auto text-[10px] uppercase tracking-widest"
                   onClick={() => handlePrintRoute(selectedRouteDetail)}
                 >
                   <Printer className="h-4 w-4 mr-2 text-brand-red" /> Imprimir
@@ -1424,11 +1480,11 @@ export const ArmadorRutas: React.FC = () => {
             </div>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 px-8 py-8 custom-scrollbar">
+          <ScrollArea className="flex-1 px-6 sm:px-8 py-8 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
             {selectedRouteDetail && (
               <div className="relative">
                 {/* Timeline Line */}
-                <div className="absolute left-[15px] top-4 bottom-8 w-1 bg-slate-200 rounded-full" />
+                <div className="absolute left-[15px] top-4 bottom-8 w-1 bg-slate-200 dark:bg-slate-800 rounded-full" />
 
                 <div className="space-y-8">
                   {selectedRouteDetail.segments.map((seg: any, idx: number) => {
@@ -1446,18 +1502,18 @@ export const ArmadorRutas: React.FC = () => {
                       >
                         <div
                           className={cn(
-                            "absolute left-0 top-2 h-8 w-8 rounded-full border-4 border-slate-50 flex items-center justify-center shadow-md z-10 transition-colors",
+                            "absolute left-0 top-2 h-8 w-8 rounded-full border-4 border-slate-50 dark:border-brand-navy flex items-center justify-center shadow-md z-10 transition-colors",
                             seg.toll_booth_id ? "bg-amber-500" : "bg-blue-500",
                           )}
                         >
-                          <div className="h-2 w-2 rounded-full bg-white" />
+                          <div className="h-2 w-2 rounded-full bg-white dark:bg-slate-900" />
                         </div>
 
-                        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all">
+                        <div className="bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-white/10 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all">
                           <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-4">
                             <div className="space-y-1.5">
-                              <div className="flex items-center gap-3">
-                                <span className="text-base font-black text-brand-navy uppercase tracking-tight">
+                              <div className="flex flex-wrap items-center gap-3">
+                                <span className="text-base font-black text-brand-navy dark:text-white uppercase tracking-tight">
                                   {seg.nombre_segmento}
                                 </span>
                                 <Badge
@@ -1465,8 +1521,8 @@ export const ArmadorRutas: React.FC = () => {
                                   className={cn(
                                     "uppercase text-[9px] font-black tracking-widest px-2 py-0.5",
                                     seg.toll_booth_id
-                                      ? "bg-amber-50 text-amber-700 border border-amber-200"
-                                      : "bg-blue-50 text-blue-700 border border-blue-200",
+                                      ? "bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-500/30"
+                                      : "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-500/30",
                                   )}
                                 >
                                   {seg.toll_booth_id
@@ -1476,7 +1532,7 @@ export const ArmadorRutas: React.FC = () => {
                               </div>
                               {(seg.carretera || seg.estado) && (
                                 <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                                  <MapPin className="h-3 w-3 text-slate-300" />
+                                  <MapPin className="h-3 w-3 text-slate-300 dark:text-slate-500" />
                                   {seg.carretera}{" "}
                                   {seg.carretera && seg.estado ? "•" : ""}{" "}
                                   {seg.estado}
@@ -1486,21 +1542,21 @@ export const ArmadorRutas: React.FC = () => {
 
                             <div
                               className={cn(
-                                "flex flex-col items-end p-3 rounded-xl border min-w-[140px] shrink-0 shadow-sm",
+                                "flex flex-col items-start md:items-end p-3 rounded-xl border min-w-[140px] shrink-0 shadow-sm",
                                 isFullRoute
-                                  ? "bg-emerald-50/50 border-emerald-100"
-                                  : "bg-blue-50/50 border-blue-100",
+                                  ? "bg-emerald-50/50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-500/20"
+                                  : "bg-blue-50/50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-500/20",
                               )}
                             >
-                              <span className="text-[9px] uppercase font-black tracking-widest text-slate-500 mb-1">
+                              <span className="text-[9px] uppercase font-black tracking-widest text-slate-500 dark:text-slate-400 mb-1">
                                 Costo Autorizado
                               </span>
                               <span
                                 className={cn(
                                   "font-mono font-black text-xl leading-none",
                                   isFullRoute
-                                    ? "text-emerald-700"
-                                    : "text-blue-700",
+                                    ? "text-emerald-700 dark:text-emerald-400"
+                                    : "text-blue-700 dark:text-blue-400",
                                 )}
                               >
                                 {formatCurrency(Number(cost || 0))}
@@ -1508,29 +1564,29 @@ export const ArmadorRutas: React.FC = () => {
                             </div>
                           </div>
 
-                          <div className="flex gap-6 pt-4 border-t border-slate-100">
+                          <div className="flex flex-wrap gap-6 pt-4 border-t border-slate-100 dark:border-white/5">
                             <div className="flex items-center gap-2">
-                              <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center">
-                                <RouteIcon className="h-4 w-4 text-slate-500" />
+                              <div className="h-8 w-8 rounded-lg bg-slate-100 dark:bg-slate-900 flex items-center justify-center border border-slate-200 dark:border-white/5">
+                                <RouteIcon className="h-4 w-4 text-slate-500 dark:text-slate-400" />
                               </div>
                               <div className="flex flex-col">
                                 <span className="text-[9px] uppercase font-black tracking-widest text-slate-400">
                                   Distancia
                                 </span>
-                                <span className="text-sm font-mono font-bold text-slate-700">
+                                <span className="text-sm font-mono font-bold text-slate-700 dark:text-slate-300">
                                   {Number(seg.distancia_km || 0)} KM
                                 </span>
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
-                              <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center">
-                                <Clock className="h-4 w-4 text-slate-500" />
+                              <div className="h-8 w-8 rounded-lg bg-slate-100 dark:bg-slate-900 flex items-center justify-center border border-slate-200 dark:border-white/5">
+                                <Clock className="h-4 w-4 text-slate-500 dark:text-slate-400" />
                               </div>
                               <div className="flex flex-col">
                                 <span className="text-[9px] uppercase font-black tracking-widest text-slate-400">
                                   Tiempo Estimado
                                 </span>
-                                <span className="text-sm font-mono font-bold text-slate-700">
+                                <span className="text-sm font-mono font-bold text-slate-700 dark:text-slate-300">
                                   {Math.floor(
                                     Number(seg.tiempo_minutos || 0) / 60,
                                   )}
