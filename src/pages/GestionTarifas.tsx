@@ -12,7 +12,7 @@ const GestionTarifas = () => {
       <PageHeader
         title="Gestión de Tarifas"
         description="Catálogo maestro de peajes y armador logístico de rutas operativas."
-        icon={<Calculator className="h-8 w-8 text-brand-navy" />}
+        icon={<Calculator className="h-8 w-8" />}
       />
 
       <Tabs defaultValue="catalogo" className="w-full">
