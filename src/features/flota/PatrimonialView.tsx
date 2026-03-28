@@ -1,4 +1,8 @@
-import { useState, useMemo } from "react";
+// src/features/flota/PatrimonialView.tsx
+import { useState, useMemo, useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import {
   Card,
   CardContent,
@@ -21,10 +25,9 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   EnhancedDataTable,
@@ -50,12 +53,37 @@ import {
   Car,
   Warehouse,
   Loader2,
+  Check,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useUnits } from "@/hooks/useUnits"; // <--- Hook real
-import { Unit } from "@/types/api.types"; // <--- Tipo real del backend
+import { useUnits } from "@/hooks/useUnits";
+import { Unit } from "@/types/api.types";
+import { cn } from "@/lib/utils";
 
-// Definimos la interfaz local que usa tu vista (ligeramente diferente a Unidad del backend)
+// Form Components
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+
+// =====================
+// ESQUEMA ZOD (VALIDACIÓN)
+// =====================
+const bajaSchema = z.object({
+  motivoBaja: z.enum(["venta", "siniestro", "chatarra"], {
+    required_error: "Debe seleccionar un motivo de baja",
+  }),
+  fechaBaja: z.string().min(1, "La fecha de baja es obligatoria"),
+  observaciones: z.string().optional(),
+});
+
+type BajaFormData = z.infer<typeof bajaSchema>;
+
+// Definimos la interfaz local que usa tu vista
 export interface ActivoPatrimonial {
   id: string;
   numero_economico: string;
@@ -81,23 +109,19 @@ export function PatrimonialView() {
   // 1. Conectar al Hook Real
   const { unidades, isLoading, updateUnit } = useUnits();
 
-  // 2. Adaptar datos del backend al formato que espera esta vista
-  // Nota: Como el backend básico aun no tiene 'valorAdquisicion' ni 'fechaAdquisicion',
-  // los simulamos para mantener la UI funcional sin romper nada.
+  // 2. Adaptar datos del backend al formato patrimonial
   const activos: ActivoPatrimonial[] = useMemo(() => {
     return unidades.map((u) => ({
       id: String(u.id),
-      numero_economico: u.numero_economico, // snake_case del backend
+      numero_economico: u.numero_economico,
       tipoUnidad: u.tipo,
       marca: u.marca,
       modelo: u.modelo,
       year: u.year || new Date().getFullYear(),
       vin: u.vin || "SIN-VIN",
-      // Simulamos datos financieros si no vienen del backend
       valorAdquisicion:
         u.tipo === "full" ? 3500000 : u.tipo === "sencillo" ? 2800000 : 1500000,
       fechaAdquisicion: "2022-01-15",
-      // Mapeamos estatus operativo a 'operativo' patrimonial, o mantenemos si ya es baja
       estatus: ([
         "disponible",
         "en_ruta",
@@ -113,12 +137,16 @@ export function PatrimonialView() {
   const [activoToBaja, setActivoToBaja] = useState<ActivoPatrimonial | null>(
     null,
   );
-  const [bajaData, setBajaData] = useState({
-    motivoBaja: "" as "venta" | "siniestro" | "chatarra" | "",
-    observaciones: "",
-    fechaBaja: new Date().toISOString().split("T")[0],
-  });
   const [isSaving, setIsSaving] = useState(false);
+
+  // 3. Inicializar React Hook Form
+  const form = useForm<BajaFormData>({
+    resolver: zodResolver(bajaSchema),
+    defaultValues: {
+      fechaBaja: new Date().toISOString().split("T")[0],
+      observaciones: "",
+    },
+  });
 
   // Calcular resumen agrupado
   const resumenAgrupado = useMemo(() => {
@@ -160,23 +188,81 @@ export function PatrimonialView() {
   };
 
   const getEstatusBadge = (estatus: ActivoPatrimonial["estatus"]) => {
+    const baseClass =
+      "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 shadow-sm";
     switch (estatus) {
       case "operativo":
-        return <Badge className="bg-green-600 text-white">Operativo</Badge>;
+        return (
+          <Badge
+            variant="outline"
+            className={cn(
+              baseClass,
+              "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-500/30",
+            )}
+          >
+            Operativo
+          </Badge>
+        );
       case "baja_venta":
-        return <Badge className="bg-blue-600 text-white">Baja - Venta</Badge>;
+        return (
+          <Badge
+            variant="outline"
+            className={cn(
+              baseClass,
+              "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-500/30",
+            )}
+          >
+            Baja - Venta
+          </Badge>
+        );
       case "baja_siniestro":
         return (
-          <Badge className="bg-red-600 text-white">Baja - Siniestro</Badge>
+          <Badge
+            variant="outline"
+            className={cn(
+              baseClass,
+              "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-500/30",
+            )}
+          >
+            Baja - Siniestro
+          </Badge>
         );
       case "baja_chatarra":
         return (
-          <Badge className="bg-gray-600 text-white">Baja - Chatarra</Badge>
+          <Badge
+            variant="outline"
+            className={cn(
+              baseClass,
+              "bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-600",
+            )}
+          >
+            Baja - Chatarra
+          </Badge>
         );
       case "en_tramite":
-        return <Badge className="bg-yellow-500 text-black">En Trámite</Badge>;
+        return (
+          <Badge
+            variant="outline"
+            className={cn(
+              baseClass,
+              "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-500/30",
+            )}
+          >
+            En Trámite
+          </Badge>
+        );
       default:
-        return <Badge variant="secondary">{estatus}</Badge>;
+        return (
+          <Badge
+            variant="outline"
+            className={cn(
+              baseClass,
+              "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-white/10",
+            )}
+          >
+            {estatus}
+          </Badge>
+        );
     }
   };
 
@@ -189,48 +275,32 @@ export function PatrimonialView() {
     if (tipoLower.includes("montacargas"))
       return <Warehouse className="h-5 w-5" />;
     if (tipoLower.includes("utilitario")) return <Car className="h-5 w-5" />;
-    return <Truck className="h-5 w-5" />;
     if (tipoLower.includes("tractocamion")) return <Car className="h-5 w-5" />;
     return <Truck className="h-5 w-5" />;
   };
 
   const handleOpenBaja = (activo: ActivoPatrimonial) => {
     setActivoToBaja(activo);
-    setBajaData({
-      motivoBaja: "",
+    form.reset({
+      motivoBaja: undefined,
       observaciones: "",
       fechaBaja: new Date().toISOString().split("T")[0],
     });
     setIsBajaModalOpen(true);
   };
 
-  const handleConfirmBaja = async () => {
-    if (!activoToBaja || !bajaData.motivoBaja) {
-      toast.error("Seleccione el motivo de baja");
-      return;
-    }
-
+  const onSubmitBaja = async (data: BajaFormData) => {
+    if (!activoToBaja) return;
     setIsSaving(true);
 
-    const estatusMap: Record<string, string> = {
-      venta: "baja_venta",
-      siniestro: "baja_siniestro",
-      chatarra: "baja_chatarra",
-    };
-
     try {
-      // Actualizamos el status en el backend real
-      // Nota: Como 'baja_venta' no es un status valido en UnitStatusEnum del backend,
-      // podrías necesitar actualizar el Enum en el backend o usar un campo 'situacion_patrimonial'.
-      // Por ahora, lo marcamos como 'bloqueado' en la operativa y guardamos la nota.
-
+      // En un sistema real enviarías { estatus_patrimonial: data.motivoBaja, fecha_baja: data.fechaBaja, observaciones: data.observaciones }
       await updateUnit(Number(activoToBaja.id), {
-        status: "bloqueado", // O el estado que corresponda en tu lógica de negocio
-        // En un sistema real enviarías { estatus_patrimonial: 'baja_venta', ... }
+        status: "bloqueado",
       });
 
       toast.success("Activo dado de baja", {
-        description: `${activoToBaja.numero_economico} ha sido removido de la disponibilidad operativa.`,
+        description: `ECO-${activoToBaja.numero_economico} ha sido removido de la disponibilidad operativa.`,
       });
 
       setIsBajaModalOpen(false);
@@ -249,14 +319,21 @@ export function PatrimonialView() {
         key: "numero_economico",
         header: "No. Económico",
         sortable: true,
-        render: (value) => <span className="font-bold font-mono">{value}</span>,
+        render: (value) => (
+          <span className="font-black text-brand-navy dark:text-white uppercase tracking-tight">
+            ECO-{value}
+          </span>
+        ),
       },
       {
         key: "tipoUnidad",
         header: "Tipo",
         sortable: true,
         render: (value) => (
-          <Badge variant="outline" className="capitalize">
+          <Badge
+            variant="outline"
+            className="text-[9px] font-black uppercase tracking-widest bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10 shadow-sm"
+          >
             {value}
           </Badge>
         ),
@@ -267,8 +344,12 @@ export function PatrimonialView() {
         sortable: true,
         render: (_, row) => (
           <div className="flex flex-col">
-            <span className="font-medium">{row.marca}</span>
-            <span className="text-xs text-muted-foreground">{row.modelo}</span>
+            <span className="font-bold text-slate-800 dark:text-slate-200">
+              {row.marca}
+            </span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+              {row.modelo}
+            </span>
           </div>
         ),
       },
@@ -277,6 +358,11 @@ export function PatrimonialView() {
         header: "Año",
         type: "number",
         sortable: true,
+        render: (value) => (
+          <span className="font-mono font-bold text-slate-600 dark:text-slate-400">
+            {value}
+          </span>
+        ),
       },
       {
         key: "valorAdquisicion",
@@ -284,7 +370,9 @@ export function PatrimonialView() {
         type: "number",
         sortable: true,
         render: (value) => (
-          <span className="font-mono text-sm">{formatCurrency(value)}</span>
+          <span className="font-mono font-black text-sm text-brand-navy dark:text-slate-200">
+            {formatCurrency(value as number)}
+          </span>
         ),
       },
       {
@@ -292,6 +380,11 @@ export function PatrimonialView() {
         header: "Fecha Adquisición",
         type: "date",
         sortable: true,
+        render: (value) => (
+          <span className="font-mono text-xs font-medium text-slate-500 dark:text-slate-400">
+            {value}
+          </span>
+        ),
       },
       {
         key: "estatus",
@@ -305,10 +398,11 @@ export function PatrimonialView() {
           "en_tramite",
         ],
         sortable: true,
-        render: (value) => getEstatusBadge(value),
+        render: (value) =>
+          getEstatusBadge(value as ActivoPatrimonial["estatus"]),
       },
       {
-        key: "id", // key id para acciones
+        key: "id",
         header: "Acciones",
         sortable: false,
         width: "w-[80px]",
@@ -319,24 +413,31 @@ export function PatrimonialView() {
           >
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                  <MoreHorizontal className="h-4 w-4" />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl shadow-sm border border-slate-200/50 dark:border-white/10 bg-white dark:bg-slate-900/50"
+                >
+                  <MoreHorizontal className="h-4 w-4 text-slate-500 dark:text-slate-400" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="bg-popover">
-                <DropdownMenuItem className="gap-2">
-                  <Eye className="h-4 w-4" />
+              <DropdownMenuContent
+                align="end"
+                className="glass-panel border-white/20 min-w-[180px] z-50 dark:bg-slate-900/90"
+              >
+                <DropdownMenuItem className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800">
+                  <Eye className="h-4 w-4 text-brand-navy dark:text-slate-400" />
                   Ver expediente
                 </DropdownMenuItem>
-                <DropdownMenuItem className="gap-2">
-                  <FileText className="h-4 w-4" />
+                <DropdownMenuItem className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800">
+                  <FileText className="h-4 w-4 text-blue-500 dark:text-blue-400" />
                   Documentos
                 </DropdownMenuItem>
                 {activo.estatus === "operativo" && (
                   <>
-                    <DropdownMenuSeparator />
+                    <DropdownMenuSeparator className="dark:bg-white/10" />
                     <DropdownMenuItem
-                      className="gap-2 text-destructive focus:text-destructive focus:bg-destructive/10"
+                      className="gap-2 font-bold text-xs uppercase tracking-tight text-rose-600 dark:text-rose-500 cursor-pointer dark:focus:bg-rose-950/30"
                       onClick={() => handleOpenBaja(activo)}
                     >
                       <Ban className="h-4 w-4" />
@@ -355,93 +456,129 @@ export function PatrimonialView() {
 
   if (isLoading)
     return (
-      <div className="flex justify-center p-10">
-        <Loader2 className="animate-spin h-8 w-8" />
+      <div className="flex justify-center items-center p-20">
+        <Loader2 className="animate-spin h-10 w-10 text-brand-red" />
       </div>
     );
 
   return (
     <div className="space-y-6">
-      {/* KPI Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card className="border-l-4 border-l-primary">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Total Activos</p>
-                <p className="text-3xl font-bold">{totalActivos}</p>
-              </div>
-              <Truck className="h-8 w-8 text-primary" />
-            </div>
-          </CardContent>
+      {/* 🚀 KPI Cards (Industrial Premium) */}
+      <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+        <Card
+          variant="default"
+          className="p-6 flex items-center gap-5 group hover:border-brand-navy/30 dark:hover:border-white/20 transition-all cursor-default"
+        >
+          <div className="p-3.5 bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-white/10 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
+            <Truck className="h-6 w-6 text-brand-navy dark:text-slate-300" />
+          </div>
+          <div className="flex flex-col justify-center">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
+              Total Activos
+            </p>
+            <p className="text-3xl font-black text-brand-navy dark:text-white leading-none tracking-tighter">
+              {totalActivos}
+            </p>
+          </div>
         </Card>
-        <Card className="border-l-4 border-l-green-500">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Operativos</p>
-                <p className="text-3xl font-bold text-green-600">
-                  {operativos}
-                </p>
-              </div>
-              <Package className="h-8 w-8 text-green-600" />
-            </div>
-          </CardContent>
+
+        <Card
+          variant="default"
+          className="p-6 flex items-center gap-5 group hover:border-emerald-300 dark:hover:border-emerald-500/50 transition-all cursor-default"
+        >
+          <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl border border-emerald-100 dark:border-emerald-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
+            <Package className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+          </div>
+          <div className="flex flex-col justify-center">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
+              Operativos
+            </p>
+            <p className="text-3xl font-black text-emerald-600 dark:text-emerald-400 leading-none tracking-tighter">
+              {operativos}
+            </p>
+          </div>
         </Card>
-        <Card className="border-l-4 border-l-red-500">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Bajas</p>
-                <p className="text-3xl font-bold text-red-600">{bajas}</p>
-              </div>
-              <TrendingDown className="h-8 w-8 text-red-600" />
-            </div>
-          </CardContent>
+
+        <Card
+          variant="default"
+          className="p-6 flex items-center gap-5 group hover:border-rose-300 dark:hover:border-rose-500/50 transition-all cursor-default"
+        >
+          <div className="p-3.5 bg-rose-50 dark:bg-rose-950/30 rounded-2xl border border-rose-100 dark:border-rose-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
+            <TrendingDown className="h-6 w-6 text-rose-600 dark:text-rose-400" />
+          </div>
+          <div className="flex flex-col justify-center">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
+              Bajas Históricas
+            </p>
+            <p className="text-3xl font-black text-rose-600 dark:text-rose-400 leading-none tracking-tighter">
+              {bajas}
+            </p>
+          </div>
         </Card>
-        <Card className="border-l-4 border-l-blue-600">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Valor Patrimonial
-                </p>
-                <p className="text-2xl font-bold text-blue-600">
-                  {formatCurrency(valorTotal)}
-                </p>
-              </div>
-              <DollarSign className="h-8 w-8 text-blue-600" />
-            </div>
-          </CardContent>
+
+        <Card
+          variant="default"
+          className="p-6 flex items-center gap-5 group hover:border-blue-300 dark:hover:border-blue-500/50 transition-all cursor-default"
+        >
+          <div className="p-3.5 bg-blue-50 dark:bg-blue-950/30 rounded-2xl border border-blue-100 dark:border-blue-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
+            <DollarSign className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+          </div>
+          <div className="flex flex-col justify-center">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
+              Valor Patrimonial
+            </p>
+            <p className="text-xl font-black font-mono text-blue-600 dark:text-blue-400 leading-none tracking-tighter mt-1">
+              {formatCurrency(valorTotal)}
+            </p>
+          </div>
         </Card>
       </div>
 
-      {/* Resumen Agrupado */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Inventario Total por Tipo</CardTitle>
-          <CardDescription>
+      {/* 🚀 Resumen Agrupado */}
+      <Card variant="default" className="border-none shadow-xl overflow-hidden">
+        <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-white/10 p-6">
+          <CardTitle className="text-xl font-black uppercase tracking-tighter text-brand-navy dark:text-white heading-crisp">
+            Inventario Total por Tipo
+          </CardTitle>
+          <CardDescription className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-1">
             Resumen de activos operativos agrupados por categoría
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <CardContent className="p-6 bg-slate-50/30 dark:bg-transparent">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {Object.entries(resumenAgrupado).map(([tipo, data]) => (
-              <div key={tipo} className="p-4 border rounded-lg bg-muted/30">
-                <div className="flex items-center gap-3 mb-3">
-                  {getTipoIcon(tipo)}
+              <div
+                key={tipo}
+                className="p-5 border border-slate-200 dark:border-white/10 rounded-2xl bg-white dark:bg-slate-900 shadow-sm hover:shadow-md transition-shadow"
+              >
+                <div className="flex items-center gap-4 mb-4 pb-4 border-b border-slate-100 dark:border-white/5">
+                  <div className="p-3 bg-brand-navy/5 dark:bg-slate-800 rounded-xl text-brand-navy dark:text-slate-300">
+                    {getTipoIcon(tipo)}
+                  </div>
                   <div>
-                    <h4 className="font-semibold capitalize">{tipo}</h4>
-                    <p className="text-2xl font-bold text-primary">
+                    <h4 className="font-black text-sm uppercase tracking-tight text-slate-800 dark:text-slate-200">
+                      {tipo}
+                    </h4>
+                    <p className="text-3xl font-black text-brand-navy dark:text-white leading-none mt-1">
                       {data.total}
                     </p>
                   </div>
                 </div>
-                <div className="space-y-1 text-xs text-muted-foreground">
+                <div className="space-y-2">
                   {Object.entries(data.detalle).map(([modelo, cantidad]) => (
-                    <div key={modelo} className="flex justify-between">
-                      <span>{modelo}</span>
-                      <span className="font-medium">{cantidad}</span>
+                    <div
+                      key={modelo}
+                      className="flex items-center justify-between"
+                    >
+                      <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-tight">
+                        {modelo}
+                      </span>
+                      <Badge
+                        variant="secondary"
+                        className="font-mono bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                      >
+                        {cantidad} ud
+                      </Badge>
                     </div>
                   ))}
                 </div>
@@ -451,116 +588,198 @@ export function PatrimonialView() {
         </CardContent>
       </Card>
 
-      {/* Tabla de Activos */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Detalle de Activos Patrimoniales</CardTitle>
-          <CardDescription>
-            Listado completo de vehículos, remolques y equipos del patrimonio
-          </CardDescription>
+      {/* 🚀 Tabla de Activos */}
+      <Card
+        variant="default"
+        className="border-none shadow-2xl overflow-hidden"
+      >
+        <CardHeader className="flex flex-row items-center justify-between border-b border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-900/50 py-6 px-6">
+          <div>
+            <CardTitle className="text-xl font-black uppercase tracking-tighter text-brand-navy dark:text-white heading-crisp">
+              Detalle de Activos Patrimoniales
+            </CardTitle>
+            <CardDescription className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-1">
+              Listado completo de vehículos, remolques y equipos del patrimonio
+            </CardDescription>
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0 bg-white dark:bg-slate-950">
           <EnhancedDataTable
             data={activos}
             columns={columns}
             exportFileName="activos_patrimoniales"
+            className="border-none"
           />
         </CardContent>
       </Card>
 
-      {/* Modal de Baja */}
+      {/* 🚀 MODAL DE BAJA (ZOD + RHF + TAHOE UI) */}
       <Dialog open={isBajaModalOpen} onOpenChange={setIsBajaModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-destructive" />
-              Dar de Baja Activo
-            </DialogTitle>
-            <DialogDescription>
-              Esta acción removerá el activo{" "}
-              <strong>{activoToBaja?.numero_economico}</strong> de la
-              disponibilidad operativa.
-            </DialogDescription>
+        <DialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
+          <DialogHeader className="p-6 sm:p-8 bg-brand-navy/95 dark:bg-slate-900 backdrop-blur-md shrink-0 border-b border-white/10 relative overflow-hidden z-10">
+            <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
+            <div className="relative z-10 flex items-center gap-4 sm:gap-5">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-rose-500/20 flex items-center justify-center shadow-inner shrink-0 icon-plate">
+                <Ban className="h-7 w-7 sm:h-8 sm:w-8 text-rose-400 drop-shadow-[0_0_8px_rgba(244,63,94,0.4)]" />
+              </div>
+              <div className="flex flex-col gap-1 text-left">
+                <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-white text-shadow-premium heading-crisp leading-none">
+                  Dar de Baja Activo
+                </DialogTitle>
+                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-brand-secondary dark:text-slate-400 mt-1">
+                  Desincorporación Operativa • Patrimonio
+                </p>
+              </div>
+            </div>
           </DialogHeader>
 
-          <div className="space-y-4">
-            <div className="p-3 bg-muted/50 rounded-lg">
-              <p className="text-sm">
-                <strong>
-                  {activoToBaja?.marca} {activoToBaja?.modelo}
-                </strong>{" "}
-                ({activoToBaja?.year})
-              </p>
-              <p className="text-xs text-muted-foreground">
-                VIN: {activoToBaja?.vin}
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Motivo de Baja *</Label>
-              <Select
-                value={bajaData.motivoBaja}
-                onValueChange={(v) =>
-                  setBajaData({ ...bajaData, motivoBaja: v as any })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar motivo..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="venta">Venta a terceros</SelectItem>
-                  <SelectItem value="siniestro">
-                    Siniestro / Pérdida total
-                  </SelectItem>
-                  <SelectItem value="chatarra">Chatarra / Desecho</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Fecha de Baja</Label>
-              <Input
-                type="date"
-                value={bajaData.fechaBaja}
-                onChange={(e) =>
-                  setBajaData({ ...bajaData, fechaBaja: e.target.value })
-                }
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Observaciones</Label>
-              <Textarea
-                placeholder="Detalles adicionales sobre la baja..."
-                value={bajaData.observaciones}
-                onChange={(e) =>
-                  setBajaData({ ...bajaData, observaciones: e.target.value })
-                }
-                rows={3}
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsBajaModalOpen(false)}
-              disabled={isSaving}
+          <Form {...form}>
+            <form
+              onSubmit={form.handleSubmit(onSubmitBaja)}
+              className="flex-1 overflow-y-auto flex flex-col custom-scrollbar bg-slate-50/50 dark:bg-transparent"
             >
-              Cancelar
-            </Button>
-            <Button
-              className="bg-destructive hover:bg-destructive/90"
-              onClick={handleConfirmBaja}
-              disabled={isSaving}
-            >
-              {isSaving ? (
-                <Loader2 className="animate-spin h-4 w-4" />
-              ) : (
-                "Confirmar Baja"
-              )}
-            </Button>
-          </DialogFooter>
+              <div className="flex-1 p-6 sm:p-8 space-y-6">
+                {/* INFO DEL ACTIVO (Solo lectura) */}
+                <div className="p-5 bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-white/10 rounded-2xl shadow-sm flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
+                      Activo Seleccionado
+                    </p>
+                    <p className="text-lg font-black text-brand-navy dark:text-white uppercase tracking-tight">
+                      ECO-{activoToBaja?.numero_economico}
+                    </p>
+                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mt-1">
+                      {activoToBaja?.marca} {activoToBaja?.modelo} (
+                      {activoToBaja?.year})
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
+                      VIN Identificador
+                    </p>
+                    <p className="font-mono font-bold text-slate-700 dark:text-slate-300 text-sm bg-slate-100 dark:bg-slate-900 px-3 py-1 rounded-lg border border-slate-200 dark:border-white/5">
+                      {activoToBaja?.vin}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <FormField
+                    control={form.control}
+                    name="motivoBaja"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel variant="brand" required>
+                          Motivo de Baja
+                        </FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="h-11 font-black uppercase text-xs bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm text-slate-800 dark:text-slate-200">
+                              <SelectValue placeholder="Seleccionar motivo..." />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-slate-200 dark:border-white/10">
+                            <SelectItem
+                              value="venta"
+                              className="font-bold text-xs uppercase text-blue-600 dark:text-blue-400"
+                            >
+                              Venta a terceros
+                            </SelectItem>
+                            <SelectItem
+                              value="siniestro"
+                              className="font-bold text-xs uppercase text-rose-600 dark:text-rose-400"
+                            >
+                              Siniestro / Pérdida Total
+                            </SelectItem>
+                            <SelectItem
+                              value="chatarra"
+                              className="font-bold text-xs uppercase text-slate-600 dark:text-slate-400"
+                            >
+                              Chatarra / Desecho
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="fechaBaja"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel variant="brand" required>
+                          Fecha Efectiva de Baja
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            type="date"
+                            {...field}
+                            className="h-11 font-mono font-bold bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="observaciones"
+                    render={({ field }) => (
+                      <FormItem className="md:col-span-2">
+                        <FormLabel variant="brand">
+                          Observaciones Adicionales
+                        </FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Detalles sobre el siniestro, venta o desincorporación..."
+                            {...field}
+                            className="min-h-[100px] resize-none bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 font-medium text-sm shadow-sm"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+
+              {/* FOOTER */}
+              <DialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0">
+                <div className="flex flex-col-reverse sm:flex-row sm:flex-wrap justify-end items-stretch sm:items-center gap-3 w-full">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    onClick={() => setIsBajaModalOpen(false)}
+                    disabled={isSaving}
+                    className="w-full sm:w-auto haptic-press flex-shrink-0"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="destructive"
+                    size="lg"
+                    disabled={isSaving}
+                    className="w-full sm:w-auto haptic-press shadow-rose-600/10 flex-shrink-0"
+                  >
+                    {isSaving ? (
+                      <Loader2 className="animate-spin h-4 w-4 mr-2" />
+                    ) : (
+                      <Ban className="h-4 w-4 mr-2" />
+                    )}
+                    Confirmar Baja Definitiva
+                  </Button>
+                </div>
+              </DialogFooter>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
     </div>

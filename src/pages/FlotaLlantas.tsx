@@ -1,3 +1,4 @@
+// src/features/flota/FlotaLlantas.tsx
 import { useMemo, useState } from "react";
 import {
   Truck,
@@ -12,8 +13,10 @@ import {
   Loader2,
   Pencil,
   Trash2,
+  AlertCircle,
+  CheckCircle,
 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -38,6 +41,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { cn } from "@/lib/utils";
 
 // Imports de Tipos y Hooks
 import {
@@ -195,7 +199,9 @@ export default function FlotaLlantas() {
         key: "codigo_interno",
         header: "ID Llanta",
         render: (value) => (
-          <span className="font-mono font-medium">{value}</span>
+          <span className="font-black font-mono text-brand-navy dark:text-white uppercase tracking-tight">
+            {value}
+          </span>
         ),
       },
       {
@@ -203,33 +209,53 @@ export default function FlotaLlantas() {
         header: "Marca",
         type: "status",
         statusOptions: tireBrands,
+        render: (value) => (
+          <span className="font-bold text-slate-800 dark:text-slate-200">
+            {value}
+          </span>
+        ),
       },
       {
         key: "modelo",
         header: "Modelo",
+        render: (value) => (
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+            {value}
+          </span>
+        ),
       },
       {
         key: "medida",
         header: "Medida",
-        render: (value) => <span className="text-xs font-mono">{value}</span>,
+        render: (value) => (
+          <span className="font-mono text-sm font-bold text-slate-600 dark:text-slate-400">
+            {value}
+          </span>
+        ),
       },
       {
         key: "unidad_actual_economico",
-        header: "Unidad Actual",
+        header: "Ubicación Actual",
         type: "status",
         statusOptions: uniqueUnits,
         render: (value) => (
           <div className="flex items-center gap-1.5">
             {value ? (
-              <>
-                <Truck className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="font-medium">{value}</span>
-              </>
+              <Badge
+                variant="outline"
+                className="font-mono font-bold text-xs bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm gap-1"
+              >
+                <Truck className="h-3.5 w-3.5 text-slate-400" />
+                ECO-{value}
+              </Badge>
             ) : (
-              <>
-                <Package className="h-3.5 w-3.5 text-amber-600" />
-                <span className="text-amber-700">En Almacén</span>
-              </>
+              <Badge
+                variant="outline"
+                className="font-black uppercase tracking-widest text-[9px] bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-500 border-amber-200 dark:border-amber-900/50 shadow-sm gap-1"
+              >
+                <Package className="h-3 w-3" />
+                En Almacén
+              </Badge>
             )}
           </div>
         ),
@@ -238,16 +264,34 @@ export default function FlotaLlantas() {
         key: "posicion",
         header: "Posición",
         render: (value) =>
-          value || <span className="text-muted-foreground text-xs">--</span>,
+          value ? (
+            <Badge
+              variant="secondary"
+              className="font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+            >
+              P-{value}
+            </Badge>
+          ) : (
+            <span className="text-muted-foreground text-xs italic">--</span>
+          ),
       },
       {
         key: "estado",
-        header: "Estado",
+        header: "Estado Físico",
         type: "status",
         statusOptions: ["nuevo", "usado", "renovado", "desecho"],
         render: (value) => {
           const badge = getEstadoBadge(value as string);
-          return <Badge className={badge.className}>{badge.label}</Badge>;
+          return (
+            <Badge
+              className={cn(
+                "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 shadow-sm",
+                badge.className,
+              )}
+            >
+              {badge.label}
+            </Badge>
+          );
         },
       },
       {
@@ -258,16 +302,38 @@ export default function FlotaLlantas() {
           const percentage = getTireLifePercentage(row);
           const semaphore = getTireSemaphoreStatus(row);
           return (
-            <div className="w-28 space-y-1">
-              <div className="flex items-center justify-between text-xs">
-                <span>{value}mm</span>
+            <div className="w-32 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-mono font-bold text-xs text-slate-700 dark:text-slate-300">
+                  {value} mm
+                </span>
                 <Badge
-                  className={`${semaphore.bgColor} ${semaphore.color}  px-1.5`}
+                  variant="outline"
+                  className={cn(
+                    "text-[8px] font-black uppercase tracking-widest px-1.5 py-0 shadow-sm",
+                    semaphore.label === "Crítico"
+                      ? "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-500/30"
+                      : semaphore.label === "Atención"
+                        ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-500/30"
+                        : "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-500/30",
+                  )}
                 >
                   {semaphore.label}
                 </Badge>
               </div>
-              <Progress value={percentage} className="h-2" />
+              <div className="relative h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden shadow-inner">
+                <div
+                  className={cn(
+                    "absolute inset-y-0 left-0 rounded-full",
+                    semaphore.label === "Crítico"
+                      ? "bg-rose-500"
+                      : semaphore.label === "Atención"
+                        ? "bg-amber-500"
+                        : "bg-emerald-500",
+                  )}
+                  style={{ width: `${percentage}%` }}
+                />
+              </div>
             </div>
           );
         },
@@ -277,68 +343,90 @@ export default function FlotaLlantas() {
         header: "Km Recorridos",
         type: "number",
         render: (value) => (
-          <span className="font-mono">{value?.toLocaleString() || 0}</span>
+          <span className="font-mono font-bold text-sm text-slate-600 dark:text-slate-400">
+            {value?.toLocaleString() || 0}
+          </span>
         ),
       },
       {
         key: "id",
         header: "Acciones",
         sortable: false,
+        width: "w-[80px]",
         render: (_, row) => (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => handleViewHistory(row)}>
-                <History className="h-4 w-4 mr-2" />
-                Ver Historial
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => handleOpenAssign(row)}
-                disabled={row.estado === "desecho"}
+          <div
+            className="flex justify-end pr-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50"
+                >
+                  <MoreHorizontal className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                className="glass-panel border-white/20 min-w-[180px] z-50 dark:bg-slate-900/90"
               >
-                <ArrowRightLeft className="h-4 w-4 mr-2" />
-                Asignar / Rotar
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => handleOpenMaintenance(row)}
-                disabled={row.estado === "desecho"}
-              >
-                <Wrench className="h-4 w-4 mr-2" />
-                Mantenimiento
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              {/* ACCIONES DE EDICIÓN / ELIMINACIÓN */}
-              <DropdownMenuItem onClick={() => handleOpenEdit(row)}>
-                <Pencil className="h-4 w-4 mr-2" />
-                Editar Datos
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => handleOpenDelete(row)}
-                className="text-red-600 focus:text-red-600"
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Eliminar
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                <DropdownMenuItem
+                  onClick={() => handleViewHistory(row)}
+                  className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
+                >
+                  <History className="h-4 w-4 text-brand-navy dark:text-slate-400" />
+                  Ver Historial
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="dark:bg-white/10" />
+                <DropdownMenuItem
+                  onClick={() => handleOpenAssign(row)}
+                  disabled={row.estado === "desecho"}
+                  className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
+                >
+                  <ArrowRightLeft className="h-4 w-4 text-blue-500 dark:text-blue-400" />
+                  Asignar / Rotar
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => handleOpenMaintenance(row)}
+                  disabled={row.estado === "desecho"}
+                  className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
+                >
+                  <Wrench className="h-4 w-4 text-amber-500 dark:text-amber-400" />
+                  Mantenimiento
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="dark:bg-white/10" />
+                <DropdownMenuItem
+                  onClick={() => handleOpenEdit(row)}
+                  className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
+                >
+                  <Pencil className="h-4 w-4 text-brand-navy dark:text-slate-400" />
+                  Editar Datos
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => handleOpenDelete(row)}
+                  className="gap-2 font-bold text-xs uppercase tracking-tight text-rose-600 dark:text-rose-500 cursor-pointer dark:focus:bg-rose-950/30"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Dar de Baja
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         ),
       },
     ],
-    [uniqueUnits],
+    [uniqueUnits, tireBrands],
   );
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="flex flex-col items-center gap-2">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-muted-foreground">
-            Cargando inventario de llantas...
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-10 w-10 animate-spin text-brand-red" />
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 animate-pulse">
+            Sincronizando inventario...
           </p>
         </div>
       </div>
@@ -346,79 +434,135 @@ export default function FlotaLlantas() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 animate-in fade-in duration-500 pb-20">
+      {/* 🚀 HEADER TAHOE */}
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between bg-white/40 dark:bg-slate-900/40 p-4 rounded-2xl shadow-sm border border-white/20 dark:border-white/10 backdrop-blur-md gap-4">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <CircleDot className="h-6 w-6" />
-            Inventario Global de Neumáticos
+          <h1 className="text-2xl font-black text-brand-navy dark:text-white flex items-center gap-2 uppercase tracking-tighter heading-crisp">
+            <div className="p-2 bg-slate-800 rounded-xl border border-slate-700 shadow-inner">
+              <CircleDot className="h-6 w-6 text-white" />
+            </div>
+            Inventario de Neumáticos
           </h1>
-          <p className="text-muted-foreground">
-            Gestión centralizada de {kpis.total} llantas activas en la flota
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-2">
+            Gestión centralizada de {kpis.total} llantas operativas.
           </p>
         </div>
-        <Button className="gap-2" onClick={handleOpenCreate}>
-          <Plus className="h-4 w-4" />
-          Nueva Llanta
+        <Button
+          variant="default"
+          size="lg"
+          className="w-full md:w-auto haptic-press shadow-lg shadow-brand-red/20"
+          onClick={handleOpenCreate}
+        >
+          <Plus className="h-4 w-4 mr-2" /> Nueva Llanta
         </Button>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card className="border-l-4 border-l-red-500">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Críticas (&lt;5mm)
-                </p>
-                <p className="text-3xl font-bold text-red-600">
-                  {kpis.critical.length}
-                </p>
-              </div>
-              <AlertTriangle className="h-8 w-8 text-red-500 opacity-50" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-l-4 border-l-amber-500">
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">Atención (6-10mm)</p>
-            <p className="text-3xl font-bold text-amber-600">
-              {kpis.warning.length}
+      {/* 🚀 KPI CARDS (Tahoe UI) */}
+      <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+        <Card
+          variant="default"
+          className="p-6 flex items-center gap-5 group hover:border-rose-300 dark:hover:border-rose-500/50 transition-all cursor-default relative overflow-hidden"
+        >
+          <div className="p-3.5 bg-rose-50 dark:bg-rose-950/30 rounded-2xl border border-rose-100 dark:border-rose-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out relative z-10">
+            <AlertCircle className="h-6 w-6 text-rose-600 dark:text-rose-400" />
+          </div>
+          <div className="flex flex-col justify-center relative z-10">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
+              Desgaste Crítico
             </p>
-          </CardContent>
-        </Card>
-        <Card className="border-l-4 border-l-emerald-500">
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">Buen Estado (+11mm)</p>
-            <p className="text-3xl font-bold text-emerald-600">
-              {kpis.good.length}
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="border-l-4 border-l-primary">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  En Stock/Almacén
-                </p>
-                <p className="text-3xl font-bold">{kpis.inStock.length}</p>
-              </div>
-              <Package className="h-8 w-8 text-primary opacity-50" />
+            <div className="flex items-baseline gap-1 mt-0.5">
+              <p className="text-3xl font-black text-rose-600 dark:text-rose-400 leading-none tracking-tighter">
+                {kpis.critical.length}
+              </p>
+              <span className="text-[10px] font-black text-rose-600/60 dark:text-rose-400/60 uppercase tracking-widest">
+                {"< 5mm"}
+              </span>
             </div>
-          </CardContent>
+          </div>
+          {kpis.critical.length > 0 && (
+            <AlertTriangle className="h-24 w-24 text-rose-500/10 dark:text-rose-500/5 absolute -right-4 -bottom-4 z-0" />
+          )}
+        </Card>
+
+        <Card
+          variant="default"
+          className="p-6 flex items-center gap-5 group hover:border-amber-300 dark:hover:border-amber-500/50 transition-all cursor-default"
+        >
+          <div className="p-3.5 bg-amber-50 dark:bg-amber-950/30 rounded-2xl border border-amber-100 dark:border-amber-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
+            <AlertTriangle className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+          </div>
+          <div className="flex flex-col justify-center">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
+              Requieren Atención
+            </p>
+            <div className="flex items-baseline gap-1 mt-0.5">
+              <p className="text-3xl font-black text-amber-600 dark:text-amber-400 leading-none tracking-tighter">
+                {kpis.warning.length}
+              </p>
+              <span className="text-[10px] font-black text-amber-600/60 dark:text-amber-400/60 uppercase tracking-widest">
+                6-10mm
+              </span>
+            </div>
+          </div>
+        </Card>
+
+        <Card
+          variant="default"
+          className="p-6 flex items-center gap-5 group hover:border-emerald-300 dark:hover:border-emerald-500/50 transition-all cursor-default"
+        >
+          <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl border border-emerald-100 dark:border-emerald-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
+            <CheckCircle className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+          </div>
+          <div className="flex flex-col justify-center">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
+              Buen Estado
+            </p>
+            <div className="flex items-baseline gap-1 mt-0.5">
+              <p className="text-3xl font-black text-emerald-600 dark:text-emerald-400 leading-none tracking-tighter">
+                {kpis.good.length}
+              </p>
+              <span className="text-[10px] font-black text-emerald-600/60 dark:text-emerald-400/60 uppercase tracking-widest">
+                +11mm
+              </span>
+            </div>
+          </div>
+        </Card>
+
+        <Card
+          variant="default"
+          className="p-6 flex items-center gap-5 group hover:border-brand-navy/30 dark:hover:border-white/20 transition-all cursor-default"
+        >
+          <div className="p-3.5 bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-white/10 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
+            <Package className="h-6 w-6 text-brand-navy dark:text-slate-300" />
+          </div>
+          <div className="flex flex-col justify-center">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
+              En Almacén
+            </p>
+            <p className="text-3xl font-black text-brand-navy dark:text-white leading-none tracking-tighter mt-0.5">
+              {kpis.inStock.length}
+            </p>
+          </div>
         </Card>
       </div>
 
-      {/* Tabla Principal */}
-      <Card>
-        <CardContent className="pt-6">
+      {/* 🚀 TABLA PRINCIPAL (Liquid Glass Tahoe) */}
+      <Card
+        variant="default"
+        className="shadow-2xl border-slate-200/50 dark:border-white/10 overflow-hidden"
+      >
+        <CardHeader className="flex flex-row items-center justify-between border-b border-slate-200 dark:border-white/10 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-xl py-6 px-6">
+          <CardTitle className="text-xl font-black uppercase tracking-tighter text-brand-navy dark:text-white heading-crisp flex items-center gap-3">
+            <CircleDot className="h-6 w-6 text-brand-red" /> Inventario Activo
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0 bg-white dark:bg-slate-950 [&_thead]:bg-slate-50/80 dark:[&_thead]:bg-slate-900/80 [&_thead]:backdrop-blur-xl [&_th]:bg-transparent [&_th]:border-b [&_th]:border-slate-200 dark:[&_th]:border-white/10 [&_th]:text-[10px] [&_th]:font-black [&_th]:uppercase [&_th]:tracking-[0.2em] [&_th]:text-slate-500 dark:[&_th]:text-slate-400">
           <EnhancedDataTable
             data={tires.filter((t) => t.estado !== "desecho")}
             columns={columns}
             exportFileName="inventario_llantas"
+            className="border-none"
           />
         </CardContent>
       </Card>
@@ -430,7 +574,7 @@ export default function FlotaLlantas() {
         open={createModalOpen}
         onOpenChange={setCreateModalOpen}
         onSubmit={handleCreateOrUpdateSubmit}
-        tireToEdit={selectedTire} // Pasa la llanta seleccionada (null si es crear)
+        tireToEdit={selectedTire}
       />
 
       {/* 2. Historial */}
@@ -456,30 +600,78 @@ export default function FlotaLlantas() {
         onSubmit={handleMaintenanceSubmit}
       />
 
-      {/* 5. Alerta de Eliminación */}
+      {/* 🚀 5. ALERTA DE ELIMINACIÓN (Estructura Triple Tahoe) */}
       <AlertDialog open={deleteAlertOpen} onOpenChange={setDeleteAlertOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta acción eliminará permanentemente la llanta
-              <span className="font-bold text-foreground">
-                {" "}
-                {selectedTire?.codigo_interno}{" "}
-              </span>
-              y todo su historial de eventos. Esta acción no se puede deshacer.
-            </AlertDialogDescription>
+        <AlertDialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
+          {/* HEADER */}
+          <AlertDialogHeader className="p-6 sm:p-8 bg-brand-navy/95 dark:bg-slate-900 backdrop-blur-md shrink-0 border-b border-white/10 relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
+            <div className="relative z-10 flex items-center gap-4 sm:gap-5">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-rose-500/20 flex items-center justify-center shadow-inner shrink-0 icon-plate">
+                <Trash2 className="h-7 w-7 sm:h-8 sm:w-8 text-rose-400 drop-shadow-[0_0_8px_rgba(244,63,94,0.4)]" />
+              </div>
+              <div className="flex flex-col gap-1 text-left">
+                <AlertDialogTitle className="text-2xl font-black uppercase tracking-tighter text-white text-shadow-premium heading-crisp leading-none">
+                  Eliminar Neumático
+                </AlertDialogTitle>
+                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-brand-secondary dark:text-slate-400 mt-1">
+                  Acción Irreversible • Inventario Almacén
+                </p>
+              </div>
+            </div>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setSelectedTire(null)}>
-              Cancelar
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmDelete}
-              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
-            >
-              Eliminar Definitivamente
-            </AlertDialogAction>
+
+          {/* BODY */}
+          <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
+            <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block space-y-6">
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                ¿Está seguro que desea eliminar la llanta{" "}
+                <b className="text-slate-900 dark:text-white text-lg font-black tracking-tight uppercase">
+                  {selectedTire?.codigo_interno}
+                </b>
+                ?
+              </p>
+
+              <div className="p-5 bg-rose-50 dark:bg-rose-950/20 border-l-4 border-rose-500 rounded-r-2xl shadow-sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+                  <h4 className="text-[10px] sm:text-[11px] font-black text-rose-800 dark:text-rose-400 uppercase tracking-widest">
+                    Pérdida de Datos Técnicos y Costos
+                  </h4>
+                </div>
+                <p className="text-xs sm:text-sm leading-relaxed text-rose-900 dark:text-rose-200/80">
+                  Esta acción eliminará el registro físico, su posición actual,
+                  historial de montajes y todos los registros de costos por
+                  mantenimiento.{" "}
+                  <b className="font-black underline">
+                    Esta acción no se puede deshacer
+                  </b>
+                  .
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </div>
+
+          {/* FOOTER */}
+          <AlertDialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0">
+            <div className="flex flex-col-reverse sm:flex-row sm:flex-wrap justify-end items-stretch sm:items-center gap-3 w-full">
+              <AlertDialogCancel
+                variant="outline"
+                size="lg"
+                onClick={() => setSelectedTire(null)}
+                className="w-full sm:w-auto haptic-press flex-shrink-0"
+              >
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                variant="destructive"
+                size="lg"
+                onClick={confirmDelete}
+                className="w-full sm:w-auto haptic-press shadow-rose-600/10 flex-shrink-0"
+              >
+                <Trash2 className="h-4 w-4 mr-2" /> Eliminar Definitivamente
+              </AlertDialogAction>
+            </div>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

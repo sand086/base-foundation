@@ -1,11 +1,13 @@
 // src/features/tarifas/ArmadorRutas.tsx
 import React, { useState, useMemo, useEffect, useRef } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import {
   Plus,
   Trash2,
   GripVertical,
   Search,
-  ArrowRight,
   Loader2,
   Check,
   MapPin,
@@ -88,6 +90,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+// Form Components
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+
 // Services & Hooks
 import { TollBooth, RateTemplate } from "@/types/api.types";
 import { useClients } from "@/hooks/useClients";
@@ -99,6 +111,19 @@ import {
   ColumnDef,
 } from "@/components/ui/enhanced-data-table";
 import { useSystemConfig } from "@/hooks/useSystemConfig";
+
+// 🚀 1. ESQUEMA DE VALIDACIÓN ZOD PARA LA RUTA
+const routeSchema = z.object({
+  origen: z.string().min(2, "Mínimo 2 caracteres requeridos"),
+  destino: z.string().min(2, "Mínimo 2 caracteres requeridos"),
+  variante: z.string().optional(),
+  configuracion: z.enum(["5ejes", "9ejes"], {
+    required_error: "Selecciona una configuración válida",
+  }),
+  selectedCliente: z.string().optional(),
+});
+
+type RouteFormData = z.infer<typeof routeSchema>;
 
 interface SegmentEntry {
   tempId: string;
@@ -285,9 +310,10 @@ const SortableTableRow: React.FC<SortableRowProps> = ({
 
         <TableCell className="w-12 pr-4 text-right">
           <Button
+            type="button"
             variant="ghost"
             size="icon"
-            className="h-8 w-8 text-slate-400 hover:text-white hover:bg-rose-600 rounded-xl opacity-0 group-hover:opacity-100 transition-all shadow-sm"
+            className="h-8 w-8 text-slate-400 dark:text-slate-500 hover:text-white hover:bg-rose-600 rounded-xl opacity-0 group-hover:opacity-100 transition-all shadow-sm"
             onClick={() => removeSegment(idx)}
           >
             <Trash2 className="h-4 w-4" />
@@ -303,24 +329,31 @@ export const ArmadorRutas: React.FC = () => {
   const { clients } = useClients();
   const { value: monedaBase } = useSystemConfig("moneda_base");
 
-  const [origen, setOrigen] = useState("");
-  const [destino, setDestino] = useState("");
-  const [variante, setVariante] = useState("");
-  const [configuracion, setConfiguracion] = useState<"5ejes" | "9ejes">(
-    "5ejes",
-  );
+  // 🚀 2. INICIALIZAMOS REACT HOOK FORM
+  const form = useForm<RouteFormData>({
+    resolver: zodResolver(routeSchema),
+    defaultValues: {
+      origen: "",
+      destino: "",
+      variante: "",
+      configuracion: "5ejes",
+      selectedCliente: "none",
+    },
+  });
+
+  const { watch, setValue, reset } = form;
+  const { origen, destino, variante, configuracion, selectedCliente } = watch();
 
   const isFullUnit = configuracion === "9ejes";
 
   const nombreRutaGenerada = useMemo(() => {
     if (!origen.trim() && !destino.trim()) return "";
-    return [origen.trim(), destino.trim(), variante.trim()]
+    return [origen.trim(), destino.trim(), variante?.trim()]
       .filter(Boolean)
       .join(" - ")
       .toUpperCase();
   }, [origen, destino, variante]);
 
-  const [selectedCliente, setSelectedCliente] = useState("");
   const [segments, setSegments] = useState<SegmentEntry[]>([]);
   const [allTolls, setAllTolls] = useState<TollBooth[]>([]);
   const [savedRoutes, setSavedRoutes] = useState<RateTemplate[]>([]);
@@ -328,8 +361,8 @@ export const ArmadorRutas: React.FC = () => {
   const [filtroTipo, setFiltroTipo] = useState<"todos" | "5ejes" | "9ejes">(
     "todos",
   );
-
   const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [tollSearch, setTollSearch] = useState("");
 
@@ -342,7 +375,7 @@ export const ArmadorRutas: React.FC = () => {
     useState<RateTemplate | null>(null);
   const [editingRouteId, setEditingRouteId] = useState<number | null>(null);
 
-  const topFormRef = useRef<HTMLDivElement>(null);
+  const topFormRef = useRef<HTMLFormElement>(null);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, {
@@ -475,8 +508,8 @@ export const ArmadorRutas: React.FC = () => {
   const handleReverseRoute = () => {
     if (!origen && !destino) return;
     const oldO = origen;
-    setOrigen(destino);
-    setDestino(oldO);
+    setValue("origen", destino);
+    setValue("destino", oldO);
 
     setSegments((prev) =>
       [...prev].reverse().map((s) => ({
@@ -506,11 +539,8 @@ export const ArmadorRutas: React.FC = () => {
     return Boolean(prevEnd && currentStart && prevEnd !== currentStart);
   };
 
-  const handleSave = async () => {
-    if (!origen.trim() || !destino.trim()) {
-      toast.error("Las ciudades de Origen y Destino son obligatorias.");
-      return;
-    }
+  // 🚀 3. ONSUBMIT INTEGRADO CON ZOD
+  const onSubmit = async (data: RouteFormData) => {
     if (segments.length === 0) {
       toast.error("Debes agregar al menos un tramo a la ruta.");
       return;
@@ -528,21 +558,22 @@ export const ArmadorRutas: React.FC = () => {
       costo_momento_full: s.costo_f,
     }));
 
-    const finalOrigen = variante.trim()
-      ? `${origen.trim().toUpperCase()} - ${variante.trim().toUpperCase()}`
-      : origen.trim().toUpperCase();
+    const finalOrigen = data.variante?.trim()
+      ? `${data.origen.trim().toUpperCase()} - ${data.variante.trim().toUpperCase()}`
+      : data.origen.trim().toUpperCase();
 
     const payload = {
       client_id:
-        selectedCliente && selectedCliente !== "none"
-          ? parseInt(selectedCliente, 10)
+        data.selectedCliente && data.selectedCliente !== "none"
+          ? parseInt(data.selectedCliente, 10)
           : null,
       origen: finalOrigen,
-      destino: destino.trim().toUpperCase(),
-      tipo_unidad: configuracion,
+      destino: data.destino.trim().toUpperCase(),
+      tipo_unidad: data.configuracion,
       segments: mappedSegments,
     };
 
+    setIsSubmitting(true);
     try {
       let res: RateTemplate;
       if (editingRouteId) {
@@ -559,35 +590,45 @@ export const ArmadorRutas: React.FC = () => {
 
       setEditingRouteId(null);
       setSegments([]);
-      setOrigen("");
-      setDestino("");
-      setVariante("");
-      setConfiguracion("5ejes");
-      setSelectedCliente("");
+      reset({
+        origen: "",
+        destino: "",
+        variante: "",
+        configuracion: "5ejes",
+        selectedCliente: "none",
+      });
     } catch (error: any) {
       toast.error(
         error.response?.data?.detail || "Error al guardar la ruta armada",
       );
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleEditRoute = (route: RateTemplate) => {
     setEditingRouteId(route.id);
     const partes = (route.origen || "").split("-");
+    let editOrigen = "";
+    let editVariante = "";
+
     if (partes.length >= 2) {
-      setOrigen(partes[0].trim());
-      setDestino(route.destino || "");
-      setVariante(partes.slice(1).join("-").trim());
+      editOrigen = partes[0].trim();
+      editVariante = partes.slice(1).join("-").trim();
     } else {
-      setOrigen(route.origen || "");
-      setDestino(route.destino || "");
-      setVariante("");
+      editOrigen = route.origen || "";
     }
 
-    setSelectedCliente(route.client_id ? String(route.client_id) : "");
     const isRouteFull =
       route.tipo_unidad === "9ejes" || route.tipo_unidad === "full";
-    setConfiguracion(isRouteFull ? "9ejes" : "5ejes");
+
+    reset({
+      origen: editOrigen,
+      destino: route.destino || "",
+      variante: editVariante,
+      configuracion: isRouteFull ? "9ejes" : "5ejes",
+      selectedCliente: route.client_id ? String(route.client_id) : "none",
+    });
 
     setSegments(
       (route.segments || []).map((s: any) => ({
@@ -605,9 +646,10 @@ export const ArmadorRutas: React.FC = () => {
     );
 
     setTimeout(() => {
-      document
-        .getElementById("form-rutas-top")
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      topFormRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
     }, 150);
 
     toast.info("Ruta cargada en el panel superior para edición");
@@ -890,456 +932,538 @@ export const ArmadorRutas: React.FC = () => {
   }
 
   return (
-    <div
-      className="space-y-8 scroll-mt-24"
-      id="form-rutas-top"
-      ref={topFormRef}
-    >
-      {/* 🚀 FORMULARIO PRINCIPAL TOP */}
-      <Card
-        variant="default"
-        className="overflow-hidden border-t-4 border-t-brand-navy shadow-xl"
-      >
-        <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-white/10 p-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-start">
-            <div className="space-y-1.5">
-              <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-navy dark:text-slate-300">
-                <MapPin className="h-3 w-3 inline mr-1" /> Ciudad Origen *
-              </Label>
-              <Input
-                placeholder="Ej: VERACRUZ"
-                className="h-11 font-black uppercase"
-                value={origen}
-                onChange={(e) => setOrigen(e.target.value.toUpperCase())}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-navy dark:text-slate-300">
-                <MapPin className="h-3 w-3 inline mr-1" /> Ciudad Destino *
-              </Label>
-              <Input
-                placeholder="Ej: TOLUCA"
-                className="h-11 font-black uppercase"
-                value={destino}
-                onChange={(e) => setDestino(e.target.value.toUpperCase())}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-400">
-                <RouteIcon className="h-3 w-3 inline mr-1" /> Variante
-                (Opcional)
-              </Label>
-              <Input
-                placeholder="Ej: BRAUN-IMO"
-                className="h-11 font-bold uppercase"
-                value={variante}
-                onChange={(e) => setVariante(e.target.value.toUpperCase())}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-navy dark:text-slate-300">
-                <Truck className="h-3 w-3 inline mr-1" /> Configuración *
-              </Label>
-              <Select
-                value={configuracion}
-                onValueChange={(v: any) => setConfiguracion(v)}
-              >
-                <SelectTrigger className="h-11 font-black uppercase text-brand-navy dark:text-white shadow-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-slate-200 dark:border-white/10">
-                  <SelectItem
-                    value="5ejes"
-                    className="font-bold uppercase text-xs"
-                  >
-                    Sencillo (5 Ejes)
-                  </SelectItem>
-                  <SelectItem
-                    value="9ejes"
-                    className="font-bold uppercase text-xs"
-                  >
-                    Full (9 Ejes)
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="mt-6 p-4 bg-brand-navy dark:bg-slate-950 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-inner border border-brand-navy/20 dark:border-white/10">
-            <span className="text-brand-navy/60 dark:text-slate-500 text-[10px] uppercase font-black tracking-[0.2em] flex items-center gap-2">
-              <RouteIcon className="h-4 w-4 text-brand-red" /> Identificador
-              Oficial:
-            </span>
-            <span
-              className={cn(
-                "font-mono font-black text-lg tracking-tight",
-                nombreRutaGenerada ? "text-white" : "text-white/30 italic",
-              )}
-            >
-              {nombreRutaGenerada || "ESPERANDO DATOS..."}
-            </span>
-          </div>
-
-          <div className="mt-6 flex flex-col md:flex-row justify-between items-center gap-4 border-t border-slate-200/50 dark:border-white/10 pt-6">
-            <div className="flex items-center space-x-3 w-full md:w-auto">
-              <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
-                Cliente Exclusivo:
-              </Label>
-              <Select
-                value={selectedCliente}
-                onValueChange={(v) => setSelectedCliente(v === "none" ? "" : v)}
-              >
-                <SelectTrigger className="h-10 w-full md:w-[280px] font-bold text-xs">
-                  <SelectValue placeholder="Ruta libre (Sin cliente)" />
-                </SelectTrigger>
-                <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-slate-200 dark:border-white/10 max-h-[40vh]">
-                  <SelectItem
-                    value="none"
-                    className="font-bold italic text-slate-500"
-                  >
-                    Ruta libre (Todos)
-                  </SelectItem>
-                  {clients.map((c) => (
-                    <SelectItem
-                      key={c.id}
-                      value={String(c.id)}
-                      className="font-bold text-xs uppercase"
-                    >
-                      {c.razon_social}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <Button
-              variant="outline"
-              className="h-10 text-[10px] w-full md:w-auto"
-              onClick={handleReverseRoute}
-            >
-              <Repeat className="h-4 w-4 mr-2 text-brand-red" /> Invertir
-              Sentido
-            </Button>
-          </div>
-        </CardHeader>
-
-        {/* TOOLBAR SECUNDARIO */}
-        <div className="bg-slate-100/50 dark:bg-slate-900/30 border-b border-slate-200 dark:border-white/10 p-4 flex justify-between items-center">
-          <div className="flex items-center space-x-3">
-            <Switch
-              id="advanced-mode"
-              checked={showAdvanced}
-              onCheckedChange={setShowAdvanced}
-              className="data-[state=checked]:bg-brand-red shadow-sm"
-            />
-            <Label
-              htmlFor="advanced-mode"
-              className="text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-400 cursor-pointer mt-0.5"
-            >
-              Mostrar Datos Completos (Carr / Edo)
-            </Label>
-          </div>
-          <Button
-            variant="outline"
-            onClick={handleAutoCalculate}
-            disabled={isCalculating || segments.length === 0}
-            className="h-9 text-[10px] text-blue-700 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 border-blue-200 dark:border-blue-800/50 shadow-sm"
+    <div className="space-y-8">
+      <Form {...form}>
+        <form
+          onSubmit={form.handleSubmit(onSubmit)}
+          className="space-y-8 scroll-mt-24"
+          id="form-rutas-top"
+          ref={topFormRef}
+        >
+          {/* 🚀 FORMULARIO PRINCIPAL TOP */}
+          <Card
+            variant="default"
+            className="overflow-hidden border-t-4 border-t-brand-navy shadow-xl overflow-visible"
           >
-            {isCalculating ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Wand2 className="h-4 w-4 mr-2" />
-            )}{" "}
-            Auto-Calcular Tiempos
-          </Button>
-        </div>
-
-        {/* 🚀 TABLA DND */}
-        <CardContent className="p-0">
-          <div className="relative w-full overflow-hidden bg-slate-50/50 dark:bg-transparent">
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
-              <Table className="w-full caption-bottom text-sm">
-                <TableHeader className="bg-slate-200/50 dark:bg-slate-900/80">
-                  <TableRow className="border-b border-slate-300 dark:border-white/10">
-                    <TableHead className="w-12 pl-4"></TableHead>
-                    <TableHead
-                      className={cn(
-                        "text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 h-12",
-                        showAdvanced ? "w-[30%]" : "w-[40%]",
-                      )}
-                    >
-                      Tramo / Plaza
-                    </TableHead>
-                    {showAdvanced && (
-                      <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 h-12 w-20">
-                        Edo.
-                      </TableHead>
-                    )}
-                    {showAdvanced && (
-                      <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 h-12 w-28">
-                        Carr.
-                      </TableHead>
-                    )}
-                    <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 h-12 text-right w-24 pr-4">
-                      Distancia
-                    </TableHead>
-                    <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 h-12 text-right w-24 pr-4">
-                      Tiempo
-                    </TableHead>
-                    {!isFullUnit && (
-                      <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-700 dark:text-blue-400 h-12 text-right pr-6">
-                        Costo Sencillo
-                      </TableHead>
-                    )}
-                    {isFullUnit && (
-                      <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700 dark:text-emerald-400 h-12 text-right pr-6">
-                        Costo Full
-                      </TableHead>
-                    )}
-                    <TableHead className="w-12 pr-4"></TableHead>
-                  </TableRow>
-                </TableHeader>
-
-                <TableBody className="relative table-staggered">
-                  <SortableContext
-                    items={segments.map((s) => s.tempId)}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    {segments.map((seg, idx) => (
-                      <SortableTableRow
-                        key={seg.tempId}
-                        seg={seg}
-                        idx={idx}
-                        updateSegment={updateSegment}
-                        removeSegment={(i) =>
-                          setSegments((prev) =>
-                            prev.filter((_, idxx) => idxx !== i),
-                          )
-                        }
-                        formatCurrency={formatCurrency}
-                        hasGap={checkRouteGap(idx)}
-                        showAdvanced={showAdvanced}
-                        isFullUnit={isFullUnit}
-                      />
-                    ))}
-                  </SortableContext>
-                  {segments.length === 0 && (
-                    <TableRow className="hover:bg-transparent">
-                      <TableCell
-                        colSpan={showAdvanced ? 8 : 6}
-                        className="h-32 text-center"
-                      >
-                        <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
-                          Utiliza los botones de abajo para agregar tramos a la
-                          ruta.
-                        </p>
-                      </TableCell>
-                    </TableRow>
+            <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-white/10 p-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-start">
+                <FormField
+                  control={form.control}
+                  name="origen"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel variant="brand" required>
+                        <MapPin className="h-3 w-3 inline mr-1" /> Ciudad Origen
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="Ej: VERACRUZ"
+                          className="h-11 font-black uppercase bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                          {...field}
+                          onChange={(e) =>
+                            field.onChange(e.target.value.toUpperCase())
+                          }
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
                   )}
-                </TableBody>
+                />
 
-                {/* FOOTER TOTALES */}
-                <tfoot className="bg-brand-navy dark:bg-slate-950 text-white sticky bottom-0 z-10 border-t-2 border-brand-red">
-                  <TableRow className="hover:bg-brand-navy dark:hover:bg-slate-950 border-none">
-                    <TableCell
-                      colSpan={showAdvanced ? 4 : 2}
-                      className="text-right text-[10px] font-black uppercase tracking-[0.3em] text-white/70 py-4"
-                    >
-                      TOTALES ESTIMADOS
-                    </TableCell>
-                    <TableCell className="text-right font-mono font-bold text-sm border-l border-white/10 pr-4">
-                      {totals.distancia.toFixed(1)} km
-                    </TableCell>
-                    <TableCell className="text-right font-mono font-bold text-sm border-l border-white/10 pr-4">
-                      {Math.floor(totals.tiempo / 60)}h {totals.tiempo % 60}m
-                    </TableCell>
-                    {!isFullUnit && (
-                      <TableCell className="text-right font-mono font-black text-lg text-blue-400 border-l border-white/10 pr-6">
-                        {formatCurrency(totals.costo_s)}
-                      </TableCell>
+                <FormField
+                  control={form.control}
+                  name="destino"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel variant="brand" required>
+                        <MapPin className="h-3 w-3 inline mr-1" /> Ciudad
+                        Destino
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="Ej: TOLUCA"
+                          className="h-11 font-black uppercase bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                          {...field}
+                          onChange={(e) =>
+                            field.onChange(e.target.value.toUpperCase())
+                          }
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="variante"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel variant="brand">
+                        <RouteIcon className="h-3 w-3 inline mr-1" /> Variante
+                        (Opcional)
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="Ej: BRAUN-IMO"
+                          className="h-11 font-bold uppercase bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                          {...field}
+                          onChange={(e) =>
+                            field.onChange(e.target.value.toUpperCase())
+                          }
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="configuracion"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel variant="brand" required>
+                        <Truck className="h-3 w-3 inline mr-1" /> Configuración
+                      </FormLabel>
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="h-11 font-black uppercase text-brand-navy dark:text-white shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10">
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-slate-200 dark:border-white/10">
+                          <SelectItem
+                            value="5ejes"
+                            className="font-bold uppercase text-xs"
+                          >
+                            Sencillo (5 Ejes)
+                          </SelectItem>
+                          <SelectItem
+                            value="9ejes"
+                            className="font-bold uppercase text-xs"
+                          >
+                            Full (9 Ejes)
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="mt-6 p-4 bg-brand-navy dark:bg-slate-950 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-inner border border-brand-navy/20 dark:border-white/10">
+                <span className="text-brand-navy/60 dark:text-slate-500 text-[10px] uppercase font-black tracking-[0.2em] flex items-center gap-2">
+                  <RouteIcon className="h-4 w-4 text-brand-red" /> Identificador
+                  Oficial:
+                </span>
+                <span
+                  className={cn(
+                    "font-mono font-black text-lg tracking-tight",
+                    nombreRutaGenerada ? "text-white" : "text-white/30 italic",
+                  )}
+                >
+                  {nombreRutaGenerada || "ESPERANDO DATOS..."}
+                </span>
+              </div>
+
+              <div className="mt-6 flex flex-col md:flex-row justify-between items-center gap-4 border-t border-slate-200/50 dark:border-white/10 pt-6">
+                <div className="flex items-center space-x-3 w-full md:w-auto">
+                  <FormField
+                    control={form.control}
+                    name="selectedCliente"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-col sm:flex-row sm:items-center gap-3 space-y-0 w-full">
+                        <FormLabel
+                          variant="brand"
+                          className="whitespace-nowrap mb-0"
+                        >
+                          Cliente Exclusivo:
+                        </FormLabel>
+                        <Select
+                          value={field.value}
+                          onValueChange={(v) =>
+                            field.onChange(v === "none" ? "" : v)
+                          }
+                        >
+                          <FormControl>
+                            <SelectTrigger className="h-10 w-full sm:w-[280px] font-bold text-xs bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm">
+                              <SelectValue placeholder="Ruta libre (Sin cliente)" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-slate-200 dark:border-white/10 max-h-[40vh]">
+                            <SelectItem
+                              value="none"
+                              className="font-bold italic text-slate-500"
+                            >
+                              Ruta libre (Todos)
+                            </SelectItem>
+                            {clients.map((c) => (
+                              <SelectItem
+                                key={c.id}
+                                value={String(c.id)}
+                                className="font-bold text-xs uppercase"
+                              >
+                                {c.razon_social}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </FormItem>
                     )}
-                    {isFullUnit && (
-                      <TableCell className="text-right font-mono font-black text-lg text-emerald-400 border-l border-white/10 pr-6">
-                        {formatCurrency(totals.costo_f)}
-                      </TableCell>
-                    )}
-                    <TableCell className="pr-4 border-l border-white/10"></TableCell>
-                  </TableRow>
-                </tfoot>
-              </Table>
-            </DndContext>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* BOTONERAS DE ACCIÓN */}
-      <div className="flex flex-col md:flex-row justify-between items-center bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-white/10 shadow-xl gap-4">
-        <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
-          <Button
-            onClick={() =>
-              setSegments([
-                ...segments,
-                {
-                  tempId: genTempId(),
-                  nombre_segmento: "Nuevo Tramo - ",
-                  estado: "",
-                  carretera: "",
-                  distancia_km: 0,
-                  tiempo_minutos: 0,
-                  toll_booth_id: null,
-                  costo_s: 0,
-                  costo_f: 0,
-                },
-              ])
-            }
-            variant="outline"
-            className="w-full sm:w-auto border-dashed border-2 text-[10px]"
-          >
-            <Plus className="h-4 w-4 mr-2" /> Tramo Libre
-          </Button>
-
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="info" className="w-full sm:w-auto text-[10px]">
-                <MapPin className="h-4 w-4 mr-2" /> Insertar Caseta
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="w-[95vw] sm:max-w-md p-0 flex flex-col max-h-[90vh] bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 shadow-2xl rounded-2xl overflow-hidden">
-              <DialogHeader className="p-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0">
-                <DialogTitle className="text-xl font-black uppercase tracking-tighter text-brand-navy dark:text-white heading-crisp">
-                  Catálogo de Peajes
-                </DialogTitle>
-              </DialogHeader>
-              <div className="p-6 bg-slate-50/50 dark:bg-transparent flex-1 overflow-hidden flex flex-col">
-                <div className="relative mb-4">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <Input
-                    placeholder="Filtrar por nombre o tramo..."
-                    className="pl-10 h-11 font-medium bg-white dark:bg-slate-800 border-slate-200 dark:border-white/10"
-                    value={tollSearch}
-                    onChange={(e) => setTollSearch(e.target.value)}
                   />
                 </div>
-                <ScrollArea className="flex-1 custom-scrollbar pr-4">
-                  <div className="space-y-2">
-                    {allTolls
-                      .filter(
-                        (t) =>
-                          t.nombre
-                            .toLowerCase()
-                            .includes(tollSearch.toLowerCase()) ||
-                          t.tramo
-                            .toLowerCase()
-                            .includes(tollSearch.toLowerCase()),
-                      )
-                      .map((t) => (
-                        <div
-                          key={t.id}
-                          className="p-4 border border-slate-200 dark:border-white/10 rounded-xl flex justify-between items-center hover:border-brand-navy dark:hover:border-white/30 hover:shadow-md cursor-pointer group transition-all bg-white dark:bg-slate-800/50"
-                          onClick={() => {
-                            setSegments([
-                              ...segments,
-                              {
-                                tempId: genTempId(),
-                                nombre_segmento: t.nombre,
-                                estado: (t as any).estado || "",
-                                carretera: (t as any).carretera || "",
-                                distancia_km: 0,
-                                tiempo_minutos: 0,
-                                toll_booth_id: t.id,
-                                toll_nombre: t.nombre,
-                                costo_s: (t as any).costo_5_ejes_sencillo ?? 0,
-                                costo_f: (t as any).costo_9_ejes_full ?? 0,
-                              },
-                            ]);
-                            setDialogOpen(false);
-                          }}
-                        >
-                          <div className="flex-1 pr-4">
-                            <p className="text-xs font-black uppercase tracking-tight text-slate-700 dark:text-slate-200 group-hover:text-brand-navy dark:group-hover:text-white">
-                              {t.nombre}
-                            </p>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 leading-tight">
-                              {t.tramo}
-                              {((t as any).carretera || (t as any).estado) && (
-                                <span className="block mt-0.5 text-slate-500">
-                                  {(t as any).carretera}{" "}
-                                  {(t as any).carretera && (t as any).estado
-                                    ? "•"
-                                    : ""}{" "}
-                                  {(t as any).estado}
-                                </span>
-                              )}
-                            </p>
-                          </div>
-                          <div className="flex flex-col items-end gap-1.5 shrink-0">
-                            {!isFullUnit && (
-                              <Badge
-                                variant="secondary"
-                                className="font-mono text-[10px] bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-500/30 px-2 py-0.5"
-                              >
-                                $
-                                {Number(
-                                  (t as any).costo_5_ejes_sencillo ?? 0,
-                                ).toFixed(2)}
-                              </Badge>
-                            )}
-                            {isFullUnit && (
-                              <Badge
-                                variant="secondary"
-                                className="font-mono text-[10px] bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/30 px-2 py-0.5"
-                              >
-                                $
-                                {Number(
-                                  (t as any).costo_9_ejes_full ?? 0,
-                                ).toFixed(2)}
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                </ScrollArea>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="w-full md:w-auto h-10 text-[10px]"
+                  onClick={handleReverseRoute}
+                >
+                  <Repeat className="h-4 w-4 mr-2 text-brand-red" /> Invertir
+                  Sentido
+                </Button>
               </div>
-            </DialogContent>
-          </Dialog>
-        </div>
+            </CardHeader>
 
-        <div className="flex flex-col-reverse sm:flex-row items-center gap-4 w-full md:w-auto mt-4 md:mt-0">
-          {editingRouteId && (
-            <Button
-              variant="ghost"
-              className="w-full sm:w-auto h-12"
-              onClick={() => {
-                setEditingRouteId(null);
-                setSegments([]);
-                setOrigen("");
-                setDestino("");
-                setVariante("");
-                setConfiguracion("5ejes");
-                setSelectedCliente("");
-                toast.info("Edición cancelada");
-              }}
-            >
-              Cancelar
-            </Button>
-          )}
-          <Button
-            onClick={handleSave}
-            size="lg"
-            variant="default"
-            className="w-full sm:w-auto"
-          >
-            <Check className="h-4 w-4 mr-2" />
-            {editingRouteId ? "Actualizar Ruta" : "Guardar Ruta"}
-          </Button>
-        </div>
-      </div>
+            {/* TOOLBAR SECUNDARIO */}
+            <div className="bg-slate-100/50 dark:bg-slate-900/30 border-b border-slate-200 dark:border-white/10 p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div className="flex items-center space-x-3">
+                <Switch
+                  id="advanced-mode"
+                  checked={showAdvanced}
+                  onCheckedChange={setShowAdvanced}
+                  className="data-[state=checked]:bg-brand-red shadow-sm"
+                />
+                <Label
+                  htmlFor="advanced-mode"
+                  className="text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-400 cursor-pointer mt-0.5"
+                >
+                  Mostrar Datos Completos (Carr / Edo)
+                </Label>
+              </div>
+              <Button
+                type="button"
+                variant="info"
+                size="lg"
+                className="w-full sm:w-auto h-9 text-[10px]"
+                onClick={handleAutoCalculate}
+                disabled={isCalculating || segments.length === 0}
+              >
+                {isCalculating ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Wand2 className="h-4 w-4 mr-2" />
+                )}
+                Auto-Calcular Tiempos
+              </Button>
+            </div>
 
-      {/* 🚀 TABLA DE HISTORIAL */}
+            {/* 🚀 TABLA DND */}
+            <CardContent className="p-0">
+              <div className="relative w-full overflow-hidden bg-slate-50/50 dark:bg-transparent">
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <Table className="w-full caption-bottom text-sm">
+                    <TableHeader className="bg-slate-200/50 dark:bg-slate-900/80">
+                      <TableRow className="border-b border-slate-300 dark:border-white/10">
+                        <TableHead className="w-12 pl-4"></TableHead>
+                        <TableHead
+                          className={cn(
+                            "text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 h-12",
+                            showAdvanced ? "w-[30%]" : "w-[40%]",
+                          )}
+                        >
+                          Tramo / Plaza
+                        </TableHead>
+                        {showAdvanced && (
+                          <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 h-12 w-20">
+                            Edo.
+                          </TableHead>
+                        )}
+                        {showAdvanced && (
+                          <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 h-12 w-28">
+                            Carr.
+                          </TableHead>
+                        )}
+                        <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 h-12 text-right w-36 pr-4">
+                          Distancia
+                        </TableHead>
+                        <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 h-12 text-right w-36 pr-4">
+                          Tiempo
+                        </TableHead>
+                        {!isFullUnit && (
+                          <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-700 dark:text-blue-400 h-12 text-right pr-6">
+                            Costo Sencillo
+                          </TableHead>
+                        )}
+                        {isFullUnit && (
+                          <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700 dark:text-emerald-400 h-12 text-right pr-6">
+                            Costo Full
+                          </TableHead>
+                        )}
+                        <TableHead className="w-12 pr-4"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+
+                    <TableBody className="relative table-staggered">
+                      <SortableContext
+                        items={segments.map((s) => s.tempId)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        {segments.map((seg, idx) => (
+                          <SortableTableRow
+                            key={seg.tempId}
+                            seg={seg}
+                            idx={idx}
+                            updateSegment={updateSegment}
+                            removeSegment={(i) =>
+                              setSegments((prev) =>
+                                prev.filter((_, idxx) => idxx !== i),
+                              )
+                            }
+                            formatCurrency={formatCurrency}
+                            hasGap={checkRouteGap(idx)}
+                            showAdvanced={showAdvanced}
+                            isFullUnit={isFullUnit}
+                          />
+                        ))}
+                      </SortableContext>
+                      {segments.length === 0 && (
+                        <TableRow className="hover:bg-transparent">
+                          <TableCell
+                            colSpan={showAdvanced ? 8 : 6}
+                            className="h-32 text-center"
+                          >
+                            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                              Utiliza los botones de abajo para agregar tramos a
+                              la ruta.
+                            </p>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+
+                    {/* FOOTER TOTALES */}
+                    <tfoot className="bg-brand-navy dark:bg-slate-950 text-white sticky bottom-0 z-10 border-t-2 border-brand-red">
+                      <TableRow className="hover:bg-brand-navy dark:hover:bg-slate-950 border-none">
+                        <TableCell
+                          colSpan={showAdvanced ? 4 : 2}
+                          className="text-right text-[10px] font-black uppercase tracking-[0.3em] text-white/70 py-4"
+                        >
+                          TOTALES ESTIMADOS
+                        </TableCell>
+                        <TableCell className="text-right font-mono font-bold text-sm border-l border-white/10 pr-4">
+                          {totals.distancia.toFixed(1)} km
+                        </TableCell>
+                        <TableCell className="text-right font-mono font-bold text-sm border-l border-white/10 pr-4">
+                          {Math.floor(totals.tiempo / 60)}h {totals.tiempo % 60}
+                          m
+                        </TableCell>
+                        {!isFullUnit && (
+                          <TableCell className="text-right font-mono font-black text-lg text-blue-400 border-l border-white/10 pr-6">
+                            {formatCurrency(totals.costo_s)}
+                          </TableCell>
+                        )}
+                        {isFullUnit && (
+                          <TableCell className="text-right font-mono font-black text-lg text-emerald-400 border-l border-white/10 pr-6">
+                            {formatCurrency(totals.costo_f)}
+                          </TableCell>
+                        )}
+                        <TableCell className="pr-4 border-l border-white/10"></TableCell>
+                      </TableRow>
+                    </tfoot>
+                  </Table>
+                </DndContext>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* BOTONERAS DE ACCIÓN Y SUBMIT */}
+          <div className="flex flex-col md:flex-row justify-between items-center bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-white/10 shadow-xl gap-4">
+            <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
+              <Button
+                type="button"
+                onClick={() =>
+                  setSegments([
+                    ...segments,
+                    {
+                      tempId: genTempId(),
+                      nombre_segmento: "Nuevo Tramo - ",
+                      estado: "",
+                      carretera: "",
+                      distancia_km: 0,
+                      tiempo_minutos: 0,
+                      toll_booth_id: null,
+                      costo_s: 0,
+                      costo_f: 0,
+                    },
+                  ])
+                }
+                variant="outline"
+                size="lg"
+                className="w-full sm:w-auto border-dashed border-2 text-[10px]"
+              >
+                <Plus className="h-4 w-4 mr-2" /> Tramo Libre
+              </Button>
+
+              <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="info"
+                    size="lg"
+                    className="w-full sm:w-auto text-[10px]"
+                  >
+                    <MapPin className="h-4 w-4 mr-2" /> Insertar Caseta
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="w-[95vw] sm:max-w-md p-0 flex flex-col max-h-[90vh] bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 shadow-2xl rounded-2xl overflow-hidden">
+                  <DialogHeader className="p-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0">
+                    <DialogTitle className="text-xl font-black uppercase tracking-tighter text-brand-navy dark:text-white heading-crisp">
+                      Catálogo de Peajes
+                    </DialogTitle>
+                  </DialogHeader>
+                  <div className="p-6 bg-slate-50/50 dark:bg-transparent flex-1 overflow-hidden flex flex-col">
+                    <div className="relative mb-4">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <Input
+                        placeholder="Filtrar por nombre o tramo..."
+                        className="pl-10 h-11 font-medium bg-white dark:bg-slate-800 border-slate-200 dark:border-white/10 shadow-sm"
+                        value={tollSearch}
+                        onChange={(e) => setTollSearch(e.target.value)}
+                      />
+                    </div>
+                    <ScrollArea className="flex-1 custom-scrollbar pr-4">
+                      <div className="space-y-2">
+                        {allTolls
+                          .filter(
+                            (t) =>
+                              t.nombre
+                                .toLowerCase()
+                                .includes(tollSearch.toLowerCase()) ||
+                              t.tramo
+                                .toLowerCase()
+                                .includes(tollSearch.toLowerCase()),
+                          )
+                          .map((t) => (
+                            <div
+                              key={t.id}
+                              className="p-4 border border-slate-200 dark:border-white/10 rounded-xl flex justify-between items-center hover:border-brand-navy dark:hover:border-white/30 hover:shadow-md cursor-pointer group transition-all bg-white dark:bg-slate-800/50"
+                              onClick={() => {
+                                setSegments([
+                                  ...segments,
+                                  {
+                                    tempId: genTempId(),
+                                    nombre_segmento: t.nombre,
+                                    estado: (t as any).estado || "",
+                                    carretera: (t as any).carretera || "",
+                                    distancia_km: 0,
+                                    tiempo_minutos: 0,
+                                    toll_booth_id: t.id,
+                                    toll_nombre: t.nombre,
+                                    costo_s:
+                                      (t as any).costo_5_ejes_sencillo ?? 0,
+                                    costo_f: (t as any).costo_9_ejes_full ?? 0,
+                                  },
+                                ]);
+                                setDialogOpen(false);
+                              }}
+                            >
+                              <div className="flex-1 pr-4">
+                                <p className="text-xs font-black uppercase tracking-tight text-slate-700 dark:text-slate-200 group-hover:text-brand-navy dark:group-hover:text-white">
+                                  {t.nombre}
+                                </p>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 leading-tight">
+                                  {t.tramo}
+                                  {((t as any).carretera ||
+                                    (t as any).estado) && (
+                                    <span className="block mt-0.5 text-slate-500">
+                                      {(t as any).carretera}{" "}
+                                      {(t as any).carretera && (t as any).estado
+                                        ? "•"
+                                        : ""}{" "}
+                                      {(t as any).estado}
+                                    </span>
+                                  )}
+                                </p>
+                              </div>
+                              <div className="flex flex-col items-end gap-1.5 shrink-0">
+                                {!isFullUnit && (
+                                  <Badge
+                                    variant="secondary"
+                                    className="font-mono text-[10px] bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-500/30 px-2 py-0.5"
+                                  >
+                                    $
+                                    {Number(
+                                      (t as any).costo_5_ejes_sencillo ?? 0,
+                                    ).toFixed(2)}
+                                  </Badge>
+                                )}
+                                {isFullUnit && (
+                                  <Badge
+                                    variant="secondary"
+                                    className="font-mono text-[10px] bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/30 px-2 py-0.5"
+                                  >
+                                    $
+                                    {Number(
+                                      (t as any).costo_9_ejes_full ?? 0,
+                                    ).toFixed(2)}
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    </ScrollArea>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+
+            <div className="flex flex-col-reverse sm:flex-row items-center gap-4 w-full md:w-auto mt-4 md:mt-0">
+              {editingRouteId && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="w-full sm:w-auto"
+                  onClick={() => {
+                    setEditingRouteId(null);
+                    setSegments([]);
+                    form.reset();
+                    toast.info("Edición cancelada");
+                  }}
+                >
+                  Cancelar
+                </Button>
+              )}
+              {/* 🚀 BOTÓN TIPO SUBMIT CENTRALIZADO */}
+              <Button
+                type="submit"
+                size="lg"
+                variant="default"
+                className="w-full sm:w-auto"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Check className="h-4 w-4 mr-2" />
+                )}
+                {editingRouteId ? "Actualizar Ruta" : "Guardar Ruta"}
+              </Button>
+            </div>
+          </div>
+        </form>
+      </Form>
       <Card variant="default" className="shadow-2xl border-none">
         <CardHeader className="flex flex-row items-center justify-between border-b border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-900/50 py-6 rounded-t-2xl">
           <CardTitle className="text-xl font-black uppercase tracking-tighter text-brand-navy dark:text-white heading-crisp flex items-center gap-3">
@@ -1416,7 +1540,7 @@ export const ArmadorRutas: React.FC = () => {
               <AlertDialogCancel
                 variant="outline"
                 size="lg"
-                className="w-full sm:w-auto haptic-press"
+                className="w-full sm:w-auto haptic-press flex-shrink-0"
               >
                 Cancelar
               </AlertDialogCancel>
@@ -1424,7 +1548,7 @@ export const ArmadorRutas: React.FC = () => {
                 variant="destructive"
                 size="lg"
                 onClick={handleConfirmDelete}
-                className="w-full sm:w-auto haptic-press shadow-rose-600/10"
+                className="w-full sm:w-auto haptic-press shadow-rose-600/10 flex-shrink-0"
               >
                 <Trash2 className="h-4 w-4 mr-2" /> Sí, Eliminar Ruta
               </AlertDialogAction>
@@ -1433,10 +1557,10 @@ export const ArmadorRutas: React.FC = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* 🚀 MODAL DETALLE DE RUTA */}
+      {/* 🚀 MODAL DETALLE DE RUTA (BITÁCORA) */}
       <Dialog open={detailModalOpen} onOpenChange={setDetailModalOpen}>
         <DialogContent className="w-[95vw] sm:max-w-3xl p-0 overflow-hidden bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 shadow-2xl rounded-2xl flex flex-col max-h-[90vh]">
-          <DialogHeader className="px-6 sm:px-8 py-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0">
+          <DialogHeader className="px-6 sm:px-8 py-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 z-10">
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
               <DialogTitle className="flex flex-col gap-2">
                 <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
@@ -1470,7 +1594,8 @@ export const ArmadorRutas: React.FC = () => {
               {selectedRouteDetail && (
                 <Button
                   variant="outline"
-                  className="w-full sm:w-auto text-[10px] uppercase tracking-widest"
+                  size="lg"
+                  className="w-full sm:w-auto"
                   onClick={() => handlePrintRoute(selectedRouteDetail)}
                 >
                   <Printer className="h-4 w-4 mr-2 text-brand-red" /> Imprimir

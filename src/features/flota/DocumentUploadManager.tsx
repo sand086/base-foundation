@@ -29,6 +29,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import axiosClient from "@/api/axiosClient";
+import { cn } from "@/lib/utils";
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "/";
 
@@ -82,15 +83,19 @@ const formatDate = (dateStr: string) =>
 const getFileIcon = (filename: string) => {
   const ext = (filename.split(".").pop() || "").toLowerCase();
   if (["xlsx", "xls", "csv"].includes(ext)) {
-    return <FileSpreadsheet className="w-4 h-4 text-emerald-600" />;
+    return (
+      <FileSpreadsheet className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+    );
   }
   if (["zip", "rar", "7z", "tar", "gz"].includes(ext)) {
-    return <FileArchive className="w-4 h-4 text-indigo-600" />;
+    return (
+      <FileArchive className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+    );
   }
   if (["pdf"].includes(ext)) {
-    return <FileText className="w-4 h-4 text-rose-600" />;
+    return <FileText className="w-5 h-5 text-rose-600 dark:text-rose-400" />;
   }
-  return <FileIcon className="w-4 h-4 text-blue-600" />;
+  return <FileIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />;
 };
 
 function buildHistoryEndpoint(
@@ -225,85 +230,118 @@ export function DocumentUploadManager({
   };
 
   return (
-    <div className="flex flex-col gap-3 p-4 border rounded-xl bg-white/5 border-black/10 shadow-sm hover:border-primary/20 transition-all">
-      <div className="flex justify-between items-start gap-3">
-        <div className="space-y-1 min-w-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <Label className="font-bold text-sm text-foreground/90 truncate">
+    <div className="flex flex-col gap-4 p-5 rounded-2xl bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-white/10 shadow-sm hover:shadow-md transition-all group">
+      {/* Cabecera del Gestor de Documentos */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        <div className="space-y-1 min-w-0 flex-1">
+          <div className="flex items-center gap-3 min-w-0">
+            <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-navy dark:text-slate-200 truncate leading-none">
               {docLabel}
             </Label>
             {statusBadge}
           </div>
-          {lastUploadDate && (
-            <p className=" text-muted-foreground font-mono">
-              Ult: {formatDate(lastUploadDate)}
+          {lastUploadDate ? (
+            <p className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-1">
+              Última act:{" "}
+              <span className="font-mono">{formatDate(lastUploadDate)}</span>
+            </p>
+          ) : (
+            <p className="text-[9px] font-bold text-amber-500 uppercase tracking-widest mt-1">
+              Sin documento registrado
             </p>
           )}
         </div>
 
+        {/* Modal de Historial */}
         <Dialog onOpenChange={(o) => o && void loadHistory(false)}>
           <DialogTrigger asChild>
             <Button
               variant="outline"
               size="sm"
-              className="h-7  font-bold uppercase gap-1.5 border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100"
+              className="h-8 text-[9px] font-black uppercase tracking-widest gap-1.5 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:text-brand-navy dark:hover:text-white haptic-press w-full sm:w-auto"
             >
-              <History className="w-3.5 h-3.5" /> Lista / Historial
+              <History className="w-3.5 h-3.5" /> Historial
             </Button>
           </DialogTrigger>
 
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Documentos: {docLabel}</DialogTitle>
+          <DialogContent className="w-[95vw] sm:max-w-lg flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
+            {/* Header Tahoe */}
+            <DialogHeader className="p-6 bg-brand-navy/95 dark:bg-slate-900 backdrop-blur-md shrink-0 border-b border-white/10 relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
+              <div className="relative z-10 flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center shadow-inner shrink-0 icon-plate">
+                  <History className="h-6 w-6 text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.4)]" />
+                </div>
+                <div className="flex flex-col gap-1 text-left">
+                  <DialogTitle className="text-xl font-black uppercase tracking-tighter text-white text-shadow-premium heading-crisp leading-none truncate pr-4">
+                    {docLabel}
+                  </DialogTitle>
+                  <p className="text-[9px] font-black uppercase tracking-[0.2em] text-brand-secondary dark:text-slate-400 mt-1">
+                    Control de Versiones y Expediente
+                  </p>
+                </div>
+              </div>
             </DialogHeader>
 
-            <ScrollArea className="h-[350px] mt-4 pr-4">
+            <ScrollArea className="flex-1 overflow-y-auto p-6 bg-slate-50/50 dark:bg-transparent custom-scrollbar max-h-[50vh]">
               {history.length === 0 ? (
-                <p className="text-center text-muted-foreground py-10 text-xs">
-                  No hay documentos cargados.
-                </p>
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <div className="h-12 w-12 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center mb-3">
+                    <FileText className="h-6 w-6 text-slate-400 dark:text-slate-500" />
+                  </div>
+                  <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                    No hay documentos en el historial
+                  </p>
+                </div>
               ) : (
                 <div className="space-y-3">
                   {history.map((item) => (
                     <div
                       key={item.id}
-                      className={`
-                        flex items-center justify-between p-3 rounded-lg border
-                        ${
-                          item.is_active
-                            ? "bg-emerald-50 border-emerald-200"
-                            : "bg-card"
-                        }
-                      `}
+                      className={cn(
+                        "flex items-center justify-between p-4 rounded-xl border shadow-sm transition-all",
+                        item.is_active
+                          ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50"
+                          : "bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10",
+                      )}
                     >
-                      <div className="space-y-1 overflow-hidden min-w-0">
-                        <div className="flex items-center gap-2 min-w-0">
+                      <div className="flex items-center gap-3 overflow-hidden min-w-0">
+                        <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 shrink-0">
                           {getFileIcon(item.filename)}
+                        </div>
+                        <div className="flex flex-col min-w-0">
                           <p
-                            className="text-xs font-bold truncate w-48"
+                            className="text-[11px] font-bold tracking-tight text-slate-700 dark:text-slate-200 truncate pr-2"
                             title={item.filename}
                           >
                             {item.filename}
                           </p>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-[9px]">
-                            v{item.version}
-                          </Badge>
-                          <span className=" text-muted-foreground">
-                            {item.created_at
-                              ? formatDate(item.created_at)
-                              : "N/A"}
-                          </span>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "text-[8px] font-black uppercase tracking-widest px-1.5 py-0",
+                                item.is_active
+                                  ? "text-emerald-600 border-emerald-300 dark:text-emerald-400 dark:border-emerald-500/50"
+                                  : "text-slate-500 border-slate-200 dark:text-slate-400 dark:border-white/10",
+                              )}
+                            >
+                              v{item.version}
+                            </Badge>
+                            <span className="text-[9px] font-bold tracking-widest text-slate-400 uppercase font-mono">
+                              {item.created_at
+                                ? formatDate(item.created_at)
+                                : "N/A"}
+                            </span>
+                          </div>
                         </div>
                       </div>
 
-                      <div className="flex gap-1">
+                      <div className="flex items-center gap-1 shrink-0 ml-2">
                         <Button
                           size="icon"
                           variant="ghost"
-                          className="h-8 w-8"
+                          className="h-8 w-8 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg"
                           asChild
                         >
                           <a
@@ -311,14 +349,14 @@ export function DocumentUploadManager({
                             target="_blank"
                             rel="noopener noreferrer"
                           >
-                            <Eye className="w-4 h-4 text-primary" />
+                            <Eye className="w-4 h-4" />
                           </a>
                         </Button>
 
                         <Button
                           size="icon"
                           variant="ghost"
-                          className="h-8 w-8 text-destructive"
+                          className="h-8 w-8 text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-lg"
                           onClick={() => void handleDelete(item.id)}
                         >
                           <Trash2 className="w-4 h-4" />
@@ -333,8 +371,9 @@ export function DocumentUploadManager({
         </Dialog>
       </div>
 
-      <div className="flex items-end gap-3 mt-1">
-        <div className="relative flex-1">
+      {/* Inputs Activos (Subida y Fecha) */}
+      <div className="flex flex-col sm:flex-row items-end gap-3 mt-1">
+        <div className="relative flex-1 w-full">
           <Input
             type="file"
             className="hidden"
@@ -346,33 +385,38 @@ export function DocumentUploadManager({
 
           <Label
             htmlFor={inputId}
-            className={[
-              "flex items-center justify-center w-full h-9 px-3 text-[11px] font-bold uppercase transition-all",
-              "border border-dashed rounded-lg cursor-pointer bg-background/50 hover:bg-accent",
-              isUploading ? "opacity-50 cursor-not-allowed" : "",
-            ].join(" ")}
+            className={cn(
+              "flex items-center justify-center w-full h-11 px-4 text-[10px] font-black uppercase tracking-[0.2em] transition-all border-2 border-dashed rounded-xl cursor-pointer shadow-sm haptic-press",
+              isUploading
+                ? "opacity-50 cursor-not-allowed bg-slate-100 border-slate-300 text-slate-400 dark:bg-slate-800 dark:border-slate-700"
+                : "bg-slate-50 dark:bg-slate-900/50 border-slate-300 dark:border-slate-700 hover:bg-brand-navy/5 dark:hover:bg-brand-navy/20 hover:border-brand-navy/30 dark:hover:border-blue-500/30 text-slate-600 dark:text-slate-300 hover:text-brand-navy dark:hover:text-white",
+            )}
           >
             {isUploading ? (
               <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" />
-                Subiendo...
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                Subiendo Documento...
               </>
             ) : (
               <>
-                <Upload className="w-3.5 h-3.5 mr-2" />
-                {currentUrl ? "Cargar Nuevo / Reemplazar" : "Subir Archivo"}
+                <Upload className="w-4 h-4 mr-2" />
+                {currentUrl ? "Reemplazar Documento" : "Subir Archivo"}
               </>
             )}
           </Label>
         </div>
 
-        {dateInput && <div className="flex-1 min-w-[130px]">{dateInput}</div>}
+        {/* Input Opcional de Fecha */}
+        {dateInput && (
+          <div className="flex-1 w-full min-w-[130px]">{dateInput}</div>
+        )}
 
+        {/* Botón Ver Documento Actual */}
         {currentUrl && (
           <Button
             variant="default"
-            size="sm"
-            className="h-9 px-3 bg-emerald-600 hover:bg-emerald-700 text-white"
+            size="lg"
+            className="h-11 px-5 bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-700 text-white rounded-xl shadow-md flex items-center justify-center haptic-press w-full sm:w-auto"
             asChild
           >
             <a
@@ -380,7 +424,8 @@ export function DocumentUploadManager({
               target="_blank"
               rel="noopener noreferrer"
             >
-              <Eye className="w-4 h-4" />
+              <Eye className="w-4 h-4 mr-2" />
+              Ver Actual
             </a>
           </Button>
         )}

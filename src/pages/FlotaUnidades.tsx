@@ -1,3 +1,4 @@
+// src/features/flota/FlotaUnidades.tsx
 import { useState, useMemo } from "react";
 import {
   Truck,
@@ -10,16 +11,17 @@ import {
   Loader2,
   MoreHorizontal,
   AlertCircle,
+  Check,
 } from "lucide-react";
 
 import { useNavigate } from "react-router-dom";
 
 // Componentes UI
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Switch } from "@/components/ui/switch"; // 🚀 AÑADIMOS EL SWITCH DE SHADCN
+import { Switch } from "@/components/ui/switch";
 import {
   Tooltip,
   TooltipContent,
@@ -48,48 +50,80 @@ import {
   EnhancedDataTable,
   ColumnDef,
 } from "@/components/ui/enhanced-data-table";
-import { toast } from "sonner"; // 🚀 PARA AVISAR QUE SE GUARDÓ EL ESTADO
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 // Features y Hooks
 import { AddUnidadModal } from "@/features/flota/AddUnidadModal";
 import { PatrimonialView } from "@/features/flota/PatrimonialView";
 import { useUnits } from "@/hooks/useUnits";
-
 import { useTiposUnidad } from "@/hooks/useTiposUnidad";
-
 import { Unit } from "@/types/api.types";
 
-// --- Helpers Visuales ---
+// --- Helpers Visuales (Industrial Premium) ---
 const getStatusBadge = (status: string) => {
   const s = status?.toLowerCase() || "";
+  const baseClass =
+    "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 shadow-sm";
+
   switch (s) {
     case "disponible":
       return (
-        <Badge className="bg-green-600 text-white hover:bg-green-700 shadow-sm">
+        <Badge
+          variant="outline"
+          className={cn(
+            baseClass,
+            "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-500/30",
+          )}
+        >
           Disponible
         </Badge>
       );
     case "en_ruta":
       return (
-        <Badge className="bg-blue-600 text-white hover:bg-blue-700 shadow-sm">
+        <Badge
+          variant="outline"
+          className={cn(
+            baseClass,
+            "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-500/30",
+          )}
+        >
           En Ruta
         </Badge>
       );
     case "mantenimiento":
       return (
-        <Badge className="bg-yellow-500 text-black hover:bg-yellow-600 shadow-sm">
+        <Badge
+          variant="outline"
+          className={cn(
+            baseClass,
+            "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-500/30",
+          )}
+        >
           Mantenimiento
         </Badge>
       );
     case "bloqueado":
       return (
-        <Badge className="bg-red-600 text-white hover:bg-red-700 shadow-sm">
+        <Badge
+          variant="outline"
+          className={cn(
+            baseClass,
+            "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-500/30",
+          )}
+        >
           Bloqueado
         </Badge>
       );
     default:
       return (
-        <Badge variant="secondary" className="shadow-sm">
+        <Badge
+          variant="outline"
+          className={cn(
+            baseClass,
+            "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-white/10",
+          )}
+        >
           {status}
         </Badge>
       );
@@ -98,7 +132,10 @@ const getStatusBadge = (status: string) => {
 
 const getTipoBadge = (tipo: string) => {
   return (
-    <Badge variant="outline" className="text-xs uppercase font-medium bg-white">
+    <Badge
+      variant="outline"
+      className="text-[9px] font-black uppercase tracking-widest bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10 shadow-sm"
+    >
       {tipo}
     </Badge>
   );
@@ -121,7 +158,6 @@ export default function FlotaUnidades() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Tipado correcto: IDs son numéricos y la unidad a editar es tipo Unidad completa
   const [unidadToEdit, setUnidadToEdit] = useState<Unit | null>(null);
   const [unidadToDelete, setUnidadToDelete] = useState<number | null>(null);
 
@@ -174,21 +210,23 @@ export default function FlotaUnidades() {
     }
   };
 
-  // Definición de columnas usando el tipo Unit correcto
+  // Definición de columnas
   const columns: ColumnDef<Unit>[] = useMemo(
     () => [
       {
         key: "numero_economico",
         header: "No. Económico",
         render: (value) => (
-          <span className="font-black text-brand-navy">ECO-{value}</span>
+          <span className="font-black text-brand-navy dark:text-white uppercase tracking-tight">
+            ECO-{value}
+          </span>
         ),
       },
       {
         key: "placas",
         header: "Placas",
         render: (value) => (
-          <span className="font-mono text-sm font-medium text-slate-600">
+          <span className="font-mono text-sm font-bold text-slate-600 dark:text-slate-400">
             {value || "S/P"}
           </span>
         ),
@@ -198,8 +236,10 @@ export default function FlotaUnidades() {
         header: "Marca / Modelo",
         render: (_, row) => (
           <div className="flex flex-col">
-            <span className="font-bold text-slate-800">{row.marca}</span>
-            <span className="text-xs font-medium text-slate-500">
+            <span className="font-bold text-slate-800 dark:text-slate-200">
+              {row.marca}
+            </span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
               {row.modelo} {row.year}
             </span>
           </div>
@@ -210,12 +250,10 @@ export default function FlotaUnidades() {
         header: "Tipo",
         render: (value) => getTipoBadge(value),
       },
-      // 🚀 NUEVA COLUMNA DE UX PARA GUSTAVO: CONTROL DEL "BOTE" (CHASIS)
       {
         key: "is_loaded",
         header: "Estado Carga",
         render: (_, row) => {
-          // Identificar si la unidad es un remolque/chasis (solo a ellos se les monta contenedor)
           const esRemolque = [
             "remolque",
             "caja",
@@ -230,13 +268,12 @@ export default function FlotaUnidades() {
 
           if (!esRemolque) {
             return (
-              <span className="text-xs text-slate-600 font-medium italic">
+              <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
                 N/A (Tracto)
               </span>
             );
           }
 
-          // Es un chasis: Mostramos el Switch interactivo
           const isLoaded = (row as any).is_loaded || false;
 
           return (
@@ -244,7 +281,6 @@ export default function FlotaUnidades() {
               <Switch
                 checked={isLoaded}
                 onCheckedChange={async (checked) => {
-                  // Guardar el estado en la base de datos en tiempo real
                   const success = await updateUnit(row.id, {
                     is_loaded: checked,
                   } as any);
@@ -259,14 +295,16 @@ export default function FlotaUnidades() {
                     );
                   }
                 }}
+                className="data-[state=checked]:bg-brand-navy"
               />
               <Badge
                 variant="outline"
-                className={`transition-colors border px-2 py-0.5 ${
+                className={cn(
+                  "transition-colors px-2 py-0.5 text-[9px] font-black uppercase tracking-widest shadow-sm",
                   isLoaded
-                    ? "bg-brand-navy/10 text-brand-navy border-brand-navy/20"
-                    : "bg-slate-100 text-slate-500 border-slate-200"
-                }`}
+                    ? "bg-brand-navy/10 text-brand-navy border-brand-navy/20 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-500/30"
+                    : "bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-white/10",
+                )}
               >
                 {isLoaded ? "📦 CARGADO" : "➖ VACÍO"}
               </Badge>
@@ -281,16 +319,17 @@ export default function FlotaUnidades() {
           <div className="flex items-center gap-2">
             {getStatusBadge(row.status)}
 
-            {/* MOSTRAR MOTIVO SI ESTÁ BLOQUEADO */}
             {row.status === "bloqueado" && row.razon_bloqueo && (
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger>
-                    <AlertCircle className="h-4 w-4 text-red-500 cursor-help transition-transform hover:scale-110" />
+                    <AlertCircle className="h-4 w-4 text-rose-500 cursor-help transition-transform hover:scale-110" />
                   </TooltipTrigger>
-                  <TooltipContent className="bg-red-50 text-red-900 border-red-200 font-medium shadow-lg">
-                    <p className="font-bold mb-1">Motivo de Bloqueo:</p>
-                    <p>{row.razon_bloqueo}</p>
+                  <TooltipContent className="bg-rose-50 text-rose-900 border-rose-200 dark:bg-rose-950 dark:text-rose-200 dark:border-rose-900 shadow-lg">
+                    <p className="text-[9px] font-black uppercase tracking-widest mb-1 opacity-70">
+                      Motivo de Bloqueo:
+                    </p>
+                    <p className="font-bold text-xs">{row.razon_bloqueo}</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -309,37 +348,37 @@ export default function FlotaUnidades() {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 p-0 hover:bg-slate-200"
+                className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl shadow-sm border border-slate-200/50 dark:border-white/10 bg-white dark:bg-slate-900/50"
               >
-                <MoreHorizontal className="h-4 w-4 text-slate-600" />
+                <MoreHorizontal className="h-4 w-4 text-slate-500 dark:text-slate-400" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="end"
-              className="bg-white rounded-xl shadow-xl p-1"
+              className="glass-panel border-white/20 min-w-[180px] z-50 dark:bg-slate-900/90"
             >
               <DropdownMenuItem
                 onClick={() =>
                   navigate(`/flota/unidad/${row.numero_economico}`)
                 }
-                className="rounded-lg cursor-pointer"
+                className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
               >
-                <Eye className="h-4 w-4 mr-3 text-slate-600" />{" "}
-                <span className="font-medium">Ver Expediente</span>
+                <Eye className="h-4 w-4 text-brand-navy dark:text-slate-400" />{" "}
+                Ver Expediente
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => handleEdit(row)}
-                className="rounded-lg cursor-pointer"
+                className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
               >
-                <Edit className="h-4 w-4 mr-3 text-slate-600" />{" "}
-                <span className="font-medium">Editar Unidad</span>
+                <Edit className="h-4 w-4 text-blue-500 dark:text-blue-400" />{" "}
+                Editar Unidad
               </DropdownMenuItem>
-              <DropdownMenuSeparator className="my-1" />
+              <DropdownMenuSeparator className="dark:bg-white/10" />
               <DropdownMenuItem
-                className="text-red-600 focus:text-red-700 focus:bg-red-50 rounded-lg cursor-pointer font-bold"
+                className="gap-2 font-bold text-xs uppercase tracking-tight text-rose-600 dark:text-rose-500 cursor-pointer dark:focus:bg-rose-950/30"
                 onClick={() => setUnidadToDelete(row.id)}
               >
-                <Trash2 className="h-4 w-4 mr-3" /> Eliminar Unidad
+                <Trash2 className="h-4 w-4" /> Eliminar Unidad
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -353,8 +392,8 @@ export default function FlotaUnidades() {
     return (
       <div className="flex justify-center items-center h-[50vh]">
         <div className="flex flex-col items-center gap-4">
-          <Loader2 className="animate-spin h-10 w-10 text-brand-navy" />
-          <p className="text-muted-foreground font-medium animate-pulse">
+          <Loader2 className="animate-spin h-10 w-10 text-brand-red" />
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 animate-pulse">
             Cargando flota operativa...
           </p>
         </div>
@@ -363,36 +402,45 @@ export default function FlotaUnidades() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-20">
-      <div className="flex items-center justify-between bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+      {/* 🚀 HEADER TAHOE */}
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between bg-white/40 dark:bg-slate-900/40 p-4 rounded-2xl shadow-sm border border-white/20 dark:border-white/10 backdrop-blur-md gap-4">
         <div>
-          <h1 className="text-2xl font-black text-brand-navy flex items-center gap-2">
-            <Truck className="h-7 w-7 text-emerald-600" /> Gestión de Flota
+          <h1 className="text-2xl font-black text-brand-navy dark:text-white flex items-center gap-2 uppercase tracking-tighter heading-crisp">
+            <div className="p-2 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+              <Truck className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            Gestión de Flota
           </h1>
-          <p className="text-sm font-medium text-slate-500 mt-1">
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-2">
             Catálogo de unidades, disponibilidad en patio y estatus físico.
           </p>
         </div>
         <Button
-          className="gap-2 bg-brand-navy text-white hover:bg-brand-navy/90 font-bold shadow-md h-11 px-6 rounded-xl"
+          variant="default"
+          size="lg"
+          className="w-full md:w-auto haptic-press shadow-lg shadow-brand-red/20"
           onClick={handleOpenNewModal}
         >
-          <Plus className="h-5 w-5" /> Nueva Unidad
+          <Plus className="h-4 w-4 mr-2" /> Nueva Unidad
         </Button>
       </div>
 
-      <Tabs defaultValue="unidades" className="space-y-4">
-        <TabsList className="bg-slate-100 p-1 h-12 rounded-xl">
+      <Tabs defaultValue="unidades" className="space-y-6">
+        {/* 🚀 TABS LIST */}
+        <TabsList className="bg-slate-100/50 dark:bg-slate-900/50 backdrop-blur-md p-1 h-14 rounded-xl border border-slate-200/50 dark:border-white/10 w-full sm:w-auto inline-flex">
           <TabsTrigger
             value="unidades"
-            className="gap-2 text-sm font-bold rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm"
+            className="gap-2 text-[11px] font-black uppercase tracking-widest rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:text-brand-navy dark:data-[state=active]:text-white data-[state=active]:shadow-sm h-full px-6 transition-all"
           >
-            <Truck className="h-4 w-4" /> Unidades Operativas
+            <Truck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />{" "}
+            Unidades Operativas
           </TabsTrigger>
           <TabsTrigger
             value="patrimonial"
-            className="gap-2 text-sm font-bold rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm"
+            className="gap-2 text-[11px] font-black uppercase tracking-widest rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:text-brand-navy dark:data-[state=active]:text-white data-[state=active]:shadow-sm h-full px-6 transition-all"
           >
-            <Package className="h-4 w-4" /> Control Patrimonial
+            <Package className="h-4 w-4 text-blue-600 dark:text-blue-400" />{" "}
+            Control Patrimonial
           </TabsTrigger>
         </TabsList>
 
@@ -400,61 +448,101 @@ export default function FlotaUnidades() {
           value="unidades"
           className="space-y-6 m-0 focus-visible:outline-none"
         >
-          {/* DASHBOARD DE FLOTA */}
-          <div className="grid gap-4 md:grid-cols-4">
-            <Card className="border-l-4 border-l-green-500 shadow-sm hover:shadow-md transition-shadow">
-              <CardContent className="p-5">
-                <p className="text-xs font-black text-slate-600 uppercase tracking-widest mb-1">
+          {/* 🚀 DASHBOARD DE FLOTA */}
+          <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+            <Card
+              variant="default"
+              className="p-6 flex items-center gap-5 group hover:border-emerald-300 dark:hover:border-emerald-500/50 transition-all cursor-default"
+            >
+              <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl border border-emerald-100 dark:border-emerald-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
+                <Check className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div className="flex flex-col justify-center">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
                   Disponibles
                 </p>
-                <p className="text-3xl font-black text-green-600">
+                <p className="text-3xl font-black text-emerald-600 dark:text-emerald-400 leading-none tracking-tighter">
                   {disponibles}
                 </p>
-              </CardContent>
+              </div>
             </Card>
-            <Card className="border-l-4 border-l-blue-600 shadow-sm hover:shadow-md transition-shadow">
-              <CardContent className="p-5">
-                <p className="text-xs font-black text-slate-600 uppercase tracking-widest mb-1">
+
+            <Card
+              variant="default"
+              className="p-6 flex items-center gap-5 group hover:border-blue-300 dark:hover:border-blue-500/50 transition-all cursor-default"
+            >
+              <div className="p-3.5 bg-blue-50 dark:bg-blue-950/30 rounded-2xl border border-blue-100 dark:border-blue-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
+                <Truck className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div className="flex flex-col justify-center">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
                   En Ruta
                 </p>
-                <p className="text-3xl font-black text-blue-600">{enRuta}</p>
-              </CardContent>
+                <p className="text-3xl font-black text-blue-600 dark:text-blue-400 leading-none tracking-tighter">
+                  {enRuta}
+                </p>
+              </div>
             </Card>
-            <Card className="border-l-4 border-l-yellow-500 shadow-sm hover:shadow-md transition-shadow">
-              <CardContent className="p-5">
-                <p className="text-xs font-black text-slate-600 uppercase tracking-widest mb-1">
+
+            <Card
+              variant="default"
+              className="p-6 flex items-center gap-5 group hover:border-amber-300 dark:hover:border-amber-500/50 transition-all cursor-default"
+            >
+              <div className="p-3.5 bg-amber-50 dark:bg-amber-950/30 rounded-2xl border border-amber-100 dark:border-amber-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
+                <AlertTriangle className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div className="flex flex-col justify-center">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
                   Mantenimiento
                 </p>
-                <p className="text-3xl font-black text-yellow-600">
+                <p className="text-3xl font-black text-amber-600 dark:text-amber-400 leading-none tracking-tighter">
                   {mantenimiento}
                 </p>
-              </CardContent>
+              </div>
             </Card>
-            <Card className="border-l-4 border-l-red-600 shadow-sm hover:shadow-md transition-shadow">
-              <CardContent className="p-5">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className="text-xs font-black text-slate-600 uppercase tracking-widest mb-1">
-                      Bloqueadas
-                    </p>
-                    <p className="text-3xl font-black text-red-600">
-                      {bloqueadas}
-                    </p>
-                  </div>
-                  {bloqueadas > 0 && (
-                    <AlertTriangle className="h-8 w-8 text-red-500/20 absolute right-4 top-4" />
-                  )}
-                </div>
-              </CardContent>
+
+            <Card
+              variant="default"
+              className="p-6 flex items-center gap-5 group hover:border-rose-300 dark:hover:border-rose-500/50 transition-all cursor-default relative overflow-hidden"
+            >
+              <div className="p-3.5 bg-rose-50 dark:bg-rose-950/30 rounded-2xl border border-rose-100 dark:border-rose-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out relative z-10">
+                <AlertCircle className="h-6 w-6 text-rose-600 dark:text-rose-400" />
+              </div>
+              <div className="flex flex-col justify-center relative z-10">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
+                  Bloqueadas
+                </p>
+                <p className="text-3xl font-black text-rose-600 dark:text-rose-400 leading-none tracking-tighter">
+                  {bloqueadas}
+                </p>
+              </div>
+              {bloqueadas > 0 && (
+                <AlertTriangle className="h-24 w-24 text-rose-500/10 dark:text-rose-500/5 absolute -right-4 -bottom-4 z-0" />
+              )}
             </Card>
           </div>
 
-          <Card className="shadow-lg border-slate-200 overflow-hidden rounded-2xl">
-            <CardContent className="p-8">
+          {/* 🚀 TABLA DE DIRECTORIO (CON HEADER HOMOLOGADO A TARIFAS) */}
+          <Card
+            variant="default"
+            className="shadow-2xl border-slate-200/50 dark:border-white/10 overflow-hidden"
+          >
+            <CardHeader className="flex flex-row items-center justify-between border-b border-slate-200 dark:border-white/10 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-xl py-6 px-6">
+              <div>
+                <CardTitle className="text-xl font-black uppercase tracking-tighter text-brand-navy dark:text-white heading-crisp flex items-center gap-3">
+                  <Truck className="h-6 w-6 text-brand-red" /> Directorio
+                  Operativo
+                </CardTitle>
+              </div>
+            </CardHeader>
+            {/* Truco: Aplicamos estilos de tabla en el contenedor para forzar las cabeceras generadas por EnhancedDataTable */}
+            <CardContent className="p-0 bg-white dark:bg-slate-950 [&_thead]:bg-slate-50/80 dark:[&_thead]:bg-slate-900/80 [&_thead]:backdrop-blur-xl [&_th]:bg-transparent [&_th]:border-b [&_th]:border-slate-200 dark:[&_th]:border-white/10 [&_th]:text-[10px] [&_th]:font-black [&_th]:uppercase [&_th]:tracking-[0.2em] [&_th]:text-slate-500 dark:[&_th]:text-slate-400">
+              {" "}
               <EnhancedDataTable
                 data={unidades}
                 columns={columns}
                 exportFileName="flota_unidades"
+                className="border-none"
               />
             </CardContent>
           </Card>
@@ -477,44 +565,79 @@ export default function FlotaUnidades() {
         isSaving={isSaving}
       />
 
-      {/* DIÁLOGO DE CONFIRMACIÓN DE ELIMINACIÓN */}
+      {/* 🚀 DIÁLOGO DE CONFIRMACIÓN DE ELIMINACIÓN */}
       <AlertDialog
         open={!!unidadToDelete}
         onOpenChange={(open) => !open && setUnidadToDelete(null)}
       >
-        <AlertDialogContent className="rounded-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-red-600 font-black">
-              <Trash2 className="h-5 w-5" /> Confirmar Eliminación
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-base text-slate-600 mt-3">
-              ¿Está seguro que desea eliminar la unidad{" "}
-              <span className="font-black text-slate-900">
-                ECO-
-                {
-                  unidades.find((u) => u.id === unidadToDelete)
-                    ?.numero_economico
-                }
-              </span>
-              ?
-              <br />
-              <br />
-              <span className="bg-red-50 text-red-700 p-2 rounded block border border-red-100 text-sm font-medium">
-                Esta acción eliminará el historial técnico asociado y no se
-                puede deshacer.
-              </span>
-            </AlertDialogDescription>
+        <AlertDialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
+          <AlertDialogHeader className="p-6 sm:p-8 bg-brand-navy/95 dark:bg-slate-900 backdrop-blur-md shrink-0 border-b border-white/10 relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
+            <div className="relative z-10 flex items-center gap-4 sm:gap-5">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-rose-500/20 flex items-center justify-center shadow-inner shrink-0 icon-plate">
+                <Trash2 className="h-7 w-7 sm:h-8 sm:w-8 text-rose-400 drop-shadow-[0_0_8px_rgba(244,63,94,0.4)]" />
+              </div>
+              <div className="flex flex-col gap-1 text-left">
+                <AlertDialogTitle className="text-2xl font-black uppercase tracking-tighter text-white text-shadow-premium heading-crisp leading-none">
+                  Eliminar Unidad
+                </AlertDialogTitle>
+                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-brand-secondary dark:text-slate-400 mt-1">
+                  Acción Irreversible • Catálogo Flota
+                </p>
+              </div>
+            </div>
           </AlertDialogHeader>
-          <AlertDialogFooter className="mt-4">
-            <AlertDialogCancel className="rounded-xl font-bold">
-              Cancelar
-            </AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold"
-              onClick={handleDelete}
-            >
-              Sí, Eliminar Unidad
-            </AlertDialogAction>
+
+          <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
+            <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block space-y-6">
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                ¿Está seguro que desea eliminar la unidad{" "}
+                <b className="text-slate-900 dark:text-white text-lg font-black tracking-tight">
+                  ECO-
+                  {
+                    unidades.find((u) => u.id === unidadToDelete)
+                      ?.numero_economico
+                  }
+                </b>
+                ?
+              </p>
+
+              <div className="p-5 bg-rose-50 dark:bg-rose-950/20 border-l-4 border-rose-500 rounded-r-2xl shadow-sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+                  <h4 className="text-[10px] sm:text-[11px] font-black text-rose-800 dark:text-rose-400 uppercase tracking-widest">
+                    Pérdida de Datos Técnicos
+                  </h4>
+                </div>
+                <p className="text-xs sm:text-sm leading-relaxed text-rose-900 dark:text-rose-200/80">
+                  Esta acción eliminará el historial técnico asociado a esta
+                  unidad y{" "}
+                  <b className="font-black underline">no se puede deshacer</b>.
+                  Los viajes históricos despachados mantendrán la referencia en
+                  modo texto.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </div>
+
+          <AlertDialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0">
+            <div className="flex flex-col-reverse sm:flex-row sm:flex-wrap justify-end items-stretch sm:items-center gap-3 w-full">
+              <AlertDialogCancel
+                variant="outline"
+                size="lg"
+                className="w-full sm:w-auto haptic-press flex-shrink-0"
+              >
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                variant="destructive"
+                size="lg"
+                onClick={handleDelete}
+                className="w-full sm:w-auto haptic-press shadow-rose-600/10 flex-shrink-0"
+              >
+                <Trash2 className="h-4 w-4 mr-2" /> Sí, Eliminar Unidad
+              </AlertDialogAction>
+            </div>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
