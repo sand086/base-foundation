@@ -906,12 +906,18 @@ class WorkOrder(AuditMixin, Base):
         Integer, ForeignKey("mechanics.id", ondelete="SET NULL"), nullable=True
     )
 
-    descripcion_problema = Column(Text, nullable=False)
+    # 🚀 NUEVAS COLUMNAS (Objetivo 4)
+    tipo_mantenimiento = Column(
+        String(20), default="patio", server_default="patio"
+    )  # "patio" o "ruta"
+    trip_id = Column(
+        Integer, ForeignKey("trips.id", ondelete="SET NULL"), nullable=True
+    )
 
+    descripcion_problema = Column(Text, nullable=False)
     status = Column(
         pg_enum(WorkOrderStatus, "workorderstatus"), default=WorkOrderStatus.ABIERTA
     )
-
     fecha_apertura = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -919,6 +925,7 @@ class WorkOrder(AuditMixin, Base):
 
     unit = relationship("Unit", back_populates="work_orders")
     mechanic = relationship("Mechanic", back_populates="work_orders")
+    trip = relationship("Trip")  # 🚀 Relación con el viaje
     parts = relationship(
         "WorkOrderPart", back_populates="work_order", cascade="all, delete-orphan"
     )

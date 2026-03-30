@@ -1,4 +1,3 @@
-// src/features/combustible/EditCargaModal.tsx
 import * as React from "react";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -6,6 +5,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,99 +24,90 @@ import {
   AlertTriangle,
   Fuel,
   Droplets,
+  Truck,
+  User,
+  Navigation,
+  DollarSign,
+  Hash,
 } from "lucide-react";
 import { toast } from "sonner";
 import { fuelService } from "@/services/fuelService";
 import { DocumentUploadManager } from "@/features/flota/DocumentUploadManager";
+import { DatePicker } from "@/components/ui/date-picker";
+import { cn } from "@/lib/utils";
 
 /** =========================
- * Tipos mínimos (ajusta a tus tipos reales si ya existen)
+ * REGLA 3: Tipografía Técnica Industrial
+ * Componente local para labels estandarizados
+ * ========================= */
+const FormLabelBrand = ({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) => (
+  <Label
+    className={cn(
+      "text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mb-1.5 block",
+      className,
+    )}
+  >
+    {children}
+  </Label>
+);
+
+/** =========================
+ * Tipos y Lógica de Dominio
  * ========================= */
 type ID = string | number;
-
 type TipoCombustible = "diesel" | "urea";
 
-type Unit = {
+interface Unit {
   id: ID;
   numero_economico?: string | null;
-  placas?: string | null;
   capacidad_tanque_diesel?: number | null;
   capacidad_tanque_urea?: number | null;
-};
+}
 
-type Operator = {
+interface Operator {
   id: ID;
   name?: string | null;
-  // compat opcional
   nombre?: string | null;
-};
+}
 
-type CargaCombustible = {
+interface CargaCombustible {
   id: ID;
-
-  // backend-style
   unit_id?: ID | null;
   operator_id?: ID | null;
   tipo_combustible?: TipoCombustible | null;
-  fecha_hora?: string | null; // puede venir ISO
+  fecha_hora?: string | null;
   precio_por_litro?: number | null;
-
-  // frontend/legacy-style (por si llega así)
+  litros?: number | null;
+  odometro?: number | null;
+  estacion?: string | null;
+  evidencia_url?: string | null;
+  // Fallbacks de compatibilidad
   unidadId?: string;
   operadorId?: string;
   tipoCombustible?: TipoCombustible;
   fechaHora?: string;
   precioPorLitro?: number;
-
-  // comunes
-  litros?: number | null;
-  odometro?: number | null;
-  estacion?: string | null;
-
-  evidencia_url?: string | null;
   evidenciaUrl?: string | null;
-};
+}
 
-type EditCargaModalProps = {
+interface EditCargaModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   carga: CargaCombustible | null;
-  /**
-   * ✅ Recomendación senior:
-   * en el padre, pásale una función que:
-   * 1) vuelva a pedir la lista (fuelService.getAll())
-   * 2) y actualice el state
-   */
   onSave: () => void;
-
-  // ✅ catálogos reales
   units?: Unit[];
   operators?: Operator[];
-};
-
-function toDatetimeLocal(value: string) {
-  // acepta "YYYY-MM-DD HH:mm:ss" o ISO y lo deja "YYYY-MM-DDTHH:mm"
-  if (!value) return "";
-  const v = value.replace(" ", "T");
-  return v.slice(0, 16);
 }
 
-function safeNumber(v: unknown, fallback = 0) {
+function safeNumber(v: unknown, fallback = 0): number {
   const n = typeof v === "string" ? Number(v) : (v as number);
   return Number.isFinite(n) ? n : fallback;
-}
-
-function getDieselCapacity(u?: Unit): number | null {
-  if (!u) return null;
-  return (u.capacidad_tanque_diesel ?? u.capacidad_tanque_diesel ?? null) as
-    | number
-    | null;
-}
-function getUreaCapacity(u?: Unit): number | null {
-  if (!u) return null;
-  return (u.capacidad_tanque_urea ?? u.capacidad_tanque_urea ?? null) as
-    | number
-    | null;
 }
 
 export function EditCargaModal({
@@ -129,23 +120,12 @@ export function EditCargaModal({
 }: EditCargaModalProps) {
   const [isSaving, setIsSaving] = useState(false);
 
-  /**
-   * formData: ya con nombres que backend espera
-   * - unit_id
-   * - operator_id
-   * - tipo_combustible
-   * - fecha_hora
-   * - litros
-   * - precio_por_litro
-   * - odometro
-   * - estacion
-   * - evidencia_url
-   */
+  // El estado de fecha_hora ahora es Date | undefined para ser compatible con el DatePicker
   const [formData, setFormData] = useState<{
     unit_id: string;
     operator_id: string;
     tipo_combustible: TipoCombustible;
-    fecha_hora: string; // datetime-local
+    fecha_hora: Date | undefined;
     estacion: string;
     litros: number;
     precio_por_litro: number;
@@ -156,32 +136,27 @@ export function EditCargaModal({
   useEffect(() => {
     if (!carga || !open) return;
 
+    // Normalización de datos recibidos
     const unitId = String(
-      (carga.unit_id ?? (carga as any).unidad_id ?? carga.unidadId ?? "") || "",
+      carga.unit_id ?? (carga as any).unidad_id ?? carga.unidadId ?? "",
     );
     const operatorId = String(
-      (carga.operator_id ??
-        (carga as any).operador_id ??
-        carga.operadorId ??
-        "") ||
-        "",
+      carga.operator_id ?? (carga as any).operador_id ?? carga.operadorId ?? "",
     );
     const tipo = (carga.tipo_combustible ??
       carga.tipoCombustible ??
       "diesel") as TipoCombustible;
-
-    const fechaRaw = String(carga.fecha_hora ?? carga.fechaHora ?? "");
-    const fechaLocal = toDatetimeLocal(fechaRaw);
+    const fechaRaw = carga.fecha_hora ?? carga.fechaHora;
 
     setFormData({
       unit_id: unitId,
       operator_id: operatorId,
       tipo_combustible: tipo,
-      fecha_hora: fechaLocal,
+      fecha_hora: fechaRaw ? new Date(fechaRaw) : new Date(),
       estacion: String(carga.estacion ?? ""),
       litros: safeNumber(carga.litros, 0),
       precio_por_litro: safeNumber(
-        (carga.precio_por_litro ?? carga.precioPorLitro) as unknown,
+        carga.precio_por_litro ?? carga.precioPorLitro,
         0,
       ),
       odometro: safeNumber(carga.odometro, 0),
@@ -189,71 +164,54 @@ export function EditCargaModal({
     });
   }, [carga, open]);
 
-  const selectedUnit = useMemo(() => {
-    if (!formData?.unit_id) return undefined;
-    return units.find((u) => String(u.id) === String(formData.unit_id));
-  }, [units, formData?.unit_id]);
+  const selectedUnit = useMemo(
+    () => units.find((u) => String(u.id) === String(formData?.unit_id)),
+    [units, formData?.unit_id],
+  );
 
   const tankCapacity = useMemo(() => {
     if (!selectedUnit || !formData) return 0;
-    if (formData.tipo_combustible === "diesel") {
-      return getDieselCapacity(selectedUnit) ?? 600;
-    }
-    return getUreaCapacity(selectedUnit) ?? 40;
+    return (
+      formData.tipo_combustible === "diesel"
+        ? (selectedUnit.capacidad_tanque_diesel ?? 600)
+        : (selectedUnit.capacidad_tanque_urea ?? 40)
+    ) as number;
   }, [selectedUnit, formData]);
 
-  const exceedsTank = useMemo(() => {
-    if (!formData) return false;
-    return formData.litros > tankCapacity && tankCapacity > 0;
-  }, [formData, tankCapacity]);
+  const exceedsTank = useMemo(
+    () =>
+      formData ? formData.litros > tankCapacity && tankCapacity > 0 : false,
+    [formData, tankCapacity],
+  );
 
-  const total = useMemo(() => {
-    if (!formData) return 0;
-    return (formData.litros || 0) * (formData.precio_por_litro || 0);
-  }, [formData]);
+  const total = useMemo(
+    () => (formData ? formData.litros * formData.precio_por_litro : 0),
+    [formData],
+  );
 
-  const validate = () => {
-    if (!formData) return "Formulario no inicializado.";
-    if (!formData.unit_id) return "Selecciona una unidad.";
-    if (!formData.operator_id) return "Selecciona un operador.";
-    if (!formData.fecha_hora) return "Selecciona fecha y hora.";
-    if (!formData.estacion.trim()) return "Escribe la estación.";
-    if (!(formData.litros > 0)) return "Los litros deben ser mayor a 0.";
-    if (!(formData.precio_por_litro > 0))
-      return "El precio por litro debe ser mayor a 0.";
-    // puedes bloquear si excede tanque o dejarlo como warning
-    return null;
-  };
-
-  const handleSubmit: React.FormEventHandler<HTMLFormElement> = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!carga || !formData) return;
-
-    const error = validate();
-    if (error) {
-      toast.error("Validación", { description: error });
-      return;
-    }
+    if (!carga || !formData || !formData.fecha_hora) return;
 
     setIsSaving(true);
     try {
-      // ✅ manda al backend con nombres correctos
-
       await fuelService.update(String(carga.id), {
         ...formData,
-        // opcional: manda snapshot y flag calculados
-        capacidad_tanque_snapshot: tankCapacity || null,
-        excede_tanque: Boolean(exceedsTank),
-        // opcional: total calculado (si tu backend lo acepta)
-        total: Number(formData.litros) * Number(formData.precio_por_litro),
+        fecha_hora: formData.fecha_hora.toISOString(),
+        capacidad_tanque_snapshot: tankCapacity,
+        excede_tanque: exceedsTank,
+        total,
       });
 
-      toast.success("Ticket actualizado");
-      onSave(); // ✅ el padre refresca tabla
+      toast.success("Sincronización Exitosa", {
+        description: "Los datos han sido validados y guardados.",
+      });
+      onSave();
       onOpenChange(false);
     } catch (err) {
-      console.error(err);
-      toast.error("Error al guardar cambios");
+      toast.error("Error Crítico", {
+        description: "Fallo en la comunicación con el servidor de carga.",
+      });
     } finally {
       setIsSaving(false);
     }
@@ -263,261 +221,262 @@ export function EditCargaModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader className="border-b pb-4">
-          <DialogTitle className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center">
-              <Edit className="h-4 w-4 text-primary" />
-            </div>
-            Editar Ticket
-            <span className="text-sm font-mono text-muted-foreground ml-2">
-              #{String(carga.id)}
-            </span>
-          </DialogTitle>
+      {/* CAPA 1 (Cascarón Tahoe) */}
+      <DialogContent className="p-0 border-none sm:max-w-[650px] bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-300">
+        {/* CAPA 2 (Header Tahoe - Icon Plate) */}
+        <DialogHeader className="p-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 flex flex-row items-center gap-5 space-y-0">
+          <div className="w-14 h-14 rounded-2xl bg-brand-green/10 text-brand-green flex items-center justify-center shadow-inner shrink-0">
+            <Edit size={28} />
+          </div>
+          <div className="flex flex-col">
+            <DialogTitle className="heading-crisp text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">
+              Editar Registro de Carga
+            </DialogTitle>
+            <DialogDescription className="font-mono text-[10px] uppercase tracking-[0.2em] opacity-60">
+              Transaction Log ID: #{carga.id}
+            </DialogDescription>
+          </div>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 pt-4">
-          {/* Fecha/Hora y Tipo */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Fecha y Hora
-              </Label>
-              <Input
-                type="datetime-local"
-                value={formData.fecha_hora}
-                onChange={(e) =>
-                  setFormData((p) =>
-                    p ? { ...p, fecha_hora: e.target.value } : p,
-                  )
-                }
-                required
-                className="h-9 text-sm"
-              />
+        <form onSubmit={handleSubmit}>
+          {/* CAPA 3 (Cuerpo/Formulario Hundido) */}
+          <div className="p-6 space-y-6 bg-slate-50/50 dark:bg-transparent max-h-[65vh] overflow-y-auto custom-scrollbar">
+            {/* Fila: Fecha y Tipo */}
+            <div className="grid grid-cols-2 gap-6">
+              <div className="space-y-1.5">
+                <FormLabelBrand>Timestamp Operativo</FormLabelBrand>
+                {/* SOLUCIÓN AL ERROR: Usamos onDateChange en lugar de setDate */}
+                <DatePicker
+                  date={formData.fecha_hora}
+                  onDateChange={(d) =>
+                    setFormData((p) => (p ? { ...p, fecha_hora: d } : p))
+                  }
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <FormLabelBrand>Fluido Energético</FormLabelBrand>
+                <Select
+                  value={formData.tipo_combustible}
+                  onValueChange={(v: TipoCombustible) =>
+                    setFormData((p) => (p ? { ...p, tipo_combustible: v } : p))
+                  }
+                >
+                  <SelectTrigger className="h-11 bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 font-bold">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="diesel">
+                      <div className="flex items-center gap-2">
+                        <Fuel className="h-4 w-4 text-amber-500" /> DIESEL
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="urea">
+                      <div className="flex items-center gap-2">
+                        <Droplets className="h-4 w-4 text-blue-500" /> UREA /
+                        DEF
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                {selectedUnit && (
+                  <p className="text-[9px] font-black uppercase text-slate-400 text-right mt-1">
+                    Capacidad Tank:{" "}
+                    <span className="text-slate-900 dark:text-slate-200">
+                      {tankCapacity}L
+                    </span>
+                  </p>
+                )}
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Tipo de Combustible
-              </Label>
-              <Select
-                value={formData.tipo_combustible}
-                onValueChange={(value: TipoCombustible) =>
-                  setFormData((p) =>
-                    p ? { ...p, tipo_combustible: value } : p,
-                  )
-                }
-              >
-                <SelectTrigger className="h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="diesel">
-                    <div className="flex items-center gap-2">
-                      <Fuel className="h-3.5 w-3.5 text-amber-600" />
-                      Diesel
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="urea">
-                    <div className="flex items-center gap-2">
-                      <Droplets className="h-3.5 w-3.5 text-sky-600" />
-                      Urea/DEF
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+            {/* Fila: Unidad y Operador */}
+            <div className="grid grid-cols-2 gap-6">
+              <div className="space-y-1.5">
+                <FormLabelBrand>Activo de Flota</FormLabelBrand>
+                <Select
+                  value={formData.unit_id}
+                  onValueChange={(v) =>
+                    setFormData((p) => (p ? { ...p, unit_id: v } : p))
+                  }
+                >
+                  <SelectTrigger className="h-11 bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 font-mono font-bold">
+                    <SelectValue placeholder="Seleccionar..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {units.map((u) => (
+                      <SelectItem
+                        key={u.id}
+                        value={String(u.id)}
+                        className="font-mono"
+                      >
+                        {u.numero_economico || `ID-${u.id}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-              {selectedUnit && (
-                <p className="text-[11px] text-muted-foreground">
-                  Capacidad{" "}
-                  {formData.tipo_combustible === "diesel" ? "Diesel" : "Urea"}:{" "}
-                  <span className="font-medium">{tankCapacity}L</span>
+              <div className="space-y-1.5">
+                <FormLabelBrand>Operador Asignado</FormLabelBrand>
+                <Select
+                  value={formData.operator_id}
+                  onValueChange={(v) =>
+                    setFormData((p) => (p ? { ...p, operator_id: v } : p))
+                  }
+                >
+                  <SelectTrigger className="h-11 bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 font-black uppercase text-[11px]">
+                    <SelectValue placeholder="Asignar..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {operators.map((o) => (
+                      <SelectItem key={o.id} value={String(o.id)}>
+                        {o.name ?? o.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Estación */}
+            <div className="space-y-1.5">
+              <FormLabelBrand>Estación de Suministro</FormLabelBrand>
+              <div className="relative group">
+                <Navigation className="absolute left-3 top-3.5 h-4 w-4 text-slate-400 group-focus-within:text-brand-red transition-colors" />
+                <Input
+                  className="h-11 pl-10 font-black uppercase"
+                  value={formData.estacion}
+                  onChange={(e) =>
+                    setFormData((p) =>
+                      p ? { ...p, estacion: e.target.value } : p,
+                    )
+                  }
+                  placeholder="Terminal de carga..."
+                />
+              </div>
+            </div>
+
+            {/* Métricas: Litros, Precio, Odómetro */}
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-1.5">
+                <FormLabelBrand>Volumen (L)</FormLabelBrand>
+                <Input
+                  type="number"
+                  className="h-11 font-mono font-bold text-center"
+                  value={formData.litros}
+                  onChange={(e) =>
+                    setFormData((p) =>
+                      p ? { ...p, litros: safeNumber(e.target.value) } : p,
+                    )
+                  }
+                />
+              </div>
+              <div className="space-y-1.5">
+                <FormLabelBrand>Precio/L</FormLabelBrand>
+                <div className="relative">
+                  <DollarSign className="absolute left-3 top-3.5 h-4 w-4 text-emerald-500" />
+                  <Input
+                    type="number"
+                    className="h-11 pl-8 font-mono font-bold text-center"
+                    value={formData.precio_por_litro}
+                    onChange={(e) =>
+                      setFormData((p) =>
+                        p
+                          ? {
+                              ...p,
+                              precio_por_litro: safeNumber(e.target.value),
+                            }
+                          : p,
+                      )
+                    }
+                  />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <FormLabelBrand>Odómetro</FormLabelBrand>
+                <div className="relative">
+                  <Hash className="absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
+                  <Input
+                    type="number"
+                    className="h-11 pl-8 font-mono font-bold text-center"
+                    value={formData.odometro}
+                    onChange={(e) =>
+                      setFormData((p) =>
+                        p ? { ...p, odometro: safeNumber(e.target.value) } : p,
+                      )
+                    }
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Alerta Tahoe de Exceso */}
+            {exceedsTank && (
+              <div className="flex items-center gap-3 p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl animate-pulse">
+                <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />
+                <p className="text-[11px] font-black uppercase text-amber-700 dark:text-amber-400 leading-tight">
+                  Alerta Operativa: El volumen capturado ({formData.litros}L)
+                  supera la capacidad nominal configurada para esta unidad (
+                  {tankCapacity}L).
                 </p>
-              )}
-            </div>
-          </div>
+              </div>
+            )}
 
-          {/* Unidad y Operador */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Unidad
-              </Label>
-              <Select
-                value={String(formData.unit_id)}
-                onValueChange={(v) =>
-                  setFormData((p) => (p ? { ...p, unit_id: v } : p))
-                }
-              >
-                <SelectTrigger className="h-9">
-                  <SelectValue placeholder="Seleccionar..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {units.map((u) => (
-                    <SelectItem key={String(u.id)} value={String(u.id)}>
-                      {u.numero_economico ?? `Unidad ${String(u.id)}`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            {/* Resumen de Liquid Glass */}
+            <div className="p-5 bg-slate-900 dark:bg-white rounded-2xl shadow-xl flex items-center justify-between transition-transform hover:scale-[1.01]">
+              <div className="flex flex-col">
+                <span className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
+                  Inversión Total
+                </span>
+                <span className="text-2xl font-mono font-black text-white dark:text-slate-900">
+                  ${total.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="bg-emerald-500/20 text-emerald-600 dark:text-emerald-500 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-emerald-500/30">
+                Pesos MXN
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Operador
-              </Label>
-              <Select
-                value={String(formData.operator_id)}
-                onValueChange={(v) =>
-                  setFormData((p) => (p ? { ...p, operator_id: v } : p))
-                }
-              >
-                <SelectTrigger className="h-9">
-                  <SelectValue placeholder="Seleccionar..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {operators.map((o) => (
-                    <SelectItem key={String(o.id)} value={String(o.id)}>
-                      {o.name ?? o.nombre ?? `Operador ${String(o.id)}`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Estación */}
-          <div className="space-y-2">
-            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Estación de Servicio
-            </Label>
-            <Input
-              value={formData.estacion}
-              onChange={(e) =>
-                setFormData((p) => (p ? { ...p, estacion: e.target.value } : p))
-              }
-              placeholder="Nombre de la estación..."
-              required
-              className="h-9 text-sm"
-            />
-          </div>
-
-          {/* Litros, Precio, Odómetro */}
-          <div className="grid grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Litros
-              </Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                value={formData.litros}
-                onChange={(e) =>
-                  setFormData((p) =>
-                    p ? { ...p, litros: safeNumber(e.target.value, 0) } : p,
-                  )
-                }
-                required
-                className="h-9 text-sm font-mono"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Precio/Litro
-              </Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                value={formData.precio_por_litro}
-                onChange={(e) =>
-                  setFormData((p) =>
-                    p
-                      ? {
-                          ...p,
-                          precio_por_litro: safeNumber(e.target.value, 0),
-                        }
-                      : p,
-                  )
-                }
-                required
-                className="h-9 text-sm font-mono"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Odómetro
-              </Label>
-              <Input
-                type="number"
-                min="0"
-                value={formData.odometro}
-                onChange={(e) =>
-                  setFormData((p) =>
-                    p ? { ...p, odometro: safeNumber(e.target.value, 0) } : p,
-                  )
-                }
-                required
-                className="h-9 text-sm font-mono"
+            {/* Gestión de Evidencia */}
+            <div className="p-5 bg-white dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-white/5 shadow-inner">
+              <FormLabelBrand className="mb-4 flex items-center gap-2">
+                <Camera size={14} className="text-brand-green" /> Digitalización
+                de Asset / Ticket
+              </FormLabelBrand>
+              <DocumentUploadManager
+                entityId={String(carga.id)}
+                entityType="fuel"
+                docType="ticket"
+                docLabel="CAPTURA DE TICKET"
+                currentUrl={formData.evidencia_url ?? undefined}
+                onUploadSuccess={(url) => {
+                  setFormData((p) => (p ? { ...p, evidencia_url: url } : p));
+                  onSave();
+                }}
               />
             </div>
           </div>
 
-          {/* Alert if exceeds tank capacity */}
-          {exceedsTank && (
-            <div className="flex items-center gap-2 p-3 bg-status-warning-bg rounded-lg border border-status-warning-border">
-              <AlertTriangle className="h-4 w-4 text-status-warning flex-shrink-0" />
-              <p className="text-xs text-status-warning">
-                Los litros ({formData.litros}L) exceden la capacidad del tanque
-                ({tankCapacity}L).
-              </p>
-            </div>
-          )}
-
-          {/* Total Preview */}
-          <div className="p-4 bg-muted/50 rounded-lg flex items-center justify-between">
-            <span className="text-sm font-medium">Total:</span>
-            <span className="text-lg font-bold">
-              ${total.toLocaleString("es-MX", { minimumFractionDigits: 2 })} MXN
-            </span>
-          </div>
-
-          {/* ✅ HISTORIAL / UPLOAD de evidencia */}
-          <div className="p-4 bg-primary/5 rounded-xl border border-primary/20">
-            <Label className="text-primary font-bold flex items-center gap-2 mb-3">
-              <Camera className="h-4 w-4" /> Gestión de Evidencia Digital
-            </Label>
-
-            <DocumentUploadManager
-              entityId={String(carga.id)}
-              entityType="fuel"
-              docType="ticket"
-              docLabel="Foto del Ticket"
-              currentUrl={formData.evidencia_url ?? undefined}
-              onUploadSuccess={(url: string) => {
-                setFormData((p) => (p ? { ...p, evidencia_url: url } : p));
-                onSave(); // refresca tabla para miniatura/flag
-              }}
-            />
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4 border-t">
+          {/* CAPA 4 (Footer / Control Bar Crystal) */}
+          <div className="p-4 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-t border-slate-200 dark:border-white/10 flex justify-end gap-3 sticky bottom-0">
             <Button
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
+              className="h-11 px-8 rounded-full font-black uppercase text-[10px] tracking-widest haptic-press transition-all hover:bg-slate-100 dark:hover:bg-white/5"
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={isSaving}>
+            <Button
+              type="submit"
+              disabled={isSaving}
+              className="h-11 px-10 rounded-full bg-brand-green hover:bg-emerald-600 text-white font-black uppercase text-[10px] tracking-widest haptic-press shadow-lg shadow-emerald-500/20"
+            >
               {isSaving ? (
-                <>
-                  <Loader2 className="animate-spin h-4 w-4 mr-2" />
-                  Guardando...
-                </>
+                <div className="flex items-center gap-2">
+                  <Loader2 className="animate-spin h-4 w-4" /> SINCRONIZANDO
+                </div>
               ) : (
                 "Guardar Cambios"
               )}

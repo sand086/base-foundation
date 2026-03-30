@@ -1,10 +1,9 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -22,7 +21,6 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import {
-  Link as LinkIcon,
   Truck,
   User,
   Loader2,
@@ -31,21 +29,50 @@ import {
   Box,
   FileText,
   DollarSign,
-  Info,
-  Activity,
   ArrowRight,
   ShieldCheck,
   TrendingDown,
   Ticket,
   Container,
+  Package,
+  Minus,
 } from "lucide-react";
 import { useUnits } from "@/hooks/useUnits";
 import { useOperators } from "@/hooks/useOperators";
 import { useBilling } from "@/hooks/useBilling";
 import { Trip, TripLegCreatePayload } from "@/types/api.types";
 import { cn } from "@/lib/utils";
-// 🚀 IMPORTAMOS AXIOS CLIENT PARA LA DESCARGA
 import axiosClient from "@/api/axiosClient";
+
+// ─── Tipos locales estrictos ──────────────────────────────────────────────────
+
+/** Unidad de transporte (tracto, remolque, dolly). */
+interface Unit {
+  id: number;
+  numero_economico: string;
+  tipo_1: string;
+  tipo: string;
+  placas: string;
+  status: string;
+  is_loaded?: boolean;
+}
+
+/** Operador de transporte. */
+interface Operator {
+  id: number;
+  name: string;
+  status: string;
+}
+
+/** Payload extendido con campos de arrastre y anticipos. */
+interface ExtendedLegPayload extends TripLegCreatePayload {
+  remolque_1_id?: number | null;
+  dolly_id?: number | null;
+  remolque_2_id?: number | null;
+  otros_anticipos: number;
+}
+
+// ─── Props del modal ──────────────────────────────────────────────────────────
 
 interface NextLegModalProps {
   open: boolean;
@@ -54,12 +81,18 @@ interface NextLegModalProps {
   onSubmit: (tripId: string, payload: TripLegCreatePayload) => Promise<boolean>;
 }
 
-interface ExtendedLegPayload extends TripLegCreatePayload {
-  remolque_1_id?: number | null;
-  dolly_id?: number | null;
-  remolque_2_id?: number | null;
-  otros_anticipos: number;
-}
+// ─── Utilidades ───────────────────────────────────────────────────────────────
+
+const formatCurrency = (val: number) =>
+  new Intl.NumberFormat("es-MX", {
+    style: "currency",
+    currency: "MXN",
+    minimumFractionDigits: 2,
+  }).format(val || 0);
+
+const UNIT_STATUSES_AVAILABLE = ["disponible", "bloqueado"] as const;
+
+// ─── Componente ───────────────────────────────────────────────────────────────
 
 export function NextLegModal({
   open,
@@ -73,8 +106,6 @@ export function NextLegModal({
 
   const [loading, setLoading] = useState(false);
   const [cpGenerada, setCpGenerada] = useState(false);
-
-  // 🚀 ESTADO LOCAL PARA EL UUID (Nos permite saber si ya se generó para descargar)
   const [localUuid, setLocalUuid] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<Partial<ExtendedLegPayload>>({
@@ -90,21 +121,39 @@ export function NextLegModal({
     otros_anticipos: 0,
   });
 
-  const formatCurrency = (val: number) =>
-    new Intl.NumberFormat("es-MX", {
-      style: "currency",
-      currency: "MXN",
-      minimumFractionDigits: 2,
-    }).format(val || 0);
+  // Reinicia el formulario cada vez que se abre el modal con un viaje nuevo
+  useEffect(() => {
+    if (open && tripPadre) {
+      setFormData({
+        leg_type: "ruta_carretera",
+        unit_id: null,
+        operator_id: null,
+        remolque_1_id: tripPadre.remolque_1_id ?? null,
+        dolly_id: tripPadre.dolly_id ?? null,
+        remolque_2_id: tripPadre.remolque_2_id ?? null,
+        anticipo_casetas: tripPadre.costo_casetas ?? 0,
+        anticipo_viaticos: 0,
+        anticipo_combustible: 0,
+        otros_anticipos: 0,
+      });
+      setCpGenerada(Boolean(tripPadre.uuid_fiscal));
+      setLocalUuid(tripPadre.uuid_fiscal ?? null);
+    }
+  }, [open, tripPadre]);
+
+  // ─── Derivados memorizados ─────────────────────────────────────────────────
 
   const isFullTrip = useMemo(() => {
     if (!tripPadre) return false;
-    const configTarifa = (tripPadre as any).tipo_unidad?.toLowerCase() || "";
-    const configStr = (tripPadre.route_name || "").toLowerCase();
+    const tipoUnidad =
+      (
+        tripPadre as Trip & { tipo_unidad?: string }
+      ).tipo_unidad?.toLowerCase() ?? "";
+    const routeName = (tripPadre.route_name ?? "").toLowerCase();
     return (
-      configStr.includes("full") ||
-      configTarifa.includes("full") ||
-      configTarifa.includes("9ejes") ||
+      routeName.includes("full") ||
+      tipoUnidad.includes("full") ||
+      tipoUnidad.includes("9ejes") ||
       Boolean(tripPadre.dolly_id)
     );
   }, [tripPadre]);
@@ -119,8 +168,8 @@ export function NextLegModal({
         retencion: 0,
         total: 0,
       };
-    const base = tripPadre.tarifa_base || 0;
-    const casetas = tripPadre.costo_casetas || 0;
+    const base = tripPadre.tarifa_base ?? 0;
+    const casetas = tripPadre.costo_casetas ?? 0;
     const subtotal = base + casetas;
     const iva = subtotal * 0.16;
     const retencion = subtotal * 0.04;
@@ -134,87 +183,78 @@ export function NextLegModal({
     };
   }, [tripPadre]);
 
-  const gastoOperativoActual = useMemo(() => {
-    return (
-      Number(formData.anticipo_casetas || 0) +
-      Number(formData.anticipo_combustible || 0) +
-      Number(formData.anticipo_viaticos || 0) +
-      Number(formData.otros_anticipos || 0)
-    );
-  }, [formData]);
-
-  useEffect(() => {
-    if (open && tripPadre) {
-      setFormData({
-        leg_type: "ruta_carretera",
-        unit_id: null,
-        operator_id: null,
-        remolque_1_id: tripPadre.remolque_1_id || null,
-        dolly_id: tripPadre.dolly_id || null,
-        remolque_2_id: tripPadre.remolque_2_id || null,
-        anticipo_casetas: tripPadre.costo_casetas || 0,
-        anticipo_viaticos: 0,
-        anticipo_combustible: 0,
-        otros_anticipos: 0,
-      });
-      setCpGenerada(Boolean(tripPadre.uuid_fiscal));
-      setLocalUuid(tripPadre.uuid_fiscal || null);
-    }
-  }, [open, tripPadre]);
+  const gastoOperativoActual = useMemo(
+    () =>
+      Number(formData.anticipo_casetas ?? 0) +
+      Number(formData.anticipo_combustible ?? 0) +
+      Number(formData.anticipo_viaticos ?? 0) +
+      Number(formData.otros_anticipos ?? 0),
+    [formData],
+  );
 
   const isRoadLeg = formData.leg_type === "ruta_carretera";
 
-  const availableTractos = useMemo(() => {
-    return unidades.filter(
-      (u: any) =>
-        (`${u.tipo_1} ${u.tipo}`.toLowerCase().includes("tracto") ||
-          `${u.tipo_1} ${u.tipo}`.toLowerCase().includes("camion")) &&
-        ["disponible", "bloqueado"].includes(u.status?.toLowerCase()),
-    );
-  }, [unidades]);
+  const availableTractos = useMemo(
+    () =>
+      (unidades as Unit[]).filter((u) => {
+        const tipo = `${u.tipo_1} ${u.tipo}`.toLowerCase();
+        return (
+          (tipo.includes("tracto") || tipo.includes("camion")) &&
+          UNIT_STATUSES_AVAILABLE.includes(
+            u.status?.toLowerCase() as (typeof UNIT_STATUSES_AVAILABLE)[number],
+          )
+        );
+      }),
+    [unidades],
+  );
 
-  const availableRemolques = useMemo(() => {
-    return unidades.filter((u: any) => {
-      const type = `${u.tipo_1} ${u.tipo}`.toLowerCase();
-      return (
-        ["remolque", "caja", "plataforma", "chasis"].some((p) =>
-          type.includes(p),
-        ) && ["disponible", "bloqueado"].includes(u.status?.toLowerCase())
-      );
-    });
-  }, [unidades]);
+  const availableRemolques = useMemo(
+    () =>
+      (unidades as Unit[]).filter((u) => {
+        const tipo = `${u.tipo_1} ${u.tipo}`.toLowerCase();
+        return (
+          ["remolque", "caja", "plataforma", "chasis"].some((p) =>
+            tipo.includes(p),
+          ) &&
+          UNIT_STATUSES_AVAILABLE.includes(
+            u.status?.toLowerCase() as (typeof UNIT_STATUSES_AVAILABLE)[number],
+          )
+        );
+      }),
+    [unidades],
+  );
 
   const availableDollies = useMemo(() => {
-    const dollies = unidades.filter((u: any) =>
-      (u.tipo_1 || "").toLowerCase().includes("dolly"),
+    const dollies = (unidades as Unit[]).filter((u) =>
+      (u.tipo_1 ?? "").toLowerCase().includes("dolly"),
     );
     return dollies.length > 0
       ? dollies
-      : [{ id: 9997, numero_economico: "DOLLY-PRUEBA" }];
+      : [{ id: 9997, numero_economico: "DOLLY-PRUEBA" } as Unit];
   }, [unidades]);
 
-  const availableOperators = useMemo(() => {
-    return (operadores || []).filter(
-      (o: any) => o.status === "activo" || o.status === "disponible",
-    );
-  }, [operadores]);
+  const availableOperators = useMemo(
+    () =>
+      (operadores as Operator[]).filter(
+        (o) => o.status === "activo" || o.status === "disponible",
+      ),
+    [operadores],
+  );
 
-  // 🚀 FUNCIÓN DE DESCARGA PDF AÑADIDA
-  const handleDownloadStampedPDF = async (uuidToDownload: string) => {
+  // ─── Acciones ─────────────────────────────────────────────────────────────
+
+  /** Descarga el PDF de la Carta Porte timbrada dado su UUID fiscal. */
+  const handleDownloadStampedPDF = useCallback(async (uuid: string) => {
     try {
-      const response = await axiosClient.get(
-        `/billing/invoice/${uuidToDownload}/pdf`,
-        { responseType: "blob" },
-      );
+      const response = await axiosClient.get(`/billing/invoice/${uuid}/pdf`, {
+        responseType: "blob",
+      });
       const fileURL = window.URL.createObjectURL(
         new Blob([response.data], { type: "application/pdf" }),
       );
       const link = document.createElement("a");
       link.href = fileURL;
-      link.setAttribute(
-        "download",
-        `Carta_Porte_Provisional_${uuidToDownload}.pdf`,
-      );
+      link.setAttribute("download", `Carta_Porte_Provisional_${uuid}.pdf`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -222,164 +262,193 @@ export function NextLegModal({
     } catch {
       toast.error("Error al descargar el PDF.");
     }
-  };
+  }, []);
 
-  const onTimbrarNominal = async () => {
+  /** Timbra la Carta Porte Bypass de $1 o descarga si ya existe. */
+  const handleCartaPorteAction = useCallback(async () => {
     if (!tripPadre) return;
+    if (localUuid) {
+      await handleDownloadStampedPDF(localUuid);
+      return;
+    }
     try {
-      await handleStampNominal(tripPadre.id, (responseData) => {
-        const generatedUuid = responseData?.data?.uuid;
-        if (generatedUuid) {
-          setLocalUuid(generatedUuid);
-          setCpGenerada(true);
-          handleDownloadStampedPDF(generatedUuid); // 🚀 Descarga automática al timbrar
-          toast.success("Carta Porte Bypass de $1 generada exitosamente.");
-        }
-      });
+      await handleStampNominal(
+        tripPadre.id,
+        (responseData: { data?: { uuid?: string } }) => {
+          const generatedUuid = responseData?.data?.uuid;
+          if (generatedUuid) {
+            setLocalUuid(generatedUuid);
+            setCpGenerada(true);
+            handleDownloadStampedPDF(generatedUuid);
+            toast.success("Carta Porte Bypass de $1 generada exitosamente.");
+          }
+        },
+      );
     } catch {
       toast.error("Error al timbrar Carta Porte de $1.");
     }
-  };
+  }, [tripPadre, localUuid, handleStampNominal, handleDownloadStampedPDF]);
 
-  const handleSubmit = async () => {
-    if (!tripPadre) return;
+  /**
+   * Valida el formulario. Devuelve true si la asignación está completa.
+   * Emite toast de error en caso contrario.
+   */
+  const validateForm = useCallback((): boolean => {
     if (!formData.unit_id || !formData.operator_id || !formData.remolque_1_id) {
-      return toast.error(
+      toast.error(
         "Asignación incompleta: Tracto, Operador y Chasis son obligatorios.",
       );
+      return false;
     }
     if (isFullTrip && (!formData.dolly_id || !formData.remolque_2_id)) {
-      return toast.error(
-        "Configuración FULL: Debe asignar Dolly y Remolque 2.",
-      );
+      toast.error("Configuración FULL: Debe asignar Dolly y Remolque 2.");
+      return false;
     }
+    return true;
+  }, [formData, isFullTrip]);
 
+  /**
+   * Envía el tramo y actualiza el estado de carga de los remolques si aplica.
+   * Unifica la lógica de handleSubmit y handleIniciarTramo en una sola función.
+   */
+  const handleIniciarTramo = useCallback(async () => {
+    if (!tripPadre || !validateForm()) return;
     setLoading(true);
-    const success = await onSubmit(String(tripPadre.id), formData as any);
-    if (success) {
-      if (formData.leg_type === "carga_muelle") {
-        await updateLoadStatus(Number(formData.remolque_1_id), true);
-        if (formData.remolque_2_id)
-          await updateLoadStatus(Number(formData.remolque_2_id), true);
-      }
-      onOpenChange(false);
-    }
-    setLoading(false);
-  };
-
-  const handleIniciarTramo = async () => {
-    if (!tripPadre) return;
-
-    // Validaciones obligatorias
-    if (!formData.unit_id || !formData.operator_id || !formData.remolque_1_id) {
-      return toast.error(
-        "Asignación incompleta: Tracto, Operador y Chasis son obligatorios.",
+    try {
+      const success = await onSubmit(
+        String(tripPadre.id),
+        formData as TripLegCreatePayload,
       );
-    }
-    if (isFullTrip && (!formData.dolly_id || !formData.remolque_2_id)) {
-      return toast.error(
-        "Configuración FULL: Debe asignar Dolly y Remolque 2.",
-      );
-    }
-
-    setLoading(true);
-    const success = await onSubmit(String(tripPadre.id), formData as any);
-
-    if (success) {
-      // Si la fase es Carga Muelle, marcamos los remolques como cargados
-      if (formData.leg_type === "carga_muelle") {
-        await updateLoadStatus(Number(formData.remolque_1_id), true);
-        if (formData.remolque_2_id) {
-          await updateLoadStatus(Number(formData.remolque_2_id), true);
+      if (success) {
+        if (formData.leg_type === "carga_muelle") {
+          await updateLoadStatus(Number(formData.remolque_1_id), true);
+          if (formData.remolque_2_id) {
+            await updateLoadStatus(Number(formData.remolque_2_id), true);
+          }
         }
+        onOpenChange(false);
       }
-      onOpenChange(false);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  };
+  }, [
+    tripPadre,
+    formData,
+    validateForm,
+    onSubmit,
+    updateLoadStatus,
+    onOpenChange,
+  ]);
+
+  const referencia = (tripPadre as (Trip & { referencia?: string }) | null)
+    ?.referencia;
 
   if (!tripPadre) return null;
 
+  // ─── Render ───────────────────────────────────────────────────────────────
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* 1. DialogContent: Eliminamos bg-slate-50 y aplicamos glass-panel. 
-      Aumentamos a max-w-[1000px] para que los datos respiren.
-  */}
-      <DialogContent className="sm:max-w-[1000px] p-0 overflow-hidden glass-panel border-none shadow-2xl animate-page-enter">
-        {/* HEADER INDUSTRIAL: Ahora con profundidad 3D. 
-        Eliminamos mt-5 y usamos bg-brand-navy/95 translúcido.
-    */}
-        <DialogHeader className="p-8 bg-brand-navy/95 backdrop-blur-md shrink-0 relative overflow-hidden">
-          {/* Brillo sutil de fondo exclusivo para el header */}
-          <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent pointer-events-none" />
-
-          <div className="relative z-10 flex justify-between items-center">
+      {/*
+       * CAPA 1 — Cascarón / Fondo Tahoe
+       * Cristal pesado: bg-white/90 en light, bg-brand-navy/95 en dark.
+       */}
+      <DialogContent
+        className={cn(
+          "sm:max-w-[1000px] p-0 overflow-hidden border-none shadow-2xl",
+          "animate-in fade-in slide-in-from-bottom-2 duration-300",
+          "bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl",
+        )}
+      >
+        {/*
+         * CAPA 2 — Header Tahoe
+         * Light: fondo blanco sólido. Dark: slate-900.
+         * Borde inferior HD.
+         */}
+        <DialogHeader
+          className={cn(
+            "p-8 shrink-0 relative overflow-hidden",
+            "bg-white dark:bg-slate-900",
+            "border-b border-slate-200 dark:border-white/10",
+          )}
+        >
+          <div className="relative z-10 flex justify-between items-center gap-6">
+            {/* Identidad del viaje */}
             <div className="space-y-4">
               <div className="flex items-center gap-4">
-                <div className="bg-white/10 p-3 rounded-xl backdrop-blur-md border border-white/20 shadow-xl">
-                  <Truck className="h-7 w-7 text-brand-primary" />
+                {/* Icon Plate — estándar Tahoe */}
+                <div
+                  className={cn(
+                    "p-3 rounded-2xl w-14 h-14 flex items-center justify-center",
+                    "bg-brand-red/10 dark:bg-brand-red/20",
+                    "border border-brand-red/20 dark:border-brand-red/30",
+                    "shadow-inner",
+                  )}
+                >
+                  <Truck className="h-7 w-7 text-brand-red" />
                 </div>
                 <div>
-                  <DialogTitle className="text-3xl font-black uppercase tracking-tighter text-brand-primary">
-                    Despacho de Viaje <span className="opacity-50">#</span>
-                    {tripPadre.public_id || tripPadre.id}
+                  <DialogTitle className="text-3xl font-black uppercase tracking-tighter text-slate-900 dark:text-white heading-crisp">
+                    Despacho{" "}
+                    <span className="text-brand-red">
+                      #{tripPadre.public_id ?? tripPadre.id}
+                    </span>
                   </DialogTitle>
-                  <p className="text-[10px] font-bold text-brand-primary/40 uppercase tracking-[0.3em] mt-1">
+                  <p className="text-[10px] font-black text-slate-400 dark:text-white/40 uppercase tracking-[0.3em] mt-1">
                     Logística Operativa Crítica
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center flex-wrap gap-3 font-bold text-brand-primary/70 uppercase text-xs tracking-widest pt-2">
-                <span className="flex items-center gap-1.5 bg-white/5 px-4 py-2 rounded-full border border-white/10">
-                  <MapPin className="h-3.5 w-3.5 text-emerald-400" />
+              {/* Ruta y badges */}
+              <div className="flex items-center flex-wrap gap-3 font-bold text-slate-600 dark:text-white/70 uppercase text-xs tracking-widest pt-2">
+                <span className="flex items-center gap-1.5 bg-slate-100 dark:bg-white/5 px-4 py-2 rounded-full border border-slate-200 dark:border-white/10">
+                  <MapPin className="h-3.5 w-3.5 text-emerald-500" />
                   {tripPadre.origin}
                 </span>
-                <ArrowRight className="h-4 w-4 text-brand-primary/20" />
-                <span className="flex items-center gap-1.5 bg-white/5 px-4 py-2 rounded-full border border-white/10">
-                  <MapPin className="h-3.5 w-3.5 text-rose-400" />
+                <ArrowRight className="h-4 w-4 text-slate-300 dark:text-white/20" />
+                <span className="flex items-center gap-1.5 bg-slate-100 dark:bg-white/5 px-4 py-2 rounded-full border border-slate-200 dark:border-white/10">
+                  <MapPin className="h-3.5 w-3.5 text-rose-500" />
                   {tripPadre.destination}
                 </span>
 
-                <Badge className="ml-3 bg-white/10 text-brand-primary border-white/20 tracking-widest">
+                <Badge className="ml-3 bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-white border-slate-200 dark:border-white/20 tracking-widest">
                   {isFullTrip ? "FULL / 9 EJES" : "SENCILLO / 5 EJES"}
                 </Badge>
 
-                {/* REFERENCIA / CONTENEDOR */}
-                {(tripPadre as any).referencia && (
-                  <Badge className="ml-2 bg-blue-500/20 text-blue-200 border-blue-500/30 tracking-widest shadow-sm flex items-center gap-1.5">
+                {referencia && (
+                  <Badge className="ml-2 bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-200 border-blue-200 dark:border-blue-500/30 tracking-widest flex items-center gap-1.5">
                     <Container className="h-3.5 w-3.5" />
-                    CONTENEDOR: {(tripPadre as any).referencia}
+                    CONTENEDOR: {referencia}
                   </Badge>
                 )}
               </div>
             </div>
 
+            {/* Control de Carta Porte */}
             <div className="flex flex-col items-end gap-3">
               <Badge
                 className={cn(
                   "px-4 py-1.5 uppercase text-[10px] font-black tracking-widest border-none shadow-lg",
                   cpGenerada
-                    ? "bg-status-success text-white"
-                    : "bg-status-danger text-white animate-pulse-danger",
+                    ? "bg-emerald-600 text-white dark:bg-emerald-500"
+                    : "bg-rose-600 text-white dark:bg-rose-500 animate-pulse",
                 )}
               >
                 {cpGenerada ? "CP $1 MXN GENERADA" : "CP $1 MXN PENDIENTE"}
               </Badge>
 
+              {/* Botón Movimiento/Timbrado — Azul Eléctrico por estándar Tahoe */}
               <Button
                 size="lg"
-                onClick={() =>
-                  localUuid
-                    ? handleDownloadStampedPDF(localUuid)
-                    : onTimbrarNominal()
-                }
+                onClick={handleCartaPorteAction}
                 disabled={isStamping}
                 className={cn(
-                  "font-black px-8 h-12 text-[11px] uppercase tracking-[0.15em] shadow-2xl transition-all duration-300",
+                  "font-black px-8 h-12 text-[11px] uppercase tracking-[0.15em] shadow-2xl",
+                  "transition-all duration-300 haptic-press",
                   localUuid
-                    ? "bg-white text-brand-navy hover:bg-white/90"
-                    : "btn-action-gradient text-white animate-pulse-glow",
+                    ? "bg-blue-600 hover:bg-blue-500 text-white"
+                    : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/30",
                 )}
               >
                 {isStamping ? (
@@ -393,60 +462,84 @@ export function NextLegModal({
           </div>
         </DialogHeader>
 
-        {/* BODY: Grid principal.
-        Usamos glass-surface para la izquierda y bg-white/40 para la derecha.
-    */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-0 overflow-y-auto max-h-[75vh] custom-scrollbar bg-transparent">
-          {/* PANEL IZQUIERDO: FINANZAS */}
-          <div className="md:col-span-4 glass-surface p-8 border-r border-white/10 space-y-8">
+        {/*
+         * CAPA 3 — Cuerpo / Formulario
+         * Fondo hundido para resaltar cards e inputs.
+         */}
+        <div
+          className={cn(
+            "grid grid-cols-1 md:grid-cols-12 gap-0 overflow-y-auto max-h-[75vh] custom-scrollbar",
+            "bg-slate-50/50 dark:bg-transparent",
+          )}
+        >
+          {/* ── Panel izquierdo: Finanzas ── */}
+          <div
+            className={cn(
+              "md:col-span-4 p-8 space-y-8",
+              "border-r border-slate-200 dark:border-white/10",
+              "bg-white dark:bg-slate-900/40",
+            )}
+          >
+            {/* Negocio Pactado */}
             <div className="space-y-4">
-              <h4 className="text-[11px] font-black text-brand-navy/60 uppercase tracking-[0.2em] flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4 text-primary" /> Negocio Pactado
+              <h4 className="text-[11px] font-black text-slate-500 dark:text-white/50 uppercase tracking-[0.2em] flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-emerald-500" />
+                Negocio Pactado
               </h4>
 
-              <Card className="glass-card border-none p-0 overflow-hidden shadow-lg">
+              <Card className="border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800/50 shadow-sm">
                 <CardContent className="p-5 space-y-3">
-                  <div className="flex justify-between items-center text-xs font-bold text-slate-500">
-                    <span>Flete Base:</span>
-                    <span className="font-mono text-slate-900">
-                      {formatCurrency(finanzas.base)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center text-xs font-bold text-slate-500">
-                    <span>Casetas Pactadas:</span>
-                    <span className="font-mono text-blue-600">
-                      {formatCurrency(finanzas.casetasPactadas)}
-                    </span>
-                  </div>
+                  {[
+                    {
+                      label: "Flete Base:",
+                      value: finanzas.base,
+                      color: "text-slate-900 dark:text-white",
+                    },
+                    {
+                      label: "Casetas Pactadas:",
+                      value: finanzas.casetasPactadas,
+                      color: "text-blue-600 dark:text-blue-400",
+                    },
+                  ].map(({ label, value, color }) => (
+                    <div
+                      key={label}
+                      className="flex justify-between items-center text-xs font-bold text-slate-500 dark:text-slate-400"
+                    >
+                      <span>{label}</span>
+                      <span className={cn("font-mono", color)}>
+                        {formatCurrency(value)}
+                      </span>
+                    </div>
+                  ))}
 
-                  <Separator className="bg-slate-200/50" />
+                  <Separator className="bg-slate-200 dark:bg-white/10" />
 
                   <div className="space-y-2 pt-1">
-                    <div className="flex justify-between items-center text-[10px] font-bold text-slate-600">
+                    <div className="flex justify-between text-[10px] font-bold text-slate-500 dark:text-slate-400">
                       <span>Subtotal:</span>
-                      <span className="font-mono text-slate-600">
+                      <span className="font-mono">
                         {formatCurrency(finanzas.subtotal)}
                       </span>
                     </div>
-                    <div className="flex justify-between items-center text-[10px] font-bold text-slate-600">
+                    <div className="flex justify-between text-[10px] font-bold text-slate-500 dark:text-slate-400">
                       <span>IVA (16%):</span>
                       <span className="font-mono">
                         {formatCurrency(finanzas.iva)}
                       </span>
                     </div>
-                    <div className="flex justify-between items-center text-[10px] font-bold text-slate-600">
+                    <div className="flex justify-between text-[10px] font-bold text-slate-500 dark:text-slate-400">
                       <span>Retención (4%):</span>
-                      <span className="font-mono text-rose-500">
+                      <span className="font-mono text-rose-500 dark:text-rose-400">
                         -{formatCurrency(finanzas.retencion)}
                       </span>
                     </div>
                   </div>
 
-                  <div className="bg-brand-navy/5 p-4 rounded-xl border border-brand-navy/10 mt-4">
-                    <span className="text-[9px] font-black text-brand-navy/40 uppercase block mb-1">
+                  <div className="bg-slate-50 dark:bg-slate-700/50 p-4 rounded-xl border border-slate-200 dark:border-white/10 mt-4">
+                    <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase block mb-1">
                       Total Factura
                     </span>
-                    <span className="text-2xl font-black text-brand-navy font-mono tracking-tighter">
+                    <span className="text-2xl font-black text-slate-900 dark:text-white font-mono tracking-tighter">
                       {formatCurrency(finanzas.total)}
                     </span>
                   </div>
@@ -454,26 +547,27 @@ export function NextLegModal({
               </Card>
             </div>
 
+            {/* Utilidad Estimada */}
             <div className="space-y-4">
-              <h4 className="text-[11px] font-black text-rose-500 uppercase tracking-[0.2em] flex items-center gap-2">
-                <TrendingDown className="h-4 w-4 text-primary" /> Utilidad
-                Estimada
+              <h4 className="text-[11px] font-black text-rose-500 dark:text-rose-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                <TrendingDown className="h-4 w-4" />
+                Utilidad Estimada
               </h4>
 
-              <Card className="glass-card border-rose-100 bg-rose-50/20 p-0 shadow-sm">
+              <Card className="border border-rose-200 dark:border-rose-800/50 bg-rose-50/20 dark:bg-rose-900/10 shadow-sm">
                 <CardContent className="p-5">
-                  <div className="flex justify-between items-center text-xs font-bold text-slate-500 mb-4">
+                  <div className="flex justify-between text-xs font-bold text-slate-500 dark:text-slate-400 mb-4">
                     <span>Gasto Operativo:</span>
-                    <span className="font-mono text-rose-600">
+                    <span className="font-mono text-rose-600 dark:text-rose-400">
                       -{formatCurrency(gastoOperativoActual)}
                     </span>
                   </div>
-                  <Separator className="bg-rose-100/50 mb-4" />
+                  <Separator className="bg-rose-200/50 dark:bg-rose-800/30 mb-4" />
                   <div>
-                    <span className="text-[9px] font-black text-emerald-700 uppercase block mb-1">
+                    <span className="text-[9px] font-black text-emerald-700 dark:text-emerald-400 uppercase block mb-1">
                       Utilidad Neta Estimada
                     </span>
-                    <span className="text-3xl font-black text-emerald-700 font-mono tracking-tighter">
+                    <span className="text-3xl font-black text-emerald-700 dark:text-emerald-400 font-mono tracking-tighter">
                       {formatCurrency(finanzas.total - gastoOperativoActual)}
                     </span>
                   </div>
@@ -481,29 +575,30 @@ export function NextLegModal({
               </Card>
             </div>
 
-            {/* PROTOCOLO BYPASS */}
-            <Card className="bg-slate-900 border-none shadow-2xl overflow-hidden relative group">
-              <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent pointer-events-none" />
-              <CardContent className="p-6 space-y-4 relative z-10">
+            {/* Protocolo Bypass */}
+            <Card
+              className={cn(
+                "border-none shadow-2xl overflow-hidden",
+                "bg-slate-900 dark:bg-slate-950",
+              )}
+            >
+              <CardContent className="p-6 space-y-4">
                 <h5 className="text-[10px] font-black uppercase text-emerald-400 tracking-[0.2em]">
                   Protocolo Bypass
                 </h5>
-                <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
+                <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
                   Genera la Carta Porte de $1 para liberar la unidad
                   inmediatamente.
                 </p>
+                {/* Botón Movimiento/Asignación — Azul Eléctrico estándar Tahoe */}
                 <Button
-                  onClick={() =>
-                    localUuid
-                      ? handleDownloadStampedPDF(localUuid)
-                      : onTimbrarNominal()
-                  }
+                  onClick={handleCartaPorteAction}
                   disabled={isStamping}
                   className={cn(
-                    "w-full h-11 font-black text-[10px] uppercase tracking-widest shadow-lg transition-all",
+                    "w-full h-11 font-black text-[10px] uppercase tracking-widest shadow-lg haptic-press transition-all",
                     localUuid
-                      ? "bg-blue-600 hover:bg-blue-500"
-                      : "bg-emerald-600 hover:bg-emerald-500 shadow-emerald-900/40",
+                      ? "bg-blue-600 hover:bg-blue-500 text-white"
+                      : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/40",
                   )}
                 >
                   {isStamping ? (
@@ -519,30 +614,45 @@ export function NextLegModal({
             </Card>
           </div>
 
-          {/* PANEL DERECHO: FORMULARIO */}
-          <div className="md:col-span-8 p-10 space-y-10 bg-white/40 backdrop-blur-sm relative">
+          {/* ── Panel derecho: Formulario ── */}
+          <div
+            className={cn(
+              "md:col-span-8 p-10 space-y-10",
+              "bg-white/40 dark:bg-transparent backdrop-blur-sm",
+            )}
+          >
+            {/* Fase operativa + Operador */}
             <div className="grid grid-cols-2 gap-8">
               <div className="space-y-3">
-                <Label className="text-[11px] font-black uppercase text-slate-600 tracking-widest ml-1">
+                <Label className="text-[11px] font-black uppercase text-slate-600 dark:text-slate-400 tracking-widest ml-1">
                   Fase Operativa
                 </Label>
                 <Select
                   value={formData.leg_type}
-                  onValueChange={(v: any) =>
-                    setFormData((p: any) => ({ ...p, leg_type: v }))
+                  onValueChange={(v: ExtendedLegPayload["leg_type"]) =>
+                    setFormData((p) => ({ ...p, leg_type: v }))
                   }
                 >
-                  <SelectTrigger className="h-12 glass-card border-slate-200 font-bold text-slate-700 shadow-sm">
+                  <SelectTrigger className="h-11 bg-white dark:bg-slate-800 border-slate-200 dark:border-white/10 font-bold text-slate-700 dark:text-white shadow-sm">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="glass-panel">
-                    <SelectItem value="carga_muelle" className="font-bold">
+                  <SelectContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10">
+                    <SelectItem
+                      value="carga_muelle"
+                      className="font-bold dark:text-white"
+                    >
                       1. CARGA PATIO / MUELLE
                     </SelectItem>
-                    <SelectItem value="ruta_carretera" className="font-bold">
+                    <SelectItem
+                      value="ruta_carretera"
+                      className="font-bold dark:text-white"
+                    >
                       2. RUTA CARRETERA
                     </SelectItem>
-                    <SelectItem value="entrega_vacio" className="font-bold">
+                    <SelectItem
+                      value="entrega_vacio"
+                      className="font-bold dark:text-white"
+                    >
                       3. RETORNO DE VACÍO
                     </SelectItem>
                   </SelectContent>
@@ -550,7 +660,7 @@ export function NextLegModal({
               </div>
 
               <div className="space-y-3">
-                <Label className="text-[11px] font-black uppercase text-slate-600 tracking-widest ml-1">
+                <Label className="text-[11px] font-black uppercase text-slate-600 dark:text-slate-400 tracking-widest ml-1">
                   Operador
                 </Label>
                 <Select
@@ -558,15 +668,19 @@ export function NextLegModal({
                     formData.operator_id ? String(formData.operator_id) : ""
                   }
                   onValueChange={(v) =>
-                    setFormData((p: any) => ({ ...p, operator_id: Number(v) }))
+                    setFormData((p) => ({ ...p, operator_id: Number(v) }))
                   }
                 >
-                  <SelectTrigger className="h-12 glass-card border-slate-200 font-bold shadow-sm">
+                  <SelectTrigger className="h-11 bg-white dark:bg-slate-800 border-slate-200 dark:border-white/10 font-bold dark:text-white shadow-sm">
                     <SelectValue placeholder="Asignar Operador..." />
                   </SelectTrigger>
-                  <SelectContent className="glass-panel">
-                    {operadores.map((o: any) => (
-                      <SelectItem key={o.id} value={String(o.id)}>
+                  <SelectContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10">
+                    {availableOperators.map((o) => (
+                      <SelectItem
+                        key={o.id}
+                        value={String(o.id)}
+                        className="font-bold dark:text-white"
+                      >
                         {o.name.toUpperCase()}
                       </SelectItem>
                     ))}
@@ -575,25 +689,26 @@ export function NextLegModal({
               </div>
             </div>
 
+            {/* Unidad (Tractocamión) */}
             <div className="space-y-3">
-              <Label className="text-[11px] font-black uppercase text-slate-600 tracking-widest ml-1">
+              <Label className="text-[11px] font-black uppercase text-slate-600 dark:text-slate-400 tracking-widest ml-1">
                 Unidad (Tractocamión)
               </Label>
               <Select
                 value={formData.unit_id ? String(formData.unit_id) : ""}
                 onValueChange={(v) =>
-                  setFormData((p: any) => ({ ...p, unit_id: Number(v) }))
+                  setFormData((p) => ({ ...p, unit_id: Number(v) }))
                 }
               >
-                <SelectTrigger className="h-12 glass-card border-slate-400 text-brand-navy font-black shadow-md">
+                <SelectTrigger className="h-12 bg-white dark:bg-slate-800 border-slate-300 dark:border-white/20 text-slate-900 dark:text-white font-black shadow-md">
                   <SelectValue placeholder="Seleccionar unidad de tracción..." />
                 </SelectTrigger>
-                <SelectContent className="glass-panel">
-                  {availableTractos.map((u: any) => (
+                <SelectContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10">
+                  {availableTractos.map((u) => (
                     <SelectItem
                       key={u.id}
                       value={String(u.id)}
-                      className="font-bold"
+                      className="font-bold dark:text-white"
                     >
                       ECO-{u.numero_economico} [{u.placas}]
                     </SelectItem>
@@ -602,23 +717,30 @@ export function NextLegModal({
               </Select>
             </div>
 
-            {/* CONFIGURACIÓN DE ARRASTRE */}
-            <div className="glass-card p-8 border-white shadow-xl space-y-8 relative">
-              <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-                <h5 className="text-[11px] font-black text-brand-navy uppercase tracking-[0.2em] flex items-center gap-2">
-                  <Box className="h-4 w-4 text-brand-red" /> Configuración de
-                  Arrastre
+            {/* Configuración de Arrastre */}
+            <div
+              className={cn(
+                "p-8 rounded-2xl border shadow-xl space-y-8",
+                "bg-white dark:bg-slate-800/50",
+                "border-slate-200 dark:border-white/10",
+              )}
+            >
+              <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-white/10">
+                <h5 className="text-[11px] font-black text-slate-700 dark:text-white uppercase tracking-[0.2em] flex items-center gap-2">
+                  <Box className="h-4 w-4 text-brand-red" />
+                  Configuración de Arrastre
                 </h5>
                 {isFullTrip && (
-                  <Badge className="bg-rose-100 text-rose-700 font-black text-[9px] border-none px-3">
+                  <Badge className="bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 font-black text-[9px] border-none px-3">
                     DOBLE ARTICULADO (FULL)
                   </Badge>
                 )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
+                {/* Chasis 1 */}
                 <div className="space-y-2.5">
-                  <Label className="text-[9px] font-bold text-slate-500 uppercase ml-1">
+                  <Label className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase ml-1">
                     Chasis 1
                   </Label>
                   <Select
@@ -628,23 +750,25 @@ export function NextLegModal({
                         : ""
                     }
                     onValueChange={(v) =>
-                      setFormData((p: any) => ({
-                        ...p,
-                        remolque_1_id: Number(v),
-                      }))
+                      setFormData((p) => ({ ...p, remolque_1_id: Number(v) }))
                     }
                   >
-                    <SelectTrigger className="h-10 font-bold border-slate-200 bg-slate-50/50">
+                    <SelectTrigger className="h-10 font-bold border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-slate-800 dark:text-white">
                       <SelectValue placeholder="R1" />
                     </SelectTrigger>
-                    <SelectContent className="glass-panel">
-                      {availableRemolques.map((u: any) => (
+                    <SelectContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10">
+                      {availableRemolques.map((u) => (
                         <SelectItem
                           key={u.id}
                           value={String(u.id)}
-                          className="font-bold"
+                          className="font-bold dark:text-white"
                         >
-                          ECO-{u.numero_economico} {u.is_loaded ? "📦" : "➖"}
+                          ECO-{u.numero_economico}{" "}
+                          {u.is_loaded ? (
+                            <Package className="inline h-3.5 w-3.5 text-amber-500 ml-1" />
+                          ) : (
+                            <Minus className="inline h-3.5 w-3.5 text-slate-400 ml-1" />
+                          )}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -653,8 +777,9 @@ export function NextLegModal({
 
                 {isFullTrip && (
                   <>
+                    {/* Dolly */}
                     <div className="space-y-2.5">
-                      <Label className="text-[9px] font-bold text-rose-600 uppercase ml-1">
+                      <Label className="text-[9px] font-bold text-rose-600 dark:text-rose-400 uppercase ml-1">
                         Dolly
                       </Label>
                       <Select
@@ -662,21 +787,18 @@ export function NextLegModal({
                           formData.dolly_id ? String(formData.dolly_id) : ""
                         }
                         onValueChange={(v) =>
-                          setFormData((p: any) => ({
-                            ...p,
-                            dolly_id: Number(v),
-                          }))
+                          setFormData((p) => ({ ...p, dolly_id: Number(v) }))
                         }
                       >
-                        <SelectTrigger className="h-10 font-bold border-rose-200 bg-rose-50 text-rose-700">
+                        <SelectTrigger className="h-10 font-bold border-rose-200 dark:border-rose-700/50 bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300">
                           <SelectValue placeholder="Dolly" />
                         </SelectTrigger>
-                        <SelectContent className="glass-panel">
-                          {availableDollies.map((u: any) => (
+                        <SelectContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10">
+                          {availableDollies.map((u) => (
                             <SelectItem
                               key={u.id}
                               value={String(u.id)}
-                              className="font-bold"
+                              className="font-bold dark:text-white"
                             >
                               ECO-{u.numero_economico}
                             </SelectItem>
@@ -685,8 +807,9 @@ export function NextLegModal({
                       </Select>
                     </div>
 
+                    {/* Chasis 2 */}
                     <div className="space-y-2.5">
-                      <Label className="text-[9px] font-bold text-rose-600 uppercase ml-1">
+                      <Label className="text-[9px] font-bold text-rose-600 dark:text-rose-400 uppercase ml-1">
                         Chasis 2
                       </Label>
                       <Select
@@ -696,24 +819,28 @@ export function NextLegModal({
                             : ""
                         }
                         onValueChange={(v) =>
-                          setFormData((p: any) => ({
+                          setFormData((p) => ({
                             ...p,
                             remolque_2_id: Number(v),
                           }))
                         }
                       >
-                        <SelectTrigger className="h-10 font-bold border-rose-200 bg-rose-50 text-rose-700">
+                        <SelectTrigger className="h-10 font-bold border-rose-200 dark:border-rose-700/50 bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300">
                           <SelectValue placeholder="R2" />
                         </SelectTrigger>
-                        <SelectContent className="glass-panel">
-                          {availableRemolques.map((u: any) => (
+                        <SelectContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10">
+                          {availableRemolques.map((u) => (
                             <SelectItem
                               key={u.id}
                               value={String(u.id)}
-                              className="font-bold"
+                              className="font-bold dark:text-white"
                             >
                               ECO-{u.numero_economico}{" "}
-                              {u.is_loaded ? "📦" : "➖"}
+                              {u.is_loaded ? (
+                                <Package className="inline h-3.5 w-3.5 text-amber-500 ml-1" />
+                              ) : (
+                                <Minus className="inline h-3.5 w-3.5 text-slate-400 ml-1" />
+                              )}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -724,104 +851,113 @@ export function NextLegModal({
               </div>
             </div>
 
-            {/* ANTICIPOS OPERATIVOS */}
+            {/* Anticipos Operativos — solo en tramo de carretera */}
             {isRoadLeg && (
-              <div className="bg-amber-500/5 p-8 rounded-3xl border border-amber-500/10 space-y-6 shadow-inner relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-1 bg-amber-400 h-full" />
-                <h4 className="text-[11px] font-black text-amber-700 uppercase tracking-[0.2em] flex items-center gap-2">
-                  <DollarSign className="h-4 w-4 text-primary" /> Registro de
-                  Anticipos y Vales
+              <div
+                className={cn(
+                  "p-8 rounded-3xl space-y-6 shadow-inner relative overflow-hidden",
+                  "bg-amber-500/5 dark:bg-amber-500/10",
+                  "border border-amber-500/10 dark:border-amber-500/20",
+                )}
+              >
+                {/* Acento izquierdo */}
+                <div className="absolute top-0 left-0 w-1 bg-amber-400 dark:bg-amber-500 h-full rounded-l-3xl" />
+
+                <h4 className="text-[11px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                  <DollarSign className="h-4 w-4" />
+                  Registro de Anticipos y Vales
                 </h4>
+
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
-                  <div className="space-y-2.5">
-                    <Label className="text-[9px] font-bold text-slate-600 uppercase ml-1">
-                      Casetas
-                    </Label>
-                    <div className="relative">
-                      <DollarSign className="text-slate-600  absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 " />
-                      <Input
-                        type="number"
-                        className="pl-9 h-11 glass-card border-amber-200/50 font-mono text-sm bg-white"
-                        value={formData.anticipo_casetas || ""}
-                        onChange={(e) =>
-                          setFormData((p: any) => ({
-                            ...p,
-                            anticipo_casetas: Number(e.target.value),
-                          }))
-                        }
-                      />
+                  {(
+                    [
+                      {
+                        key: "anticipo_casetas",
+                        label: "Casetas",
+                        accent: "amber",
+                      },
+                      {
+                        key: "anticipo_combustible",
+                        label: "Diesel",
+                        accent: "amber",
+                      },
+                      {
+                        key: "anticipo_viaticos",
+                        label: "Viáticos",
+                        accent: "amber",
+                      },
+                      {
+                        key: "otros_anticipos",
+                        label: "Vale / Otros",
+                        accent: "blue",
+                      },
+                    ] as const
+                  ).map(({ key, label, accent }) => (
+                    <div key={key} className="space-y-2.5">
+                      <Label
+                        className={cn(
+                          "text-[9px] font-bold uppercase ml-1 flex items-center gap-1",
+                          accent === "blue"
+                            ? "text-blue-600 dark:text-blue-400"
+                            : "text-slate-600 dark:text-slate-400",
+                        )}
+                      >
+                        {key === "otros_anticipos" && (
+                          <Ticket className="h-3 w-3" />
+                        )}
+                        {label}
+                      </Label>
+                      <div className="relative">
+                        <DollarSign
+                          className={cn(
+                            "absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5",
+                            accent === "blue"
+                              ? "text-blue-400"
+                              : "text-slate-400 dark:text-slate-500",
+                          )}
+                        />
+                        <Input
+                          type="number"
+                          className={cn(
+                            "pl-9 h-11 font-mono text-sm",
+                            "bg-white dark:bg-slate-800",
+                            "dark:text-white dark:placeholder:text-slate-500",
+                            accent === "blue"
+                              ? "border-blue-200 dark:border-blue-700/50 bg-blue-50/50 dark:bg-blue-900/20"
+                              : "border-amber-200/50 dark:border-amber-700/30",
+                          )}
+                          value={formData[key] || ""}
+                          onChange={(e) =>
+                            setFormData((p) => ({
+                              ...p,
+                              [key]: Number(e.target.value),
+                            }))
+                          }
+                        />
+                      </div>
                     </div>
-                  </div>
-                  <div className="space-y-2.5">
-                    <Label className="text-[9px] font-bold text-slate-600 uppercase ml-1">
-                      Diesel
-                    </Label>
-                    <div className="relative">
-                      <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-600" />
-                      <Input
-                        type="number"
-                        className="pl-9 h-11 glass-card border-amber-200/50 font-mono text-sm bg-white"
-                        value={formData.anticipo_combustible || ""}
-                        onChange={(e) =>
-                          setFormData((p: any) => ({
-                            ...p,
-                            anticipo_combustible: Number(e.target.value),
-                          }))
-                        }
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2.5">
-                    <Label className="text-[9px] font-bold text-slate-600 uppercase ml-1">
-                      Viáticos
-                    </Label>
-                    <div className="relative">
-                      <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-600" />
-                      <Input
-                        type="number"
-                        className="pl-9 h-11 glass-card border-amber-200/50 font-mono text-sm bg-white"
-                        value={formData.anticipo_viaticos || ""}
-                        onChange={(e) =>
-                          setFormData((p: any) => ({
-                            ...p,
-                            anticipo_viaticos: Number(e.target.value),
-                          }))
-                        }
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2.5">
-                    <Label className="text-[9px] font-bold text-brand-navy uppercase flex items-center gap-1 ml-1">
-                      <Ticket className="h-3 w-3" /> Vale / Otros
-                    </Label>
-                    <div className="relative">
-                      <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-blue-400" />
-                      <Input
-                        type="number"
-                        className="pl-9 h-11 glass-card border-blue-200 bg-blue-50/50 font-mono text-sm"
-                        value={formData.otros_anticipos || ""}
-                        onChange={(e) =>
-                          setFormData((p: any) => ({
-                            ...p,
-                            otros_anticipos: Number(e.target.value),
-                          }))
-                        }
-                      />
-                    </div>
-                  </div>
+                  ))}
                 </div>
               </div>
             )}
           </div>
         </div>
 
-        {/* FOOTER: Estilo barra inferior de Safari. 
-        Transparente con blur.
-    */}
-        <DialogFooter className="p-6 bg-white/80 backdrop-blur-xl border-t border-white/20 flex justify-between items-center px-10">
+        {/*
+         * CAPA 4 — Footer / Control Bar Tahoe
+         * Barra inferior cristalina anclada al final.
+         */}
+        <DialogFooter
+          className={cn(
+            "p-6 px-10 flex justify-between items-center",
+            "bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl",
+            "border-t border-slate-200/50 dark:border-white/10",
+          )}
+        >
+          {/* Indicador de estado */}
           <div className="flex items-center gap-3 px-2">
-            <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse-slow shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-600">
+            <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
               Validación Física Requerida
             </span>
           </div>
@@ -830,15 +966,21 @@ export function NextLegModal({
             <Button
               variant="ghost"
               onClick={() => onOpenChange(false)}
-              className="font-bold uppercase text-[11px] tracking-widest text-slate-500 hover:text-slate-700 hover:bg-transparent"
+              className="font-bold uppercase text-[11px] tracking-widest text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-transparent haptic-press"
             >
               Cancelar
             </Button>
 
+            {/* Botón principal — Agregar/Crear → bg-brand-red por estándar Tahoe */}
             <Button
               onClick={handleIniciarTramo}
               disabled={loading || !cpGenerada}
-              className="btn-primary-gradient px-12 h-12 font-black uppercase text-[11px] tracking-[0.2em] shadow-2xl"
+              className={cn(
+                "px-12 h-12 font-black uppercase text-[11px] tracking-[0.2em] shadow-2xl haptic-press",
+                "bg-brand-red hover:bg-brand-red/90 text-white",
+                "shadow-brand-red/30",
+                "disabled:opacity-50 disabled:cursor-not-allowed",
+              )}
             >
               {loading ? (
                 <Loader2 className="h-5 w-5 animate-spin mr-2" />

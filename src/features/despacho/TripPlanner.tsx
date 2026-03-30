@@ -39,11 +39,27 @@ import {
   ShieldAlert,
   Route as RouteIcon,
 } from "lucide-react";
-
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuContent,
+} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -52,13 +68,6 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 
 import {
   DndContext,
@@ -88,6 +97,7 @@ import TripSettlementModal from "@/features/cierre/TripSettlementModal";
 import { NextLegModal } from "@/features/despacho/NextLegModal";
 import { TripDetailsModal } from "@/features/despacho/TripDetailsModal";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 // =====================
 // Interfaces & Helpers
@@ -136,10 +146,9 @@ const groupKeyFromStatusAndLeg = (
 const getOperationalStatusBadge = (leg: TripLeg) => {
   const status = normalizeStatus(leg.status);
 
-  // 🚀 CORRECCIÓN DE EXPERIENCIA DE USUARIO: Traducir "Creado"
   if (status === "creado") {
     return (
-      <Badge className="bg-amber-400 hover:bg-amber-500 text-amber-950 shadow-sm border-0 w-full justify-center py-1">
+      <Badge className="bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-500/30 shadow-sm w-full justify-center py-1">
         <Clock className="h-3 w-3 mr-1.5" /> ASIGNADO / EN RUTA
       </Badge>
     );
@@ -147,19 +156,19 @@ const getOperationalStatusBadge = (leg: TripLeg) => {
 
   if (status === "entregado" && leg.leg_type === "carga_muelle")
     return (
-      <Badge className="bg-orange-500 text-white shadow-sm border-0 w-full justify-center py-1">
+      <Badge className="bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-500/30 shadow-sm w-full justify-center py-1">
         📦 CARGADO EN PATIO
       </Badge>
     );
   if (status === "entregado" && leg.leg_type === "ruta_carretera")
     return (
-      <Badge className="bg-purple-600 text-white shadow-sm border-0 w-full justify-center py-1">
-        ⏳ DESENGANCHADO / EN PATIO
+      <Badge className="bg-purple-100 text-purple-800 border-purple-300 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-500/30 shadow-sm w-full justify-center py-1">
+        ⏳ DESENGANCHADO / PATIO
       </Badge>
     );
   if (status === "entregado" && leg.leg_type === "entrega_vacio")
     return (
-      <Badge className="bg-emerald-600 text-white shadow-sm border-0 w-full justify-center py-1">
+      <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-500/30 shadow-sm w-full justify-center py-1">
         🏁 FINALIZADO
       </Badge>
     );
@@ -167,19 +176,19 @@ const getOperationalStatusBadge = (leg: TripLeg) => {
   if (status === "en_transito") {
     if (leg.leg_type === "carga_muelle")
       return (
-        <Badge className="bg-sky-600 text-white shadow-sm border-0 w-full justify-center py-1">
+        <Badge className="bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-900/30 dark:text-sky-400 dark:border-sky-500/30 shadow-sm w-full justify-center py-1">
           🚜 OPERANDO EN MUELLE
         </Badge>
       );
     if (leg.leg_type === "ruta_carretera")
       return (
-        <Badge className="bg-blue-600 text-white shadow-sm border-0 w-full justify-center py-1">
+        <Badge className="bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-500/30 shadow-sm w-full justify-center py-1">
           🚚 EN CARRETERA
         </Badge>
       );
     if (leg.leg_type === "entrega_vacio")
       return (
-        <Badge className="bg-indigo-500 text-white shadow-sm border-0 w-full justify-center py-1">
+        <Badge className="bg-indigo-100 text-indigo-800 border-indigo-300 dark:bg-indigo-900/30 dark:text-indigo-400 dark:border-indigo-500/30 shadow-sm w-full justify-center py-1">
           🔄 RETORNANDO VACÍO
         </Badge>
       );
@@ -187,7 +196,7 @@ const getOperationalStatusBadge = (leg: TripLeg) => {
 
   if (["detenido", "retraso", "accidente"].includes(status)) {
     return (
-      <Badge className="bg-red-600 text-white shadow-sm border-0 uppercase animate-pulse w-full justify-center py-1">
+      <Badge className="bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-500/30 shadow-sm uppercase animate-pulse w-full justify-center py-1">
         <ShieldAlert className="h-3 w-3 mr-1.5" /> {status}
       </Badge>
     );
@@ -196,7 +205,7 @@ const getOperationalStatusBadge = (leg: TripLeg) => {
   return (
     <Badge
       variant="outline"
-      className="uppercase w-full justify-center bg-slate-100 text-slate-700 py-1"
+      className="uppercase w-full justify-center bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 py-1 border-slate-200 dark:border-slate-700"
     >
       {status.replace("_", " ")}
     </Badge>
@@ -208,7 +217,7 @@ const isIncidentStatus = (status: unknown) => {
   return ["detenido", "retraso", "accidente"].includes(s);
 };
 
-// 🚀 4 COLUMNAS KANBAN EXACTAS
+// 🚀 4 COLUMNAS KANBAN EXACTAS (Colores Semánticos Tahoe)
 const KANBAN_COLUMNS: Array<{
   id: KanbanColumnId;
   title: string;
@@ -223,36 +232,36 @@ const KANBAN_COLUMNS: Array<{
     title: "En Carga",
     subtitle: "Movimientos en patio",
     icon: Box,
-    bg: "bg-slate-100",
-    border: "border-slate-200",
-    text: "text-slate-700",
+    bg: "bg-slate-50 dark:bg-slate-900/30",
+    border: "border-slate-200 dark:border-white/10",
+    text: "text-slate-700 dark:text-slate-200",
   },
   {
     id: "en_transito",
     title: "En Tránsito",
     subtitle: "Operando en carretera",
     icon: Truck,
-    bg: "bg-blue-50/60",
-    border: "border-blue-200",
-    text: "text-blue-800",
+    bg: "bg-blue-50/60 dark:bg-blue-950/20",
+    border: "border-blue-200 dark:border-blue-900/50",
+    text: "text-blue-800 dark:text-blue-400",
   },
   {
     id: "desenganchado",
     title: "Desenganchado",
     subtitle: "Llegó a destino/patio",
     icon: LinkIcon,
-    bg: "bg-purple-50/60",
-    border: "border-purple-200",
-    text: "text-purple-800",
+    bg: "bg-purple-50/60 dark:bg-purple-950/20",
+    border: "border-purple-200 dark:border-purple-900/50",
+    text: "text-purple-800 dark:text-purple-400",
   },
   {
     id: "por_liquidar",
     title: "Por Liquidar",
     subtitle: "Listo para pago",
     icon: Banknote,
-    bg: "bg-emerald-50/60",
-    border: "border-emerald-200",
-    text: "text-emerald-800",
+    bg: "bg-emerald-50/60 dark:bg-emerald-950/20",
+    border: "border-emerald-200 dark:border-emerald-900/50",
+    text: "text-emerald-800 dark:text-emerald-400",
   },
 ];
 
@@ -300,7 +309,7 @@ function KanbanCard({
       {...attributes}
       className="cursor-grab active:cursor-grabbing group relative"
     >
-      <div className="absolute -top-3 -right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all duration-200 bg-white shadow-lg border border-slate-200 rounded-lg p-1 z-10 translate-y-1 group-hover:translate-y-0">
+      <div className="absolute -top-3 -right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all duration-200 bg-white dark:bg-slate-900 shadow-lg border border-slate-200 dark:border-white/10 rounded-lg p-1 z-10 translate-y-1 group-hover:translate-y-0">
         <button
           type="button"
           onPointerDown={(e) => e.stopPropagation()}
@@ -308,7 +317,7 @@ function KanbanCard({
             e.stopPropagation();
             onOpenCommandCenter(tripPadre);
           }}
-          className="p-1.5 hover:bg-brand-navy hover:text-white rounded text-brand-navy transition-colors"
+          className="p-1.5 hover:bg-brand-navy dark:hover:bg-slate-800 hover:text-white rounded text-brand-navy dark:text-slate-300 transition-colors"
           title="Abrir Centro de Mando"
         >
           <Eye className="h-3.5 w-3.5" />
@@ -321,7 +330,7 @@ function KanbanCard({
               e.stopPropagation();
               onSettleClick(leg, tripPadre);
             }}
-            className="p-1.5 hover:bg-emerald-500 hover:text-white rounded text-emerald-600 transition-colors"
+            className="p-1.5 hover:bg-emerald-500 hover:text-white rounded text-emerald-600 dark:text-emerald-400 transition-colors"
             title="Liquidar Tramo"
           >
             <Banknote className="h-3.5 w-3.5" />
@@ -334,7 +343,7 @@ function KanbanCard({
             e.stopPropagation();
             onDeleteClick(tripPadre);
           }}
-          className="p-1.5 hover:bg-red-500 hover:text-white rounded text-red-600 transition-colors"
+          className="p-1.5 hover:bg-rose-500 hover:text-white rounded text-rose-600 dark:text-rose-400 transition-colors"
           title="Eliminar Viaje Completo"
         >
           <Trash2 className="h-3.5 w-3.5" />
@@ -342,61 +351,71 @@ function KanbanCard({
       </div>
 
       <Card
-        className={`overflow-hidden transition-all border-l-4 ${isDragging ? "shadow-2xl ring-2 ring-brand-navy" : "shadow-sm hover:shadow-md"} ${isIncident ? "border-l-red-500 bg-red-50/40" : leg.status === "entregado" ? "border-l-emerald-500" : "border-l-brand-navy"}`}
+        className={cn(
+          "overflow-hidden transition-all border-l-4 bg-white dark:bg-slate-950",
+          isDragging
+            ? "shadow-2xl ring-2 ring-brand-navy dark:ring-white/20"
+            : "shadow-sm hover:shadow-md",
+          isIncident
+            ? "border-l-rose-500 bg-rose-50/40 dark:bg-rose-950/20"
+            : leg.status === "entregado"
+              ? "border-l-emerald-500"
+              : "border-l-blue-500",
+        )}
       >
-        <CardContent className="p-3.5">
-          <div className="flex justify-between items-start mb-3">
-            <div className="pr-2">
-              <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest block mb-0.5">
+        <CardContent className="p-4">
+          <div className="flex justify-between items-start mb-3 gap-2">
+            <div className="pr-2 flex flex-col min-w-0">
+              <span className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">
                 {legTypeShort[leg.leg_type] || "TRAMO"}
               </span>
-              <span className="text-xs font-black text-slate-800 uppercase leading-tight line-clamp-2">
+              <span className="text-sm font-black text-slate-800 dark:text-slate-200 uppercase leading-tight truncate">
                 {tripPadre.client?.razon_social || "CLIENTE GENERAL"}
               </span>
             </div>
             <Badge
               variant="outline"
-              className="text-[9px] font-mono bg-slate-50 text-slate-600 shrink-0 shadow-sm"
+              className="text-[10px] font-mono font-bold bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-400 shrink-0 shadow-sm border-slate-200 dark:border-white/10 py-0.5"
             >
               #{tripPadre.public_id || tripPadre.id}
             </Badge>
           </div>
 
-          <div className="bg-slate-50 border border-slate-100 rounded-lg p-2 mb-3 space-y-1.5 flex flex-col justify-center items-center text-center">
-            <RouteIcon className="h-4 w-4 text-primary opacity-60 mb-0.5" />
+          <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-white/5 rounded-xl p-3 mb-4 space-y-2 flex flex-col justify-center items-center text-center shadow-inner">
+            <RouteIcon className="h-4 w-4 text-blue-500 opacity-80" />
             <div
-              className="text-[11px] font-black text-brand-navy uppercase tracking-tight line-clamp-3"
+              className="text-[11px] font-black text-brand-navy dark:text-blue-100 uppercase tracking-tight line-clamp-3"
               title={formattedRouteName}
             >
               {formattedRouteName}
             </div>
           </div>
 
-          <div className="flex items-center justify-between mb-3 gap-2">
-            <div className="flex items-center gap-1.5 text-[10px] font-black text-brand-navy bg-white border border-slate-200 px-2 py-1 rounded-md shadow-sm w-1/2">
-              <Truck className="h-3 w-3 text-slate-600 shrink-0" />
+          <div className="flex items-center justify-between mb-4 gap-3">
+            <div className="flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 px-2 py-1.5 rounded-lg shadow-sm w-1/2 min-w-0">
+              <Truck className="h-3 w-3 text-slate-400 shrink-0" />
               <span className="truncate">
                 ECO-{leg.unit?.numero_economico || "N/A"}
               </span>
             </div>
-            <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600 bg-white border border-slate-200 px-2 py-1 rounded-md shadow-sm w-1/2">
-              <User className="h-3 w-3 text-slate-600 shrink-0" />
+            <div className="flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 px-2 py-1.5 rounded-lg shadow-sm w-1/2 min-w-0">
+              <User className="h-3 w-3 text-slate-400 shrink-0" />
               <span className="truncate">
                 {leg.operator?.name?.split(" ")[0] || "S/A"}
               </span>
             </div>
           </div>
 
-          <div className="pt-2 border-t border-slate-100 space-y-2">
+          <div className="pt-3 border-t border-slate-100 dark:border-white/5 space-y-2.5">
             {getOperationalStatusBadge(leg)}
             {(tripPadre.remolque_1_id ||
               tripPadre.dolly_id ||
               tripPadre.remolque_2_id) && (
-              <div className="flex flex-wrap gap-1 justify-center">
+              <div className="flex flex-wrap gap-1.5 justify-center">
                 {tripPadre.remolque_1_id && (
                   <Badge
                     variant="outline"
-                    className="text-[8px] py-0 h-4 border-slate-200 text-slate-500 bg-white"
+                    className="text-[8px] font-black py-0 h-4 border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800"
                   >
                     R1
                   </Badge>
@@ -404,7 +423,7 @@ function KanbanCard({
                 {tripPadre.dolly_id && (
                   <Badge
                     variant="outline"
-                    className="text-[8px] py-0 h-4 border-blue-200 bg-blue-50 text-blue-700"
+                    className="text-[8px] font-black py-0 h-4 border-blue-200 dark:border-blue-900/50 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
                   >
                     D
                   </Badge>
@@ -412,7 +431,7 @@ function KanbanCard({
                 {tripPadre.remolque_2_id && (
                   <Badge
                     variant="outline"
-                    className="text-[8px] py-0 h-4 border-slate-200 text-slate-500 bg-white"
+                    className="text-[8px] font-black py-0 h-4 border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800"
                   >
                     R2
                   </Badge>
@@ -443,7 +462,13 @@ function KanbanColumn({
   return (
     <div
       ref={setNodeRef}
-      className={`flex-shrink-0 w-[350px] rounded-2xl border-2 p-3 flex flex-col h-full transition-colors shadow-sm ${column.bg} ${isOver ? "border-brand-navy border-dashed ring-4 ring-brand-navy/10" : column.border}`}
+      className={cn(
+        "flex-shrink-0 w-[350px] rounded-3xl border-2 p-4 flex flex-col h-full transition-colors shadow-sm",
+        column.bg,
+        isOver
+          ? "border-brand-navy border-dashed ring-4 ring-brand-navy/10 dark:ring-white/10 dark:border-white/40"
+          : column.border,
+      )}
     >
       <div className="flex items-start justify-between mb-4 px-2 pt-1">
         <div>
@@ -452,21 +477,21 @@ function KanbanColumn({
           >
             <Icon className="h-5 w-5" /> {column.title}
           </div>
-          <p className="text-[11px] font-bold text-slate-600 uppercase tracking-widest mt-0.5">
+          <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mt-1">
             {column.subtitle}
           </p>
         </div>
         <Badge
           variant="secondary"
-          className="bg-white text-slate-800 shadow-sm font-black border border-slate-200 text-sm px-2.5 py-0.5"
+          className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 shadow-sm font-black border border-slate-200 dark:border-white/10 text-sm px-2.5 py-0.5"
         >
           {items.length}
         </Badge>
       </div>
-      <div className="flex flex-col gap-3 overflow-y-auto pr-1 min-h-[200px] pb-10 custom-scrollbar">
+      <div className="flex flex-col gap-4 overflow-y-auto pr-1 min-h-[200px] pb-10 custom-scrollbar">
         {items.length === 0 ? (
-          <div className="p-8 border-2 border-dashed border-slate-300/50 rounded-xl text-center text-slate-600 text-sm font-medium bg-white/50">
-            Mueve un servicio aquí
+          <div className="p-8 border-2 border-dashed border-slate-300/50 dark:border-white/10 rounded-2xl text-center text-slate-500 dark:text-slate-400 text-xs font-black uppercase tracking-widest bg-white/50 dark:bg-slate-900/30">
+            Zona de Descarga
           </div>
         ) : (
           items.map((item: any) => (
@@ -680,93 +705,101 @@ export const TripPlanner = () => {
 
   if (loading)
     return (
-      <div className="p-12 text-center text-brand-navy flex flex-col items-center justify-center min-h-[50vh]">
-        <Loader2 className="h-10 w-10 animate-spin mb-4 text-brand-navy" />
-        <p className="font-medium animate-pulse">
-          Cargando Tablero de Despacho...
+      <div className="flex flex-col items-center justify-center h-96 gap-4">
+        <Loader2 className="h-10 w-10 animate-spin text-brand-red" />
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 animate-pulse">
+          Sincronizando Tablero de Despacho...
         </p>
       </div>
     );
 
   return (
-    <div className="h-full flex flex-col space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex flex-col md:flex-row md:items-center justify-between bg-white p-3 rounded-2xl border border-slate-200 shadow-sm gap-4">
-        <h2 className="text-xl font-black text-brand-navy flex items-center gap-3 px-2 uppercase tracking-tighter">
-          <Truck className="h-6 w-6 text-blue-600" /> Control de Tráfico
+    <div className="h-full flex flex-col space-y-4 animate-in fade-in duration-500">
+      {/* 🚀 HEADER DE PESTAÑAS (Segmented Control Tahoe UI) */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between bg-white/40 dark:bg-slate-900/40 p-4 rounded-2xl border border-white/20 dark:border-white/10 shadow-sm backdrop-blur-md gap-4">
+        <h2 className="text-xl font-black text-brand-navy dark:text-white flex items-center gap-3 px-2 uppercase tracking-tighter heading-crisp">
+          <div className="p-2 bg-blue-600 rounded-xl shadow-inner border border-blue-500">
+            <LayoutGrid className="h-5 w-5 text-white" />
+          </div>
+          Centro de Operaciones
         </h2>
-        <Tabs
-          value={viewMode}
-          onValueChange={(v) => setViewMode(v as any)}
-          className="w-full md:w-auto overflow-x-auto custom-scrollbar pb-1 md:pb-0"
-        >
-          <TabsList className="grid w-full min-w-[450px] grid-cols-3 h-12 bg-slate-100 rounded-xl p-1.5 shadow-inner">
-            <TabsTrigger
-              value="table"
-              className="text-xs font-bold rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-brand-navy"
-            >
-              <List className="h-4 w-4 mr-2" /> Lista
-            </TabsTrigger>
-            <TabsTrigger
-              value="standby"
-              className="text-xs font-bold rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-brand-navy"
-            >
-              <CalendarDays className="h-4 w-4 mr-2" /> Planeador{" "}
-              {standbyTrips.length > 0 && (
-                <Badge
-                  variant="secondary"
-                  className="ml-1.5 bg-blue-100 text-blue-700 h-5 px-1.5 border-0"
-                >
-                  {standbyTrips.length}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger
-              value="kanban"
-              className="text-xs font-bold rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-brand-navy"
-            >
-              <LayoutGrid className="h-4 w-4 mr-2" /> Pizarrón
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
+
+        <div className="w-full md:w-auto overflow-x-auto hide-scrollbar bg-white dark:bg-slate-900 p-1.5 rounded-xl border border-slate-200 dark:border-white/10 shadow-sm">
+          <Tabs
+            value={viewMode}
+            onValueChange={(v) => setViewMode(v as any)}
+            className="w-full min-w-max"
+          >
+            <TabsList className="grid w-full grid-cols-3 h-10 bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
+              <TabsTrigger
+                value="table"
+                className="text-[10px] font-black uppercase tracking-widest rounded-md data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:shadow-sm data-[state=active]:text-brand-navy dark:data-[state=active]:text-white transition-all h-full"
+              >
+                <List className="h-3.5 w-3.5 mr-2" /> Tabla
+              </TabsTrigger>
+              <TabsTrigger
+                value="standby"
+                className="text-[10px] font-black uppercase tracking-widest rounded-md data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:shadow-sm data-[state=active]:text-brand-navy dark:data-[state=active]:text-white transition-all h-full"
+              >
+                <CalendarDays className="h-3.5 w-3.5 mr-2" /> Planeador{" "}
+                {standbyTrips.length > 0 && (
+                  <Badge
+                    variant="secondary"
+                    className="ml-1.5 bg-amber-500 text-white h-4 px-1.5 border-none shadow-sm text-[8px] leading-none flex items-center justify-center"
+                  >
+                    {standbyTrips.length}
+                  </Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger
+                value="kanban"
+                className="text-[10px] font-black uppercase tracking-widest rounded-md data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:shadow-sm data-[state=active]:text-brand-navy dark:data-[state=active]:text-white transition-all h-full"
+              >
+                <LayoutGrid className="h-3.5 w-3.5 mr-2" /> Pizarrón
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
       </div>
 
+      {/* 🚀 MODO TABLA */}
       {viewMode === "table" && (
-        <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden bg-white">
+        <Card className="border-slate-200/50 dark:border-white/10 shadow-2xl rounded-2xl overflow-hidden bg-white/50 dark:bg-slate-950/30 backdrop-blur-xl liquid-glass-table">
           <CardContent className="p-0">
             <DataTable>
-              <DataTableHeader className="bg-slate-50 border-b border-slate-200">
-                <DataTableRow>
-                  <DataTableHead className="font-bold text-slate-700 uppercase tracking-widest text-[10px]">
+              <DataTableHeader className="bg-slate-50/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-white/10 backdrop-blur-md">
+                <DataTableRow className="hover:bg-transparent border-none">
+                  <DataTableHead className="font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] text-[10px] h-12">
                     Folio / Cliente
                   </DataTableHead>
-                  <DataTableHead className="font-bold text-slate-700 uppercase tracking-widest text-[10px]">
+                  <DataTableHead className="font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] text-[10px] h-12">
                     Fase del Servicio
                   </DataTableHead>
-                  <DataTableHead className="font-bold text-slate-700 uppercase tracking-widest text-[10px]">
+                  <DataTableHead className="font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] text-[10px] h-12">
                     Ruta Registrada
                   </DataTableHead>
-                  <DataTableHead className="font-bold text-slate-700 uppercase tracking-widest text-[10px]">
+                  <DataTableHead className="font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] text-[10px] h-12">
                     Asignación Física
                   </DataTableHead>
-                  <DataTableHead className="font-bold text-slate-700 text-center uppercase tracking-widest text-[10px]">
+                  <DataTableHead className="font-black text-slate-500 dark:text-slate-400 text-center uppercase tracking-[0.2em] text-[10px] h-12">
                     Estatus Operativo
                   </DataTableHead>
-                  <DataTableHead className="text-right font-bold text-slate-700 pr-6 uppercase tracking-widest text-[10px]">
+                  <DataTableHead className="text-right font-black text-slate-500 dark:text-slate-400 pr-6 uppercase tracking-[0.2em] text-[10px] h-12">
                     Acciones
                   </DataTableHead>
                 </DataTableRow>
               </DataTableHeader>
-              <DataTableBody>
+              <DataTableBody className="table-staggered bg-white dark:bg-slate-950">
                 {allActiveLegs.length === 0 ? (
                   <DataTableRow>
                     <DataTableCell
                       colSpan={6}
-                      className="text-center py-16 text-slate-600"
+                      className="text-center py-20 text-slate-600 dark:text-slate-400"
                     >
                       <div className="flex flex-col items-center justify-center">
-                        <Truck className="h-12 w-12 mb-3 opacity-20" />
-                        <span className="font-medium text-lg text-slate-500">
-                          No hay servicios en ruta.
+                        <Truck className="h-12 w-12 mb-4 opacity-20" />
+                        <span className="font-black text-sm uppercase tracking-widest">
+                          No hay servicios en ruta activos
                         </span>
                       </div>
                     </DataTableCell>
@@ -787,105 +820,103 @@ export const TripPlanner = () => {
                     return (
                       <DataTableRow
                         key={leg.id}
-                        className={`hover:bg-slate-50 transition-colors ${isIncident ? "bg-red-50/40" : ""}`}
+                        className={cn(
+                          "border-b border-slate-100 dark:border-white/5 interactive-row transition-all hover:bg-slate-50/50 dark:hover:bg-white/5",
+                          isIncident && "bg-rose-50/40 dark:bg-rose-950/20",
+                        )}
                       >
-                        <DataTableCell>
-                          <div className="flex flex-col">
-                            <span className="font-black text-brand-navy uppercase">
+                        <DataTableCell className="py-4 pl-4">
+                          <div className="flex flex-col gap-1">
+                            <span className="font-black text-brand-navy dark:text-slate-200 uppercase tracking-tight text-sm">
                               {tripPadre.client?.razon_social ||
                                 "CLIENTE GENERAL"}
                             </span>
-                            <span className="text-xs font-mono font-bold text-slate-500">
-                              VIAJE #{tripPadre.public_id || tripPadre.id}
-                            </span>
-                          </div>
-                        </DataTableCell>
-                        <DataTableCell>
-                          <div className="flex flex-col items-start gap-1">
                             <Badge
                               variant="outline"
-                              className="w-fit bg-slate-100 text-slate-700 font-bold text-[10px]"
+                              className="w-fit font-mono font-bold text-[9px] bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400"
                             >
-                              {legTypeShort[leg.leg_type] || leg.leg_type}
+                              #{tripPadre.public_id || tripPadre.id}
                             </Badge>
                           </div>
                         </DataTableCell>
 
-                        <DataTableCell>
-                          <div className="flex flex-col gap-1">
-                            <span
-                              className="text-[11px] font-black text-slate-800 uppercase tracking-tighter"
-                              title={formattedRouteName}
-                            >
-                              <RouteIcon className="inline h-3.5 w-3.5 mr-1.5 text-primary" />
-                              {formattedRouteName}
-                            </span>
-                          </div>
+                        <DataTableCell className="py-4">
+                          <Badge
+                            variant="outline"
+                            className="bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 font-black uppercase tracking-widest text-[9px] shadow-sm border-slate-200 dark:border-white/10 px-2 py-0.5"
+                          >
+                            {legTypeShort[leg.leg_type] || leg.leg_type}
+                          </Badge>
                         </DataTableCell>
 
-                        <DataTableCell>
+                        <DataTableCell className="py-4">
+                          <span
+                            className="text-[10px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-tighter"
+                            title={formattedRouteName}
+                          >
+                            <RouteIcon className="inline h-3.5 w-3.5 mr-1.5 text-blue-500" />
+                            {formattedRouteName}
+                          </span>
+                        </DataTableCell>
+
+                        <DataTableCell className="py-4">
                           <div className="flex flex-col gap-1.5">
-                            <div className="flex items-center gap-2 text-xs font-bold text-brand-navy">
-                              <Truck className="h-3.5 w-3.5 text-slate-600" />{" "}
-                              {leg.unit?.numero_economico || "Sin Unidad"}
+                            <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-brand-navy dark:text-blue-400 bg-slate-50 dark:bg-slate-900 w-fit px-2 py-1 rounded border border-slate-200 dark:border-white/10 shadow-sm">
+                              <Truck className="h-3 w-3 text-slate-400 shrink-0" />{" "}
+                              ECO-{leg.unit?.numero_economico || "N/A"}
                             </div>
-                            <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
-                              <User className="h-3.5 w-3.5 text-slate-600" />{" "}
-                              {leg.operator?.name || "Sin Operador"}
+                            <div className="flex items-center gap-2 text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-tight w-fit px-2 py-1">
+                              <User className="h-3 w-3 shrink-0" />{" "}
+                              {leg.operator?.name?.split(" ")[0] || "S/A"}
                             </div>
                           </div>
                         </DataTableCell>
-                        <DataTableCell className="text-center">
-                          <div className="flex flex-col items-center justify-center gap-1">
+                        <DataTableCell className="text-center py-4">
+                          <div className="flex flex-col items-center justify-center gap-1 w-full max-w-[160px] mx-auto">
                             {getOperationalStatusBadge(leg)}
                           </div>
                         </DataTableCell>
-                        <DataTableCell className="text-right pr-4">
+                        <DataTableCell className="text-right py-4 pr-6">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 hover:bg-slate-200 rounded-lg"
+                                className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50"
                               >
-                                <MoreVertical className="h-4 w-4" />
+                                <MoreVertical className="h-4 w-4 text-slate-500 dark:text-slate-400" />
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent
                               align="end"
-                              className="w-56 rounded-xl p-1 shadow-xl"
+                              className="glass-panel border-white/20 min-w-[200px] z-50 dark:bg-slate-900/90 shadow-2xl rounded-xl p-1"
                             >
                               <DropdownMenuItem
                                 onClick={() => setTripToView(tripPadre)}
-                                className="rounded-lg cursor-pointer py-2"
+                                className="rounded-lg cursor-pointer py-2.5 font-bold text-[10px] uppercase tracking-widest text-slate-700 dark:text-slate-300 focus:bg-slate-100 dark:focus:bg-slate-800"
                               >
-                                <Eye className="h-4 w-4 mr-3 text-slate-600" />{" "}
-                                <span className="font-medium">
-                                  Abrir Centro de Mando
-                                </span>
+                                <Eye className="h-4 w-4 mr-3 text-blue-500" />{" "}
+                                Abrir Centro de Mando
                               </DropdownMenuItem>
+
                               {leg.status === "entregado" && (
                                 <DropdownMenuItem
                                   onClick={() =>
                                     setLegToSettle({ leg, tripPadre })
                                   }
-                                  className="rounded-lg cursor-pointer py-2 text-emerald-700 focus:bg-emerald-50 focus:text-emerald-800"
+                                  className="rounded-lg cursor-pointer py-2.5 font-bold text-[10px] uppercase tracking-widest text-emerald-700 dark:text-emerald-400 focus:bg-emerald-50 dark:focus:bg-emerald-950/30"
                                 >
-                                  <Banknote className="h-4 w-4 mr-3" />{" "}
-                                  <span className="font-bold">
-                                    Liquidar a Operador
-                                  </span>
+                                  <Banknote className="h-4 w-4 mr-3" /> Liquidar
+                                  Fase
                                 </DropdownMenuItem>
                               )}
-                              <DropdownMenuSeparator className="my-1" />
+                              <DropdownMenuSeparator className="my-1 dark:bg-white/10" />
                               <DropdownMenuItem
                                 onClick={() => setTripToDelete(tripPadre)}
-                                className="rounded-lg cursor-pointer py-2 text-red-600 focus:bg-red-50 focus:text-red-700"
+                                className="rounded-lg cursor-pointer py-2.5 font-bold text-[10px] uppercase tracking-widest text-rose-600 dark:text-rose-500 focus:bg-rose-50 dark:focus:bg-rose-950/30"
                               >
-                                <Trash2 className="h-4 w-4 mr-3" />{" "}
-                                <span className="font-bold">
-                                  Eliminar Viaje
-                                </span>
+                                <Trash2 className="h-4 w-4 mr-3" /> Eliminar
+                                Viaje
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -900,71 +931,74 @@ export const TripPlanner = () => {
         </Card>
       )}
 
+      {/* 🚀 MODO STANDBY (CALENDARIO) */}
       {viewMode === "standby" && (
-        <div className="flex flex-col xl:flex-row gap-6">
+        <div className="flex flex-col xl:flex-row gap-6 h-full min-h-0">
+          {/* Panel Lateral: Atrasados / Sin Asignar */}
           {(delayedTrips.length > 0 || unscheduledTrips.length > 0) && (
-            <div className="w-full xl:w-64 flex flex-col gap-4">
+            <div className="w-full xl:w-72 flex flex-col gap-6 shrink-0 h-full overflow-y-auto hide-scrollbar pb-6">
               {delayedTrips.length > 0 && (
-                <Card className="bg-rose-50 border-rose-200 shadow-sm">
-                  <CardHeader className="p-3 border-b border-rose-200 bg-rose-100/50 rounded-t-xl text-center">
-                    <CardTitle className="text-sm font-black text-rose-800 uppercase flex items-center justify-center gap-2">
+                <Card className="bg-rose-50/80 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 shadow-sm rounded-2xl overflow-hidden shrink-0">
+                  <CardHeader className="p-4 border-b border-rose-200/50 dark:border-rose-900/50 bg-rose-100/50 dark:bg-rose-900/30 text-center">
+                    <CardTitle className="text-[11px] font-black text-rose-800 dark:text-rose-400 uppercase tracking-widest flex items-center justify-center gap-2">
                       <AlertTriangle className="h-4 w-4" /> Atrasados
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="p-2 space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar">
+                  <CardContent className="p-3 space-y-3">
                     {delayedTrips.map((v) => (
                       <div
                         key={v.id}
-                        className="bg-white p-2 rounded-lg border border-rose-100 text-xs shadow-sm"
+                        className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-rose-100 dark:border-rose-900/50 text-xs shadow-sm hover:shadow-md transition-shadow"
                       >
-                        <p className="font-bold text-slate-800 truncate mb-1">
+                        <p className="font-black text-brand-navy dark:text-white uppercase truncate mb-1 text-[11px]">
                           {v.client?.razon_social}
                         </p>
-                        <p className="text-slate-500 truncate">
+                        <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 truncate tracking-widest uppercase">
                           {v.route_name || `${v.origin} - ${v.destination}`}
                         </p>
                         <Button
                           size="sm"
-                          className="w-full h-7 mt-2 bg-brand-navy text-white text-[10px]"
+                          className="w-full h-8 mt-3 bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-black uppercase tracking-widest shadow-md shadow-rose-500/20 haptic-press"
                           onClick={() =>
                             setLegToRelay({ leg: {} as TripLeg, tripPadre: v })
                           }
                         >
-                          Asignar
+                          Asignar F1 Urgente
                         </Button>
                       </div>
                     ))}
                   </CardContent>
                 </Card>
               )}
+
               {unscheduledTrips.length > 0 && (
-                <Card className="bg-slate-50 border-slate-200 shadow-sm">
-                  <CardHeader className="p-3 border-b border-slate-200 bg-slate-100 rounded-t-xl text-center">
-                    <CardTitle className="text-sm font-black text-slate-700 uppercase">
-                      Sin Fecha Asignada
+                <Card className="bg-slate-50 dark:bg-slate-900/30 border-slate-200 dark:border-white/10 shadow-sm rounded-2xl overflow-hidden shrink-0">
+                  <CardHeader className="p-4 border-b border-slate-200/50 dark:border-white/5 bg-slate-100/50 dark:bg-slate-800/50 text-center">
+                    <CardTitle className="text-[11px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-widest">
+                      Sin Fecha Programada
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="p-2 space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar">
+                  <CardContent className="p-3 space-y-3">
                     {unscheduledTrips.map((v) => (
                       <div
                         key={v.id}
-                        className="bg-white p-2 rounded-lg border border-slate-200 text-xs shadow-sm"
+                        className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-white/5 text-xs shadow-sm hover:shadow-md transition-shadow"
                       >
-                        <p className="font-bold text-slate-800 truncate mb-1">
+                        <p className="font-black text-brand-navy dark:text-white uppercase truncate mb-1 text-[11px]">
                           {v.client?.razon_social}
                         </p>
-                        <p className="text-slate-500 truncate">
+                        <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 truncate tracking-widest uppercase">
                           {v.route_name || `${v.origin} - ${v.destination}`}
                         </p>
                         <Button
                           size="sm"
                           variant="outline"
-                          className="w-full h-7 mt-2 text-[10px]"
+                          className="w-full h-8 mt-3 text-[10px] font-black uppercase tracking-widest border-blue-200 dark:border-blue-900/50 text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 haptic-press"
                           onClick={() =>
                             setLegToRelay({ leg: {} as TripLeg, tripPadre: v })
                           }
                         >
-                          Asignar
+                          Agendar / Asignar
                         </Button>
                       </div>
                     ))}
@@ -974,38 +1008,41 @@ export const TripPlanner = () => {
             </div>
           )}
 
-          <Card className="flex-1 shadow-md border-slate-200 bg-white">
-            <CardHeader className="p-4 border-b flex flex-row items-center justify-between bg-slate-50 rounded-t-xl">
+          {/* Calendario Mensual */}
+          <Card className="flex-1 shadow-2xl border-slate-200/50 dark:border-white/10 bg-white dark:bg-slate-950 rounded-2xl overflow-hidden flex flex-col h-full min-h-0">
+            <CardHeader className="p-4 border-b border-slate-200 dark:border-white/10 flex flex-row items-center justify-between bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-xl shrink-0">
               <Button
                 variant="outline"
                 size="icon"
+                className="h-10 w-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-slate-800 haptic-press"
                 onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
               >
-                <ChevronLeft className="h-4 w-4" />
+                <ChevronLeft className="h-5 w-5 text-slate-600 dark:text-slate-400" />
               </Button>
-              <h2 className="text-xl font-black text-brand-navy uppercase tracking-widest capitalize">
+              <h2 className="text-lg sm:text-xl font-black text-brand-navy dark:text-white uppercase tracking-widest">
                 {format(currentMonth, "MMMM yyyy", { locale: es })}
               </h2>
               <Button
                 variant="outline"
                 size="icon"
+                className="h-10 w-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-slate-800 haptic-press"
                 onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
               >
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRight className="h-5 w-5 text-slate-600 dark:text-slate-400" />
               </Button>
             </CardHeader>
-            <CardContent className="p-0">
-              <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-100">
+            <CardContent className="p-0 flex-1 flex flex-col min-h-0">
+              <div className="grid grid-cols-7 border-b border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-900/50 shrink-0">
                 {["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map((d) => (
                   <div
                     key={d}
-                    className="py-2 text-center text-xs font-black text-slate-500 uppercase"
+                    className="py-3 text-center text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest"
                   >
                     {d}
                   </div>
                 ))}
               </div>
-              <div className="grid grid-cols-7 bg-slate-200 gap-px">
+              <div className="grid grid-cols-7 bg-slate-200 dark:bg-white/5 gap-px flex-1 overflow-y-auto custom-scrollbar">
                 {calendarDays.map((day, idx) => {
                   const isCurrentMonth = isSameMonth(day, monthStart);
                   const isDiaHoy = isToday(day);
@@ -1014,13 +1051,28 @@ export const TripPlanner = () => {
                   return (
                     <div
                       key={day.toISOString()}
-                      className={`min-h-[140px] bg-white flex flex-col transition-colors ${!isCurrentMonth ? "bg-slate-50 opacity-50" : ""} ${isDiaHoy ? "bg-blue-50/20" : ""}`}
+                      className={cn(
+                        "min-h-[140px] bg-white dark:bg-slate-950 flex flex-col transition-colors",
+                        !isCurrentMonth &&
+                          "bg-slate-50/50 dark:bg-slate-950/50 opacity-40",
+                        isDiaHoy &&
+                          "bg-blue-50/30 dark:bg-blue-900/10 ring-1 ring-inset ring-blue-200 dark:ring-blue-900/50 z-10",
+                      )}
                     >
                       <div
-                        className={`p-2 flex justify-between items-center border-b border-slate-100 ${isDiaHoy ? "bg-blue-100 text-blue-800" : "text-slate-500"}`}
+                        className={cn(
+                          "p-2 flex justify-between items-center border-b border-slate-100 dark:border-white/5",
+                          isDiaHoy
+                            ? "bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-400"
+                            : "text-slate-500 dark:text-slate-400",
+                        )}
                       >
                         <span
-                          className={`text-sm font-bold ${isDiaHoy ? "bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center shadow-sm" : ""}`}
+                          className={cn(
+                            "text-xs font-black w-7 h-7 flex items-center justify-center rounded-full",
+                            isDiaHoy &&
+                              "bg-blue-600 text-white shadow-md shadow-blue-500/20",
+                          )}
                         >
                           {format(day, "d")}
                         </span>
@@ -1030,13 +1082,18 @@ export const TripPlanner = () => {
                               `/despacho/nuevo?date=${format(day, "yyyy-MM-dd")}`,
                             )
                           }
-                          className={`p-1 rounded hover:bg-slate-200 transition-colors ${!isCurrentMonth ? "hidden" : ""}`}
+                          className={cn(
+                            "p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors haptic-press",
+                            !isCurrentMonth && "hidden",
+                          )}
+                          title="Crear viaje este día"
                         >
                           <Plus className="h-3.5 w-3.5" />
                         </button>
                       </div>
-                      <div className="flex-1 p-1.5 overflow-y-auto max-h-[120px] custom-scrollbar space-y-1">
-                        {tripsOnDay.slice(0, 2).map((v) => (
+
+                      <div className="flex-1 p-1.5 overflow-y-auto max-h-[160px] custom-scrollbar space-y-1.5">
+                        {tripsOnDay.slice(0, 3).map((v) => (
                           <div
                             key={v.id}
                             onClick={() =>
@@ -1045,27 +1102,27 @@ export const TripPlanner = () => {
                                 tripPadre: v,
                               })
                             }
-                            className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-[9px] p-1.5 rounded cursor-pointer hover:bg-emerald-100 hover:shadow-sm transition-all relative group"
+                            className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 p-2 rounded-lg cursor-pointer hover:bg-emerald-100 dark:hover:bg-emerald-900/50 hover:shadow-sm transition-all relative group haptic-press"
                           >
-                            <div className="font-bold truncate pr-4">
+                            <div className="font-black text-[9px] uppercase tracking-widest text-emerald-800 dark:text-emerald-400 truncate pr-4">
                               {v.client?.razon_social}
                             </div>
-                            <div className="text-emerald-600 truncate font-semibold uppercase">
+                            <div className="text-[10px] text-emerald-600 dark:text-emerald-500/80 truncate font-bold uppercase tracking-tight mt-0.5">
                               {v.route_name || `${v.origin}-${v.destination}`}
                             </div>
-                            <PlayCircle className="h-3 w-3 absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100" />
+                            <PlayCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400 absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-sm" />
                           </div>
                         ))}
 
-                        {tripsOnDay.length > 2 && (
+                        {tripsOnDay.length > 3 && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedDayTrips(tripsOnDay);
                             }}
-                            className="w-full text-center text-[10px] font-black text-blue-600 hover:text-blue-800 hover:underline py-1"
+                            className="w-full text-center text-[10px] font-black text-brand-navy dark:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 py-1.5 rounded-lg transition-colors border border-dashed border-slate-300 dark:border-white/10 uppercase tracking-widest"
                           >
-                            + {tripsOnDay.length - 2} más...
+                            + {tripsOnDay.length - 3} VIAJES MÁS
                           </button>
                         )}
                       </div>
@@ -1078,6 +1135,7 @@ export const TripPlanner = () => {
         </div>
       )}
 
+      {/* 🚀 MODO KANBAN (PIZARRÓN) */}
       {viewMode === "kanban" && (
         <DndContext
           collisionDetection={closestCorners}
@@ -1103,6 +1161,8 @@ export const TripPlanner = () => {
         </DndContext>
       )}
 
+      {/* --- MODALES --- */}
+
       {selectedTripPadre && (
         <UpdateStatusModal
           open={updateModalOpen}
@@ -1115,37 +1175,86 @@ export const TripPlanner = () => {
         />
       )}
 
-      <Dialog
+      {/* 🚀 ALERTA DE ELIMINACIÓN DE VIAJE (Estructura Tahoe 4 Capas) */}
+      <AlertDialog
         open={!!tripToDelete}
         onOpenChange={(open) => !open && setTripToDelete(null)}
       >
-        <DialogContent className="rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-brand-navy font-black text-xl">
-              Eliminar Viaje
-            </DialogTitle>
-            <DialogDescription>
-              Esta acción borrará todas las fases permanentemente.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setTripToDelete(null)}>
-              Cancelar
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={async () => {
-                if (tripToDelete) {
-                  await deleteTrip(String(tripToDelete.id));
-                  setTripToDelete(null);
-                }
-              }}
-            >
-              Eliminar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        <AlertDialogContent className="w-[95vw] sm:max-w-2xl p-0 flex flex-col max-h-[90vh] bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 shadow-2xl rounded-2xl transition-all duration-300 overflow-hidden">
+          {/* CAPA 2: HEADER */}
+          <AlertDialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
+            <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
+            <div className="relative z-10 flex items-center gap-4 sm:gap-5">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center shadow-inner shrink-0 icon-plate border border-rose-200 dark:border-rose-500/20">
+                <Trash2 className="h-7 w-7 sm:h-8 sm:w-8 text-rose-600 dark:text-rose-400 drop-shadow-[0_0_8px_rgba(244,63,94,0.4)]" />
+              </div>
+              <div className="flex flex-col gap-1 text-left min-w-0">
+                <AlertDialogTitle className="text-2xl font-black uppercase tracking-tighter text-rose-600 dark:text-rose-500 heading-crisp leading-none">
+                  Eliminar Viaje
+                </AlertDialogTitle>
+                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-1 truncate">
+                  Acción Irreversible • Purga de Sistema
+                </p>
+              </div>
+            </div>
+          </AlertDialogHeader>
+
+          {/* CAPA 3: BODY */}
+          <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
+            <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block space-y-6">
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                ¿Está seguro que desea eliminar el viaje completo y todas sus
+                fases asociadas?
+              </p>
+
+              <div className="p-5 sm:p-6 bg-rose-50 dark:bg-rose-950/20 border-l-4 border-rose-500 rounded-r-2xl shadow-sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+                  <h4 className="text-[10px] sm:text-[11px] font-black text-rose-800 dark:text-rose-400 uppercase tracking-widest">
+                    Pérdida de Historial y Asignaciones
+                  </h4>
+                </div>
+                <p className="text-xs sm:text-sm leading-relaxed text-rose-900 dark:text-rose-200/80">
+                  Esta acción desvinculará a los operadores y unidades
+                  asigandos, liberándolos en el sistema. Todo el historial de
+                  rastreo, bitácoras y liquidaciones se perderán.{" "}
+                  <b className="font-black underline">
+                    No podrá ser recuperado
+                  </b>
+                  .
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </div>
+
+          {/* CAPA 4: FOOTER */}
+          <AlertDialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
+            <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
+              <AlertDialogCancel
+                variant="outline"
+                size="lg"
+                onClick={() => setTripToDelete(null)}
+                className="w-full sm:w-auto haptic-press flex-shrink-0 font-black uppercase tracking-widest text-[10px]"
+              >
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                variant="destructive"
+                size="lg"
+                onClick={async () => {
+                  if (tripToDelete) {
+                    await deleteTrip(String(tripToDelete.id));
+                    setTripToDelete(null);
+                  }
+                }}
+                className="w-full sm:w-auto haptic-press shadow-rose-600/20 flex-shrink-0 border-none bg-rose-600 hover:bg-rose-700 text-white font-black uppercase tracking-widest text-[10px]"
+              >
+                <Trash2 className="h-4 w-4 mr-2" /> Eliminar Definitivamente
+              </AlertDialogAction>
+            </div>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <NextLegModal
         open={!!legToRelay}
@@ -1169,53 +1278,80 @@ export const TripPlanner = () => {
         onUpdateStatusClick={(t, l) => openUpdateStatusModal(t, l)}
       />
 
+      {/* 🚀 MODAL DIA DE VIAJES (Standby) - Estructura 4 Capas */}
       <Dialog
         open={!!selectedDayTrips}
         onOpenChange={() => setSelectedDayTrips(null)}
       >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <CalendarDays className="h-5 w-5 text-brand-navy" />
-              Viajes Programados
-            </DialogTitle>
-            <DialogDescription>
-              Selecciona el servicio que deseas asignar para el día{" "}
-              {selectedDayTrips?.[0]?.fecha_programada &&
-                format(
-                  parseISO(selectedDayTrips[0].fecha_programada as string),
-                  "dd 'de' MMMM",
-                  { locale: es },
-                )}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3 mt-2 max-h-[50vh] overflow-y-auto p-1 custom-scrollbar">
-            {selectedDayTrips?.map((v) => (
-              <div
-                key={v.id}
-                className="flex items-center justify-between p-3 border rounded-xl hover:bg-slate-50 transition-colors group"
-              >
-                <div className="flex-1 min-w-0 pr-4">
-                  <p className="font-black text-xs text-brand-navy uppercase truncate">
-                    {v.client?.razon_social}
-                  </p>
-                  <p className="text-[10px] text-slate-500 font-bold truncate">
-                    {v.route_name || `${v.origin}-${v.destination}`}
-                  </p>
-                </div>
-                <Button
-                  size="sm"
-                  className="bg-brand-navy hover:bg-brand-navy/90 h-8 text-[10px] font-bold"
-                  onClick={() => {
-                    setSelectedDayTrips(null);
-                    setLegToRelay({ leg: {} as TripLeg, tripPadre: v });
-                  }}
-                >
-                  Asignar Fase 1
-                </Button>
+        <DialogContent className="w-[95vw] sm:max-w-md flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl transition-all duration-300">
+          <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
+            <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
+            <div className="relative z-10 flex items-center gap-4 sm:gap-5">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shadow-inner shrink-0 icon-plate border border-blue-200 dark:border-blue-500/20">
+                <CalendarDays className="h-7 w-7 sm:h-8 sm:w-8 text-blue-600 dark:text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.4)]" />
               </div>
-            ))}
+              <div className="flex flex-col gap-1 text-left min-w-0">
+                <DialogTitle className="text-xl font-black uppercase tracking-tighter text-slate-900 dark:text-white heading-crisp leading-none">
+                  Viajes Programados
+                </DialogTitle>
+                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-1 truncate tracking-normal normal-case">
+                  Servicios listos para el{" "}
+                  <span className="font-bold text-blue-600 dark:text-blue-400 uppercase">
+                    {selectedDayTrips?.[0]?.fecha_programada &&
+                      format(
+                        parseISO(
+                          selectedDayTrips[0].fecha_programada as string,
+                        ),
+                        "dd 'de' MMM",
+                        { locale: es },
+                      )}
+                  </span>
+                </p>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-slate-50/50 dark:bg-transparent custom-scrollbar">
+            <div className="space-y-4">
+              {selectedDayTrips?.map((v) => (
+                <div
+                  key={v.id}
+                  className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 border border-slate-200 dark:border-white/10 rounded-2xl bg-white dark:bg-slate-900/50 hover:border-emerald-300 dark:hover:border-emerald-500/50 hover:shadow-md transition-all group"
+                >
+                  <div className="flex-1 min-w-0 pr-4 mb-4 sm:mb-0">
+                    <p className="font-black text-sm text-brand-navy dark:text-white uppercase truncate">
+                      {v.client?.razon_social}
+                    </p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest truncate mt-1">
+                      {v.route_name || `${v.origin}-${v.destination}`}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase tracking-widest text-[10px] h-10 px-4 rounded-xl shadow-lg shadow-emerald-500/20 transition-all active:scale-95 border-none haptic-press"
+                    onClick={() => {
+                      setSelectedDayTrips(null);
+                      setLegToRelay({ leg: {} as TripLeg, tripPadre: v });
+                    }}
+                  >
+                    Asignar Fase 1
+                  </Button>
+                </div>
+              ))}
+            </div>
           </div>
+
+          {/* Footer para el botón cerrar del modal del día */}
+          <DialogFooter className="p-6 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setSelectedDayTrips(null)}
+              className="w-full haptic-press font-black uppercase tracking-widest text-[10px]"
+            >
+              Cerrar Vista
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

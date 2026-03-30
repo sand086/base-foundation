@@ -1,34 +1,60 @@
-import { useState, useMemo } from "react";
+import * as React from "react";
+import { useEffect, useMemo, useState } from "react";
+import { PageHeader } from "@/components/ui/page-header";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   Fuel,
+  Plus,
   AlertTriangle,
-  CheckCircle,
-  Calculator,
-  Gauge,
-  TrendingUp,
   FileText,
-  Truck,
-  User,
-  MapPin,
-  ShieldAlert,
-  Shield,
-  RotateCcw,
-  Printer,
-  Search,
+  TrendingUp,
+  Gauge,
+  Droplets,
+  MoreVertical,
+  Eye,
+  Pencil,
+  Trash2,
   Loader2,
+  Calendar,
+  FilterX,
+  Search,
+  ArrowUpRight,
+  BarChart3,
+  Activity,
 } from "lucide-react";
+
+import { FuelLoad, Unit, Operator } from "@/types/api.types";
+
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
+  AddTicketModal,
+  type TicketFormData,
+} from "@/features/combustible/AddTicketModal";
+import { ViewCargaModal } from "@/features/combustible/ViewCargaModal";
+import { EditCargaModal } from "@/features/combustible/EditCargaModal";
+
+import {
+  EnhancedDataTable,
+  type ColumnDef,
+} from "@/components/ui/enhanced-data-table";
+import { cn } from "@/lib/utils";
+
+import { toast } from "sonner";
+import { fuelService } from "@/services/fuelService";
+import { unitService } from "@/services/unitService";
+import { operatorService } from "@/services/operatorService";
+
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+
 import {
   Select,
   SelectContent,
@@ -36,605 +62,521 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { toast } from "@/hooks/use-toast";
-import { useTrips } from "@/hooks/useTrips";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
-const TOLERANCE_PERCENTAGE = 0.003;
-
-interface AuditFormData {
-  litrosBomba: string;
-  litrosVales: string;
-  lecturaInicialECM: string;
-  lecturaFinalECM: string;
-  litrosConsumidosECM: string;
+// Interface extendida para lógica de negocio visual
+interface FuelLoadDisplay extends FuelLoad {
+  unidad_numero: string;
+  operador_nombre: string;
+  excede_tanque: boolean;
 }
 
-export default function CombustibleConciliacion() {
-  const { trips } = useTrips();
-  const [selectedTripId, setSelectedTripId] = useState<string>("");
+const CombustibleCargas = () => {
+  const [units, setUnits] = useState<Unit[]>([]);
+  const [operators, setOperators] = useState<Operator[]>([]);
+  const [cargas, setCargas] = useState<FuelLoadDisplay[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [idParaEliminar, setIdParaEliminar] = useState<number | null>(null);
 
-  const [formData, setFormData] = useState<AuditFormData>({
-    litrosBomba: "",
-    litrosVales: "",
-    lecturaInicialECM: "",
-    lecturaFinalECM: "",
-    litrosConsumidosECM: "",
-  });
+  const [selectedUnitId, setSelectedUnitId] = useState<string>("all");
+  const [searchTerm, setSearchTerm] = useState("");
 
-  const [showReceiptModal, setShowReceiptModal] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [auditCompleted, setAuditCompleted] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [cargaToView, setCargaToView] = useState<FuelLoadDisplay | null>(null);
+  const [cargaToEdit, setCargaToEdit] = useState<FuelLoadDisplay | null>(null);
 
-  // 🚀 OBTENER LOS DATOS REALES DEL VIAJE SELECCIONADO
-  const activeTrip = useMemo(() => {
-    return trips.find((t) => String(t.id) === selectedTripId) || null;
-  }, [trips, selectedTripId]);
+  const loadData = async () => {
+    try {
+      const [uData, oData, fData] = await Promise.all([
+        unitService.getAll(),
+        operatorService.getAll(),
+        fuelService.getAll(),
+      ]);
 
-  const tripData = useMemo(() => {
-    if (!activeTrip) return null;
-    const leg = activeTrip.legs?.[0]; // Tomamos el tramo principal
-    return {
-      cartaPorteId: activeTrip.public_id || `TRP-${activeTrip.id}`,
-      unidadId: leg?.unit?.numero_economico || "Sin Unidad",
-      ruta: `${activeTrip.origin} → ${activeTrip.destination}`,
-      operador: leg?.operator?.name || "Sin Operador",
-      fechaViaje: new Date(activeTrip.start_date).toLocaleDateString(),
-    };
-  }, [activeTrip]);
+      setUnits(uData || []);
+      setOperators(oData || []);
 
-  // Al cambiar el viaje, reseteamos la calculadora
-  const handleTripSelect = (id: string) => {
-    setSelectedTripId(id);
-    setFormData({
-      litrosBomba: "",
-      litrosVales: "",
-      lecturaInicialECM: "",
-      lecturaFinalECM: "",
-      litrosConsumidosECM: "",
-    });
-    setAuditCompleted(false);
-  };
+      const normalizedFuel: FuelLoadDisplay[] = (fData || []).map(
+        (item: any) => {
+          const unit = uData.find((u: Unit) => u.id === item.unit_id);
+          const capacity =
+            item.tipo_combustible === "diesel"
+              ? unit?.capacidad_tanque_diesel || 800
+              : unit?.capacidad_tanque_urea || 60;
 
-  const auditResult = useMemo(() => {
-    const litrosBomba = parseFloat(formData.litrosBomba) || 0;
-    const litrosVales = parseFloat(formData.litrosVales) || 0;
-    const litrosConsumidosECM = parseFloat(formData.litrosConsumidosECM) || 0;
-    const lecturaInicial = parseFloat(formData.lecturaInicialECM) || 0;
-    const lecturaFinal = parseFloat(formData.lecturaFinalECM) || 0;
+          return {
+            ...item,
+            unidad_numero:
+              item.unit?.numero_economico || unit?.numero_economico || "N/A",
+            operador_nombre:
+              item.operator?.name || item.operator?.nombre || "N/A",
+            excede_tanque: Number(item.litros) > Number(capacity),
+          };
+        },
+      );
 
-    if (litrosConsumidosECM <= 0) return null;
-
-    const totalFisicoLitros = litrosBomba + litrosVales;
-    const totalDigitalLitros = litrosConsumidosECM;
-    const diferenciaLitros = totalFisicoLitros - totalDigitalLitros;
-
-    const kmsRecorridos =
-      lecturaFinal > lecturaInicial ? lecturaFinal - lecturaInicial : 0;
-    const rendimientoKmL =
-      totalFisicoLitros > 0 ? kmsRecorridos / totalFisicoLitros : 0;
-    const toleranciaPermitida = totalDigitalLitros * TOLERANCE_PERCENTAGE;
-
-    let estatus: "CONCILIADO" | "COBRO_OPERADOR" | "PENDIENTE" = "PENDIENTE";
-    let esRoboSospechado = false;
-
-    if (totalFisicoLitros > 0) {
-      if (diferenciaLitros > toleranciaPermitida) {
-        estatus = "COBRO_OPERADOR";
-        esRoboSospechado = true;
-      } else {
-        estatus = "CONCILIADO";
-        esRoboSospechado = false;
-      }
+      setCargas(normalizedFuel);
+    } catch (error) {
+      console.error("Error sync:", error);
+      toast.error("Error de Sincronización Industrial");
+    } finally {
+      setIsLoading(false);
     }
-
-    return {
-      totalFisicoLitros,
-      totalDigitalLitros,
-      diferenciaLitros,
-      rendimientoKmL,
-      toleranciaPermitida,
-      estatus,
-      esRoboSospechado,
-    };
-  }, [formData]);
-
-  const handleInputChange = (field: keyof AuditFormData, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-    setAuditCompleted(false);
   };
 
-  const handleReset = () => {
-    setSelectedTripId("");
-    setFormData({
-      litrosBomba: "",
-      litrosVales: "",
-      lecturaInicialECM: "",
-      lecturaFinalECM: "",
-      litrosConsumidosECM: "",
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const filteredCargas = useMemo(() => {
+    return cargas.filter((c) => {
+      const matchesUnit =
+        selectedUnitId === "all" || String(c.unit_id) === selectedUnitId;
+      const term = searchTerm.toLowerCase();
+      const matchesSearch =
+        c.unidad_numero?.toLowerCase().includes(term) ||
+        c.estacion?.toLowerCase().includes(term);
+      return matchesUnit && matchesSearch;
     });
-    setAuditCompleted(false);
-  };
+  }, [cargas, selectedUnitId, searchTerm]);
 
-  const handleAuthorizeAndClose = () => {
-    if (!auditResult || !activeTrip) {
-      toast({
-        title: "Datos incompletos",
-        description:
-          "Por favor seleccione un viaje y complete los campos requeridos.",
-        variant: "destructive",
+  const statsAuditoria = useMemo(() => {
+    const ahora = new Date();
+    const hace7Dias = new Date(ahora.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const cargasSemana = filteredCargas.filter(
+      (c) => new Date(c.fecha_hora) >= hace7Dias,
+    );
+    const litros = cargasSemana.reduce((sum, c) => sum + (c.litros || 0), 0);
+    const inversion = cargasSemana.reduce((sum, c) => sum + (c.total || 0), 0);
+    const sorted = [...cargasSemana].sort(
+      (a, b) =>
+        new Date(b.fecha_hora).getTime() - new Date(a.fecha_hora).getTime(),
+    );
+    const odoActual = sorted.length > 0 ? sorted[0].odometro : 0;
+    const odoAnterior =
+      sorted.length > 1 ? sorted[sorted.length - 1].odometro : odoActual;
+    const kmRecorridos = odoActual - odoAnterior;
+    const rendimiento =
+      kmRecorridos > 0 && litros > 0
+        ? (kmRecorridos / litros).toFixed(2)
+        : "0.00";
+
+    return { litros, inversion, odoActual, kmRecorridos, rendimiento };
+  }, [filteredCargas]);
+
+  const selectedUnitObj = useMemo(
+    () => units.find((u) => String(u.id) === selectedUnitId),
+    [units, selectedUnitId],
+  );
+
+  const handleAddTicket = async (data: TicketFormData) => {
+    const toastId = toast.loading("Sincronizando Vale...");
+    try {
+      await fuelService.create({
+        ...data,
+        unit_id: Number(data.unit_id),
+        operator_id: Number(data.operator_id),
+        trip_id: data.trip_id ? Number(data.trip_id) : null,
       });
-      return;
+      await loadData();
+      toast.success("Registro de Carga Exitoso", { id: toastId });
+      setIsModalOpen(false);
+    } catch (error) {
+      toast.error("Fallo en Registro de Ticket", { id: toastId });
     }
-
-    setIsProcessing(true);
-
-    setTimeout(() => {
-      setIsProcessing(false);
-      setAuditCompleted(true);
-      setShowReceiptModal(true);
-
-      toast({
-        title:
-          auditResult.estatus === "COBRO_OPERADOR"
-            ? "⚠️ Vale de Cobro Generado"
-            : "✅ Viaje Conciliado",
-        description:
-          auditResult.estatus === "COBRO_OPERADOR"
-            ? `Diferencia de ${auditResult.diferenciaLitros.toFixed(2)} L detectada. Cargo aplicado al operador.`
-            : "El viaje ha sido conciliado exitosamente sin diferencias significativas.",
-        variant:
-          auditResult.estatus === "COBRO_OPERADOR" ? "destructive" : "default",
-      });
-    }, 1500);
   };
+
+  const handleDelete = async () => {
+    if (!idParaEliminar) return;
+    const toastId = toast.loading("Eliminando del Ledger...");
+    try {
+      await fuelService.delete(idParaEliminar);
+      setCargas((prev) => prev.filter((c) => c.id !== idParaEliminar));
+      toast.success("Activo Eliminado", { id: toastId });
+    } catch (error) {
+      toast.error("Error en Eliminación", { id: toastId });
+    } finally {
+      setIdParaEliminar(null);
+    }
+  };
+
+  // Columnas con Semántica Operativa y Tipografía Mono
+  const columns: ColumnDef<FuelLoadDisplay>[] = useMemo(
+    () => [
+      {
+        key: "fecha_hora",
+        header: "Timestamp",
+        render: (v) => (
+          <div className="flex flex-col animate-in fade-in duration-500">
+            <span className="font-black text-slate-900 dark:text-white uppercase tracking-tighter text-[11px]">
+              {new Date(String(v)).toLocaleDateString("es-MX", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+              })}
+            </span>
+            <span className="text-[10px] text-slate-400 font-mono tracking-widest uppercase">
+              {new Date(String(v)).toLocaleTimeString("es-MX", {
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: false,
+              })}
+            </span>
+          </div>
+        ),
+      },
+      {
+        key: "tipo_combustible",
+        header: "Vector",
+        render: (v) => (
+          <Badge
+            variant="outline"
+            className={cn(
+              "gap-2 px-3 py-1 rounded-full border-none font-black text-[9px] tracking-[0.1em]",
+              v === "diesel"
+                ? "bg-amber-500/10 text-amber-600 shadow-[inset_0_0_10px_rgba(245,158,11,0.1)]"
+                : "bg-blue-500/10 text-blue-600",
+            )}
+          >
+            {v === "diesel" ? <Fuel size={12} /> : <Droplets size={12} />}
+            {String(v).toUpperCase()}
+          </Badge>
+        ),
+      },
+      {
+        key: "unidad_numero",
+        header: "Asset ID",
+        render: (v) => (
+          <span className="font-mono font-black text-slate-900 dark:text-slate-200 bg-slate-100 dark:bg-white/5 px-2 py-1 rounded text-xs tracking-tight">
+            ECO-{v}
+          </span>
+        ),
+      },
+      {
+        key: "litros",
+        header: "Volumen",
+        render: (v, row) => (
+          <div className="flex items-center gap-2">
+            <span
+              className={cn(
+                "font-mono font-black text-sm",
+                row.excede_tanque
+                  ? "text-rose-600 animate-pulse"
+                  : "text-slate-700 dark:text-slate-300",
+              )}
+            >
+              {Number(v).toFixed(1)}{" "}
+              <span className="text-[10px] opacity-50">L</span>
+            </span>
+            {row.excede_tanque && (
+              <AlertTriangle className="h-3 w-3 text-rose-500" />
+            )}
+          </div>
+        ),
+      },
+      {
+        key: "total",
+        header: "Inversión",
+        render: (v) => (
+          <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 text-sm tracking-tighter">
+            ${Number(v).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+          </span>
+        ),
+      },
+      {
+        key: "odometro",
+        header: "Métrica Km",
+        render: (v) => (
+          <div className="flex items-center gap-2 text-slate-500">
+            <Activity size={12} />
+            <span className="font-mono text-[11px] font-bold">
+              {Number(v).toLocaleString()}
+            </span>
+          </div>
+        ),
+      },
+      {
+        key: "evidencia_url",
+        header: "Asset Doc",
+        render: (v) =>
+          v ? (
+            <Badge className="bg-emerald-500 text-white border-none text-[8px] font-black tracking-widest px-2">
+              VERIFIED
+            </Badge>
+          ) : (
+            <Badge
+              variant="outline"
+              className="text-rose-400 border-rose-400/30 text-[8px] font-black tracking-widest px-2"
+            >
+              MISSING
+            </Badge>
+          ),
+      },
+      {
+        key: "acciones",
+        header: "",
+        sortable: false,
+        render: (_, row) => (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 haptic-press"
+              >
+                <MoreVertical size={16} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              className="rounded-2xl border-slate-200 dark:border-white/10 bg-white/95 dark:bg-brand-navy/95 backdrop-blur-xl"
+            >
+              <DropdownMenuItem
+                onClick={() => setCargaToView(row)}
+                className="cursor-pointer font-bold uppercase text-[10px] py-2.5"
+              >
+                <Eye className="h-3.5 w-3.5 mr-2 text-blue-500" /> Consultar
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setCargaToEdit(row)}
+                className="cursor-pointer font-bold uppercase text-[10px] py-2.5"
+              >
+                <Pencil className="h-3.5 w-3.5 mr-2 text-emerald-500" />{" "}
+                Refactorizar
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-rose-600 focus:bg-rose-50 font-bold uppercase text-[10px] py-2.5"
+                onClick={() => setIdParaEliminar(row.id)}
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-2" /> Eliminar
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ),
+      },
+    ],
+    [],
+  );
+
+  if (isLoading)
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-900">
+        <Loader2 className="animate-spin h-16 w-16 text-brand-red" />
+      </div>
+    );
 
   return (
-    <div className="space-y-6 animate-in fade-in-50 duration-500 max-w-6xl mx-auto pb-12">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2 text-brand-dark">
-            <Calculator className="h-6 w-6" /> Conciliación de Combustible
-          </h1>
-          <p className="text-muted-foreground">
-            Herramienta de Auditoría — Tolerancia:{" "}
-            <span className="font-semibold text-foreground">±0.3%</span>
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          onClick={handleReset}
-          className="gap-2 font-bold"
-        >
-          <RotateCcw className="h-4 w-4" /> Nueva Auditoría
-        </Button>
-      </div>
+    <div className="p-8 space-y-8 bg-[#F8FAFC] dark:bg-brand-navy/30 min-h-screen animate-in fade-in duration-700">
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
+        <PageHeader
+          title="Consola de Combustible"
+          description="Auditoría técnica de rendimientos y suministro de activos"
+          className="heading-crisp"
+        />
 
-      {/* 🚀 BÚSQUEDA DEL VIAJE REAL */}
-      <Card className="shadow-sm border-slate-200">
-        <CardContent className="p-4 flex items-center gap-4 bg-slate-50 rounded-xl">
-          <Label className="font-bold text-slate-700 whitespace-nowrap flex items-center gap-2">
-            <Search className="h-4 w-4" /> Buscar Viaje a Conciliar:
-          </Label>
-          <Select value={selectedTripId} onValueChange={handleTripSelect}>
-            <SelectTrigger className="bg-white border-slate-300 font-medium text-brand-navy max-w-xl">
-              <SelectValue placeholder="Seleccione un viaje del histórico..." />
+        {/* TOOLBAR TAHOE: Sunken Industrial */}
+        <div className="flex items-center gap-2 bg-white dark:bg-slate-900 p-1.5 rounded-[1.2rem] border border-slate-200 dark:border-white/10 shadow-inner">
+          <div className="flex items-center gap-3 px-4 border-r border-slate-100 dark:border-white/5">
+            <Search className="h-4 w-4 text-slate-400" />
+            <Input
+              placeholder="Buscar unidad o terminal..."
+              className="border-none shadow-none focus-visible:ring-0 text-[11px] font-bold uppercase w-[220px] bg-transparent"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <Select value={selectedUnitId} onValueChange={setSelectedUnitId}>
+            <SelectTrigger className="w-[180px] border-none shadow-none focus:ring-0 font-black uppercase text-[10px] tracking-widest text-brand-navy dark:text-white bg-transparent">
+              <SelectValue placeholder="Flota Completa" />
             </SelectTrigger>
-            <SelectContent>
-              {trips
-                .filter((t) => String(t.status).toLowerCase() !== "liquidado")
-                .map((t) => (
-                  <SelectItem key={t.id} value={String(t.id)}>
-                    Folio: {t.public_id || t.id} | {t.origin} → {t.destination}{" "}
-                    ({t.status.toUpperCase()})
-                  </SelectItem>
-                ))}
+            <SelectContent className="rounded-xl border-none shadow-2xl">
+              <SelectItem
+                value="all"
+                className="font-bold text-[10px] uppercase"
+              >
+                Flota Completa
+              </SelectItem>
+              {units.map((u) => (
+                <SelectItem
+                  key={u.id}
+                  value={String(u.id)}
+                  className="font-mono text-[10px]"
+                >
+                  ECO-{u.numero_economico}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
-        </CardContent>
-      </Card>
-
-      {!tripData ? (
-        <div className="text-center py-20 border-2 border-dashed border-slate-200 rounded-2xl bg-white">
-          <Fuel className="h-12 w-12 text-slate-300 mx-auto mb-4" />
-          <p className="text-lg font-bold text-slate-600">
-            Selecciona un viaje para iniciar la auditoría
-          </p>
         </div>
-      ) : (
-        <>
-          {/* Section 1: Trip Information */}
-          <Card className="border-l-4 border-l-primary shadow-sm">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <FileText className="h-5 w-5" /> Información del Viaje (Lectura
-                de BD)
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      </div>
+
+      {/* KPI GRID: macOS Tahoe Glass Widgets */}
+      <div className="grid gap-6 md:grid-cols-4">
+        {[
+          {
+            label: "Volumen Semanal",
+            val: `${statsAuditoria.litros.toLocaleString()} L`,
+            icon: Fuel,
+            color: "text-amber-500",
+            bg: "bg-amber-500/10",
+          },
+          {
+            label: "Inversión Ledger",
+            val: `$${statsAuditoria.inversion.toLocaleString()}`,
+            icon: TrendingUp,
+            color: "text-emerald-500",
+            bg: "bg-emerald-500/10",
+          },
+          {
+            label: "Performance Real",
+            val: `${statsAuditoria.rendimiento} km/L`,
+            icon: BarChart3,
+            color: "text-blue-500",
+            bg: "bg-blue-500/10",
+          },
+          {
+            label: "Último Odómetro",
+            val: `${statsAuditoria.odoActual.toLocaleString()} km`,
+            icon: Gauge,
+            color: "text-slate-200",
+            bg: "bg-white/10",
+            dark: true,
+          },
+        ].map((kpi, i) => (
+          <Card
+            key={i}
+            className={cn(
+              "border-none shadow-2xl backdrop-blur-xl rounded-[2rem] transition-all hover:scale-[1.02] hover:ring-1 hover:ring-white/20",
+              kpi.dark
+                ? "bg-brand-navy text-white"
+                : "bg-white/90 dark:bg-slate-900/90",
+            )}
+          >
+            <CardContent className="p-6">
+              <div className="flex justify-between items-start">
                 <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">
-                    Folio Sistema
-                  </Label>
-                  <div className="flex items-center gap-2 font-mono font-semibold text-brand-dark bg-muted/50 px-3 py-2 rounded-md">
-                    <FileText className="h-4 w-4 text-muted-foreground" />{" "}
-                    {tripData.cartaPorteId}
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">
-                    Unidad (Tracto)
-                  </Label>
-                  <div className="flex items-center gap-2 font-mono font-semibold text-brand-dark bg-muted/50 px-3 py-2 rounded-md">
-                    <Truck className="h-4 w-4 text-muted-foreground" />{" "}
-                    {tripData.unidadId}
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Ruta</Label>
-                  <div
-                    className="flex items-center gap-2 font-semibold text-brand-dark bg-muted/50 px-3 py-2 rounded-md truncate"
-                    title={tripData.ruta}
+                  <p
+                    className={cn(
+                      "text-[9px] font-black uppercase tracking-[0.25em] opacity-60",
+                      kpi.dark ? "text-slate-400" : "text-slate-500",
+                    )}
                   >
-                    <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />{" "}
-                    {tripData.ruta}
-                  </div>
+                    {kpi.label}
+                  </p>
+                  <p className="text-3xl font-mono font-black tracking-tighter">
+                    {kpi.val}
+                  </p>
                 </div>
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">
-                    Operador
-                  </Label>
-                  <div
-                    className="flex items-center gap-2 font-semibold text-brand-dark bg-muted/50 px-3 py-2 rounded-md truncate"
-                    title={tripData.operador}
-                  >
-                    <User className="h-4 w-4 text-muted-foreground shrink-0" />{" "}
-                    {tripData.operador}
-                  </div>
+                <div
+                  className={cn(
+                    "w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner",
+                    kpi.bg,
+                  )}
+                >
+                  <kpi.icon className={kpi.color} size={24} strokeWidth={2.5} />
                 </div>
               </div>
             </CardContent>
           </Card>
+        ))}
+      </div>
 
-          {/* Section 2: The "Auditor" Form */}
-          <div className="grid md:grid-cols-2 gap-6">
-            <Card className="border-t-4 border-t-amber-500 shadow-sm">
-              <CardHeader className="bg-amber-50/30 pb-4">
-                <CardTitle className="text-lg flex items-center gap-2 text-amber-700">
-                  <Fuel className="h-5 w-5" /> 1. Datos Físicos (Vales y Bomba)
-                </CardTitle>
-                <CardDescription>
-                  Combustible entregado o inyectado
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4 pt-6">
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="litrosBomba"
-                    className="flex items-center gap-2"
-                  >
-                    Litros Bomba (Patio){" "}
-                    <span className="text-xs text-muted-foreground">
-                      — Carga inicial en base
-                    </span>
-                  </Label>
-                  <div className="relative">
-                    <Input
-                      id="litrosBomba"
-                      type="number"
-                      step="0.01"
-                      placeholder="Ej: 350.00"
-                      value={formData.litrosBomba}
-                      onChange={(e) =>
-                        handleInputChange("litrosBomba", e.target.value)
-                      }
-                      className="pr-10 font-mono"
-                    />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
-                      L
-                    </span>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="litrosVales"
-                    className="flex items-center gap-2"
-                  >
-                    Litros Vales (En Ruta){" "}
-                    <span className="text-xs text-muted-foreground">
-                      — Recargas en el viaje
-                    </span>
-                  </Label>
-                  <div className="relative">
-                    <Input
-                      id="litrosVales"
-                      type="number"
-                      step="0.01"
-                      placeholder="Ej: 80.00"
-                      value={formData.litrosVales}
-                      onChange={(e) =>
-                        handleInputChange("litrosVales", e.target.value)
-                      }
-                      className="pr-10 font-mono"
-                    />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
-                      L
-                    </span>
-                  </div>
-                </div>
-                <Separator />
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-bold text-amber-800">
-                      Total Físico Inyectado
-                    </span>
-                    <span className="text-2xl font-black font-mono text-amber-700">
-                      {auditResult
-                        ? auditResult.totalFisicoLitros.toFixed(2)
-                        : "0.00"}{" "}
-                      L
-                    </span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-t-4 border-t-blue-500 shadow-sm">
-              <CardHeader className="bg-blue-50/30 pb-4">
-                <CardTitle className="text-lg flex items-center gap-2 text-blue-700">
-                  <Gauge className="h-5 w-5" /> 2. Datos Digitales (ECM)
-                </CardTitle>
-                <CardDescription>
-                  Lecturas del computador del motor
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4 pt-6">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="lecturaInicialECM">Odómetro Inicial</Label>
-                    <div className="relative">
-                      <Input
-                        id="lecturaInicialECM"
-                        type="number"
-                        step="1"
-                        placeholder="Ej: 245000"
-                        value={formData.lecturaInicialECM}
-                        onChange={(e) =>
-                          handleInputChange("lecturaInicialECM", e.target.value)
-                        }
-                        className="pr-12 font-mono"
-                      />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
-                        km
-                      </span>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="lecturaFinalECM">Odómetro Final</Label>
-                    <div className="relative">
-                      <Input
-                        id="lecturaFinalECM"
-                        type="number"
-                        step="1"
-                        placeholder="Ej: 245425"
-                        value={formData.lecturaFinalECM}
-                        onChange={(e) =>
-                          handleInputChange("lecturaFinalECM", e.target.value)
-                        }
-                        className="pr-12 font-mono"
-                      />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
-                        km
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="litrosConsumidosECM"
-                    className="flex items-center gap-2 font-bold"
-                  >
-                    Litros Consumidos ECM *
-                  </Label>
-                  <div className="relative">
-                    <Input
-                      id="litrosConsumidosECM"
-                      type="number"
-                      step="0.01"
-                      placeholder="Requerido..."
-                      value={formData.litrosConsumidosECM}
-                      onChange={(e) =>
-                        handleInputChange("litrosConsumidosECM", e.target.value)
-                      }
-                      className="pr-10 font-mono border-blue-300 focus-visible:ring-blue-500"
-                    />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
-                      L
-                    </span>
-                  </div>
-                </div>
-                <Separator />
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-bold text-blue-800">
-                      Total Computadora
-                    </span>
-                    <span className="text-2xl font-black font-mono text-blue-700">
-                      {auditResult
-                        ? auditResult.totalDigitalLitros.toFixed(2)
-                        : "0.00"}{" "}
-                      L
-                    </span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Section 3: Analysis Results */}
-          <Card
-            className={`transition-all duration-500 shadow-md ${auditResult?.esRoboSospechado ? "border-2 border-red-500 bg-red-50/30" : auditResult?.estatus === "CONCILIADO" ? "border-2 border-emerald-500 bg-emerald-50/30" : "border border-slate-200"}`}
+      {/* SECCIÓN DE DATOS: Liquid Glass Table */}
+      <div className="space-y-4">
+        <div className="flex justify-between items-center px-2">
+          <h3 className="text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.3em] flex items-center gap-3">
+            <div className="h-1 w-8 bg-brand-red rounded-full" /> Registro
+            Maestro de Cargas
+          </h3>
+          <Button
+            onClick={() => setIsModalOpen(true)}
+            className="bg-brand-red hover:bg-red-700 text-white font-black uppercase text-[10px] tracking-[0.15em] h-12 px-8 rounded-2xl shadow-[0_10px_20px_-5px_rgba(239,68,68,0.3)] haptic-press transition-all hover:-translate-y-0.5"
           >
-            <CardHeader className="text-center border-b pb-4 bg-white/50">
-              <CardTitle className="text-lg font-black uppercase tracking-widest flex items-center justify-center gap-2">
-                <TrendingUp className="h-5 w-5" /> 3. Veredicto del Algoritmo
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-6">
-              {!auditResult ? (
-                <div className="text-center py-6 text-muted-foreground">
-                  <Calculator className="h-10 w-10 mx-auto mb-2 opacity-50" />
-                  <p>Llene los datos físicos y del ECM para ver el cálculo.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
-                  <div className="text-center p-6 bg-white rounded-2xl shadow-sm border border-slate-100 col-span-1">
-                    <p className="text-sm font-bold text-slate-500 uppercase mb-2">
-                      Desviación (Físico vs ECM)
-                    </p>
-                    <p
-                      className={`text-4xl font-black font-mono ${auditResult.esRoboSospechado ? "text-red-600" : "text-emerald-600"}`}
-                    >
-                      {auditResult.diferenciaLitros > 0 ? "+" : ""}
-                      {auditResult.diferenciaLitros.toFixed(2)} L
-                    </p>
-                    <p className="text-xs font-bold text-slate-600 mt-3">
-                      Tolerancia permitida: ±
-                      {auditResult.toleranciaPermitida.toFixed(2)} L
-                    </p>
-                  </div>
+            <Plus size={16} className="mr-2 stroke-[3]" /> Nuevo Vale Industrial
+          </Button>
+        </div>
 
-                  <div className="text-center p-6 bg-white rounded-2xl shadow-sm border border-slate-100 col-span-1">
-                    <p className="text-sm font-bold text-slate-500 uppercase mb-2">
-                      Rendimiento Operativo
-                    </p>
-                    <p className="text-4xl font-black font-mono text-brand-navy">
-                      {auditResult.rendimientoKmL.toFixed(2)}
-                    </p>
-                    <p className="text-xs font-bold text-slate-600 mt-3">
-                      Kilómetros por Litro (Km/L)
-                    </p>
-                  </div>
+        <Card className="border-none shadow-3xl bg-white/50 dark:bg-slate-900/50 backdrop-blur-md rounded-[2.5rem] overflow-hidden border border-white/20 dark:border-white/5">
+          <CardContent className="p-0">
+            <EnhancedDataTable
+              data={filteredCargas}
+              columns={columns as any}
+              onRowClick={(row) => setCargaToView(row)}
+              className="liquid-glass"
+            />
+          </CardContent>
+        </Card>
+      </div>
 
-                  <div className="text-center space-y-4 col-span-1">
-                    {auditResult.esRoboSospechado ? (
-                      <div className="animate-in zoom-in duration-300">
-                        <ShieldAlert className="h-12 w-12 text-red-500 mx-auto mb-2 animate-pulse" />
-                        <h3 className="text-lg font-black text-red-700 uppercase tracking-widest">
-                          Ordeña Detectada
-                        </h3>
-                      </div>
-                    ) : (
-                      <div className="animate-in zoom-in duration-300">
-                        <CheckCircle className="h-12 w-12 text-emerald-500 mx-auto mb-2" />
-                        <h3 className="text-lg font-black text-emerald-700 uppercase tracking-widest">
-                          Consumo Perfecto
-                        </h3>
-                      </div>
-                    )}
-                    <Button
-                      size="lg"
-                      onClick={handleAuthorizeAndClose}
-                      disabled={isProcessing}
-                      className={`w-full font-black text-white shadow-xl ${auditResult.esRoboSospechado ? "bg-red-600 hover:bg-red-700" : "bg-emerald-600 hover:bg-emerald-700"}`}
-                    >
-                      {isProcessing ? (
-                        <Loader2 className="h-5 w-5 animate-spin mr-2" />
-                      ) : (
-                        <CheckCircle className="h-5 w-5 mr-2" />
-                      )}
-                      {auditResult.esRoboSospechado
-                        ? "APLICAR CARGO Y CERRAR"
-                        : "CONCILIAR Y CERRAR"}
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Receipt Modal */}
-          <Dialog open={showReceiptModal} onOpenChange={setShowReceiptModal}>
-            <DialogContent className="max-w-md">
-              <DialogHeader className="text-center border-b pb-4">
-                <DialogTitle
-                  className={`text-xl font-black flex justify-center items-center gap-2 ${auditResult?.esRoboSospechado ? "text-red-600" : "text-emerald-600"}`}
-                >
-                  {auditResult?.esRoboSospechado ? (
-                    <ShieldAlert />
-                  ) : (
-                    <CheckCircle />
-                  )}
-                  TICKET DE CONCILIACIÓN
-                </DialogTitle>
-                <p className="text-xs font-mono text-slate-600 mt-1">
-                  {new Date().toLocaleString("es-MX")}
-                </p>
-              </DialogHeader>
-
-              {auditResult && (
-                <div className="space-y-3 py-4 text-sm font-medium text-slate-700">
-                  <div className="flex justify-between border-b pb-2">
-                    <span>Folio Viaje:</span>{" "}
-                    <span className="font-mono font-bold text-slate-900">
-                      {tripData.cartaPorteId}
-                    </span>
-                  </div>
-                  <div className="flex justify-between border-b pb-2">
-                    <span>Operador:</span>{" "}
-                    <span className="font-bold text-slate-900 text-right">
-                      {tripData.operador}
-                    </span>
-                  </div>
-                  <div className="flex justify-between border-b pb-2">
-                    <span>Litros Físicos:</span>{" "}
-                    <span className="font-mono">
-                      {auditResult.totalFisicoLitros.toFixed(2)} L
-                    </span>
-                  </div>
-                  <div className="flex justify-between border-b pb-2">
-                    <span>Litros Computadora:</span>{" "}
-                    <span className="font-mono">
-                      {auditResult.totalDigitalLitros.toFixed(2)} L
-                    </span>
-                  </div>
-                  <div className="flex justify-between bg-slate-100 p-3 rounded-lg mt-4">
-                    <span className="font-black text-slate-800">
-                      DIFERENCIA FINAL:
-                    </span>
-                    <span
-                      className={`font-black font-mono text-lg ${auditResult.esRoboSospechado ? "text-red-600" : "text-emerald-600"}`}
-                    >
-                      {auditResult.diferenciaLitros > 0 ? "+" : ""}
-                      {auditResult.diferenciaLitros.toFixed(2)} L
-                    </span>
-                  </div>
-                </div>
-              )}
-              <DialogFooter>
-                <Button
-                  className="w-full font-bold bg-slate-800 hover:bg-slate-900 text-white"
-                  onClick={() => {
-                    setShowReceiptModal(false);
-                    toast({ title: "Enviado a impresora" });
-                  }}
-                >
-                  <Printer className="h-4 w-4 mr-2" /> IMPRIMIR RECIBO
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </>
+      {/* COMPONENTES DE DIÁLOGO REFACTORIZADOS */}
+      <AddTicketModal
+        open={isModalOpen}
+        onOpenChange={setIsModalOpen}
+        onSubmit={handleAddTicket as any}
+      />
+      {cargaToView && (
+        <ViewCargaModal
+          open={!!cargaToView}
+          onOpenChange={() => setCargaToView(null)}
+          carga={cargaToView as any}
+        />
       )}
+      {cargaToEdit && (
+        <EditCargaModal
+          open={!!cargaToEdit}
+          onOpenChange={() => setCargaToEdit(null)}
+          carga={cargaToEdit as any}
+          units={units as any}
+          operators={operators as any}
+          onSave={loadData}
+        />
+      )}
+
+      <AlertDialog
+        open={!!idParaEliminar}
+        onOpenChange={(o) => !o && setIdParaEliminar(null)}
+      >
+        <AlertDialogContent className="rounded-[2rem] bg-white/95 dark:bg-brand-navy/95 backdrop-blur-2xl border-none shadow-3xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-rose-600 font-black uppercase tracking-tighter text-2xl flex items-center gap-3">
+              <div className="p-2 bg-rose-500/10 rounded-xl">
+                <Trash2 size={24} />
+              </div>{" "}
+              ¿Eliminar Asset?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-500 dark:text-slate-400 font-bold text-sm">
+              Esta operación es irreversible. Los datos de rendimiento km/L de
+              la unidad ECO-
+              {cargas.find((c) => c.id === idParaEliminar)?.unidad_numero} serán
+              recalculados.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-6 gap-3">
+            <AlertDialogCancel className="rounded-xl h-11 font-black uppercase text-[10px] tracking-widest border-slate-200">
+              Abortar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-rose-600 hover:bg-rose-700 text-white rounded-xl h-11 font-black uppercase text-[10px] tracking-widest haptic-press"
+            >
+              Confirmar Purga
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
-}
+};
+
+export default CombustibleCargas;

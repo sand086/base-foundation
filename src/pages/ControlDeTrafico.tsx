@@ -11,12 +11,23 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogFooter,
+  AlertDialogDescription,
+  AlertDialogHeader,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import {
   MapPin,
   Clock,
   Search,
   Truck,
+  Loader2,
   User,
   Edit2,
   AlertTriangle,
@@ -53,6 +64,8 @@ export default function ControlDeTrafico() {
   const [eventToEdit, setEventToEdit] = useState<TripTimelineEvent | null>(
     null,
   );
+  const [eventToDelete, setEventToDelete] = useState<number | null>(null);
+  const [isDeletingEvent, setIsDeletingEvent] = useState(false);
 
   // 🚀 1. FILTROS PRO: Búsqueda de texto + Pestañas de Estados
   const filteredTrips = useMemo(() => {
@@ -127,20 +140,33 @@ export default function ControlDeTrafico() {
     });
   }, [selectedTrip]);
 
-  const handleDeleteEvent = async (eventId: number) => {
-    if (!confirm("¿Estás seguro de eliminar este evento de la bitácora?"))
-      return;
+  // Abre el modal guardando el ID del evento
+  const handleAskDeleteEvent = (eventId: number) => {
+    setEventToDelete(eventId);
+  };
+
+  // Ejecuta la eliminación real cuando el usuario confirma en el modal
+  const executeDeleteEvent = async () => {
+    if (!eventToDelete) return;
+
+    setIsDeletingEvent(true);
     try {
-      await axiosClient.delete(`/trips/timeline/${eventId}`);
-      toast.success("Evento eliminado");
+      await axiosClient.delete(`/trips/timeline/${eventToDelete}`);
+      toast.success("Evento eliminado de la bitácora");
+
       // Recargar datos
       await fetchTrips();
       const { data: updatedTrip } = await axiosClient.get(
         `/trips/${selectedTrip?.id}`,
       );
       setSelectedTrip(updatedTrip);
+
+      // Cerrar modal
+      setEventToDelete(null);
     } catch (error) {
       toast.error("Error al eliminar el evento");
+    } finally {
+      setIsDeletingEvent(false);
     }
   };
 
@@ -648,11 +674,11 @@ export default function ControlDeTrafico() {
                                       <DropdownMenuItem
                                         className="text-[10px] font-black uppercase tracking-widest text-rose-600 dark:text-rose-500 cursor-pointer dark:focus:bg-rose-950/30"
                                         onClick={() =>
-                                          handleDeleteEvent(event.id!)
+                                          handleAskDeleteEvent(event.id!)
                                         }
                                       >
                                         <Trash2 className="h-3.5 w-3.5 mr-2" />{" "}
-                                        Eliminar Reporte
+                                        Eliminar item
                                       </DropdownMenuItem>
                                     </DropdownMenuContent>
                                   </DropdownMenu>
@@ -698,6 +724,94 @@ export default function ControlDeTrafico() {
           eventToEdit={eventToEdit}
         />
       )}
+
+      {/* 🚀 ALERTA DE ELIMINACIÓN DE EVENTO (Estructura Tahoe 4 Capas) */}
+      <AlertDialog
+        open={!!eventToDelete}
+        onOpenChange={(open) => {
+          if (!open && !isDeletingEvent) setEventToDelete(null);
+        }}
+      >
+        <AlertDialogContent className="w-[95vw] sm:max-w-lg flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl transition-all duration-300">
+          {/* CAPA 2: HEADER TAHOE (Contraste Blanco/Navy puro) */}
+          <AlertDialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
+            <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
+            <div className="relative z-10 flex items-center gap-4 sm:gap-5">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center shadow-inner shrink-0 icon-plate border border-rose-200 dark:border-rose-500/20">
+                <Trash2 className="h-7 w-7 sm:h-8 sm:w-8 text-rose-600 dark:text-rose-400 drop-shadow-[0_0_8px_rgba(244,63,94,0.4)]" />
+              </div>
+              <div className="flex flex-col gap-1 text-left min-w-0">
+                <AlertDialogTitle className="text-2xl font-black uppercase tracking-tighter text-rose-600 dark:text-rose-500 heading-crisp leading-none">
+                  Eliminar Novedad
+                </AlertDialogTitle>
+                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-1 truncate">
+                  Acción Irreversible • Bitácora Operativa
+                </p>
+              </div>
+            </div>
+          </AlertDialogHeader>
+
+          {/* CAPA 3: BODY */}
+          <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
+            <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block space-y-6">
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                ¿Está seguro que desea eliminar este evento de la bitácora del
+                viaje?
+              </p>
+
+              <div className="p-5 sm:p-6 bg-rose-50 dark:bg-rose-950/20 border-l-4 border-rose-500 rounded-r-2xl shadow-sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+                  <h4 className="text-[10px] sm:text-[11px] font-black text-rose-800 dark:text-rose-400 uppercase tracking-widest">
+                    Pérdida de Historial Operativo
+                  </h4>
+                </div>
+                <p className="text-xs sm:text-sm leading-relaxed text-rose-900 dark:text-rose-200/80">
+                  Esta acción purgará la novedad, sus coordenadas GPS, y
+                  comentarios asociados.{" "}
+                  <b className="font-black underline">
+                    No podrá ser recuperado
+                  </b>
+                  .
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </div>
+
+          {/* CAPA 4: FOOTER */}
+          <AlertDialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
+            <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
+              <AlertDialogCancel
+                variant="outline"
+                size="lg"
+                onClick={() => setEventToDelete(null)}
+                disabled={isDeletingEvent}
+                className="w-full sm:w-auto haptic-press flex-shrink-0 font-black uppercase tracking-widest text-[10px]"
+              >
+                Cancelar
+              </AlertDialogCancel>
+
+              <AlertDialogAction
+                variant="destructive"
+                size="lg"
+                onClick={(e) => {
+                  e.preventDefault(); // 🚀 Crucial: Evita que el modal se cierre al instante, permitiendo ver el loader
+                  executeDeleteEvent();
+                }}
+                disabled={isDeletingEvent}
+                className="w-full sm:w-auto haptic-press shadow-rose-600/20 flex-shrink-0 border-none bg-rose-600 hover:bg-rose-700 text-white font-black uppercase tracking-widest text-[10px]"
+              >
+                {isDeletingEvent ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4 mr-2" />
+                )}
+                Eliminar Registro
+              </AlertDialogAction>
+            </div>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

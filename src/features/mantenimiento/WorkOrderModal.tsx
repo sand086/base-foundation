@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Plus,
   Trash2,
@@ -7,7 +7,8 @@ import {
   Loader2,
   Wrench,
   Check,
-  Search,
+  Home,
+  MapPin,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,10 +30,12 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 // Hooks y Tipos Reales
 import { useMaintenance } from "@/hooks/useMaintenance";
 import { useUnits } from "@/hooks/useUnits";
+import { useTrips } from "@/hooks/useTrips";
 import { InventoryItem } from "@/services/maintenanceService";
 
 interface SelectedPart {
@@ -54,10 +57,17 @@ export const WorkOrderModal = ({
   // Cargar datos reales
   const { inventory, mechanics } = useMaintenance();
   const { unidades } = useUnits();
+  const { trips } = useTrips(); // 🚀 Traemos los viajes para asociar gastos
 
   const [selectedUnit, setSelectedUnit] = useState("");
   const [selectedMechanic, setSelectedMechanic] = useState("");
   const [descripcion, setDescripcion] = useState("");
+
+  // 🚀 OBJETIVO 4: Estados para Patio vs Ruta
+  const [tipoMantenimiento, setTipoMantenimiento] = useState<"patio" | "ruta">(
+    "patio",
+  );
+  const [selectedTrip, setSelectedTrip] = useState("");
 
   // Partes seleccionadas
   const [selectedParts, setSelectedParts] = useState<SelectedPart[]>([]);
@@ -67,6 +77,22 @@ export const WorkOrderModal = ({
   const [selectedSkuId, setSelectedSkuId] = useState(""); // ID del item (string temp)
   const [partQuantity, setPartQuantity] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // 🚀 Filtrar solo los viajes de la unidad seleccionada que estén activos
+  const activeTripsForUnit = useMemo(() => {
+    if (!selectedUnit || !trips) return [];
+    return trips.filter(
+      (t: any) =>
+        t.status !== "cerrado" &&
+        t.status !== "liquidado" &&
+        t.legs?.some((l: any) => String(l.unit_id) === selectedUnit),
+    );
+  }, [trips, selectedUnit]);
+
+  // Limpiar el viaje si cambian la unidad
+  useEffect(() => {
+    setSelectedTrip("");
+  }, [selectedUnit]);
 
   // Filtrar partes disponibles (que no hayan sido seleccionadas ya)
   const availableParts = useMemo(() => {
@@ -110,19 +136,35 @@ export const WorkOrderModal = ({
     setSelectedSkuId("");
     setPartQuantity(1);
     setIsSubmitting(false);
+    setTipoMantenimiento("patio");
+    setSelectedTrip("");
     onOpenChange(false);
   };
 
   const handleSubmit = async () => {
     if (!selectedUnit || !descripcion) return;
 
+    // Validación extra para Auxilio en Ruta
+    if (tipoMantenimiento === "ruta" && !selectedTrip) {
+      toast.error("Dato Faltante", {
+        description:
+          "Debes seleccionar el viaje afectado para el auxilio en ruta.",
+      });
+      return;
+    }
+
     setIsSubmitting(true);
 
-    // Preparar payload para el backend
+    // Preparar payload para el backend con las nuevas columnas
     const payload = {
       unit_id: parseInt(selectedUnit),
       mechanic_id: selectedMechanic ? parseInt(selectedMechanic) : undefined,
       descripcion_problema: descripcion,
+      tipo_mantenimiento: tipoMantenimiento,
+      trip_id:
+        selectedTrip && tipoMantenimiento === "ruta"
+          ? parseInt(selectedTrip)
+          : undefined,
       parts: selectedParts.map((p) => ({
         inventory_item_id: p.item.id,
         cantidad: p.cantidad,
@@ -137,7 +179,10 @@ export const WorkOrderModal = ({
     }
   };
 
-  const isValid = selectedUnit && descripcion.trim().length > 0;
+  const isValid =
+    selectedUnit &&
+    descripcion.trim().length > 0 &&
+    (tipoMantenimiento === "patio" || selectedTrip !== "");
 
   return (
     <Dialog
@@ -235,6 +280,82 @@ export const WorkOrderModal = ({
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+
+              {/* 🚀 OBJETIVO 4: TIPO DE MANTENIMIENTO (PATIO VS RUTA) */}
+              <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-white/10 space-y-4">
+                <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+                  Tipo de Gasto (Afectación Financiera) *
+                </Label>
+                <div className="flex gap-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setTipoMantenimiento("patio");
+                      setSelectedTrip("");
+                    }}
+                    className={cn(
+                      "flex-1 h-12 gap-2 border-2",
+                      tipoMantenimiento === "patio"
+                        ? "border-brand-navy bg-blue-50 text-brand-navy"
+                        : "border-slate-200",
+                    )}
+                  >
+                    <Home className="h-4 w-4" /> Mantenimiento en Patio
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setTipoMantenimiento("ruta")}
+                    className={cn(
+                      "flex-1 h-12 gap-2 border-2",
+                      tipoMantenimiento === "ruta"
+                        ? "border-amber-500 bg-amber-50 text-amber-700"
+                        : "border-slate-200",
+                    )}
+                  >
+                    <MapPin className="h-4 w-4" /> Auxilio en Ruta (Viaje)
+                  </Button>
+                </div>
+
+                {/* Selector de Viaje si es en Ruta */}
+                {tipoMantenimiento === "ruta" && (
+                  <div className="space-y-2 mt-4 animate-in fade-in slide-in-from-top-2">
+                    <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-700">
+                      Vincular al Viaje *
+                    </Label>
+                    <Select
+                      value={selectedTrip}
+                      onValueChange={setSelectedTrip}
+                      disabled={!selectedUnit}
+                    >
+                      <SelectTrigger className="h-11 border-amber-200 bg-white">
+                        <SelectValue
+                          placeholder={
+                            selectedUnit
+                              ? "Selecciona el viaje afectado..."
+                              : "Primero selecciona la Unidad arriba"
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {activeTripsForUnit.length === 0 ? (
+                          <div className="p-2 text-[10px] text-slate-500 text-center font-bold">
+                            No hay viajes activos para esta unidad
+                          </div>
+                        ) : (
+                          activeTripsForUnit.map((t: any) => (
+                            <SelectItem key={t.id} value={String(t.id)}>
+                              VIAJE {t.public_id || t.id} - {t.origin} a{" "}
+                              {t.destination}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
 
               {/* Issue Description */}
@@ -499,7 +620,7 @@ export const WorkOrderModal = ({
               Cancelar
             </Button>
             <Button
-              type="button" // Cambiado de submit a button ya que no es un <form> real
+              type="button"
               variant="default"
               size="lg"
               disabled={!isValid || isSubmitting}

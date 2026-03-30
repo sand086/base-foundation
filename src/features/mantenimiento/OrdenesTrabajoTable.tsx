@@ -46,7 +46,7 @@ import { cn } from "@/lib/utils";
 
 export const OrdenesTrabajoTable = () => {
   // 1. Usar Hook Real
-  const { workOrders, createWorkOrder } = useMaintenance();
+  const { workOrders, createWorkOrder, updateOrderStatus } = useMaintenance();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -262,6 +262,7 @@ export const OrdenesTrabajoTable = () => {
                 align="end"
                 className="glass-panel border-white/20 min-w-[160px] z-50 dark:bg-slate-900/90"
               >
+                {/* BOTÓN VER DETALLES */}
                 <DropdownMenuItem
                   className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
                   onClick={() => setOrderToView(order)}
@@ -269,11 +270,45 @@ export const OrdenesTrabajoTable = () => {
                   <Eye className="h-4 w-4 text-brand-navy dark:text-slate-400" />{" "}
                   Ver detalles
                 </DropdownMenuItem>
-                {/* Edición futura */}
-                {/* <DropdownMenuSeparator className="dark:bg-white/10" />
-                <DropdownMenuItem className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800" onClick={() => handleEdit(order)}>
-                  <Edit className="h-4 w-4 text-blue-500 dark:text-blue-400" /> Editar
-                </DropdownMenuItem> */}
+
+                {/* 🚀 BOTÓN FINALIZAR (Solo si no está cerrada ni cancelada) */}
+                {order.status !== "cerrada" && order.status !== "cancelada" && (
+                  <>
+                    <DropdownMenuSeparator className="dark:bg-white/10" />
+                    <DropdownMenuItem
+                      className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer text-emerald-600 focus:text-emerald-700 focus:bg-emerald-50 dark:focus:bg-emerald-900/30"
+                      onClick={async () => {
+                        if (
+                          confirm(
+                            "¿Estás seguro de finalizar esta orden de trabajo?",
+                          )
+                        ) {
+                          await updateOrderStatus(order.id, "cerrada");
+                        }
+                      }}
+                    >
+                      <CheckCircle className="h-4 w-4" /> Finalizar Orden
+                    </DropdownMenuItem>
+                  </>
+                )}
+
+                {/* 🚀 BOTÓN CANCELAR (Solo si no está cerrada ni cancelada) */}
+                {order.status !== "cerrada" && order.status !== "cancelada" && (
+                  <DropdownMenuItem
+                    className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer text-rose-600 focus:text-rose-700 focus:bg-rose-50 dark:focus:bg-rose-900/30"
+                    onClick={async () => {
+                      if (
+                        confirm(
+                          "¿Estás seguro de CANCELAR esta orden? Las refacciones regresarán automáticamente al almacén.",
+                        )
+                      ) {
+                        await updateOrderStatus(order.id, "cancelada");
+                      }
+                    }}
+                  >
+                    <XCircle className="h-4 w-4" /> Cancelar / Revertir
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

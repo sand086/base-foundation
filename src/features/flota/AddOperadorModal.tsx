@@ -29,6 +29,7 @@ import {
   Heart,
   Loader2,
   Check,
+  Fingerprint,
 } from "lucide-react";
 import { Operator } from "@/types/api.types";
 import { useUnits } from "@/hooks/useUnits";
@@ -58,6 +59,8 @@ interface AddOperadorModalProps {
 // =====================
 const operatorSchema = z.object({
   name: z.string().min(2, "El nombre es requerido y debe ser válido"),
+  // 🚀 RFC REQUERIDO (12 o 13 caracteres)
+  rfc: z.string().min(12, "RFC inválido").max(13, "RFC inválido"),
   license_number: z.string().min(3, "Número de licencia requerido"),
   license_type: z.string().min(1, "Seleccione el tipo de licencia"),
   license_expiry: z.date({ required_error: "Fecha requerida" }),
@@ -97,6 +100,7 @@ export function AddOperadorModal({
     resolver: zodResolver(operatorSchema),
     defaultValues: {
       name: "",
+      rfc: "XAXX010101000", // Valor genérico por defecto
       license_number: "",
       license_type: "",
       license_expiry: undefined,
@@ -116,6 +120,7 @@ export function AddOperadorModal({
       if (operatorToEdit) {
         reset({
           name: operatorToEdit.name,
+          rfc: operatorToEdit.rfc || "XAXX010101000", // 🚀 Cargar RFC en edición
           license_number: operatorToEdit.license_number,
           license_type: operatorToEdit.license_type,
           license_expiry: operatorToEdit.license_expiry
@@ -136,6 +141,7 @@ export function AddOperadorModal({
       } else {
         reset({
           name: "",
+          rfc: "XAXX010101000",
           license_number: "",
           license_type: "",
           license_expiry: undefined,
@@ -169,6 +175,7 @@ export function AddOperadorModal({
       ...(isEditMode && { id: operatorToEdit?.id }),
       status: operatorToEdit?.status || "activo",
       name: data.name.trim(),
+      rfc: data.rfc.trim().toUpperCase(), // 🚀 Enviar RFC limpio y en mayúsculas
       license_number: data.license_number.trim().toUpperCase(),
       license_type: data.license_type,
       license_expiry: format(data.license_expiry, "yyyy-MM-dd"),
@@ -195,10 +202,8 @@ export function AddOperadorModal({
         if (!isOpen) handleClose();
       }}
     >
-      {/* 🚀 CAPA 1: CASCARÓN DEL MODAL */}
-      <DialogContent className="w-[95vw] sm:max-w-2xl p-0 flex flex-col max-h-[90vh] bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 shadow-2xl rounded-2xl transition-all duration-300 overflow-hidden">
-        {/* 🚀 CAPA 2: CABECERA (Blanca en Light, Oscura en Dark) */}
-        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 z-10 relative overflow-hidden">
+      <DialogContent className="w-[95vw] sm:max-w-2xl p-0 flex flex-col max-h-[90vh] bg-white dark:bg-brand-navy border border-slate-200 dark:border-white/10 shadow-2xl rounded-2xl overflow-hidden">
+        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
           <DialogTitle className="flex items-center gap-4 sm:gap-5 text-slate-800 dark:text-white text-xl font-black relative z-10">
             <div
@@ -213,38 +218,34 @@ export function AddOperadorModal({
                 className={cn(
                   "h-7 w-7 sm:h-8 sm:w-8",
                   isEditMode
-                    ? "text-amber-600 dark:text-amber-400 drop-shadow-[0_0_8px_rgba(245,158,11,0.4)]"
-                    : "text-blue-600 dark:text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.4)]",
+                    ? "text-amber-600 dark:text-amber-400"
+                    : "text-blue-600 dark:text-blue-400",
                 )}
               />
             </div>
             <div className="flex flex-col gap-1 text-left">
-              <span className="text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white heading-crisp leading-none">
-                {isEditMode ? "Editar Operador" : "Registrar Nuevo Operador"}
+              <span className="text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white leading-none">
+                {isEditMode ? "Editar Operador" : "Nuevo Operador"}
               </span>
-              <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-1 tracking-normal normal-case">
-                {isEditMode
-                  ? "Modifique la información operativa del conductor."
-                  : "Complete la información para alta en el sistema."}
+              <span className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400 mt-1">
+                Datos obligatorios para complemento carta porte
               </span>
             </div>
           </DialogTitle>
         </DialogHeader>
 
-        {/* 🚀 CAPA 3: CUERPO Y FORMULARIO */}
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit(onSubmit)}
             className="flex-1 min-h-0 overflow-hidden flex flex-col"
           >
-            {/* Fondo gris claro en modo Light para que los inputs blancos resalten */}
             <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-slate-50/50 dark:bg-transparent custom-scrollbar">
               <div className="space-y-8">
-                {/* Información Personal */}
+                {/* 🚀 SECCIÓN 1: IDENTIFICACIÓN FISCAL Y PERSONAL */}
                 <div className="space-y-6">
                   <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-2">
-                    <User className="h-3.5 w-3.5 text-blue-500" />
-                    Información Personal
+                    <Fingerprint className="h-3.5 w-3.5 text-blue-500" />
+                    Identificación y Contacto
                   </h3>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -259,8 +260,29 @@ export function AddOperadorModal({
                           <FormControl>
                             <Input
                               {...field}
-                              placeholder="Ej: Juan Pérez González"
-                              className="h-11 font-black uppercase bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                              placeholder="Ej: Juan Pérez"
+                              className="h-11 font-black uppercase bg-white dark:bg-slate-900 shadow-sm"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    {/* 🚀 NUEVO CAMPO RFC */}
+                    <FormField
+                      control={form.control}
+                      name="rfc"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel variant="brand" required>
+                            RFC (SAT)
+                          </FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              placeholder="XAXX010101000"
+                              className="h-11 font-mono uppercase font-bold bg-white dark:bg-slate-900 shadow-sm"
                             />
                           </FormControl>
                           <FormMessage />
@@ -274,36 +296,13 @@ export function AddOperadorModal({
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel variant="brand" required>
-                            Teléfono
+                            Teléfono Celular
                           </FormLabel>
                           <FormControl>
-                            <div className="relative">
-                              <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                              <Input
-                                {...field}
-                                placeholder="+52 55 1234 5678"
-                                className="pl-10 h-11 font-mono font-bold bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
-                              />
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="hire_date"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel variant="brand" required>
-                            Fecha de Contratación
-                          </FormLabel>
-                          <FormControl>
-                            <DatePicker
-                              date={field.value}
-                              onDateChange={field.onChange}
-                              modalTitle="Fecha de Contratación"
+                            <Input
+                              {...field}
+                              placeholder="10 dígitos"
+                              className="h-11 font-mono font-bold bg-white dark:bg-slate-900 shadow-sm"
                             />
                           </FormControl>
                           <FormMessage />
@@ -313,11 +312,11 @@ export function AddOperadorModal({
                   </div>
                 </div>
 
-                {/* Licencia */}
-                <div className="space-y-6 pt-2">
+                {/* SECCIÓN 2: LICENCIA Y VIGENCIAS */}
+                <div className="space-y-6">
                   <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-2">
                     <CreditCard className="h-3.5 w-3.5 text-blue-500" />
-                    Información de Licencia
+                    Licencia Federal y Médica
                   </h3>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -327,13 +326,13 @@ export function AddOperadorModal({
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel variant="brand" required>
-                            Número de Licencia
+                            Folio de Licencia
                           </FormLabel>
                           <FormControl>
                             <Input
                               {...field}
-                              placeholder="LIC-2024-12345"
-                              className="h-11 font-mono uppercase font-bold bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                              placeholder="LIC-000000"
+                              className="h-11 font-mono uppercase font-bold bg-white dark:bg-slate-900"
                             />
                           </FormControl>
                           <FormMessage />
@@ -347,7 +346,7 @@ export function AddOperadorModal({
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel variant="brand" required>
-                            Tipo de Licencia
+                            Tipo
                           </FormLabel>
                           <Select
                             onValueChange={field.onChange}
@@ -355,28 +354,15 @@ export function AddOperadorModal({
                             value={field.value}
                           >
                             <FormControl>
-                              <SelectTrigger className="h-11 font-bold bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm">
-                                <SelectValue placeholder="Seleccionar tipo" />
+                              <SelectTrigger className="h-11 font-bold bg-white dark:bg-slate-900">
+                                <SelectValue placeholder="Tipo" />
                               </SelectTrigger>
                             </FormControl>
-                            <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-slate-200 dark:border-white/10">
-                              <SelectItem value="A">
-                                Tipo A - Motocicleta
-                              </SelectItem>
-                              <SelectItem value="B">
-                                Tipo B - Automóvil
-                              </SelectItem>
-                              <SelectItem value="C">
-                                Tipo C - Carga ligera
-                              </SelectItem>
-                              <SelectItem value="D">
-                                Tipo D - Carga pesada
-                              </SelectItem>
-                              <SelectItem
-                                value="E"
-                                className="font-bold text-brand-navy dark:text-blue-400"
-                              >
-                                Tipo E - Tractocamión
+                            <SelectContent>
+                              <SelectItem value="A">Tipo A</SelectItem>
+                              <SelectItem value="B">Tipo B</SelectItem>
+                              <SelectItem value="E">
+                                Tipo E (Federal)
                               </SelectItem>
                             </SelectContent>
                           </Select>
@@ -391,13 +377,12 @@ export function AddOperadorModal({
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel variant="brand" required>
-                            Vigencia de Licencia
+                            Vigencia Licencia
                           </FormLabel>
                           <FormControl>
                             <DatePicker
                               date={field.value}
                               onDateChange={field.onChange}
-                              modalTitle="Vigencia Licencia"
                             />
                           </FormControl>
                           <FormMessage />
@@ -411,13 +396,12 @@ export function AddOperadorModal({
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel variant="brand" required>
-                            Vigencia Examen Médico
+                            Examen Médico
                           </FormLabel>
                           <FormControl>
                             <DatePicker
                               date={field.value}
                               onDateChange={field.onChange}
-                              modalTitle="Vigencia Examen"
                             />
                           </FormControl>
                           <FormMessage />
@@ -427,78 +411,43 @@ export function AddOperadorModal({
                   </div>
                 </div>
 
-                {/* Asignación de Unidad */}
-                <div className="space-y-6 pt-2">
+                {/* SECCIÓN 3: EMPRESA */}
+                <div className="space-y-6">
                   <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-2">
                     <Truck className="h-3.5 w-3.5 text-blue-500" />
-                    Asignación Operativa
-                  </h3>
-
-                  <FormField
-                    control={form.control}
-                    name="assigned_unit_id"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel variant="brand">
-                          Unidad Asignada (Opcional)
-                        </FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          defaultValue={field.value}
-                          value={field.value}
-                        >
-                          <FormControl>
-                            <SelectTrigger className="h-11 font-bold bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm">
-                              <SelectValue placeholder="Sin asignar" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-slate-200 dark:border-white/10">
-                            <SelectItem
-                              value="none"
-                              className="italic text-slate-500"
-                            >
-                              Sin asignar (En Patio)
-                            </SelectItem>
-                            {unidadesSelectables.map((unit) => (
-                              <SelectItem
-                                key={unit.id}
-                                value={unit.id.toString()}
-                                className="font-bold"
-                              >
-                                ECO-{unit.numero_economico} - {unit.marca}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                {/* Contacto de Emergencia */}
-                <div className="space-y-6 pt-2">
-                  <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-2">
-                    <Heart className="h-3.5 w-3.5 text-rose-500" />
-                    Contacto de Emergencia
+                    Asignación y Alta
                   </h3>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <FormField
                       control={form.control}
-                      name="emergency_contact"
+                      name="assigned_unit_id"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel variant="brand">
-                            Nombre del Contacto
-                          </FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              placeholder="Ej: María González"
-                              className="h-11 font-bold bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
-                            />
-                          </FormControl>
+                          <FormLabel variant="brand">Unidad Asignada</FormLabel>
+                          <Select
+                            onValueChange={field.onChange}
+                            value={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger className="h-11 font-bold bg-white dark:bg-slate-900">
+                                <SelectValue placeholder="Sin asignar" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="none">
+                                Sin unidad fija
+                              </SelectItem>
+                              {unidadesSelectables.map((unit) => (
+                                <SelectItem
+                                  key={unit.id}
+                                  value={unit.id.toString()}
+                                >
+                                  ECO-{unit.numero_economico}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -506,21 +455,17 @@ export function AddOperadorModal({
 
                     <FormField
                       control={form.control}
-                      name="emergency_phone"
+                      name="hire_date"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel variant="brand">
-                            Teléfono de Emergencia
+                          <FormLabel variant="brand" required>
+                            Fecha Ingreso
                           </FormLabel>
                           <FormControl>
-                            <div className="relative">
-                              <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                              <Input
-                                {...field}
-                                placeholder="+52 55 8765 4321"
-                                className="pl-10 h-11 font-mono font-bold bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
-                              />
-                            </div>
+                            <DatePicker
+                              date={field.value}
+                              onDateChange={field.onChange}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -531,7 +476,6 @@ export function AddOperadorModal({
               </div>
             </div>
 
-            {/* 🚀 CAPA 4: FOOTER TAHOE */}
             <DialogFooter className="p-6 sm:p-8 bg-slate-50/50 dark:bg-black/20 border-t border-slate-200 dark:border-white/10 shrink-0">
               <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
                 <Button
@@ -540,20 +484,17 @@ export function AddOperadorModal({
                   size="lg"
                   onClick={handleClose}
                   disabled={isSaving}
-                  className="w-full sm:w-auto haptic-press flex-shrink-0"
+                  className="w-full sm:w-auto"
                 >
                   Cancelar
                 </Button>
                 <Button
                   type="submit"
-                  variant="default"
                   size="lg"
                   disabled={isSaving}
                   className={cn(
-                    "w-full sm:w-auto haptic-press flex-shrink-0 border-none text-white",
-                    isEditMode
-                      ? "bg-brand-green hover:bg-brand-green/80 shadow-amber-500/20"
-                      : "bg-brand-red hover:bg-brand-red/90 shadow-brand-red/20",
+                    "w-full sm:w-auto text-white",
+                    isEditMode ? "bg-brand-green" : "bg-brand-red",
                   )}
                 >
                   {isSaving ? (

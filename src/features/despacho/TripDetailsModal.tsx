@@ -327,33 +327,40 @@ export function TripDetailsModal({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-6xl bg-white h-[90vh] flex flex-col p-0 overflow-hidden rounded-2xl shadow-2xl border-none">
-          <DialogHeader className="p-6 pb-4 bg-slate-100 border-b border-slate-300 shrink-0">
-            <div className="flex justify-between items-start">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-brand-navy flex items-center justify-center shadow-lg">
-                  <Navigation className="h-6 w-6 text-black" />
+        <DialogContent className="max-w-6xl w-[95vw] h-[90vh] bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 flex flex-col p-0 overflow-hidden rounded-2xl shadow-2xl">
+          {/* 🚀 CAPA 2: HEADER TAHOE (Alto contraste) */}
+          <DialogHeader className="p-6 pb-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
+            <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
+            <div className="relative z-10 flex flex-col md:flex-row justify-between md:items-start gap-6">
+              <div className="flex items-center gap-4 sm:gap-5">
+                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shadow-inner shrink-0 icon-plate border border-blue-200 dark:border-blue-500/20">
+                  <Navigation className="h-7 w-7 sm:h-8 sm:w-8 text-blue-600 dark:text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.4)]" />
                 </div>
                 <div>
-                  <DialogTitle className="text-2xl font-black text-brand-navy uppercase tracking-tighter">
-                    #{trip.public_id || trip.id} | {trip.route_name}
+                  <DialogTitle className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter heading-crisp leading-none">
+                    #{trip.public_id || trip.id}{" "}
+                    <span className="text-slate-300 dark:text-slate-600 mx-1">
+                      |
+                    </span>{" "}
+                    {trip.route_name}
                   </DialogTitle>
-                  <DialogDescription className="text-xs font-bold text-slate-500 uppercase">
+                  <DialogDescription className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-2">
                     Cliente:{" "}
-                    <span className="text-slate-900">
+                    <span className="text-brand-navy dark:text-blue-300 ml-1">
                       {trip.client?.razon_social}
                     </span>
                   </DialogDescription>
                 </div>
               </div>
-              <div className="flex gap-2 mt-10">
+
+              <div className="flex gap-3">
                 <Button
                   variant="outline"
                   className={cn(
-                    "h-10 text-xs font-black shadow-md transition-all uppercase tracking-tight",
+                    "h-12 px-6 text-[10px] font-black shadow-lg transition-all uppercase tracking-widest border-none haptic-press",
                     localUuid
-                      ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
-                      : "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100",
+                      ? "bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-500/20"
+                      : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-500/20",
                   )}
                   onClick={() => {
                     if (localUuid) {
@@ -373,11 +380,11 @@ export function TripDetailsModal({
                   disabled={isStamping}
                 >
                   {isStamping ? (
-                    <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   ) : localUuid ? (
-                    <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                    <CheckCircle2 className="h-4 w-4 mr-2" />
                   ) : (
-                    <Activity className="h-4 w-4 mr-1.5" />
+                    <Activity className="h-4 w-4 mr-2" />
                   )}
                   {localUuid
                     ? "DESCARGAR CARTA PORTE"
@@ -386,19 +393,29 @@ export function TripDetailsModal({
               </div>
             </div>
 
-            {/* 🚀 AQUÍ AÑADIMOS EL CONTENEDOR EN LA VISTA SUPERIOR */}
-            <div className="flex items-center flex-wrap gap-2 font-bold text-slate-600 uppercase text-sm tracking-widest mt-4 pt-4 border-t border-slate-200">
-              <span className="flex items-center gap-1">
-                <MapPin className="h-4 w-4 text-emerald-400" />
+            {/* 🚀 BREADCRUMB DE RUTA (Barra inferior del header) */}
+            <div className="relative z-10 flex items-center flex-wrap gap-3 font-black text-slate-500 dark:text-slate-400 uppercase text-[10px] tracking-widest mt-6 pt-4 border-t border-slate-200 dark:border-white/10">
+              <span className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded shadow-sm border border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-300">
+                <MapPin className="h-3.5 w-3.5 text-emerald-500" />
                 {trip.origin}
               </span>
-              <span className="text-slate-300">→</span>
-              <span>{trip.destination}</span>
-              <Badge className="ml-2 bg-white text-primary border border-slate-300 shadow-sm tracking-widest px-2 py-0.5">
+              <span className="text-slate-300 dark:text-slate-600">→</span>
+              <span className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded shadow-sm border border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-300">
+                {trip.destination}
+              </span>
+
+              <Badge
+                variant="outline"
+                className="ml-2 bg-white dark:bg-slate-950 text-brand-navy dark:text-white border-slate-300 dark:border-white/20 shadow-sm font-black tracking-widest text-[9px] px-2.5 py-1"
+              >
                 {isFullTrip ? "FULL / 9 EJES" : "SENCILLO / 5 EJES"}
               </Badge>
+
               {(trip as any).referencia && (
-                <Badge className="ml-2 bg-blue-50 text-blue-700 border border-blue-200 shadow-sm tracking-widest px-2 py-0.5 flex items-center gap-1">
+                <Badge
+                  variant="outline"
+                  className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800/50 shadow-sm font-black tracking-widest text-[9px] px-2.5 py-1 flex items-center gap-1.5"
+                >
                   <Container className="h-3 w-3" /> CONTENEDOR:{" "}
                   {(trip as any).referencia}
                 </Badge>
@@ -406,100 +423,133 @@ export function TripDetailsModal({
             </div>
           </DialogHeader>
 
-          <div className="flex flex-1 overflow-hidden flex-col lg:flex-row">
-            <div className="w-full lg:w-[30%] bg-slate-50 border-r border-slate-200 p-6 space-y-6 overflow-y-auto">
-              <div className="space-y-2">
-                <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-2">
-                  <RouteIcon className="h-3 w-3" /> Ruta de Servicio
+          {/* 🚀 CAPA 3: CUERPO DUAL */}
+          <div className="flex flex-1 overflow-hidden flex-col lg:flex-row bg-slate-50/50 dark:bg-transparent">
+            {/* PANEL IZQUIERDO (Info Fija) */}
+            <div className="w-full lg:w-[30%] bg-slate-50/80 dark:bg-slate-900/30 border-r border-slate-200 dark:border-white/10 p-6 space-y-6 overflow-y-auto custom-scrollbar">
+              <div className="space-y-3">
+                <h3 className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                  <RouteIcon className="h-3.5 w-3.5 text-blue-500" /> Ruta de
+                  Servicio
                 </h3>
-                <div className="bg-white border rounded-xl p-4 shadow-sm space-y-4 text-xs">
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl p-5 shadow-sm space-y-5 text-xs">
                   <div className="relative pl-6">
-                    <div className="absolute left-2.5 top-2 bottom-2 w-0.5 bg-slate-100" />
-                    <div className="mb-4">
-                      <div className="absolute -left-[27px] top-1 w-3 h-3 bg-blue-500 rounded-full ring-4 ring-white" />
-                      <p className="text-[9px] font-bold text-slate-600 uppercase tracking-wider">
-                        Origen
+                    <div className="absolute left-2.5 top-2 bottom-2 w-0.5 bg-slate-100 dark:bg-slate-800" />
+                    <div className="mb-5">
+                      <div className="absolute -left-[27px] top-1 w-3.5 h-3.5 bg-blue-500 rounded-full ring-4 ring-white dark:ring-slate-900" />
+                      <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">
+                        Punto de Origen
                       </p>
-                      <p className="font-black text-slate-800 uppercase">
+                      <p className="font-black text-sm text-slate-800 dark:text-slate-200 uppercase tracking-tight">
                         {trip.origin}
                       </p>
                     </div>
                     <div>
-                      <div className="absolute -left-[27px] top-1 w-3 h-3 bg-emerald-500 rounded-full ring-4 ring-white" />
-                      <p className="text-[9px] font-bold text-slate-600 uppercase tracking-wider">
+                      <div className="absolute -left-[27px] top-1 w-3.5 h-3.5 bg-emerald-500 rounded-full ring-4 ring-white dark:ring-slate-900" />
+                      <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">
                         Destino Final
                       </p>
-                      <p className="font-black text-slate-800 uppercase">
+                      <p className="font-black text-sm text-slate-800 dark:text-slate-200 uppercase tracking-tight">
                         {trip.destination}
                       </p>
                     </div>
                   </div>
                 </div>
               </div>
-              <Separator />
-              <div className="space-y-2">
-                <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-2">
-                  <Box className="h-3 w-3" /> Equipos Asignados
+
+              <Separator className="dark:bg-white/10" />
+
+              <div className="space-y-3">
+                <h3 className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                  <Box className="h-3.5 w-3.5 text-amber-500" /> Equipos
+                  Asignados
                 </h3>
-                <div className="grid grid-cols-1 gap-2">
-                  <div className="p-3 bg-white rounded-lg border flex justify-between items-center text-xs">
-                    <span className="font-bold text-slate-500 uppercase tracking-tighter">
-                      Tractor:
+                <div className="grid grid-cols-1 gap-3">
+                  <div className="p-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-white/10 shadow-sm flex flex-col justify-center">
+                    <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">
+                      Tractocamión Activo
                     </span>
-                    <span className="font-black text-brand-navy">
-                      ECO-{activeLeg?.unit?.numero_economico || "S/A"}
+                    <span className="font-black text-lg text-brand-navy dark:text-blue-400 uppercase tracking-tighter flex items-center gap-2">
+                      <Truck className="h-4 w-4 text-slate-400" /> ECO-
+                      {activeLeg?.unit?.numero_economico || "S/A"}
                     </span>
                   </div>
-                  {trip.remolque_1 && (
-                    <div className="p-3 bg-white rounded-lg border flex justify-between items-center text-xs">
-                      <span className="font-bold text-slate-500 uppercase tracking-tighter">
-                        Remolque 1:
-                      </span>
-                      <span className="font-black text-brand-navy uppercase">
-                        ECO-{trip.remolque_1.numero_economico}
-                      </span>
-                    </div>
-                  )}
-                  {trip.remolque_2 && (
-                    <div className="p-3 bg-white rounded-lg border flex justify-between items-center text-xs">
-                      <span className="font-bold text-slate-500 uppercase tracking-tighter">
-                        Remolque 2:
-                      </span>
-                      <span className="font-black text-brand-navy uppercase">
-                        ECO-{trip.remolque_2.numero_economico}
-                      </span>
+
+                  {(trip.remolque_1 || trip.remolque_2) && (
+                    <div className="p-4 bg-slate-100/50 dark:bg-slate-800/30 rounded-xl border border-slate-200 dark:border-white/5 space-y-3">
+                      {trip.remolque_1 && (
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="font-black text-slate-500 uppercase tracking-widest">
+                            Remolque 1
+                          </span>
+                          <Badge
+                            variant="outline"
+                            className="font-mono font-bold bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-200"
+                          >
+                            ECO-{trip.remolque_1.numero_economico}
+                          </Badge>
+                        </div>
+                      )}
+                      {trip.remolque_2 && (
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="font-black text-slate-500 uppercase tracking-widest">
+                            Remolque 2
+                          </span>
+                          <Badge
+                            variant="outline"
+                            className="font-mono font-bold bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-200"
+                          >
+                            ECO-{trip.remolque_2.numero_economico}
+                          </Badge>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
               </div>
             </div>
 
-            <div className="w-full lg:w-[70%] flex flex-col bg-white">
+            {/* PANEL DERECHO (Tabs: Fases, Finanzas, Bitácora) */}
+            <div className="w-full lg:w-[70%] flex flex-col bg-transparent">
               <Tabs
                 value={activeTab}
                 onValueChange={setActiveTab}
                 className="flex flex-col h-full"
               >
-                <div className="px-6 pt-4 border-b">
-                  <TabsList className="grid grid-cols-3 bg-slate-100 h-11 p-1 rounded-xl">
-                    <TabsTrigger value="fases" className="text-xs font-bold">
+                <div className="px-6 pt-5 border-b border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-950/50 backdrop-blur-md">
+                  <TabsList className="grid grid-cols-3 bg-slate-200/50 dark:bg-slate-800/80 h-12 p-1 rounded-xl shadow-sm border border-slate-300/50 dark:border-white/5">
+                    <TabsTrigger
+                      value="fases"
+                      className="text-[10px] font-black uppercase tracking-widest rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-brand-navy dark:data-[state=active]:text-white data-[state=active]:shadow-sm h-full px-2 transition-all"
+                    >
                       Fases Operativas
                     </TabsTrigger>
-                    <TabsTrigger value="finanzas" className="text-xs font-bold">
-                      Datos de Facturación
+                    <TabsTrigger
+                      value="finanzas"
+                      className="text-[10px] font-black uppercase tracking-widest rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-brand-navy dark:data-[state=active]:text-white data-[state=active]:shadow-sm h-full px-2 transition-all"
+                    >
+                      Finanzas
                     </TabsTrigger>
-                    <TabsTrigger value="bitacora" className="text-xs font-bold">
-                      Diario Bitácora
+                    <TabsTrigger
+                      value="bitacora"
+                      className="text-[10px] font-black uppercase tracking-widest rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-brand-navy dark:data-[state=active]:text-white data-[state=active]:shadow-sm h-full px-2 transition-all"
+                    >
+                      Bitácora Eventos
                     </TabsTrigger>
                   </TabsList>
                 </div>
 
-                <ScrollArea className="flex-1">
-                  <div className="p-6">
-                    <TabsContent value="fases" className="m-0 space-y-4">
-                      <div className="flex justify-between items-center mb-4">
-                        <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">
-                          Secuencia Operativa
+                <ScrollArea className="flex-1 custom-scrollbar">
+                  <div className="p-6 md:p-8">
+                    {/* TAB: FASES OPERATIVAS */}
+                    <TabsContent
+                      value="fases"
+                      className="m-0 space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500"
+                    >
+                      <div className="flex justify-between items-center mb-6">
+                        <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                          <Activity className="h-4 w-4 text-blue-500" />{" "}
+                          Histórico de Relevos
                         </p>
                         {trip.legs && trip.legs.length > 0 && (
                           <Button
@@ -507,140 +557,158 @@ export function TripDetailsModal({
                             size="sm"
                             onClick={handleUndoLeg}
                             disabled={isUndoing}
-                            className="h-8 text-[10px] font-black text-rose-600 border-rose-200 hover:bg-rose-50 uppercase tracking-widest shadow-sm"
+                            className="h-9 text-[9px] font-black text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/20 hover:bg-rose-100 dark:hover:bg-rose-900/40 uppercase tracking-widest shadow-sm haptic-press"
                           >
                             {isUndoing ? (
-                              <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                              <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
                             ) : (
-                              <Undo className="h-3 w-3 mr-2" />
+                              <Undo className="h-3.5 w-3.5 mr-2" />
                             )}
                             Deshacer Último Movimiento
                           </Button>
                         )}
                       </div>
 
-                      {trip.legs?.map((leg, idx) => (
-                        <Card
-                          key={leg.id}
-                          className={cn(
-                            "border-l-4 shadow-sm overflow-hidden",
-                            leg.id === activeLeg?.id
-                              ? "border-l-emerald-500"
-                              : "border-l-slate-300 opacity-80",
-                          )}
-                        >
-                          <CardContent className="p-4 flex justify-between items-center bg-white">
-                            <div className="space-y-1">
-                              <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">
-                                Fase {idx + 1}{" "}
-                                {leg.id === activeLeg?.id && "(ACTUAL)"}
-                              </p>
-                              <h4 className="font-black text-brand-navy uppercase text-sm leading-tight">
-                                {leg.leg_type.replace("_", " ")}
-                              </h4>
-                              <div className="flex items-center gap-3 text-xs font-medium text-slate-600 pt-1">
-                                <span className="flex items-center gap-1">
-                                  <User className="h-3 w-3 text-slate-600" />{" "}
-                                  {leg.operator?.name || "S/A"}
-                                </span>
-                                <span className="flex items-center gap-1">
-                                  <Truck className="h-3 w-3 text-slate-600" />{" "}
-                                  ECO-{leg.unit?.numero_economico || "N/A"}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Badge
-                                className={cn(
-                                  "uppercase font-bold text-[10px] border-0 px-3 py-1 shadow-sm",
-                                  leg.status === "entregado"
-                                    ? "bg-emerald-100 text-emerald-700"
-                                    : leg.status === "cerrado"
-                                      ? "bg-blue-100 text-blue-700"
-                                      : "bg-amber-100 text-amber-700",
-                                )}
-                              >
-                                {leg.status.replace("_", " ")}
-                              </Badge>
-
-                              {["creado", "en_transito"].includes(leg.status) &&
-                                onRelayClick && (
-                                  <Button
-                                    size="sm"
-                                    className="h-8 bg-brand-navy font-bold text-[10px] uppercase shadow-lg shadow-brand-navy/20"
-                                    onClick={() => onRelayClick(leg, trip)}
-                                  >
-                                    <Link2Off className="h-3 w-3 mr-1.5" />
-                                    Desenganchar (Relevo)
-                                  </Button>
-                                )}
-                              {leg.status === "entregado" && onSettleClick && (
-                                <Button
-                                  size="sm"
-                                  className="h-8 bg-emerald-600 font-bold text-[11px]"
-                                  onClick={() => onSettleClick(leg, trip)}
-                                >
-                                  LIQUIDAR OP.
-                                </Button>
-                              )}
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                      {trip.status === "en_transito" &&
-                        activeLeg?.leg_type === "ruta_carretera" && (
-                          <Button
-                            variant="outline"
-                            className="w-full border-dashed border-2 h-12 text-slate-500 font-bold hover:bg-slate-50 mt-4"
-                            onClick={() => setShowTerminalModal(true)}
+                      <div className="space-y-4">
+                        {trip.legs?.map((leg, idx) => (
+                          <Card
+                            key={leg.id}
+                            className={cn(
+                              "border-l-4 shadow-sm overflow-hidden bg-white dark:bg-slate-900 border-t border-r border-b border-slate-200 dark:border-white/10",
+                              leg.id === activeLeg?.id
+                                ? "border-l-emerald-500 ring-1 ring-emerald-500/20"
+                                : "border-l-slate-300 dark:border-l-slate-700 opacity-80",
+                            )}
                           >
-                            <MapPin className="h-4 w-4 mr-2" /> REGISTRAR
-                            LLEGADA A TERMINAL (CIERRE OPERATIVO)
-                          </Button>
-                        )}
+                            <CardContent className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                              <div className="space-y-1.5 flex-1">
+                                <p className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                  Fase Operativa {idx + 1}{" "}
+                                  {leg.id === activeLeg?.id && (
+                                    <Badge className="h-4 px-1.5 text-[8px] bg-emerald-500 font-black">
+                                      ACTUAL
+                                    </Badge>
+                                  )}
+                                </p>
+                                <h4 className="font-black text-brand-navy dark:text-white uppercase text-lg tracking-tighter leading-tight">
+                                  {leg.leg_type.replace("_", " ")}
+                                </h4>
+                                <div className="flex items-center gap-4 text-xs font-bold text-slate-600 dark:text-slate-400 pt-2">
+                                  <span className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded border border-slate-200 dark:border-white/5">
+                                    <User className="h-3.5 w-3.5" />{" "}
+                                    {leg.operator?.name || "S/A"}
+                                  </span>
+                                  <span className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded border border-slate-200 dark:border-white/5">
+                                    <Truck className="h-3.5 w-3.5" /> ECO-
+                                    {leg.unit?.numero_economico || "N/A"}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="flex flex-col sm:items-end gap-3 shrink-0">
+                                <Badge
+                                  className={cn(
+                                    "uppercase font-black tracking-widest text-[9px] border-0 px-3 py-1 shadow-sm",
+                                    leg.status === "entregado"
+                                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                                      : leg.status === "cerrado"
+                                        ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                                        : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+                                  )}
+                                >
+                                  {leg.status.replace("_", " ")}
+                                </Badge>
+
+                                <div className="flex gap-2">
+                                  {["creado", "en_transito"].includes(
+                                    leg.status,
+                                  ) &&
+                                    onRelayClick && (
+                                      <Button
+                                        size="sm"
+                                        className="h-8 bg-brand-navy hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-700 font-black text-[9px] uppercase tracking-widest shadow-lg shadow-brand-navy/20 haptic-press text-white"
+                                        onClick={() => onRelayClick(leg, trip)}
+                                      >
+                                        <Link2Off className="h-3.5 w-3.5 mr-1.5" />
+                                        Relevo (Desenganchar)
+                                      </Button>
+                                    )}
+                                  {leg.status === "entregado" &&
+                                    onSettleClick && (
+                                      <Button
+                                        size="sm"
+                                        className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[9px] uppercase tracking-widest shadow-lg shadow-emerald-500/20 haptic-press"
+                                        onClick={() => onSettleClick(leg, trip)}
+                                      >
+                                        <Wallet className="h-3.5 w-3.5 mr-1.5" />
+                                        LIQUIDAR OP.
+                                      </Button>
+                                    )}
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+
+                        {trip.status === "en_transito" &&
+                          activeLeg?.leg_type === "ruta_carretera" && (
+                            <Button
+                              variant="outline"
+                              className="w-full border-dashed border-2 h-14 bg-white dark:bg-slate-900/50 border-slate-300 dark:border-white/10 text-slate-600 dark:text-slate-400 font-black uppercase tracking-widest text-[10px] hover:bg-slate-50 dark:hover:bg-slate-800/80 mt-6 shadow-sm haptic-press"
+                              onClick={() => setShowTerminalModal(true)}
+                            >
+                              <MapPin className="h-4 w-4 mr-2 text-emerald-500" />{" "}
+                              REGISTRAR LLEGADA A TERMINAL (CIERRE DE RUTA)
+                            </Button>
+                          )}
+                      </div>
                     </TabsContent>
 
-                    <TabsContent value="finanzas" className="m-0 space-y-6">
+                    {/* TAB: FINANZAS */}
+                    <TabsContent
+                      value="finanzas"
+                      className="m-0 space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500"
+                    >
                       <Card
                         className={cn(
-                          "shadow-sm border-2",
+                          "shadow-xl border-2 transition-colors",
                           isEditing
-                            ? "border-amber-200 bg-amber-50/5"
-                            : "border-emerald-100 bg-emerald-50/5",
+                            ? "border-amber-200 dark:border-amber-900/50 bg-amber-50/20 dark:bg-amber-950/10"
+                            : "border-emerald-100 dark:border-emerald-900/50 bg-white dark:bg-slate-900",
                         )}
                       >
-                        <CardHeader className="p-5 border-b flex justify-between items-center bg-white rounded-t-xl shadow-sm">
-                          <CardTitle className="text-sm font-black uppercase text-emerald-800 flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-primary" />{" "}
-                            Pre-Factura Comercial (Cobro al Cliente)
+                        <CardHeader className="p-6 border-b border-slate-100 dark:border-white/5 flex flex-col sm:flex-row justify-between sm:items-center gap-4 bg-slate-50/50 dark:bg-slate-950/50 rounded-t-xl">
+                          <CardTitle className="text-xs font-black uppercase tracking-widest text-emerald-800 dark:text-emerald-400 flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-emerald-500" />{" "}
+                            Pre-Factura Comercial (Ingresos)
                           </CardTitle>
                           {!isEditing ? (
-                            <div className="flex gap-2">
+                            <div className="flex gap-3">
                               <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={handleManualSync}
                                 disabled={isSyncing}
-                                className="h-8 font-bold"
+                                className="h-9 font-black uppercase tracking-widest text-[9px] shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10"
                               >
-                                <History className="h-3 w-3 mr-1" /> Sincronizar
+                                <History className="h-3.5 w-3.5 mr-1.5" /> Sync
                               </Button>
                               <Button
-                                variant="outline"
+                                variant="default"
                                 size="sm"
                                 onClick={() => setIsEditing(true)}
-                                className="h-8 font-bold"
+                                className="h-9 font-black uppercase tracking-widest text-[9px] shadow-md bg-brand-navy hover:bg-slate-800 text-white"
                               >
-                                <Edit2 className="h-3 w-3 mr-1" /> Editar Montos
+                                <Edit2 className="h-3.5 w-3.5 mr-1.5" /> Editar
                               </Button>
                             </div>
                           ) : (
-                            <div className="flex gap-2">
+                            <div className="flex gap-3">
                               <Button
-                                variant="ghost"
+                                variant="outline"
                                 size="sm"
                                 onClick={() => setIsEditing(false)}
-                                className="h-8 font-bold text-slate-500"
+                                className="h-9 font-black uppercase tracking-widest text-[9px]"
                               >
                                 Cancelar
                               </Button>
@@ -648,127 +716,145 @@ export function TripDetailsModal({
                                 size="sm"
                                 onClick={handleSaveFinanzas}
                                 disabled={saving}
-                                className="h-8 bg-brand-navy font-bold text-white shadow-md"
+                                className="h-9 bg-brand-green hover:bg-emerald-600 text-white font-black uppercase tracking-widest text-[9px] shadow-md"
                               >
-                                <Save className="h-3 w-3 mr-1" /> Guardar
+                                {saving ? (
+                                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                                ) : (
+                                  <Save className="h-3.5 w-3.5 mr-1.5" />
+                                )}
+                                Guardar
                               </Button>
                             </div>
                           )}
                         </CardHeader>
-                        <CardContent className="p-6 space-y-6">
+
+                        <CardContent className="p-6 md:p-8">
                           {isEditing ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-xl mx-auto bg-amber-50 p-6 rounded-xl border border-amber-200 shadow-inner">
-                              <div className="space-y-2">
-                                <Label className="text-xs font-black uppercase text-amber-800">
-                                  Flete Base / Adicionales
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-2xl mx-auto bg-amber-50 dark:bg-amber-950/20 p-6 sm:p-8 rounded-2xl border border-amber-200 dark:border-amber-900/50 shadow-inner">
+                              <div className="space-y-3">
+                                <Label className="text-[10px] font-black uppercase tracking-widest text-amber-800 dark:text-amber-500">
+                                  Flete Base Acordado
                                 </Label>
-                                <Input
-                                  type="number"
-                                  value={tarifaBase}
-                                  onChange={(e) =>
-                                    setTarifaBase(Number(e.target.value))
-                                  }
-                                  className="font-mono text-lg h-12 bg-white"
-                                />
-                                <p className="text-[10px] text-amber-700 font-medium leading-tight">
-                                  Ingreso principal. Suma demoras, custodias o
-                                  maniobras adicionales pactadas a facturar.
+                                <div className="relative">
+                                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-amber-600/50">
+                                    $
+                                  </span>
+                                  <Input
+                                    type="number"
+                                    value={tarifaBase}
+                                    onChange={(e) =>
+                                      setTarifaBase(Number(e.target.value))
+                                    }
+                                    className="font-mono text-lg font-bold h-12 pl-8 bg-white dark:bg-slate-900 border-amber-200 dark:border-amber-900/50 shadow-sm"
+                                  />
+                                </div>
+                                <p className="text-[10px] text-amber-700/80 dark:text-amber-400/80 font-medium leading-relaxed">
+                                  Ingreso principal pactado con el cliente.
+                                  Incluye maniobras extra si aplican.
                                 </p>
                               </div>
-                              <div className="space-y-2">
-                                <Label className="text-xs font-black uppercase text-amber-800">
-                                  Recuperación Casetas
+                              <div className="space-y-3">
+                                <Label className="text-[10px] font-black uppercase tracking-widest text-amber-800 dark:text-amber-500">
+                                  Reembolso Casetas
                                 </Label>
-                                <Input
-                                  type="number"
-                                  value={costoCasetas}
-                                  onChange={(e) =>
-                                    setCostoCasetas(Number(e.target.value))
-                                  }
-                                  className="font-mono text-lg h-12 bg-white"
-                                />
+                                <div className="relative">
+                                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-amber-600/50">
+                                    $
+                                  </span>
+                                  <Input
+                                    type="number"
+                                    value={costoCasetas}
+                                    onChange={(e) =>
+                                      setCostoCasetas(Number(e.target.value))
+                                    }
+                                    className="font-mono text-lg font-bold h-12 pl-8 bg-white dark:bg-slate-900 border-amber-200 dark:border-amber-900/50 shadow-sm"
+                                  />
+                                </div>
                               </div>
                             </div>
                           ) : (
-                            <div className="space-y-4 max-w-xl mx-auto">
-                              <div className="bg-white p-6 rounded-xl border shadow-sm space-y-3">
-                                <div className="flex justify-between items-center text-sm font-bold text-slate-600">
-                                  <span>
-                                    Flete Base Acordado (y Adicionales):
-                                  </span>
-                                  <span className="font-mono text-slate-900">
+                            <div className="space-y-5 max-w-xl mx-auto">
+                              <div className="bg-slate-50 dark:bg-slate-900/50 p-6 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm space-y-4">
+                                <div className="flex justify-between items-center text-sm font-black text-slate-600 dark:text-slate-400 uppercase tracking-tight">
+                                  <span>Flete Base Acordado:</span>
+                                  <span className="font-mono text-brand-navy dark:text-white text-base">
                                     {formatCurrency(finanzasComercial.base)}
                                   </span>
                                 </div>
-                                <div className="flex justify-between items-center text-sm font-bold text-slate-600">
-                                  <span>Recuperación de Casetas:</span>
-                                  <span className="font-mono text-slate-900">
+                                <div className="flex justify-between items-center text-sm font-black text-slate-600 dark:text-slate-400 uppercase tracking-tight">
+                                  <span>Reembolso Casetas:</span>
+                                  <span className="font-mono text-brand-navy dark:text-white text-base">
                                     {formatCurrency(finanzasComercial.casetas)}
                                   </span>
                                 </div>
-                                <Separator className="my-2" />
-                                <div className="flex justify-between items-center text-xs font-bold text-slate-500">
+                                <Separator className="my-4 dark:bg-white/10" />
+                                <div className="flex justify-between items-center text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
                                   <span>Subtotal:</span>
-                                  <span className="font-mono text-slate-700">
+                                  <span className="font-mono">
                                     {formatCurrency(finanzasComercial.subtotal)}
                                   </span>
                                 </div>
-                                <div className="flex justify-between items-center text-xs font-bold text-slate-500">
+                                <div className="flex justify-between items-center text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
                                   <span>IVA (16%):</span>
-                                  <span className="font-mono text-slate-700">
+                                  <span className="font-mono">
                                     {formatCurrency(finanzasComercial.iva)}
                                   </span>
                                 </div>
-                                <div className="flex justify-between items-center text-xs font-bold text-slate-500">
+                                <div className="flex justify-between items-center text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
                                   <span>Retención (4%):</span>
-                                  <span className="font-mono text-rose-600">
-                                    -
+                                  <span className="font-mono text-rose-600 dark:text-rose-400">
+                                    -{" "}
                                     {formatCurrency(
                                       finanzasComercial.retencion,
                                     )}
                                   </span>
                                 </div>
-                                <div className="bg-emerald-500 text-white p-4 rounded-xl flex justify-between items-center shadow-lg mt-4">
-                                  <span className="font-black text-sm uppercase tracking-widest">
+
+                                <div className="bg-emerald-600 dark:bg-emerald-500 text-white p-5 rounded-xl flex justify-between items-center shadow-lg mt-6 relative overflow-hidden">
+                                  <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
+                                    <Wallet className="h-20 w-20" />
+                                  </div>
+                                  <span className="font-black text-sm uppercase tracking-widest relative z-10">
                                     Total a Facturar:
                                   </span>
-                                  <span className="text-2xl font-black font-mono tracking-tighter">
+                                  <span className="text-3xl font-black font-mono tracking-tighter relative z-10 drop-shadow-md">
                                     {formatCurrency(finanzasComercial.total)}
                                   </span>
                                 </div>
                               </div>
 
-                              <div className="bg-slate-900 p-6 rounded-2xl border-t-4 border-emerald-500 flex flex-col sm:flex-row items-center justify-between gap-6 mt-10 shadow-2xl">
+                              {/* 🚀 CALL TO ACTION FACTURACIÓN */}
+                              <div className="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-2xl border border-slate-200 dark:border-white/10 flex flex-col sm:flex-row items-center justify-between gap-6 mt-8 shadow-sm">
                                 <div className="text-left">
-                                  <h4 className="text-emerald-400 font-black text-sm uppercase tracking-tighter flex items-center gap-2">
-                                    <CheckCircle2 className="h-4 w-4 text-primary" />{" "}
-                                    Emisión Factura 4.0
+                                  <h4 className="text-brand-navy dark:text-blue-400 font-black text-sm uppercase tracking-tight flex items-center gap-2">
+                                    <FileText className="h-5 w-5" />
+                                    Emisión Factura Ingreso (CFDI 4.0)
                                   </h4>
-                                  <p className="text-[10px] text-slate-600 max-w-xs leading-relaxed mt-1 italic">
+                                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 max-w-sm leading-relaxed mt-2">
                                     Genera la factura real del servicio
                                     aplicando Sustitución (04) de la Carta Porte
                                     Bypass.
                                   </p>
                                 </div>
                                 <Button
-                                  variant="ghost"
+                                  variant="default"
                                   className={cn(
-                                    "font-black px-8 h-12 shadow-xl disabled:opacity-30 uppercase tracking-widest text-[10px] text-white transition-colors",
+                                    "font-black px-8 h-12 shadow-xl disabled:opacity-50 uppercase tracking-widest text-[10px] text-white transition-all w-full sm:w-auto haptic-press border-none",
                                     finalUuid
-                                      ? "bg-blue-600 hover:bg-blue-700 hover:text-white"
-                                      : "bg-emerald-500 hover:bg-emerald-600",
+                                      ? "bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600"
+                                      : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20",
                                   )}
                                   disabled={
                                     isStamping ||
                                     (!localUuid &&
                                       !finalUuid &&
-                                      !trip.uuid_fiscal) // 👈 FIX 1: Evita que el botón se bloquee por error
+                                      !trip.uuid_fiscal)
                                   }
                                   onClick={() => {
                                     if (finalUuid) {
                                       handleDownloadStampedPDF(finalUuid);
                                     } else {
-                                      // 🚀 FIX 2: Busca el UUID en localUuid, o si no, directo del trip
                                       const uuidToRelate =
                                         localUuid || trip.uuid_fiscal;
 
@@ -781,7 +867,7 @@ export function TripDetailsModal({
 
                                       handleStampFinal(
                                         trip.id,
-                                        uuidToRelate, // 👈 Se envía el valor seguro
+                                        uuidToRelate,
                                         (responseData: any) => {
                                           const generatedFinalUuid =
                                             responseData?.data?.uuid ||
@@ -802,14 +888,14 @@ export function TripDetailsModal({
                                   }}
                                 >
                                   {isStamping ? (
-                                    <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
                                   ) : finalUuid ? (
-                                    <FileText className="h-5 w-5 mr-2" />
+                                    <FileText className="h-4 w-4 mr-2" />
                                   ) : (
-                                    <Activity className="h-5 w-5 mr-2" />
+                                    <Activity className="h-4 w-4 mr-2" />
                                   )}
                                   {finalUuid
-                                    ? "Descargar Factura Final"
+                                    ? "Descargar CFDI Final"
                                     : "Timbrar Factura Final"}
                                 </Button>
                               </div>
@@ -819,55 +905,68 @@ export function TripDetailsModal({
                       </Card>
                     </TabsContent>
 
-                    <TabsContent value="bitacora" className="m-0 space-y-4">
-                      <div className="flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-slate-200 mb-4 shadow-inner">
-                        <h4 className="text-xs font-black uppercase text-slate-600 tracking-widest">
-                          Línea de Tiempo del Servicio
+                    {/* TAB: BITÁCORA */}
+                    <TabsContent
+                      value="bitacora"
+                      className="m-0 space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500"
+                    >
+                      <div className="flex justify-between items-center bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-white/10 shadow-sm">
+                        <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                          <History className="h-4 w-4 text-blue-500" /> Línea de
+                          Tiempo del Servicio
                         </h4>
                         <Button
                           size="sm"
                           variant="outline"
-                          className="h-8 border-brand-navy text-brand-navy font-bold hover:bg-brand-navy hover:text-white"
+                          className="h-9 border-brand-navy dark:border-blue-500/50 text-brand-navy dark:text-blue-400 font-black uppercase tracking-widest text-[9px] hover:bg-blue-50 dark:hover:bg-blue-900/20 shadow-sm haptic-press"
                           onClick={() => onUpdateStatusClick?.(trip, activeLeg)}
                         >
-                          <Edit2 className="h-3 w-3 mr-2" /> Insertar Novedad
+                          <Edit2 className="h-3.5 w-3.5 mr-2" /> Insertar
+                          Novedad
                         </Button>
                       </div>
+
                       {allEvents.length === 0 ? (
-                        <div className="text-center py-12 text-slate-600 bg-slate-50 rounded-2xl border border-dashed border-slate-300 italic font-medium tracking-tight">
-                          El viaje aún no cuenta con movimientos reportados
+                        <div className="text-center py-16 px-6 text-slate-500 bg-white/50 dark:bg-slate-900/30 rounded-2xl border-2 border-dashed border-slate-200 dark:border-white/10">
+                          <Clock className="h-12 w-12 mx-auto mb-4 opacity-20" />
+                          <p className="font-black uppercase tracking-widest text-xs">
+                            El viaje aún no cuenta con movimientos reportados.
+                          </p>
                         </div>
                       ) : (
                         <div className="space-y-4">
                           {allEvents.map((ev, idx) => (
                             <div
                               key={idx}
-                              className="flex gap-4 border-b border-slate-100 pb-4 last:border-0 items-start group hover:bg-slate-50 p-2 rounded-lg transition-colors"
+                              className="flex gap-4 items-start group bg-white dark:bg-slate-900/80 p-5 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm hover:shadow-md transition-all relative overflow-hidden"
                             >
-                              <div className="p-2 bg-slate-100 rounded-full group-hover:bg-brand-navy transition-colors">
-                                <Clock className="h-4 w-4 text-slate-600 group-hover:text-white" />
+                              <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-blue-500/20 group-hover:bg-blue-500 transition-colors" />
+                              <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl group-hover:bg-blue-50 dark:group-hover:bg-blue-900/30 transition-colors shrink-0 border border-slate-100 dark:border-white/5 shadow-inner">
+                                <Clock className="h-5 w-5 text-slate-400 dark:text-slate-500 group-hover:text-blue-500 dark:group-hover:text-blue-400" />
                               </div>
-                              <div className="flex-1">
-                                <div className="flex justify-between items-center">
-                                  <p className="text-[10px] font-black text-brand-navy uppercase tracking-tighter bg-slate-100 px-2 py-0.5 rounded">
-                                    {format(
-                                      new Date(ev.time),
-                                      "dd MMM, HH:mm",
-                                      { locale: es },
-                                    )}
-                                  </p>
-                                  <Badge
-                                    variant="outline"
-                                    className="text-[9px] uppercase font-black bg-white border-slate-300"
-                                  >
-                                    {ev.legName}
-                                  </Badge>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 mb-2">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <p className="text-[10px] font-mono font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded shadow-sm border border-slate-200 dark:border-slate-700">
+                                      {format(
+                                        new Date(ev.time),
+                                        "dd MMM, HH:mm",
+                                        { locale: es },
+                                      ).toUpperCase()}
+                                    </p>
+                                    <Badge
+                                      variant="outline"
+                                      className="text-[8px] uppercase font-black tracking-widest bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 shadow-sm"
+                                    >
+                                      {ev.legName}
+                                    </Badge>
+                                  </div>
                                 </div>
-                                <p className="text-sm font-black text-slate-800 mt-1 uppercase tracking-tight leading-tight">
+                                <p className="text-sm font-black text-brand-navy dark:text-slate-200 uppercase tracking-tight leading-tight">
                                   {ev.event}
                                 </p>
                                 {ev.comments && (
-                                  <div className="text-[11px] text-slate-600 bg-white p-2.5 rounded border border-slate-200 mt-2 italic border-l-4 border-l-brand-navy leading-relaxed shadow-sm">
+                                  <div className="text-xs text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-950/50 p-3 rounded-lg border border-slate-100 dark:border-white/5 mt-3 italic border-l-4 border-l-brand-navy dark:border-l-blue-500 shadow-sm leading-relaxed">
                                     "{ev.comments}"
                                   </div>
                                 )}
@@ -885,20 +984,30 @@ export function TripDetailsModal({
         </DialogContent>
       </Dialog>
 
+      {/* 🚀 MODAL DE LLEGADA A TERMINAL (4 CAPAS) */}
       <Dialog open={showTerminalModal} onOpenChange={setShowTerminalModal}>
-        <DialogContent className="sm:max-w-md rounded-2xl overflow-visible shadow-2xl border-none">
-          <DialogHeader className="bg-slate-100 p-6 rounded-t-2xl border-b border-slate-300">
-            <DialogTitle className="flex items-center gap-2 text-brand-navy font-black uppercase tracking-tighter">
-              <MapPin className="h-5 w-5 text-emerald-600" /> Cierre Operativo
-              de Ruta
-            </DialogTitle>
-            <DialogDescription className="text-slate-600 font-bold text-xs uppercase tracking-widest mt-1">
-              Registro de entrega de equipo en puerto / patio
-            </DialogDescription>
+        <DialogContent className="sm:max-w-md w-[95vw] rounded-2xl overflow-visible p-0 border-none shadow-2xl bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl flex flex-col max-h-[90vh]">
+          <DialogHeader className="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-t-2xl border-b border-slate-200 dark:border-white/10 relative overflow-hidden z-10 shrink-0">
+            <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
+            <div className="relative z-10 flex items-center gap-4">
+              <div className="w-14 h-14 rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center shadow-inner shrink-0 icon-plate border border-emerald-200 dark:border-emerald-500/20">
+                <MapPin className="h-7 w-7 text-emerald-600 dark:text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.4)]" />
+              </div>
+              <div className="flex flex-col gap-1 text-left min-w-0">
+                <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-emerald-700 dark:text-emerald-400 heading-crisp leading-none">
+                  Cierre Operativo
+                </DialogTitle>
+                <DialogDescription className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-1">
+                  Registro de entrega de equipo en destino
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
-          <div className="p-6 space-y-4 bg-white">
-            <div className="space-y-2">
-              <Label className="font-black text-slate-700 text-[10px] uppercase tracking-widest">
+
+          <div className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-6 bg-slate-50/50 dark:bg-transparent custom-scrollbar">
+            <div className="space-y-3">
+              <Label className="font-black text-slate-500 dark:text-slate-400 text-[10px] uppercase tracking-widest flex items-center gap-1.5">
+                <Navigation className="h-3.5 w-3.5 text-brand-navy dark:text-blue-400" />
                 Seleccionar Patio de Arribo *
               </Label>
               <Popover
@@ -910,30 +1019,40 @@ export function TripDetailsModal({
                     variant="outline"
                     role="combobox"
                     aria-expanded={terminalComboboxOpen}
-                    className="w-full justify-between h-12 text-left font-black bg-slate-50 border-slate-200 uppercase text-xs tracking-tight"
+                    className={cn(
+                      "w-full justify-between h-12 text-left font-black uppercase text-xs tracking-tight shadow-sm border-2 transition-all",
+                      selectedTerminal
+                        ? "bg-emerald-50/50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800/50 text-emerald-800 dark:text-emerald-400"
+                        : "bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800",
+                    )}
                   >
-                    {selectedTerminal || "Buscar o escribir terminal..."}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    <span className="truncate mr-2">
+                      {selectedTerminal || "Buscar o escribir terminal..."}
+                    </span>
+                    <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent
-                  className="w-[380px] p-0 shadow-2xl rounded-xl"
+                  className="w-[calc(100vw-3rem)] sm:w-[380px] p-0 shadow-2xl rounded-xl border-slate-200 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl overflow-hidden"
                   align="start"
                 >
-                  <Command className="rounded-xl overflow-hidden">
-                    <CommandInput
-                      placeholder="Escribe el nombre de la terminal..."
-                      value={searchTerminalQuery}
-                      onValueChange={setSearchTerminalQuery}
-                    />
-                    <CommandList className="max-h-[300px]">
-                      <CommandEmpty className="p-4 text-sm flex flex-col items-center gap-3">
-                        <span className="text-slate-500 font-bold uppercase text-[10px]">
-                          No registrado en catálogo
+                  <Command className="bg-transparent">
+                    <div className="relative border-b border-slate-100 dark:border-white/10 bg-slate-50 dark:bg-slate-800">
+                      <CommandInput
+                        placeholder="Escribe el nombre..."
+                        value={searchTerminalQuery}
+                        onValueChange={setSearchTerminalQuery}
+                        className="h-11 border-0 focus:ring-0 font-bold text-xs uppercase tracking-tight"
+                      />
+                    </div>
+                    <CommandList className="max-h-[30vh] sm:max-h-[300px] custom-scrollbar">
+                      <CommandEmpty className="p-6 text-sm flex flex-col items-center gap-4 bg-slate-50/50 dark:bg-slate-900/50">
+                        <span className="text-slate-500 font-black uppercase text-[10px] tracking-widest text-center">
+                          La terminal no existe en el catálogo
                         </span>
                         <Button
                           size="sm"
-                          className="w-full bg-emerald-600 font-black h-10 shadow-lg"
+                          className="w-full bg-emerald-600 hover:bg-emerald-700 font-black uppercase tracking-widest text-[10px] h-10 shadow-lg shadow-emerald-500/20 haptic-press border-none text-white"
                           disabled={isCreatingTerminal || !searchTerminalQuery}
                           onClick={() =>
                             handleCreateTerminal(searchTerminalQuery)
@@ -944,10 +1063,16 @@ export function TripDetailsModal({
                           ) : (
                             <PlusCircle className="h-4 w-4 mr-2" />
                           )}
-                          AÑADIR "{searchTerminalQuery.toUpperCase()}"
+                          AÑADIR COMO NUEVA
                         </Button>
                       </CommandEmpty>
-                      <CommandGroup heading="Terminales Registradas">
+                      <CommandGroup
+                        heading={
+                          <div className="text-[9px] font-black uppercase tracking-widest text-brand-navy dark:text-blue-400 py-1">
+                            Terminales Registradas
+                          </div>
+                        }
+                      >
                         {terminals
                           .filter((t) =>
                             t.nombre
@@ -962,17 +1087,19 @@ export function TripDetailsModal({
                                 setSelectedTerminal(v);
                                 setTerminalComboboxOpen(false);
                               }}
-                              className="py-2.5 px-4 font-bold text-slate-700 uppercase text-xs"
+                              className="py-3 px-4 font-bold text-slate-700 dark:text-slate-200 uppercase text-xs cursor-pointer border-b border-slate-50 dark:border-white/5 last:border-0"
                             >
                               <CheckCircle2
                                 className={cn(
-                                  "mr-2 h-4 w-4",
+                                  "mr-3 h-4 w-4 shrink-0 transition-all",
                                   selectedTerminal === terminal.nombre
                                     ? "opacity-100 text-emerald-600"
                                     : "opacity-0",
                                 )}
                               />
-                              {terminal.nombre}
+                              <span className="truncate">
+                                {terminal.nombre}
+                              </span>
                             </CommandItem>
                           ))}
                       </CommandGroup>
@@ -982,26 +1109,31 @@ export function TripDetailsModal({
               </Popover>
             </div>
           </div>
-          <DialogFooter className="bg-slate-50 p-4 rounded-b-2xl flex gap-3 border-t border-slate-200">
-            <Button
-              variant="ghost"
-              onClick={() => setShowTerminalModal(false)}
-              className="rounded-xl font-bold text-slate-500"
-            >
-              Cerrar
-            </Button>
-            <Button
-              onClick={submitTerminalArrival}
-              disabled={finishingLeg || !selectedTerminal}
-              className="bg-brand-navy hover:bg-brand-navy/90 text-white font-black px-10 shadow-lg rounded-xl h-11"
-            >
-              {finishingLeg ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              ) : (
-                <CheckCircle2 className="h-4 w-4 mr-2" />
-              )}
-              CONFIRMAR LLEGADA
-            </Button>
+
+          <DialogFooter className="bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl p-6 border-t border-slate-200 dark:border-white/10 shrink-0 z-10 rounded-b-2xl">
+            <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
+              <Button
+                variant="outline"
+                onClick={() => setShowTerminalModal(false)}
+                className="w-full sm:w-auto haptic-press font-black uppercase tracking-widest text-[10px]"
+                size="lg"
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={submitTerminalArrival}
+                disabled={finishingLeg || !selectedTerminal}
+                className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-black px-8 shadow-lg shadow-emerald-500/20 rounded-xl haptic-press uppercase tracking-widest text-[10px] border-none"
+                size="lg"
+              >
+                {finishingLeg ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                )}
+                CONFIRMAR LLEGADA
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
