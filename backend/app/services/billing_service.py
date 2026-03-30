@@ -3,6 +3,7 @@ import base64
 import logging
 import logging.config
 import uuid
+import re
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -61,7 +62,7 @@ logging.config.dictConfig(
 )
 logger = logging.getLogger("billing.audit")
 
-DEFAULT_LEYENDA = "Condiciones de prestación de servicios que ampara la CARTA DE PORTE O COMPROBANTE PARA EL TRANSPORTE DE MERCANCÍAS..."
+DEFAULT_LEYENDA = "Condiciones de prestación de servicios que ampara la CARTA DE PORTE O COMPROBANTE PARA EL TRANSPORTE DE MERCANCÍAS. PRIMERA.- Para los efectos del presente contrato..."
 
 
 # =========================================================================
@@ -70,13 +71,10 @@ DEFAULT_LEYENDA = "Condiciones de prestación de servicios que ampara la CARTA D
 class SafeData(dict):
     def __getitem__(self, key):
         val = self.get(key)
-        # Si el valor no existe o es explícitamente None/vacío
         if val is None or str(val).strip() == "" or str(val).strip() == "None":
             logger.warning(
-                f"⚠️ [BLINDAJE ACTIVO] Llave faltante o vacía: '{key}'. Inyectando valor por defecto para evitar Error 500."
+                f"⚠️ [BLINDAJE ACTIVO] Llave faltante o vacía en diccionario: '{key}'. Inyectando valor por defecto."
             )
-
-            # Si la llave es matemática, inyectar números
             if key in [
                 "subtotal",
                 "total",
@@ -92,8 +90,6 @@ class SafeData(dict):
                 return "XAXX010101000"
             if "cp" in key:
                 return "00000"
-
-            # Por defecto, devolver un string genérico para el SAT/PDF
             return "NO_ESPECIFICADO"
         return val
 
@@ -120,7 +116,6 @@ class BillingService:
             self.pac_pass = os.getenv("PAC_PASS_PROD", "TU_PASS_PROD")
 
         self.history = HistoryPlugin()
-
         self.base_path = Path(
             os.getenv("APP_BASE_PATH", Path(__file__).resolve().parents[2])
         )
@@ -254,7 +249,6 @@ class BillingService:
             data, relacion_uuid=invoice_data.uuid_relacionado
         )
 
-        # Usar SafeData para que no truene si falta el total
         safe_data = SafeData(data)
         monto_total = Decimal(safe_data["total"])
 
@@ -290,7 +284,6 @@ class BillingService:
     def cancelar_factura_nominal(
         self, invoice_id: int, motivo: str = "01", uuid_sustituto: str = None
     ):
-        # ... (Lógica de cancelación intacta) ...
         factura = self.db.get(ReceivableInvoice, invoice_id)
         if not factura or not factura.uuid:
             logger.error(
@@ -364,9 +357,7 @@ class BillingService:
                 .first()
             )
             if not leg:
-                leg = (
-                    self.db.query(TripLeg).filter(TripLeg.trip_id == viaje_id).first()
-                )  # Fallback
+                leg = self.db.query(TripLeg).filter(TripLeg.trip_id == viaje_id).first()
         else:
             leg = self.db.query(TripLeg).filter(TripLeg.trip_id == viaje_id).first()
 
@@ -426,22 +417,38 @@ class BillingService:
         clave_producto_viaje = str(_get_safe(viaje, "sat_clave_producto", "31111501"))
         if clave_producto_viaje == "78101802":
             logger.warning(
-                f"🚨 [SAT FALLBACK] Clave de Flete (78101802) no permitida como Bien Transportado. Forzando a '31111501'."
+                f"🚨 [SAT FALLBACK] Clave de Flete (78101802) no permitida en Carta Porte. Forzando a '31111501'."
             )
             bienes_transporte = "31111501"
         else:
             bienes_transporte = clave_producto_viaje
 
         # 🚀 REGLA DE NEGOCIO 2: ANTI-RECHAZO DE PESO SAT
-        # El SAT exige que el peso sea > 0.000
         peso_toneladas = float(_get_safe(viaje, "peso_toneladas", 25.0))
         if peso_toneladas <= 0.0:
             logger.warning(
-                f"🚨 [SAT FALLBACK] Peso del viaje es 0. Forzando a 25.0 Toneladas para evitar rechazo."
+                f"🚨 [SAT FALLBACK] Peso del viaje es 0. Forzando a 25.0 Toneladas."
             )
             peso_toneladas = 25.0
-
         peso_bruto_kg = f"{peso_toneladas * 1000:.2f}"
+
+        # 🚀 REGLA DE NEGOCIO 3: ANTI-RECHAZO DE PLACAS SAT (5 a 7 caracteres, sin espacios)
+        def _clean_placa(placa_raw, default="XXXX99"):
+            if not placa_raw or placa_raw == "S/P":
+                return default
+            # Quitar espacios y guiones
+            clean = re.sub(r"[\s\-]", "", str(placa_raw)).upper()
+            if 5 <= len(clean) <= 7:
+                return clean
+            logger.warning(
+                f"🚨 [SAT FALLBACK] Placa '{placa_raw}' inválida (debe medir 5-7 chars). Forzando '{default}'."
+            )
+            return default
+
+        placa_tracto = _clean_placa(_get_safe(unidad, "placas", "XXXX99"), "XXXX99")
+        placa_caja = _clean_placa(
+            "S/P", "YYYY99"
+        )  # Si luego guardas la caja, extrae de allí
 
         return {
             "folio": str(_get_safe(viaje, "id", "0")),
@@ -458,7 +465,8 @@ class BillingService:
             "iva": f"{iva:.2f}",
             "retenciones": f"{ret:.2f}",
             "total": f"{total:.2f}",
-            "placas": _get_safe(unidad, "placas", "S/P"),
+            # 🚀 USAMOS LAS PLACAS BLINDADAS AQUÍ
+            "placas": placa_tracto,
             "anio_modelo": str(_get_safe(unidad, "year", "2024")),
             "config_vehicular": _get_safe(unidad, "config_vehicular_sat", "T3S2"),
             "permiso_sct": _get_safe(unidad, "permiso_sct_tipo", "TPAF01"),
@@ -475,7 +483,6 @@ class BillingService:
             "descripcion_mercancia": _get_safe(
                 viaje, "descripcion_mercancia", "CARGA GENERAL"
             ),
-            # 🚀 USAMOS EL PESO BLINDADO AQUÍ
             "peso_bruto": peso_bruto_kg,
             "bienes_transp": bienes_transporte,
             "id_ccp": f"CCC{str(uuid.uuid4())[3:]}",
@@ -485,7 +492,8 @@ class BillingService:
             "estado_destino": estado_destino,
             "municipio_destino": municipio_destino,
             "subtipo_remolque": "CTR010",
-            "placa_remolque": "S/P",
+            # 🚀 PLACA DEL REMOLQUE BLINDADA
+            "placa_remolque": placa_caja,
             "peso_bruto_vehicular": "25.00",
             "leyenda_legal": DEFAULT_LEYENDA,
         }
@@ -500,7 +508,6 @@ class BillingService:
             xml_base = self._armar_xml_sin_sello(data, relacion_uuid)
             xml_sellado = self._sellar_xml(xml_base, data, relacion_uuid)
 
-            # Escribir debug
             debug_path = (
                 self.storage_dir / f"DEBUG_PRE_ENVIO_VIAJE_{data.get('folio', 'X')}.xml"
             )
@@ -530,7 +537,6 @@ class BillingService:
 
                 self._guardar_xml_disco(cfdi_bytes, res_sat.uuid)
 
-                # Procesar XML para PDF
                 root = etree.fromstring(cfdi_bytes)
                 ns = {
                     "cfdi": "http://www.sat.gob.mx/cfd/4",
@@ -548,7 +554,7 @@ class BillingService:
 
                 cadena_original = f"||{tfd_version}|{res_sat.uuid}|{tfd_fecha}|{tfd_rfc_prov}|{tfd_sello_cfd}|{c_sat}||"
 
-                safe_d = SafeData(data)  # Blindaje para la letra
+                safe_d = SafeData(data)
                 if HAS_NUM2WORDS:
                     entero = int(float(safe_d["total"]))
                     decimales = int(round((float(safe_d["total"]) - entero) * 100))
@@ -557,7 +563,6 @@ class BillingService:
                 else:
                     importe_letra = f"(*** {safe_d['total']} MXN ***)"
 
-                # Generación QR
                 sello_ocho = s_emi[-8:] if s_emi else "00000000"
                 qr_string = f"https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id={res_sat.uuid}&re={self.emisor_rfc}&rr={safe_d['rfc_cliente']}&tt={safe_d['total']}&fe={sello_ocho}"
                 qr = qrcode.QRCode(version=1, box_size=10, border=2)
@@ -592,7 +597,6 @@ class BillingService:
             )
 
     def _sellar_xml(self, xml_str, data, relacion_uuid: str = None):
-        # 🛡️ APLICAMOS EL ESCUDO
         d = SafeData(data)
 
         with open(self.path_cer, "rb") as f:
@@ -641,9 +645,7 @@ class BillingService:
         )
 
     def _armar_xml_sin_sello(self, data, relacion_uuid: str = None) -> str:
-        # 🛡️ APLICAMOS EL ESCUDO
         d = SafeData(data)
-
         relacion_xml = (
             f'\n    <cfdi:CfdiRelacionados TipoRelacion="04">\n        <cfdi:CfdiRelacionado UUID="{relacion_uuid}" />\n    </cfdi:CfdiRelacionados>'
             if relacion_uuid
@@ -698,7 +700,6 @@ class BillingService:
     def _generar_pdf_con_diseno(
         self, data, uuid, qr_bytes, s_sat, s_emi, c_sat, cadena_original, importe_letra
     ):
-        # 🛡️ APLICAMOS EL ESCUDO AL CONTEXTO DEL HTML
         d = SafeData(data)
 
         logo_path = self.templates_dir / "assets" / "logo-black.png"
@@ -798,7 +799,10 @@ class BillingService:
 
         return pdf_path
 
-    # ... (procesar_cancelaciones_pendientes queda igual) ...
+    def _guardar_xml_disco(self, xml_bytes: bytes, uuid: str):
+        with open(self.storage_dir / f"{uuid}.xml", "wb") as f:
+            f.write(xml_bytes)
+
     def procesar_cancelaciones_pendientes(self):
         logger.info("--- INICIANDO RECUPERADOR DE CANCELACIONES PENDIENTES ---")
         facturas_pendientes = (
