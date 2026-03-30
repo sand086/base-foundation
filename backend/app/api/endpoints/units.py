@@ -106,73 +106,37 @@ def create_unit(unit: schemas.UnitCreate, db: Session = Depends(get_db)):
 @router.put("/{unit_id}", response_model=schemas.UnitResponse)
 def update_unit(unit_id: str, unit: schemas.UnitUpdate, db: Session = Depends(get_db)):
     try:
-        # 1. Convertir ID a entero
+        # 1. Validación de ID
         try:
             current_id = int(unit_id)
         except ValueError:
             raise HTTPException(status_code=400, detail="ID de unidad inválido")
 
-        # 2. Limpieza de datos (ECO- prefix)
+        # 2. Limpieza de prefijos (ECO-)
         if unit.numero_economico:
             unit.numero_economico = clean_eco_prefix(unit.numero_economico)
 
-            # Validación proactiva de Número Económico
-            dup_eco = (
-                db.query(models.Unit)
-                .filter(
-                    models.Unit.numero_economico == unit.numero_economico,
-                    models.Unit.id != current_id,
-                )
-                .first()
-            )
-            if dup_eco:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"El número económico '{unit.numero_economico}' ya pertenece a otra unidad (ID: {dup_eco.id}).",
-                )
+        # 3. 🚀 ESTRATEGIA "CON TODOS": Limpieza de campos y Valores por Defecto
+        # Si un campo obligatorio llega vacío, le ponemos "N/A" para no romper la BD
+        # Si un campo ÚNICO llega vacío (""), lo convertimos a None (NULL)
 
-        # 3. Sanitización de strings vacíos a NULL (Previene choques de "" vs "")
-        # Iteramos sobre los campos únicos para limpiar basura del frontend
-        fields_to_null = [
-            "vin",
-            "placas",
-            "permiso_sct_folio",
-            "caat_folio",
-            "tarjeta_circulacion_folio",
-        ]
-        for field in fields_to_null:
+        # Campos obligatorios que no pueden ser NULL (Evita el error de 'modelo')
+        mandatory_fields = ["marca", "modelo", "tipo", "tipo_1"]
+        for field in mandatory_fields:
+            val = getattr(unit, field, None)
+            if val is None or str(val).strip() == "":
+                setattr(
+                    unit, field, "N/A"
+                )  # Ponemos N/A en lugar de dejarlo caer como NULL
+
+        # Campos que deben ser ÚNICOS (Evita choques de "" vs "")
+        unique_fields = ["vin", "placas", "permiso_sct_folio", "caat_folio"]
+        for field in unique_fields:
             if hasattr(unit, field) and getattr(unit, field) == "":
                 setattr(unit, field, None)
 
-        # 4. Validación proactiva de Placas
-        if unit.placas:
-            dup_placa = (
-                db.query(models.Unit)
-                .filter(models.Unit.placas == unit.placas, models.Unit.id != current_id)
-                .first()
-            )
-            if dup_placa:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Las placas '{unit.placas}' ya están registradas en otra unidad.",
-                )
-
-        # 5. Validación proactiva de VIN (Número de Serie)
-        if unit.vin:
-            dup_vin = (
-                db.query(models.Unit)
-                .filter(models.Unit.vin == unit.vin, models.Unit.id != current_id)
-                .first()
-            )
-            if dup_vin:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"El VIN '{unit.vin}' ya existe en el sistema para otra unidad.",
-                )
-
-        # 6. Ejecutar actualización en el CRUD
+        # 4. Ejecutar actualización
         db_unit = crud.update_unit(db, unit_id, unit)
-
         if not db_unit:
             raise HTTPException(status_code=404, detail="Unidad no encontrada")
 
@@ -180,23 +144,35 @@ def update_unit(unit_id: str, unit: schemas.UnitUpdate, db: Session = Depends(ge
 
     except IntegrityError as e:
         db.rollback()
-        # 🚀 DEBUG: Esto imprimirá el error real en tu terminal para que sepas el campo exacto
         raw_error = str(e.orig).lower()
-        print(f"--- DATABASE INTEGRITY ERROR: {raw_error} ---")
 
-        if "placas" in raw_error:
-            msg = "Conflicto: Las placas ya existen."
-        elif "numero_economico" in raw_error:
-            msg = "Conflicto: El número económico ya está en uso."
-        elif "vin" in raw_error:
-            msg = "Conflicto: El número de serie (VIN) ya está registrado."
-        elif "public_id" in raw_error:
-            msg = "Error de identificador interno duplicado."
-        else:
-            # Si cae aquí, revisa la terminal de VS Code / Docker para ver el 'raw_error'
-            msg = f"Dato duplicado no identificado: {raw_error}"
+        # 🚀 MANEJADOR DE ERRORES INTELIGENTE
+        # Caso A: Violación de NOT NULL (Falta un dato)
+        if "null value" in raw_error or "not-null" in raw_error:
+            # Intentamos extraer el nombre de la columna que falló
+            match = re.search(r'column "([^"]+)"', raw_error)
+            col = match.group(1) if match else "desconocida"
+            raise HTTPException(
+                status_code=400,
+                detail=f"Falta un dato obligatorio: El campo '{col}' no puede estar vacío.",
+            )
 
-        raise HTTPException(status_code=400, detail=msg)
+        # Caso B: Violación de UNIQUE (Dato duplicado)
+        if "unique" in raw_error or "already exists" in raw_error:
+            if "placas" in raw_error:
+                msg = "Las placas ya están asignadas a otra unidad."
+            elif "numero_economico" in raw_error:
+                msg = "El número económico ya está en uso."
+            elif "vin" in raw_error:
+                msg = "El número de serie (VIN) ya existe en el sistema."
+            else:
+                msg = "Dato duplicado: Verifique que las placas, VIN o económico no existan ya."
+            raise HTTPException(status_code=400, detail=msg)
+
+        # Caso C: Cualquier otro error de integridad
+        raise HTTPException(
+            status_code=400, detail=f"Error de base de datos: {raw_error}"
+        )
 
 
 @router.delete("/{unit_id}")
