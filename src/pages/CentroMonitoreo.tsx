@@ -419,14 +419,14 @@ export default function CentroMonitoreo() {
     link.setAttribute("href", url);
     link.setAttribute(
       "download",
-      `Finanzas_Operativas_${new Date().toISOString().split("T")[0]}.csv`,
+      `historial_servicios_${new Date().toISOString().split("T")[0]}.csv`,
     );
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     toast({
       title: "Exportación exitosa",
-      description: "Se descargó el reporte financiero y operativo.",
+      description: "Se descargó el reporte.",
     });
   };
 

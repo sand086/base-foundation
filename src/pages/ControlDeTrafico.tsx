@@ -9,6 +9,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
@@ -99,16 +100,31 @@ export default function ControlDeTrafico() {
     );
   }, [selectedTrip]);
 
-  // Extraer historial de eventos del viaje y ordenarlo (más reciente arriba)
+  // 🚀 BÚSQUEDA ROBUSTA DE EVENTOS
   const timelineEvents = useMemo(() => {
     if (!selectedTrip?.legs) return [];
-    const allEvents: TripTimelineEvent[] = [];
-    selectedTrip.legs.forEach((leg) => {
-      if (leg.timeline_events) allEvents.push(...leg.timeline_events);
+
+    // 🕵️‍♂️ TRUCO DE DEBUG: Imprimimos el viaje para ver las tripas de la respuesta
+    console.log("Estructura del viaje seleccionado:", selectedTrip);
+
+    const allEvents: any[] = []; // Usamos any temporalmente para atrapar todo
+
+    selectedTrip.legs.forEach((leg: any) => {
+      // 1. Buscamos el arreglo en los nombres más comunes que manda FastAPI
+      const events = leg.timeline_events || leg.events || leg.historial || [];
+      allEvents.push(...events);
     });
-    return allEvents.sort(
-      (a, b) => new Date(b.time).getTime() - new Date(a.time).getTime(),
-    );
+
+    return allEvents.sort((a, b) => {
+      // 2. Buscamos la fecha sea como sea que la haya mandado la BD
+      const dateA = new Date(
+        a.time || a.timestamp || a.created_at || 0,
+      ).getTime();
+      const dateB = new Date(
+        b.time || b.timestamp || b.created_at || 0,
+      ).getTime();
+      return dateB - dateA;
+    });
   }, [selectedTrip]);
 
   const handleDeleteEvent = async (eventId: number) => {
@@ -140,10 +156,41 @@ export default function ControlDeTrafico() {
       setSelectedTrip(data);
     }
   };
+
   // BUSCA handleStatusSubmit en ControlDeTrafico.tsx y actualiza el modo edición:
   const handleStatusSubmit = async (data: StatusUpdateData) => {
-    if (!selectedTrip) return;
+    // 🚀 IMPORTANTE: Necesitamos asegurar que tenemos el activeLeg
+    if (!selectedTrip || !activeLeg) {
+      toast.error("No hay un tramo activo para registrar la bitácora.");
+      return;
+    }
+
     try {
+      // 🚀 CONSTRUIMOS EL PAYLOAD EXACTO QUE ESPERA FASTAPI
+      const payloadLimpio = {
+        ...data,
+        // 1. Vinculamos el evento al tramo actual
+        trip_leg_id: activeLeg.id,
+
+        // 2. FastAPI espera 'time', pero el modal manda 'timestamp'
+        time: data.timestamp || new Date().toISOString(),
+
+        // 3. FastAPI espera un texto descriptivo obligatorio en 'event'
+        event: data.comments || `Actualización de estatus en ${data.location}`,
+
+        // 4. Mapeo opcional para los íconos
+        event_type: data.status,
+
+        // 5. Sanitización de números (lo que ya habíamos arreglado)
+        odometro: data.odometro ? Number(data.odometro) : null,
+        combustible_porcentaje: data.combustible_porcentaje
+          ? Number(data.combustible_porcentaje)
+          : null,
+        combustible_litros: data.combustible_litros
+          ? Number(data.combustible_litros)
+          : null,
+      };
+
       if (eventToEdit) {
         // 🚀 MODO EDICIÓN
         await axiosClient.put(`/trips/timeline/${eventToEdit.id}`, {
@@ -151,31 +198,38 @@ export default function ControlDeTrafico() {
           comments: data.comments,
           lat: data.lat,
           lng: data.lng,
-          status: data.status, // 👈 Esto enviará el valor correcto al backend
+          status: data.status,
         });
         toast.success("Registro corregido con éxito");
       } else {
-        // MODO CREACIÓN
-        await axiosClient.post(`/trips/${selectedTrip.id}/timeline`, data);
+        // 🚀 MODO CREACIÓN
+        await axiosClient.post(
+          `/trips/${selectedTrip.id}/timeline`,
+          payloadLimpio,
+        );
         toast.success("Bitácora actualizada");
       }
 
       setEventToEdit(null);
       setIsModalOpen(false);
+
+      // 🔄 Refrescamos los datos para que aparezcan en la pantalla
       await refreshCurrentTrip();
     } catch (error) {
-      toast.error("Error al procesar los datos");
+      console.error("Error del backend:", error);
+      toast.error("Error al guardar en la bitácora. Revisa la consola.");
     }
   };
 
+  // 🚀 ESTILOS SEMÁNTICOS PARA BADGES DE ESTADO (Tahoe Standard)
   const getStatusColor = (status: string) => {
     if (status === "detenido" || status === "retraso")
-      return "bg-amber-100 text-amber-800 border-amber-300";
+      return "bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-400 border-amber-300 dark:border-amber-500/30";
     if (status === "accidente" || status === "bloqueado")
-      return "bg-red-100 text-red-800 border-red-300";
+      return "bg-rose-100 dark:bg-rose-900/30 text-rose-800 dark:text-rose-400 border-rose-300 dark:border-rose-500/30";
     if (status === "entregado" || status === "cerrado")
-      return "bg-emerald-100 text-emerald-800 border-emerald-300";
-    return "bg-blue-50 text-brand-navy border-blue-200";
+      return "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-400 border-emerald-300 dark:border-emerald-500/30";
+    return "bg-blue-50 dark:bg-blue-900/30 text-brand-navy dark:text-blue-400 border-blue-200 dark:border-blue-500/30";
   };
 
   // 🚀 3. DISEÑO INTELIGENTE DEL TIMELINE (Detecta palabras clave)
@@ -188,9 +242,11 @@ export default function ControlDeTrafico() {
       text.includes("falla")
     ) {
       return {
-        icon: <AlertTriangle className="h-4 w-4 text-red-600" />,
-        border: "border-red-200",
-        bg: "bg-red-50",
+        icon: (
+          <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+        ),
+        border: "border-rose-200 dark:border-rose-900/50",
+        bg: "bg-rose-50 dark:bg-rose-950/20",
       };
     }
     if (
@@ -200,9 +256,9 @@ export default function ControlDeTrafico() {
       text.includes("tráfico")
     ) {
       return {
-        icon: <Clock className="h-4 w-4 text-amber-600" />,
-        border: "border-amber-200",
-        bg: "bg-amber-50",
+        icon: <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />,
+        border: "border-amber-200 dark:border-amber-900/50",
+        bg: "bg-amber-50 dark:bg-amber-950/20",
       };
     }
     if (
@@ -211,51 +267,53 @@ export default function ControlDeTrafico() {
       text.includes("destino")
     ) {
       return {
-        icon: <CheckCircle2 className="h-4 w-4 text-emerald-600" />,
-        border: "border-emerald-200",
-        bg: "bg-emerald-50",
+        icon: (
+          <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+        ),
+        border: "border-emerald-200 dark:border-emerald-900/50",
+        bg: "bg-emerald-50 dark:bg-emerald-950/20",
       };
     }
     return {
-      icon: <Navigation className="h-4 w-4 text-blue-600" />,
-      border: "border-blue-200",
-      bg: "bg-slate-50",
+      icon: <Navigation className="h-4 w-4 text-blue-600 dark:text-blue-400" />,
+      border: "border-slate-200 dark:border-white/10",
+      bg: "bg-white dark:bg-slate-900/50",
     };
   };
 
   return (
-    <div className="p-6 space-y-6 h-[calc(100vh-4rem)] flex flex-col bg-slate-50/50">
+    <div className="p-4 md:p-6 space-y-6 h-[calc(100vh-4rem)] flex flex-col animate-page-enter">
       <PageHeader
         title="Control de Tráfico"
-        description="Tracking operativo en tiempo real, unidades en ruta y bitácora de novedades."
+        description="Monitoreo operativo en tiempo real, seguimiento de unidades en ruta y bitácora de novedades."
       />
 
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6 flex-1 min-h-0">
         {/* ========================================================================= */}
         {/* COLUMNA IZQUIERDA: LISTA DE VIAJES (FILTROS Y BÚSQUEDA) */}
         {/* ========================================================================= */}
-        <Card className="md:col-span-4 flex flex-col h-full shadow-sm border-slate-200/60 rounded-2xl overflow-hidden bg-white">
-          <div className="p-4 border-b border-slate-100 bg-white space-y-3 z-10 shadow-sm">
+        <Card className="md:col-span-4 flex flex-col h-full shadow-lg border-slate-200/60 dark:border-white/10 rounded-2xl overflow-hidden bg-white/60 dark:bg-slate-900/40 backdrop-blur-md">
+          <div className="p-4 border-b border-slate-200 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl space-y-4 z-10 shadow-sm">
             {/* BUSCADOR */}
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-600" />
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input
                 placeholder="Buscar por unidad, cliente, ruta..."
-                className="pl-9 h-11 bg-slate-50 border-slate-200 rounded-xl focus-visible:ring-brand-navy/20 transition-all"
+                className="pl-10 h-11 bg-white dark:bg-slate-950 border-slate-200 dark:border-white/10 rounded-xl focus-visible:ring-brand-red/20 font-bold text-sm transition-all shadow-sm"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
 
-            {/* 🚀 FILTROS PRO (Segmented Control) */}
-            <div className="flex bg-slate-100/80 p-1 rounded-xl">
+            {/* 🚀 FILTROS PRO (Segmented Control Tahoe) */}
+            <div className="flex bg-slate-100/80 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200/50 dark:border-white/5">
               <button
                 onClick={() => setFilterType("activos")}
                 className={cn(
-                  "flex-1 text-[11px] font-black py-2 rounded-lg transition-all duration-200 uppercase tracking-wider",
+                  "flex-1 text-[10px] font-black py-2.5 rounded-lg transition-all duration-300 uppercase tracking-widest",
                   filterType === "activos"
-                    ? "bg-white shadow-sm text-brand-navy ring-1 ring-slate-200/50"
-                    : "text-slate-600 hover:text-slate-600",
+                    ? "bg-white dark:bg-slate-900 shadow-sm text-brand-navy dark:text-white"
+                    : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200",
                 )}
               >
                 En Curso
@@ -263,10 +321,10 @@ export default function ControlDeTrafico() {
               <button
                 onClick={() => setFilterType("completados")}
                 className={cn(
-                  "flex-1 text-[11px] font-black py-2 rounded-lg transition-all duration-200 uppercase tracking-wider",
+                  "flex-1 text-[10px] font-black py-2.5 rounded-lg transition-all duration-300 uppercase tracking-widest",
                   filterType === "completados"
-                    ? "bg-white shadow-sm text-brand-navy ring-1 ring-slate-200/50"
-                    : "text-slate-600 hover:text-slate-600",
+                    ? "bg-white dark:bg-slate-900 shadow-sm text-brand-navy dark:text-white"
+                    : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200",
                 )}
               >
                 Completados
@@ -274,10 +332,10 @@ export default function ControlDeTrafico() {
               <button
                 onClick={() => setFilterType("todos")}
                 className={cn(
-                  "flex-1 text-[11px] font-black py-2 rounded-lg transition-all duration-200 uppercase tracking-wider",
+                  "flex-1 text-[10px] font-black py-2.5 rounded-lg transition-all duration-300 uppercase tracking-widest",
                   filterType === "todos"
-                    ? "bg-white shadow-sm text-brand-navy ring-1 ring-slate-200/50"
-                    : "text-slate-600 hover:text-slate-600",
+                    ? "bg-white dark:bg-slate-900 shadow-sm text-brand-navy dark:text-white"
+                    : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200",
                 )}
               >
                 Todos
@@ -285,25 +343,29 @@ export default function ControlDeTrafico() {
             </div>
           </div>
 
-          <ScrollArea className="flex-1 px-3 py-2 bg-slate-50/30">
+          <ScrollArea className="flex-1 px-4 py-3 custom-scrollbar">
             <div className="space-y-3 pb-4 pt-2">
               {isLoading ? (
-                <div className="p-8 flex flex-col items-center justify-center text-slate-600 space-y-3 mt-10">
-                  <Activity className="h-8 w-8 animate-pulse text-blue-500" />
-                  <p className="text-sm font-bold">Localizando flota...</p>
+                <div className="p-8 flex flex-col items-center justify-center text-slate-600 space-y-4 mt-10">
+                  <Activity className="h-8 w-8 animate-pulse text-brand-red" />
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    Localizando flota...
+                  </p>
                 </div>
               ) : filteredTrips.length === 0 ? (
                 <div className="p-8 flex flex-col items-center justify-center text-slate-600 space-y-3 mt-10">
-                  <div className="bg-slate-100 p-4 rounded-full mb-2">
-                    <Filter className="h-8 w-8 text-slate-300" />
+                  <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded-2xl mb-2 shadow-inner border border-slate-200 dark:border-white/5">
+                    <Filter className="h-8 w-8 text-slate-400" />
                   </div>
-                  <p className="text-sm font-bold text-slate-500 text-center leading-tight">
+                  <p className="text-xs font-bold text-slate-500 text-center leading-tight uppercase tracking-widest">
                     No se encontraron viajes <br />
-                    <span className="text-brand-navy">"{filterType}"</span>
+                    <span className="text-brand-navy dark:text-white">
+                      "{filterType}"
+                    </span>
                   </p>
                   {search && (
-                    <p className="text-[11px] text-slate-600 mt-1">
-                      que coincidan con "{search}"
+                    <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-widest">
+                      Coincidencia: "{search}"
                     </p>
                   )}
                 </div>
@@ -313,18 +375,23 @@ export default function ControlDeTrafico() {
                     key={trip.id}
                     onClick={() => setSelectedTrip(trip)}
                     className={cn(
-                      "group p-4 rounded-2xl border cursor-pointer transition-all duration-200",
+                      "group p-4 rounded-2xl border cursor-pointer transition-all duration-300 relative overflow-hidden",
                       selectedTrip?.id === trip.id
-                        ? "bg-blue-50/60 border-brand-navy/30 shadow-md ring-1 ring-brand-navy/10"
-                        : "bg-white hover:bg-slate-50 border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300",
+                        ? "bg-blue-50/80 dark:bg-blue-900/20 border-blue-300 dark:border-blue-500/50 shadow-md ring-1 ring-blue-500/20"
+                        : "bg-white dark:bg-slate-900/50 hover:bg-slate-50 dark:hover:bg-slate-800/80 border-slate-200 dark:border-white/10 shadow-sm hover:shadow-md",
                     )}
                   >
+                    {/* Indicador lateral para viaje seleccionado */}
+                    {selectedTrip?.id === trip.id && (
+                      <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-blue-500 rounded-l-2xl" />
+                    )}
+
                     <div className="flex justify-between items-start mb-4">
                       <div className="flex flex-col">
-                        <span className="font-black text-brand-navy text-sm tracking-tight">
+                        <span className="font-black text-brand-navy dark:text-white text-sm uppercase tracking-tight">
                           {trip.public_id || `TRP-${trip.id}`}
                         </span>
-                        <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mt-0.5">
+                        <span className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mt-1">
                           {trip.client?.razon_social?.substring(0, 22) ||
                             "Sin Cliente"}
                         </span>
@@ -332,7 +399,7 @@ export default function ControlDeTrafico() {
                       <Badge
                         variant="outline"
                         className={cn(
-                          "uppercase text-[9px] font-black tracking-widest px-2 py-0.5",
+                          "uppercase text-[9px] font-black tracking-widest px-2 py-0.5 shadow-sm",
                           getStatusColor(trip.status),
                         )}
                       >
@@ -341,34 +408,34 @@ export default function ControlDeTrafico() {
                     </div>
 
                     <div className="relative pl-1 my-3">
-                      <div className="absolute left-[9px] top-3 bottom-3 w-0.5 bg-slate-200 rounded-full" />
+                      <div className="absolute left-[9px] top-3 bottom-3 w-0.5 bg-slate-200 dark:bg-slate-700 rounded-full" />
                       <div className="space-y-3">
                         <div className="flex items-center gap-3 relative z-10">
-                          <div className="bg-white rounded-full p-0.5">
+                          <div className="bg-white dark:bg-slate-900 rounded-full p-0.5 border border-slate-200 dark:border-slate-700">
                             <CircleDot className="h-3.5 w-3.5 text-blue-500" />
                           </div>
-                          <span className="text-xs font-bold text-slate-700 truncate">
+                          <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">
                             {trip.origin}
                           </span>
                         </div>
                         <div className="flex items-center gap-3 relative z-10">
-                          <div className="bg-white rounded-full p-0.5">
+                          <div className="bg-white dark:bg-slate-900 rounded-full p-0.5 border border-slate-200 dark:border-slate-700">
                             <MapPin className="h-3.5 w-3.5 text-emerald-500" />
                           </div>
-                          <span className="text-xs font-bold text-slate-600 truncate">
+                          <span className="text-xs font-bold text-slate-600 dark:text-slate-400 truncate">
                             {trip.destination}
                           </span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-4 mt-4 pt-3 border-t border-slate-100/80">
-                      <div className="flex items-center text-[10px] font-bold text-slate-500 uppercase tracking-widest bg-slate-100/80 px-2 py-1 rounded-md">
-                        <Truck className="h-3 w-3 mr-1.5 text-brand-navy" />
+                    <div className="flex items-center gap-3 mt-4 pt-3 border-t border-slate-100 dark:border-white/5">
+                      <div className="flex items-center text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md border border-slate-200 dark:border-white/5">
+                        <Truck className="h-3 w-3 mr-1.5 text-brand-navy dark:text-slate-300" />
                         {trip.legs?.[0]?.unit?.numero_economico || "N/A"}
                       </div>
-                      <div className="flex items-center text-[10px] font-bold text-slate-500 uppercase tracking-widest truncate">
-                        <User className="h-3 w-3 mr-1.5 text-slate-600" />
+                      <div className="flex items-center text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest truncate">
+                        <User className="h-3 w-3 mr-1.5 text-slate-400" />
                         {trip.legs?.[0]?.operator?.name?.split(" ")[0] || "N/A"}
                       </div>
                     </div>
@@ -382,39 +449,41 @@ export default function ControlDeTrafico() {
         {/* ========================================================================= */}
         {/* COLUMNA DERECHA: DETALLE, TELEMETRÍA Y TIMELINE */}
         {/* ========================================================================= */}
-        <Card className="md:col-span-8 flex flex-col h-full shadow-sm border-slate-200/60 rounded-2xl overflow-hidden bg-white">
+        <Card className="md:col-span-8 flex flex-col h-full shadow-lg border-slate-200/60 dark:border-white/10 rounded-2xl overflow-hidden bg-white/60 dark:bg-slate-900/40 backdrop-blur-md">
           {!selectedTrip ? (
-            <div className="flex flex-col items-center justify-center h-full text-slate-300 space-y-4 bg-slate-50/30">
-              <div className="h-20 w-20 bg-slate-100 rounded-full flex items-center justify-center mb-2 shadow-inner">
-                <Navigation className="h-10 w-10 text-slate-300" />
+            <div className="flex flex-col items-center justify-center h-full text-slate-400 dark:text-slate-500 space-y-5 bg-slate-50/30 dark:bg-transparent">
+              <div className="h-24 w-24 bg-white dark:bg-slate-800 rounded-3xl flex items-center justify-center shadow-sm border border-slate-200 dark:border-white/5 icon-plate">
+                <Navigation className="h-10 w-10 text-slate-300 dark:text-slate-500" />
               </div>
-              <p className="text-sm font-bold text-slate-600">
-                Selecciona un viaje para ver su bitácora operativa
+              <p className="text-[11px] font-black uppercase tracking-widest text-slate-500 text-center max-w-xs leading-relaxed">
+                Seleccione un viaje del panel lateral para monitorear su
+                bitácora operativa.
               </p>
             </div>
           ) : (
             <>
-              {/* HEADER DEL DETALLE */}
-              <CardHeader className="p-6 border-b border-slate-100 bg-white shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4 z-10">
-                <div>
-                  <div className="flex items-center gap-3 mb-1.5">
-                    <CardTitle className="text-2xl font-black text-brand-navy tracking-tight">
-                      Viaje {selectedTrip.public_id || `TRP-${selectedTrip.id}`}
+              {/* 🚀 HEADER DEL DETALLE TAHOE */}
+              <CardHeader className="p-6 md:p-8 border-b border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4 z-10 relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
+                <div className="relative z-10">
+                  <div className="flex items-center gap-4 mb-2">
+                    <CardTitle className="text-2xl sm:text-3xl font-black text-brand-navy dark:text-white tracking-tighter heading-crisp uppercase">
+                      {selectedTrip.public_id || `TRP-${selectedTrip.id}`}
                     </CardTitle>
                     <Badge
                       variant="outline"
                       className={cn(
-                        "uppercase text-[10px] tracking-widest px-2.5 py-0.5 shadow-sm",
+                        "uppercase text-[10px] font-black tracking-widest px-3 py-1 shadow-sm",
                         getStatusColor(selectedTrip.status),
                       )}
                     >
                       {selectedTrip.status.replace("_", " ")}
                     </Badge>
                   </div>
-                  <div className="flex items-center text-sm text-slate-500 font-medium gap-2">
-                    <User className="h-4 w-4 text-slate-600" />
+                  <div className="flex items-center text-[11px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest gap-2">
+                    <User className="h-3.5 w-3.5" />
                     Cliente:{" "}
-                    <span className="font-bold text-slate-700">
+                    <span className="text-slate-700 dark:text-slate-200">
                       {selectedTrip.client?.razon_social || "Ruta Libre"}
                     </span>
                   </div>
@@ -423,36 +492,39 @@ export default function ControlDeTrafico() {
                 {/* Mostrar botón solo si el viaje no está cerrado */}
                 {String(selectedTrip.status) !== "cerrado" &&
                   String(selectedTrip.status) !== "liquidado" && (
-                    <Button
-                      onClick={() => setIsModalOpen(true)}
-                      className="bg-brand-navy hover:bg-brand-navy/90 text-white font-black h-12 px-6 shadow-lg shadow-brand-navy/20 rounded-xl transition-all active:scale-95"
-                    >
-                      <Edit2 className="h-4 w-4 mr-2" />
-                      Actualizar Bitácora
-                    </Button>
+                    <div className="relative z-10 w-full sm:w-auto mt-4 sm:mt-0">
+                      <Button
+                        onClick={() => setIsModalOpen(true)}
+                        className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-black uppercase tracking-widest text-[10px] h-12 px-6 shadow-lg shadow-blue-500/20 rounded-xl transition-all active:scale-95 border-none haptic-press"
+                      >
+                        <Edit2 className="h-4 w-4 mr-2" />
+                        Actualizar Bitácora
+                      </Button>
+                    </div>
                   )}
               </CardHeader>
 
-              <ScrollArea className="flex-1 bg-slate-50/50">
+              <ScrollArea className="flex-1 bg-slate-50/50 dark:bg-transparent custom-scrollbar">
                 <div className="p-6 md:p-8 max-w-4xl mx-auto space-y-8">
-                  {/* TARJETAS DE INFORMACIÓN (UNIDAD Y OPERADOR) */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-5 hover:shadow-md transition-shadow">
-                      <div className="h-12 w-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0">
-                        <Truck className="h-6 w-6" />
+                  {/* 🚀 TARJETAS DE INFORMACIÓN (UNIDAD Y OPERADOR) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    {/* Tarjeta Unidad */}
+                    <div className="bg-white dark:bg-slate-900/50 p-5 rounded-2xl border border-slate-200 dark:border-white/10 shadow-sm flex items-center gap-5 hover:shadow-md transition-all">
+                      <div className="h-14 w-14 bg-blue-50 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center shrink-0 shadow-inner icon-plate border border-blue-100 dark:border-blue-500/20">
+                        <Truck className="h-7 w-7 text-blue-600 dark:text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.4)]" />
                       </div>
                       <div className="flex-1">
-                        <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">
+                        <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
                           Tractocamión Asignado
                         </p>
-                        <p className="text-lg font-black text-brand-navy leading-tight mt-0.5">
+                        <p className="text-xl font-black uppercase tracking-tighter text-brand-navy dark:text-white leading-tight mt-0.5">
                           {activeLeg?.unit?.numero_economico || "Sin Asignar"}
                         </p>
                         {(activeLeg?.unit as any)?.odometro && (
                           <div className="mt-2">
                             <Badge
-                              variant="secondary"
-                              className="bg-slate-100 text-slate-600 text-[10px] font-mono px-2 py-0.5"
+                              variant="outline"
+                              className="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-mono font-bold px-2 py-0.5 border-slate-200 dark:border-white/10"
                             >
                               ODO:{" "}
                               {(
@@ -465,20 +537,21 @@ export default function ControlDeTrafico() {
                       </div>
                     </div>
 
-                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-5 hover:shadow-md transition-shadow">
-                      <div className="h-12 w-12 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center shrink-0">
-                        <User className="h-6 w-6" />
+                    {/* Tarjeta Operador */}
+                    <div className="bg-white dark:bg-slate-900/50 p-5 rounded-2xl border border-slate-200 dark:border-white/10 shadow-sm flex items-center gap-5 hover:shadow-md transition-all">
+                      <div className="h-14 w-14 bg-amber-50 dark:bg-amber-900/30 rounded-2xl flex items-center justify-center shrink-0 shadow-inner icon-plate border border-amber-100 dark:border-amber-500/20">
+                        <User className="h-7 w-7 text-amber-600 dark:text-amber-400 drop-shadow-[0_0_8px_rgba(245,158,11,0.4)]" />
                       </div>
-                      <div className="flex-1">
-                        <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">
+                      <div className="flex-1 overflow-hidden">
+                        <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
                           Operador en Turno
                         </p>
-                        <p className="text-lg font-black text-brand-navy leading-tight mt-0.5 truncate">
+                        <p className="text-xl font-black uppercase tracking-tighter text-brand-navy dark:text-white leading-tight mt-0.5 truncate">
                           {activeLeg?.operator?.name || "Sin Asignar"}
                         </p>
                         {activeLeg?.operator?.phone && (
-                          <p className="text-xs font-bold text-slate-500 mt-1.5 flex items-center gap-1.5">
-                            <Phone className="h-3.5 w-3.5 text-slate-600" />
+                          <p className="text-[11px] font-mono font-bold text-slate-500 dark:text-slate-400 mt-2 flex items-center gap-1.5 truncate">
+                            <Phone className="h-3.5 w-3.5 text-slate-400" />
                             {activeLeg.operator.phone}
                           </p>
                         )}
@@ -486,25 +559,26 @@ export default function ControlDeTrafico() {
                     </div>
                   </div>
 
-                  {/* LÍNEA DE TIEMPO (TIMELINE) */}
-                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 md:p-8">
-                    <h3 className="text-sm font-black text-brand-navy uppercase tracking-widest flex items-center gap-2 mb-8 border-b border-slate-100 pb-4">
+                  {/* 🚀 LÍNEA DE TIEMPO (TIMELINE) */}
+                  <div className="bg-white dark:bg-slate-900/30 rounded-3xl border border-slate-200 dark:border-white/10 shadow-sm p-6 md:p-8">
+                    <h3 className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.3em] flex items-center gap-2 mb-8 border-b border-slate-100 dark:border-white/5 pb-4">
                       <FileText className="h-4 w-4 text-blue-500" /> Historial
-                      de Eventos
+                      de Eventos (Bitácora)
                     </h3>
 
                     {timelineEvents.length === 0 ? (
-                      <div className="text-center p-10 bg-slate-50 rounded-xl border border-dashed border-slate-300 text-slate-600">
-                        <CalendarDays className="h-10 w-10 mx-auto mb-3 opacity-30 text-slate-500" />
-                        <p className="text-sm font-bold text-slate-500">
+                      <div className="text-center p-12 bg-slate-50/50 dark:bg-slate-800/30 rounded-2xl border-2 border-dashed border-slate-200 dark:border-white/10 text-slate-600">
+                        <CalendarDays className="h-12 w-12 mx-auto mb-4 opacity-30 text-slate-500 dark:text-slate-400" />
+                        <p className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
                           Sin historial registrado
                         </p>
-                        <p className="text-xs mt-1">
-                          Las novedades se mostrarán aquí una vez reportadas.
+                        <p className="text-[11px] font-medium text-slate-400 dark:text-slate-500 mt-2">
+                          Las novedades operativas se mostrarán aquí una vez
+                          reportadas.
                         </p>
                       </div>
                     ) : (
-                      <div className="relative border-l-2 border-slate-200 ml-4 space-y-8 pb-4">
+                      <div className="relative border-l-2 border-slate-200 dark:border-slate-800 ml-4 space-y-8 pb-4">
                         {timelineEvents.map((event, idx) => {
                           const config = getTimelineConfig(
                             event.event,
@@ -513,29 +587,36 @@ export default function ControlDeTrafico() {
                           return (
                             <div key={idx} className="relative pl-8 group">
                               {/* Círculo del Timeline */}
-                              <div className="absolute -left-[17px] top-1 h-8 w-8 rounded-full border-[3px] border-white bg-slate-100 flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                              <div className="absolute -left-[17px] top-1 h-8 w-8 rounded-full border-[3px] border-white dark:border-slate-900 bg-slate-100 dark:bg-slate-800 flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform z-10">
                                 {config.icon}
                               </div>
 
                               <div
                                 className={cn(
-                                  "p-4 rounded-xl border transition-all relative",
+                                  "p-5 rounded-2xl border transition-all relative overflow-hidden",
                                   config.bg,
                                   config.border,
                                   "group-hover:shadow-md",
                                 )}
                               >
-                                <div className="flex justify-between items-start mb-2">
-                                  <div className="flex flex-col gap-1">
-                                    <span className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-1">
+                                <div className="flex justify-between items-start mb-3">
+                                  <div className="flex flex-col gap-1.5">
+                                    <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
                                       <Clock className="h-3 w-3" />
-                                      {new Date(event.time).toLocaleString()}
+                                      {new Date(
+                                        event.time ||
+                                          event.timestamp ||
+                                          event.created_at,
+                                      ).toLocaleString("es-MX", {
+                                        dateStyle: "medium",
+                                        timeStyle: "short",
+                                      })}
                                     </span>
 
                                     {/* 🚀 MOSTRAR COORDENADAS SI EXISTEN (Esto quita tu error) */}
                                     {(event.lat || event.lng) && (
-                                      <span className="text-[9px] font-mono text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded flex items-center gap-1 w-fit border border-blue-100">
-                                        <Compass className="h-2.5 w-2.5" />{" "}
+                                      <span className="text-[9px] font-mono font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded shadow-sm flex items-center gap-1.5 w-fit border border-blue-200 dark:border-blue-800/50">
+                                        <Compass className="h-3 w-3" />{" "}
                                         {event.lat}, {event.lng}
                                       </span>
                                     )}
@@ -547,39 +628,43 @@ export default function ControlDeTrafico() {
                                       <Button
                                         variant="ghost"
                                         size="icon"
-                                        className="h-7 w-7 text-slate-600 hover:text-slate-600"
+                                        className="h-8 w-8 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-white/10 rounded-xl transition-all"
                                       >
                                         <MoreVertical className="h-4 w-4" />
                                       </Button>
                                     </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end">
+                                    <DropdownMenuContent
+                                      align="end"
+                                      className="glass-panel border-slate-200 dark:border-white/10 min-w-[160px] dark:bg-slate-900/90 shadow-xl"
+                                    >
                                       <DropdownMenuItem
                                         onClick={() => handleEditEvent(event)}
-                                        className="text-brand-navy"
+                                        className="text-[10px] font-black uppercase tracking-widest text-brand-green cursor-pointer dark:focus:bg-slate-800"
                                       >
                                         <Edit2 className="h-3.5 w-3.5 mr-2" />{" "}
-                                        Editar detalles
+                                        Corregir Datos
                                       </DropdownMenuItem>
+                                      <DropdownMenuSeparator className="dark:bg-white/10" />
                                       <DropdownMenuItem
-                                        className="text-red-600"
+                                        className="text-[10px] font-black uppercase tracking-widest text-rose-600 dark:text-rose-500 cursor-pointer dark:focus:bg-rose-950/30"
                                         onClick={() =>
                                           handleDeleteEvent(event.id!)
                                         }
                                       >
                                         <Trash2 className="h-3.5 w-3.5 mr-2" />{" "}
-                                        Eliminar reporte
+                                        Eliminar Reporte
                                       </DropdownMenuItem>
                                     </DropdownMenuContent>
                                   </DropdownMenu>
                                 </div>
 
-                                <p className="text-sm font-bold text-slate-800">
+                                <p className="text-sm sm:text-base font-black uppercase tracking-tight text-slate-800 dark:text-slate-200 leading-snug">
                                   {event.event}
                                 </p>
 
                                 {/* 🚀 COMENTARIOS SEPARADOS */}
                                 {event.comments && (
-                                  <p className="text-xs text-slate-500 italic bg-white/40 p-2 rounded-lg border border-slate-100 mt-2">
+                                  <p className="text-xs text-slate-600 dark:text-slate-400 italic bg-white/60 dark:bg-slate-950/50 p-3 rounded-xl border border-slate-200 dark:border-white/5 shadow-inner mt-3 leading-relaxed">
                                     "{event.comments}"
                                   </p>
                                 )}
