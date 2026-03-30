@@ -76,10 +76,10 @@ export function GlobalProgressBar({
 
             <div className="flex flex-col items-center gap-1 mt-2">
               <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 dark:text-white/40 animate-pulse">
-                Sincronizando Logística
+                Sincronizando datos ...
               </span>
               <span className="text-[9px] font-bold uppercase tracking-[0.1em] text-brand-red/60 dark:text-brand-red/40">
-                Rápidos 3T
+                Espere por favor
               </span>
             </div>
           </div>
