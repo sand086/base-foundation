@@ -18,19 +18,20 @@ const GestionTarifas = () => {
       <Tabs defaultValue="catalogo" className="w-full">
         {/* 🚀 TABS LIST: Estilo Switch de macOS en cristal */}
         <div className="flex justify-start mb-6">
-          <TabsList className="grid w-full max-w-md grid-cols-2 bg-slate-900/5 p-1 rounded-xl border border-slate-200/50 backdrop-blur-md shadow-inner">
+          <TabsList className="bg-slate-100/50 dark:bg-slate-900/50 backdrop-blur-md p-1 h-14 rounded-xl border border-slate-200/50 dark:border-white/10 w-full sm:w-auto inline-flex">
             <TabsTrigger
               value="catalogo"
-              className="gap-2 font-bold text-[10px] uppercase tracking-wider data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-brand-navy transition-all haptic-press"
+              className="gap-2 text-[11px] font-black uppercase tracking-widest rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:text-brand-navy dark:data-[state=active]:text-white data-[state=active]:shadow-sm h-full px-6 transition-all"
             >
-              <Map className="h-3.5 w-3.5 text-emerald-600" />
+              <Map className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
               Catálogo Maestro
             </TabsTrigger>
+
             <TabsTrigger
               value="armador"
-              className="gap-2 font-bold text-[10px] uppercase tracking-wider data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-brand-navy transition-all haptic-press"
+              className="gap-2 text-[11px] font-black uppercase tracking-widest rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:text-brand-navy dark:data-[state=active]:text-white data-[state=active]:shadow-sm h-full px-6 transition-all"
             >
-              <Route className="h-3.5 w-3.5 text-blue-600" />
+              <Route className="h-4 w-4 text-blue-600 dark:text-blue-400" />
               Armador de Rutas
             </TabsTrigger>
           </TabsList>

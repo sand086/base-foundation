@@ -13,8 +13,9 @@ import {
   CreditCard,
   Loader2,
   AlertCircle,
+  AlertTriangle,
 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -59,12 +60,17 @@ const statusConfig: Record<string, { label: string; type: StatusType }> = {
 
 // --- BADGES ESTILO TAHOE ---
 const getOperationBadge = (tipo: string) => {
+  const baseClass =
+    "px-2 py-0.5 text-[9px] font-black uppercase tracking-widest shadow-sm";
   switch (tipo?.toLowerCase()) {
     case "nacional":
       return (
         <Badge
           variant="outline"
-          className="px-2 py-0.5 text-[9px] font-black uppercase tracking-widest bg-emerald-500/10 text-emerald-600 border-emerald-200 shadow-sm"
+          className={cn(
+            baseClass,
+            "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-500/30",
+          )}
         >
           Nacional
         </Badge>
@@ -73,7 +79,10 @@ const getOperationBadge = (tipo: string) => {
       return (
         <Badge
           variant="outline"
-          className="px-2 py-0.5 text-[9px] font-black uppercase tracking-widest bg-blue-500/10 text-blue-600 border-blue-200 shadow-sm"
+          className={cn(
+            baseClass,
+            "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-500/30",
+          )}
         >
           Import
         </Badge>
@@ -82,7 +91,10 @@ const getOperationBadge = (tipo: string) => {
       return (
         <Badge
           variant="outline"
-          className="px-2 py-0.5 text-[9px] font-black uppercase tracking-widest bg-amber-500/10 text-amber-600 border-amber-200 shadow-sm"
+          className={cn(
+            baseClass,
+            "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-500/30",
+          )}
         >
           Export
         </Badge>
@@ -122,11 +134,11 @@ function ExpandableClientRow({
           if (subClientes.length > 0) onToggle();
         }}
         className={cn(
-          "transition-colors duration-200 ease-out border-b border-white/10 dark:border-white/5 interactive-row",
+          "transition-colors duration-200 ease-out border-b border-slate-100 dark:border-white/5 interactive-row",
           subClientes.length > 0
-            ? "cursor-pointer hover:bg-white/50"
+            ? "cursor-pointer hover:bg-slate-50/50 dark:hover:bg-white/5"
             : "hover:bg-transparent",
-          isExpanded && "bg-white/60 dark:bg-white/10",
+          isExpanded && "bg-slate-50 dark:bg-white/10",
         )}
       >
         <TableCell className="py-4 w-10 pl-6">
@@ -134,32 +146,32 @@ function ExpandableClientRow({
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6 hover:bg-slate-200/50 rounded-full"
+              className="h-6 w-6 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full"
               onClick={(e) => {
                 e.stopPropagation();
                 onToggle();
               }}
             >
               {isExpanded ? (
-                <ChevronDown className="h-4 w-4 text-brand-navy" />
+                <ChevronDown className="h-4 w-4 text-brand-navy dark:text-slate-300" />
               ) : (
-                <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-brand-navy" />
+                <ChevronRight className="h-4 w-4 text-slate-400 dark:text-slate-500 group-hover:text-brand-navy dark:group-hover:text-white" />
               )}
             </Button>
           )}
         </TableCell>
         <TableCell className="py-4">
           <div className="flex flex-col">
-            <span className="font-black text-brand-navy text-sm uppercase tracking-tight leading-none">
+            <span className="font-black text-brand-navy dark:text-white text-sm uppercase tracking-tight leading-none">
               {client.razon_social}
             </span>
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+            <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-1">
               {client.contacto_principal || "Sin contacto"}
             </span>
           </div>
         </TableCell>
         <TableCell className="py-4">
-          <span className="font-mono text-xs font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-md border border-slate-200">
+          <span className="font-mono text-xs font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded-md border border-slate-200 dark:border-white/10">
             {client.rfc}
           </span>
         </TableCell>
@@ -167,10 +179,10 @@ function ExpandableClientRow({
           <Badge
             variant="secondary"
             className={cn(
-              "font-black text-[10px] uppercase tracking-widest border-none shadow-sm",
+              "font-black text-[10px] uppercase tracking-widest border border-transparent shadow-sm",
               subClientes.length > 0
-                ? "bg-brand-navy text-white"
-                : "bg-slate-100 text-slate-400",
+                ? "bg-brand-navy text-white dark:bg-slate-700 dark:text-white"
+                : "bg-slate-100 text-slate-400 dark:bg-slate-900 dark:text-slate-600 dark:border-white/10",
             )}
           >
             {subClientes.length}
@@ -178,8 +190,8 @@ function ExpandableClientRow({
         </TableCell>
         <TableCell className="py-4">
           <div className="flex items-center gap-2">
-            <CreditCard className="h-3.5 w-3.5 text-slate-400" />
-            <span className="text-xs font-black text-slate-600">
+            <CreditCard className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
+            <span className="text-xs font-black text-slate-600 dark:text-slate-300">
               {diasCredito} DÍAS
             </span>
           </div>
@@ -187,7 +199,7 @@ function ExpandableClientRow({
         <TableCell className="py-4">
           <Badge
             variant="outline"
-            className="text-[9px] font-bold uppercase tracking-widest text-slate-500 bg-white/50"
+            className="text-[9px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 bg-white/50 dark:bg-slate-900/50 border-slate-200 dark:border-white/10"
           >
             {totalTarifas} Tarifas
           </Badge>
@@ -211,28 +223,29 @@ function ExpandableClientRow({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 hover:bg-white/80 rounded-xl transition-all shadow-sm border border-slate-200/50 bg-white/50"
+                className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50"
                 onClick={(e) => e.stopPropagation()}
               >
-                <MoreHorizontal className="h-4 w-4 text-slate-500" />
+                <MoreHorizontal className="h-4 w-4 text-slate-500 dark:text-slate-400" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="end"
-              className="glass-panel border-white/20 min-w-[160px] z-50"
+              className="glass-panel border-white/20 min-w-[160px] z-50 dark:bg-slate-900/90"
             >
               <DropdownMenuItem
-                className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer"
+                className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
                 onClick={(e) => {
                   e.stopPropagation();
                   onEdit();
                 }}
               >
-                <Edit className="h-4 w-4 text-blue-500" /> Editar Perfil
+                <Edit className="h-4 w-4 text-blue-500 dark:text-blue-400" />{" "}
+                Editar Perfil
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
+              <DropdownMenuSeparator className="dark:bg-white/10" />
               <DropdownMenuItem
-                className="gap-2 font-bold text-xs uppercase tracking-tight text-rose-600 cursor-pointer"
+                className="gap-2 font-bold text-xs uppercase tracking-tight text-rose-600 dark:text-rose-500 cursor-pointer dark:focus:bg-rose-950/30"
                 onClick={(e) => {
                   e.stopPropagation();
                   onDelete();
@@ -247,30 +260,32 @@ function ExpandableClientRow({
 
       {/* FILA EXPANDIDA (Destinos) */}
       {isExpanded && (
-        <TableRow className="bg-slate-900/5 backdrop-blur-sm border-b border-white/10">
+        <TableRow className="bg-slate-50/50 dark:bg-slate-900/30 border-b border-slate-200 dark:border-white/10">
           <TableCell colSpan={8} className="p-0">
-            <div className="px-14 py-6 border-l-4 border-l-brand-navy shadow-inner">
-              <div className="flex items-center gap-2 mb-4">
-                <MapPin className="h-4 w-4 text-brand-red" />
-                <span className="text-[11px] font-black uppercase tracking-widest text-brand-navy">
+            <div className="px-6 py-6 border-l-4 border-l-brand-navy dark:border-l-blue-500 shadow-inner">
+              <div className="flex items-center gap-2 mb-4 ml-8">
+                <MapPin className="h-4 w-4 text-brand-red dark:text-brand-red/80" />
+                <span className="text-[11px] font-black uppercase tracking-widest text-brand-navy dark:text-slate-300">
                   Destinos de Entrega Registrados ({subClientes.length})
                 </span>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 ml-8">
                 {subClientes.map((sub) => (
                   <div
                     key={sub.id}
-                    className="flex items-center justify-between p-4 rounded-xl glass-card border border-white/40 bg-white/60 shadow-sm hover:shadow-md transition-all"
+                    className="flex items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 shadow-sm hover:shadow-md transition-all"
                   >
-                    <div className="flex-1">
-                      <p className="font-black text-xs uppercase tracking-tight text-slate-700">
+                    <div className="flex-1 overflow-hidden pr-4">
+                      <p className="font-black text-xs uppercase tracking-tight text-slate-700 dark:text-slate-200 truncate">
                         {sub.nombre}
                       </p>
-                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">
+                      <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mt-0.5 truncate">
                         {sub.direccion}, {sub.ciudad}
                       </p>
                     </div>
-                    {getOperationBadge(sub.tipo_operacion)}
+                    <div className="shrink-0">
+                      {getOperationBadge(sub.tipo_operacion)}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -324,16 +339,18 @@ export default function ClientesCatalogo() {
   };
 
   return (
-    <div className="p-8 space-y-8 animate-page-enter">
+    <div className="p-4 md:p-8 space-y-8 animate-page-enter">
       {/* 🚀 1. PAGE HEADER TAHOE */}
       <PageHeader
         title="Gestión de Clientes"
         description="Directorio comercial, destinos de entrega y control de tarifas operativas."
-        icon={<Building2 className="h-8 w-8 text-brand-navy" />}
+        icon={<Building2 className="h-8 w-8 text-brand-navy dark:text-white" />}
       >
         <Button
+          variant="default"
+          size="lg"
           onClick={() => navigate("/clients/nuevo")}
-          className="btn-primary-gradient px-8 h-12 font-black uppercase text-[11px] tracking-[0.2em] shadow-xl shadow-brand-red/20 hover:-translate-y-0.5 transition-all"
+          className="haptic-press shadow-lg shadow-brand-red/20 w-full sm:w-auto"
         >
           <Plus className="h-4 w-4 mr-2" /> Nuevo Cliente
         </Button>
@@ -341,43 +358,52 @@ export default function ClientesCatalogo() {
 
       {/* 🚀 2. KPIs METRICS CARDS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card variant="glass" className="p-5 flex items-center gap-4">
-          <div className="p-3 bg-brand-navy/5 rounded-xl border border-brand-navy/10">
-            <Building2 className="h-6 w-6 text-brand-navy" />
+        <Card
+          variant="default"
+          className="p-6 flex items-center gap-5 group hover:border-slate-300 dark:hover:border-white/20 transition-all cursor-default"
+        >
+          <div className="p-3.5 bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-white/10 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
+            <Building2 className="h-6 w-6 text-brand-navy dark:text-slate-300" />
           </div>
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          <div className="flex flex-col justify-center">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
               Total Clientes
             </p>
-            <p className="text-2xl font-black text-brand-navy leading-none mt-1">
+            <p className="text-3xl font-black text-brand-navy dark:text-white leading-none tracking-tighter">
               {clients.length}
             </p>
           </div>
         </Card>
 
-        <Card variant="glass" className="p-5 flex items-center gap-4">
-          <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
-            <Users className="h-6 w-6 text-emerald-600" />
+        <Card
+          variant="default"
+          className="p-6 flex items-center gap-5 group hover:border-emerald-300 dark:hover:border-emerald-500/50 transition-all cursor-default"
+        >
+          <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl border border-emerald-100 dark:border-emerald-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
+            <Users className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
           </div>
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          <div className="flex flex-col justify-center">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
               Cuentas Activas
             </p>
-            <p className="text-2xl font-black text-emerald-600 leading-none mt-1">
+            <p className="text-3xl font-black text-emerald-600 dark:text-emerald-400 leading-none tracking-tighter">
               {activeClients}
             </p>
           </div>
         </Card>
 
-        <Card variant="glass" className="p-5 flex items-center gap-4">
-          <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20">
-            <MapPin className="h-6 w-6 text-blue-600" />
+        <Card
+          variant="default"
+          className="p-6 flex items-center gap-5 group hover:border-blue-300 dark:hover:border-blue-500/50 transition-all cursor-default"
+        >
+          <div className="p-3.5 bg-blue-50 dark:bg-blue-950/30 rounded-2xl border border-blue-100 dark:border-blue-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
+            <MapPin className="h-6 w-6 text-blue-600 dark:text-blue-400" />
           </div>
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          <div className="flex flex-col justify-center">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
               Total Destinos
             </p>
-            <p className="text-2xl font-black text-blue-600 leading-none mt-1">
+            <p className="text-3xl font-black text-blue-600 dark:text-blue-400 leading-none tracking-tighter">
               {totalSubClients}
             </p>
           </div>
@@ -392,60 +418,60 @@ export default function ClientesCatalogo() {
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input
               placeholder="Buscar por Razón Social o RFC..."
-              className="pl-10 h-11 glass-card border-slate-200 shadow-sm focus:ring-brand-red/20 font-medium"
+              className="pl-10 h-11 bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm focus:ring-brand-red/20 font-medium"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
         </div>
 
-        {/* Contenedor de Tabla Cristal */}
-        <div className="relative w-full overflow-hidden rounded-2xl border border-white/40 bg-white/30 backdrop-blur-sm shadow-xl liquid-glass-table">
+        {/* Contenedor de Tabla Cristal (Homologado) */}
+        <div className="relative w-full overflow-hidden rounded-2xl border border-slate-200/50 dark:border-white/10 bg-white/30 dark:bg-slate-950/30 backdrop-blur-sm shadow-xl liquid-glass-table">
           <div className="overflow-auto max-h-[60vh] custom-scrollbar">
             <Table className="w-full caption-bottom text-sm">
-              <TableHeader className="sticky top-0 z-20 backdrop-blur-xl bg-slate-900/5 border-b border-white/20">
-                <TableRow className="hover:bg-transparent">
+              <TableHeader className="sticky top-0 z-20 backdrop-blur-xl bg-slate-50/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-white/10">
+                <TableRow className="hover:bg-transparent border-none">
                   <TableHead className="w-10 pl-6"></TableHead>
-                  <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 h-12">
+                  <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 h-12">
                     Razón Social
                   </TableHead>
-                  <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 h-12">
+                  <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 h-12">
                     RFC
                   </TableHead>
-                  <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 h-12 text-center">
+                  <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 h-12 text-center">
                     Destinos
                   </TableHead>
-                  <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 h-12">
+                  <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 h-12">
                     Crédito
                   </TableHead>
-                  <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 h-12">
+                  <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 h-12">
                     Tarifas
                   </TableHead>
-                  <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 h-12">
+                  <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 h-12">
                     Estatus
                   </TableHead>
-                  <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 h-12 text-right pr-6">
+                  <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 h-12 text-right pr-6">
                     Acciones
                   </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody className="table-staggered">
                 {isLoading ? (
-                  <tr>
-                    <td colSpan={8} className="p-12 text-center">
-                      <div className="flex flex-col items-center justify-center gap-3">
-                        <Loader2 className="h-8 w-8 animate-spin text-brand-red/50" />
-                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+                  <TableRow>
+                    <TableCell colSpan={8} className="p-16 text-center">
+                      <div className="flex flex-col items-center justify-center gap-4">
+                        <Loader2 className="h-8 w-8 animate-spin text-brand-red/50 dark:text-brand-red" />
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
                           Cargando cartera de clientes...
                         </span>
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ) : filteredClients.length === 0 ? (
                   <TableRow>
                     <TableCell
                       colSpan={8}
-                      className="p-12 text-center text-[11px] font-bold uppercase tracking-widest text-slate-400"
+                      className="p-16 text-center text-[11px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500"
                     >
                       No se encontraron clientes que coincidan con la búsqueda
                     </TableCell>
@@ -471,34 +497,75 @@ export default function ClientesCatalogo() {
         </div>
       </div>
 
-      {/* 🚀 4. ALERT DIALOG ELIMINAR (Hereda estilos del base UI) */}
+      {/* 🚀 4. ALERT DIALOG ELIMINAR (Estructura Triple Tahoe) */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-rose-600">
-              <AlertCircle className="h-5 w-5" />
-              Confirmar Eliminación
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              Estás a punto de eliminar permanentemente a
-              <strong className="text-brand-navy ml-1">
-                {clientToDelete?.razon_social}
-              </strong>
-              .
-              <br />
-              <br />
-              Esta acción borrará todo el historial, destinos asociados y
-              configuración de tarifas. Esta acción no se puede deshacer.
-            </AlertDialogDescription>
+        <AlertDialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
+          <AlertDialogHeader className="p-6 sm:p-8 bg-brand-navy/95 dark:bg-slate-900 backdrop-blur-md shrink-0 border-b border-white/10 relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
+            <div className="relative z-10 flex items-center gap-4 sm:gap-5">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-rose-500/20 flex items-center justify-center shadow-inner shrink-0 icon-plate">
+                <AlertTriangle className="h-7 w-7 sm:h-8 sm:w-8 text-rose-400 drop-shadow-[0_0_8px_rgba(244,63,94,0.4)]" />
+              </div>
+              <div className="flex flex-col gap-1 text-left">
+                <AlertDialogTitle className="text-2xl font-black uppercase tracking-tighter text-white text-shadow-premium heading-crisp leading-none">
+                  Confirmar Eliminación
+                </AlertDialogTitle>
+                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-brand-secondary dark:text-slate-400 mt-1">
+                  Acción Irreversible • Catálogo Clientes
+                </p>
+              </div>
+            </div>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmDelete}
-              className="bg-destructive hover:bg-destructive/90 text-white border-none"
-            >
-              Sí, Eliminar
-            </AlertDialogAction>
+
+          <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
+            <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block space-y-6">
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                Estás a punto de eliminar permanentemente a{" "}
+                <b className="text-slate-900 dark:text-white text-lg font-black tracking-tight uppercase">
+                  {clientToDelete?.razon_social}
+                </b>
+                .
+              </p>
+
+              <div className="p-5 bg-rose-50 dark:bg-rose-950/20 border-l-4 border-rose-500 rounded-r-2xl shadow-sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+                  <h4 className="text-[10px] sm:text-[11px] font-black text-rose-800 dark:text-rose-400 uppercase tracking-widest">
+                    Pérdida de Configuración
+                  </h4>
+                </div>
+                <p className="text-xs sm:text-sm leading-relaxed text-rose-900 dark:text-rose-200/80">
+                  Esta acción borrará todo el historial, los{" "}
+                  <b className="font-black underline">
+                    {clientToDelete?.sub_clients?.length || 0} destinos
+                    asociados
+                  </b>{" "}
+                  y su configuración de tarifas logísticas.{" "}
+                  <b className="font-black">Esta acción no se puede deshacer</b>
+                  .
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </div>
+
+          <AlertDialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0">
+            <div className="flex flex-col-reverse sm:flex-row sm:flex-wrap justify-end items-stretch sm:items-center gap-3 w-full">
+              <AlertDialogCancel
+                variant="outline"
+                size="lg"
+                className="w-full sm:w-auto haptic-press flex-shrink-0"
+              >
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                variant="destructive"
+                size="lg"
+                onClick={confirmDelete}
+                className="w-full sm:w-auto haptic-press shadow-rose-600/10 flex-shrink-0"
+              >
+                <Trash2 className="h-4 w-4 mr-2" /> Sí, Eliminar Cliente
+              </AlertDialogAction>
+            </div>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

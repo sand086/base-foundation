@@ -1,15 +1,16 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -26,33 +27,47 @@ import {
   Truck,
   Heart,
   Loader2,
+  Check,
 } from "lucide-react";
 import { Operator } from "@/types/api.types";
 import { useUnits } from "@/hooks/useUnits";
+import { cn } from "@/lib/utils";
+
+// Form Components (Tahoe UI)
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 
 interface AddOperadorModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   operatorToEdit?: Operator | null;
-  // Omitimos ID al crear (y permitimos payload flexible)
   onSave?: (operador: any) => void;
   isSaving?: boolean;
 }
 
-// Nota: assigned_unit_id sigue siendo string aquí SOLO para el Select.
-// En el submit lo convertimos a number | null.
-const emptyFormData = {
-  name: "",
-  license_number: "",
-  license_type: "",
-  license_expiry: "",
-  medical_check_expiry: "",
-  phone: "",
-  assigned_unit_id: "", // String temporal para el Select
-  hire_date: "",
-  emergency_contact: "",
-  emergency_phone: "",
-};
+// =====================
+// ESQUEMA ZOD (VALIDACIÓN)
+// =====================
+const operatorSchema = z.object({
+  name: z.string().min(2, "El nombre es requerido y debe ser válido"),
+  license_number: z.string().min(3, "Número de licencia requerido"),
+  license_type: z.string().min(1, "Seleccione el tipo de licencia"),
+  license_expiry: z.string().min(1, "Fecha requerida"),
+  medical_check_expiry: z.string().min(1, "Fecha requerida"),
+  phone: z.string().min(10, "Ingrese un número válido a 10 dígitos"),
+  assigned_unit_id: z.string().optional(),
+  hire_date: z.string().min(1, "Fecha requerida"),
+  emergency_contact: z.string().optional(),
+  emergency_phone: z.string().optional(),
+});
+
+type OperatorFormData = z.infer<typeof operatorSchema>;
 
 export function AddOperadorModal({
   open,
@@ -63,98 +78,95 @@ export function AddOperadorModal({
 }: AddOperadorModalProps) {
   const { toast } = useToast();
   const { unidades } = useUnits();
-  const [formData, setFormData] = useState(emptyFormData);
-  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const isEditMode = !!operatorToEdit;
 
   // Filtramos unidades disponibles + la actual del operador
-  const unidadesSelectables = unidades.filter(
-    (u) =>
-      u.status === "disponible" ||
-      (operatorToEdit && u.id === operatorToEdit.assigned_unit_id),
-  );
+  const unidadesSelectables = useMemo(() => {
+    return unidades.filter(
+      (u) =>
+        u.status === "disponible" ||
+        (operatorToEdit && u.id === operatorToEdit.assigned_unit_id),
+    );
+  }, [unidades, operatorToEdit]);
+
+  // 🚀 REACT HOOK FORM
+  const form = useForm<OperatorFormData>({
+    resolver: zodResolver(operatorSchema),
+    defaultValues: {
+      name: "",
+      license_number: "",
+      license_type: "",
+      license_expiry: "",
+      medical_check_expiry: "",
+      phone: "",
+      assigned_unit_id: "none",
+      hire_date: "",
+      emergency_contact: "",
+      emergency_phone: "",
+    },
+  });
+
+  const { reset, handleSubmit } = form;
 
   useEffect(() => {
     if (open && operatorToEdit) {
-      setFormData({
+      reset({
         name: operatorToEdit.name,
         license_number: operatorToEdit.license_number,
         license_type: operatorToEdit.license_type,
         license_expiry: operatorToEdit.license_expiry,
         medical_check_expiry: operatorToEdit.medical_check_expiry,
         phone: operatorToEdit.phone || "",
-        // Convertimos el ID numérico a string para el Select, o "" si es null
-        assigned_unit_id: operatorToEdit.assigned_unit_id?.toString() || "",
+        assigned_unit_id: operatorToEdit.assigned_unit_id?.toString() || "none",
         hire_date: operatorToEdit.hire_date || "",
         emergency_contact: operatorToEdit.emergency_contact || "",
         emergency_phone: operatorToEdit.emergency_phone || "",
       });
-      setErrors({});
     } else if (!open) {
-      setFormData(emptyFormData);
-      setErrors({});
-    }
-  }, [operatorToEdit, open]);
-
-  const validateForm = (): boolean => {
-    const newErrors: Record<string, string> = {};
-    if (!formData.name?.trim()) newErrors.name = "Requerido";
-    if (!formData.license_number?.trim())
-      newErrors.license_number = "Requerido";
-    if (!formData.license_type) newErrors.license_type = "Requerido";
-    if (!formData.license_expiry) newErrors.license_expiry = "Requerido";
-    if (!formData.medical_check_expiry)
-      newErrors.medical_check_expiry = "Requerido";
-    if (!formData.phone?.trim()) newErrors.phone = "Requerido";
-    if (!formData.hire_date) newErrors.hire_date = "Requerido";
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!validateForm()) {
-      toast({
-        title: "Faltan datos",
-        description: "Complete los campos obligatorios.",
-        variant: "destructive",
+      reset({
+        name: "",
+        license_number: "",
+        license_type: "",
+        license_expiry: "",
+        medical_check_expiry: "",
+        phone: "",
+        assigned_unit_id: "none",
+        hire_date: "",
+        emergency_contact: "",
+        emergency_phone: "",
       });
-      return;
     }
+  }, [operatorToEdit, open, reset]);
 
-    // CORRECCIÓN: Convertir String del Select a Number o Null
+  // =====================
+  // SUBMIT
+  // =====================
+  const onSubmit = (data: OperatorFormData) => {
     let unitIdToSend: number | null = null;
 
     if (
-      formData.assigned_unit_id &&
-      formData.assigned_unit_id !== "none" &&
-      formData.assigned_unit_id !== ""
+      data.assigned_unit_id &&
+      data.assigned_unit_id !== "none" &&
+      data.assigned_unit_id !== ""
     ) {
-      const parsed = parseInt(formData.assigned_unit_id, 10);
+      const parsed = parseInt(data.assigned_unit_id, 10);
       unitIdToSend = Number.isNaN(parsed) ? null : parsed;
     }
 
     const operadorData: any = {
-      // No mandamos ID si es nuevo (el backend lo crea)
       ...(isEditMode && { id: operatorToEdit?.id }),
-
       status: operatorToEdit?.status || "activo",
-      name: formData.name,
-      license_number: formData.license_number,
-      license_type: formData.license_type,
-      license_expiry: formData.license_expiry,
-      medical_check_expiry: formData.medical_check_expiry,
-      phone: formData.phone,
-
-      // Enviamos el número o null
+      name: data.name.trim(),
+      license_number: data.license_number.trim().toUpperCase(),
+      license_type: data.license_type,
+      license_expiry: data.license_expiry,
+      medical_check_expiry: data.medical_check_expiry,
+      phone: data.phone.trim(),
       assigned_unit_id: unitIdToSend,
-
-      hire_date: formData.hire_date,
-      emergency_contact: formData.emergency_contact,
-      emergency_phone: formData.emergency_phone,
+      hire_date: data.hire_date,
+      emergency_contact: data.emergency_contact?.trim() || "",
+      emergency_phone: data.emergency_phone?.trim() || "",
     };
 
     onSave?.(operadorData);
@@ -162,293 +174,370 @@ export function AddOperadorModal({
 
   const handleClose = () => {
     onOpenChange(false);
-    setFormData(emptyFormData);
-    setErrors({});
+    reset();
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader className="bg-primary text-primary-foreground -mx-6 -mt-6 px-6 py-4 rounded-t-lg">
-          <DialogTitle className="flex items-center gap-2 text-lg">
-            <User className="h-5 w-5" />
-            {isEditMode ? "Editar Operador" : "Registrar Nuevo Operador"}
-          </DialogTitle>
-          <DialogDescription className="text-primary-foreground/80">
-            {isEditMode
-              ? "Modifique la información del operador."
-              : "Complete la información del conductor para agregarlo al sistema."}
-          </DialogDescription>
+    <Dialog
+      open={open}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) handleClose();
+      }}
+    >
+      <DialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-slate-50/50 dark:bg-transparent backdrop-blur-xl rounded-2xl">
+        {/* 🚀 HEADER TAHOE */}
+        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-brand-navy/95 dark:bg-slate-900 backdrop-blur-md shrink-0 border-b border-white/10 relative overflow-hidden z-10">
+          <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
+          <div className="relative z-10 flex items-center gap-4 sm:gap-5">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-blue-500/20 flex items-center justify-center shadow-inner shrink-0 icon-plate">
+              <User className="h-7 w-7 sm:h-8 sm:w-8 text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.4)]" />
+            </div>
+            <div className="flex flex-col gap-1 text-left">
+              <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-white text-shadow-premium heading-crisp leading-none">
+                {isEditMode ? "Editar Operador" : "Registrar Nuevo Operador"}
+              </DialogTitle>
+              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-brand-secondary dark:text-slate-400 mt-1">
+                {isEditMode
+                  ? "Modifique la información operativa del conductor."
+                  : "Complete la información para alta en el sistema."}
+              </p>
+            </div>
+          </div>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-6 pt-4">
-          {/* Información Personal */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-foreground border-b pb-2 flex items-center gap-2">
-              <User className="h-4 w-4 text-muted-foreground" />
-              Información Personal
-            </h3>
+        {/* 🚀 BODY: FORMULARIO */}
+        <Form {...form}>
+          <form
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="flex-1 overflow-hidden flex flex-col"
+          >
+            <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar">
+              <div className="space-y-8">
+                {/* Información Personal */}
+                <div className="space-y-6">
+                  <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-2">
+                    <User className="h-3.5 w-3.5 text-blue-500" />
+                    Información Personal
+                  </h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Nombre Completo *</Label>
-                <Input
-                  id="name"
-                  placeholder="Juan Pérez González"
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                  className={errors.name ? "border-destructive" : ""}
-                />
-                {errors.name && (
-                  <p className="text-xs text-destructive">{errors.name}</p>
-                )}
-              </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <FormField
+                      control={form.control}
+                      name="name"
+                      render={({ field }) => (
+                        <FormItem className="col-span-1 md:col-span-2">
+                          <FormLabel variant="brand" required>
+                            Nombre Completo
+                          </FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              placeholder="Ej: Juan Pérez González"
+                              className="h-11 font-black uppercase bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-              <div className="space-y-2">
-                <Label htmlFor="phone">Teléfono *</Label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="phone"
-                    placeholder="+52 55 1234 5678"
-                    className={`pl-10 ${errors.phone ? "border-destructive" : ""}`}
-                    value={formData.phone}
-                    onChange={(e) =>
-                      setFormData({ ...formData, phone: e.target.value })
-                    }
+                    <FormField
+                      control={form.control}
+                      name="phone"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel variant="brand" required>
+                            Teléfono
+                          </FormLabel>
+                          <FormControl>
+                            <div className="relative">
+                              <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                              <Input
+                                {...field}
+                                placeholder="+52 55 1234 5678"
+                                className="pl-10 h-11 font-mono font-bold bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                              />
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="hire_date"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel variant="brand" required>
+                            Fecha de Contratación
+                          </FormLabel>
+                          <FormControl>
+                            <div className="relative">
+                              <CalendarIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                              <Input
+                                type="date"
+                                {...field}
+                                className="pl-10 h-11 font-mono bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                              />
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+
+                {/* Licencia */}
+                <div className="space-y-6 pt-2">
+                  <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-2">
+                    <CreditCard className="h-3.5 w-3.5 text-blue-500" />
+                    Información de Licencia
+                  </h3>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <FormField
+                      control={form.control}
+                      name="license_number"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel variant="brand" required>
+                            Número de Licencia
+                          </FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              placeholder="LIC-2024-12345"
+                              className="h-11 font-mono uppercase font-bold bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="license_type"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel variant="brand" required>
+                            Tipo de Licencia
+                          </FormLabel>
+                          <Select
+                            onValueChange={field.onChange}
+                            defaultValue={field.value}
+                            value={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger className="h-11 font-bold bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm">
+                                <SelectValue placeholder="Seleccionar tipo" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-slate-200 dark:border-white/10">
+                              <SelectItem value="A">
+                                Tipo A - Motocicleta
+                              </SelectItem>
+                              <SelectItem value="B">
+                                Tipo B - Automóvil
+                              </SelectItem>
+                              <SelectItem value="C">
+                                Tipo C - Carga ligera
+                              </SelectItem>
+                              <SelectItem value="D">
+                                Tipo D - Carga pesada
+                              </SelectItem>
+                              <SelectItem
+                                value="E"
+                                className="font-bold text-brand-navy dark:text-blue-400"
+                              >
+                                Tipo E - Tractocamión
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="license_expiry"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel variant="brand" required>
+                            Vigencia de Licencia
+                          </FormLabel>
+                          <FormControl>
+                            <Input
+                              type="date"
+                              {...field}
+                              className="h-11 font-mono bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="medical_check_expiry"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel variant="brand" required>
+                            Vigencia Examen Médico
+                          </FormLabel>
+                          <FormControl>
+                            <Input
+                              type="date"
+                              {...field}
+                              className="h-11 font-mono bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+
+                {/* Asignación de Unidad */}
+                <div className="space-y-6 pt-2">
+                  <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-2">
+                    <Truck className="h-3.5 w-3.5 text-blue-500" />
+                    Asignación Operativa
+                  </h3>
+
+                  <FormField
+                    control={form.control}
+                    name="assigned_unit_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel variant="brand">
+                          Unidad Asignada (Opcional)
+                        </FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                          value={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="h-11 font-bold bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm">
+                              <SelectValue placeholder="Sin asignar" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-slate-200 dark:border-white/10">
+                            <SelectItem
+                              value="none"
+                              className="italic text-slate-500"
+                            >
+                              Sin asignar (En Patio)
+                            </SelectItem>
+                            {unidadesSelectables.map((unit) => (
+                              <SelectItem
+                                key={unit.id}
+                                value={unit.id.toString()}
+                                className="font-bold"
+                              >
+                                {unit.numero_economico} - {unit.marca}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
                 </div>
-                {errors.phone && (
-                  <p className="text-xs text-destructive">{errors.phone}</p>
-                )}
+
+                {/* Contacto de Emergencia */}
+                <div className="space-y-6 pt-2">
+                  <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-2">
+                    <Heart className="h-3.5 w-3.5 text-rose-500" />
+                    Contacto de Emergencia
+                  </h3>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <FormField
+                      control={form.control}
+                      name="emergency_contact"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel variant="brand">
+                            Nombre del Contacto
+                          </FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              placeholder="Ej: María González"
+                              className="h-11 font-bold bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="emergency_phone"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel variant="brand">
+                            Teléfono de Emergencia
+                          </FormLabel>
+                          <FormControl>
+                            <div className="relative">
+                              <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                              <Input
+                                {...field}
+                                placeholder="+52 55 8765 4321"
+                                className="pl-10 h-11 font-mono font-bold bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                              />
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="hire_date">Fecha de Contratación *</Label>
-              <div className="relative">
-                <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="hire_date"
-                  type="date"
-                  className={`pl-10 ${errors.hire_date ? "border-destructive" : ""}`}
-                  value={formData.hire_date}
-                  onChange={(e) =>
-                    setFormData({ ...formData, hire_date: e.target.value })
-                  }
-                />
-              </div>
-              {errors.hire_date && (
-                <p className="text-xs text-destructive">{errors.hire_date}</p>
-              )}
-            </div>
-          </div>
-
-          {/* Licencia */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-foreground border-b pb-2 flex items-center gap-2">
-              <CreditCard className="h-4 w-4 text-muted-foreground" />
-              Información de Licencia
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="license_number">Número de Licencia *</Label>
-                <Input
-                  id="license_number"
-                  placeholder="LIC-2024-12345"
-                  value={formData.license_number}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      license_number: e.target.value,
-                    })
-                  }
-                  className={errors.license_number ? "border-destructive" : ""}
-                />
-                {errors.license_number && (
-                  <p className="text-xs text-destructive">
-                    {errors.license_number}
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="license_type">Tipo de Licencia *</Label>
-                <Select
-                  value={formData.license_type}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, license_type: value })
-                  }
+            {/* 🚀 FOOTER TAHOE */}
+            <DialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0">
+              <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  onClick={handleClose}
+                  disabled={isSaving}
+                  className="w-full sm:w-auto haptic-press flex-shrink-0"
                 >
-                  <SelectTrigger
-                    className={errors.license_type ? "border-destructive" : ""}
-                  >
-                    <SelectValue placeholder="Seleccionar tipo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="A">Tipo A - Motocicleta</SelectItem>
-                    <SelectItem value="B">Tipo B - Automóvil</SelectItem>
-                    <SelectItem value="C">Tipo C - Carga ligera</SelectItem>
-                    <SelectItem value="D">Tipo D - Carga pesada</SelectItem>
-                    <SelectItem value="E">Tipo E - Tractocamión</SelectItem>
-                  </SelectContent>
-                </Select>
-                {errors.license_type && (
-                  <p className="text-xs text-destructive">
-                    {errors.license_type}
-                  </p>
-                )}
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  variant="default"
+                  size="lg"
+                  disabled={isSaving}
+                  className="w-full sm:w-auto haptic-press flex-shrink-0"
+                >
+                  {isSaving ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Check className="mr-2 h-4 w-4" />
+                  )}
+                  {isEditMode ? "Actualizar Operador" : "Guardar Operador"}
+                </Button>
               </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="license_expiry">Vigencia de Licencia *</Label>
-                <Input
-                  id="license_expiry"
-                  type="date"
-                  value={formData.license_expiry}
-                  onChange={(e) =>
-                    setFormData({ ...formData, license_expiry: e.target.value })
-                  }
-                  className={errors.license_expiry ? "border-destructive" : ""}
-                />
-                {errors.license_expiry && (
-                  <p className="text-xs text-destructive">
-                    {errors.license_expiry}
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="medical_check_expiry">
-                  Vigencia Examen Médico *
-                </Label>
-                <Input
-                  id="medical_check_expiry"
-                  type="date"
-                  value={formData.medical_check_expiry}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      medical_check_expiry: e.target.value,
-                    })
-                  }
-                  className={
-                    errors.medical_check_expiry ? "border-destructive" : ""
-                  }
-                />
-                {errors.medical_check_expiry && (
-                  <p className="text-xs text-destructive">
-                    {errors.medical_check_expiry}
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Asignación de Unidad */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-foreground border-b pb-2 flex items-center gap-2">
-              <Truck className="h-4 w-4 text-muted-foreground" />
-              Asignación de Unidad (Opcional)
-            </h3>
-
-            <div className="space-y-2">
-              <Label htmlFor="assigned_unit">Unidad Asignada</Label>
-              <Select
-                value={formData.assigned_unit_id || "none"}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, assigned_unit_id: value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Sin asignar" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Sin asignar</SelectItem>
-                  {unidadesSelectables.map((unit) => (
-                    // Convertimos ID a string para el value del select
-                    <SelectItem key={unit.id} value={unit.id.toString()}>
-                      {unit.numero_economico} - {unit.marca}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Contacto de Emergencia */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-foreground border-b pb-2 flex items-center gap-2">
-              <Heart className="h-4 w-4 text-muted-foreground" />
-              Contacto de Emergencia
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="emergency_contact">Nombre del Contacto</Label>
-                <Input
-                  id="emergency_contact"
-                  placeholder="María González"
-                  value={formData.emergency_contact}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      emergency_contact: e.target.value,
-                    })
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="emergency_phone">Teléfono de Emergencia</Label>
-                <Input
-                  id="emergency_phone"
-                  placeholder="+52 55 8765 4321"
-                  value={formData.emergency_phone}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      emergency_phone: e.target.value,
-                    })
-                  }
-                />
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter className="gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleClose}
-              disabled={isSaving}
-            >
-              Cancelar
-            </Button>
-
-            <Button
-              type="submit"
-              className="bg-primary hover:bg-primary/90 text-primary-foreground"
-              disabled={isSaving}
-            >
-              {isSaving ? (
-                <span className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Guardando...
-                </span>
-              ) : isEditMode ? (
-                "Actualizar Operador"
-              ) : (
-                "Guardar Operador"
-              )}
-            </Button>
-          </DialogFooter>
-        </form>
+            </DialogFooter>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   );

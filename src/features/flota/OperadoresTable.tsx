@@ -29,6 +29,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { OperatorDetailSheet } from "./OperatorDetailSheet";
 import { Operator } from "@/types/api.types";
+import { cn } from "@/lib/utils";
 
 interface OperadoresTableProps {
   operadores: Operator[];
@@ -54,34 +55,66 @@ const getExpiryLabel = (dateStr?: string) => {
 // ----------------------------------------
 
 const getStatusBadge = (status: string) => {
+  const baseClass =
+    "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 shadow-sm";
   switch (status?.toLowerCase()) {
     case "activo":
       return (
-        <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100/80 border-emerald-200">
+        <Badge
+          variant="outline"
+          className={cn(
+            baseClass,
+            "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-500/30",
+          )}
+        >
           Activo
         </Badge>
       );
     case "inactivo":
       return (
-        <Badge className="bg-red-100 text-red-700 hover:bg-red-100/80 border-red-200">
+        <Badge
+          variant="outline"
+          className={cn(
+            baseClass,
+            "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-500/30",
+          )}
+        >
           Inactivo
         </Badge>
       );
     case "vacaciones":
       return (
-        <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100/80 border-blue-200">
+        <Badge
+          variant="outline"
+          className={cn(
+            baseClass,
+            "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-500/30",
+          )}
+        >
           Vacaciones
         </Badge>
       );
     case "incapacidad":
       return (
-        <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100/80 border-amber-200">
+        <Badge
+          variant="outline"
+          className={cn(
+            baseClass,
+            "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-500/30",
+          )}
+        >
           Incapacidad
         </Badge>
       );
     default:
       return (
-        <Badge variant="secondary" className="capitalize">
+        <Badge
+          variant="outline"
+          className={cn(
+            baseClass,
+            "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-white/10",
+          )}
+        >
           {status || "Desconocido"}
         </Badge>
       );
@@ -106,10 +139,12 @@ const ExpiryBadge = ({ date, label }: { date: string; label: string }) => {
 
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
+        {label}
+      </span>
       <StatusBadge
         status={statusMap[status] || "default"}
-        className="flex items-center w-fit"
+        className="flex items-center w-fit text-[9px] font-bold uppercase tracking-widest shadow-sm"
       >
         {iconMap[status]} {expiryLabel}
       </StatusBadge>
@@ -140,10 +175,10 @@ export function OperadoresTable({
         sortable: true,
         render: (_, operador) => (
           <div className="flex flex-col">
-            <span className="font-semibold text-foreground">
+            <span className="font-black text-brand-navy dark:text-white uppercase tracking-tight">
               {operador.name}
             </span>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mt-1">
               ID: {operador.id} • Lic: {operador.license_type}
             </span>
           </div>
@@ -153,7 +188,11 @@ export function OperadoresTable({
         key: "license_number",
         header: "Licencia",
         sortable: true,
-        render: (value) => <span className="font-mono text-sm">{value}</span>,
+        render: (value) => (
+          <span className="font-mono text-sm font-bold text-slate-700 dark:text-slate-300 uppercase">
+            {value}
+          </span>
+        ),
       },
       {
         key: "license_expiry",
@@ -195,9 +234,9 @@ export function OperadoresTable({
         render: (value) => (
           <a
             href={`tel:${value}`}
-            className="flex items-center gap-1 text-sm hover:text-primary transition-colors"
+            className="flex items-center gap-1 font-mono text-sm font-bold text-brand-navy dark:text-blue-400 hover:text-brand-red transition-colors"
           >
-            <Phone className="h-3 w-3" /> {value || "--"}
+            <Phone className="h-3.5 w-3.5" /> {value || "--"}
           </a>
         ),
       },
@@ -206,11 +245,16 @@ export function OperadoresTable({
         header: "Unidad",
         render: (value, operador) =>
           value || operador.assigned_unit_id ? (
-            <Badge variant="outline" className="font-mono">
-              {value || `Unidad ID: ${operador.assigned_unit_id}`}
+            <Badge
+              variant="outline"
+              className="font-mono text-[10px] bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-white/10 font-bold"
+            >
+              {value || `ECO-${operador.assigned_unit_id}`}
             </Badge>
           ) : (
-            <span className="text-muted-foreground text-xs">Sin asignar</span>
+            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 italic">
+              En Patio
+            </span>
           ),
       },
       {
@@ -226,25 +270,40 @@ export function OperadoresTable({
         width: "w-[80px]",
         render: (_, operador) => (
           <div
-            className="flex justify-center"
+            className="flex justify-end pr-2"
             onClick={(e) => e.stopPropagation()}
           >
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                  <MoreHorizontal className="h-4 w-4" />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50"
+                >
+                  <MoreHorizontal className="h-4 w-4 text-slate-500 dark:text-slate-400" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => handleViewDetails(operador)}>
-                  <Eye className="h-4 w-4 mr-2" /> Ver detalles
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onEdit?.(operador)}>
-                  <Edit className="h-4 w-4 mr-2" /> Editar
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
+              <DropdownMenuContent
+                align="end"
+                className="glass-panel border-white/20 min-w-[160px] z-50 dark:bg-slate-900/90"
+              >
                 <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
+                  onClick={() => handleViewDetails(operador)}
+                  className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
+                >
+                  <Eye className="h-4 w-4 text-brand-navy dark:text-slate-400" />{" "}
+                  Ver detalles
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => onEdit?.(operador)}
+                  className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
+                >
+                  <Edit className="h-4 w-4 text-blue-500 dark:text-blue-400" />{" "}
+                  Editar
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="dark:bg-white/10" />
+                <DropdownMenuItem
+                  className="gap-2 font-bold text-xs uppercase tracking-tight text-rose-600 dark:text-rose-500 cursor-pointer dark:focus:bg-rose-950/30"
                   onClick={() => onDelete?.(operador.id)}
                 >
                   <UserX className="h-4 w-4 mr-2" /> Dar de Baja
@@ -259,14 +318,18 @@ export function OperadoresTable({
   );
 
   return (
-    <Card className="overflow-hidden border-none shadow-none">
-      <CardHeader className="pb-4 px-6">
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <FileText className="h-5 w-5" /> Listado de Operadores
+    <Card variant="default" className="shadow-2xl border-none overflow-hidden">
+      <CardHeader className="flex flex-row items-center justify-between border-b border-slate-200 dark:border-white/10 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-xl py-6 px-6">
+        <CardTitle className="text-xl font-black uppercase tracking-tighter text-brand-navy dark:text-white heading-crisp flex items-center gap-3">
+          <FileText className="h-6 w-6 text-brand-red" /> Listado de Operadores
         </CardTitle>
       </CardHeader>
-      <CardContent className="p-6">
-        <EnhancedDataTable data={operadores} columns={columns} />
+      <CardContent className="p-0 bg-white dark:bg-slate-950 [&_thead]:bg-slate-50/80 dark:[&_thead]:bg-slate-900/80 [&_thead]:backdrop-blur-xl [&_th]:bg-transparent [&_th]:border-b [&_th]:border-slate-200 dark:[&_th]:border-white/10 [&_th]:text-[10px] [&_th]:font-black [&_th]:uppercase [&_th]:tracking-[0.2em] [&_th]:text-slate-500 dark:[&_th]:text-slate-400">
+        <EnhancedDataTable
+          data={operadores}
+          columns={columns}
+          className="border-none"
+        />
       </CardContent>
 
       <OperatorDetailSheet
