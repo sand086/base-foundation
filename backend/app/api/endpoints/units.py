@@ -106,9 +106,20 @@ def create_unit(unit: schemas.UnitCreate, db: Session = Depends(get_db)):
 @router.put("/{unit_id}", response_model=schemas.UnitResponse)
 def update_unit(unit_id: str, unit: schemas.UnitUpdate, db: Session = Depends(get_db)):
     try:
-        # 🚀 LIMPIAMOS TAMBIÉN EN EDICIÓN
+        # 🚀 1. LIMPIAMOS EL PREFIJO ECO
         if unit.numero_economico:
             unit.numero_economico = clean_eco_prefix(unit.numero_economico)
+
+        # 🚀 2. SANITIZACIÓN DE CAMPOS ÚNICOS (Evitar el choque de strings vacíos "")
+        # Si React manda "", lo convertimos a None (NULL en BD) para que no haya falsos duplicados
+        if hasattr(unit, "vin") and unit.vin == "":
+            unit.vin = None
+        if hasattr(unit, "placas") and unit.placas == "":
+            unit.placas = None
+        if hasattr(unit, "permiso_sct_folio") and unit.permiso_sct_folio == "":
+            unit.permiso_sct_folio = None
+        if hasattr(unit, "caat_folio") and unit.caat_folio == "":
+            unit.caat_folio = None
 
         db_unit = crud.update_unit(db, unit_id, unit)
         if not db_unit:
@@ -117,14 +128,31 @@ def update_unit(unit_id: str, unit: schemas.UnitUpdate, db: Session = Depends(ge
 
     except IntegrityError as e:
         db.rollback()
-        error_msg = str(e.orig)
-        if "units_placas_key" in error_msg:
+        error_msg = str(
+            e.orig
+        ).lower()  # Convertimos a minúsculas para buscar fácilmente
+
+        # 🚀 3. ALERTAS ESPECÍFICAS DE DUPLICADOS
+        if "placas" in error_msg:
             raise HTTPException(
                 status_code=400,
                 detail="No se pudo actualizar: Esas placas ya están asignadas a otra unidad.",
             )
+        if "numero_economico" in error_msg:
+            raise HTTPException(
+                status_code=400,
+                detail="No se pudo actualizar: El número económico ya está en uso por otra unidad.",
+            )
+        if "vin" in error_msg:
+            raise HTTPException(
+                status_code=400,
+                detail="No se pudo actualizar: El número de serie (VIN) ya existe en otra unidad.",
+            )
+
+        # Fallback por si choca alguna otra cosa
         raise HTTPException(
-            status_code=400, detail="Error al actualizar: Posible dato duplicado."
+            status_code=400,
+            detail=f"Error de integridad (Dato duplicado): Verifique los folios ingresados.",
         )
 
 
