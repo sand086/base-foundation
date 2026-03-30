@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Plus, Wrench } from "lucide-react";
 import { toast } from "sonner";
 
 // Importamos nuestros componentes modulares
@@ -74,18 +74,24 @@ export default function MechanicsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* CORRECCIÓN AQUÍ: Quitamos el "/>" y dejamos solo ">" */}
+    <div className="p-4 md:p-8 space-y-8 animate-page-enter pb-20">
+      {/* 🚀 PAGE HEADER TAHOE */}
       <PageHeader
         title="Administración de Mecánicos"
-        description="Gestión de personal técnico y expedientes"
+        description="Gestión de personal técnico, certificaciones y expedientes operativos."
+        icon={<Wrench className="h-8 w-8 text-brand-navy dark:text-white" />}
       >
-        {/* Ahora el botón es un hijo directo */}
-        <Button onClick={handleCreate}>
+        <Button
+          size="lg"
+          variant="default"
+          className="w-full sm:w-auto haptic-press shadow-lg shadow-brand-red/20"
+          onClick={handleCreate}
+        >
           <Plus className="mr-2 h-4 w-4" /> Nuevo Mecánico
         </Button>
       </PageHeader>
 
+      {/* 🚀 TABLA DE MECÁNICOS */}
       <MechanicsTable
         data={mechanics}
         isLoading={isLoading}
@@ -93,6 +99,7 @@ export default function MechanicsPage() {
         onOpenExpediente={handleOpenExpediente}
       />
 
+      {/* 🚀 MODAL DE FORMULARIO */}
       <MechanicFormModal
         open={isFormOpen}
         onOpenChange={setIsFormOpen}
@@ -100,6 +107,7 @@ export default function MechanicsPage() {
         onSave={handleSave}
       />
 
+      {/* 🚀 MODAL DE EXPEDIENTE */}
       <MechanicExpedienteModal
         open={isExpedienteOpen}
         onOpenChange={setIsExpedienteOpen}

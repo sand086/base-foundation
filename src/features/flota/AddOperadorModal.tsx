@@ -2,6 +2,8 @@ import { useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
 import {
   Dialog,
   DialogContent,
@@ -23,7 +25,6 @@ import {
   User,
   Phone,
   CreditCard,
-  Calendar as CalendarIcon,
   Truck,
   Heart,
   Loader2,
@@ -42,6 +43,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { DatePicker } from "@/components/ui/date-picker";
 
 interface AddOperadorModalProps {
   open: boolean;
@@ -58,11 +60,11 @@ const operatorSchema = z.object({
   name: z.string().min(2, "El nombre es requerido y debe ser válido"),
   license_number: z.string().min(3, "Número de licencia requerido"),
   license_type: z.string().min(1, "Seleccione el tipo de licencia"),
-  license_expiry: z.string().min(1, "Fecha requerida"),
-  medical_check_expiry: z.string().min(1, "Fecha requerida"),
+  license_expiry: z.date({ required_error: "Fecha requerida" }),
+  medical_check_expiry: z.date({ required_error: "Fecha requerida" }),
   phone: z.string().min(10, "Ingrese un número válido a 10 dígitos"),
   assigned_unit_id: z.string().optional(),
-  hire_date: z.string().min(1, "Fecha requerida"),
+  hire_date: z.date({ required_error: "Fecha requerida" }),
   emergency_contact: z.string().optional(),
   emergency_phone: z.string().optional(),
 });
@@ -97,11 +99,11 @@ export function AddOperadorModal({
       name: "",
       license_number: "",
       license_type: "",
-      license_expiry: "",
-      medical_check_expiry: "",
+      license_expiry: undefined,
+      medical_check_expiry: undefined,
       phone: "",
       assigned_unit_id: "none",
-      hire_date: "",
+      hire_date: new Date(),
       emergency_contact: "",
       emergency_phone: "",
     },
@@ -110,32 +112,41 @@ export function AddOperadorModal({
   const { reset, handleSubmit } = form;
 
   useEffect(() => {
-    if (open && operatorToEdit) {
-      reset({
-        name: operatorToEdit.name,
-        license_number: operatorToEdit.license_number,
-        license_type: operatorToEdit.license_type,
-        license_expiry: operatorToEdit.license_expiry,
-        medical_check_expiry: operatorToEdit.medical_check_expiry,
-        phone: operatorToEdit.phone || "",
-        assigned_unit_id: operatorToEdit.assigned_unit_id?.toString() || "none",
-        hire_date: operatorToEdit.hire_date || "",
-        emergency_contact: operatorToEdit.emergency_contact || "",
-        emergency_phone: operatorToEdit.emergency_phone || "",
-      });
-    } else if (!open) {
-      reset({
-        name: "",
-        license_number: "",
-        license_type: "",
-        license_expiry: "",
-        medical_check_expiry: "",
-        phone: "",
-        assigned_unit_id: "none",
-        hire_date: "",
-        emergency_contact: "",
-        emergency_phone: "",
-      });
+    if (open) {
+      if (operatorToEdit) {
+        reset({
+          name: operatorToEdit.name,
+          license_number: operatorToEdit.license_number,
+          license_type: operatorToEdit.license_type,
+          license_expiry: operatorToEdit.license_expiry
+            ? new Date(`${operatorToEdit.license_expiry}T12:00:00`)
+            : undefined,
+          medical_check_expiry: operatorToEdit.medical_check_expiry
+            ? new Date(`${operatorToEdit.medical_check_expiry}T12:00:00`)
+            : undefined,
+          phone: operatorToEdit.phone || "",
+          assigned_unit_id:
+            operatorToEdit.assigned_unit_id?.toString() || "none",
+          hire_date: operatorToEdit.hire_date
+            ? new Date(`${operatorToEdit.hire_date}T12:00:00`)
+            : new Date(),
+          emergency_contact: operatorToEdit.emergency_contact || "",
+          emergency_phone: operatorToEdit.emergency_phone || "",
+        });
+      } else {
+        reset({
+          name: "",
+          license_number: "",
+          license_type: "",
+          license_expiry: undefined,
+          medical_check_expiry: undefined,
+          phone: "",
+          assigned_unit_id: "none",
+          hire_date: new Date(),
+          emergency_contact: "",
+          emergency_phone: "",
+        });
+      }
     }
   }, [operatorToEdit, open, reset]);
 
@@ -160,11 +171,11 @@ export function AddOperadorModal({
       name: data.name.trim(),
       license_number: data.license_number.trim().toUpperCase(),
       license_type: data.license_type,
-      license_expiry: data.license_expiry,
-      medical_check_expiry: data.medical_check_expiry,
+      license_expiry: format(data.license_expiry, "yyyy-MM-dd"),
+      medical_check_expiry: format(data.medical_check_expiry, "yyyy-MM-dd"),
       phone: data.phone.trim(),
       assigned_unit_id: unitIdToSend,
-      hire_date: data.hire_date,
+      hire_date: format(data.hire_date, "yyyy-MM-dd"),
       emergency_contact: data.emergency_contact?.trim() || "",
       emergency_phone: data.emergency_phone?.trim() || "",
     };
@@ -184,34 +195,50 @@ export function AddOperadorModal({
         if (!isOpen) handleClose();
       }}
     >
-      <DialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-slate-50/50 dark:bg-transparent backdrop-blur-xl rounded-2xl">
-        {/* 🚀 HEADER TAHOE */}
-        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-brand-navy/95 dark:bg-slate-900 backdrop-blur-md shrink-0 border-b border-white/10 relative overflow-hidden z-10">
-          <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
-          <div className="relative z-10 flex items-center gap-4 sm:gap-5">
-            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-blue-500/20 flex items-center justify-center shadow-inner shrink-0 icon-plate">
-              <User className="h-7 w-7 sm:h-8 sm:w-8 text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.4)]" />
+      {/* 🚀 CAPA 1: CASCARÓN DEL MODAL */}
+      <DialogContent className="w-[95vw] sm:max-w-2xl p-0 flex flex-col max-h-[90vh] bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 shadow-2xl rounded-2xl transition-all duration-300 overflow-hidden">
+        {/* 🚀 CAPA 2: CABECERA (Blanca en Light, Oscura en Dark) */}
+        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 z-10 relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
+          <DialogTitle className="flex items-center gap-4 sm:gap-5 text-slate-800 dark:text-white text-xl font-black relative z-10">
+            <div
+              className={cn(
+                "w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shadow-inner shrink-0 icon-plate",
+                isEditMode
+                  ? "bg-amber-100 dark:bg-amber-900/30"
+                  : "bg-blue-100 dark:bg-blue-900/30",
+              )}
+            >
+              <User
+                className={cn(
+                  "h-7 w-7 sm:h-8 sm:w-8",
+                  isEditMode
+                    ? "text-amber-600 dark:text-amber-400 drop-shadow-[0_0_8px_rgba(245,158,11,0.4)]"
+                    : "text-blue-600 dark:text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.4)]",
+                )}
+              />
             </div>
             <div className="flex flex-col gap-1 text-left">
-              <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-white text-shadow-premium heading-crisp leading-none">
+              <span className="text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white heading-crisp leading-none">
                 {isEditMode ? "Editar Operador" : "Registrar Nuevo Operador"}
-              </DialogTitle>
-              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-brand-secondary dark:text-slate-400 mt-1">
+              </span>
+              <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-1 tracking-normal normal-case">
                 {isEditMode
                   ? "Modifique la información operativa del conductor."
                   : "Complete la información para alta en el sistema."}
-              </p>
+              </span>
             </div>
-          </div>
+          </DialogTitle>
         </DialogHeader>
 
-        {/* 🚀 BODY: FORMULARIO */}
+        {/* 🚀 CAPA 3: CUERPO Y FORMULARIO */}
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit(onSubmit)}
-            className="flex-1 overflow-hidden flex flex-col"
+            className="flex-1 min-h-0 overflow-hidden flex flex-col"
           >
-            <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar">
+            {/* Fondo gris claro en modo Light para que los inputs blancos resalten */}
+            <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-slate-50/50 dark:bg-transparent custom-scrollbar">
               <div className="space-y-8">
                 {/* Información Personal */}
                 <div className="space-y-6">
@@ -273,14 +300,11 @@ export function AddOperadorModal({
                             Fecha de Contratación
                           </FormLabel>
                           <FormControl>
-                            <div className="relative">
-                              <CalendarIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                              <Input
-                                type="date"
-                                {...field}
-                                className="pl-10 h-11 font-mono bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
-                              />
-                            </div>
+                            <DatePicker
+                              date={field.value}
+                              onDateChange={field.onChange}
+                              modalTitle="Fecha de Contratación"
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -370,10 +394,10 @@ export function AddOperadorModal({
                             Vigencia de Licencia
                           </FormLabel>
                           <FormControl>
-                            <Input
-                              type="date"
-                              {...field}
-                              className="h-11 font-mono bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                            <DatePicker
+                              date={field.value}
+                              onDateChange={field.onChange}
+                              modalTitle="Vigencia Licencia"
                             />
                           </FormControl>
                           <FormMessage />
@@ -390,10 +414,10 @@ export function AddOperadorModal({
                             Vigencia Examen Médico
                           </FormLabel>
                           <FormControl>
-                            <Input
-                              type="date"
-                              {...field}
-                              className="h-11 font-mono bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                            <DatePicker
+                              date={field.value}
+                              onDateChange={field.onChange}
+                              modalTitle="Vigencia Examen"
                             />
                           </FormControl>
                           <FormMessage />
@@ -441,7 +465,7 @@ export function AddOperadorModal({
                                 value={unit.id.toString()}
                                 className="font-bold"
                               >
-                                {unit.numero_economico} - {unit.marca}
+                                ECO-{unit.numero_economico} - {unit.marca}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -507,8 +531,8 @@ export function AddOperadorModal({
               </div>
             </div>
 
-            {/* 🚀 FOOTER TAHOE */}
-            <DialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0">
+            {/* 🚀 CAPA 4: FOOTER TAHOE */}
+            <DialogFooter className="p-6 sm:p-8 bg-slate-50/50 dark:bg-black/20 border-t border-slate-200 dark:border-white/10 shrink-0">
               <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
                 <Button
                   type="button"
@@ -525,7 +549,12 @@ export function AddOperadorModal({
                   variant="default"
                   size="lg"
                   disabled={isSaving}
-                  className="w-full sm:w-auto haptic-press flex-shrink-0"
+                  className={cn(
+                    "w-full sm:w-auto haptic-press flex-shrink-0 border-none text-white",
+                    isEditMode
+                      ? "bg-brand-green hover:bg-brand-green/80 shadow-amber-500/20"
+                      : "bg-brand-red hover:bg-brand-red/90 shadow-brand-red/20",
+                  )}
                 >
                   {isSaving ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />

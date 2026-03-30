@@ -8,11 +8,13 @@ import {
   Trash2,
   MoreHorizontal,
   Loader2,
+  Database,
+  DollarSign,
+  CheckCircle,
 } from "lucide-react";
-import { ActionButton } from "@/components/ui/action-button";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,6 +36,7 @@ import {
   EnhancedDataTable,
   ColumnDef,
 } from "@/components/ui/enhanced-data-table";
+
 // IMPORTANTE: Usar el Hook y Tipo real
 import { useMaintenance } from "@/hooks/useMaintenance";
 import { InventoryItem } from "@/services/maintenanceService";
@@ -55,6 +58,7 @@ export const InventarioTable = () => {
   // 1. Usar Hook Real
   const { inventory, isLoading, createItem, deleteItem, updateItem } =
     useMaintenance();
+
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
@@ -85,30 +89,41 @@ export const InventarioTable = () => {
     // Convierte "motor" a "Motor" para el diseño
     const categoryName = categoria.charAt(0).toUpperCase() + categoria.slice(1);
 
-    const colors: Record<string, string> = {
-      Motor: "bg-blue-100 text-blue-700 border-blue-200",
-      Frenos: "bg-red-100 text-red-700 border-red-200",
-      Eléctrico: "bg-yellow-100 text-yellow-700 border-yellow-200",
-      General: "bg-slate-100 text-slate-700 border-slate-200",
+    // Mapeo semántico de categorías Tahoe UI
+    const colorClasses: Record<string, string> = {
+      Motor:
+        "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-500/30",
+      Frenos:
+        "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-500/30",
+      Eléctrico:
+        "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-500/30",
+      Suspensión:
+        "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-500/30",
+      Transmisión:
+        "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-500/30",
+      General:
+        "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-white/10",
     };
+
     return (
       <Badge
+        variant="outline"
         className={cn(
-          "hover:bg-opacity-100",
-          colors[categoryName] || colors.General,
+          "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 shadow-sm",
+          colorClasses[categoryName] || colorClasses.General,
         )}
       >
         {categoryName}
       </Badge>
     );
   };
+
   // Handlers conectados al hook
   const handleSave = async (itemData: any) => {
     let success = false;
 
     if (itemToEdit) {
       // MODO EDICIÓN
-      // itemToEdit.id viene del estado cuando hiciste click en el lápiz
       success = await updateItem(itemToEdit.id, itemData);
     } else {
       // MODO CREACIÓN
@@ -153,8 +168,10 @@ export const InventarioTable = () => {
           const isLowStock = item.stock_actual < item.stock_minimo;
           return (
             <div className="flex items-center gap-2">
-              {isLowStock && <AlertTriangle className="h-4 w-4 text-red-500" />}
-              <span className="font-mono text-xs font-medium text-foreground">
+              {isLowStock && (
+                <AlertTriangle className="h-4 w-4 text-rose-500 dark:text-rose-400 animate-pulse" />
+              )}
+              <span className="font-mono font-black text-brand-navy dark:text-white uppercase tracking-tight">
                 {value}
               </span>
             </div>
@@ -166,6 +183,11 @@ export const InventarioTable = () => {
         header: "Descripción",
         sortable: true,
         width: "min-w-[250px]",
+        render: (value) => (
+          <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
+            {value}
+          </span>
+        ),
       },
       {
         key: "categoria",
@@ -185,8 +207,10 @@ export const InventarioTable = () => {
           return (
             <span
               className={cn(
-                "font-semibold text-center block",
-                isLowStock ? "text-red-600" : "text-foreground",
+                "font-mono font-black text-sm text-center block",
+                isLowStock
+                  ? "text-rose-600 dark:text-rose-400"
+                  : "text-brand-navy dark:text-white",
               )}
             >
               {value}
@@ -200,7 +224,7 @@ export const InventarioTable = () => {
         type: "number",
         sortable: true,
         render: (value) => (
-          <span className="text-muted-foreground text-center block">
+          <span className="font-mono font-bold text-xs text-slate-400 dark:text-slate-500 text-center block">
             {value}
           </span>
         ),
@@ -210,7 +234,9 @@ export const InventarioTable = () => {
         header: "Ubicación",
         sortable: true,
         render: (value) => (
-          <span className="text-muted-foreground">{value}</span>
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+            {value || "N/A"}
+          </span>
         ),
       },
       {
@@ -219,7 +245,7 @@ export const InventarioTable = () => {
         type: "number",
         sortable: true,
         render: (value) => (
-          <span className="font-mono text-sm text-foreground text-right block">
+          <span className="font-mono font-bold text-sm text-emerald-600 dark:text-emerald-400 text-right block">
             {formatCurrency(value as number)}
           </span>
         ),
@@ -231,29 +257,43 @@ export const InventarioTable = () => {
         width: "w-[80px]",
         render: (_, item) => (
           <div
-            className="flex justify-center"
+            className="flex justify-end pr-2"
             onClick={(e) => e.stopPropagation()}
           >
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                  <MoreHorizontal className="h-4 w-4" />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50"
+                >
+                  <MoreHorizontal className="h-4 w-4 text-slate-500 dark:text-slate-400" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => handleView(item)}>
-                  <Eye className="h-4 w-4 mr-2" /> Ver detalles
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleEdit(item)}>
-                  <Edit className="h-4 w-4 mr-2" /> Editar
-                </DropdownMenuItem>
-
-                <DropdownMenuSeparator />
+              <DropdownMenuContent
+                align="end"
+                className="glass-panel border-white/20 min-w-[160px] z-50 dark:bg-slate-900/90"
+              >
                 <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
+                  onClick={() => handleView(item)}
+                  className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
+                >
+                  <Eye className="h-4 w-4 text-brand-navy dark:text-slate-400" />{" "}
+                  Ver detalles
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => handleEdit(item)}
+                  className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
+                >
+                  <Edit className="h-4 w-4 text-blue-500 dark:text-blue-400" />{" "}
+                  Editar
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="dark:bg-white/10" />
+                <DropdownMenuItem
+                  className="gap-2 font-bold text-xs uppercase tracking-tight text-rose-600 dark:text-rose-500 cursor-pointer dark:focus:bg-rose-950/30"
                   onClick={() => setItemToDelete(item.id)}
                 >
-                  <Trash2 className="h-4 w-4 mr-2" /> Eliminar
+                  <Trash2 className="h-4 w-4" /> Eliminar
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -266,95 +306,138 @@ export const InventarioTable = () => {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center p-8">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="flex justify-center items-center h-[50vh]">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="animate-spin h-10 w-10 text-brand-red" />
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 animate-pulse">
+            Cargando inventario...
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Total SKUs</p>
-                <p className="text-2xl font-bold text-foreground">
-                  {inventory.length}
-                </p>
-              </div>
-              <Package className="h-8 w-8 text-muted-foreground" />
-            </div>
-          </CardContent>
-        </Card>
+    <div className="space-y-6">
+      {/* 🚀 KPI CARDS (Tahoe UI) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card
-          className={cn(lowStockCount > 0 && "border-red-200 bg-red-50/50")}
+          variant="default"
+          className="p-6 flex items-center gap-5 group hover:border-slate-300 dark:hover:border-white/20 transition-all cursor-default"
         >
-          <CardContent className="pt-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Bajo Stock</p>
-                <p
-                  className={cn(
-                    "text-2xl font-bold",
-                    lowStockCount > 0 ? "text-red-600" : "text-foreground",
-                  )}
-                >
-                  {lowStockCount}
-                </p>
-              </div>
-              <AlertTriangle
-                className={cn(
-                  "h-8 w-8",
-                  lowStockCount > 0 ? "text-red-500" : "text-muted-foreground",
-                )}
-              />
-            </div>
-          </CardContent>
+          <div className="p-3.5 bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-white/10 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
+            <Database className="h-6 w-6 text-brand-navy dark:text-slate-300" />
+          </div>
+          <div className="flex flex-col justify-center">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
+              Total SKUs
+            </p>
+            <p className="text-3xl font-black text-brand-navy dark:text-white leading-none tracking-tighter">
+              {inventory.length}
+            </p>
+          </div>
         </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Valor Inventario
-                </p>
-                <p className="text-2xl font-bold text-foreground">
-                  {formatCurrency(totalValue)}
-                </p>
-              </div>
-              <Package className="h-8 w-8 text-emerald-500" />
-            </div>
-          </CardContent>
+
+        <Card
+          variant="default"
+          className={cn(
+            "p-6 flex items-center gap-5 group transition-all cursor-default relative overflow-hidden",
+            lowStockCount > 0
+              ? "hover:border-rose-300 dark:hover:border-rose-500/50"
+              : "hover:border-emerald-300 dark:hover:border-emerald-500/50",
+          )}
+        >
+          <div
+            className={cn(
+              "p-3.5 rounded-2xl border shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out relative z-10",
+              lowStockCount > 0
+                ? "bg-rose-50 dark:bg-rose-950/30 border-rose-100 dark:border-rose-900/50"
+                : "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-100 dark:border-emerald-900/50",
+            )}
+          >
+            {lowStockCount > 0 ? (
+              <AlertTriangle className="h-6 w-6 text-rose-600 dark:text-rose-400" />
+            ) : (
+              <CheckCircle className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+            )}
+          </div>
+          <div className="flex flex-col justify-center relative z-10">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
+              {lowStockCount > 0 ? "Bajo Stock" : "Stock Saludable"}
+            </p>
+            <p
+              className={cn(
+                "text-3xl font-black leading-none tracking-tighter",
+                lowStockCount > 0
+                  ? "text-rose-600 dark:text-rose-400"
+                  : "text-emerald-600 dark:text-emerald-400",
+              )}
+            >
+              {lowStockCount}
+            </p>
+          </div>
+          {lowStockCount > 0 && (
+            <AlertTriangle className="h-24 w-24 text-rose-500/10 dark:text-rose-500/5 absolute -right-4 -bottom-4 z-0" />
+          )}
+        </Card>
+
+        <Card
+          variant="default"
+          className="p-6 flex items-center gap-5 group hover:border-emerald-300 dark:hover:border-emerald-500/50 transition-all cursor-default"
+        >
+          <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl border border-emerald-100 dark:border-emerald-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
+            <Package className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+          </div>
+          <div className="flex flex-col justify-center">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
+              Valor Inventario
+            </p>
+            <p className="text-3xl font-black text-emerald-600 dark:text-emerald-400 leading-none tracking-tighter">
+              {formatCurrency(totalValue)}
+            </p>
+          </div>
         </Card>
       </div>
 
-      {/* Toolbar */}
-      <div className="flex justify-end">
-        <ActionButton onClick={handleOpenNewModal}>
-          <Plus className="h-4 w-4 mr-2" />
-          Nueva Refacción
-        </ActionButton>
-      </div>
-
-      {/* Table */}
-      <EnhancedDataTable
-        data={inventory}
-        columns={columns}
-        exportFileName="inventario-refacciones"
-      />
+      {/* 🚀 TABLA PRINCIPAL (Liquid Glass Tahoe) */}
+      <Card
+        variant="default"
+        className="shadow-2xl border-slate-200/50 dark:border-white/10 overflow-hidden"
+      >
+        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-200 dark:border-white/10 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-xl py-5 px-6 gap-4">
+          <CardTitle className="text-xl font-black uppercase tracking-tighter text-brand-navy dark:text-white heading-crisp flex items-center gap-3">
+            <Database className="h-6 w-6 text-brand-red" /> Catálogo de
+            Refacciones
+          </CardTitle>
+          <Button
+            variant="default"
+            size="sm"
+            onClick={handleOpenNewModal}
+            className="w-full sm:w-auto haptic-press shadow-md shadow-brand-red/20"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Nueva Refacción
+          </Button>
+        </CardHeader>
+        {/* Inyección CSS para la cabecera de la tabla */}
+        <CardContent className="p-0 bg-white dark:bg-slate-950 [&_thead]:bg-slate-50/80 dark:[&_thead]:bg-slate-900/80 [&_thead]:backdrop-blur-xl [&_th]:bg-transparent [&_th]:border-b [&_th]:border-slate-200 dark:[&_th]:border-white/10 [&_th]:text-[10px] [&_th]:font-black [&_th]:uppercase [&_th]:tracking-[0.2em] [&_th]:text-slate-500 dark:[&_th]:text-slate-400">
+          <EnhancedDataTable
+            data={inventory}
+            columns={columns}
+            exportFileName="inventario-refacciones"
+            className="border-none"
+          />
+        </CardContent>
+      </Card>
 
       {/* Modals */}
-      {/* Nota: AddInventarioModal y ViewInventarioModal necesitarán ajustes menores para snake_case también */}
       <AddInventarioModal
         open={isAddModalOpen}
         onOpenChange={(open) => {
           setIsAddModalOpen(open);
           if (!open) setItemToEdit(null);
         }}
-        itemToEdit={itemToEdit as any} // Cast temporal
+        itemToEdit={itemToEdit as any}
         onSave={handleSave}
       />
 
@@ -364,26 +447,75 @@ export const InventarioTable = () => {
         item={itemToView as any}
       />
 
-      {/* Delete Confirmation */}
+      {/* 🚀 DIÁLOGO DE CONFIRMACIÓN DE ELIMINACIÓN (Estructura Triple Tahoe) */}
       <AlertDialog
         open={!!itemToDelete}
-        onOpenChange={() => setItemToDelete(null)}
+        onOpenChange={(open) => !open && setItemToDelete(null)}
       >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar Eliminación</AlertDialogTitle>
-            <AlertDialogDescription>
-              ¿Está seguro que desea eliminar esta refacción?
-            </AlertDialogDescription>
+        <AlertDialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
+          {/* HEADER */}
+          <AlertDialogHeader className="p-6 sm:p-8 bg-brand-navy/95 dark:bg-slate-900 backdrop-blur-md shrink-0 border-b border-white/10 relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
+            <div className="relative z-10 flex items-center gap-4 sm:gap-5">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-rose-500/20 flex items-center justify-center shadow-inner shrink-0 icon-plate">
+                <Trash2 className="h-7 w-7 sm:h-8 sm:w-8 text-rose-400 drop-shadow-[0_0_8px_rgba(244,63,94,0.4)]" />
+              </div>
+              <div className="flex flex-col gap-1 text-left">
+                <AlertDialogTitle className="text-2xl font-black uppercase tracking-tighter text-white text-shadow-premium heading-crisp leading-none">
+                  Eliminar Refacción
+                </AlertDialogTitle>
+                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-brand-secondary dark:text-slate-400 mt-1">
+                  Acción Irreversible • Catálogo Inventario
+                </p>
+              </div>
+            </div>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive hover:bg-destructive/90"
-              onClick={handleDelete}
-            >
-              Eliminar
-            </AlertDialogAction>
+
+          {/* BODY */}
+          <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
+            <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block space-y-6">
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                ¿Está seguro que desea eliminar la refacción del inventario?
+              </p>
+
+              <div className="p-5 bg-rose-50 dark:bg-rose-950/20 border-l-4 border-rose-500 rounded-r-2xl shadow-sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+                  <h4 className="text-[10px] sm:text-[11px] font-black text-rose-800 dark:text-rose-400 uppercase tracking-widest">
+                    Pérdida de Configuración y Costos
+                  </h4>
+                </div>
+                <p className="text-xs sm:text-sm leading-relaxed text-rose-900 dark:text-rose-200/80">
+                  Esta acción eliminará la refacción del catálogo activo y no
+                  podrá ser seleccionada en futuras Órdenes de Trabajo.{" "}
+                  <b className="font-black underline">
+                    Esta acción no se puede deshacer
+                  </b>
+                  .
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </div>
+
+          {/* FOOTER */}
+          <AlertDialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0">
+            <div className="flex flex-col-reverse sm:flex-row sm:flex-wrap justify-end items-stretch sm:items-center gap-3 w-full">
+              <AlertDialogCancel
+                variant="outline"
+                size="lg"
+                className="w-full sm:w-auto haptic-press flex-shrink-0"
+              >
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                variant="destructive"
+                size="lg"
+                onClick={handleDelete}
+                className="w-full sm:w-auto haptic-press shadow-rose-600/10 flex-shrink-0 border-none bg-rose-600 hover:bg-rose-700 text-white"
+              >
+                <Trash2 className="h-4 w-4 mr-2" /> Eliminar Refacción
+              </AlertDialogAction>
+            </div>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

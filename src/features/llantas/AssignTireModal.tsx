@@ -191,46 +191,61 @@ export function AssignTireModal({
     }
   };
 
+  const handleClose = () => {
+    onOpenChange(false);
+    reset();
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[95vw] sm:max-w-lg flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-slate-50/50 dark:bg-transparent backdrop-blur-xl rounded-2xl">
-        {/* 🚀 HEADER TAHOE */}
-        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-brand-navy/95 dark:bg-slate-900 backdrop-blur-md shrink-0 border-b border-white/10 relative overflow-hidden z-10">
-          <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
+    <Dialog
+      open={open}
+      onOpenChange={(isOpen) => {
+        if (!isOpen && !isSubmitting) handleClose();
+      }}
+    >
+      {/* 🚀 CAPA 1: CASCARÓN */}
+      <DialogContent className="w-[95vw] sm:max-w-lg flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
+        {/* 🚀 CAPA 2: CABECERA (Blanca en Light, Navy oscuro en Dark) */}
+        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
+          <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center gap-4 sm:gap-5">
-            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-blue-500/20 flex items-center justify-center shadow-inner shrink-0 icon-plate">
-              <ArrowRightLeft className="h-7 w-7 sm:h-8 sm:w-8 text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.4)]" />
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shadow-inner shrink-0 icon-plate border border-blue-200 dark:border-blue-500/20">
+              <ArrowRightLeft className="h-7 w-7 sm:h-8 sm:w-8 text-blue-600 dark:text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.4)]" />
             </div>
-            <div className="flex flex-col gap-1 text-left">
-              <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-white text-shadow-premium heading-crisp leading-none">
+            <div className="flex flex-col gap-1 text-left min-w-0">
+              <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white heading-crisp leading-none">
                 Asignar / Rotar
               </DialogTitle>
-              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-brand-secondary dark:text-slate-400 mt-1 truncate">
-                {tire.codigo_interno} • {tire.marca} {tire.medida}
+              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-1 truncate tracking-normal normal-case">
+                <span className="font-mono font-bold text-blue-600 dark:text-blue-400 uppercase">
+                  {tire.codigo_interno}
+                </span>{" "}
+                • {tire.marca} {tire.medida}
               </p>
             </div>
           </div>
         </DialogHeader>
 
-        {/* 🚀 BODY: FORMULARIO */}
+        {/* 🚀 CAPA 3: CUERPO Y FORMULARIO */}
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit(onSubmit)}
             className="flex-1 overflow-hidden flex flex-col"
           >
-            <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-slate-50/50 dark:bg-transparent custom-scrollbar">
               <div className="space-y-6">
-                {/* Ubicación Actual */}
-                <div className="p-4 bg-slate-100 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-white/10 shadow-inner flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                {/* 📍 Ubicación Actual */}
+                <div className="p-5 bg-white dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-white/10 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
-                      Ubicación Actual
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1 flex items-center gap-1.5">
+                      <MapPin className="h-3.5 w-3.5" /> Ubicación Actual
                     </p>
-                    <p className="text-sm font-black text-brand-navy dark:text-white uppercase tracking-tight mt-1 flex items-center gap-2">
+                    <p className="text-sm font-black text-brand-navy dark:text-white uppercase tracking-tight flex items-center gap-2">
                       {isCurrentlyMounted ? (
                         <>
-                          <Truck className="h-4 w-4 text-slate-400" />
-                          {tire.unidad_actual_economico} • Pos. {tire.posicion}
+                          <Truck className="h-4 w-4 text-blue-500" />
+                          ECO-{tire.unidad_actual_economico} • Pos.{" "}
+                          {tire.posicion}
                         </>
                       ) : (
                         <>
@@ -250,7 +265,7 @@ export function AssignTireModal({
                   )}
                 </div>
 
-                {/* Selector de Unidad */}
+                {/* 🚚 Selector de Unidad / Almacén */}
                 <FormField
                   control={form.control}
                   name="selectedUnit"
@@ -265,11 +280,11 @@ export function AssignTireModal({
                         disabled={loadingUnits || isSubmitting}
                       >
                         <FormControl>
-                          <SelectTrigger className="h-11 glass-card font-black uppercase text-xs bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm text-brand-navy dark:text-slate-100">
+                          <SelectTrigger className="h-11 font-black uppercase text-xs shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 text-brand-navy dark:text-slate-100">
                             <SelectValue
                               placeholder={
                                 loadingUnits
-                                  ? "Cargando..."
+                                  ? "Cargando catálogo..."
                                   : "Seleccionar destino..."
                               }
                             />
@@ -290,7 +305,7 @@ export function AssignTireModal({
                               className="font-bold text-xs uppercase"
                             >
                               ECO-{u.numero_economico}
-                              <span className="text-slate-400 dark:text-slate-500 ml-2 text-[10px]">
+                              <span className="text-slate-400 dark:text-slate-500 ml-2 text-[10px] font-medium tracking-widest normal-case">
                                 {u.marca} {u.placas ? `(${u.placas})` : ""}
                               </span>
                             </SelectItem>
@@ -302,7 +317,7 @@ export function AssignTireModal({
                   )}
                 />
 
-                {/* Selector de Posición Numérica */}
+                {/* 🎯 Selector de Posición Numérica */}
                 {currentUnit && currentUnit !== "almacen" && (
                   <div className="animate-in fade-in slide-in-from-top-2">
                     <FormField
@@ -310,11 +325,15 @@ export function AssignTireModal({
                       name="selectedPosition"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel variant="brand" required>
-                            Posición en el Vehículo{" "}
+                          <FormLabel
+                            variant="brand"
+                            required
+                            className="flex items-center gap-2"
+                          >
+                            Posición en el Vehículo
                             {isTrailer && (
-                              <span className="text-amber-600 dark:text-amber-400">
-                                (Solo Ejes Traseros)
+                              <span className="text-[9px] text-amber-600 dark:text-amber-400 font-bold bg-amber-50 dark:bg-amber-950/30 px-1.5 py-0.5 rounded uppercase tracking-widest">
+                                (Ejes Traseros)
                               </span>
                             )}
                           </FormLabel>
@@ -324,7 +343,7 @@ export function AssignTireModal({
                             disabled={isSubmitting}
                           >
                             <FormControl>
-                              <SelectTrigger className="h-11 glass-card font-bold text-xs bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm text-brand-navy dark:text-slate-100">
+                              <SelectTrigger className="h-11 font-bold text-xs bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm text-brand-navy dark:text-slate-100">
                                 <SelectValue placeholder="Seleccionar posición (1 al 10)..." />
                               </SelectTrigger>
                             </FormControl>
@@ -347,7 +366,7 @@ export function AssignTireModal({
                   </div>
                 )}
 
-                {/* Notas */}
+                {/* 📝 Notas */}
                 <FormField
                   control={form.control}
                   name="notas"
@@ -360,7 +379,7 @@ export function AssignTireModal({
                         <Textarea
                           {...field}
                           placeholder="Razón del cambio, condición física detectada, etc."
-                          className="min-h-[80px] resize-none glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm font-medium text-sm"
+                          className="min-h-[80px] resize-none bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm font-medium text-sm"
                           disabled={isSubmitting}
                         />
                       </FormControl>
@@ -371,16 +390,16 @@ export function AssignTireModal({
               </div>
             </div>
 
-            {/* 🚀 FOOTER TAHOE */}
-            <DialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0">
+            {/* 🚀 CAPA 4: FOOTER TAHOE */}
+            <DialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
               <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
                 <Button
                   type="button"
                   variant="outline"
                   size="lg"
-                  onClick={() => onOpenChange(false)}
+                  onClick={handleClose}
                   disabled={isSubmitting}
-                  className="w-full sm:w-auto haptic-press flex-shrink-0"
+                  className="w-full sm:w-auto haptic-press flex-shrink-0 font-black uppercase tracking-widest text-[10px]"
                 >
                   Cancelar
                 </Button>
@@ -389,7 +408,7 @@ export function AssignTireModal({
                   variant="default"
                   size="lg"
                   disabled={isSubmitting}
-                  className="w-full sm:w-auto haptic-press flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white border-none shadow-lg shadow-blue-500/20"
+                  className="w-full sm:w-auto haptic-press flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white border-none shadow-lg shadow-blue-500/20 font-black uppercase tracking-widest text-[10px]"
                 >
                   {isSubmitting ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />

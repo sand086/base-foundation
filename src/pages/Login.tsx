@@ -1,37 +1,81 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import { useAuth } from "@/hooks/useAuth";
-import { authService } from "@/services/authService"; // Importamos el servicio
+import { authService } from "@/services/authService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { User, Lock, AlertCircle, Eye, EyeOff, ArrowRight } from "lucide-react";
+import {
+  User,
+  Lock,
+  AlertCircle,
+  Eye,
+  EyeOff,
+  ArrowRight,
+  Loader2,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { logos_3t } from "@/assets/img";
 import { AxiosError } from "axios";
 
+// Form Components (Tahoe UI)
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormMessage,
+} from "@/components/ui/form";
+
+// =====================
+// ESQUEMA ZOD (VALIDACIÓN)
+// =====================
+const loginSchema = z.object({
+  email: z.string().email("Formato de correo electrónico inválido"),
+  password: z.string().min(1, "La contraseña es requerida"),
+  remember: z.boolean().default(true),
+});
+
+type LoginFormData = z.infer<typeof loginSchema>;
+
 export default function Login() {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
+  const [apiError, setApiError] = useState("");
 
-  const [error, setError] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [remember, setRemember] = useState(true);
-
-  // Traemos la función login de nuestro contexto global
   const { login } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setIsLoading(true);
+  // 🚀 REACT HOOK FORM
+  const form = useForm<LoginFormData>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: "",
+      password: "",
+      remember: true,
+    },
+  });
+
+  const {
+    handleSubmit,
+    formState: { isSubmitting },
+  } = form;
+
+  // =====================
+  // SUBMIT (Llamada a API)
+  // =====================
+  const onSubmit = async (data: LoginFormData) => {
+    setApiError("");
 
     try {
       // 1. Llamada al Backend a través del Servicio
-      const response = await authService.login({ email: username, password });
+      const response = await authService.login({
+        email: data.email,
+        password: data.password,
+      });
 
       // 2. Caso: El backend dice que el usuario tiene 2FA activado
       if (response.require_2fa) {
@@ -50,10 +94,11 @@ export default function Login() {
         return;
       }
 
-      // 3. Si el login es directo (y tenemos token + user)
-      if (response.access_token && response.user) {
+      // 3. Si el login es directo (y tenemos token + user + refresh_token)
+      // 🚀 CORRECCIÓN: Validamos y pasamos el refresh_token exigido por el AuthContext
+      if (response.access_token && response.user && response.refresh_token) {
         // Guardamos en el estado global (Contexto) y en localStorage
-        login(response.user, response.access_token);
+        login(response.user, response.access_token, response.refresh_token);
 
         toast({
           title: "Bienvenido",
@@ -62,6 +107,13 @@ export default function Login() {
 
         // Redirigimos al Dashboard
         navigate("/", { replace: true });
+      } else if (
+        response.access_token &&
+        response.user &&
+        !response.refresh_token
+      ) {
+        // Fallback de seguridad por si el backend no manda refresh token en algún entorno
+        setApiError("Respuesta del servidor incompleta (Falta Refresh Token).");
       }
     } catch (err) {
       console.error("Error en login:", err);
@@ -70,25 +122,25 @@ export default function Login() {
         const status = err.response?.status;
 
         if (status === 401) {
-          setError("Usuario o contraseña incorrectos");
+          setApiError("Usuario o contraseña incorrectos");
         } else if (status === 403) {
-          setError("Tu usuario está desactivado. Contacta al administrador.");
+          setApiError(
+            "Tu usuario está desactivado. Contacta al administrador.",
+          );
         } else if (status === 422) {
-          setError("Formato de correo inválido");
+          setApiError("Formato de correo o contraseña inválido");
         } else {
-          setError(`Error del servidor: ${status}`);
+          setApiError(`Error del servidor: ${status}`);
         }
       } else {
-        setError("Ocurrió un error inesperado. Verifica tu conexión.");
+        setApiError("Ocurrió un error inesperado. Verifica tu conexión.");
       }
-    } finally {
-      setIsLoading(false);
     }
   };
 
   return (
     <div className="fixed inset-0 z-[9999] overflow-hidden">
-      {/* Background image */}
+      {/* Background image & overlays */}
       <div className="absolute inset-0">
         <div
           className="absolute inset-0 bg-cover bg-center scale-105 animate-[subtle-float_20s_ease-in-out_infinite]"
@@ -97,7 +149,7 @@ export default function Login() {
           }}
         />
         <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-black/50" />
-        <div className="absolute inset-0 bg-gradient-to-t from-brand-red/10 via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-brand-red/20 via-transparent to-transparent" />
       </div>
 
       {/* Logo top-right */}
@@ -115,107 +167,132 @@ export default function Login() {
           <CardContent className="px-10 py-10">
             {/* Title */}
             <div className="text-center">
-              <div className="text-5xl font-extrabold tracking-wide text-white drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]">
+              <div className="text-5xl font-black uppercase tracking-wide text-white drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]">
                 TMS
               </div>
               <div className="mx-auto mt-2 h-[6px] w-[150px] rounded-full bg-gradient-to-r from-brand-red via-brand-red/80 to-brand-red shadow-[0_0_20px_rgba(190,8,17,0.5)]" />
-              <div className="mt-4 text-sm font-medium tracking-[0.18em] text-white/80">
+              <div className="mt-4 text-[10px] font-black uppercase tracking-[0.2em] text-white/80">
                 TRANSPORT MANAGEMENT SYSTEM
               </div>
             </div>
 
-            {/* Error Message */}
-            {error && (
-              <div className="mt-6 flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 backdrop-blur-sm p-3 text-sm text-red-300 animate-in fade-in slide-in-from-top-2">
-                <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                <span>{error}</span>
+            {/* Error Message (API) */}
+            {apiError && (
+              <div className="mt-6 flex items-center gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 backdrop-blur-sm p-4 animate-in fade-in slide-in-from-top-2 shadow-inner">
+                <AlertCircle className="h-5 w-5 text-rose-400 flex-shrink-0" />
+                <span className="text-xs font-bold text-rose-200">
+                  {apiError}
+                </span>
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="mt-8 space-y-4">
-              {/* Username */}
-              <div className="relative group">
-                <User className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-secondary transition-all duration-300 group-focus-within:text-white group-focus-within:scale-110" />
-                <Input
-                  id="username"
-                  type="email"
-                  placeholder="correo electrónico"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  required
-                  autoComplete="username"
-                  className="login-input h-12 rounded-xl border border-white/20 bg-white/10 pl-11 pr-4 text-[15px] text-white placeholder:text-brand-secondary transition-all duration-300 focus:bg-white/15 focus:border-white/30 focus:shadow-[0_0_20px_rgba(255,255,255,0.1)] focus-visible:ring-0 focus-visible:ring-offset-0 hover:bg-white/12 hover:border-white/25"
-                />
-              </div>
-
-              {/* Password */}
-              <div className="relative group">
-                <Lock className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-secondary transition-all duration-300 group-focus-within:text-white group-focus-within:scale-110" />
-                <Input
-                  id="password"
-                  type={showPass ? "text" : "password"}
-                  placeholder="contraseña"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  autoComplete="current-password"
-                  className="login-input h-12 rounded-xl border border-white/20 bg-white/10 pl-11 pr-12 text-[15px] text-white placeholder:text-brand-secondary transition-all duration-300 focus:bg-white/15 focus:border-white/30 focus:shadow-[0_0_20px_rgba(255,255,255,0.1)] focus-visible:ring-0 focus-visible:ring-offset-0 hover:bg-white/12 hover:border-white/25"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPass((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex h-9 w-9 items-center justify-center rounded-lg text-brand-secondary transition-all duration-300 hover:bg-white/10 hover:text-white active:scale-95"
-                >
-                  {showPass ? (
-                    <EyeOff className="h-5 w-5" />
-                  ) : (
-                    <Eye className="h-5 w-5" />
-                  )}
-                </button>
-              </div>
-
-              {/* Extras */}
-              <div className="flex items-center justify-between pt-1 text-sm">
-                <label className="flex cursor-pointer items-center gap-2 text-brand-secondary hover:text-white/80 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={remember}
-                    onChange={(e) => setRemember(e.target.checked)}
-                    className="h-4 w-4 rounded border-white/30 bg-white/10 accent-brand-red"
-                  />
-                  Recuérdame
-                </label>
-                <button
-                  type="button"
-                  className="text-white/50 transition-colors hover:text-white/80"
-                >
-                  ¿Olvidaste tu contraseña?
-                </button>
-              </div>
-
-              {/* Submit */}
-              <Button
-                type="submit"
-                disabled={isLoading}
-                className="login-button mt-2 h-12 w-full rounded-xl bg-brand-red text-base font-semibold text-white transition-all duration-300 hover:bg-brand-red/90 hover:-translate-y-[2px] hover:shadow-[0_0_30px_rgba(190,8,17,0.5)] active:translate-y-0 active:shadow-[0_0_15px_rgba(190,8,17,0.3)] disabled:opacity-70 disabled:hover:translate-y-0 disabled:hover:shadow-none border-0"
+            <Form {...form}>
+              <form
+                onSubmit={handleSubmit(onSubmit)}
+                className="mt-8 space-y-5"
               >
-                {isLoading ? (
-                  <span className="flex items-center gap-2">
-                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                    Validando...
-                  </span>
-                ) : (
-                  <span className="flex items-center justify-center gap-3">
-                    ENTRAR <ArrowRight className="h-5 w-5" />
-                  </span>
-                )}
-              </Button>
+                {/* Email */}
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <div className="relative group">
+                          <User className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/40 transition-all duration-300 group-focus-within:text-white group-focus-within:scale-110" />
+                          <Input
+                            {...field}
+                            type="email"
+                            placeholder="Correo Electrónico"
+                            autoComplete="username"
+                            className="h-14 rounded-xl border border-white/20 bg-white/5 pl-12 pr-4 text-base font-medium text-white placeholder:text-white/30 transition-all duration-300 focus:bg-white/10 focus:border-white/40 focus:shadow-[0_0_20px_rgba(255,255,255,0.1)] focus-visible:ring-0 focus-visible:ring-offset-0 hover:bg-white/10 hover:border-white/30"
+                          />
+                        </div>
+                      </FormControl>
+                      <FormMessage className="text-rose-400" />
+                    </FormItem>
+                  )}
+                />
 
-              <div className="pt-3 text-center text-[11px] text-brand-secondary">
-                ¿No tienes acceso? Comunícate con el soporte técnico o con el
-                administrador. <small>admin@transportes.com</small>
-              </div>
-            </form>
+                {/* Password */}
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <div className="relative group">
+                          <Lock className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/40 transition-all duration-300 group-focus-within:text-white group-focus-within:scale-110" />
+                          <Input
+                            {...field}
+                            type={showPass ? "text" : "password"}
+                            placeholder="Contraseña"
+                            autoComplete="current-password"
+                            className="h-14 rounded-xl border border-white/20 bg-white/5 pl-12 pr-12 text-base font-medium text-white placeholder:text-white/30 transition-all duration-300 focus:bg-white/10 focus:border-white/40 focus:shadow-[0_0_20px_rgba(255,255,255,0.1)] focus-visible:ring-0 focus-visible:ring-offset-0 hover:bg-white/10 hover:border-white/30"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPass((v) => !v)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-10 w-10 items-center justify-center rounded-lg text-white/40 transition-all duration-300 hover:bg-white/10 hover:text-white active:scale-95"
+                          >
+                            {showPass ? (
+                              <EyeOff className="h-5 w-5" />
+                            ) : (
+                              <Eye className="h-5 w-5" />
+                            )}
+                          </button>
+                        </div>
+                      </FormControl>
+                      <FormMessage className="text-rose-400" />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Extras */}
+                <div className="flex items-center justify-between pt-2">
+                  <FormField
+                    control={form.control}
+                    name="remember"
+                    render={({ field }) => (
+                      <label className="flex cursor-pointer items-center gap-2 text-xs font-bold uppercase tracking-wider text-white/50 hover:text-white/90 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={field.value}
+                          onChange={field.onChange}
+                          className="h-4 w-4 rounded border-white/30 bg-white/10 accent-brand-red cursor-pointer"
+                        />
+                        Recuérdame
+                      </label>
+                    )}
+                  />
+                </div>
+
+                {/* Submit Button */}
+                <Button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="mt-6 h-14 w-full rounded-xl bg-brand-red text-[11px] font-black uppercase tracking-[0.2em] text-white transition-all duration-300 hover:bg-red-700 hover:-translate-y-[2px] hover:shadow-[0_0_30px_rgba(190,8,17,0.5)] active:translate-y-0 active:shadow-[0_0_15px_rgba(190,8,17,0.3)] disabled:opacity-70 disabled:hover:translate-y-0 disabled:hover:shadow-none border-0 haptic-press"
+                >
+                  {isSubmitting ? (
+                    <span className="flex items-center gap-3">
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      AUTENTICANDO...
+                    </span>
+                  ) : (
+                    <span className="flex items-center justify-center gap-3">
+                      INICIAR SESIÓN <ArrowRight className="h-5 w-5" />
+                    </span>
+                  )}
+                </Button>
+
+                <div className="pt-4 text-center text-[10px] font-bold uppercase tracking-widest text-white/40">
+                  Soporte Técnico:{" "}
+                  <span className="text-white/70 tracking-normal normal-case">
+                    admin@transportes.com
+                  </span>
+                </div>
+              </form>
+            </Form>
           </CardContent>
         </Card>
       </div>

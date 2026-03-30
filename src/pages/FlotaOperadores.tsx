@@ -5,10 +5,11 @@ import {
   AlertTriangle,
   CheckCircle,
   Clock,
+  Trash2,
   UserX,
   Loader2,
 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -23,11 +24,10 @@ import {
 import { OperadoresTable } from "@/features/flota/OperadoresTable";
 import { AddOperadorModal } from "@/features/flota/AddOperadorModal";
 import { useToast } from "@/hooks/use-toast";
-import { useOperators } from "@/hooks/useOperators"; // <--- Hook Real
-import { operatorService } from "@/services/operatorService"; // <--- Tipo Real
-import { Operator } from "@/types/api.types"; // <--- Tipo Real
+import { useOperators } from "@/hooks/useOperators";
+import { Operator } from "@/types/api.types";
 
-// Helper de fechas (puedes moverlo a utils si prefieres)
+// Helper de fechas
 const getExpiryStatus = (dateString: string) => {
   if (!dateString) return "danger";
   const today = new Date();
@@ -86,11 +86,9 @@ export default function FlotaOperadores() {
     setIsSaving(true);
     let success = false;
 
-    // Si tiene ID real (no temporal), es update
     if (operadorToEdit?.id) {
       success = await updateOperator(operadorToEdit.id, operadorData);
     } else {
-      // Generar ID temporal si el backend lo requiere o dejar que backend genere
       success = await createOperator(operadorData);
     }
 
@@ -126,108 +124,121 @@ export default function FlotaOperadores() {
     return (
       <div className="flex justify-center items-center h-[50vh]">
         <div className="flex flex-col items-center gap-4">
-          <Loader2 className="animate-spin h-8 w-8 text-primary" />
-          <p className="text-muted-foreground">Cargando operadores...</p>
+          <Loader2 className="animate-spin h-10 w-10 text-brand-red" />
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 animate-pulse">
+            Cargando operadores...
+          </p>
         </div>
       </div>
     );
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 animate-in fade-in duration-500 pb-20">
+      {/* 🚀 HEADER TAHOE */}
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between bg-white/40 dark:bg-slate-900/40 p-4 rounded-2xl shadow-sm border border-white/20 dark:border-white/10 backdrop-blur-md gap-4">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Users className="h-6 w-6" /> Gestión de Operadores
+          <h1 className="text-2xl font-black text-brand-navy dark:text-white flex items-center gap-2 uppercase tracking-tighter heading-crisp">
+            <div className="p-2 bg-blue-500/10 rounded-xl border border-blue-500/20 shadow-inner">
+              <Users className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+            </div>
+            Gestión de Operadores
           </h1>
-          <p className="text-muted-foreground">
-            Administración de conductores, licencias y exámenes médicos
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-2">
+            Administración de conductores, licencias y exámenes médicos.
           </p>
         </div>
         <Button
-          className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
+          variant="default"
+          size="lg"
+          className="w-full md:w-auto haptic-press shadow-lg shadow-brand-red/20"
           onClick={handleOpenNewModal}
         >
-          <Plus className="h-4 w-4" /> Nuevo Operador
+          <Plus className="h-4 w-4 mr-2" /> Nuevo Operador
         </Button>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card className="border-l-4 border-l-green-500">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Operadores Activos
-                </p>
-                <p className="text-3xl font-bold text-green-600">{activos}</p>
-              </div>
-              <CheckCircle className="h-8 w-8 text-green-500 opacity-50" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-l-red-500">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Documentos Vencidos
-                </p>
-                <p className="text-3xl font-bold text-red-600">
-                  {licenciasVencidas + examenesVencidos}
-                </p>
-              </div>
-              <AlertTriangle className="h-8 w-8 text-red-500 opacity-50" />
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              {licenciasVencidas} licencias • {examenesVencidos} exámenes
+      {/* 🚀 KPI CARDS (Tahoe UI) */}
+      <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+        <Card
+          variant="default"
+          className="p-6 flex items-center gap-5 group hover:border-emerald-300 dark:hover:border-emerald-500/50 transition-all cursor-default"
+        >
+          <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl border border-emerald-100 dark:border-emerald-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
+            <CheckCircle className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+          </div>
+          <div className="flex flex-col justify-center">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
+              Operadores Activos
             </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-l-yellow-500">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Por Vencer (30 días)
-                </p>
-                <p className="text-3xl font-bold text-yellow-600">
-                  {licenciasPorVencer + examenesPorVencer}
-                </p>
-              </div>
-              <Clock className="h-8 w-8 text-yellow-500 opacity-50" />
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              {licenciasPorVencer} licencias • {examenesPorVencer} exámenes
+            <p className="text-3xl font-black text-emerald-600 dark:text-emerald-400 leading-none tracking-tighter">
+              {activos}
             </p>
-          </CardContent>
+          </div>
         </Card>
 
-        <Card className="border-l-4 border-l-gray-400">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Inactivos</p>
-                <p className="text-3xl font-bold text-gray-500">{inactivos}</p>
-              </div>
-              <UserX className="h-8 w-8 text-gray-400 opacity-50" />
-            </div>
-          </CardContent>
+        <Card
+          variant="default"
+          className="p-6 flex items-center gap-5 group hover:border-rose-300 dark:hover:border-rose-500/50 transition-all cursor-default"
+        >
+          <div className="p-3.5 bg-rose-50 dark:bg-rose-950/30 rounded-2xl border border-rose-100 dark:border-rose-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
+            <AlertTriangle className="h-6 w-6 text-rose-600 dark:text-rose-400" />
+          </div>
+          <div className="flex flex-col justify-center">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
+              Docs. Vencidos
+            </p>
+            <p className="text-3xl font-black text-rose-600 dark:text-rose-400 leading-none tracking-tighter">
+              {licenciasVencidas + examenesVencidos}
+            </p>
+          </div>
+        </Card>
+
+        <Card
+          variant="default"
+          className="p-6 flex items-center gap-5 group hover:border-amber-300 dark:hover:border-amber-500/50 transition-all cursor-default"
+        >
+          <div className="p-3.5 bg-amber-50 dark:bg-amber-950/30 rounded-2xl border border-amber-100 dark:border-amber-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
+            <Clock className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+          </div>
+          <div className="flex flex-col justify-center">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
+              Por Vencer (30D)
+            </p>
+            <p className="text-3xl font-black text-amber-600 dark:text-amber-400 leading-none tracking-tighter">
+              {licenciasPorVencer + examenesPorVencer}
+            </p>
+          </div>
+        </Card>
+
+        <Card
+          variant="default"
+          className="p-6 flex items-center gap-5 group hover:border-slate-300 dark:hover:border-white/20 transition-all cursor-default"
+        >
+          <div className="p-3.5 bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-white/10 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
+            <UserX className="h-6 w-6 text-slate-500 dark:text-slate-400" />
+          </div>
+          <div className="flex flex-col justify-center">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
+              Inactivos
+            </p>
+            <p className="text-3xl font-black text-slate-700 dark:text-slate-300 leading-none tracking-tighter">
+              {inactivos}
+            </p>
+          </div>
         </Card>
       </div>
 
-      {/* Alert Banner */}
+      {/* 🚀 ALERT BANNER TAHOE */}
       {alertasTotal > 0 && (
-        <Card className="bg-yellow-50/50 border-yellow-200">
-          <CardContent className="py-3 flex items-center gap-3">
-            <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0" />
-            <p className="text-sm text-yellow-700 font-medium">
-              <span className="font-bold">
-                {alertasTotal} alertas de documentación:
-              </span>{" "}
+        <div className="p-5 bg-amber-50 dark:bg-amber-950/20 border-l-4 border-amber-500 rounded-r-2xl shadow-sm flex items-start gap-4 animate-in fade-in slide-in-from-top-4">
+          <div className="bg-amber-500 rounded-full p-1.5 mt-0.5 shadow-lg shadow-amber-500/20 shrink-0">
+            <AlertTriangle className="h-4 w-4 text-white" />
+          </div>
+          <div>
+            <p className="text-[10px] sm:text-[11px] font-black text-amber-800 dark:text-amber-400 uppercase tracking-widest mb-1">
+              {alertasTotal} Alertas de Documentación Operativa
+            </p>
+            <p className="text-xs sm:text-sm font-medium text-amber-900/80 dark:text-amber-200/80 leading-snug">
               {licenciasVencidas > 0 &&
                 `${licenciasVencidas} licencia(s) vencida(s)`}
               {licenciasVencidas > 0 &&
@@ -246,8 +257,8 @@ export default function FlotaOperadores() {
               {examenesPorVencer > 0 &&
                 `${examenesPorVencer} examen(es) por vencer`}
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {/* Operators Table */}
@@ -266,36 +277,83 @@ export default function FlotaOperadores() {
         isSaving={isSaving}
       />
 
-      {/* Delete Confirmation Dialog */}
+      {/* 🚀 DIÁLOGO DE CONFIRMACIÓN DE ELIMINACIÓN (ESTRUCTURA TRIPLE TAHOE) */}
       <AlertDialog
         open={!!operadorToDelete}
-        onOpenChange={() => setOperadorToDelete(null)}
+        onOpenChange={(open) => !open && setOperadorToDelete(null)}
       >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <UserX className="h-5 w-5 text-destructive" />
-              Confirmar Baja de Operador
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              ¿Está seguro que desea dar de baja a{" "}
-              <span className="font-semibold">
-                {
-                  operadores.find((op) => op.id === Number(operadorToDelete))
-                    ?.name
-                }
-              </span>
-              ? Esta acción eliminará al operador del sistema.
-            </AlertDialogDescription>
+        {/* CAPA 1: CASCARÓN */}
+        <AlertDialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
+          {/* CAPA 2: HEADER TAHOE (Contraste Blanco/Navy puro) */}
+          <AlertDialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
+            <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
+            <div className="relative z-10 flex items-center gap-4 sm:gap-5">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center shadow-inner shrink-0 icon-plate border border-rose-200 dark:border-rose-500/20">
+                <UserX className="h-7 w-7 sm:h-8 sm:w-8 text-rose-600 dark:text-rose-400 drop-shadow-[0_0_8px_rgba(244,63,94,0.4)]" />
+              </div>
+              <div className="flex flex-col gap-1 text-left">
+                <AlertDialogTitle className="text-rose-600 dark:text-rose-500 text-2xl font-black uppercase tracking-tighter heading-crisp leading-none">
+                  Confirmar Baja de Operador
+                </AlertDialogTitle>
+                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-1">
+                  Acción Irreversible • Catálogo Operadores
+                </p>
+              </div>
+            </div>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive hover:bg-destructive/90"
-              onClick={handleDelete}
-            >
-              Dar de Baja
-            </AlertDialogAction>
+
+          {/* CAPA 3: BODY */}
+          <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
+            <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block space-y-6">
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                ¿Está seguro que desea dar de baja permanentemente a{" "}
+                <b className="text-slate-900 dark:text-white text-lg font-black tracking-tight uppercase">
+                  {
+                    operadores.find((op) => op.id === Number(operadorToDelete))
+                      ?.name
+                  }
+                </b>
+                ?
+              </p>
+
+              <div className="p-5 sm:p-6 bg-rose-50 dark:bg-rose-950/20 border-l-4 border-rose-500 rounded-r-2xl shadow-sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+                  <h4 className="text-[10px] sm:text-[11px] font-black text-rose-800 dark:text-rose-400 uppercase tracking-widest">
+                    Pérdida de Asignaciones
+                  </h4>
+                </div>
+                <p className="text-xs sm:text-sm leading-relaxed text-rose-900 dark:text-rose-200/80">
+                  Esta acción eliminará al operador del sistema activo y
+                  desvinculará sus registros de unidades y viajes actuales.{" "}
+                  <b className="font-black underline">
+                    Esta acción no se puede deshacer
+                  </b>
+                  .
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </div>
+
+          {/* CAPA 4: FOOTER */}
+          <AlertDialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
+            <div className="flex flex-col-reverse sm:flex-row sm:flex-wrap justify-end items-stretch sm:items-center gap-3 w-full">
+              <AlertDialogCancel
+                variant="outline"
+                size="lg"
+                className="w-full sm:w-auto haptic-press flex-shrink-0 font-black uppercase tracking-widest text-[10px]"
+              >
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                variant="destructive"
+                size="lg"
+                onClick={handleDelete}
+                className="w-full sm:w-auto haptic-press shadow-rose-600/10 flex-shrink-0 border-none bg-rose-600 hover:bg-rose-700 text-white font-black uppercase tracking-widest text-[10px]"
+              >
+                <Trash2 className="h-4 w-4 mr-2" /> Dar de Baja
+              </AlertDialogAction>
+            </div>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
