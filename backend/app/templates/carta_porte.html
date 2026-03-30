@@ -13,47 +13,31 @@
           <tr>
             <td width="20%" valign="middle">
               {% if logo_src %}
-              <img
-                src="{{ logo_src }}"
-                class="logo-img"
-                alt="Logo de la Empresa"
-              />
+              <img src="{{ logo_src }}" class="logo-img" alt="Logo" />
               {% else %}
-              <div class="header-company">Rápidos 3T</div>
+              <div class="header-company">{{ nombre_emisor }}</div>
               {% endif %}
             </td>
 
             <td
               width="60%"
               valign="top"
-              style="font-size: 7pt; line-height: 1.35; padding-right: 0px"
+              style="font-size: 7pt; line-height: 1.35"
             >
               <div
                 class="bold text-dark"
-                style="font-size: 9pt; margin-bottom: 2px"
+                style="font-size: 10pt; margin-bottom: 2px"
               >
-                TRANSPORTE DE CARGA PESADA
+                {{ nombre_emisor }}
               </div>
               <div>
                 <span class="bold text-muted">RFC:</span>
                 <span class="text-dark">{{ rfc_emisor }}</span>
               </div>
-              <div class="text-muted">
-                DESARROLLO URBANO, MANZANA 3, LOTE 10 Y 11
-              </div>
-              <div class="text-muted">
-                COL. RENACIMIENTO, C.P. 91808 | VERACRUZ, VER.
-              </div>
-              <div>
-                <span class="bold text-muted">Expedición:</span>
-                <span class="text-dark">91808</span>
-                <span style="color: #cbd5e1">|</span>
-                <span class="bold text-muted">Tel:</span>
-                <span class="text-dark">2291000240</span>
-              </div>
+              <div class="text-muted">C.P. EXPEDICIÓN: {{ cp_emisor }}</div>
               <div>
                 <span class="bold text-muted">Régimen Fiscal (Emisor):</span>
-                <span class="text-dark">624 (Coordinados)</span>
+                <span class="text-dark">{{ regimen_emisor }}</span>
               </div>
             </td>
 
@@ -78,10 +62,6 @@
                     Fecha y Hora:
                     <span class="text-dark bold">{{ fecha_emision }}</span>
                   </div>
-                  <div style="font-size: 5.5pt; color: #64748b">
-                    Certificado:
-                    <span class="text-dark">{{ cert_emisor }}</span>
-                  </div>
                 </div>
               </div>
             </td>
@@ -93,7 +73,7 @@
         <div class="bento-card-header">Datos del Cliente</div>
         <table class="grid-table">
           <tr>
-            <td width="35%">
+            <td width="40%">
               <span class="grid-label">Nombre o Razón Social</span>
               <span class="bold text-dark" style="font-size: 7.5pt"
                 >{{ nombre_cliente }}</span
@@ -103,7 +83,7 @@
               <span class="grid-label">RFC</span>
               <span class="bold text-dark">{{ rfc_cliente }}</span>
             </td>
-            <td width="45%">
+            <td width="40%">
               <span class="grid-label text-primary"
                 >Régimen Fiscal (Receptor)</span
               >
@@ -112,15 +92,11 @@
           </tr>
           <tr>
             <td colspan="2">
-              <span class="grid-label">Dirección Completa</span>
-              {% if direccion_cliente %}
+              <span class="grid-label">Dirección Fiscal</span>
               <span class="text-dark">{{ direccion_cliente }}</span>
-              {% else %}
-              <span style="color: transparent">Sin información disponible</span>
-              {% endif %}
             </td>
             <td>
-              <span class="grid-label">Código Postal</span>
+              <span class="grid-label">C.P. Receptor</span>
               <span class="text-dark">{{ cp_cliente }}</span>
             </td>
           </tr>
@@ -162,13 +138,11 @@
           <td style="vertical-align: top; padding-left: 8px">
             <table class="sat-table">
               <tr class="sat-table-header">
-                <td style="width: 10%">Versión</td>
-                <td style="width: 40%">Folio Fiscal</td>
-                <td style="width: 25%">No. Certificado SAT</td>
-                <td style="width: 25%">Fecha y Hora Certificación</td>
+                <td style="width: 40%">Folio Fiscal (UUID)</td>
+                <td style="width: 30%">No. Certificado SAT</td>
+                <td style="width: 30%">Fecha Certificación</td>
               </tr>
               <tr>
-                <td class="bold text-dark">4.0</td>
                 <td class="bold text-dark">{{ uuid }}</td>
                 <td class="bold text-dark">{{ cert_sat }}</td>
                 <td class="bold text-dark">{{ fecha_certificacion }}</td>
@@ -177,7 +151,6 @@
 
             <div class="sello-wrapper">
               <div class="sello-title">Sello Digital del Emisor</div>
-              <div class="line-emisor"></div>
               <div class="sello-text">{{ sello_emisor }}</div>
             </div>
           </td>
@@ -186,14 +159,12 @@
 
       <div class="sello-wrapper">
         <div class="sello-title">Sello Digital del SAT</div>
-        <div class="line-sat"></div>
         <div class="sello-text">{{ sello_sat }}</div>
       </div>
       <div class="sello-wrapper" style="margin-bottom: 0">
         <div class="sello-title">
-          Cadena Original del Complemento de Certificación digital del SAT
+          Cadena Original del Complemento de Certificación
         </div>
-        <div class="line-cadena"></div>
         <div class="sello-text">{{ cadena_original }}</div>
       </div>
     </footer>
@@ -203,32 +174,21 @@
         <div class="bento-card-header">Datos del Comprobante</div>
         <table class="grid-table">
           <tr>
-            <td width="20%">
-              <span class="grid-label">Uso del CFDI</span
+            <td width="25%">
+              <span class="grid-label">Uso CFDI</span
               ><span class="text-dark">{{ uso_cfdi }}</span>
             </td>
-            <td width="25%">
+            <td width="30%">
               <span class="grid-label">Método de Pago</span
               ><span class="text-dark">{{ metodo_pago }}</span>
             </td>
             <td width="20%">
-              <span class="grid-label">Tipo Comprobante</span
-              ><span class="text-dark">{{ tipo_comprobante }}</span>
-            </td>
-            <td width="15%">
               <span class="grid-label">Moneda</span
               ><span class="bold text-dark">{{ moneda }}</span>
-              <span class="text-muted">(TC: {{ tc }})</span>
             </td>
-            <td width="20%">
+            <td width="25%">
               <span class="grid-label">Forma de Pago</span
               ><span class="text-dark">{{ forma_pago }}</span>
-            </td>
-          </tr>
-          <tr>
-            <td colspan="5">
-              <span class="grid-label">Condiciones de Pago</span
-              ><span class="text-dark">{{ condiciones_pago }}</span>
             </td>
           </tr>
         </table>
@@ -237,11 +197,10 @@
       <table class="table-main">
         <thead>
           <tr>
-            <td width="12%" class="center">CÓDIGO</td>
-            <td width="48%">DESCRIPCIÓN</td>
-            <td width="12%" class="center">CANTIDAD</td>
-            <td width="14%" class="right">PRECIO UNITARIO</td>
-            <td width="14%" class="right">IMPORTE</td>
+            <td width="15%" class="center">CÓDIGO</td>
+            <td width="55%">DESCRIPCIÓN SERVICIO</td>
+            <td width="15%" class="right">UNITARIO</td>
+            <td width="15%" class="right">IMPORTE</td>
           </tr>
         </thead>
         <tbody>
@@ -254,12 +213,6 @@
                 >{{ c.detalles_extra }}</span
               >
             </td>
-            <td class="center">
-              <span class="bold text-dark">{{ c.cantidad }}</span><br />
-              <span style="font-size: 5.5pt" class="text-muted"
-                >{{ c.unidad }}</span
-              >
-            </td>
             <td class="right text-dark">$ {{ c.precio }}</td>
             <td class="right bold text-dark">$ {{ c.importe }}</td>
           </tr>
@@ -267,32 +220,25 @@
         </tbody>
       </table>
 
-      <table style="margin-top: 15px; width: 100%; table-layout: fixed">
+      <table style="margin-top: 10px; width: 100%; table-layout: fixed">
         <tr>
-          <td width="65%"></td>
-          <td width="35%">
+          <td width="70%"></td>
+          <td width="30%">
             <div class="bento-card" style="padding: 8px">
               <table style="font-size: 7.5pt">
                 <tr>
-                  <td class="right text-muted" width="50%">SubTotal:</td>
-                  <td class="right bold text-dark">$ {{ subtotal }}</td>
+                  <td class="right text-muted">SubTotal:</td>
+                  <td class="right bold">$ {{ subtotal }}</td>
                 </tr>
                 <tr>
                   <td class="right text-muted">IVA 16%:</td>
-                  <td class="right bold text-dark">$ {{ iva }}</td>
+                  <td class="right bold">$ {{ iva }}</td>
                 </tr>
                 <tr>
-                  <td class="right text-muted">Retención IVA (4%):</td>
+                  <td class="right text-muted">Retención 4%:</td>
                   <td class="right text-primary">-$ {{ retenciones }}</td>
                 </tr>
-                <tr>
-                  <td colspan="2">
-                    <div
-                      style="border-top: 1px solid #e2e8f0; margin: 6px 0"
-                    ></div>
-                  </td>
-                </tr>
-                <tr style="font-size: 11pt; color: #0f172a">
+                <tr style="font-size: 10pt; color: #0f172a">
                   <td class="right bold">TOTAL:</td>
                   <td class="right bold text-action">$ {{ total }}</td>
                 </tr>
@@ -307,46 +253,28 @@
       <div class="bento-card">
         <table class="grid-table">
           <tr>
-            <td width="20%">
-              <span class="grid-label">Versión</span
-              ><span class="bold text-dark">3.1</span>
-            </td>
-            <td width="35%">
-              <span class="grid-label">IdCCP</span>
-              <span
+            <td width="40%">
+              <span class="grid-label">IdCCP</span
+              ><span
                 class="bold text-dark"
                 style="font-family: monospace; font-size: 6pt"
                 >{{ id_ccp }}</span
               >
             </td>
-            <td width="25%">
-              <span class="grid-label">Distancia Total Recorrida</span
+            <td width="30%">
+              <span class="grid-label">Distancia Recorrida</span
               ><span class="bold text-dark">{{ distancia_total }} KM</span>
             </td>
-            <td width="20%">
+            <td width="30%">
               <span class="grid-label">Transp. Internacional</span
               ><span class="bold text-dark">No</span>
-            </td>
-          </tr>
-          <tr>
-            <td>
-              <span class="grid-label">Vía Entrada/Salida</span
-              ><span class="bold text-dark">N/A</span>
-            </td>
-            <td>
-              <span class="grid-label">RegistroISTMO</span
-              ><span class="bold text-dark">No aplica</span>
-            </td>
-            <td colspan="2">
-              <span class="grid-label">Polo Origen / Destino / País</span
-              ><span class="bold text-dark">N/A</span>
             </td>
           </tr>
         </table>
       </div>
 
       <div class="bento-card">
-        <div class="bento-card-header">Ubicación Origen</div>
+        <div class="bento-card-header">Ubicación Origen (Salida)</div>
         <table class="grid-table">
           <tr>
             <td width="50%">
@@ -359,17 +287,11 @@
             </td>
           </tr>
           <tr>
-            <td width="50%">
+            <td>
               <span class="grid-label">Fecha/Hora Salida</span
               ><span class="text-dark">{{ fecha_salida }}</span>
             </td>
-            <td width="50%">
-              <span class="grid-label">Tipo / Nombre Estación</span
-              ><span class="text-dark">N/A</span>
-            </td>
-          </tr>
-          <tr>
-            <td colspan="2">
+            <td>
               <span class="grid-label">Domicilio Origen</span
               ><span class="text-dark">{{ domicilio_origen }}</span>
             </td>
@@ -382,7 +304,7 @@
           class="bento-card-header"
           style="color: #009740; border-left-color: #009740"
         >
-          Ubicación Destino
+          Ubicación Destino (Entrega)
         </div>
         <table class="grid-table">
           <tr>
@@ -396,17 +318,11 @@
             </td>
           </tr>
           <tr>
-            <td width="50%">
+            <td>
               <span class="grid-label">Fecha/Hora Llegada</span
               ><span class="text-dark">{{ fecha_llegada }}</span>
             </td>
-            <td width="50%">
-              <span class="grid-label">Distancia</span
-              ><span class="text-dark">{{ distancia_total }} KM</span>
-            </td>
-          </tr>
-          <tr>
-            <td colspan="2">
+            <td>
               <span class="grid-label">Domicilio Destino</span
               ><span class="text-dark">{{ domicilio_destino }}</span>
             </td>
@@ -415,55 +331,49 @@
       </div>
 
       <div class="bento-card">
-        <div class="bento-card-header">Autotransporte y Seguros</div>
+        <div class="bento-card-header">Identificación Vehicular y Seguros</div>
         <table class="grid-table">
           <tr>
             <td width="30%">
               <span class="grid-label">Permiso SCT</span
-              ><span class="text-dark"
-                >{{ permiso_sct }} - Autotransporte Federal</span
-              >
+              ><span class="text-dark">{{ permiso_sct }}</span>
             </td>
-            <td width="30%">
-              <span class="grid-label">Num Permiso SCT</span
+            <td width="35%">
+              <span class="grid-label">Número Permiso</span
               ><span class="bold text-dark">{{ num_permiso_sct }}</span>
             </td>
-            <td width="40%">
+            <td width="35%">
               <span class="grid-label">Config Vehicular</span
               ><span class="text-dark">{{ config_vehicular }}</span>
             </td>
           </tr>
           <tr>
             <td>
-              <span class="grid-label">Placa VM</span
-              ><span class="bold text-dark">{{ placas }}</span>
-              <span class="text-muted">(Mod: {{ anio_modelo }})</span>
+              <span class="grid-label">Placa</span
+              ><span class="bold text-dark">{{ placas }}</span> ({{ anio_modelo
+              }})
             </td>
             <td>
-              <span class="grid-label">Seguro Resp. Civil</span
-              ><span class="text-dark"
-                >{{ aseguradora }} (Pol: {{ poliza }})</span
-              >
+              <span class="grid-label">Aseguradora R.C.</span
+              ><span class="text-dark">{{ aseguradora }}</span>
             </td>
             <td>
-              <span class="grid-label">Asegura Medio Ambiente / Carga</span
-              ><span class="text-dark">{{ aseguradora }} / N/A</span>
+              <span class="grid-label">Póliza</span
+              ><span class="text-dark">{{ poliza }}</span>
             </td>
           </tr>
         </table>
       </div>
 
       <div class="bento-card">
-        <div class="bento-card-header">Mercancías y Operador</div>
+        <div class="bento-card-header">Mercancías y Figura Transporte</div>
         <table class="grid-table">
           <tr>
             <td width="60%">
-              <span class="grid-label">Bienes Transportados</span>
-              <span class="text-dark"
+              <span class="grid-label">Bienes</span
+              ><span class="text-dark"
                 >{{ bienes_transp }} - {{ descripcion_mercancia }}</span
               >
-              <br />
-              <span class="text-muted">CANTIDAD: 1 | UNIDAD: PZA</span>
             </td>
             <td width="40%">
               <span class="grid-label">Peso Bruto Total</span
@@ -472,173 +382,27 @@
           </tr>
           <tr>
             <td>
-              <span class="grid-label">Remolque (SubTipo - Placa)</span
+              <span class="grid-label">Remolque</span
               ><span class="text-dark"
                 >{{ subtipo_remolque }} - Placa: {{ placa_remolque }}</span
               >
             </td>
             <td>
-              <span class="grid-label">Figura Transporte (Operador)</span>
-              <span class="bold text-dark">{{ operador_rfc }}</span>
-              <span class="text-dark">- {{ operador_nombre }}</span>
-              <span class="text-muted">(Lic: {{ operador_licencia }})</span>
-            </td>
-          </tr>
-        </table>
-      </div>
-      <div class="bento-card">
-        <div class="bento-card-header">Ubicación Origen</div>
-        <table class="grid-table">
-          <tr>
-            <td width="50%">
-              <span class="grid-label">Remitente</span
-              ><span class="bold text-dark">ALBANY</span>
-            </td>
-            <td width="50%">
-              <span class="grid-label">RFC Remitente</span
-              ><span class="bold text-dark">EEC1406167F9</span>
-            </td>
-          </tr>
-          <tr>
-            <td width="50%">
-              <span class="grid-label">Fecha/Hora Salida</span
-              ><span class="text-dark">2026-03-02T00:00:00</span>
-            </td>
-            <td width="50%">
-              <span class="grid-label">Tipo / Nombre Estación</span
-              ><span class="text-dark">N/A</span>
-            </td>
-          </tr>
-          <tr>
-            <td colspan="2">
-              <span class="grid-label">Domicilio Origen</span
-              ><span class="text-dark"
-                >CARRETERA TLALNEPANTLA CUAUTITLAN K.M. 18 S/N, C.P. 54879, MEX,
-                MEX.</span
+              <span class="grid-label">Operador</span>
+              <span class="bold text-dark">{{ operador_rfc }}</span> - {{
+              operador_nombre }} <br /><span
+                class="text-muted"
+                style="font-size: 6pt"
+                >Lic: {{ operador_licencia }}</span
               >
-            </td>
-          </tr>
-        </table>
-      </div>
-
-      <div class="bento-card">
-        <div
-          class="bento-card-header"
-          style="color: #009740; border-left-color: #009740"
-        >
-          Ubicación Destino
-        </div>
-        <table class="grid-table">
-          <tr>
-            <td width="50%">
-              <span class="grid-label">Destinatario</span
-              ><span class="bold text-dark"
-                >INTERNACIONAL DE CONTENEDORES Y ASOCIADOS DE VERACRUZ</span
-              >
-            </td>
-            <td width="50%">
-              <span class="grid-label">RFC Destinatario</span
-              ><span class="bold text-dark">ICA9507256L6</span>
-            </td>
-          </tr>
-          <tr>
-            <td width="50%">
-              <span class="grid-label">Fecha/Hora Llegada</span
-              ><span class="text-dark">2026-03-02T00:00:00</span>
-            </td>
-            <td width="50%">
-              <span class="grid-label">Distancia</span
-              ><span class="text-dark">480 KM</span>
-            </td>
-          </tr>
-          <tr>
-            <td colspan="2">
-              <span class="grid-label">Domicilio Destino</span
-              ><span class="text-dark"
-                >MORELOS 159 17, VER, C.P. 91700, MEX.</span
-              >
-            </td>
-          </tr>
-        </table>
-      </div>
-
-      <div class="bento-card">
-        <div class="bento-card-header">Autotransporte y Seguros</div>
-        <table class="grid-table">
-          <tr>
-            <td width="30%">
-              <span class="grid-label">Permiso SCT</span
-              ><span class="text-dark">TPAF01 - Autotransporte Federal</span>
-            </td>
-            <td width="30%">
-              <span class="grid-label">Num Permiso SCT</span
-              ><span class="bold text-dark">3066RTX02122011230301020</span>
-            </td>
-            <td width="40%">
-              <span class="grid-label">Config Vehicular</span
-              ><span class="text-dark"
-                >T3S3 (10 llantas tracto, 12 semirremolque)</span
-              >
-            </td>
-          </tr>
-          <tr>
-            <td>
-              <span class="grid-label">Placa VM</span
-              ><span class="bold text-dark">03BG8H</span>
-              <span class="text-muted">(Mod: 2025)</span>
-            </td>
-            <td>
-              <span class="grid-label">Seguro Resp. Civil</span
-              ><span class="text-dark">QUALITAS (Pol: 7050094731)</span>
-            </td>
-            <td>
-              <span class="grid-label">Asegura Medio Ambiente / Carga</span
-              ><span class="text-dark">QUALITAS / N/A</span>
-            </td>
-          </tr>
-        </table>
-      </div>
-
-      <div class="bento-card">
-        <div class="bento-card-header">Mercancías y Operador</div>
-        <table class="grid-table">
-          <tr>
-            <td width="60%">
-              <span class="grid-label">Bienes Transportados</span>
-              <span class="text-dark">53141606 - Bobinas</span> <br />
-              <span class="text-muted"
-                >BOBINAS (Cant: 1, Unidad: 21 - Contenedor 40 pies)</span
-              >
-            </td>
-            <td width="40%">
-              <span class="grid-label">Peso Bruto Total</span
-              ><span class="bold text-dark">3400 KGM</span>
-            </td>
-          </tr>
-          <tr>
-            <td>
-              <span class="grid-label">Remolque (SubTipo - Placa)</span
-              ><span class="text-dark"
-                >CTR010 - Chasis Portacontenedor - 58UD5Z</span
-              >
-            </td>
-            <td>
-              <span class="grid-label">Figura Transporte (Operador)</span>
-              <span class="bold text-dark">QUAA850329VEA</span>
-              <span class="text-dark">- ABIEL QUEZADA AZAMAR</span>
-              <span class="text-muted">(Lic: VER0136802)</span>
             </td>
           </tr>
         </table>
       </div>
 
       <div class="addenda-box">
-        <span class="bold text-dark">ADDENDA:</span><br />
-        &lt;fst3:Contrato xmlns:fst3="http://facturasoftesc.com/ns"
-        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-        xsi:schemaLocation="http://facturasoftesc.com/ns
-        http://facturasoftesc.com/ns/fst3.xsd" Comentario="{{ leyenda_legal
-        }}"&gt;&lt;/fst3:Contrato&gt;
+        <span class="bold text-dark">Leyes y Condiciones:</span><br />
+        {{ leyenda_legal }}
       </div>
     </main>
   </body>
