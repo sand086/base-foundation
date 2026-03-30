@@ -148,10 +148,17 @@ const RegistroValesTab = () => {
               ? unit?.capacidad_tanque_diesel || 800
               : unit?.capacidad_tanque_urea || 60;
 
+          // Detectar si es tracto
+          const isTracto =
+            unit?.tipo_1?.toLowerCase().includes("tracto") ||
+            unit?.tipo_1?.toLowerCase().includes("camion");
+          const ecoRaw =
+            item.unit?.numero_economico || unit?.numero_economico || "N/A";
+
           return {
             ...item,
             unidad_numero:
-              item.unit?.numero_economico || unit?.numero_economico || "N/A",
+              isTracto && ecoRaw !== "N/A" ? `ECO-${ecoRaw}` : ecoRaw, // Limpio!
             operador_nombre:
               item.operator?.name || item.operator?.nombre || "N/A",
             excede_tanque: Number(item.litros) > Number(capacity),
@@ -286,7 +293,7 @@ const RegistroValesTab = () => {
         header: "Asset ID",
         render: (v) => (
           <span className="font-mono font-black text-slate-900 dark:text-slate-200 bg-slate-100 dark:bg-white/5 px-2 py-1 rounded text-xs tracking-tight">
-            ECO-{v}
+            {v} {/* Eliminamos el ECO- */}
           </span>
         ),
       },
