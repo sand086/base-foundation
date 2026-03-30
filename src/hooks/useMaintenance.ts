@@ -97,10 +97,11 @@ export const useMaintenance = () => {
   const createWorkOrder = async (order: CreateWorkOrderPayload) => {
     try {
       const newOrder = await maintenanceService.createWorkOrder(order);
-      // Al crear una orden, el inventario cambia en el backend, hay que recargar o actualizar localmente
+
+      // 1. Agregamos la orden a la tabla
       setWorkOrders((prev) => [newOrder, ...prev]);
 
-      // Opción A: Recargar todo el inventario (Más seguro)
+      // 2. 🚀 MAGIA: Recargamos el inventario inmediatamente para que se vea la resta
       const updatedInventory = await maintenanceService.getInventory();
       setInventory(updatedInventory);
 
@@ -116,6 +117,34 @@ export const useMaintenance = () => {
     }
   };
 
+  const updateOrderStatus = async (id: number, status: string) => {
+    try {
+      const updatedOrder = await maintenanceService.updateWorkOrderStatus(
+        id,
+        status,
+      );
+
+      // Actualizamos la orden en la tabla
+      setWorkOrders((prev) =>
+        prev.map((o) => (o.id === id ? updatedOrder : o)),
+      );
+
+      // Si se cancela, las piezas regresan, así que recargamos el inventario
+      if (status === "cancelada") {
+        const updatedInventory = await maintenanceService.getInventory();
+        setInventory(updatedInventory);
+      }
+
+      toast.success(
+        `Orden ${status === "cerrada" ? "Finalizada" : "Cancelada"}`,
+      );
+      return true;
+    } catch (error) {
+      toast.error("Error al actualizar la orden");
+      return false;
+    }
+  };
+
   return {
     inventory,
     workOrders,
@@ -127,5 +156,6 @@ export const useMaintenance = () => {
     updateItem,
     deleteItem,
     createWorkOrder,
+    updateOrderStatus,
   };
 };

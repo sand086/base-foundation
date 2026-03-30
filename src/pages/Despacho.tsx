@@ -1,53 +1,87 @@
 // src/pages/Despacho.tsx
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/ui/page-header"; // 🚀 Importado nuestro Header estándar
 import { DespachoWizard } from "@/features/despacho/DespachoWizard";
 import { TripPlanner } from "@/features/despacho/TripPlanner";
 import { StandByTrips } from "@/features/despacho/StandByTrips";
 
-import { Clock, LayoutDashboard, PlusCircle } from "lucide-react";
+import { Clock, LayoutDashboard, PlusCircle, Route } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const Despacho = () => {
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            CONTROL DE TRÁFICO
-          </h1>
-          <p className="text-muted-foreground text-sm">
-            Gestiona la salida y monitoreo de unidades
-          </p>
+    <div className="p-4 md:p-6 space-y-6 min-h-[calc(100vh-4rem)] flex flex-col animate-page-enter pb-20 bg-slate-50/30 dark:bg-transparent">
+      {/* 🚀 PAGE HEADER TAHOE */}
+      <PageHeader
+        title="Centro de Despacho"
+        description="Gestión de salida, asignación de unidades y monitoreo de equipos en stand-by."
+        icon={
+          <Route className="h-8 w-8 text-brand-navy dark:text-white drop-shadow-sm" />
+        }
+      />
+
+      {/* 🚀 TABS CONTENEDOR FLEX PARA SCROLL PERFECTO */}
+      <Tabs
+        defaultValue="planner"
+        className="w-full flex-1 flex flex-col min-h-0"
+      >
+        {/* 🚀 TABS LIST TAHOE */}
+        <div className="w-full overflow-x-auto hide-scrollbar pb-2 sm:pb-0">
+          <TabsList className="bg-slate-200/50 dark:bg-slate-800/80 backdrop-blur-md p-1 h-12 rounded-xl border border-slate-300/50 dark:border-white/5 inline-flex min-w-max sm:w-full max-w-[600px] grid-cols-3 shadow-sm">
+            <TabsTrigger
+              value="planner"
+              className="gap-2 text-[10px] font-black uppercase tracking-widest rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-brand-navy dark:data-[state=active]:text-white data-[state=active]:shadow-sm h-full px-4 transition-all"
+            >
+              <LayoutDashboard className="h-3.5 w-3.5" /> Planeador
+            </TabsTrigger>
+
+            <TabsTrigger
+              value="standby"
+              className="gap-2 text-[10px] font-black uppercase tracking-widest rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-brand-navy dark:data-[state=active]:text-white data-[state=active]:shadow-sm h-full px-4 transition-all"
+            >
+              <Clock className="h-3.5 w-3.5" /> Stand-By
+              <Badge className="ml-1 h-4 px-1.5 bg-amber-500 text-white border-none shadow-sm text-[8px] font-black uppercase tracking-widest leading-none flex items-center justify-center">
+                New
+              </Badge>
+            </TabsTrigger>
+
+            <TabsTrigger
+              value="wizard"
+              className="gap-2 text-[10px] font-black uppercase tracking-widest rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-brand-navy dark:data-[state=active]:text-white data-[state=active]:shadow-sm h-full px-4 transition-all"
+            >
+              <PlusCircle className="h-3.5 w-3.5 text-brand-red dark:text-rose-500" />{" "}
+              Nuevo Viaje
+            </TabsTrigger>
+          </TabsList>
         </div>
-      </div>
 
-      <Tabs defaultValue="planner" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 max-w-[600px] bg-slate-100 p-1">
-          <TabsTrigger value="planner" className="gap-2">
-            <LayoutDashboard className="h-4 w-4" /> Planeador
-          </TabsTrigger>
-          <TabsTrigger value="standby" className="gap-2">
-            <Clock className="h-4 w-4" /> Stand-By
-            <Badge className="ml-1 h-5 px-1 bg-amber-500">New</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="wizard" className="gap-2">
-            <PlusCircle className="h-4 w-4" /> Nuevo Viaje
-          </TabsTrigger>
-        </TabsList>
+        {/* 🚀 TABS CONTENT (Con animación de entrada) */}
+        <div className="flex-1 mt-6">
+          <TabsContent
+            value="planner"
+            className="m-0 h-full animate-in fade-in slide-in-from-bottom-2 duration-500 focus-visible:outline-none"
+          >
+            <TripPlanner />
+          </TabsContent>
 
-        <TabsContent value="planner" className="mt-6">
-          <TripPlanner />
-        </TabsContent>
+          <TabsContent
+            value="standby"
+            className="m-0 h-full animate-in fade-in slide-in-from-bottom-2 duration-500 focus-visible:outline-none"
+          >
+            <StandByTrips />
+          </TabsContent>
 
-        <TabsContent value="standby" className="mt-6">
-          <StandByTrips />
-        </TabsContent>
-
-        <TabsContent value="wizard" className="mt-6">
-          <DespachoWizard />
-        </TabsContent>
+          <TabsContent
+            value="wizard"
+            className="m-0 h-full animate-in fade-in slide-in-from-bottom-2 duration-500 focus-visible:outline-none"
+          >
+            <DespachoWizard />
+          </TabsContent>
+        </div>
       </Tabs>
     </div>
   );
 };
+
 export default Despacho;

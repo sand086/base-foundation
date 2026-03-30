@@ -1,4 +1,3 @@
-# backend/app/api/endpoints/fuel.py
 import os
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
@@ -25,7 +24,7 @@ def get_fuel_logs(
         .options(
             joinedload(models.FuelLog.unit),
             joinedload(models.FuelLog.operator),
-            joinedload(models.FuelLog.created_by),  # 🚀 NUEVO: Cargar el usuario
+            joinedload(models.FuelLog.created_by),
         )
         .where(models.FuelLog.record_status == "A")
     )
@@ -38,25 +37,29 @@ def get_fuel_logs(
     return result.scalars().unique().all()
 
 
-@router.post("/fuel-logs", response_model=schemas.FuelLogResponse)
+# 🚀 NUEVO: ENDPOINT PARA CREAR EL "VALE DOBLE"
+@router.post("/fuel-logs", response_model=List[schemas.FuelLogResponse])
 async def create_fuel_log(
-    unit_id: int = Form(...),  # 🚀 Cambiado de unidadId a unit_id
-    operator_id: int = Form(...),  # 🚀 Cambiado de operadorId a operator_id
-    trip_id: Optional[int] = Form(None),  # 🚀 Cambiado de viajeId a trip_id
-    fecha_hora: str = Form(...),  # 🚀 Cambiado de fechaHora a fecha_hora
-    estacion: str = Form(...),
-    tipo_combustible: str = Form(
-        ...
-    ),  # 🚀 Cambiado de tipoCombustible a tipo_combustible
-    litros: float = Form(...),
-    precio_por_litro: float = Form(
-        ...
-    ),  # 🚀 Cambiado de precioPorLitro a precio_por_litro
-    odometro: int = Form(...),
+    unit_id: int = Form(...),
+    operator_id: int = Form(...),
+    trip_id: Optional[int] = Form(None),
+    fecha_hora: str = Form(...),
+    estacion: str = Form("No especificada"),  # 🚀 Estación ya no es obligatoria
+    # 🚀 VALORES SEPARADOS DE DIÉSEL Y UREA
+    litros_diesel: float = Form(0.0),
+    precio_diesel: float = Form(0.0),
+    litros_urea: float = Form(0.0),
+    precio_urea: float = Form(0.0),
+    odometro: int = Form(0),
     file: UploadFile = File(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    if litros_diesel <= 0 and litros_urea <= 0:
+        raise HTTPException(
+            status_code=400, detail="Debe registrar litros de diésel o de urea."
+        )
+
     evidencia_url = None
     filename = None
     if file:
@@ -66,38 +69,58 @@ async def create_fuel_log(
         evidencia_url = storage["url"]
         filename = storage["filename"]
 
-    new_log = models.FuelLog(
-        unit_id=unit_id,
-        operator_id=operator_id,
-        trip_leg_id=trip_id,  # ✅ Ahora sí recibirá el ID del viaje/tramo
-        fecha_hora=fecha_hora,
-        estacion=estacion,
-        tipo_combustible=tipo_combustible,
-        litros=litros,
-        precio_por_litro=precio_por_litro,
-        total=litros * precio_por_litro,
-        odometro=odometro,
-        evidencia_url=evidencia_url,
-        created_by_id=current_user.id,
-    )
-    db.add(new_log)
-    db.commit()
-    db.refresh(new_log)
+    created_logs = []
 
-    if evidencia_url:
-        history_entry = models.FuelDocumentHistory(
-            fuel_log_id=new_log.id,
-            document_type="ticket",  # Agregamos un string por defecto
-            filename=filename,
-            file_url=evidencia_url,
-            version=1,
-            is_active=True,
+    # Helper para no repetir código al crear los registros en la BD
+    def _crear_registro(tipo: str, litros: float, precio: float):
+        new_log = models.FuelLog(
+            unit_id=unit_id,
+            operator_id=operator_id,
+            trip_leg_id=trip_id,
+            fecha_hora=fecha_hora,
+            estacion=estacion,
+            tipo_combustible=tipo,
+            litros=litros,
+            precio_por_litro=precio,
+            total=litros * precio,
+            odometro=odometro,
+            evidencia_url=evidencia_url,
             created_by_id=current_user.id,
         )
-        db.add(history_entry)
-        db.commit()
+        db.add(new_log)
+        db.flush()  # Guardar temporalmente para obtener el ID
 
-    return new_log
+        # Si subió foto, crear el historial del documento asociado a este log
+        if evidencia_url:
+            history_entry = models.FuelDocumentHistory(
+                fuel_log_id=new_log.id,
+                document_type="ticket",
+                filename=filename,
+                file_url=evidencia_url,
+                version=1,
+                is_active=True,
+                created_by_id=current_user.id,
+            )
+            db.add(history_entry)
+
+        created_logs.append(new_log)
+
+    # 🚀 Si el usuario capturó Diésel, creamos el registro de Diésel
+    if litros_diesel > 0:
+        _crear_registro("diesel", litros_diesel, precio_diesel)
+
+    # 🚀 Si el usuario capturó Urea, creamos el registro de Urea
+    if litros_urea > 0:
+        _crear_registro("urea", litros_urea, precio_urea)
+
+    # Guardar ambos en la base de datos
+    db.commit()
+
+    # Recargar los objetos para devolverlos al frontend con todos sus datos relacionados
+    for log in created_logs:
+        db.refresh(log)
+
+    return created_logs
 
 
 @router.put("/fuel-logs/{log_id}", response_model=schemas.FuelLogResponse)
@@ -123,12 +146,9 @@ async def update_fuel_log(
     log.excede_tanque = data.excede_tanque
     log.capacidad_tanque_snapshot = data.capacidad_tanque_snapshot
 
-    # Si tu schema lo soporta, actualizamos viaje también
     if hasattr(data, "trip_leg_id"):
         log.trip_leg_id = data.trip_leg_id
-    elif hasattr(
-        data, "trip_id"
-    ):  # Por si el frontend sigue mandando trip_id en el JSON
+    elif hasattr(data, "trip_id"):
         log.trip_leg_id = data.trip_id
 
     log.updated_by_id = current_user.id

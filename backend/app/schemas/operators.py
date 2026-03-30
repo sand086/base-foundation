@@ -50,6 +50,7 @@ class OperatorBase(ORMBase):
 
     # hire_date = Column(Date)
     hire_date: Optional[date] = None
+    rfc: Optional[str] = Field(default="XAXX010101000", max_length=13)
 
     # emergency_contact = Column(String(100))
     emergency_contact: Optional[str] = Field(default=None, max_length=100)
@@ -85,7 +86,7 @@ class OperatorCreate(ORMBase):
 
     assigned_unit_id: Optional[int] = None
     hire_date: Optional[date] = None
-
+    rfc: Optional[str] = Field(default="XAXX010101000", max_length=13)
     emergency_contact: Optional[str] = Field(default=None, max_length=100)
     emergency_phone: Optional[str] = Field(default=None, max_length=20)
 
@@ -117,6 +118,7 @@ class OperatorUpdate(ORMBase):
 
     assigned_unit_id: Optional[int] = None
     hire_date: Optional[date] = None
+    rfc: Optional[str] = Field(default="XAXX010101000", max_length=13)
 
     emergency_contact: Optional[str] = Field(default=None, max_length=100)
     emergency_phone: Optional[str] = Field(default=None, max_length=20)

@@ -252,13 +252,11 @@ class WorkOrderBase(ORMBase):
 
 
 class WorkOrderCreate(WorkOrderBase):
-    # En ORM: folio es NOT NULL y UNIQUE
-    # Si tu backend lo genera, no lo pidas. Si NO lo genera, descomenta:
-    # folio: str = Field(..., max_length=20)
 
-    parts: List[WorkOrderPartCreate] = Field(default_factory=list)
-
-    model_config = ConfigDict(extra="ignore")
+    parts: List[WorkOrderPartCreate] = []
+    # 🚀 Agregamos esto
+    tipo_mantenimiento: str = "patio"
+    trip_id: Optional[int] = None
 
 
 class WorkOrderUpdate(ORMBase):

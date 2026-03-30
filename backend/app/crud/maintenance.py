@@ -348,6 +348,8 @@ def create_work_order(db: Session, order_in: schemas.WorkOrderCreate):
             descripcion_problema=order_in.descripcion_problema,
             status=models.WorkOrderStatus.ABIERTA,
             fecha_apertura=now,
+            tipo_mantenimiento=order_in.tipo_mantenimiento,
+            trip_id=order_in.trip_id,
         )
         db.add(db_order)
         db.flush()  # obtiene id sin commit
@@ -407,7 +409,18 @@ def update_work_order_status(
     if not order:
         _not_found("Orden de trabajo")
 
+    # 🚀 NUEVO: Si la orden se CANCELA, devolvemos las refacciones al inventario
+    if (
+        status == models.WorkOrderStatus.CANCELADA
+        and order.status != models.WorkOrderStatus.CANCELADA
+    ):
+        for part in order.parts:
+            if part.item:
+                part.item.stock_actual += part.cantidad
+
     order.status = status
+
+    # 🚀 NUEVO: Registrar la hora exacta de cierre
     if status == models.WorkOrderStatus.CERRADA:
         order.fecha_cierre = datetime.now(timezone.utc)
 
@@ -420,6 +433,13 @@ def delete_work_order(db: Session, order_id: int):
     order = db.query(models.WorkOrder).filter(models.WorkOrder.id == order_id).first()
     if not order:
         _not_found("Orden de trabajo")
+
+    # 🚀 NUEVO: Si se elimina la orden y no estaba cancelada, devolvemos el stock
+    if order.status != models.WorkOrderStatus.CANCELADA:
+        for part in order.parts:
+            if part.item:
+                part.item.stock_actual += part.cantidad
+
     order.record_status = models.RecordStatus.ELIMINADO.value
     db.commit()
     return True
