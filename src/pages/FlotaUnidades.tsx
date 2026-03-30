@@ -217,7 +217,7 @@ export default function FlotaUnidades() {
         key: "numero_economico",
         header: "No. Económico",
         render: (value, row) => {
-          // Lógica Senior: Solo los tractocamiones/camionetas llevan el prefijo ECO-
+          // Lógica: Si el tipo incluye "tracto" o "camion", le ponemos ECO. Si no, lo dejamos intacto (Ej. C-70)
           const isTracto =
             row.tipo_1?.toLowerCase().includes("tracto") ||
             row.tipo_1?.toLowerCase().includes("camion") ||

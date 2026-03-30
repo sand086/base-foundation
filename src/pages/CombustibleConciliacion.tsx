@@ -291,11 +291,14 @@ const RegistroValesTab = () => {
       {
         key: "unidad_numero",
         header: "Asset ID",
-        render: (v) => (
-          <span className="font-mono font-black text-slate-900 dark:text-slate-200 bg-slate-100 dark:bg-white/5 px-2 py-1 rounded text-xs tracking-tight">
-            {v} {/* Eliminamos el ECO- */}
-          </span>
-        ),
+        render: (v) => {
+          // El string 'v' ya viene formateado correctamente desde nuestra función loadData
+          return (
+            <span className="font-mono font-black text-slate-900 dark:text-slate-200 bg-slate-100 dark:bg-white/5 px-2 py-1 rounded text-xs tracking-tight">
+              {v} {/* 🚀 Antes decía ECO-{v}, ahora lo dejamos limpio */}
+            </span>
+          );
+        },
       },
       {
         key: "litros",

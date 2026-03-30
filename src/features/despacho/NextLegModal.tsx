@@ -92,6 +92,12 @@ const formatCurrency = (val: number) =>
 
 const UNIT_STATUSES_AVAILABLE = ["disponible", "bloqueado"] as const;
 
+const normalizeStr = (str?: string | null) =>
+  str
+    ?.toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") || "";
+
 // ─── Componente ───────────────────────────────────────────────────────────────
 
 export function NextLegModal({
@@ -194,6 +200,7 @@ export function NextLegModal({
 
   const isRoadLeg = formData.leg_type === "ruta_carretera";
 
+  // 🚀 FIX: Filtro inteligente para Tractocamiones
   const availableTractos = useMemo(
     () =>
       (unidades as Unit[]).filter((u) => {
@@ -208,14 +215,18 @@ export function NextLegModal({
     [unidades],
   );
 
+  // 🚀 FIX: Filtro inteligente para Remolques (Si no es tracto y no es dolly, es remolque)
   const availableRemolques = useMemo(
     () =>
       (unidades as Unit[]).filter((u) => {
-        const tipo = `${u.tipo_1} ${u.tipo}`.toLowerCase();
+        const searchIn = `${u.tipo_1} ${u.tipo}`.toLowerCase();
+        const isTracto =
+          searchIn.includes("tracto") || searchIn.includes("camion");
+        const isDolly = searchIn.includes("dolly");
+
         return (
-          ["remolque", "caja", "plataforma", "chasis"].some((p) =>
-            tipo.includes(p),
-          ) &&
+          !isTracto &&
+          !isDolly &&
           UNIT_STATUSES_AVAILABLE.includes(
             u.status?.toLowerCase() as (typeof UNIT_STATUSES_AVAILABLE)[number],
           )
@@ -224,19 +235,33 @@ export function NextLegModal({
     [unidades],
   );
 
+  // 🚀 FIX: Filtro para Dollies
   const availableDollies = useMemo(() => {
-    const dollies = (unidades as Unit[]).filter((u) =>
-      (u.tipo_1 ?? "").toLowerCase().includes("dolly"),
+    const dollies = (unidades as Unit[]).filter(
+      (u) =>
+        normalizeStr(u.tipo_1).includes("dolly") &&
+        UNIT_STATUSES_AVAILABLE.includes(
+          u.status?.toLowerCase() as (typeof UNIT_STATUSES_AVAILABLE)[number],
+        ),
     );
     return dollies.length > 0
       ? dollies
-      : [{ id: 9997, numero_economico: "DOLLY-PRUEBA" } as Unit];
+      : [
+          {
+            id: 9997,
+            numero_economico: "DOLLY-PRUEBA",
+            tipo_1: "DOLLY",
+          } as Unit,
+        ];
   }, [unidades]);
 
   const availableOperators = useMemo(
     () =>
       (operadores as Operator[]).filter(
-        (o) => o.status === "activo" || o.status === "disponible",
+        (o) =>
+          o.status === "activo" ||
+          o.status === "disponible" ||
+          o.status === "inactivo",
       ),
     [operadores],
   );
@@ -313,6 +338,14 @@ export function NextLegModal({
    */
   const handleIniciarTramo = useCallback(async () => {
     if (!tripPadre || !validateForm()) return;
+
+    // 🚀 FIX: Advertencia en lugar de bloqueo si no han timbrado
+    if (formData.leg_type === "ruta_carretera" && !cpGenerada) {
+      toast.warning(
+        "Iniciando tramo de carretera sin Carta Porte timbrada. Recuerde timbrar más tarde.",
+      );
+    }
+
     setLoading(true);
     try {
       const success = await onSubmit(
@@ -338,6 +371,7 @@ export function NextLegModal({
     onSubmit,
     updateLoadStatus,
     onOpenChange,
+    cpGenerada,
   ]);
 
   const referencia = (tripPadre as (Trip & { referencia?: string }) | null)
@@ -349,10 +383,6 @@ export function NextLegModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {/*
-       * CAPA 1 — Cascarón / Fondo Tahoe
-       * Cristal pesado: bg-white/90 en light, bg-brand-navy/95 en dark.
-       */}
       <DialogContent
         className={cn(
           "sm:max-w-[1000px] p-0 overflow-hidden border-none shadow-2xl",
@@ -360,11 +390,6 @@ export function NextLegModal({
           "bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl",
         )}
       >
-        {/*
-         * CAPA 2 — Header Tahoe
-         * Light: fondo blanco sólido. Dark: slate-900.
-         * Borde inferior HD.
-         */}
         <DialogHeader
           className={cn(
             "p-8 shrink-0 relative overflow-hidden",
@@ -376,7 +401,6 @@ export function NextLegModal({
             {/* Identidad del viaje */}
             <div className="space-y-4">
               <div className="flex items-center gap-4">
-                {/* Icon Plate — estándar Tahoe */}
                 <div
                   className={cn(
                     "p-3 rounded-2xl w-14 h-14 flex items-center justify-center",
@@ -438,7 +462,6 @@ export function NextLegModal({
                 {cpGenerada ? "CP $1 MXN GENERADA" : "CP $1 MXN PENDIENTE"}
               </Badge>
 
-              {/* Botón Movimiento/Timbrado — Azul Eléctrico por estándar Tahoe */}
               <Button
                 size="lg"
                 onClick={handleCartaPorteAction}
@@ -462,10 +485,6 @@ export function NextLegModal({
           </div>
         </DialogHeader>
 
-        {/*
-         * CAPA 3 — Cuerpo / Formulario
-         * Fondo hundido para resaltar cards e inputs.
-         */}
         <div
           className={cn(
             "grid grid-cols-1 md:grid-cols-12 gap-0 overflow-y-auto max-h-[75vh] custom-scrollbar",
@@ -590,7 +609,6 @@ export function NextLegModal({
                   Genera la Carta Porte de $1 para liberar la unidad
                   inmediatamente.
                 </p>
-                {/* Botón Movimiento/Asignación — Azul Eléctrico estándar Tahoe */}
                 <Button
                   onClick={handleCartaPorteAction}
                   disabled={isStamping}
@@ -710,6 +728,7 @@ export function NextLegModal({
                       value={String(u.id)}
                       className="font-bold dark:text-white"
                     >
+                      {/* 🚀 FIX: Mostramos ECO- solo en el tractocamión */}
                       ECO-{u.numero_economico} [{u.placas}]
                     </SelectItem>
                   ))}
@@ -763,7 +782,8 @@ export function NextLegModal({
                           value={String(u.id)}
                           className="font-bold dark:text-white"
                         >
-                          ECO-{u.numero_economico}{" "}
+                          {/* 🚀 FIX: Remolque sin "ECO-" */}
+                          {u.numero_economico}{" "}
                           {u.is_loaded ? (
                             <Package className="inline h-3.5 w-3.5 text-amber-500 ml-1" />
                           ) : (
@@ -800,7 +820,8 @@ export function NextLegModal({
                               value={String(u.id)}
                               className="font-bold dark:text-white"
                             >
-                              ECO-{u.numero_economico}
+                              {/* 🚀 FIX: Dolly tampoco lleva ECO- */}
+                              {u.numero_economico}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -835,7 +856,8 @@ export function NextLegModal({
                               value={String(u.id)}
                               className="font-bold dark:text-white"
                             >
-                              ECO-{u.numero_economico}{" "}
+                              {/* 🚀 FIX: Remolque 2 sin ECO- */}
+                              {u.numero_economico}{" "}
                               {u.is_loaded ? (
                                 <Package className="inline h-3.5 w-3.5 text-amber-500 ml-1" />
                               ) : (
@@ -945,7 +967,6 @@ export function NextLegModal({
 
         {/*
          * CAPA 4 — Footer / Control Bar Tahoe
-         * Barra inferior cristalina anclada al final.
          */}
         <DialogFooter
           className={cn(
@@ -971,10 +992,10 @@ export function NextLegModal({
               Cancelar
             </Button>
 
-            {/* Botón principal — Agregar/Crear → bg-brand-red por estándar Tahoe */}
+            {/* 🚀 FIX: Botón de despacho liberado. Ya no depende de !cpGenerada */}
             <Button
               onClick={handleIniciarTramo}
-              disabled={loading || !cpGenerada}
+              disabled={loading}
               className={cn(
                 "px-12 h-12 font-black uppercase text-[11px] tracking-[0.2em] shadow-2xl haptic-press",
                 "bg-brand-red hover:bg-brand-red/90 text-white",
