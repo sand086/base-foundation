@@ -18,7 +18,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { ArrowDownToLine, MapPin, Search, Loader2, Check } from "lucide-react";
+import {
+  ArrowDownToLine,
+  MapPin,
+  Search,
+  Loader2,
+  Check,
+  Truck,
+  Package,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 import { tireService, TIRE_POSITIONS } from "@/services/tireService";
@@ -118,128 +126,94 @@ export function MountTireModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[95vw] sm:max-w-lg flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-slate-50/50 dark:bg-transparent backdrop-blur-xl rounded-2xl">
-        {/* 🚀 HEADER TAHOE */}
-        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-brand-navy/95 dark:bg-slate-900 backdrop-blur-md shrink-0 border-b border-white/10 relative overflow-hidden z-10">
-          <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
+      <DialogContent className="w-[95vw] sm:max-w-lg flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl transition-all duration-300">
+        {/* 🚀 CAPA 2: HEADER TAHOE (Blanco en Light, Navy oscuro en Dark) */}
+        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
+          <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center gap-4 sm:gap-5">
-            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-blue-500/20 flex items-center justify-center shadow-inner shrink-0 icon-plate">
-              <ArrowDownToLine className="h-7 w-7 sm:h-8 sm:w-8 text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.4)]" />
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shadow-inner shrink-0 icon-plate border border-blue-200 dark:border-blue-500/20">
+              <ArrowDownToLine className="h-7 w-7 sm:h-8 sm:w-8 text-blue-600 dark:text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.4)]" />
             </div>
-            <div className="flex flex-col gap-1 text-left">
-              <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-white text-shadow-premium heading-crisp leading-none">
-                Montaje desde Almacén
+            <div className="flex flex-col gap-1 text-left min-w-0">
+              <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white heading-crisp leading-none">
+                Montaje de Neumático
               </DialogTitle>
-              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-brand-secondary dark:text-slate-400 mt-1">
-                Asigna una llanta disponible del inventario a la unidad ECO-
-                {unitId}.
+              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-1 truncate tracking-normal normal-case">
+                Asignación de stock a unidad{" "}
+                <span className="font-mono font-bold text-blue-600 dark:text-blue-400">
+                  ECO-{unitId}
+                </span>
+                .
               </p>
             </div>
           </div>
         </DialogHeader>
 
-        {/* 🚀 BODY: FORMULARIO */}
+        {/* 🚀 CAPA 3: BODY FORMULARIO */}
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit(onFormSubmit)}
-            className="flex-1 overflow-hidden flex flex-col"
+            className="flex-1 min-h-0 overflow-hidden flex flex-col"
           >
-            <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar">
-              <div className="space-y-6">
-                {/* Selector de Llanta */}
-                <FormField
-                  control={form.control}
-                  name="selectedTireId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel
-                        variant="brand"
-                        className="flex items-center gap-2"
-                        required
-                      >
-                        <Search className="h-3.5 w-3.5 text-blue-500" />
-                        Seleccionar Llanta en Almacén
-                      </FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        value={field.value}
-                        disabled={loadingTires || isSubmitting}
-                      >
-                        <FormControl>
-                          <SelectTrigger className="h-11 glass-card font-black uppercase text-xs bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm text-brand-navy dark:text-slate-100">
-                            <SelectValue
-                              placeholder={
-                                loadingTires
-                                  ? "Buscando inventario..."
-                                  : "Buscar por ID / Código..."
-                              }
-                            />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-slate-200 dark:border-white/10 max-h-[40vh]">
-                          {availableTires.length === 0 && !loadingTires ? (
-                            <div className="p-3 text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 text-center">
-                              No hay llantas disponibles en almacén.
-                            </div>
-                          ) : (
-                            availableTires.map((t) => (
-                              <SelectItem
-                                key={t.id}
-                                value={t.id.toString()}
-                                className="font-bold text-xs uppercase"
-                              >
-                                <span className="font-mono font-black text-blue-600 dark:text-blue-400 mr-2">
-                                  {t.codigo_interno}
-                                </span>
-                                <span className="text-slate-600 dark:text-slate-400 text-[10px] tracking-widest">
-                                  {t.marca} {t.modelo} ({t.profundidad_actual}
-                                  mm)
-                                </span>
-                              </SelectItem>
-                            ))
-                          )}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+            <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-slate-50/50 dark:bg-transparent custom-scrollbar">
+              <div className="space-y-8">
+                {/* 🏷️ SECCIÓN 1: Selección de Inventario */}
+                <div className="space-y-6">
+                  <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-2">
+                    <Package className="h-3.5 w-3.5 text-blue-500" />
+                    Inventario en Almacén
+                  </h3>
 
-                {/* Selector de Posición */}
-                <div className="animate-in fade-in slide-in-from-top-2">
                   <FormField
                     control={form.control}
-                    name="selectedPosition"
+                    name="selectedTireId"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel
-                          variant="brand"
-                          className="flex items-center gap-2"
-                          required
-                        >
-                          <MapPin className="h-3.5 w-3.5 text-blue-500" />
-                          Posición a Montar
+                        <FormLabel variant="brand" required>
+                          Seleccionar Llanta Disponible
                         </FormLabel>
                         <Select
                           onValueChange={field.onChange}
                           value={field.value}
-                          disabled={isSubmitting}
+                          disabled={loadingTires || isSubmitting}
                         >
                           <FormControl>
-                            <SelectTrigger className="h-11 glass-card font-bold text-xs bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm text-brand-navy dark:text-slate-100">
-                              <SelectValue placeholder="Seleccionar posición (1 al 10)..." />
+                            <SelectTrigger className="h-11 glass-card font-black uppercase text-xs shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 text-brand-navy dark:text-slate-100">
+                              <SelectValue
+                                placeholder={
+                                  loadingTires
+                                    ? "Sincronizando Almacén..."
+                                    : "Buscar por ID / Código..."
+                                }
+                              />
                             </SelectTrigger>
                           </FormControl>
-                          <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-slate-200 dark:border-white/10">
-                            {TIRE_POSITIONS.map((pos) => (
-                              <SelectItem
-                                key={pos.id}
-                                value={pos.id.toString()}
-                                className="font-bold text-xs"
-                              >
-                                {pos.label}
-                              </SelectItem>
-                            ))}
+                          <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-slate-200 dark:border-white/10 max-h-[40vh]">
+                            {availableTires.length === 0 && !loadingTires ? (
+                              <div className="p-4 text-center">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                                  Sin existencias disponibles
+                                </p>
+                              </div>
+                            ) : (
+                              availableTires.map((t) => (
+                                <SelectItem
+                                  key={t.id}
+                                  value={t.id.toString()}
+                                  className="font-bold text-xs uppercase"
+                                >
+                                  <span className="font-mono font-black text-blue-600 dark:text-blue-400 mr-3 bg-blue-50 dark:bg-blue-900/40 px-1.5 py-0.5 rounded">
+                                    {t.codigo_interno}
+                                  </span>
+                                  <span className="text-slate-700 dark:text-slate-200 tracking-tight">
+                                    {t.marca} {t.modelo}
+                                  </span>
+                                  <span className="ml-2 text-[9px] text-slate-400 font-medium">
+                                    ({t.profundidad_actual}mm)
+                                  </span>
+                                </SelectItem>
+                              ))
+                            )}
                           </SelectContent>
                         </Select>
                         <FormMessage />
@@ -247,11 +221,56 @@ export function MountTireModal({
                     )}
                   />
                 </div>
+
+                {/* 🎯 SECCIÓN 2: Posicionamiento */}
+                <div className="space-y-6 pt-2">
+                  <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-2">
+                    <Truck className="h-3.5 w-3.5 text-emerald-500" />
+                    Ubicación en Unidad
+                  </h3>
+
+                  <div className="animate-in fade-in slide-in-from-top-2 duration-500">
+                    <FormField
+                      control={form.control}
+                      name="selectedPosition"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel variant="brand" required>
+                            Seleccionar Posición de Montaje
+                          </FormLabel>
+                          <Select
+                            onValueChange={field.onChange}
+                            value={field.value}
+                            disabled={isSubmitting}
+                          >
+                            <FormControl>
+                              <SelectTrigger className="h-11 glass-card font-bold text-xs bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm text-brand-navy dark:text-slate-100">
+                                <SelectValue placeholder="Seleccionar posición (1 al 10)..." />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-slate-200 dark:border-white/10">
+                              {TIRE_POSITIONS.map((pos) => (
+                                <SelectItem
+                                  key={pos.id}
+                                  value={pos.id.toString()}
+                                  className="font-bold text-xs"
+                                >
+                                  {pos.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* 🚀 FOOTER TAHOE */}
-            <DialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0">
+            {/* 🚀 CAPA 4: FOOTER TAHOE */}
+            <DialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
               <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
                 <Button
                   type="button"
@@ -259,7 +278,7 @@ export function MountTireModal({
                   size="lg"
                   onClick={() => onOpenChange(false)}
                   disabled={isSubmitting}
-                  className="w-full sm:w-auto haptic-press flex-shrink-0"
+                  className="w-full sm:w-auto haptic-press flex-shrink-0 font-black uppercase tracking-widest text-[10px]"
                 >
                   Cancelar
                 </Button>
@@ -268,7 +287,7 @@ export function MountTireModal({
                   variant="default"
                   size="lg"
                   disabled={isSubmitting || availableTires.length === 0}
-                  className="w-full sm:w-auto haptic-press flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white border-none shadow-lg shadow-blue-500/20"
+                  className="w-full sm:w-auto haptic-press flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white border-none shadow-lg shadow-blue-500/20 font-black uppercase tracking-widest text-[10px]"
                 >
                   {isSubmitting ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />

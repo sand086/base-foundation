@@ -1,15 +1,16 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -17,9 +18,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Package, Save, Loader2 } from "lucide-react";
+import { Package, Check, Loader2, Edit } from "lucide-react";
 import { toast } from "sonner";
 import { InventoryItem } from "@/services/maintenanceService";
+import { cn } from "@/lib/utils";
+
+// Form Components (Tahoe UI)
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 
 interface AddInventarioModalProps {
   open: boolean;
@@ -28,7 +40,6 @@ interface AddInventarioModalProps {
   onSave: (item: any) => Promise<void>;
 }
 
-// 1. CORRECCIÓN: Las opciones internas deben ser en minúsculas para coincidir con el backend
 const categories = [
   { value: "motor", label: "Motor" },
   { value: "frenos", label: "Frenos" },
@@ -38,6 +49,21 @@ const categories = [
   { value: "general", label: "General" },
 ];
 
+// =====================
+// ESQUEMA ZOD (VALIDACIÓN)
+// =====================
+const inventorySchema = z.object({
+  sku: z.string().min(2, "El SKU es requerido"),
+  descripcion: z.string().min(3, "La descripción es requerida"),
+  categoria: z.string().min(1, "La categoría es requerida"),
+  stock_actual: z.coerce.number().min(0, "Debe ser mayor o igual a 0"),
+  stock_minimo: z.coerce.number().min(0, "Debe ser mayor o igual a 0"),
+  precio_unitario: z.coerce.number().min(0, "El precio no puede ser negativo"),
+  ubicacion: z.string().optional(),
+});
+
+type InventoryFormData = z.infer<typeof inventorySchema>;
+
 export function AddInventarioModal({
   open,
   onOpenChange,
@@ -46,220 +72,338 @@ export function AddInventarioModal({
 }: AddInventarioModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 2. CORRECCIÓN: El valor por defecto inicial ahora es minúscula
-  const [formData, setFormData] = useState({
-    sku: "",
-    descripcion: "",
-    categoria: "general",
-    stock_actual: 0,
-    stock_minimo: 0,
-    ubicacion: "",
-    precio_unitario: 0,
+  // 🚀 REACT HOOK FORM
+  const form = useForm<InventoryFormData>({
+    resolver: zodResolver(inventorySchema),
+    defaultValues: {
+      sku: "",
+      descripcion: "",
+      categoria: "general",
+      stock_actual: 0,
+      stock_minimo: 0,
+      precio_unitario: 0,
+      ubicacion: "",
+    },
   });
 
-  useEffect(() => {
-    if (itemToEdit) {
-      setFormData({
-        sku: itemToEdit.sku,
-        descripcion: itemToEdit.descripcion,
-        categoria: itemToEdit.categoria, // Asumimos que viene en minúscula del backend
-        stock_actual: itemToEdit.stock_actual,
-        stock_minimo: itemToEdit.stock_minimo,
-        ubicacion: itemToEdit.ubicacion,
-        precio_unitario: itemToEdit.precio_unitario,
-      });
-    } else {
-      // 3. CORRECCIÓN: Reiniciar a minúscula
-      setFormData({
-        sku: "",
-        descripcion: "",
-        categoria: "general",
-        stock_actual: 0,
-        stock_minimo: 0,
-        ubicacion: "",
-        precio_unitario: 0,
-      });
-    }
-  }, [itemToEdit, open]);
+  const { reset, handleSubmit } = form;
+  const isEditMode = !!itemToEdit;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  useEffect(() => {
+    if (open) {
+      if (itemToEdit) {
+        reset({
+          sku: itemToEdit.sku,
+          descripcion: itemToEdit.descripcion,
+          categoria: itemToEdit.categoria, // Asumimos que viene en minúscula del backend
+          stock_actual: itemToEdit.stock_actual,
+          stock_minimo: itemToEdit.stock_minimo,
+          ubicacion: itemToEdit.ubicacion || "",
+          precio_unitario: itemToEdit.precio_unitario,
+        });
+      } else {
+        reset({
+          sku: "",
+          descripcion: "",
+          categoria: "general",
+          stock_actual: 0,
+          stock_minimo: 0,
+          ubicacion: "",
+          precio_unitario: 0,
+        });
+      }
+    }
+  }, [itemToEdit, open, reset]);
+
+  // =====================
+  // SUBMIT
+  // =====================
+  const onFormSubmit = async (data: InventoryFormData) => {
     setIsSubmitting(true);
 
     try {
-      // AQUÍ ESTÁ LA MAGIA: Forzamos la minúscula sin importar qué tenga el estado
       await onSave({
-        ...formData,
-        categoria: formData.categoria.toLowerCase(),
+        ...data,
+        categoria: data.categoria.toLowerCase(),
       });
 
       toast.success(
-        itemToEdit ? "Refacción actualizada" : "Refacción agregada",
+        isEditMode ? "Refacción actualizada" : "Refacción agregada",
         {
-          description: `${formData.sku} - ${formData.descripcion}`,
+          description: `${data.sku} - ${data.descripcion}`,
         },
       );
 
       onOpenChange(false);
     } catch (error) {
       console.error(error);
+      toast.error("Ocurrió un error al guardar la refacción");
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const handleClose = () => {
+    onOpenChange(false);
+    reset();
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Package className="h-5 w-5" />
-            {itemToEdit ? "Editar Refacción" : "Nueva Refacción"}
-          </DialogTitle>
-          <DialogDescription>
-            {itemToEdit
-              ? "Modifica los datos de la refacción"
-              : "Agrega una nueva refacción al inventario"}
-          </DialogDescription>
+    <Dialog
+      open={open}
+      onOpenChange={(isOpen) => {
+        if (!isOpen && !isSubmitting) handleClose();
+      }}
+    >
+      <DialogContent className="w-[95vw] sm:max-w-2xl flex flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-slate-50/50 dark:bg-transparent backdrop-blur-xl rounded-2xl">
+        {/* 🚀 HEADER TAHOE */}
+        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-brand-navy/95 dark:bg-slate-900 backdrop-blur-md shrink-0 border-b border-white/10 relative overflow-hidden z-10">
+          <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
+          <div className="relative z-10 flex items-center gap-4 sm:gap-5">
+            <div
+              className={cn(
+                "w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shadow-inner shrink-0 icon-plate",
+                isEditMode ? "bg-blue-500/20" : "bg-emerald-500/20",
+              )}
+            >
+              {isEditMode ? (
+                <Edit className="h-7 w-7 sm:h-8 sm:w-8 text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.4)]" />
+              ) : (
+                <Package className="h-7 w-7 sm:h-8 sm:w-8 text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.4)]" />
+              )}
+            </div>
+            <div className="flex flex-col gap-1 text-left">
+              <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-white text-shadow-premium heading-crisp leading-none">
+                {isEditMode ? "Editar Refacción" : "Nueva Refacción"}
+              </DialogTitle>
+              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-brand-secondary dark:text-slate-400 mt-1">
+                {isEditMode
+                  ? "Modifica los datos del elemento en el almacén."
+                  : "Registra una nueva pieza en el inventario global."}
+              </p>
+            </div>
+          </div>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="sku">SKU *</Label>
-              <Input
-                id="sku"
-                value={formData.sku}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, sku: e.target.value }))
-                }
-                placeholder="REF-001"
-                required
-                disabled={!!itemToEdit}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="categoria">Categoría</Label>
-              <Select
-                value={formData.categoria}
-                onValueChange={(value) =>
-                  setFormData((prev) => ({ ...prev, categoria: value }))
-                }
-              >
-                <SelectTrigger>
-                  {/* Buscamos el label bonito para mostrar */}
-                  <SelectValue placeholder="Seleccione...">
-                    {categories.find((c) => c.value === formData.categoria)
-                      ?.label || formData.categoria}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {/* 4. CORRECCIÓN: Renderizamos usando value (minúscula) y label (mayúscula) */}
-                  {categories.map((cat) => (
-                    <SelectItem key={cat.value} value={cat.value}>
-                      {cat.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+        {/* 🚀 BODY: FORMULARIO */}
+        <Form {...form}>
+          <form
+            onSubmit={form.handleSubmit(onFormSubmit)}
+            className="flex-1 min-h-0 overflow-hidden flex flex-col"
+          >
+            <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar">
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  {/* SKU */}
+                  <FormField
+                    control={form.control}
+                    name="sku"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel variant="brand" required>
+                          SKU
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            disabled={isEditMode}
+                            placeholder="REF-001"
+                            className={cn(
+                              "h-11 font-mono font-bold uppercase bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm",
+                              isEditMode &&
+                                "bg-slate-100 dark:bg-slate-800 text-slate-500 cursor-not-allowed",
+                            )}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-          <div className="space-y-2">
-            <Label htmlFor="descripcion">Descripción *</Label>
-            <Input
-              id="descripcion"
-              value={formData.descripcion}
-              onChange={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  descripcion: e.target.value,
-                }))
-              }
-              placeholder="Filtro de aceite motor"
-              required
-            />
-          </div>
+                  {/* Categoría */}
+                  <FormField
+                    control={form.control}
+                    name="categoria"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel variant="brand" required>
+                          Categoría
+                        </FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                          value={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="h-11 font-black uppercase text-xs glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm text-brand-navy dark:text-slate-100">
+                              <SelectValue placeholder="Seleccione..." />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-slate-200 dark:border-white/10">
+                            {categories.map((cat) => (
+                              <SelectItem
+                                key={cat.value}
+                                value={cat.value}
+                                className="font-bold uppercase text-xs"
+                              >
+                                {cat.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-          <div className="grid grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="stock_actual">Stock Actual</Label>
-              <Input
-                id="stock_actual"
-                type="number"
-                min="0"
-                value={formData.stock_actual}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    stock_actual: Number(e.target.value),
-                  }))
-                }
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="stock_minimo">Stock Mínimo</Label>
-              <Input
-                id="stock_minimo"
-                type="number"
-                min="0"
-                value={formData.stock_minimo}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    stock_minimo: Number(e.target.value),
-                  }))
-                }
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="precio_unitario">Precio Unit.</Label>
-              <Input
-                id="precio_unitario"
-                type="number"
-                min="0"
-                step="0.01"
-                value={formData.precio_unitario}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    precio_unitario: Number(e.target.value),
-                  }))
-                }
-              />
-            </div>
-          </div>
+                  {/* Descripción */}
+                  <FormField
+                    control={form.control}
+                    name="descripcion"
+                    render={({ field }) => (
+                      <FormItem className="sm:col-span-2">
+                        <FormLabel variant="brand" required>
+                          Descripción
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder="Ej: Filtro de aceite para motor Cummins"
+                            className="h-11 font-medium bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-          <div className="space-y-2">
-            <Label htmlFor="ubicacion">Ubicación</Label>
-            <Input
-              id="ubicacion"
-              value={formData.ubicacion}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, ubicacion: e.target.value }))
-              }
-              placeholder="Almacén A - Estante 3"
-            />
-          </div>
+                  {/* Stock Actual */}
+                  <FormField
+                    control={form.control}
+                    name="stock_actual"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel variant="brand" required>
+                          Stock Actual
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            {...field}
+                            className="h-11 font-mono font-bold glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-            >
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={isSubmitting} className="gap-2">
-              {isSubmitting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Save className="h-4 w-4" />
-              )}
-              {itemToEdit ? "Guardar Cambios" : "Agregar Refacción"}
-            </Button>
-          </DialogFooter>
-        </form>
+                  {/* Stock Mínimo */}
+                  <FormField
+                    control={form.control}
+                    name="stock_minimo"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel variant="brand" required>
+                          Stock Mínimo (Alerta)
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            {...field}
+                            className="h-11 font-mono font-bold glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Precio Unitario */}
+                  <FormField
+                    control={form.control}
+                    name="precio_unitario"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel variant="brand" required>
+                          Precio Unitario (MXN)
+                        </FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-black">
+                              $
+                            </span>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              {...field}
+                              className="h-11 pl-7 font-mono font-bold glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                            />
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Ubicación */}
+                  <FormField
+                    control={form.control}
+                    name="ubicacion"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel variant="brand">Ubicación Física</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder="Ej: Almacén A - Estante 3"
+                            className="h-11 font-bold uppercase glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 🚀 FOOTER TAHOE */}
+            <DialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0">
+              <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  onClick={handleClose}
+                  disabled={isSubmitting}
+                  className="w-full sm:w-auto haptic-press flex-shrink-0"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  variant="default"
+                  size="lg"
+                  disabled={isSubmitting}
+                  className={cn(
+                    "w-full sm:w-auto haptic-press flex-shrink-0 border-none text-white",
+                    isEditMode
+                      ? "bg-blue-600 hover:bg-blue-700 shadow-blue-500/20"
+                      : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20",
+                  )}
+                >
+                  {isSubmitting ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Check className="mr-2 h-4 w-4" />
+                  )}
+                  {isEditMode ? "Guardar Cambios" : "Agregar Refacción"}
+                </Button>
+              </div>
+            </DialogFooter>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   );

@@ -20,7 +20,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Tire } from "@/types/api.types";
 import {
@@ -132,48 +131,51 @@ export function MaintenanceTireModal({
         if (!isOpen && !isSubmitting) onOpenChange(false);
       }}
     >
-      <DialogContent className="w-[95vw] sm:max-w-lg flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-slate-50/50 dark:bg-transparent backdrop-blur-xl rounded-2xl">
-        {/* 🚀 HEADER TAHOE */}
-        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-brand-navy/95 dark:bg-slate-900 backdrop-blur-md shrink-0 border-b border-white/10 relative overflow-hidden z-10">
-          <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
+      <DialogContent className="w-[95vw] sm:max-w-lg flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
+        {/* 🚀 CAPA 2: CABECERA TAHOE (Blanco en Light, Navy oscuro en Dark) */}
+        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
+          <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center gap-4 sm:gap-5">
             <div
               className={cn(
                 "w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shadow-inner shrink-0 icon-plate",
                 currentTipo === "desecho"
-                  ? "bg-rose-500/20"
-                  : "bg-amber-500/20",
+                  ? "bg-rose-100 dark:bg-rose-900/30 border border-rose-200 dark:border-rose-500/20"
+                  : "bg-amber-100 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-500/20",
               )}
             >
               {currentTipo === "desecho" ? (
-                <Trash2 className="h-7 w-7 sm:h-8 sm:w-8 text-rose-400 drop-shadow-[0_0_8px_rgba(244,63,94,0.4)]" />
+                <Trash2 className="h-7 w-7 sm:h-8 sm:w-8 text-rose-600 dark:text-rose-400 drop-shadow-[0_0_8px_rgba(244,63,94,0.4)]" />
               ) : (
-                <Wrench className="h-7 w-7 sm:h-8 sm:w-8 text-amber-400 drop-shadow-[0_0_8px_rgba(245,158,11,0.4)]" />
+                <Wrench className="h-7 w-7 sm:h-8 sm:w-8 text-amber-600 dark:text-amber-400 drop-shadow-[0_0_8px_rgba(245,158,11,0.4)]" />
               )}
             </div>
-            <div className="flex flex-col gap-1 text-left">
-              <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-white text-shadow-premium heading-crisp leading-none">
+            <div className="flex flex-col gap-1 text-left min-w-0">
+              <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white heading-crisp leading-none">
                 Mantenimiento
               </DialogTitle>
-              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-brand-secondary dark:text-slate-400 mt-1 truncate">
-                {tire.codigo_interno} • {tire.marca} {tire.modelo}
+              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-1 truncate tracking-normal normal-case">
+                <span className="font-mono font-bold text-amber-600 dark:text-amber-400 uppercase">
+                  {tire.codigo_interno}
+                </span>{" "}
+                • {tire.marca} {tire.modelo}
               </p>
             </div>
           </div>
         </DialogHeader>
 
-        {/* 🚀 BODY: FORMULARIO */}
+        {/* 🚀 CAPA 3: CUERPO (Fondo slate-50 para resaltar inputs) */}
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit(onFormSubmit)}
-            className="flex-1 overflow-hidden flex flex-col"
+            className="flex-1 min-h-0 overflow-hidden flex flex-col"
           >
-            <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-slate-50/50 dark:bg-transparent custom-scrollbar">
               <div className="space-y-6">
-                {/* Resumen Estado Actual */}
-                <div className="p-4 bg-slate-100 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-white/10 shadow-inner flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                {/* 📍 Resumen Estado Actual */}
+                <div className="p-5 bg-white dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-white/10 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1 flex items-center gap-1.5">
                       Estado Actual
                     </p>
                     <p className="text-sm font-black text-brand-navy dark:text-white uppercase tracking-tight mt-1">
@@ -181,13 +183,13 @@ export function MaintenanceTireModal({
                     </p>
                   </div>
                   <div>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1 flex items-center gap-1.5">
                       Ubicación
                     </p>
                     <p className="text-sm font-black text-brand-navy dark:text-white uppercase tracking-tight mt-1 flex items-center gap-1.5">
                       {tire.unidad_actual_economico ? (
                         <>
-                          <Truck className="h-4 w-4 text-slate-400" /> ECO-
+                          <Truck className="h-4 w-4 text-blue-500" /> ECO-
                           {tire.unidad_actual_economico}
                         </>
                       ) : (
@@ -201,7 +203,7 @@ export function MaintenanceTireModal({
                 </div>
 
                 <div className="grid grid-cols-1 gap-6">
-                  {/* Tipo Mantenimiento */}
+                  {/* ⚙️ Tipo Mantenimiento */}
                   <FormField
                     control={form.control}
                     name="tipo"
@@ -216,7 +218,7 @@ export function MaintenanceTireModal({
                           disabled={isSubmitting}
                         >
                           <FormControl>
-                            <SelectTrigger className="h-11 glass-card font-black uppercase text-xs bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm text-brand-navy dark:text-slate-100">
+                            <SelectTrigger className="h-11 font-black uppercase text-xs shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 text-brand-navy dark:text-slate-100">
                               <SelectValue placeholder="Seleccionar acción..." />
                             </SelectTrigger>
                           </FormControl>
@@ -254,7 +256,7 @@ export function MaintenanceTireModal({
                     )}
                   />
 
-                  {/* Costo */}
+                  {/* 💰 Costo */}
                   <FormField
                     control={form.control}
                     name="costo"
@@ -264,25 +266,29 @@ export function MaintenanceTireModal({
                           variant="brand"
                           className="flex items-center gap-2"
                         >
-                          <DollarSign className="h-3.5 w-3.5 text-emerald-500" />{" "}
                           Costo Estimado (MXN)
                         </FormLabel>
                         <FormControl>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            placeholder="0.00"
-                            {...field}
-                            className="h-11 font-mono font-bold glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
-                            disabled={isSubmitting}
-                          />
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-500 dark:text-emerald-400 font-black">
+                              <DollarSign className="h-4 w-4" />
+                            </span>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              placeholder="0.00"
+                              {...field}
+                              className="h-11 pl-9 font-mono font-bold uppercase bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                              disabled={isSubmitting}
+                            />
+                          </div>
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
 
-                  {/* Descripción */}
+                  {/* 📝 Descripción */}
                   <FormField
                     control={form.control}
                     name="descripcion"
@@ -293,7 +299,7 @@ export function MaintenanceTireModal({
                           <Textarea
                             placeholder="Detalles del daño, proveedor, número de factura..."
                             {...field}
-                            className="min-h-[80px] resize-none glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm font-medium text-sm"
+                            className="min-h-[80px] resize-none bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm font-medium text-sm"
                             disabled={isSubmitting}
                           />
                         </FormControl>
@@ -303,8 +309,9 @@ export function MaintenanceTireModal({
                   />
                 </div>
 
+                {/* ⚠️ Advertencia de Desecho */}
                 {currentTipo === "desecho" && (
-                  <div className="p-4 bg-rose-50 dark:bg-rose-950/20 border-l-4 border-rose-500 rounded-r-xl shadow-sm flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                  <div className="p-5 bg-rose-50 dark:bg-rose-950/20 border-l-4 border-rose-500 rounded-r-xl shadow-sm flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
                     <AlertTriangle className="h-5 w-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-widest text-rose-800 dark:text-rose-400 mb-1">
@@ -312,7 +319,11 @@ export function MaintenanceTireModal({
                       </p>
                       <p className="text-xs font-medium text-rose-900/80 dark:text-rose-200/80 leading-snug">
                         Al confirmar el desecho, la llanta se marcará como
-                        inactiva permanentemente en el inventario.
+                        <b className="font-black text-rose-900 dark:text-rose-100">
+                          {" "}
+                          inactiva permanentemente{" "}
+                        </b>
+                        en el inventario.
                       </p>
                     </div>
                   </div>
@@ -320,8 +331,8 @@ export function MaintenanceTireModal({
               </div>
             </div>
 
-            {/* 🚀 FOOTER TAHOE */}
-            <DialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0">
+            {/* 🚀 CAPA 4: FOOTER TAHOE (Botón semántico) */}
+            <DialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
               <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
                 <Button
                   type="button"
@@ -329,25 +340,25 @@ export function MaintenanceTireModal({
                   size="lg"
                   onClick={() => onOpenChange(false)}
                   disabled={isSubmitting}
-                  className="w-full sm:w-auto haptic-press flex-shrink-0"
+                  className="w-full sm:w-auto haptic-press flex-shrink-0 font-black uppercase tracking-widest text-[10px]"
                 >
                   Cancelar
                 </Button>
                 <Button
                   type="submit"
-                  variant={
-                    currentTipo === "desecho" ? "destructive" : "default"
-                  }
                   size="lg"
                   disabled={isSubmitting}
                   className={cn(
-                    "w-full sm:w-auto haptic-press flex-shrink-0 border-none",
-                    currentTipo !== "desecho" &&
-                      "bg-amber-600 hover:bg-amber-700 shadow-amber-500/20 text-white",
+                    "w-full sm:w-auto haptic-press flex-shrink-0 border-none text-white font-black uppercase tracking-widest text-[10px]",
+                    currentTipo === "desecho"
+                      ? "bg-rose-600 hover:bg-rose-700 shadow-rose-500/20"
+                      : "bg-amber-600 hover:bg-amber-700 shadow-amber-500/20",
                   )}
                 >
                   {isSubmitting ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : currentTipo === "desecho" ? (
+                    <Trash2 className="mr-2 h-4 w-4" />
                   ) : (
                     <Check className="mr-2 h-4 w-4" />
                   )}

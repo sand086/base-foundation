@@ -41,8 +41,9 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        // POSICIONAMIENTO: Centrado absoluto
-        "fixed left-[50%] top-[50%] z-50 grid w-full translate-x-[-50%] translate-y-[-50%]",
+        // POSICIONAMIENTO Y SCROLL (LA MAGIA): Flex column con altura máxima
+        "fixed left-[50%] top-[50%] z-50 flex flex-col w-full translate-x-[-50%] translate-y-[-50%]",
+        "max-h-[90dvh]", // 🚀 Restringe la altura al 90% de la pantalla dinámica
 
         // ESTILO TAHOE: Glassmorphism Líquido y Bordes HD
         "bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl",
@@ -62,8 +63,8 @@ const DialogContent = React.forwardRef<
       {/* Brillo de luz (Spotlight) interno para profundidad de materiales Apple */}
       <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-white/20 dark:from-white/5 to-transparent z-0" />
 
-      {/* Contenedor Real para respetar el Z-index */}
-      <div className="relative z-10 flex flex-col h-full w-full">
+      {/* 🚀 CONTENEDOR MAESTRO DE SCROLL: flex-1 y min-h-0 son obligatorios */}
+      <div className="relative z-10 flex flex-col flex-1 h-full w-full min-h-0 overflow-hidden">
         {children}
       </div>
 
@@ -83,7 +84,7 @@ const DialogHeader = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex flex-col space-y-1.5 text-center sm:text-left p-8 pb-4 relative z-10",
+      "flex flex-col space-y-1.5 text-center sm:text-left p-8 pb-4 relative z-10 shrink-0",
       className,
     )}
     {...props}
@@ -98,7 +99,7 @@ const DialogFooter = ({
   <div
     className={cn(
       // TAHOE MAGIC: Footer tipo "Control Bar" con fondo diferenciado
-      "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-3 p-6 pt-4",
+      "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-3 p-6 pt-4 shrink-0",
       "bg-slate-50/50 dark:bg-black/20 backdrop-blur-md border-t border-slate-200/80 dark:border-white/10 relative z-10",
       className,
     )}

@@ -20,7 +20,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CirclePlus, Pencil, Loader2, Check } from "lucide-react";
+import {
+  CirclePlus,
+  Pencil,
+  Loader2,
+  Check,
+  Barcode,
+  Settings,
+  DollarSign,
+} from "lucide-react";
 import { Tire } from "@/types/api.types";
 import { cn } from "@/lib/utils";
 
@@ -177,35 +185,43 @@ export function CreateTireModal({
     }
   };
 
+  const handleClose = () => {
+    onOpenChange(false);
+    reset();
+  };
+
   return (
     <Dialog
       open={open}
       onOpenChange={(isOpen) => {
-        if (!isOpen && !loading) onOpenChange(false);
+        if (!isOpen && !loading) handleClose();
       }}
     >
-      <DialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-slate-50/50 dark:bg-transparent backdrop-blur-xl rounded-2xl">
-        {/* 🚀 HEADER TAHOE */}
-        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-brand-navy/95 dark:bg-slate-900 backdrop-blur-md shrink-0 border-b border-white/10 relative overflow-hidden z-10">
-          <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
+      {/* 🚀 CAPA 1: CASCARÓN */}
+      <DialogContent className="w-[95vw] sm:max-w-2xl flex flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
+        {/* 🚀 CAPA 2: CABECERA (Blanca en Light, Navy oscuro en Dark) */}
+        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
+          <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center gap-4 sm:gap-5">
             <div
               className={cn(
                 "w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shadow-inner shrink-0 icon-plate",
-                isEditing ? "bg-blue-500/20" : "bg-emerald-500/20",
+                isEditing
+                  ? "bg-brand-green/10 dark:bg-brand-green/20"
+                  : "bg-brand-red/10 dark:bg-brand-red/20",
               )}
             >
               {isEditing ? (
-                <Pencil className="h-7 w-7 sm:h-8 sm:w-8 text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.4)]" />
+                <Pencil className="h-7 w-7 sm:h-8 sm:w-8 text-brand-green drop-shadow-[0_0_8px_rgba(16,185,129,0.4)]" />
               ) : (
-                <CirclePlus className="h-7 w-7 sm:h-8 sm:w-8 text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.4)]" />
+                <CirclePlus className="h-7 w-7 sm:h-8 sm:w-8 text-brand-red drop-shadow-[0_0_8px_rgba(220,38,38,0.4)]" />
               )}
             </div>
             <div className="flex flex-col gap-1 text-left">
-              <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-white text-shadow-premium heading-crisp leading-none">
+              <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white heading-crisp leading-none">
                 {isEditing ? "Editar Llanta" : "Alta de Nueva Llanta"}
               </DialogTitle>
-              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-brand-secondary dark:text-slate-400 mt-1">
+              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-1 tracking-normal normal-case">
                 {isEditing
                   ? "Modifica los datos generales del neumático."
                   : "Registra un neumático nuevo en el inventario (Stock)."}
@@ -214,242 +230,280 @@ export function CreateTireModal({
           </div>
         </DialogHeader>
 
-        {/* 🚀 BODY: FORMULARIO */}
+        {/* 🚀 CAPA 3: CUERPO (Fondo slate-50 para resaltar inputs) */}
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit(onFormSubmit)}
-            className="flex-1 overflow-hidden flex flex-col"
+            className="flex-1 min-h-0 overflow-hidden flex flex-col"
           >
-            <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar">
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  {/* ID / Código */}
-                  <FormField
-                    control={form.control}
-                    name="codigo_interno"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel variant="brand" required>
-                          ID / Código Interno
-                        </FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            disabled={isEditing}
-                            className={cn(
-                              "h-11 font-mono font-bold uppercase shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10",
-                              isEditing &&
-                                "bg-slate-100 dark:bg-slate-800 text-slate-500 cursor-not-allowed",
-                            )}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+            <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-slate-50/50 dark:bg-transparent custom-scrollbar">
+              <div className="space-y-8">
+                {/* 🏷️ SECCIÓN 1: Identificación */}
+                <div className="space-y-6">
+                  <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-2">
+                    <Barcode className="h-3.5 w-3.5 text-blue-500" />
+                    Identificación del Neumático
+                  </h3>
 
-                  {/* Marca */}
-                  <FormField
-                    control={form.control}
-                    name="marca"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel variant="brand" required>
-                          Marca
-                        </FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          defaultValue={field.value}
-                          value={field.value}
-                        >
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <FormField
+                      control={form.control}
+                      name="codigo_interno"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel variant="brand" required>
+                            ID / Código Interno
+                          </FormLabel>
                           <FormControl>
-                            <SelectTrigger className="h-11 font-black uppercase text-xs glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm text-brand-navy dark:text-slate-100">
-                              <SelectValue placeholder="Seleccionar marca" />
-                            </SelectTrigger>
+                            <Input
+                              {...field}
+                              disabled={isEditing}
+                              placeholder="Ej: LL-001"
+                              className={cn(
+                                "h-11 font-mono font-bold uppercase shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10",
+                                isEditing &&
+                                  "bg-slate-100 dark:bg-slate-800 text-slate-500 cursor-not-allowed",
+                              )}
+                            />
                           </FormControl>
-                          <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-slate-200 dark:border-white/10">
-                            {MARCAS_COMUNES.map((m) => (
-                              <SelectItem
-                                key={m}
-                                value={m}
-                                className="font-bold uppercase text-xs"
-                              >
-                                {m}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                  {/* Modelo */}
-                  <FormField
-                    control={form.control}
-                    name="modelo"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel variant="brand">Modelo</FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            className="h-11 font-bold uppercase glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                    <FormField
+                      control={form.control}
+                      name="dot"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel variant="brand">
+                            DOT (Fabricación)
+                          </FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              maxLength={4}
+                              placeholder="Ej: 4223"
+                              className="h-11 font-mono font-bold uppercase glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                  {/* Medida */}
-                  <FormField
-                    control={form.control}
-                    name="medida"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel variant="brand" required>
-                          Medida
-                        </FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            className="h-11 font-mono font-bold glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                    <FormField
+                      control={form.control}
+                      name="marca"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel variant="brand" required>
+                            Marca
+                          </FormLabel>
+                          <Select
+                            onValueChange={field.onChange}
+                            defaultValue={field.value}
+                            value={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger className="h-11 font-black uppercase text-xs glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm text-brand-navy dark:text-slate-100">
+                                <SelectValue placeholder="Seleccionar marca" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-slate-200 dark:border-white/10">
+                              {MARCAS_COMUNES.map((m) => (
+                                <SelectItem
+                                  key={m}
+                                  value={m}
+                                  className="font-bold uppercase text-xs"
+                                >
+                                  {m}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                  {/* DOT */}
-                  <FormField
-                    control={form.control}
-                    name="dot"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel variant="brand">DOT</FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            maxLength={4}
-                            className="h-11 font-mono font-bold glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                    <FormField
+                      control={form.control}
+                      name="modelo"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel variant="brand">Modelo</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              placeholder="Ej: X Multi Z"
+                              className="h-11 font-bold uppercase glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
 
-                  {/* Profundidad Original */}
-                  <FormField
-                    control={form.control}
-                    name="profundidad_original"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel variant="brand" required>
-                          Profundidad Original (mm)
-                        </FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            step="0.1"
-                            {...field}
-                            className="h-11 font-mono font-bold glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                {/* ⚙️ SECCIÓN 2: Especificaciones Técnicas */}
+                <div className="space-y-6 pt-2">
+                  <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-2">
+                    <Settings className="h-3.5 w-3.5 text-amber-500" />
+                    Especificaciones Técnicas
+                  </h3>
 
-                  {/* Precio de Compra */}
-                  <FormField
-                    control={form.control}
-                    name="precio_compra"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel variant="brand">Precio de Compra</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            {...field}
-                            className="h-11 font-mono font-bold glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <FormField
+                      control={form.control}
+                      name="medida"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel variant="brand" required>
+                            Medida
+                          </FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              placeholder="Ej: 295/80R22.5"
+                              className="h-11 font-mono font-bold uppercase glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                  {/* Proveedor */}
-                  <FormField
-                    control={form.control}
-                    name="proveedor"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel variant="brand">Proveedor</FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            className="h-11 font-bold uppercase glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                    <FormField
+                      control={form.control}
+                      name="profundidad_original"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel variant="brand" required>
+                            Profundidad Original (mm)
+                          </FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              step="0.1"
+                              {...field}
+                              placeholder="Ej: 18.5"
+                              className="h-11 font-mono font-bold glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
 
-                  {/* 🚀 Fecha de Compra usando DatePicker Tahoe */}
-                  <FormField
-                    control={form.control}
-                    name="fecha_compra"
-                    render={({ field }) => (
-                      <FormItem className="sm:col-span-2">
-                        <FormLabel variant="brand" required>
-                          Fecha de Compra
-                        </FormLabel>
-                        <FormControl>
-                          <DatePicker
-                            date={field.value}
-                            onDateChange={field.onChange}
-                            placeholder="Selecciona la fecha"
-                            modalTitle="Fecha de Compra"
-                            className="sm:w-1/2"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                {/* 💰 SECCIÓN 3: Adquisición */}
+                <div className="space-y-6 pt-2">
+                  <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-2">
+                    <DollarSign className="h-3.5 w-3.5 text-emerald-500" />
+                    Datos de Adquisición
+                  </h3>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <FormField
+                      control={form.control}
+                      name="precio_compra"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel variant="brand">
+                            Precio de Compra
+                          </FormLabel>
+                          <FormControl>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-black">
+                                $
+                              </span>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                {...field}
+                                placeholder="0.00"
+                                className="h-11 pl-7 font-mono font-bold glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                              />
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="proveedor"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel variant="brand">Proveedor</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              placeholder="Nombre de la llantera..."
+                              className="h-11 font-bold uppercase glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    {/* 🚀 Fecha de Compra usando DatePicker Tahoe */}
+                    <FormField
+                      control={form.control}
+                      name="fecha_compra"
+                      render={({ field }) => (
+                        <FormItem className="sm:col-span-2">
+                          <FormLabel variant="brand" required>
+                            Fecha de Compra
+                          </FormLabel>
+                          <FormControl>
+                            <DatePicker
+                              date={field.value}
+                              onDateChange={field.onChange}
+                              placeholder="Selecciona la fecha"
+                              modalTitle="Fecha de Compra"
+                              className="sm:w-1/2"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* 🚀 FOOTER TAHOE */}
-            <DialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0">
+            {/* 🚀 CAPA 4: FOOTER TAHOE (Con nueva regla de color) */}
+            <DialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
               <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
                 <Button
                   type="button"
                   variant="outline"
                   size="lg"
-                  onClick={() => onOpenChange(false)}
+                  onClick={handleClose}
                   disabled={loading}
-                  className="w-full sm:w-auto haptic-press flex-shrink-0"
+                  className="w-full sm:w-auto haptic-press flex-shrink-0 font-black uppercase tracking-widest text-[10px]"
                 >
                   Cancelar
                 </Button>
+
+                {/* 🚀 REGLA APLICADA: brand-green para Editar, brand-red para Crear */}
                 <Button
                   type="submit"
                   variant="default"
                   size="lg"
                   disabled={loading}
                   className={cn(
-                    "w-full sm:w-auto haptic-press flex-shrink-0 border-none",
+                    "w-full sm:w-auto haptic-press flex-shrink-0 border-none text-white font-black uppercase tracking-widest text-[10px]",
                     isEditing
-                      ? "bg-blue-600 hover:bg-blue-700 shadow-blue-500/20"
-                      : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20",
+                      ? "bg-brand-green hover:bg-brand-green/80 shadow-emerald-500/20"
+                      : "bg-brand-red hover:bg-brand-red/80 shadow-brand-red/20",
                   )}
                 >
                   {loading ? (
@@ -457,7 +511,11 @@ export function CreateTireModal({
                   ) : (
                     <Check className="mr-2 h-4 w-4" />
                   )}
-                  {loading ? "Guardando..." : "Guardar Cambios"}
+                  {loading
+                    ? "Guardando..."
+                    : isEditing
+                      ? "Actualizar Llanta"
+                      : "Registrar Llanta"}
                 </Button>
               </div>
             </DialogFooter>
