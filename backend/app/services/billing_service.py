@@ -422,17 +422,26 @@ class BillingService:
             estado_destino = "CMX"
             municipio_destino = "007"
 
-        # 🚀 REGLA DE NEGOCIO ANTI-RECHAZO DE MERCANCÍAS SAT
-        # El SAT permite 78101802 en el CFDI, pero NO en la Carta Porte.
+        # 🚀 REGLA DE NEGOCIO 1: ANTI-RECHAZO DE MERCANCÍAS SAT
         clave_producto_viaje = str(_get_safe(viaje, "sat_clave_producto", "31111501"))
-
         if clave_producto_viaje == "78101802":
             logger.warning(
-                f"🚨 [SAT FALLBACK] Se intentó usar clave de Flete (78101802) como Bien Transportado. Forzando a '31111501' (Bobinas)."
+                f"🚨 [SAT FALLBACK] Clave de Flete (78101802) no permitida como Bien Transportado. Forzando a '31111501'."
             )
             bienes_transporte = "31111501"
         else:
             bienes_transporte = clave_producto_viaje
+
+        # 🚀 REGLA DE NEGOCIO 2: ANTI-RECHAZO DE PESO SAT
+        # El SAT exige que el peso sea > 0.000
+        peso_toneladas = float(_get_safe(viaje, "peso_toneladas", 25.0))
+        if peso_toneladas <= 0.0:
+            logger.warning(
+                f"🚨 [SAT FALLBACK] Peso del viaje es 0. Forzando a 25.0 Toneladas para evitar rechazo."
+            )
+            peso_toneladas = 25.0
+
+        peso_bruto_kg = f"{peso_toneladas * 1000:.2f}"
 
         return {
             "folio": str(_get_safe(viaje, "id", "0")),
@@ -463,11 +472,11 @@ class BillingService:
             "domicilio_destino": _get_safe(
                 viaje, "destination", "DESTINO NO DECLARADO"
             ),
-            "peso_bruto": str(float(_get_safe(viaje, "peso_toneladas", 25.0)) * 1000),
             "descripcion_mercancia": _get_safe(
                 viaje, "descripcion_mercancia", "CARGA GENERAL"
             ),
-            # 🚀 USAMOS LA CLAVE FILTRADA AQUÍ
+            # 🚀 USAMOS EL PESO BLINDADO AQUÍ
+            "peso_bruto": peso_bruto_kg,
             "bienes_transp": bienes_transporte,
             "id_ccp": f"CCC{str(uuid.uuid4())[3:]}",
             "descripcion_concepto": f"FLETE CARGA GENERAL - Folio {_get_safe(viaje, 'id', '0')}",
