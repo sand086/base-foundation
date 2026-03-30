@@ -106,54 +106,74 @@ def create_unit(unit: schemas.UnitCreate, db: Session = Depends(get_db)):
 @router.put("/{unit_id}", response_model=schemas.UnitResponse)
 def update_unit(unit_id: str, unit: schemas.UnitUpdate, db: Session = Depends(get_db)):
     try:
-        # 🚀 1. LIMPIAMOS EL PREFIJO ECO
+        # 1. Convertir ID a entero para comparaciones
+        try:
+            current_id = int(unit_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="ID de unidad inválido")
+
+        # 2. Limpiar y Validar Número Económico
         if unit.numero_economico:
             unit.numero_economico = clean_eco_prefix(unit.numero_economico)
 
-        # 🚀 2. SANITIZACIÓN DE CAMPOS ÚNICOS (Evitar el choque de strings vacíos "")
-        # Si React manda "", lo convertimos a None (NULL en BD) para que no haya falsos duplicados
+            # Verificar si OTRA unidad ya tiene este número (incluyendo eliminadas)
+            dup_eco = (
+                db.query(models.Unit)
+                .filter(
+                    models.Unit.numero_economico == unit.numero_economico,
+                    models.Unit.id != current_id,
+                )
+                .first()
+            )
+            if dup_eco:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"El número económico '{unit.numero_economico}' ya está asignado a otra unidad (ID: {dup_eco.id}).",
+                )
+
+        # 3. Sanitización de campos únicos (Evitar strings vacíos "")
+        # Esto previene que "" choque con otro ""
         if hasattr(unit, "vin") and unit.vin == "":
             unit.vin = None
         if hasattr(unit, "placas") and unit.placas == "":
             unit.placas = None
-        if hasattr(unit, "permiso_sct_folio") and unit.permiso_sct_folio == "":
-            unit.permiso_sct_folio = None
-        if hasattr(unit, "caat_folio") and unit.caat_folio == "":
-            unit.caat_folio = None
 
+        # 4. Validar Placas proactivamente
+        if unit.placas:
+            dup_placa = (
+                db.query(models.Unit)
+                .filter(models.Unit.placas == unit.placas, models.Unit.id != current_id)
+                .first()
+            )
+            if dup_placa:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Las placas '{unit.placas}' ya están registradas en la unidad {dup_placa.numero_economico}.",
+                )
+
+        # 5. Intentar actualización en CRUD
         db_unit = crud.update_unit(db, unit_id, unit)
+
         if not db_unit:
             raise HTTPException(status_code=404, detail="Unidad no encontrada")
+
         return db_unit
 
     except IntegrityError as e:
         db.rollback()
-        error_msg = str(
-            e.orig
-        ).lower()  # Convertimos a minúsculas para buscar fácilmente
+        error_msg = str(e.orig).lower()
 
-        # 🚀 3. ALERTAS ESPECÍFICAS DE DUPLICADOS
+        # Identificación precisa del error de BD si la validación proactiva no lo cachó
         if "placas" in error_msg:
-            raise HTTPException(
-                status_code=400,
-                detail="No se pudo actualizar: Esas placas ya están asignadas a otra unidad.",
-            )
-        if "numero_economico" in error_msg:
-            raise HTTPException(
-                status_code=400,
-                detail="No se pudo actualizar: El número económico ya está en uso por otra unidad.",
-            )
-        if "vin" in error_msg:
-            raise HTTPException(
-                status_code=400,
-                detail="No se pudo actualizar: El número de serie (VIN) ya existe en otra unidad.",
-            )
+            detail = "Las placas ya están asignadas a otra unidad."
+        elif "numero_economico" in error_msg:
+            detail = "El número económico ya está en uso."
+        elif "vin" in error_msg:
+            detail = "El número de serie (VIN) ya existe en el sistema."
+        else:
+            detail = "Dato duplicado detectado en la base de datos. Verifique folios y placas."
 
-        # Fallback por si choca alguna otra cosa
-        raise HTTPException(
-            status_code=400,
-            detail=f"Error de integridad (Dato duplicado): Verifique los folios ingresados.",
-        )
+        raise HTTPException(status_code=400, detail=detail)
 
 
 @router.delete("/{unit_id}")
