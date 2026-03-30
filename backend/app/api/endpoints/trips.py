@@ -332,19 +332,16 @@ def reopen_trip_leg(leg_id: int, db: Session = Depends(get_db)):
 
 @router.get("/{trip_id}/carta-porte-ciega")
 def generate_carta_porte(trip_id: int, db: Session = Depends(get_db)):
-    # 1. Verificar si WeasyPrint cargó
     if HTML is None:
         raise HTTPException(
             status_code=500,
-            detail="WeasyPrint no está instalado o faltan dependencias del sistema (pango, cairo).",
+            detail="WeasyPrint no está instalado o faltan dependencias del sistema.",
         )
 
-    # 2. Buscar el viaje
     trip = db.query(models.Trip).filter(models.Trip.id == trip_id).first()
     if not trip:
         raise HTTPException(status_code=404, detail="Viaje no encontrado")
 
-    # 3. Determinar el tramo activo
     active_leg = None
     if trip.legs:
         active_leg = next(
@@ -357,41 +354,124 @@ def generate_carta_porte(trip_id: int, db: Session = Depends(get_db)):
             trip.legs[-1],
         )
 
-    # 4. Renderizar HTML con Jinja2
+    # 🚀 EXTRACCIÓN SEGURA PARA LA CARTA CIEGA
+    unidad = active_leg.unit if active_leg else None
+    operador = active_leg.operator if active_leg else None
+    cliente = trip.client
+
+    # 🚀 CONSTRUIMOS EL MISMO CONTEXTO PERO VERSIÓN "TRASLADO/CIEGA"
+    context = {
+        "rfc_emisor": "EN TRÁNSITO",
+        "nombre_emisor": "DOCUMENTO OPERATIVO (CIEGA)",
+        "cp_emisor": "N/A",
+        "regimen_emisor": "N/A",
+        "uuid": "NO APLICA - DOCUMENTO DE TRASLADO INTERNO",
+        "folio_interno": f"CIEGA-{trip.public_id or trip.id}",
+        "fecha_emision": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+        "logo_src": "",
+        "qr_src": "",
+        "nombre_cliente": getattr(cliente, "razon_social", "N/A") if cliente else "N/A",
+        "rfc_cliente": getattr(cliente, "rfc", "N/A") if cliente else "N/A",
+        "cp_cliente": (
+            getattr(cliente, "codigo_postal_fiscal", "N/A") if cliente else "N/A"
+        ),
+        "regimen_cliente": (
+            getattr(cliente, "regimen_fiscal", "N/A") if cliente else "N/A"
+        ),
+        "direccion_cliente": (
+            getattr(cliente, "direccion_fiscal", "N/A") if cliente else "N/A"
+        ),
+        "uso_cfdi": "S01",
+        "metodo_pago": "N/A",
+        "tipo_comprobante": "T (Traslado)",  # Es una ciega
+        "moneda": "XXX",
+        "tc": "1",
+        "forma_pago": "N/A",
+        "condiciones_pago": "N/A",
+        "cert_sat": "N/A",
+        "cert_emisor": "N/A",
+        "sello_sat": "DOCUMENTO SIN VALIDEZ FISCAL",
+        "sello_emisor": "DOCUMENTO SIN VALIDEZ FISCAL",
+        "cadena_original": "DOCUMENTO SIN VALIDEZ FISCAL",
+        "importe_letra": "(*** DOCUMENTO SIN VALOR COMERCIAL ***)",
+        "subtotal": "0.00",
+        "iva": "0.00",
+        "retenciones": "0.00",
+        "total": "0.00",
+        "conceptos": [
+            {
+                "clave": "78101802",
+                "cantidad": "1.00",
+                "unidad": "E48 - SRV",
+                "descripcion": trip.descripcion_mercancia or "FLETE",
+                "detalles_extra": "Carta Porte Operativa Ciega",
+                "precio": "0.00",
+                "importe": "0.00",
+            }
+        ],
+        "id_ccp": "PENDIENTE TIMBRADO",
+        "distancia_total": "0",
+        "remitente_nombre": "OPERADOR LOGÍSTICO",
+        "remitente_rfc": "N/A",
+        "fecha_salida": (
+            trip.start_date.strftime("%Y-%m-%dT%H:%M:%S") if trip.start_date else ""
+        ),
+        "domicilio_origen": trip.origin or "N/A",
+        "destinatario_nombre": (
+            getattr(cliente, "razon_social", "N/A") if cliente else "N/A"
+        ),
+        "destinatario_rfc": getattr(cliente, "rfc", "N/A") if cliente else "N/A",
+        "fecha_llegada": "PENDIENTE",
+        "domicilio_destino": trip.destination or "N/A",
+        "permiso_sct": (
+            getattr(unidad, "permiso_sct_tipo", "TPAF01") if unidad else "N/A"
+        ),
+        "num_permiso_sct": (
+            getattr(unidad, "permiso_sct_folio", "N/A") if unidad else "N/A"
+        ),
+        "config_vehicular": (
+            getattr(unidad, "config_vehicular_sat", "T3S2") if unidad else "N/A"
+        ),
+        "placas": getattr(unidad, "placas", "S/P") if unidad else "N/A",
+        "anio_modelo": str(getattr(unidad, "year", "N/A")) if unidad else "N/A",
+        "aseguradora": (
+            getattr(unidad, "aseguradora_resp_civil", "N/A") if unidad else "N/A"
+        ),
+        "poliza": getattr(unidad, "poliza_resp_civil", "N/A") if unidad else "N/A",
+        "peso_bruto": str(float(trip.peso_toneladas or 0) * 1000),
+        "bienes_transp": getattr(trip, "sat_clave_producto", "78101802"),
+        "descripcion_mercancia": trip.descripcion_mercancia or "N/A",
+        "subtipo_remolque": "N/A",
+        "placa_remolque": "N/A",
+        "operador_rfc": getattr(operador, "rfc", "N/A") if operador else "N/A",
+        "operador_nombre": getattr(operador, "name", "N/A") if operador else "N/A",
+        "operador_licencia": (
+            getattr(operador, "license_number", "N/A") if operador else "N/A"
+        ),
+        "leyenda_legal": "DOCUMENTO DE CARÁCTER INFORMATIVO Y OPERATIVO (CARTA PORTE CIEGA). NO ES UN COMPROBANTE FISCAL.",
+    }
+
     try:
         template = jinja_env.get_template("carta_porte.html")
-        html_content = template.render(
-            trip=trip,
-            leg=active_leg,
-            fecha_impresion=datetime.now().strftime("%d/%m/%Y %H:%M"),
-        )
+        # 🚀 Le pasamos el CONTEXT extendido en lugar de solo trip y leg
+        html_content = template.render(**context)
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Error en el template HTML: {str(e)}"
         )
 
-    # 5. Generar PDF con manejo de errores específico 🚀
     try:
-        # El base_url es clave para que encuentre imágenes y CSS
-        pdf_file = HTML(string=html_content, base_url=TEMPLATE_DIR).write_pdf()
-    except TypeError as e:
-        # Este captura el error específico de pydyf que tienes actualmente
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error de compatibilidad en WeasyPrint (pydyf): {str(e)}. Intente actualizar las librerías en el servidor.",
-        )
+        pdf_file = HTML(string=html_content, base_url=str(TEMPLATE_DIR)).write_pdf()
     except Exception as e:
-        # Captura cualquier otro error (memoria, permisos, CSS corrupto)
         raise HTTPException(
             status_code=500, detail=f"Error al generar el PDF: {str(e)}"
         )
 
-    # 6. Retornar respuesta exitosa
     return Response(
         content=pdf_file,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": f"inline; filename=Carta_Porte_{trip.public_id or trip.id}.pdf"
+            "Content-Disposition": f"inline; filename=Ciega_Folio_{trip.public_id or trip.id}.pdf"
         },
     )
 

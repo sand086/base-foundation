@@ -1,19 +1,14 @@
-// src/features/cierre/TripSettlementModal.tsx
 import React, { useState, useMemo, useEffect } from "react";
 import {
   Calculator,
   CheckCircle2,
-  AlertCircle,
-  DollarSign,
-  FileText,
-  User,
-  Fuel,
   TrendingUp,
-  AlertTriangle,
   History,
   Loader2,
+  Plus,
+  Trash2,
+  FileText,
 } from "lucide-react";
-
 import {
   Dialog,
   DialogContent,
@@ -25,8 +20,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 
@@ -42,6 +35,14 @@ export interface TripSettlementModalProps {
   onSuccess?: () => void;
 }
 
+// 🚀 Nueva Interfaz para los Conceptos Extra (Vales Azules)
+interface ConceptoExtra {
+  id: string;
+  tipo: "ingreso" | "deduccion";
+  descripcion: string;
+  monto: number | "";
+}
+
 export default function TripSettlementModal({
   open,
   onOpenChange,
@@ -52,32 +53,28 @@ export default function TripSettlementModal({
 }: TripSettlementModalProps) {
   const { updateTripStatus, refreshTrips } = useTrips();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false); // 🚀 DEFINIDO
+  const [isSyncing, setIsSyncing] = useState(false);
 
-  // ==========================================
-  // ESTADOS DE CONTROL OPERATIVO (GUSTAVO)
-  // ==========================================
+  // ESTADOS OPERATIVOS
   const [odometroFinal, setOdometroFinal] = useState<number | "">("");
 
-  // ==========================================
-  // ESTADOS FINANCIEROS
-  // ==========================================
+  // ESTADOS FINANCIEROS (FIJOS)
   const [sueldoBase, setSueldoBase] = useState<number | "">("");
   const [bonos, setBonos] = useState<number | "">("");
-  const [maniobras, setManiobras] = useState<number | "">("");
   const [penalizaciones, setPenalizaciones] = useState<number | "">("");
   const [observaciones, setObservaciones] = useState("");
 
-  // ==========================================
+  // 🚀 ESTADO PARA CONCEPTOS DINÁMICOS (VALES AZULES)
+  const [conceptosExtra, setConceptosExtra] = useState<ConceptoExtra[]>([]);
+
   // UNIFICAR DATOS
-  // ==========================================
   const activeLegs = useMemo(() => {
     if (selectedLegs.length > 0) return selectedLegs;
     if (leg && tripPadre) return [{ ...leg, trip: tripPadre }];
     return [];
   }, [leg, tripPadre, selectedLegs]);
 
-  // Carga inicial de datos
+  // Carga inicial
   useEffect(() => {
     if (open && activeLegs.length > 0) {
       const padre = activeLegs[0].trip || tripPadre;
@@ -87,9 +84,7 @@ export default function TripSettlementModal({
     }
   }, [open, activeLegs, tripPadre]);
 
-  // ==========================================
   // LÓGICA DE RENDIMIENTO
-  // ==========================================
   const kmsRecorridos = useMemo(() => {
     const inicial = Number(activeLegs[0]?.odometro_inicial) || 0;
     if (!odometroFinal || odometroFinal <= inicial) return 0;
@@ -110,6 +105,7 @@ export default function TripSettlementModal({
     return kmsRecorridos / totalLitrosCargados;
   }, [kmsRecorridos, totalLitrosCargados]);
 
+  // CÁLCULOS FINANCIEROS Y DE CONCEPTOS
   const sumAnticipos = activeLegs.reduce(
     (sum, item) =>
       sum +
@@ -119,23 +115,51 @@ export default function TripSettlementModal({
     0,
   );
 
-  const totalPercepciones =
-    (Number(sueldoBase) || 0) + (Number(bonos) || 0) + (Number(maniobras) || 0);
-  const total_deducciones = (Number(penalizaciones) || 0) + sumAnticipos;
-  const totalNeto = totalPercepciones - total_deducciones;
+  // 🚀 Sumar los conceptos extra dinámicos
+  const extraIngresos = conceptosExtra
+    .filter((c) => c.tipo === "ingreso")
+    .reduce((sum, c) => sum + (Number(c.monto) || 0), 0);
 
-  // ==========================================
-  // HANDLERS
-  // ==========================================
+  const extraDeducciones = conceptosExtra
+    .filter((c) => c.tipo === "deduccion")
+    .reduce((sum, c) => sum + (Number(c.monto) || 0), 0);
+
+  const totalPercepciones =
+    (Number(sueldoBase) || 0) + (Number(bonos) || 0) + extraIngresos;
+  const totalDeducciones =
+    (Number(penalizaciones) || 0) + sumAnticipos + extraDeducciones;
+  const totalNeto = totalPercepciones - totalDeducciones;
+
+  // HANDLERS PARA CONCEPTOS DINÁMICOS
+  const addConcepto = (tipo: "ingreso" | "deduccion") => {
+    setConceptosExtra([
+      ...conceptosExtra,
+      { id: Date.now().toString(), tipo, descripcion: "", monto: "" },
+    ]);
+  };
+
+  const removeConcepto = (id: string) => {
+    setConceptosExtra(conceptosExtra.filter((c) => c.id !== id));
+  };
+
+  const updateConcepto = (
+    id: string,
+    field: keyof ConceptoExtra,
+    value: string | number,
+  ) => {
+    setConceptosExtra(
+      conceptosExtra.map((c) => (c.id === id ? { ...c, [field]: value } : c)),
+    );
+  };
+
   const handleClose = () => {
-    // 🚀 DEFINIDO
     onOpenChange(false);
     setOdometroFinal("");
     setSueldoBase("");
     setBonos("");
-    setManiobras("");
     setPenalizaciones("");
     setObservaciones("");
+    setConceptosExtra([]); // 🚀 Limpiar conceptos al cerrar
   };
 
   const handleManualSync = async () => {
@@ -148,16 +172,30 @@ export default function TripSettlementModal({
   const handleSettle = async () => {
     if (!odometroFinal) return toast.error("El odómetro final es obligatorio");
 
+    // 🚀 Validar que los conceptos extra no estén vacíos
+    const invalidConceptos = conceptosExtra.some(
+      (c) => !c.descripcion.trim() || c.monto === "" || Number(c.monto) <= 0,
+    );
+    if (invalidConceptos) {
+      return toast.error(
+        "Por favor, completa o elimina los conceptos extra vacíos.",
+      );
+    }
+
     try {
       setIsSubmitting(true);
+
+      // 🚀 NOTA TÉCNICA: Aquí idealmente mandarías 'conceptosExtra' y 'totalNeto' al backend.
+      // Por ahora, actualizamos el estatus del viaje como estaba diseñado.
       for (const item of activeLegs) {
         const tripId = item.trip?.id || item.trip_id;
         await updateTripStatus(
           String(tripId),
           "cerrado",
-          `Liquidado. Rendimiento: ${rendimientoReal.toFixed(2)} km/l. Obs: ${observaciones}`,
+          `Liquidado. Neto: $${totalNeto.toFixed(2)}. Rendimiento: ${rendimientoReal.toFixed(2)} km/l. Obs: ${observaciones}`,
         );
       }
+
       toast.success("Liquidación completada");
       if (onSuccess) onSuccess();
       handleClose();
@@ -171,6 +209,7 @@ export default function TripSettlementModal({
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-5xl p-0 overflow-hidden bg-slate-50 rounded-2xl border-none shadow-2xl">
+        {/* HEADER */}
         <div className="bg-brand-navy p-6 flex justify-between items-center text-white">
           <div>
             <DialogTitle className="text-2xl font-black flex items-center gap-2">
@@ -196,8 +235,8 @@ export default function TripSettlementModal({
           </Button>
         </div>
 
-        <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* CONTROL DE RENDIMIENTO */}
+        <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 max-h-[75vh] overflow-y-auto">
+          {/* LADO IZQUIERDO: RENDIMIENTO */}
           <div className="space-y-4">
             <h3 className="text-xs font-black text-slate-600 uppercase tracking-widest flex items-center gap-2">
               <TrendingUp className="h-4 w-4" /> Rendimiento
@@ -254,14 +293,24 @@ export default function TripSettlementModal({
             </Card>
           </div>
 
-          {/* CALCULADORA */}
+          {/* LADO DERECHO: CALCULADORA FINANCIERA */}
           <div className="lg:col-span-2 space-y-4">
             <div className="grid grid-cols-2 gap-6 bg-white p-6 rounded-2xl border border-slate-200">
-              {/* INGRESOS */}
-              <div className="space-y-3">
-                <p className="text-[10px] font-black text-emerald-600 uppercase border-b pb-1">
-                  Percepciones
-                </p>
+              {/* SECCIÓN PERCEPCIONES (INGRESOS) */}
+              <div className="space-y-4">
+                <div className="flex justify-between items-center border-b pb-1">
+                  <p className="text-[10px] font-black text-emerald-600 uppercase">
+                    Percepciones
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 text-[9px] text-emerald-600 px-2"
+                    onClick={() => addConcepto("ingreso")}
+                  >
+                    <Plus className="h-3 w-3 mr-1" /> Gasto Extra
+                  </Button>
+                </div>
                 <div className="space-y-1.5">
                   <Label className="text-[11px] font-bold">Sueldo Base</Label>
                   <Input
@@ -282,16 +331,71 @@ export default function TripSettlementModal({
                     className="font-mono h-10 bg-emerald-50/20"
                   />
                 </div>
+
+                {/* 🚀 Renderizado de Conceptos Extra (Ingresos) */}
+                {conceptosExtra
+                  .filter((c) => c.tipo === "ingreso")
+                  .map((c) => (
+                    <div
+                      key={c.id}
+                      className="flex gap-2 items-end animate-in fade-in slide-in-from-top-2"
+                    >
+                      <div className="space-y-1.5 flex-1">
+                        <Input
+                          placeholder="Concepto (Ej: Maniobras)"
+                          value={c.descripcion}
+                          onChange={(e) =>
+                            updateConcepto(c.id, "descripcion", e.target.value)
+                          }
+                          className="h-9 text-xs"
+                        />
+                      </div>
+                      <div className="space-y-1.5 w-24">
+                        <Input
+                          type="number"
+                          placeholder="$"
+                          value={c.monto}
+                          onChange={(e) =>
+                            updateConcepto(
+                              c.id,
+                              "monto",
+                              Number(e.target.value),
+                            )
+                          }
+                          className="h-9 text-xs font-mono"
+                        />
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 text-rose-500 hover:bg-rose-50"
+                        onClick={() => removeConcepto(c.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
               </div>
-              {/* EGRESOS */}
-              <div className="space-y-3">
-                <p className="text-[10px] font-black text-rose-600 uppercase border-b pb-1">
-                  Deducciones
-                </p>
+
+              {/* SECCIÓN DEDUCCIONES (EGRESOS) */}
+              <div className="space-y-4">
+                <div className="flex justify-between items-center border-b pb-1">
+                  <p className="text-[10px] font-black text-rose-600 uppercase">
+                    Deducciones
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 text-[9px] text-rose-600 px-2"
+                    onClick={() => addConcepto("deduccion")}
+                  >
+                    <Plus className="h-3 w-3 mr-1" /> Vale Azul
+                  </Button>
+                </div>
                 <div className="p-3 bg-rose-50/50 border border-dashed border-rose-200 rounded-xl">
                   <div className="flex justify-between items-center text-[11px] font-bold text-slate-500">
-                    <span>TOTAL ANTICIPOS:</span>
-                    <span className="text-rose-600">
+                    <span>ANTICIPOS EN RUTA:</span>
+                    <span className="text-rose-600 font-mono">
                       -${sumAnticipos.toLocaleString()}
                     </span>
                   </div>
@@ -307,15 +411,65 @@ export default function TripSettlementModal({
                     className="font-mono h-10 bg-rose-50/20"
                   />
                 </div>
+
+                {/* 🚀 Renderizado de Conceptos Extra (Deducciones) */}
+                {conceptosExtra
+                  .filter((c) => c.tipo === "deduccion")
+                  .map((c) => (
+                    <div
+                      key={c.id}
+                      className="flex gap-2 items-end animate-in fade-in slide-in-from-top-2"
+                    >
+                      <div className="space-y-1.5 flex-1">
+                        <Input
+                          placeholder="Concepto (Ej: Multa Tránsito)"
+                          value={c.descripcion}
+                          onChange={(e) =>
+                            updateConcepto(c.id, "descripcion", e.target.value)
+                          }
+                          className="h-9 text-xs"
+                        />
+                      </div>
+                      <div className="space-y-1.5 w-24">
+                        <Input
+                          type="number"
+                          placeholder="$"
+                          value={c.monto}
+                          onChange={(e) =>
+                            updateConcepto(
+                              c.id,
+                              "monto",
+                              Number(e.target.value),
+                            )
+                          }
+                          className="h-9 text-xs font-mono"
+                        />
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 text-rose-500 hover:bg-rose-50"
+                        onClick={() => removeConcepto(c.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
               </div>
             </div>
 
+            {/* TOTAL NETO */}
             <div className="bg-brand-navy p-6 rounded-2xl flex justify-between items-center shadow-2xl border-t-4 border-emerald-500">
               <div className="text-white">
-                <p className="text-slate-600 font-black uppercase text-[10px] tracking-widest">
+                <p className="text-slate-400 font-black uppercase text-[10px] tracking-widest mb-1">
                   Saldo Neto a Pagar
                 </p>
-                <p className="text-xs">{activeLegs[0]?.operator?.name}</p>
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-emerald-400" />
+                  <span className="text-sm font-medium">
+                    {activeLegs[0]?.operator?.name}
+                  </span>
+                </div>
               </div>
               <p className="text-5xl font-black text-white font-mono tracking-tighter">
                 $
@@ -327,6 +481,7 @@ export default function TripSettlementModal({
           </div>
         </div>
 
+        {/* FOOTER */}
         <DialogFooter className="bg-slate-100 p-5 border-t flex justify-end gap-4 rounded-b-2xl">
           <Button variant="ghost" onClick={handleClose} disabled={isSubmitting}>
             CANCELAR

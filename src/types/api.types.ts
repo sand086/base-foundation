@@ -500,6 +500,13 @@ export interface Trip {
   sat_clave_unidad?: string;
   mercancia_clave_stcc?: string;
   legs?: TripLeg[];
+  fuel_reconciled?: boolean;
+  fuel_reconciliation_data?: {
+    litros_vales: number;
+    litros_ecm: number;
+    diferencia: number;
+    km_recorridos: number;
+  };
 }
 
 export interface TripLegCreatePayload {

@@ -1,5 +1,10 @@
-// src/features/tarifas/ArmadorRutas.tsx
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, {
+  useState,
+  useMemo,
+  useEffect,
+  useRef,
+  useCallback,
+} from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -50,6 +55,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -383,21 +389,28 @@ export const ArmadorRutas: React.FC = () => {
     }),
   );
 
+  // 🚀 FIX: Creada función maestra para forzar la actualización de rutas desde la BD
+  const fetchRutas = useCallback(async () => {
+    try {
+      const rs = await tollService.getTemplates();
+      setSavedRoutes(rs);
+    } catch (e) {
+      console.error("Error fetching templates", e);
+    }
+  }, []);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [t, rs] = await Promise.all([
-          tollService.getTolls(),
-          tollService.getTemplates(),
-        ]);
+        const t = await tollService.getTolls();
         setAllTolls(t);
-        setSavedRoutes(rs);
+        await fetchRutas();
       } finally {
         setIsLoading(false);
       }
     };
     void fetchData();
-  }, []);
+  }, [fetchRutas]);
 
   const totals = useMemo(() => {
     return segments.reduce(
@@ -496,7 +509,7 @@ export const ArmadorRutas: React.FC = () => {
     if (!routeToDelete) return;
     try {
       await tollService.deleteTemplate(routeToDelete.id);
-      setSavedRoutes((prev) => prev.filter((r) => r.id !== routeToDelete.id));
+      await fetchRutas(); // 🚀 FIX: Forzamos la descarga desde DB para evitar duplicados fantasma
       toast.success("Ruta eliminada correctamente");
     } catch (error: any) {
       toast.error(error.response?.data?.detail || "Error al eliminar la ruta");
@@ -539,7 +552,7 @@ export const ArmadorRutas: React.FC = () => {
     return Boolean(prevEnd && currentStart && prevEnd !== currentStart);
   };
 
-  // 🚀 3. ONSUBMIT INTEGRADO CON ZOD
+  // 🚀 3. ONSUBMIT INTEGRADO CON ZOD + SUFIJOS AUTOMÁTICOS + SYNC
   const onSubmit = async (data: RouteFormData) => {
     if (segments.length === 0) {
       toast.error("Debes agregar al menos un tramo a la ruta.");
@@ -558,9 +571,12 @@ export const ArmadorRutas: React.FC = () => {
       costo_momento_full: s.costo_f,
     }));
 
+    // 🚀 FIX: Agregamos el sufijo para que Gustavo no tenga que poner guiones manuales
+    const sufijoConfig =
+      data.configuracion === "9ejes" ? "[FULL]" : "[SENCILLO]";
     const finalOrigen = data.variante?.trim()
-      ? `${data.origen.trim().toUpperCase()} - ${data.variante.trim().toUpperCase()}`
-      : data.origen.trim().toUpperCase();
+      ? `${data.origen.trim().toUpperCase()} - ${data.variante.trim().toUpperCase()} ${sufijoConfig}`
+      : `${data.origen.trim().toUpperCase()} ${sufijoConfig}`;
 
     const payload = {
       client_id:
@@ -575,18 +591,15 @@ export const ArmadorRutas: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      let res: RateTemplate;
       if (editingRouteId) {
-        res = await tollService.updateTemplate(editingRouteId, payload);
-        setSavedRoutes((prev) =>
-          prev.map((r) => (r.id === editingRouteId ? res : r)),
-        );
+        await tollService.updateTemplate(editingRouteId, payload);
         toast.success("Ruta actualizada correctamente");
       } else {
-        res = await tollService.saveTemplate(payload as any);
-        setSavedRoutes((prev) => [res, ...prev]);
+        await tollService.saveTemplate(payload as any);
         toast.success("Nueva ruta guardada exitosamente");
       }
+
+      await fetchRutas(); // 🚀 FIX: Forzar Sync con BD
 
       setEditingRouteId(null);
       setSegments([]);
@@ -608,17 +621,14 @@ export const ArmadorRutas: React.FC = () => {
 
   const handleEditRoute = (route: RateTemplate) => {
     setEditingRouteId(route.id);
-    const partes = (route.origen || "").split("-");
-    let editOrigen = "";
-    let editVariante = "";
-
-    if (partes.length >= 2) {
-      editOrigen = partes[0].trim();
-      editVariante = partes.slice(1).join("-").trim();
-    } else {
-      editOrigen = route.origen || "";
-    }
-
+    const originStr = (route.origen || "")
+      .replace("[FULL]", "")
+      .replace("[SENCILLO]", "")
+      .trim();
+    const partes = originStr.split("-");
+    const editOrigen = partes.length >= 2 ? partes[0].trim() : originStr;
+    const editVariante =
+      partes.length >= 2 ? partes.slice(1).join("-").trim() : "";
     const isRouteFull =
       route.tipo_unidad === "9ejes" || route.tipo_unidad === "full";
 
@@ -1067,7 +1077,9 @@ export const ArmadorRutas: React.FC = () => {
                     nombreRutaGenerada ? "text-white" : "text-white/30 italic",
                   )}
                 >
-                  {nombreRutaGenerada || "ESPERANDO DATOS..."}
+                  {nombreRutaGenerada
+                    ? `${nombreRutaGenerada} [${configuracion === "9ejes" ? "FULL" : "SENCILLO"}]`
+                    : "ESPERANDO DATOS..."}
                 </span>
               </div>
 
@@ -1284,191 +1296,222 @@ export const ArmadorRutas: React.FC = () => {
                 </DndContext>
               </div>
             </CardContent>
-          </Card>
 
-          {/* BOTONERAS DE ACCIÓN Y SUBMIT */}
-          <div className="flex flex-col md:flex-row justify-between items-center bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-white/10 shadow-xl gap-4">
-            <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
-              <Button
-                type="button"
-                onClick={() =>
-                  setSegments([
-                    ...segments,
-                    {
-                      tempId: genTempId(),
-                      nombre_segmento: "Nuevo Tramo - ",
-                      estado: "",
-                      carretera: "",
-                      distancia_km: 0,
-                      tiempo_minutos: 0,
-                      toll_booth_id: null,
-                      costo_s: 0,
-                      costo_f: 0,
-                    },
-                  ])
-                }
-                variant="outline"
-                size="lg"
-                className="w-full sm:w-auto border-dashed border-2 text-[10px]"
-              >
-                <Plus className="h-4 w-4 mr-2" /> Tramo Libre
-              </Button>
-
-              <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="info"
-                    size="lg"
-                    className="w-full sm:w-auto text-[10px]"
-                  >
-                    <MapPin className="h-4 w-4 mr-2" /> Insertar Caseta
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="w-[95vw] sm:max-w-md p-0 flex flex-col max-h-[90vh] bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 shadow-2xl rounded-2xl overflow-hidden">
-                  <DialogHeader className="p-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0">
-                    <DialogTitle className="text-xl font-black uppercase tracking-tighter text-brand-navy dark:text-white heading-crisp">
-                      Catálogo de Peajes
-                    </DialogTitle>
-                  </DialogHeader>
-                  <div className="p-6 bg-slate-50/50 dark:bg-transparent flex-1 overflow-hidden flex flex-col">
-                    <div className="relative mb-4">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                      <Input
-                        placeholder="Filtrar por nombre o tramo..."
-                        className="pl-10 h-11 font-medium bg-white dark:bg-slate-800 border-slate-200 dark:border-white/10 shadow-sm"
-                        value={tollSearch}
-                        onChange={(e) => setTollSearch(e.target.value)}
-                      />
-                    </div>
-                    <ScrollArea className="flex-1 custom-scrollbar pr-4">
-                      <div className="space-y-2">
-                        {allTolls
-                          .filter(
-                            (t) =>
-                              t.nombre
-                                .toLowerCase()
-                                .includes(tollSearch.toLowerCase()) ||
-                              t.tramo
-                                .toLowerCase()
-                                .includes(tollSearch.toLowerCase()),
-                          )
-                          .map((t) => (
-                            <div
-                              key={t.id}
-                              className="p-4 border border-slate-200 dark:border-white/10 rounded-xl flex justify-between items-center hover:border-brand-navy dark:hover:border-white/30 hover:shadow-md cursor-pointer group transition-all bg-white dark:bg-slate-800/50"
-                              onClick={() => {
-                                setSegments([
-                                  ...segments,
-                                  {
-                                    tempId: genTempId(),
-                                    nombre_segmento: t.nombre,
-                                    estado: (t as any).estado || "",
-                                    carretera: (t as any).carretera || "",
-                                    distancia_km: 0,
-                                    tiempo_minutos: 0,
-                                    toll_booth_id: t.id,
-                                    toll_nombre: t.nombre,
-                                    costo_s:
-                                      (t as any).costo_5_ejes_sencillo ?? 0,
-                                    costo_f: (t as any).costo_9_ejes_full ?? 0,
-                                  },
-                                ]);
-                                setDialogOpen(false);
-                              }}
-                            >
-                              <div className="flex-1 pr-4">
-                                <p className="text-xs font-black uppercase tracking-tight text-slate-700 dark:text-slate-200 group-hover:text-brand-navy dark:group-hover:text-white">
-                                  {t.nombre}
-                                </p>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 leading-tight">
-                                  {t.tramo}
-                                  {((t as any).carretera ||
-                                    (t as any).estado) && (
-                                    <span className="block mt-0.5 text-slate-500">
-                                      {(t as any).carretera}{" "}
-                                      {(t as any).carretera && (t as any).estado
-                                        ? "•"
-                                        : ""}{" "}
-                                      {(t as any).estado}
-                                    </span>
-                                  )}
-                                </p>
-                              </div>
-                              <div className="flex flex-col items-end gap-1.5 shrink-0">
-                                {!isFullUnit && (
-                                  <Badge
-                                    variant="secondary"
-                                    className="font-mono text-[10px] bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-500/30 px-2 py-0.5"
-                                  >
-                                    $
-                                    {Number(
-                                      (t as any).costo_5_ejes_sencillo ?? 0,
-                                    ).toFixed(2)}
-                                  </Badge>
-                                )}
-                                {isFullUnit && (
-                                  <Badge
-                                    variant="secondary"
-                                    className="font-mono text-[10px] bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/30 px-2 py-0.5"
-                                  >
-                                    $
-                                    {Number(
-                                      (t as any).costo_9_ejes_full ?? 0,
-                                    ).toFixed(2)}
-                                  </Badge>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                      </div>
-                    </ScrollArea>
-                  </div>
-                </DialogContent>
-              </Dialog>
-            </div>
-
-            <div className="flex flex-col-reverse sm:flex-row items-center gap-4 w-full md:w-auto mt-4 md:mt-0">
-              {editingRouteId && (
+            {/* BOTONERAS DE ACCIÓN Y SUBMIT */}
+            <div className="flex flex-col md:flex-row justify-between items-center bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-white/10 shadow-xl gap-4">
+              <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
                 <Button
                   type="button"
+                  onClick={() =>
+                    setSegments([
+                      ...segments,
+                      {
+                        tempId: genTempId(),
+                        nombre_segmento: "Nuevo Tramo - ",
+                        estado: "",
+                        carretera: "",
+                        distancia_km: 0,
+                        tiempo_minutos: 0,
+                        toll_booth_id: null,
+                        costo_s: 0,
+                        costo_f: 0,
+                      },
+                    ])
+                  }
                   variant="outline"
                   size="lg"
-                  className="w-full sm:w-auto"
-                  onClick={() => {
-                    setEditingRouteId(null);
-                    setSegments([]);
-                    form.reset();
-                    toast.info("Edición cancelada");
-                  }}
+                  className="w-full sm:w-auto border-dashed border-2 text-[10px]"
                 >
-                  Cancelar
+                  <Plus className="h-4 w-4 mr-2" /> Tramo Libre
                 </Button>
-              )}
-              {/* 🚀 BOTÓN TIPO SUBMIT CENTRALIZADO */}
-              <Button
-                type="submit"
-                size="lg"
-                variant="default"
-                className="w-full sm:w-auto"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Check className="h-4 w-4 mr-2" />
+
+                <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="info"
+                      size="lg"
+                      className="w-full sm:w-auto text-[10px]"
+                    >
+                      <MapPin className="h-4 w-4 mr-2" /> Insertar Caseta
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="w-[95vw] sm:max-w-md p-0 flex flex-col max-h-[90vh] bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 shadow-2xl rounded-2xl overflow-hidden">
+                    <DialogHeader className="p-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0">
+                      <DialogTitle className="text-xl font-black uppercase tracking-tighter text-brand-navy dark:text-white heading-crisp">
+                        Catálogo de Peajes
+                      </DialogTitle>
+                    </DialogHeader>
+                    <div className="p-6 bg-slate-50/50 dark:bg-transparent flex-1 overflow-hidden flex flex-col">
+                      <div className="relative mb-4">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <Input
+                          placeholder="Filtrar por nombre o tramo..."
+                          className="pl-10 h-11 font-medium bg-white dark:bg-slate-800 border-slate-200 dark:border-white/10 shadow-sm"
+                          value={tollSearch}
+                          onChange={(e) => setTollSearch(e.target.value)}
+                        />
+                      </div>
+                      <ScrollArea className="flex-1 custom-scrollbar pr-4">
+                        <div className="space-y-2">
+                          {allTolls
+                            .filter(
+                              (t) =>
+                                t.nombre
+                                  .toLowerCase()
+                                  .includes(tollSearch.toLowerCase()) ||
+                                t.tramo
+                                  .toLowerCase()
+                                  .includes(tollSearch.toLowerCase()),
+                            )
+                            .map((t) => (
+                              <div
+                                key={t.id}
+                                className="p-4 border border-slate-200 dark:border-white/10 rounded-xl flex justify-between items-center hover:border-brand-navy dark:hover:border-white/30 hover:shadow-md cursor-pointer group transition-all bg-white dark:bg-slate-800/50"
+                                onClick={() => {
+                                  setSegments([
+                                    ...segments,
+                                    {
+                                      tempId: genTempId(),
+                                      nombre_segmento: t.nombre,
+                                      estado: (t as any).estado || "",
+                                      carretera: (t as any).carretera || "",
+                                      distancia_km: 0,
+                                      tiempo_minutos: 0,
+                                      toll_booth_id: t.id,
+                                      toll_nombre: t.nombre,
+                                      costo_s:
+                                        (t as any).costo_5_ejes_sencillo ?? 0,
+                                      costo_f:
+                                        (t as any).costo_9_ejes_full ?? 0,
+                                    },
+                                  ]);
+                                  setDialogOpen(false);
+                                }}
+                              >
+                                <div className="flex-1 pr-4">
+                                  <p className="text-xs font-black uppercase tracking-tight text-slate-700 dark:text-slate-200 group-hover:text-brand-navy dark:group-hover:text-white">
+                                    {t.nombre}
+                                  </p>
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 leading-tight">
+                                    {t.tramo}
+                                    {((t as any).carretera ||
+                                      (t as any).estado) && (
+                                      <span className="block mt-0.5 text-slate-500">
+                                        {(t as any).carretera}{" "}
+                                        {(t as any).carretera &&
+                                        (t as any).estado
+                                          ? "•"
+                                          : ""}{" "}
+                                        {(t as any).estado}
+                                      </span>
+                                    )}
+                                  </p>
+                                </div>
+                                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                                  {!isFullUnit && (
+                                    <Badge
+                                      variant="secondary"
+                                      className="font-mono text-[10px] bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-500/30 px-2 py-0.5"
+                                    >
+                                      $
+                                      {Number(
+                                        (t as any).costo_5_ejes_sencillo ?? 0,
+                                      ).toFixed(2)}
+                                    </Badge>
+                                  )}
+                                  {isFullUnit && (
+                                    <Badge
+                                      variant="secondary"
+                                      className="font-mono text-[10px] bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/30 px-2 py-0.5"
+                                    >
+                                      $
+                                      {Number(
+                                        (t as any).costo_9_ejes_full ?? 0,
+                                      ).toFixed(2)}
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                        </div>
+                      </ScrollArea>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
+
+              <div className="flex flex-col-reverse sm:flex-row items-center gap-4 w-full md:w-auto mt-4 md:mt-0">
+                {editingRouteId && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    className="w-full sm:w-auto"
+                    onClick={() => {
+                      setEditingRouteId(null);
+                      setSegments([]);
+                      form.reset();
+                      toast.info("Edición cancelada");
+                    }}
+                  >
+                    Cancelar
+                  </Button>
                 )}
-                {editingRouteId ? "Actualizar Ruta" : "Guardar Ruta"}
-              </Button>
+                {/* 🚀 BOTÓN TIPO SUBMIT CENTRALIZADO */}
+                <Button
+                  type="submit"
+                  size="lg"
+                  variant="default"
+                  className="w-full sm:w-auto"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Check className="h-4 w-4 mr-2" />
+                  )}
+                  {editingRouteId ? "Actualizar Ruta" : "Guardar Ruta"}
+                </Button>
+              </div>
             </div>
-          </div>
+          </Card>
         </form>
       </Form>
+
       <Card variant="default" className="shadow-2xl border-none">
-        <CardHeader className="flex flex-row items-center justify-between border-b border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-900/50 py-6 rounded-t-2xl">
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-900/50 py-6 rounded-t-2xl gap-4">
           <CardTitle className="text-xl font-black uppercase tracking-tighter text-brand-navy dark:text-white heading-crisp flex items-center gap-3">
             <RouteIcon className="h-6 w-6 text-brand-red" /> Directorio de Rutas
           </CardTitle>
+
+          {/* 🚀 FIX: Aquí se agregó el Filtro de FULL / SENCILLO que faltaba en la UI */}
+          <Tabs
+            value={filtroTipo}
+            onValueChange={(v) => setFiltroTipo(v as any)}
+            className="w-full sm:w-[300px]"
+          >
+            <TabsList className="grid w-full grid-cols-3 bg-slate-200/50 dark:bg-slate-800">
+              <TabsTrigger
+                value="todos"
+                className="text-xs font-bold uppercase"
+              >
+                Todos
+              </TabsTrigger>
+              <TabsTrigger
+                value="5ejes"
+                className="text-xs font-bold uppercase text-blue-700 dark:text-blue-400"
+              >
+                Sencillos
+              </TabsTrigger>
+              <TabsTrigger
+                value="9ejes"
+                className="text-xs font-bold uppercase text-emerald-700 dark:text-emerald-400"
+              >
+                Full
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
         </CardHeader>
         <CardContent className="pt-6 p-0 bg-white dark:bg-slate-950">
           <EnhancedDataTable

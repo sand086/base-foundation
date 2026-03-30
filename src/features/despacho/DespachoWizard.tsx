@@ -16,12 +16,15 @@ import {
   RotateCcw,
   CalendarDays,
   Container,
+  FileKey,
+  ShieldCheck,
+  Loader2,
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Form } from "@/components/ui/form";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch"; // 🚀 Nuevo import
 import {
   Select,
   SelectContent,
@@ -99,6 +102,10 @@ type WizardData = {
   anticipo_casetas: number;
   anticipo_viaticos: number;
   anticipo_combustible: number;
+
+  // 🚀 NUEVOS ESTADOS FISCALES
+  generarCartaPorte: boolean;
+  ocultarMontosPdf: boolean;
 };
 
 const normalizeStr = (str?: string | null) =>
@@ -135,16 +142,16 @@ function TahoeIconPlate({
 }) {
   const toneClass =
     tone === "red"
-      ? "bg-brand-red/15 text-brand-red ring-brand-red/15 dark:bg-brand-red/20 dark:text-brand-red"
+      ? "bg-brand-red/15 text-brand-red ring-brand-red/15"
       : tone === "green"
-        ? "bg-emerald-500/15 text-emerald-700 ring-emerald-500/15 dark:bg-emerald-500/20 dark:text-emerald-300"
+        ? "bg-emerald-500/15 text-emerald-700 ring-emerald-500/15"
         : tone === "blue"
-          ? "bg-blue-600/15 text-blue-700 ring-blue-600/15 dark:bg-blue-500/20 dark:text-blue-300"
+          ? "bg-blue-600/15 text-blue-700 ring-blue-600/15"
           : tone === "amber"
-            ? "bg-amber-500/15 text-amber-700 ring-amber-500/15 dark:bg-amber-500/20 dark:text-amber-300"
+            ? "bg-amber-500/15 text-amber-700 ring-amber-500/15"
             : tone === "indigo"
-              ? "bg-indigo-500/15 text-indigo-700 ring-indigo-500/15 dark:bg-indigo-500/20 dark:text-indigo-300"
-              : "bg-slate-500/10 text-slate-700 ring-slate-500/10 dark:bg-white/10 dark:text-slate-200";
+              ? "bg-indigo-500/15 text-indigo-700 ring-indigo-500/15"
+              : "bg-slate-500/10 text-slate-700 ring-slate-500/10";
 
   return (
     <div
@@ -184,7 +191,7 @@ function SearchableSelect({
           role="combobox"
           aria-expanded={open}
           className={cn(
-            "h-11 w-full justify-between rounded-xl border-slate-200/80 bg-white/90 px-4 font-semibold text-slate-800 shadow-sm backdrop-blur-xl hover:bg-white dark:border-white/10 dark:bg-brand-navy/95 dark:text-slate-100 dark:hover:bg-brand-navy/95",
+            "h-11 w-full justify-between rounded-xl border-slate-200/80 bg-white/90 px-4 font-semibold text-slate-800 shadow-sm backdrop-blur-xl hover:bg-white",
             className,
           )}
         >
@@ -234,6 +241,7 @@ function SearchableSelect({
 
 export const DespachoWizard = () => {
   const [currentStep, setCurrentStep] = useState<Step>(1);
+  const [isStamping, setIsStamping] = useState(false); // 🚀 Estado para simular timbrado SAT
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -243,13 +251,15 @@ export const DespachoWizard = () => {
   const { clients } = useClients();
   const { products: satProducts } = useSatCatalogs();
 
-  const availableSatProducts = useMemo(() => {
-    return satProducts.map((p) => ({
-      label: `${p.clave} - ${p.descripcion}`,
-      value: p.clave,
-      ...p,
-    }));
-  }, [satProducts]);
+  const availableSatProducts = useMemo(
+    () =>
+      satProducts.map((p) => ({
+        label: `${p.clave} - ${p.descripcion}`,
+        value: p.clave,
+        ...p,
+      })),
+    [satProducts],
+  );
 
   const [data, setData] = useState<WizardData>({
     clienteId: "",
@@ -259,24 +269,22 @@ export const DespachoWizard = () => {
     origen: "",
     destino: "",
     fecha_programada: new Date(),
-
     descripcion_mercancia: "Carga General",
     peso_toneladas: 0,
     es_material_peligroso: false,
     clase_imo: "",
     contenedor: "",
-
     unitId: "",
     remolque1Id: "",
     dollyId: "",
     remolque2Id: "",
     driverId: "",
-
     leg_type: "carga_muelle",
-
     anticipo_casetas: 0,
     anticipo_viaticos: 0,
     anticipo_combustible: 0,
+    generarCartaPorte: true,
+    ocultarMontosPdf: true,
   });
 
   const arrUnidades = useMemo(
@@ -298,12 +306,10 @@ export const DespachoWizard = () => {
         .filter((u: any) => {
           const searchIn =
             `${u.tipo_1} ${u.tipo} ${u.tipo_unidad}`.toLowerCase();
-          const esTracto =
-            searchIn.includes("tracto") || searchIn.includes("camion");
-          const estaDisponible = ["disponible", "bloqueado"].includes(
-            u.status?.toLowerCase(),
+          return (
+            (searchIn.includes("tracto") || searchIn.includes("camion")) &&
+            ["disponible", "bloqueado"].includes(u.status?.toLowerCase())
           );
-          return esTracto && estaDisponible;
         })
         .map((u: any) => ({
           label: `${u.numero_economico} - ${u.placas || "Sin placas"} (${normalizeStr(u.tipo_1)})`,
@@ -317,28 +323,19 @@ export const DespachoWizard = () => {
       .filter((u: any) => {
         const strTipo1 = normalizeStr(u.tipo_1);
         const strTipo = normalizeStr(u.tipo);
-        const estaDisponible = ["disponible", "bloqueado"].includes(
-          u.status?.toLowerCase(),
-        );
         return (
           ["remolque", "caja", "plataforma", "chasis", "utilitario"].some(
             (p) => strTipo1.includes(p) || strTipo.includes(p),
-          ) && estaDisponible
+          ) && ["disponible", "bloqueado"].includes(u.status?.toLowerCase())
         );
       })
-      .map((u: any) => {
-        const estadoCarga = u.is_loaded ? "📦 CARGADO" : "➖ ESQUELETO VACÍO";
-        return {
-          label: `${u.numero_economico} - ${u.placas || "S/P"} | ${estadoCarga}`,
-          value: String(u.id),
-        };
-      });
-
-    if (remolquesReales.length === 0) {
-      return [{ label: "No hay remolques disponibles", value: "" }];
-    }
-
-    return remolquesReales;
+      .map((u: any) => ({
+        label: `${u.numero_economico} - ${u.placas || "S/P"} | ${u.is_loaded ? "📦 CARGADO" : "➖ ESQUELETO VACÍO"}`,
+        value: String(u.id),
+      }));
+    return remolquesReales.length === 0
+      ? [{ label: "No hay remolques disponibles", value: "" }]
+      : remolquesReales;
   }, [arrUnidades]);
 
   const availableDollies = useMemo(() => {
@@ -348,12 +345,9 @@ export const DespachoWizard = () => {
         label: `${u.numero_economico} (${normalizeStr(u.tipo_1)})`,
         value: String(u.id),
       }));
-
-    if (dolliesReales.length === 0) {
-      return [{ label: "DOLLY-PRUEBA - (No tienes dollies)", value: "9997" }];
-    }
-
-    return dolliesReales;
+    return dolliesReales.length === 0
+      ? [{ label: "DOLLY-PRUEBA - (No tienes dollies)", value: "9997" }]
+      : dolliesReales;
   }, [arrUnidades]);
 
   const availableOperators = useMemo(
@@ -369,22 +363,18 @@ export const DespachoWizard = () => {
     () => arrClients.find((c: any) => String(c.id) === data.clienteId),
     [arrClients, data.clienteId],
   );
-
   const availableSubClientes = useMemo(
     () => (selectedClient?.sub_clients || []) as SubClient[],
     [selectedClient],
   );
-
   const selectedSubClient = useMemo(
     () => availableSubClientes.find((s) => String(s.id) === data.subClienteId),
     [availableSubClientes, data.subClienteId],
   );
-
   const availableTariffs = useMemo(
     () => (selectedSubClient?.tariffs || []) as Tariff[],
     [selectedSubClient],
   );
-
   const selectedTariff = useMemo(
     () => availableTariffs.find((t) => String(t.id) === data.routeId),
     [availableTariffs, data.routeId],
@@ -398,7 +388,7 @@ export const DespachoWizard = () => {
   const isRoadLeg = data.leg_type === "ruta_carretera";
 
   const infoTarifa = useMemo(() => {
-    if (!selectedTariff) {
+    if (!selectedTariff)
       return {
         base: 0,
         casetas: 0,
@@ -409,34 +399,23 @@ export const DespachoWizard = () => {
         ret: 0,
         total: 0,
       };
-    }
-
     const base = Number((selectedTariff as any).tarifa_base || 0);
     const casetas = Number((selectedTariff as any).costo_casetas || 0);
     const subtotal = base + casetas;
     const ivaPct = Number((selectedTariff as any).iva_porcentaje ?? 16) / 100;
     const retPct =
       Number((selectedTariff as any).retencion_porcentaje ?? 4) / 100;
-    const iva = subtotal * ivaPct;
-    const ret = subtotal * retPct;
-
     return {
       base,
       casetas,
       subtotal,
       ivaPct,
       retPct,
-      iva,
-      ret,
-      total: subtotal + iva - ret,
+      iva: subtotal * ivaPct,
+      ret: subtotal * retPct,
+      total: subtotal + subtotal * ivaPct - subtotal * retPct,
     };
   }, [selectedTariff]);
-
-  const resetRecursosFull = (nextIsFull: boolean) => {
-    if (!nextIsFull) {
-      setData((prev) => ({ ...prev, dollyId: "", remolque2Id: "" }));
-    }
-  };
 
   const handleCreate = async (status: TripStatus = "creado") => {
     const cleanId = (val: string) => {
@@ -445,6 +424,12 @@ export const DespachoWizard = () => {
     };
 
     try {
+      // 🚀 Si eligen despachar, simulamos el delay del Timbrado del SAT
+      if (status === "en_transito" && data.generarCartaPorte) {
+        setIsStamping(true);
+        await new Promise((resolve) => setTimeout(resolve, 2000)); // Delay ficticio de 2 seg simulando API del PAC
+      }
+
       const payload: any = {
         client_id: parseInt(data.clienteId, 10),
         sub_client_id: parseInt(data.subClienteId, 10),
@@ -455,13 +440,11 @@ export const DespachoWizard = () => {
         fecha_programada: data.fecha_programada
           ? data.fecha_programada.toISOString().split("T")[0]
           : null,
-
         descripcion_mercancia: data.descripcion_mercancia,
         peso_toneladas: Number(data.peso_toneladas),
         es_material_peligroso: data.es_material_peligroso,
         clase_imo: data.es_material_peligroso ? data.clase_imo : null,
         referencia: data.contenedor || null,
-
         tarifa_base: Number(infoTarifa.base || 0),
         costo_casetas: Number(infoTarifa.casetas || 0),
         status,
@@ -472,7 +455,6 @@ export const DespachoWizard = () => {
         payload.remolque_1_id = cleanId(data.remolque1Id);
         payload.dolly_id = isFullTrip ? cleanId(data.dollyId) : null;
         payload.remolque_2_id = isFullTrip ? cleanId(data.remolque2Id) : null;
-
         payload.initial_leg = {
           unit_id: parseInt(data.unitId, 10),
           leg_type: data.leg_type,
@@ -488,26 +470,35 @@ export const DespachoWizard = () => {
       const result = await createTrip(payload as TripCreatePayload);
 
       if (result) {
-        toast({
-          title:
-            status === "en_transito"
-              ? "¡Viaje Despachado!"
-              : "¡Viaje en Stand-By!",
-          description:
-            status === "en_transito"
-              ? "El viaje ya se encuentra operando."
-              : "Guardado en el planeador para asignación futura.",
-        });
-
+        if (status === "en_transito" && data.generarCartaPorte) {
+          toast({
+            title: "¡Carta Porte Timbrada Exitosamente!",
+            description: data.ocultarMontosPdf
+              ? "Viaje despachado. Se generó PDF Operativo (Montos Ocultos / $1)."
+              : "Viaje despachado. Se generó Factura con Monto Real.",
+          });
+        } else {
+          toast({
+            title:
+              status === "en_transito"
+                ? "¡Viaje Despachado!"
+                : "¡Viaje en Planeador!",
+            description:
+              status === "en_transito"
+                ? "El viaje ya se encuentra operando."
+                : "Guardado en el planeador para asignación futura.",
+          });
+        }
         setTimeout(() => navigate("/despacho"), 1000);
       }
     } catch (error) {
-      console.error("Error al despachar:", error);
       toast({
         variant: "destructive",
         title: "Error",
         description: "No se pudo crear el viaje. Revisa la consola.",
       });
+    } finally {
+      setIsStamping(false);
     }
   };
 
@@ -517,7 +508,6 @@ export const DespachoWizard = () => {
     data.routeId &&
     data.fecha_programada,
   );
-
   const isStep2Valid = useMemo(() => {
     const isBasicValid = Boolean(
       data.unitId &&
@@ -526,12 +516,9 @@ export const DespachoWizard = () => {
       data.descripcion_mercancia &&
       data.contenedor,
     );
-
-    const isEquipValid = isFullTrip
+    return isFullTrip
       ? Boolean(isBasicValid && data.dollyId && data.remolque2Id)
       : isBasicValid;
-
-    return Boolean(isEquipValid);
   }, [isFullTrip, data]);
 
   return (
@@ -542,7 +529,6 @@ export const DespachoWizard = () => {
             <TahoeIconPlate tone="blue">
               <Truck className="h-7 w-7" />
             </TahoeIconPlate>
-
             <div className="space-y-1">
               <CardTitle className="text-xl text-slate-900 dark:text-white">
                 DESPACHO WIZARD
@@ -552,7 +538,6 @@ export const DespachoWizard = () => {
               </p>
             </div>
           </div>
-
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <Badge
               variant={currentStep >= 1 ? "info" : "neutral"}
@@ -570,46 +555,38 @@ export const DespachoWizard = () => {
               variant={currentStep === 3 ? "info" : "neutral"}
               className="justify-center rounded-2xl px-4 py-2"
             >
-              3. Finanzas y Egresos
+              3. Finanzas y Timbrado
             </Badge>
           </div>
         </div>
       </CardHeader>
 
       <CardContent className={cn(bodyClass, "space-y-6 px-6 py-6 md:px-8")}>
+        {/* PASO 1 */}
         {currentStep === 1 && (
           <div className="animate-in fade-in slide-in-from-bottom-2 space-y-6">
             <div className={cn(sunkPanelClass, "space-y-6")}>
               <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
                 <div className="md:col-span-3">
-                  <div className="flex flex-col gap-4 rounded-[24px] border border-blue-200/70 bg-blue-50/80 p-5 shadow-inner shadow-blue-100/60 dark:border-blue-500/20 dark:bg-blue-500/10 dark:shadow-black/20 md:flex-row md:items-center md:justify-between">
+                  <div className="flex flex-col gap-4 rounded-[24px] border border-blue-200/70 bg-blue-50/80 p-5 shadow-inner shadow-blue-100/60 md:flex-row md:items-center md:justify-between">
                     <div className="flex items-start gap-4">
                       <TahoeIconPlate tone="blue" className="h-16 w-16">
                         <CalendarDays className="h-8 w-8" />
                       </TahoeIconPlate>
-
                       <div className="space-y-1">
                         <Label variant="brand" required>
                           ¿PARA CUÁNDO LO QUIERES?
                         </Label>
-                        <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                        <p className="text-sm font-semibold text-slate-700">
                           Fecha programada para la salida del viaje.
-                        </p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
-                          Usa el selector estándar y conserva trazabilidad
-                          operativa.
                         </p>
                       </div>
                     </div>
-
                     <div className="w-full max-w-[240px]">
                       <DatePicker
                         date={data.fecha_programada}
                         onDateChange={(date) =>
-                          setData((p) => ({
-                            ...p,
-                            fecha_programada: date,
-                          }))
+                          setData((p) => ({ ...p, fecha_programada: date }))
                         }
                       />
                     </div>
@@ -657,7 +634,6 @@ export const DespachoWizard = () => {
                       const subClient = availableSubClientes.find(
                         (s) => String(s.id) === v,
                       );
-
                       setData((prev) => ({
                         ...prev,
                         subClienteId: v,
@@ -694,23 +670,21 @@ export const DespachoWizard = () => {
                       const tariff = availableTariffs.find(
                         (t) => String(t.id) === v,
                       ) as any;
-
                       const nextTipo = normalizeStr(tariff?.tipo_unidad);
                       const nextIsFull =
                         nextTipo === "full" ||
                         nextTipo === "9ejes" ||
                         nextTipo === "9 ejes" ||
                         nextTipo === "doble";
-
                       setData((prev) => ({
                         ...prev,
                         routeId: v,
                         routeNombre: tariff?.nombre_ruta || "",
                         origen: tariff?.origen || "Origen",
                         anticipo_casetas: Number(tariff?.costo_casetas || 0),
+                        dollyId: nextIsFull ? prev.dollyId : "",
+                        remolque2Id: nextIsFull ? prev.remolque2Id : "",
                       }));
-
-                      resetRecursosFull(nextIsFull);
                     }}
                   >
                     <SelectTrigger className="font-black uppercase tracking-wide">
@@ -719,7 +693,7 @@ export const DespachoWizard = () => {
                     <SelectContent>
                       {availableTariffs.length === 0 ? (
                         <SelectItem value="disabled" disabled>
-                          Sin tarifas asignadas al cliente
+                          Sin tarifas asignadas
                         </SelectItem>
                       ) : (
                         availableTariffs.map((t: any) => {
@@ -745,28 +719,25 @@ export const DespachoWizard = () => {
                             >
                               <div className="flex flex-col gap-1">
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <span className="font-black text-slate-900 dark:text-white">
+                                  <span className="font-black text-slate-900">
                                     {t.nombre_ruta}
                                   </span>
                                   <Badge
-                                    variant="outline"
+                                    variant={
+                                      tu.includes("full")
+                                        ? "destructive"
+                                        : "success"
+                                    }
                                     className="rounded-xl"
                                   >
                                     {labelTipo}
                                   </Badge>
                                 </div>
-                                <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                                  Base: $
-                                  {base.toLocaleString("es-MX", {
-                                    minimumFractionDigits: 2,
-                                  })}{" "}
-                                  | Total Neto:{" "}
-                                  <span className="font-black text-emerald-700 dark:text-emerald-300">
-                                    $
-                                    {total.toLocaleString("es-MX", {
-                                      minimumFractionDigits: 2,
-                                    })}{" "}
-                                    {t.moneda}
+                                <div className="text-xs font-semibold text-slate-500">
+                                  Base: ${base.toLocaleString("es-MX")} | Total
+                                  Neto:{" "}
+                                  <span className="font-black text-emerald-700">
+                                    ${total.toLocaleString("es-MX")} {t.moneda}
                                   </span>
                                 </div>
                               </div>
@@ -793,7 +764,6 @@ export const DespachoWizard = () => {
               >
                 Cancelar
               </Button>
-
               <div className="flex flex-col gap-3 md:flex-row">
                 <Button
                   variant="warning"
@@ -804,53 +774,49 @@ export const DespachoWizard = () => {
                   disabled={!isStep1Valid}
                   className="rounded-2xl font-black uppercase tracking-[0.16em]"
                 >
-                  <Clock className="mr-2 h-4 w-4" />
-                  Guardar en Planeador
+                  <Clock className="mr-2 h-4 w-4" /> Guardar en Planeador
                 </Button>
-
                 <Button
                   onClick={() => setCurrentStep(2)}
                   disabled={!isStep1Valid}
                   className="rounded-2xl bg-blue-600 font-black uppercase tracking-[0.16em] text-white shadow-xl shadow-blue-600/20 hover:bg-blue-700"
                 >
-                  Asignar Operación
-                  <ChevronRight className="ml-2 h-4 w-4" />
+                  Asignar Operación <ChevronRight className="ml-2 h-4 w-4" />
                 </Button>
               </div>
             </div>
           </div>
         )}
 
+        {/* PASO 2 */}
         {currentStep === 2 && (
           <div className="animate-in fade-in slide-in-from-bottom-2 space-y-6">
             <div className={cn(sunkPanelClass, "space-y-6")}>
-              <div className="flex flex-col gap-4 border-b border-slate-200/80 pb-5 dark:border-white/10 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-col gap-4 border-b border-slate-200/80 pb-5 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex items-center gap-4">
                   <TahoeIconPlate tone="indigo">
                     <RotateCcw className="h-7 w-7" />
                   </TahoeIconPlate>
-
                   <div>
-                    <h3 className="heading-crisp text-lg font-black uppercase tracking-tighter text-slate-900 dark:text-white">
+                    <h3 className="heading-crisp text-lg font-black uppercase tracking-tighter text-slate-900">
                       Preparación del Viaje
                     </h3>
-                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
+                    <p className="text-sm font-medium text-slate-500">
                       Asignación física y configuración inicial de operación.
                     </p>
                   </div>
                 </div>
-
                 <Badge
                   variant={isFullTrip ? "destructive" : "success"}
-                  className="w-fit rounded-2xl px-4 py-2"
+                  className="w-fit rounded-2xl px-4 py-2 text-sm uppercase font-black"
                 >
                   {isFullTrip
-                    ? "Modo: Full / Doble Articulado"
-                    : "Modo: Sencillo"}
+                    ? "🚛 Modo Configurado: FULL / DOBLE"
+                    : "🚚 Modo Configurado: SENCILLO"}
                 </Badge>
               </div>
 
-              <div className="rounded-[24px] border border-indigo-200/60 bg-indigo-50/70 p-5 shadow-inner shadow-indigo-100/60 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:shadow-black/20">
+              <div className="rounded-[24px] border border-indigo-200/60 bg-indigo-50/70 p-5 shadow-inner">
                 <div className="mb-4 flex items-center gap-3">
                   <TahoeIconPlate tone="indigo" className="h-14 w-14">
                     <RotateCcw className="h-6 w-6" />
@@ -859,13 +825,13 @@ export const DespachoWizard = () => {
                     <Label variant="brand" required>
                       MODALIDAD DE INICIO
                     </Label>
-                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                    <p className="text-sm font-semibold text-slate-700">
                       Define si el arranque es local en patio o en ruta.
                     </p>
                   </div>
                 </div>
 
-                <div className="mx-auto flex w-full max-w-[360px] rounded-[20px] border border-slate-200/80 bg-white/70 p-1.5 shadow-inner shadow-slate-200/50 dark:border-white/10 dark:bg-slate-950/60 dark:shadow-black/30">
+                <div className="mx-auto flex w-full max-w-[360px] rounded-[20px] border border-slate-200/80 bg-white/70 p-1.5 shadow-inner">
                   <button
                     type="button"
                     onClick={() =>
@@ -874,14 +840,12 @@ export const DespachoWizard = () => {
                     className={cn(
                       "haptic-press flex h-10 flex-1 items-center justify-center gap-2 rounded-2xl text-[10px] font-black uppercase tracking-[0.18em] transition-all",
                       data.leg_type === "carga_muelle"
-                        ? "bg-brand-red text-white shadow-lg shadow-brand-red/20"
-                        : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white",
+                        ? "bg-brand-red text-white shadow-lg"
+                        : "text-slate-500 hover:text-slate-800",
                     )}
                   >
-                    <Box className="h-3.5 w-3.5" />
-                    Patio
+                    <Box className="h-3.5 w-3.5" /> Patio
                   </button>
-
                   <button
                     type="button"
                     onClick={() =>
@@ -890,22 +854,12 @@ export const DespachoWizard = () => {
                     className={cn(
                       "haptic-press flex h-10 flex-1 items-center justify-center gap-2 rounded-2xl text-[10px] font-black uppercase tracking-[0.18em] transition-all",
                       data.leg_type === "ruta_carretera"
-                        ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20"
-                        : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white",
+                        ? "bg-blue-600 text-white shadow-lg"
+                        : "text-slate-500 hover:text-slate-800",
                     )}
                   >
-                    <Truck className="h-3.5 w-3.5" />
-                    Carretera
+                    <Truck className="h-3.5 w-3.5" /> Carretera
                   </button>
-                </div>
-
-                <div className="mt-4 flex items-start gap-3 rounded-2xl border border-indigo-200/50 bg-white/60 px-4 py-3 dark:border-indigo-500/20 dark:bg-slate-950/50">
-                  <Info className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600 dark:text-indigo-300" />
-                  <p className="text-xs font-medium leading-relaxed text-indigo-900/80 dark:text-indigo-200/80">
-                    {data.leg_type === "ruta_carretera"
-                      ? "El sistema solicitará casetas, diésel y viáticos en el paso de Finanzas."
-                      : "Movimiento local: no se requerirá registro de anticipos ni vales de diésel."}
-                  </p>
                 </div>
               </div>
 
@@ -914,14 +868,12 @@ export const DespachoWizard = () => {
                   <TahoeIconPlate tone="blue">
                     <Box className="h-7 w-7" />
                   </TahoeIconPlate>
-
                   <div>
-                    <h4 className="heading-crisp text-sm font-black uppercase tracking-tighter text-slate-900 dark:text-white">
+                    <h4 className="heading-crisp text-sm font-black uppercase tracking-tighter text-slate-900">
                       Información de la Mercancía
                     </h4>
-                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                      Datos de catálogo SAT, peso estimado y referencia de
-                      contenedor.
+                    <p className="text-xs font-medium text-slate-500">
+                      Datos de catálogo SAT, peso estimado y referencia.
                     </p>
                   </div>
                 </div>
@@ -934,12 +886,12 @@ export const DespachoWizard = () => {
                     <SearchableSelect
                       items={availableSatProducts}
                       value={data.descripcion_mercancia.split(" ")[0]}
+                      placeholder="Buscar producto SAT..."
                       onSelect={(val) => {
                         const prod = availableSatProducts.find(
                           (p) => p.value === val,
                         );
-
-                        if (prod) {
+                        if (prod)
                           setData((p) => ({
                             ...p,
                             descripcion_mercancia: prod.label,
@@ -950,12 +902,9 @@ export const DespachoWizard = () => {
                                 ? p.clase_imo
                                 : "",
                           }));
-                        }
                       }}
-                      placeholder="Buscar producto SAT..."
                     />
                   </div>
-
                   <div className="space-y-2">
                     <Label variant="brand" required>
                       PESO ESTIMADO (TON)
@@ -977,13 +926,12 @@ export const DespachoWizard = () => {
                 <div className="space-y-2 pt-2">
                   <Label
                     variant="brand"
-                    className="flex items-center gap-2 text-brand-red dark:text-brand-red"
+                    className="flex items-center gap-2 text-brand-red"
                     required
                   >
-                    <Container className="h-4 w-4" />
-                    NÚMERO DE CONTENEDOR / DESGLOSE *
+                    <Container className="h-4 w-4" /> NÚMERO DE CONTENEDOR /
+                    DESGLOSE *
                   </Label>
-
                   <Input
                     placeholder="Ej: CMA U 1521457"
                     value={data.contenedor}
@@ -993,12 +941,11 @@ export const DespachoWizard = () => {
                         contenedor: e.target.value.toUpperCase(),
                       }))
                     }
-                    className="h-12 border-blue-200 font-mono text-lg font-black uppercase tracking-wide dark:border-blue-500/20"
+                    className="h-12 border-blue-200 font-mono text-lg font-black uppercase tracking-wide"
                   />
-
-                  <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                  <p className="text-[11px] font-medium text-slate-500">
                     Este número se inyectará en la descripción del concepto de
-                    la Carta Porte de $1 MXN.
+                    la Carta Porte.
                   </p>
                 </div>
               </div>
@@ -1009,17 +956,12 @@ export const DespachoWizard = () => {
                     <TahoeIconPlate tone="green">
                       <User className="h-7 w-7" />
                     </TahoeIconPlate>
-
                     <div>
-                      <h4 className="heading-crisp text-sm font-black uppercase tracking-tighter text-slate-900 dark:text-white">
+                      <h4 className="heading-crisp text-sm font-black uppercase tracking-tighter text-slate-900">
                         Ejecutor del Viaje
                       </h4>
-                      <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                        Operador y tractocamión asignados.
-                      </p>
                     </div>
                   </div>
-
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <Label variant="brand" required>
@@ -1032,7 +974,6 @@ export const DespachoWizard = () => {
                         placeholder="Buscar económico o placa..."
                       />
                     </div>
-
                     <div className="space-y-2">
                       <Label variant="brand" required>
                         OPERADOR / CHÓFER *
@@ -1049,27 +990,17 @@ export const DespachoWizard = () => {
                   </div>
                 </div>
 
-                <div
-                  className={cn(
-                    sectionCardClass,
-                    "bg-slate-50/80 dark:bg-slate-950/45",
-                  )}
-                >
+                <div className={sectionCardClass}>
                   <div className="mb-5 flex items-center gap-4">
                     <TahoeIconPlate tone="blue">
                       <LinkIcon className="h-7 w-7" />
                     </TahoeIconPlate>
-
                     <div>
-                      <h4 className="heading-crisp text-sm font-black uppercase tracking-tighter text-slate-900 dark:text-white">
+                      <h4 className="heading-crisp text-sm font-black uppercase tracking-tighter text-slate-900">
                         Equipos de Arrastre
                       </h4>
-                      <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                        Configuración física principal y articulada.
-                      </p>
                     </div>
                   </div>
-
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <Label variant="brand" required>
@@ -1084,10 +1015,9 @@ export const DespachoWizard = () => {
                         placeholder="Buscar económico..."
                       />
                     </div>
-
                     {isFullTrip && (
                       <>
-                        <div className="space-y-2 border-t border-slate-200/80 pt-4 dark:border-white/10">
+                        <div className="space-y-2 border-t border-slate-200/80 pt-4">
                           <Label variant="brand" required>
                             DOLLY (CONVERTIDOR) *
                           </Label>
@@ -1100,7 +1030,6 @@ export const DespachoWizard = () => {
                             placeholder="Buscar económico del dolly..."
                           />
                         </div>
-
                         <div className="space-y-2">
                           <Label variant="brand" required>
                             REMOLQUE / CHASIS 2 *
@@ -1135,184 +1064,285 @@ export const DespachoWizard = () => {
               >
                 Atrás
               </Button>
-
               <Button
                 onClick={() => setCurrentStep(3)}
                 disabled={!isStep2Valid}
                 className="rounded-2xl bg-blue-600 font-black uppercase tracking-[0.16em] text-white shadow-xl shadow-blue-600/20 hover:bg-blue-700"
               >
-                Continuar a Finanzas
-                <ChevronRight className="ml-2 h-5 w-5" />
+                Continuar a Finanzas <ChevronRight className="ml-2 h-5 w-5" />
               </Button>
             </div>
           </div>
         )}
 
+        {/* PASO 3 - 🚀 ACTUALIZADO CON MÓDULO DE TIMBRADO (CARTA PORTE) */}
         {currentStep === 3 && (
           <div className="animate-in fade-in slide-in-from-bottom-2 space-y-6">
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              <Card
-                className={cn(
-                  shellClass,
-                  "border-emerald-200/70 bg-emerald-50/45 dark:border-emerald-500/20 dark:bg-emerald-500/5",
+              {/* TARJETA 1: FINANZAS Y GASTOS */}
+              <div className="space-y-6">
+                <Card
+                  className={cn(
+                    shellClass,
+                    "border-emerald-200/70 bg-emerald-50/45",
+                  )}
+                >
+                  <CardHeader className={cn(headerClass, "pb-4")}>
+                    <div className="flex items-center gap-4">
+                      <TahoeIconPlate tone="green">
+                        <DollarSign className="h-7 w-7" />
+                      </TahoeIconPlate>
+                      <CardTitle className="text-sm text-emerald-800 font-black uppercase tracking-widest">
+                        INGRESO GLOBAL (A FACTURAR)
+                      </CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4 pt-6 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-600">
+                        Flete Base:
+                      </span>
+                      <span className="font-mono text-lg font-black text-slate-800">
+                        ${infoTarifa.base.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-600">Casetas:</span>
+                      <span className="font-mono text-lg font-black text-slate-800">
+                        ${infoTarifa.casetas.toLocaleString()}
+                      </span>
+                    </div>
+                    <Separator className="my-4 bg-emerald-200" />
+                    <div className="rounded-[24px] bg-emerald-600 p-5 text-white shadow-2xl shadow-emerald-600/20">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-black uppercase tracking-[0.2em]">
+                          Total Neto
+                        </span>
+                        <span className="font-mono text-2xl font-black tracking-tighter">
+                          ${infoTarifa.total.toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {isRoadLeg ? (
+                  <Card
+                    className={cn(
+                      shellClass,
+                      "border-amber-200/70 bg-amber-50/40",
+                    )}
+                  >
+                    <CardHeader className={cn(headerClass, "pb-4")}>
+                      <div className="flex items-center gap-4">
+                        <TahoeIconPlate tone="amber">
+                          <Truck className="h-7 w-7" />
+                        </TahoeIconPlate>
+                        <CardTitle className="text-sm text-amber-800 font-black uppercase tracking-widest">
+                          ANTICIPOS FASE INICIAL
+                        </CardTitle>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-6 pt-6">
+                      <div className="space-y-2">
+                        <Label variant="brand" required>
+                          CASETAS
+                        </Label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-3 text-sm font-black text-slate-500">
+                            $
+                          </span>
+                          <Input
+                            type="number"
+                            className="pl-8 font-mono text-lg font-bold"
+                            value={data.anticipo_casetas || ""}
+                            onChange={(e) =>
+                              setData((p) => ({
+                                ...p,
+                                anticipo_casetas:
+                                  parseFloat(e.target.value) || 0,
+                              }))
+                            }
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label variant="brand" required>
+                          VALE DE DIÉSEL
+                        </Label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-3 text-sm font-black text-slate-500">
+                            $
+                          </span>
+                          <Input
+                            type="number"
+                            className="pl-8 font-mono text-lg font-bold"
+                            value={data.anticipo_combustible || ""}
+                            onChange={(e) =>
+                              setData((p) => ({
+                                ...p,
+                                anticipo_combustible:
+                                  parseFloat(e.target.value) || 0,
+                              }))
+                            }
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label variant="brand" required>
+                          VIÁTICOS OPERADOR
+                        </Label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-3 text-sm font-black text-slate-500">
+                            $
+                          </span>
+                          <Input
+                            type="number"
+                            className="pl-8 font-mono text-lg font-bold"
+                            value={data.anticipo_viaticos || ""}
+                            onChange={(e) =>
+                              setData((p) => ({
+                                ...p,
+                                anticipo_viaticos:
+                                  parseFloat(e.target.value) || 0,
+                              }))
+                            }
+                          />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Card
+                    className={cn(
+                      shellClass,
+                      "flex min-h-[320px] flex-col items-center justify-center border-slate-200/70 bg-slate-50/70 p-10 text-center",
+                    )}
+                  >
+                    <TahoeIconPlate tone="neutral" className="mb-4 h-16 w-16">
+                      <Info className="h-8 w-8" />
+                    </TahoeIconPlate>
+                    <h3 className="heading-crisp text-lg font-black uppercase tracking-tighter text-slate-900">
+                      Sin Anticipos
+                    </h3>
+                    <p className="mt-2 max-w-xs text-sm font-medium leading-relaxed text-slate-500">
+                      Movimiento local en patio/muelle. Por políticas
+                      operativas, no se requieren registros de anticipos.
+                    </p>
+                  </Card>
                 )}
+              </div>
+
+              {/* 🚀 TARJETA 2: TIMBRADO SAT Y CARTA PORTE (REGLA DE GUSTAVO) */}
+              <Card
+                className={cn(shellClass, "border-brand-navy/20 bg-blue-50/20")}
               >
                 <CardHeader className={cn(headerClass, "pb-4")}>
                   <div className="flex items-center gap-4">
-                    <TahoeIconPlate tone="green">
-                      <DollarSign className="h-7 w-7" />
+                    <TahoeIconPlate tone="indigo">
+                      <ShieldCheck className="h-7 w-7 text-indigo-600" />
                     </TahoeIconPlate>
-
-                    <CardTitle className="text-sm text-emerald-800 dark:text-emerald-300">
-                      INGRESO GLOBAL (A FACTURAR)
-                    </CardTitle>
+                    <div>
+                      <CardTitle className="text-sm text-brand-navy font-black uppercase tracking-widest">
+                        Emisión Fiscal (Carta Porte)
+                      </CardTitle>
+                      <p className="text-[10px] font-bold text-slate-500 mt-0.5">
+                        Complemento Carta Porte 3.0 / CFDI 4.0
+                      </p>
+                    </div>
                   </div>
                 </CardHeader>
-
-                <CardContent className="space-y-4 pt-6 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-slate-600 dark:text-slate-300">
-                      Flete Base:
-                    </span>
-                    <span className="font-mono text-lg font-black text-slate-800 dark:text-white">
-                      ${infoTarifa.base.toLocaleString()}
-                    </span>
+                <CardContent className="space-y-6 pt-6">
+                  <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
+                    <div className="space-y-1 pr-4">
+                      <Label className="text-sm font-black text-slate-800">
+                        Generar Timbrado SAT Automático
+                      </Label>
+                      <p className="text-[11px] font-medium text-slate-500 leading-tight">
+                        Emitir XML y PDF con PAC autorizado al momento de
+                        despachar la unidad.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={data.generarCartaPorte}
+                      onCheckedChange={(c) =>
+                        setData((p) => ({ ...p, generarCartaPorte: c }))
+                      }
+                    />
                   </div>
 
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-slate-600 dark:text-slate-300">
-                      Casetas:
-                    </span>
-                    <span className="font-mono text-lg font-black text-slate-800 dark:text-white">
-                      ${infoTarifa.casetas.toLocaleString()}
-                    </span>
-                  </div>
+                  {data.generarCartaPorte && (
+                    <div className="animate-in slide-in-from-top-2 p-4 bg-indigo-50/50 rounded-xl border border-indigo-200 space-y-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="space-y-1.5">
+                          <Label className="text-sm font-black text-indigo-900">
+                            Ocultar Montos al Operador
+                          </Label>
+                          <p className="text-[11px] font-bold text-indigo-700/70 leading-tight">
+                            Generar versión "Operativa" ($1 MXN impreso) para
+                            entregar al chofer/aduana, protegiendo el costo real
+                            del Flete.
+                          </p>
+                        </div>
+                        <Switch
+                          checked={data.ocultarMontosPdf}
+                          onCheckedChange={(c) =>
+                            setData((p) => ({ ...p, ocultarMontosPdf: c }))
+                          }
+                          className="data-[state=checked]:bg-indigo-600 mt-1"
+                        />
+                      </div>
 
-                  <Separator className="my-4 bg-emerald-200 dark:bg-emerald-500/20" />
+                      {data.ocultarMontosPdf && (
+                        <div className="bg-white p-3 rounded-lg border border-indigo-100 flex items-start gap-3">
+                          <FileKey className="h-5 w-5 text-indigo-500 shrink-0 mt-0.5" />
+                          <p className="text-[10px] text-slate-600 font-medium">
+                            El XML conservará la validez fiscal y los montos
+                            reales ($
+                            <span className="font-mono font-bold">
+                              {infoTarifa.total.toLocaleString()}
+                            </span>
+                            ). Solo el PDF impreso entregado al operador saldrá
+                            en ceros o por $1.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
-                  <div className="rounded-[24px] bg-emerald-600 p-5 text-white shadow-2xl shadow-emerald-600/20">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-black uppercase tracking-[0.2em]">
-                        Total Neto
+                  <div className="bg-slate-900 p-4 rounded-xl text-white space-y-2 shadow-inner">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-800 pb-2">
+                      Resumen de Sellado
+                    </p>
+                    <div className="flex justify-between text-xs font-medium">
+                      <span className="text-slate-400">Tractocamión RFC:</span>
+                      <span className="font-mono text-emerald-400">
+                        {
+                          availableTractos
+                            .find((t) => t.value === data.unitId)
+                            ?.label?.split(" ")[0]
+                        }
                       </span>
-                      <span className="font-mono text-2xl font-black tracking-tighter">
-                        ${infoTarifa.total.toLocaleString()}
+                    </div>
+                    <div className="flex justify-between text-xs font-medium">
+                      <span className="text-slate-400">Operador:</span>
+                      <span className="font-mono text-emerald-400">
+                        {
+                          availableOperators.find(
+                            (o) => o.value === data.driverId,
+                          )?.label
+                        }
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-xs font-medium">
+                      <span className="text-slate-400">Bienes Transp:</span>
+                      <span className="font-mono text-emerald-400 truncate max-w-[150px]">
+                        {data.descripcion_mercancia}
                       </span>
                     </div>
                   </div>
                 </CardContent>
               </Card>
-
-              {isRoadLeg ? (
-                <Card
-                  className={cn(
-                    shellClass,
-                    "border-amber-200/70 bg-amber-50/40 dark:border-amber-500/20 dark:bg-amber-500/5",
-                  )}
-                >
-                  <CardHeader className={cn(headerClass, "pb-4")}>
-                    <div className="flex items-center gap-4">
-                      <TahoeIconPlate tone="amber">
-                        <Truck className="h-7 w-7" />
-                      </TahoeIconPlate>
-
-                      <CardTitle className="text-sm text-amber-800 dark:text-amber-300">
-                        ANTICIPOS PARA LA FASE INICIAL
-                      </CardTitle>
-                    </div>
-                  </CardHeader>
-
-                  <CardContent className="space-y-6 pt-6">
-                    <div className="space-y-2">
-                      <Label variant="brand" required>
-                        CASETAS
-                      </Label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-3 text-sm font-black text-slate-500 dark:text-slate-400">
-                          $
-                        </span>
-                        <Input
-                          type="number"
-                          className="pl-8 font-mono text-lg font-bold"
-                          value={data.anticipo_casetas || ""}
-                          onChange={(e) =>
-                            setData((p) => ({
-                              ...p,
-                              anticipo_casetas: parseFloat(e.target.value) || 0,
-                            }))
-                          }
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label variant="brand" required>
-                        VALE DE DIÉSEL
-                      </Label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-3 text-sm font-black text-slate-500 dark:text-slate-400">
-                          $
-                        </span>
-                        <Input
-                          type="number"
-                          className="pl-8 font-mono text-lg font-bold"
-                          value={data.anticipo_combustible || ""}
-                          onChange={(e) =>
-                            setData((p) => ({
-                              ...p,
-                              anticipo_combustible:
-                                parseFloat(e.target.value) || 0,
-                            }))
-                          }
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label variant="brand" required>
-                        VIÁTICOS OPERADOR
-                      </Label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-3 text-sm font-black text-slate-500 dark:text-slate-400">
-                          $
-                        </span>
-                        <Input
-                          type="number"
-                          className="pl-8 font-mono text-lg font-bold"
-                          value={data.anticipo_viaticos || ""}
-                          onChange={(e) =>
-                            setData((p) => ({
-                              ...p,
-                              anticipo_viaticos:
-                                parseFloat(e.target.value) || 0,
-                            }))
-                          }
-                        />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ) : (
-                <Card
-                  className={cn(
-                    shellClass,
-                    "flex min-h-[320px] flex-col items-center justify-center border-slate-200/70 bg-slate-50/70 p-10 text-center dark:border-white/10 dark:bg-slate-950/45",
-                  )}
-                >
-                  <TahoeIconPlate tone="neutral" className="mb-4 h-16 w-16">
-                    <Info className="h-8 w-8" />
-                  </TahoeIconPlate>
-
-                  <h3 className="heading-crisp text-lg font-black uppercase tracking-tighter text-slate-900 dark:text-white">
-                    Sin Anticipos
-                  </h3>
-
-                  <p className="mt-2 max-w-xs text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-400">
-                    Movimiento local en patio/muelle. Por políticas operativas,
-                    no se requieren registros de anticipos.
-                  </p>
-                </Card>
-              )}
             </div>
 
             <div
@@ -1324,24 +1354,36 @@ export const DespachoWizard = () => {
               <Button
                 variant="outline"
                 size="lg"
-                className="w-32 rounded-2xl"
+                className="w-32 rounded-2xl font-black uppercase tracking-widest"
                 onClick={() => setCurrentStep(2)}
+                disabled={isStamping}
               >
                 Atrás
               </Button>
 
               <Button
                 type="button"
-                variant="success"
                 size="lg"
-                className="rounded-2xl"
+                className="rounded-2xl bg-brand-navy hover:bg-slate-800 font-black uppercase tracking-[0.16em] text-white shadow-xl transition-all"
+                disabled={isStamping}
                 onClick={(e) => {
                   e.preventDefault();
                   handleCreate("en_transito");
                 }}
               >
-                <Check className="mr-2 h-5 w-5" />
-                Despachar Ahora
+                {isStamping ? (
+                  <>
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Timbrando
+                    SAT...
+                  </>
+                ) : (
+                  <>
+                    <Check className="mr-2 h-5 w-5" />{" "}
+                    {data.generarCartaPorte
+                      ? "Timbrar y Despachar"
+                      : "Despachar Sin Timbrar"}
+                  </>
+                )}
               </Button>
             </div>
           </div>
