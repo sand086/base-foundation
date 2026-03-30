@@ -1,4 +1,3 @@
-// src/features/despacho/DespachoWizard.tsx
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/components/ui/use-toast";
@@ -24,7 +23,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch"; // 🚀 Nuevo import
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -103,7 +102,6 @@ type WizardData = {
   anticipo_viaticos: number;
   anticipo_combustible: number;
 
-  // 🚀 NUEVOS ESTADOS FISCALES
   generarCartaPorte: boolean;
   ocultarMontosPdf: boolean;
 };
@@ -241,7 +239,7 @@ function SearchableSelect({
 
 export const DespachoWizard = () => {
   const [currentStep, setCurrentStep] = useState<Step>(1);
-  const [isStamping, setIsStamping] = useState(false); // 🚀 Estado para simular timbrado SAT
+  const [isStamping, setIsStamping] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -299,6 +297,8 @@ export const DespachoWizard = () => {
     () => (Array.isArray(clients) ? clients : []),
     [clients],
   );
+
+  // 🚀 FIX TRACTOCAMIONES: SÍ llevan el prefijo ECO-
   const availableTractos = useMemo(
     () =>
       arrUnidades
@@ -317,6 +317,7 @@ export const DespachoWizard = () => {
     [arrUnidades],
   );
 
+  // 🚀 FIX REMOLQUES: NO llevan el prefijo ECO- y usan filtro inteligente
   const availableRemolques = useMemo(() => {
     const remolquesReales = arrUnidades
       .filter((u: any) => {
@@ -324,8 +325,6 @@ export const DespachoWizard = () => {
         const isTracto =
           searchIn.includes("tracto") || searchIn.includes("camion");
         const isDolly = searchIn.includes("dolly");
-
-        // Si no es tracto y no es dolly, DEBE ser un remolque/chasis/caja
         return (
           !isTracto &&
           !isDolly &&
@@ -333,15 +332,15 @@ export const DespachoWizard = () => {
         );
       })
       .map((u: any) => ({
-        // Eliminamos el 'ECO-' para los remolques, tal como pidió Gustavo
         label: `${u.numero_economico} - ${u.placas || "S/P"} | ${u.is_loaded ? "📦 CARGADO" : "➖ VACÍO"}`,
         value: String(u.id),
       }));
-
     return remolquesReales.length === 0
       ? [{ label: "No hay remolques disponibles", value: "" }]
       : remolquesReales;
   }, [arrUnidades]);
+
+  // 🚀 FIX DOLLIES: NO llevan el prefijo ECO-
   const availableDollies = useMemo(() => {
     const dolliesReales = arrUnidades
       .filter(
@@ -358,12 +357,19 @@ export const DespachoWizard = () => {
       : dolliesReales;
   }, [arrUnidades]);
 
+  // 🚀 FIX OPERADORES: Incluimos a los inactivos para que no desaparezcan
   const availableOperators = useMemo(
     () =>
-      arrOperadores.map((o: any) => ({
-        label: o.name,
-        value: String(o.id),
-      })),
+      arrOperadores
+        .filter((o: any) =>
+          ["activo", "disponible", "inactivo"].includes(
+            o.status?.toLowerCase(),
+          ),
+        )
+        .map((o: any) => ({
+          label: o.name,
+          value: String(o.id),
+        })),
     [arrOperadores],
   );
 
@@ -432,10 +438,9 @@ export const DespachoWizard = () => {
     };
 
     try {
-      // 🚀 Si eligen despachar, simulamos el delay del Timbrado del SAT
       if (status === "en_transito" && data.generarCartaPorte) {
         setIsStamping(true);
-        await new Promise((resolve) => setTimeout(resolve, 2000)); // Delay ficticio de 2 seg simulando API del PAC
+        await new Promise((resolve) => setTimeout(resolve, 2000));
       }
 
       const payload: any = {
@@ -838,7 +843,6 @@ export const DespachoWizard = () => {
                     </p>
                   </div>
                 </div>
-
                 <div className="mx-auto flex w-full max-w-[360px] rounded-[20px] border border-slate-200/80 bg-white/70 p-1.5 shadow-inner">
                   <button
                     type="button"
@@ -885,7 +889,6 @@ export const DespachoWizard = () => {
                     </p>
                   </div>
                 </div>
-
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
                   <div className="space-y-2 md:col-span-2">
                     <Label variant="brand" required>
@@ -930,7 +933,6 @@ export const DespachoWizard = () => {
                     />
                   </div>
                 </div>
-
                 <div className="space-y-2 pt-2">
                   <Label
                     variant="brand"
@@ -1083,11 +1085,10 @@ export const DespachoWizard = () => {
           </div>
         )}
 
-        {/* PASO 3 - 🚀 ACTUALIZADO CON MÓDULO DE TIMBRADO (CARTA PORTE) */}
+        {/* PASO 3 */}
         {currentStep === 3 && (
           <div className="animate-in fade-in slide-in-from-bottom-2 space-y-6">
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              {/* TARJETA 1: FINANZAS Y GASTOS */}
               <div className="space-y-6">
                 <Card
                   className={cn(
@@ -1241,7 +1242,6 @@ export const DespachoWizard = () => {
                 )}
               </div>
 
-              {/* 🚀 TARJETA 2: TIMBRADO SAT Y CARTA PORTE (REGLA DE GUSTAVO) */}
               <Card
                 className={cn(shellClass, "border-brand-navy/20 bg-blue-50/20")}
               >
@@ -1268,7 +1268,7 @@ export const DespachoWizard = () => {
                       </Label>
                       <p className="text-[11px] font-medium text-slate-500 leading-tight">
                         Emitir XML y PDF con PAC autorizado al momento de
-                        despachar la unidad.
+                        despachar.
                       </p>
                     </div>
                     <Switch
@@ -1288,8 +1288,7 @@ export const DespachoWizard = () => {
                           </Label>
                           <p className="text-[11px] font-bold text-indigo-700/70 leading-tight">
                             Generar versión "Operativa" ($1 MXN impreso) para
-                            entregar al chofer/aduana, protegiendo el costo real
-                            del Flete.
+                            entregar al chofer/aduana.
                           </p>
                         </div>
                         <Switch
@@ -1300,7 +1299,6 @@ export const DespachoWizard = () => {
                           className="data-[state=checked]:bg-indigo-600 mt-1"
                         />
                       </div>
-
                       {data.ocultarMontosPdf && (
                         <div className="bg-white p-3 rounded-lg border border-indigo-100 flex items-start gap-3">
                           <FileKey className="h-5 w-5 text-indigo-500 shrink-0 mt-0.5" />
@@ -1310,8 +1308,7 @@ export const DespachoWizard = () => {
                             <span className="font-mono font-bold">
                               {infoTarifa.total.toLocaleString()}
                             </span>
-                            ). Solo el PDF impreso entregado al operador saldrá
-                            en ceros o por $1.
+                            ). Solo el PDF impreso saldrá en ceros o por $1.
                           </p>
                         </div>
                       )}
