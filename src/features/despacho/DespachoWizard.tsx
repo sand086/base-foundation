@@ -299,7 +299,6 @@ export const DespachoWizard = () => {
     () => (Array.isArray(clients) ? clients : []),
     [clients],
   );
-
   const availableTractos = useMemo(
     () =>
       arrUnidades
@@ -312,7 +311,7 @@ export const DespachoWizard = () => {
           );
         })
         .map((u: any) => ({
-          label: `${u.numero_economico} - ${u.placas || "Sin placas"} (${normalizeStr(u.tipo_1)})`,
+          label: `ECO-${u.numero_economico} - ${u.placas || "S/P"}`,
           value: String(u.id),
         })),
     [arrUnidades],
@@ -321,28 +320,37 @@ export const DespachoWizard = () => {
   const availableRemolques = useMemo(() => {
     const remolquesReales = arrUnidades
       .filter((u: any) => {
-        const strTipo1 = normalizeStr(u.tipo_1);
-        const strTipo = normalizeStr(u.tipo);
+        const searchIn = `${u.tipo_1} ${u.tipo}`.toLowerCase();
+        const isTracto =
+          searchIn.includes("tracto") || searchIn.includes("camion");
+        const isDolly = searchIn.includes("dolly");
+
+        // Si no es tracto y no es dolly, DEBE ser un remolque/chasis/caja
         return (
-          ["remolque", "caja", "plataforma", "chasis", "utilitario"].some(
-            (p) => strTipo1.includes(p) || strTipo.includes(p),
-          ) && ["disponible", "bloqueado"].includes(u.status?.toLowerCase())
+          !isTracto &&
+          !isDolly &&
+          ["disponible", "bloqueado"].includes(u.status?.toLowerCase())
         );
       })
       .map((u: any) => ({
-        label: `${u.numero_economico} - ${u.placas || "S/P"} | ${u.is_loaded ? "📦 CARGADO" : "➖ ESQUELETO VACÍO"}`,
+        // Eliminamos el 'ECO-' para los remolques, tal como pidió Gustavo
+        label: `${u.numero_economico} - ${u.placas || "S/P"} | ${u.is_loaded ? "📦 CARGADO" : "➖ VACÍO"}`,
         value: String(u.id),
       }));
+
     return remolquesReales.length === 0
       ? [{ label: "No hay remolques disponibles", value: "" }]
       : remolquesReales;
   }, [arrUnidades]);
-
   const availableDollies = useMemo(() => {
     const dolliesReales = arrUnidades
-      .filter((u: any) => normalizeStr(u.tipo_1).includes("dolly"))
+      .filter(
+        (u: any) =>
+          normalizeStr(u.tipo_1).includes("dolly") &&
+          ["disponible", "bloqueado"].includes(u.status?.toLowerCase()),
+      )
       .map((u: any) => ({
-        label: `${u.numero_economico} (${normalizeStr(u.tipo_1)})`,
+        label: `${u.numero_economico} (DOLLY)`,
         value: String(u.id),
       }));
     return dolliesReales.length === 0

@@ -25,6 +25,7 @@ import { toast } from "sonner";
 
 import { Trip, TripLeg } from "@/types/api.types";
 import { useTrips } from "@/hooks/useTrips";
+import axiosClient from "@/api/axiosClient";
 
 export interface TripSettlementModalProps {
   open: boolean;
@@ -172,7 +173,7 @@ export default function TripSettlementModal({
   const handleSettle = async () => {
     if (!odometroFinal) return toast.error("El odómetro final es obligatorio");
 
-    // 🚀 Validar que los conceptos extra no estén vacíos
+    // Validar que los conceptos extra no estén vacíos
     const invalidConceptos = conceptosExtra.some(
       (c) => !c.descripcion.trim() || c.monto === "" || Number(c.monto) <= 0,
     );
@@ -185,8 +186,76 @@ export default function TripSettlementModal({
     try {
       setIsSubmitting(true);
 
-      // 🚀 NOTA TÉCNICA: Aquí idealmente mandarías 'conceptosExtra' y 'totalNeto' al backend.
-      // Por ahora, actualizamos el estatus del viaje como estaba diseñado.
+      const legId = activeLegs[0]?.id;
+      if (!legId) throw new Error("No hay un tramo activo para liquidar");
+
+      // 🚀 1. ARMAR EL PAQUETE FINANCIERO (Como lo espera el Backend de Gustavo)
+      const conceptosBase = [
+        {
+          id: "sueldo",
+          tipo: "ingreso",
+          categoria: "tarifa",
+          descripcion: "Sueldo Base",
+          monto: Number(sueldoBase) || 0,
+          esAutomatico: true,
+        },
+        {
+          id: "bonos",
+          tipo: "ingreso",
+          categoria: "bono",
+          descripcion: "Bonos Operativos",
+          monto: Number(bonos) || 0,
+          esAutomatico: false,
+        },
+        {
+          id: "penalizacion",
+          tipo: "deduccion",
+          categoria: "descuento",
+          descripcion: "Penalizaciones",
+          monto: Number(penalizaciones) || 0,
+          esAutomatico: false,
+        },
+        {
+          id: "anticipos",
+          tipo: "deduccion",
+          categoria: "anticipo",
+          descripcion: "Anticipos en Ruta",
+          monto: sumAnticipos,
+          esAutomatico: true,
+        },
+      ];
+
+      // Mapear los Vales Azules / Gastos Extra
+      const conceptosAdicionales = conceptosExtra.map((c) => ({
+        id: c.id,
+        tipo: c.tipo,
+        categoria: c.tipo === "ingreso" ? "bono" : "descuento",
+        descripcion: c.descripcion,
+        monto: Number(c.monto),
+        esAutomatico: false,
+      }));
+
+      // Filtramos los que están en $0 para no ensuciar la base de datos
+      const todosLosConceptos = [
+        ...conceptosBase,
+        ...conceptosAdicionales,
+      ].filter((c) => c.monto > 0);
+
+      const payloadLiquidacion = {
+        conceptos: todosLosConceptos,
+        total_ingresos: totalPercepciones,
+        total_deducciones: totalDeducciones,
+        neto_a_pagar: totalNeto,
+      };
+
+      // 🚀 2. ENVIAR A TESORERÍA (Al endpoint oficial)
+      // Asegúrate de tener axiosClient importado arriba
+      await axiosClient.post(
+        `/trips/leg/${legId}/close-settlement`,
+        payloadLiquidacion,
+      );
+
+      // 🚀 3. ACTUALIZAR ESTATUS DEL VIAJE Y BITÁCORA
       for (const item of activeLegs) {
         const tripId = item.trip?.id || item.trip_id;
         await updateTripStatus(
@@ -196,11 +265,12 @@ export default function TripSettlementModal({
         );
       }
 
-      toast.success("Liquidación completada");
+      toast.success("Liquidación guardada en Tesorería exitosamente");
       if (onSuccess) onSuccess();
       handleClose();
     } catch (error) {
-      toast.error("Error al liquidar");
+      console.error("Error cerrando liquidación:", error);
+      toast.error("Error al registrar los datos financieros en el servidor");
     } finally {
       setIsSubmitting(false);
     }

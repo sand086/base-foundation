@@ -100,7 +100,7 @@ const unidadSchema = z
     placas: z.string().optional(),
     vin: z.string().optional(),
     marca: z.string().min(1, "La marca es requerida"),
-    modelo: z.string().optional(),
+    modelo: z.string().min(1, "El modelo es requerido"),
     year: z.string().min(4, "Requerido"),
 
     tipo: z.string(),
@@ -519,7 +519,8 @@ export function AddUnidadModal({
             >
               {/* TABS LIST (Fija) */}
               <div className="shrink-0 w-full overflow-x-auto hide-scrollbar pt-6 px-6 sm:pt-8 sm:px-8 pb-2 sm:pb-0 z-20">
-                <TabsList className="bg-slate-200/50 dark:bg-slate-800/80 backdrop-blur-md p-1 h-12 rounded-xl border border-slate-300/50 dark:border-white/5 inline-flex min-w-max sm:w-full grid-cols-3">
+                <TabsList className="bg-slate-200/50 dark:bg-slate-800/80 backdrop-blur-md p-1 h-12 rounded-xl border border-slate-300/50 dark:border-white/5 grid min-w-max sm:w-full grid-cols-3">
+                  {" "}
                   <TabsTrigger
                     value="general"
                     type="button"

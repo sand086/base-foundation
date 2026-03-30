@@ -216,11 +216,19 @@ export default function FlotaUnidades() {
       {
         key: "numero_economico",
         header: "No. Económico",
-        render: (value) => (
-          <span className="font-black text-brand-navy dark:text-white uppercase tracking-tight">
-            ECO-{value}
-          </span>
-        ),
+        render: (value, row) => {
+          // Lógica Senior: Solo los tractocamiones/camionetas llevan el prefijo ECO-
+          const isTracto =
+            row.tipo_1?.toLowerCase().includes("tracto") ||
+            row.tipo_1?.toLowerCase().includes("camion") ||
+            row.tipo?.toLowerCase().includes("tracto");
+
+          return (
+            <span className="font-black text-brand-navy dark:text-white uppercase tracking-tight">
+              {isTracto ? `ECO-${value}` : value}
+            </span>
+          );
+        },
       },
       {
         key: "placas",
