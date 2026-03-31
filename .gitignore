@@ -29,8 +29,7 @@ dist-ssr
 
 # archivos de entorno
 .env
-.env.local
-.env.*.local
+.env.*
 backend/.env
 backend/.env.*
 
