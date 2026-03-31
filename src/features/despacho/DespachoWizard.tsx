@@ -52,6 +52,7 @@ import {
 } from "@/components/ui/popover";
 
 import { cn } from "@/lib/utils";
+import axiosClient from "@/api/axiosClient"; // 🚀 Importante para llamar al timbrado
 
 // Hooks
 import { useUnits } from "@/hooks/useUnits";
@@ -442,7 +443,6 @@ export const DespachoWizard = () => {
     try {
       if (status === "en_transito" && data.generarCartaPorte) {
         setIsStamping(true);
-        await new Promise((resolve) => setTimeout(resolve, 2000));
       }
 
       const payload: any = {
@@ -459,6 +459,7 @@ export const DespachoWizard = () => {
         peso_toneladas: Number(data.peso_toneladas),
         es_material_peligroso: data.es_material_peligroso,
         clase_imo: data.es_material_peligroso ? data.clase_imo : null,
+        // 🚀 FASE 1: Mapeo correcto al backend
         contenedor_1: data.contenedor_1 || null,
         contenedor_2: isFullTrip ? data.contenedor_2 : null,
         referencia: data.referencia_cliente || null,
@@ -488,12 +489,26 @@ export const DespachoWizard = () => {
 
       if (result) {
         if (status === "en_transito" && data.generarCartaPorte) {
-          toast({
-            title: "¡Carta Porte Timbrada Exitosamente!",
-            description: data.ocultarMontosPdf
-              ? "Viaje despachado. Se generó PDF Operativo (Montos Ocultos / $1)."
-              : "Viaje despachado. Se generó Factura con Monto Real.",
-          });
+          try {
+            // 🚀 FASE 2: TIMBRADO NOMINAL REAL ($1)
+            await axiosClient.post("/billing/stamp/nominal", {
+              viaje_id: result.id,
+              is_nominal: true,
+            });
+            toast({
+              title: "¡Carta Porte Timbrada Exitosamente!",
+              description: data.ocultarMontosPdf
+                ? "Viaje despachado. Se generó PDF Operativo (Montos Ocultos / $1)."
+                : "Viaje despachado. Se generó Factura con Monto Real.",
+            });
+          } catch (err) {
+            toast({
+              variant: "destructive",
+              title: "Viaje creado pero falló el timbrado",
+              description:
+                "Deberá timbrar manualmente desde la mesa de control.",
+            });
+          }
         } else {
           toast({
             title:
@@ -532,11 +547,11 @@ export const DespachoWizard = () => {
       data.driverId &&
       data.remolque1Id &&
       data.descripcion_mercancia &&
-      data.contenedor_1,
+      data.contenedor_1, // 🚀 FASE 1: Validar el primero
     );
     return isFullTrip
       ? Boolean(
-          isBasicValid && data.dollyId && data.remolque2Id && data.contenedor_2,
+          isBasicValid && data.dollyId && data.remolque2Id && data.contenedor_2, // 🚀 FASE 1: Validar el segundo en FULL
         )
       : isBasicValid;
   }, [isFullTrip, data]);

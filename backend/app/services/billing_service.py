@@ -89,7 +89,7 @@ class SafeData(dict):
             if "rfc" in key:
                 return "XAXX010101000"
             if "cp" in key:
-                return "00000"
+                return "91700"
             return "NO_ESPECIFICADO"
         return val
 
@@ -190,7 +190,7 @@ class BillingService:
         self.emisor_regimen = (
             regimen_conf.value if regimen_conf and regimen_conf.value else "601"
         )
-        self.emisor_cp = cp_conf.value if cp_conf and cp_conf.value else "00000"
+        self.emisor_cp = cp_conf.value if cp_conf and cp_conf.value else "91700"
 
     def generar_carta_porte_nominal(
         self, invoice_data: ReceivableInvoiceCreate
