@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch"; // 🚀 FASE 2: Añadido Switch
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -23,7 +23,6 @@ import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import {
   Truck,
-  User,
   Loader2,
   CheckCircle2,
   MapPin,
@@ -37,6 +36,7 @@ import {
   Container,
   Package,
   Minus,
+  FileCode2,
 } from "lucide-react";
 import { useUnits } from "@/hooks/useUnits";
 import { useOperators } from "@/hooks/useOperators";
@@ -47,7 +47,6 @@ import axiosClient from "@/api/axiosClient";
 
 // ─── Tipos locales estrictos ──────────────────────────────────────────────────
 
-/** Unidad de transporte (tracto, remolque, dolly). */
 interface Unit {
   id: number;
   numero_economico: string;
@@ -58,22 +57,19 @@ interface Unit {
   is_loaded?: boolean;
 }
 
-/** Operador de transporte. */
 interface Operator {
   id: number;
   name: string;
   status: string;
 }
 
-/** Payload extendido con campos de arrastre y anticipos. */
 interface ExtendedLegPayload extends TripLegCreatePayload {
   remolque_1_id?: number | null;
   dolly_id?: number | null;
   remolque_2_id?: number | null;
   otros_anticipos: number;
+  destino_vacio?: string; // 🚀 FASE 3: Agregamos el destino textual del vacío
 }
-
-// ─── Props del modal ──────────────────────────────────────────────────────────
 
 interface NextLegModalProps {
   open: boolean;
@@ -114,8 +110,6 @@ export function NextLegModal({
   const [loading, setLoading] = useState(false);
   const [cpGenerada, setCpGenerada] = useState(false);
   const [localUuid, setLocalUuid] = useState<string | null>(null);
-
-  // 🚀 FASE 2: Estado para timbrar al salir a carretera
   const [shouldStampReal, setShouldStampReal] = useState(false);
 
   const [formData, setFormData] = useState<Partial<ExtendedLegPayload>>({
@@ -129,9 +123,9 @@ export function NextLegModal({
     anticipo_viaticos: 0,
     anticipo_combustible: 0,
     otros_anticipos: 0,
+    destino_vacio: "", // Inicializamos vacío
   });
 
-  // Reinicia el formulario cada vez que se abre el modal con un viaje nuevo
   useEffect(() => {
     if (open && tripPadre) {
       setFormData({
@@ -145,10 +139,11 @@ export function NextLegModal({
         anticipo_viaticos: 0,
         anticipo_combustible: 0,
         otros_anticipos: 0,
+        destino_vacio: "",
       });
       setCpGenerada(Boolean(tripPadre.uuid_fiscal));
       setLocalUuid(tripPadre.uuid_fiscal ?? null);
-      setShouldStampReal(false); // 🚀 FASE 2: reset
+      setShouldStampReal(false);
     }
   }, [open, tripPadre]);
 
@@ -205,22 +200,18 @@ export function NextLegModal({
 
   const isRoadLeg = formData.leg_type === "ruta_carretera";
 
-  // 🚀 FIX: Filtro inteligente para Tractocamiones
   const availableTractos = useMemo(
     () =>
       (unidades as Unit[]).filter((u) => {
         const tipo = `${u.tipo_1} ${u.tipo}`.toLowerCase();
         return (
           (tipo.includes("tracto") || tipo.includes("camion")) &&
-          UNIT_STATUSES_AVAILABLE.includes(
-            u.status?.toLowerCase() as (typeof UNIT_STATUSES_AVAILABLE)[number],
-          )
+          UNIT_STATUSES_AVAILABLE.includes(u.status?.toLowerCase() as any)
         );
       }),
     [unidades],
   );
 
-  // 🚀 FIX: Filtro inteligente para Remolques (Si no es tracto y no es dolly, es remolque)
   const availableRemolques = useMemo(
     () =>
       (unidades as Unit[]).filter((u) => {
@@ -228,26 +219,20 @@ export function NextLegModal({
         const isTracto =
           searchIn.includes("tracto") || searchIn.includes("camion");
         const isDolly = searchIn.includes("dolly");
-
         return (
           !isTracto &&
           !isDolly &&
-          UNIT_STATUSES_AVAILABLE.includes(
-            u.status?.toLowerCase() as (typeof UNIT_STATUSES_AVAILABLE)[number],
-          )
+          UNIT_STATUSES_AVAILABLE.includes(u.status?.toLowerCase() as any)
         );
       }),
     [unidades],
   );
 
-  // 🚀 FIX: Filtro para Dollies
   const availableDollies = useMemo(() => {
     const dollies = (unidades as Unit[]).filter(
       (u) =>
         normalizeStr(u.tipo_1).includes("dolly") &&
-        UNIT_STATUSES_AVAILABLE.includes(
-          u.status?.toLowerCase() as (typeof UNIT_STATUSES_AVAILABLE)[number],
-        ),
+        UNIT_STATUSES_AVAILABLE.includes(u.status?.toLowerCase() as any),
     );
     return dollies.length > 0
       ? dollies
@@ -273,56 +258,75 @@ export function NextLegModal({
 
   // ─── Acciones ─────────────────────────────────────────────────────────────
 
-  /** Descarga el PDF de la Carta Porte timbrada dado su UUID fiscal. */
-  const handleDownloadStampedPDF = useCallback(async (uuid: string) => {
+  const handleDownloadPDF = useCallback(async (uuid: string) => {
+    const toastId = toast.loading("Descargando PDF...");
     try {
-      const response = await axiosClient.get(`/billing/invoice/${uuid}/pdf`, {
+      const res = await axiosClient.get(`/billing/invoice/${uuid}/pdf`, {
         responseType: "blob",
       });
-      const fileURL = window.URL.createObjectURL(
-        new Blob([response.data], { type: "application/pdf" }),
+      const url = window.URL.createObjectURL(
+        new Blob([res.data], { type: "application/pdf" }),
       );
       const link = document.createElement("a");
-      link.href = fileURL;
-      link.setAttribute("download", `Carta_Porte_Provisional_${uuid}.pdf`);
+      link.href = url;
+      link.setAttribute("download", `Carta_Porte_${uuid}.pdf`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      toast.success("Archivo descargado.");
+      toast.success("PDF descargado exitosamente.", { id: toastId });
     } catch {
-      toast.error("Error al descargar el PDF.");
+      toast.error("Error al descargar el PDF.", { id: toastId });
     }
   }, []);
 
-  /** Timbra la Carta Porte Bypass de $1 o descarga si ya existe. */
-  const handleCartaPorteAction = useCallback(async () => {
-    if (!tripPadre) return;
-    if (localUuid) {
-      await handleDownloadStampedPDF(localUuid);
-      return;
-    }
+  const handleDownloadXML = useCallback(async (uuid: string) => {
+    const toastId = toast.loading("Descargando XML...");
     try {
-      await handleStampNominal(
-        tripPadre.id,
-        (responseData: { data?: { uuid?: string } }) => {
-          const generatedUuid = responseData?.data?.uuid;
-          if (generatedUuid) {
-            setLocalUuid(generatedUuid);
-            setCpGenerada(true);
-            handleDownloadStampedPDF(generatedUuid);
-            toast.success("Carta Porte Bypass de $1 generada exitosamente.");
-          }
-        },
+      const res = await axiosClient.get(`/billing/invoice/${uuid}/xml`, {
+        responseType: "blob",
+      });
+      const url = window.URL.createObjectURL(
+        new Blob([res.data], { type: "application/xml" }),
       );
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `Carta_Porte_${uuid}.xml`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success("XML descargado exitosamente.", { id: toastId });
+    } catch {
+      toast.error("Error al descargar el XML.", { id: toastId });
+    }
+  }, []);
+
+  const handleCartaPorteAction = useCallback(async () => {
+    if (!tripPadre || localUuid) return;
+
+    try {
+      await handleStampNominal(tripPadre.id, (responseData: any) => {
+        const generatedUuid =
+          responseData?.data?.uuid ||
+          responseData?.uuid ||
+          responseData?.data?.data?.uuid;
+
+        if (generatedUuid) {
+          setLocalUuid(generatedUuid);
+          setCpGenerada(true);
+          toast.success(
+            "¡Carta Porte generada exitosamente! Ya puedes descargar los archivos.",
+          );
+        } else {
+          toast.warning(
+            "Se timbró correctamente, recarga para ver los archivos.",
+          );
+        }
+      });
     } catch {
       toast.error("Error al timbrar Carta Porte de $1.");
     }
-  }, [tripPadre, localUuid, handleStampNominal, handleDownloadStampedPDF]);
+  }, [tripPadre, localUuid, handleStampNominal]);
 
-  /**
-   * Valida el formulario. Devuelve true si la asignación está completa.
-   * Emite toast de error en caso contrario.
-   */
   const validateForm = useCallback((): boolean => {
     if (!formData.unit_id || !formData.operator_id || !formData.remolque_1_id) {
       toast.error(
@@ -334,17 +338,20 @@ export function NextLegModal({
       toast.error("Configuración FULL: Debe asignar Dolly y Remolque 2.");
       return false;
     }
+    // 🚀 FASE 3: Validación del destino de vacío
+    if (
+      formData.leg_type === "entrega_vacio" &&
+      !formData.destino_vacio?.trim()
+    ) {
+      toast.error("Indique el destino/patio donde se entregará el vacío.");
+      return false;
+    }
     return true;
   }, [formData, isFullTrip]);
 
-  /**
-   * Envía el tramo y actualiza el estado de carga de los remolques si aplica.
-   * Unifica la lógica de handleSubmit y handleIniciarTramo en una sola función.
-   */
   const handleIniciarTramo = useCallback(async () => {
     if (!tripPadre || !validateForm()) return;
 
-    // 🚀 FIX: Advertencia en lugar de bloqueo si no han timbrado
     if (formData.leg_type === "ruta_carretera" && !cpGenerada) {
       toast.warning(
         "Iniciando tramo de carretera sin Carta Porte timbrada. Recuerde timbrar más tarde.",
@@ -358,7 +365,6 @@ export function NextLegModal({
         formData as TripLegCreatePayload,
       );
       if (success) {
-        // 🚀 FASE 2: TIMBRADO REAL EN CARRETERA
         if (shouldStampReal && formData.leg_type === "ruta_carretera") {
           try {
             await axiosClient.post(`/billing/${tripPadre.id}/stamp-real`);
@@ -370,10 +376,17 @@ export function NextLegModal({
 
         if (formData.leg_type === "carga_muelle") {
           await updateLoadStatus(Number(formData.remolque_1_id), true);
-          if (formData.remolque_2_id) {
+          if (formData.remolque_2_id)
             await updateLoadStatus(Number(formData.remolque_2_id), true);
-          }
+        } else if (formData.leg_type === "entrega_vacio") {
+          await updateLoadStatus(Number(formData.remolque_1_id), false);
+          if (formData.remolque_2_id)
+            await updateLoadStatus(Number(formData.remolque_2_id), false);
+          toast.success(
+            `📦 Contenedores/Remolques liberados (Vacíos) en: ${formData.destino_vacio}`,
+          );
         }
+
         onOpenChange(false);
       }
     } finally {
@@ -387,7 +400,7 @@ export function NextLegModal({
     updateLoadStatus,
     onOpenChange,
     cpGenerada,
-    shouldStampReal, // Dependencia de Fase 2
+    shouldStampReal,
   ]);
 
   const referencia = (tripPadre as (Trip & { referencia?: string }) | null)
@@ -414,7 +427,6 @@ export function NextLegModal({
           )}
         >
           <div className="relative z-10 flex justify-between items-center gap-6">
-            {/* Identidad del viaje */}
             <div className="space-y-4">
               <div className="flex items-center gap-4">
                 <div
@@ -429,18 +441,18 @@ export function NextLegModal({
                 </div>
                 <div>
                   <DialogTitle className="text-3xl font-black uppercase tracking-tighter text-slate-900 dark:text-white heading-crisp">
-                    Despacho{" "}
-                    <span className="text-brand-red">
-                      #{tripPadre.public_id ?? tripPadre.id}
+                    SERV- {tripPadre.public_id ?? tripPadre.id}
+                    <br></br>
+                    <span className="text-brand-red text-[25px]">
+                      {tripPadre.uuid_fiscal ?? "Sin UUID"}
                     </span>
                   </DialogTitle>
                   <p className="text-[10px] font-black text-slate-400 dark:text-white/40 uppercase tracking-[0.3em] mt-1">
-                    Logística Operativa Crítica
+                    Logística Operativa
                   </p>
                 </div>
               </div>
 
-              {/* Ruta y badges */}
               <div className="flex items-center flex-wrap gap-3 font-bold text-slate-600 dark:text-white/70 uppercase text-xs tracking-widest pt-2">
                 <span className="flex items-center gap-1.5 bg-slate-100 dark:bg-white/5 px-4 py-2 rounded-full border border-slate-200 dark:border-white/10">
                   <MapPin className="h-3.5 w-3.5 text-emerald-500" />
@@ -465,7 +477,6 @@ export function NextLegModal({
               </div>
             </div>
 
-            {/* Control de Carta Porte */}
             <div className="flex flex-col items-end gap-3">
               <Badge
                 className={cn(
@@ -477,26 +488,6 @@ export function NextLegModal({
               >
                 {cpGenerada ? "CP $1 MXN GENERADA" : "CP $1 MXN PENDIENTE"}
               </Badge>
-
-              <Button
-                size="lg"
-                onClick={handleCartaPorteAction}
-                disabled={isStamping}
-                className={cn(
-                  "font-black px-8 h-12 text-[11px] uppercase tracking-[0.15em] shadow-2xl",
-                  "transition-all duration-300 haptic-press",
-                  localUuid
-                    ? "bg-blue-600 hover:bg-blue-500 text-white"
-                    : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/30",
-                )}
-              >
-                {isStamping ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                ) : (
-                  <FileText className="h-4 w-4 mr-2" />
-                )}
-                {localUuid ? "DESCARGAR CARTA PORTE" : "TIMBRAR BYPASS ($1)"}
-              </Button>
             </div>
           </div>
         </DialogHeader>
@@ -515,7 +506,6 @@ export function NextLegModal({
               "bg-white dark:bg-slate-900/40",
             )}
           >
-            {/* Negocio Pactado */}
             <div className="space-y-4">
               <h4 className="text-[11px] font-black text-slate-500 dark:text-white/50 uppercase tracking-[0.2em] flex items-center gap-2">
                 <ShieldCheck className="h-4 w-4 text-emerald-500" />
@@ -582,7 +572,6 @@ export function NextLegModal({
               </Card>
             </div>
 
-            {/* Utilidad Estimada */}
             <div className="space-y-4">
               <h4 className="text-[11px] font-black text-rose-500 dark:text-rose-400 uppercase tracking-[0.2em] flex items-center gap-2">
                 <TrendingDown className="h-4 w-4" />
@@ -610,7 +599,6 @@ export function NextLegModal({
               </Card>
             </div>
 
-            {/* Protocolo Bypass */}
             <Card
               className={cn(
                 "border-none shadow-2xl overflow-hidden",
@@ -625,25 +613,36 @@ export function NextLegModal({
                   Genera la Carta Porte de $1 para liberar la unidad
                   inmediatamente.
                 </p>
-                <Button
-                  onClick={handleCartaPorteAction}
-                  disabled={isStamping}
-                  className={cn(
-                    "w-full h-11 font-black text-[10px] uppercase tracking-widest shadow-lg haptic-press transition-all",
-                    localUuid
-                      ? "bg-blue-600 hover:bg-blue-500 text-white"
-                      : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/40",
-                  )}
-                >
-                  {isStamping ? (
-                    <Loader2 className="h-3 w-3 animate-spin mr-2" />
-                  ) : (
-                    <FileText className="h-3 w-3 mr-2" />
-                  )}
-                  {localUuid
-                    ? "Descargar Carta Porte $1"
-                    : "Timbrar Carta Porte $1"}
-                </Button>
+
+                {localUuid ? (
+                  <div className="flex flex-col gap-2">
+                    <Button
+                      onClick={() => handleDownloadPDF(localUuid)}
+                      className="w-full bg-red-600 hover:bg-red-500 text-white font-black text-[10px] uppercase tracking-widest h-10 shadow-lg haptic-press transition-all"
+                    >
+                      <FileText className="h-3 w-3 mr-2" /> Descargar PDF
+                    </Button>
+                    <Button
+                      onClick={() => handleDownloadXML(localUuid)}
+                      className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black text-[10px] uppercase tracking-widest h-10 shadow-lg haptic-press transition-all"
+                    >
+                      <FileCode2 className="h-3 w-3 mr-2" /> Descargar XML
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    onClick={handleCartaPorteAction}
+                    disabled={isStamping}
+                    className="w-full bg-emerald-600 hover:bg-emerald-500 text-white h-11 font-black text-[10px] uppercase tracking-widest shadow-emerald-900/40 haptic-press transition-all"
+                  >
+                    {isStamping ? (
+                      <Loader2 className="h-3 w-3 animate-spin mr-2" />
+                    ) : (
+                      <FileText className="h-3 w-3 mr-2" />
+                    )}
+                    Timbrar Carta Porte $1
+                  </Button>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -655,7 +654,6 @@ export function NextLegModal({
               "bg-white/40 dark:bg-transparent backdrop-blur-sm",
             )}
           >
-            {/* Fase operativa + Operador */}
             <div className="grid grid-cols-2 gap-8">
               <div className="space-y-3">
                 <Label className="text-[11px] font-black uppercase text-slate-600 dark:text-slate-400 tracking-widest ml-1">
@@ -723,7 +721,30 @@ export function NextLegModal({
               </div>
             </div>
 
-            {/* Unidad (Tractocamión) */}
+            {/* 🚀 FASE 3: Campo dinámico de Destino de Vacío */}
+            {formData.leg_type === "entrega_vacio" && (
+              <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
+                <Label className="text-[11px] font-black uppercase text-rose-600 dark:text-rose-400 tracking-widest ml-1 flex items-center gap-1.5">
+                  <MapPin className="h-4 w-4" />
+                  Destino / Ubicación de entrega del vacío *
+                </Label>
+                <Input
+                  placeholder="Ej. Patio CCS, San Julián, Terminal ICAVE..."
+                  value={formData.destino_vacio}
+                  onChange={(e) =>
+                    setFormData((p) => ({
+                      ...p,
+                      destino_vacio: e.target.value,
+                    }))
+                  }
+                  className="h-11 border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 shadow-sm font-medium"
+                />
+                <p className="text-[10px] text-slate-500 font-medium ml-1">
+                  Debe indicar dónde se desenganchó físicamente el equipo.
+                </p>
+              </div>
+            )}
+
             <div className="space-y-3">
               <Label className="text-[11px] font-black uppercase text-slate-600 dark:text-slate-400 tracking-widest ml-1">
                 Unidad (Tractocamión)
@@ -744,7 +765,6 @@ export function NextLegModal({
                       value={String(u.id)}
                       className="font-bold dark:text-white"
                     >
-                      {/* 🚀 FIX: Mostramos ECO- solo en el tractocamión */}
                       ECO-{u.numero_economico} [{u.placas}]
                     </SelectItem>
                   ))}
@@ -752,7 +772,6 @@ export function NextLegModal({
               </Select>
             </div>
 
-            {/* Configuración de Arrastre */}
             <div
               className={cn(
                 "p-8 rounded-2xl border shadow-xl space-y-8",
@@ -773,7 +792,6 @@ export function NextLegModal({
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
-                {/* Chasis 1 */}
                 <div className="space-y-2.5">
                   <Label className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase ml-1">
                     Chasis 1
@@ -798,7 +816,6 @@ export function NextLegModal({
                           value={String(u.id)}
                           className="font-bold dark:text-white"
                         >
-                          {/* 🚀 FIX: Remolque sin "ECO-" */}
                           {u.numero_economico}{" "}
                           {u.is_loaded ? (
                             <Package className="inline h-3.5 w-3.5 text-amber-500 ml-1" />
@@ -813,7 +830,6 @@ export function NextLegModal({
 
                 {isFullTrip && (
                   <>
-                    {/* Dolly */}
                     <div className="space-y-2.5">
                       <Label className="text-[9px] font-bold text-rose-600 dark:text-rose-400 uppercase ml-1">
                         Dolly
@@ -836,7 +852,6 @@ export function NextLegModal({
                               value={String(u.id)}
                               className="font-bold dark:text-white"
                             >
-                              {/* 🚀 FIX: Dolly tampoco lleva ECO- */}
                               {u.numero_economico}
                             </SelectItem>
                           ))}
@@ -844,7 +859,6 @@ export function NextLegModal({
                       </Select>
                     </div>
 
-                    {/* Chasis 2 */}
                     <div className="space-y-2.5">
                       <Label className="text-[9px] font-bold text-rose-600 dark:text-rose-400 uppercase ml-1">
                         Chasis 2
@@ -872,7 +886,6 @@ export function NextLegModal({
                               value={String(u.id)}
                               className="font-bold dark:text-white"
                             >
-                              {/* 🚀 FIX: Remolque 2 sin ECO- */}
                               {u.numero_economico}{" "}
                               {u.is_loaded ? (
                                 <Package className="inline h-3.5 w-3.5 text-amber-500 ml-1" />
@@ -889,7 +902,6 @@ export function NextLegModal({
               </div>
             </div>
 
-            {/* 🚀 FASE 2: TIMBRADO REAL SWITCH (Aparece en carretera) */}
             {formData.leg_type === "ruta_carretera" && (
               <div className="flex items-center justify-between p-5 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-2xl mb-4 shadow-sm animate-in fade-in zoom-in-95">
                 <div>
@@ -909,7 +921,6 @@ export function NextLegModal({
               </div>
             )}
 
-            {/* Anticipos Operativos — solo en tramo de carretera */}
             {isRoadLeg && (
               <div
                 className={cn(
@@ -918,14 +929,11 @@ export function NextLegModal({
                   "border border-amber-500/10 dark:border-amber-500/20",
                 )}
               >
-                {/* Acento izquierdo */}
                 <div className="absolute top-0 left-0 w-1 bg-amber-400 dark:bg-amber-500 h-full rounded-l-3xl" />
-
                 <h4 className="text-[11px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                  <DollarSign className="h-4 w-4" />
-                  Registro de Anticipos y Vales
+                  <DollarSign className="h-4 w-4" /> Registro de Anticipos y
+                  Vales
                 </h4>
-
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
                   {(
                     [
@@ -1001,9 +1009,6 @@ export function NextLegModal({
           </div>
         </div>
 
-        {/*
-         * CAPA 4 — Footer / Control Bar Tahoe
-         */}
         <DialogFooter
           className={cn(
             "p-6 px-10 flex justify-between items-center",
@@ -1011,14 +1016,12 @@ export function NextLegModal({
             "border-t border-slate-200/50 dark:border-white/10",
           )}
         >
-          {/* Indicador de estado */}
           <div className="flex items-center gap-3 px-2">
             <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
             <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
               Validación Física Requerida
             </span>
           </div>
-
           <div className="flex gap-4">
             <Button
               variant="ghost"
@@ -1027,8 +1030,6 @@ export function NextLegModal({
             >
               Cancelar
             </Button>
-
-            {/* 🚀 FIX: Botón de despacho liberado. Ya no depende de !cpGenerada */}
             <Button
               onClick={handleIniciarTramo}
               disabled={loading}

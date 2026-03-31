@@ -1,38 +1,28 @@
-// src/pages/CierreViaje.tsx
 import * as React from "react";
 import { useState, useMemo, useEffect } from "react";
 import {
   FileCheck,
   User,
-  Truck,
   MapPin,
   DollarSign,
   Receipt,
   ArrowDownCircle,
   ArrowUpCircle,
-  Plus,
   Calculator,
-  Percent,
   Loader2,
   CheckCircle,
   Fuel,
   Printer,
   AlertTriangle,
-  Search,
-  FilterX,
   Clock,
   History,
   CheckSquare,
+  Percent,
   Edit,
+  Truck,
 } from "lucide-react";
 
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,13 +43,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 
 import { AddTicketModal } from "@/features/combustible/AddTicketModal";
-
 import { fuelService } from "@/services/fuelService";
-
 import { cn } from "@/lib/utils";
 import { useTrips } from "@/hooks/useTrips";
 import { useClients } from "@/hooks/useClients";
@@ -75,13 +63,12 @@ interface ConceptoExtra {
 }
 
 export default function CierreViaje() {
-  //  EXTRAEMOS LA NUEVA FUNCIÓN DEL HOOK
   const { trips = [], liquidarLote, getSettlementPreview } = useTrips() as any;
   const { clients = [] } = useClients();
   const { operadores = [], operators = [] } = useOperators() as any;
   const { unidades = [], units = [] } = useUnits() as any;
 
-  // 🚀 1. EXTRAEMOS LOS PARÁMETROS GLOBALES DINÁMICOS
+  // 🚀 PARÁMETROS GLOBALES DINÁMICOS
   const { valueAsNumber: rendimientoGlobal } = useSystemConfig(
     "rendimiento_diesel_esperado",
   );
@@ -98,7 +85,6 @@ export default function CierreViaje() {
   const { value: empresaLogo } = useSystemConfig("empresa_logo");
 
   const safeOperators = operadores.length > 0 ? operadores : operators;
-  const safeUnits = unidades.length > 0 ? unidades : units;
 
   // ==========================================
   // ESTADOS DE SELECCIÓN Y FILTROS
@@ -107,8 +93,6 @@ export default function CierreViaje() {
     "pendientes",
   );
   const [filterOperator, setFilterOperator] = useState("ALL");
-  const [filterClient, setFilterClient] = useState("ALL");
-  const [filterType, setFilterType] = useState("ALL");
   const [globalSearch, setGlobalSearch] = useState("");
   const [selectedOperatorId, setSelectedOperatorId] = useState<string>("");
   const [selectedLegIds, setSelectedLegIds] = useState<string[]>([]);
@@ -116,14 +100,8 @@ export default function CierreViaje() {
   // ==========================================
   // ESTADOS DE CÁLCULO & PREVIEW API
   // ==========================================
-  const [calcMode, setCalcMode] = useState<"percentage" | "fixed">(
-    "percentage",
-  );
   const [porcentajeFlete, setPorcentajeFlete] = useState<number>(15);
-  const [montoFijo, setMontoFijo] = useState<number>(300);
   const [combustibleFaltante, setCombustibleFaltante] = useState<number>(0);
-
-  //  ESTADOS PARA EL RESULTADO DEL BACKEND
   const [previewData, setPreviewData] = useState<any>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
 
@@ -144,46 +122,6 @@ export default function CierreViaje() {
   const [currentFixingLegId, setCurrentFixingLegId] = useState<number | null>(
     null,
   );
-
-  // ==========================================
-  // EFECTO: SOLICITAR PRE-LIQUIDACIÓN AL BACKEND
-  // ==========================================
-  useEffect(() => {
-    if (selectedLegIds.length > 0 && getSettlementPreview) {
-      setIsLoadingPreview(true);
-      getSettlementPreview(selectedLegIds)
-        .then((data: any) => {
-          setPreviewData(data);
-
-          // 🚀 2. CÁLCULO DINÁMICO BASADO EN TU CONFIGURACIÓN
-          const totalKms = data?.total_kms || 0;
-          const consumoReal = data?.consumo_real || 0;
-          const precioPromedio = data?.precio_promedio || 24.5;
-
-          // Hacemos la matemática usando tus parámetros globales
-          const consumoIdeal =
-            totalKms > 0 ? totalKms / rendimientoEsperado : 0;
-          const diferencia = consumoReal - consumoIdeal;
-          const litrosTolerados = consumoIdeal * toleranciaPct;
-
-          if (diferencia > litrosTolerados) {
-            // Si se pasa de la tolerancia, se le cobra el exceso
-            setCombustibleFaltante(diferencia * precioPromedio);
-          } else {
-            // Si está dentro del rango o ahorró, no se le cobra
-            setCombustibleFaltante(0);
-          }
-        })
-        .catch(() => {
-          toast.error("Error al calcular telemetría de combustible");
-          setPreviewData(null);
-        })
-        .finally(() => setIsLoadingPreview(false));
-    } else {
-      setPreviewData(null);
-      setCombustibleFaltante(0);
-    }
-  }, [selectedLegIds, rendimientoEsperado, toleranciaPct]); // Se ejecuta cada que seleccionas o deseleccionas un viaje
 
   // ==========================================
   // DERIVACIONES Y LISTAS
@@ -240,50 +178,51 @@ export default function CierreViaje() {
   }, [allLegs, selectedLegIds]);
 
   // ==========================================
-  // CÁLCULOS FINANCIEROS (FRONTEND + BACKEND)
+  // 🚀 FASE 4: CÁLCULOS FINANCIEROS (REGLA GUSTAVO)
   // ==========================================
   const liquidacion = useMemo(() => {
     if (selectedLegsData.length === 0) return null;
 
     let pagoBaseBruto = 0;
-    if (calcMode === "percentage") {
-      const sumaTarifas = selectedLegsData.reduce(
-        (sum, l) => sum + (l.trip.tarifa_base || 0),
-        0,
-      );
-      pagoBaseBruto = (sumaTarifas * porcentajeFlete) / 100;
-    } else {
-      pagoBaseBruto = montoFijo * selectedLegsData.length;
-    }
+    let deduccionViaticos = 0;
+    let otrosAnticipos = 0;
+    let hasRoadMove = false;
+
+    selectedLegsData.forEach((leg) => {
+      // 1. REGLA GUSTAVO: Diferenciar Rutas vs Movimientos de Patio/Vacío
+      if (leg.leg_type === "ruta_carretera") {
+        hasRoadMove = true;
+        pagoBaseBruto += (leg.trip?.tarifa_base || 0) * (porcentajeFlete / 100);
+      } else {
+        // Es Muelle, Patio o Vacío
+        const isFull = Boolean(leg.trip?.dolly_id || leg.trip?.remolque_2_id);
+        const bonoFijo = isFull ? 300 : 200; // $300 Full, $200 Sencillo
+        pagoBaseBruto += bonoFijo;
+      }
+
+      // 2. Sumar deducciones automáticas
+      deduccionViaticos +=
+        (leg.anticipo_viaticos || 0) + (leg.anticipo_casetas || 0);
+      otrosAnticipos +=
+        (leg.otros_anticipos || 0) + (leg.anticipo_combustible || 0); // Consideramos diesel un anticipo más
+    });
 
     const bonosAdicionales = conceptosExtra
       .filter((c) => c.tipo === "ingreso")
-      .reduce((sum, c) => sum + c.monto, 0);
-    const total_ingresos = pagoBaseBruto + bonosAdicionales;
-
-    let deduccionViaticos = 0;
-    let otrosAnticipos = 0;
-    selectedLegsData.forEach((l) => {
-      deduccionViaticos +=
-        (l.anticipo_viaticos || 0) + (l.anticipo_casetas || 0);
-      otrosAnticipos += l.otros_anticipos || 0;
-    });
-
+      .reduce((s, c) => s + c.monto, 0);
     const deduccionesManuales = conceptosExtra
       .filter((c) => c.tipo === "deduccion")
-      .reduce((sum, c) => sum + c.monto, 0);
+      .reduce((s, c) => s + c.monto, 0);
 
-    //  Sumamos el Faltante de Combustible a las deducciones
+    const total_ingresos = pagoBaseBruto + bonosAdicionales;
     const total_deducciones =
       deduccionViaticos +
       otrosAnticipos +
       deduccionesManuales +
       (combustibleFaltante || 0);
 
-    const neto_a_pagar = total_ingresos - total_deducciones;
-
-    //  RETORNAMOS TODO, INCLUYENDO combustibleFaltante
     return {
+      hasRoadMove,
       pagoBaseBruto,
       bonosAdicionales,
       total_ingresos,
@@ -292,24 +231,64 @@ export default function CierreViaje() {
       deduccionesManuales,
       combustibleFaltante,
       total_deducciones,
-      neto_a_pagar,
+      neto_a_pagar: total_ingresos - total_deducciones,
     };
-  }, [
-    selectedLegsData,
-    calcMode,
-    porcentajeFlete,
-    montoFijo,
-    conceptosExtra,
-    combustibleFaltante,
-  ]);
+  }, [selectedLegsData, porcentajeFlete, conceptosExtra, combustibleFaltante]);
+
+  // ==========================================
+  // EFECTO: SOLICITAR PRE-LIQUIDACIÓN AL BACKEND (SOLO SI HAY RUTA)
+  // ==========================================
+  useEffect(() => {
+    if (selectedLegIds.length > 0 && getSettlementPreview) {
+      // Verificamos si al menos uno de los tramos seleccionados es carretera
+      const hasRoadTrip = selectedLegsData.some(
+        (l) => l.leg_type === "ruta_carretera",
+      );
+
+      if (hasRoadTrip) {
+        setIsLoadingPreview(true);
+        getSettlementPreview(selectedLegIds)
+          .then((data: any) => {
+            setPreviewData(data);
+            const totalKms = data?.total_kms || 0;
+            const consumoReal = data?.consumo_real || 0;
+            const precioPromedio = data?.precio_promedio || 24.5;
+
+            const consumoIdeal =
+              totalKms > 0 ? totalKms / rendimientoEsperado : 0;
+            const diferencia = consumoReal - consumoIdeal;
+            const litrosTolerados = consumoIdeal * toleranciaPct;
+
+            if (diferencia > litrosTolerados) {
+              setCombustibleFaltante(diferencia * precioPromedio);
+            } else {
+              setCombustibleFaltante(0);
+            }
+          })
+          .catch(() => {
+            toast.error("Error al calcular telemetría de combustible");
+            setPreviewData(null);
+          })
+          .finally(() => setIsLoadingPreview(false));
+      } else {
+        // 🚀 Si no hay rutas, limpiamos la penalización y ocultamos lo del diésel
+        setPreviewData(null);
+        setCombustibleFaltante(0);
+      }
+    } else {
+      setPreviewData(null);
+      setCombustibleFaltante(0);
+    }
+  }, [selectedLegIds, rendimientoEsperado, toleranciaPct]);
 
   // ==========================================
   // HANDLERS
   // ==========================================
-  const formatCurrency = (amount: number) =>
+  const formatCurrencyLocal = (amount: number) =>
     new Intl.NumberFormat("es-MX", {
       style: "currency",
       currency: "MXN",
+      minimumFractionDigits: 2,
     }).format(amount || 0);
 
   const toggleLegSelection = (id: string) =>
@@ -349,7 +328,7 @@ export default function CierreViaje() {
         await liquidarLote(selectedLegIds, liquidacion.neto_a_pagar);
       }
       toast.success("Liquidación Exitosa", {
-        description: `Se registró el pago de ${formatCurrency(liquidacion.neto_a_pagar)} correctamente.`,
+        description: `Se registró el pago de ${formatCurrencyLocal(liquidacion.neto_a_pagar)} correctamente.`,
       });
       setShowReceiptModal(true);
     } catch (error) {
@@ -359,22 +338,11 @@ export default function CierreViaje() {
     }
   };
 
-  const clearFilters = () => {
-    setFilterOperator("ALL");
-    setFilterClient("ALL");
-    setFilterType("ALL");
-    setGlobalSearch("");
-    setSelectedLegIds([]);
-  };
-
   // APLICAR FILTROS A LA TABLA
   const applyFilters = (list: any[]) =>
     list.filter((l) => {
       if (filterOperator !== "ALL" && String(l.operator_id) !== filterOperator)
         return false;
-      if (filterClient !== "ALL" && String(l.trip?.client_id) !== filterClient)
-        return false;
-      if (filterType !== "ALL" && l.leg_type !== filterType) return false;
       if (globalSearch) {
         const term = globalSearch.toLowerCase();
         const folio = (l.trip?.public_id || `TRP-${l.trip_id}`).toLowerCase();
@@ -386,11 +354,11 @@ export default function CierreViaje() {
 
   const filteredPending = useMemo(
     () => applyFilters(pendingLegs),
-    [pendingLegs, filterOperator, filterClient, filterType, globalSearch],
+    [pendingLegs, filterOperator, globalSearch],
   );
   const filteredHistory = useMemo(
     () => applyFilters(historyLegs),
-    [historyLegs, filterOperator, filterClient, filterType, globalSearch],
+    [historyLegs, filterOperator, globalSearch],
   );
   const currentList =
     activeTab === "pendientes" ? filteredPending : filteredHistory;
@@ -401,47 +369,32 @@ export default function CierreViaje() {
     entrega_vacio: "Retorno Vacío",
   };
 
-  const safeLiquidacion = liquidacion || {
-    pagoBaseBruto: 0,
-    bonosAdicionales: 0,
-    deduccionViaticos: 0,
-    otrosAnticipos: 0,
-    combustibleFaltante: 0,
-    deduccionesManuales: 0,
-    neto_a_pagar: 0,
-  };
-
-  // Función para manejar el envío del ticket (llamar a tu API de combustible)
   const handleQuickTicketSubmit = async (data: any) => {
     const loadingToast = toast.loading("Registrando vale en el sistema...");
-
     try {
-      //  Llamada a tu servicio con los datos del modal
       await fuelService.create(data);
-
       toast.success("Vale registrado exitosamente", {
         id: loadingToast,
         description: "Recalculando liquidación...",
       });
 
-      //  REFRESCAR LA VISTA: Esto hace que la alerta rosa desaparezca
-      if (getSettlementPreview && selectedLegIds.length > 0) {
+      // Refrescar cálculo si es ruta
+      if (
+        getSettlementPreview &&
+        selectedLegIds.length > 0 &&
+        liquidacion?.hasRoadMove
+      ) {
         setIsLoadingPreview(true);
         const updatedPreview = await getSettlementPreview(selectedLegIds);
         setPreviewData(updatedPreview);
-
-        // Si el nuevo vale cubrió el faltante, el monto bajará o será 0
         setCombustibleFaltante(updatedPreview?.deduccion_combustible || 0);
         setIsLoadingPreview(false);
       }
-
-      setShowAddTicket(false); // Cerrar el modal de combustible
+      setShowAddTicket(false);
     } catch (error: any) {
-      console.error("Error al registrar combustible:", error);
       toast.error("Error al guardar el vale", {
         id: loadingToast,
-        description:
-          error.response?.data?.detail || "Intente de nuevo más tarde.",
+        description: error.response?.data?.detail || "Intente de nuevo.",
       });
     }
   };
@@ -454,7 +407,7 @@ export default function CierreViaje() {
         unit_id: leg.unit_id,
         operator_id: leg.operator_id,
       });
-      setCurrentFixingLegId(legId); // Guardamos cuál estamos arreglando
+      setCurrentFixingLegId(legId);
       setShowAddTicket(true);
     }
   };
@@ -582,9 +535,7 @@ export default function CierreViaje() {
                         <th
                           scope="col"
                           className="px-4 py-3 w-[50px] text-center"
-                        >
-                          {/* Opcional: Checkbox global aquí */}
-                        </th>
+                        ></th>
                       )}
                       <th scope="col" className="px-6 py-3">
                         Referencia
@@ -596,20 +547,15 @@ export default function CierreViaje() {
                         Unidad
                       </th>
                       <th scope="col" className="px-6 py-3 text-right">
-                        Monto / Estatus
+                        Estatus / Bono
                       </th>
-                      {activeTab === "historico" && (
-                        <th scope="col" className="px-4 py-3 text-center">
-                          Acciones
-                        </th>
-                      )}
                     </tr>
                   </thead>
                   <tbody>
                     {currentList.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={activeTab === "historico" ? 5 : 5}
+                          colSpan={5}
                           className="px-6 py-16 text-center bg-white"
                         >
                           <div className="flex flex-col items-center justify-center text-slate-600">
@@ -626,7 +572,7 @@ export default function CierreViaje() {
                             <p className="text-xs">
                               {activeTab === "pendientes"
                                 ? "Selecciona un operador arriba o revisa el estado de los viajes."
-                                : "No hay liquidaciones cerradas para los filtros actuales."}
+                                : "No hay liquidaciones cerradas."}
                             </p>
                           </div>
                         </td>
@@ -636,9 +582,9 @@ export default function CierreViaje() {
                         const isSelected = selectedLegIds.includes(
                           String(leg.id),
                         );
-                        const totalAnticipos =
-                          (leg.anticipo_viaticos || 0) +
-                          (leg.anticipo_casetas || 0);
+                        const isFull = Boolean(
+                          leg.trip?.dolly_id || leg.trip?.remolque_2_id,
+                        );
 
                         return (
                           <tr
@@ -650,13 +596,8 @@ export default function CierreViaje() {
                                 : "bg-white hover:bg-slate-50/60",
                             )}
                             onClick={() => {
-                              if (activeTab === "pendientes") {
+                              if (activeTab === "pendientes")
                                 toggleLegSelection(String(leg.id));
-                              } else {
-                                // Comportamiento rápido: Al hacer clic en la fila del histórico, mostramos el recibo
-                                // (Asumiendo que implementas una función para cargar la liquidación)
-                                // handleViewReceipt(leg);
-                              }
                             }}
                           >
                             {activeTab === "pendientes" && (
@@ -682,10 +623,7 @@ export default function CierreViaje() {
                               <div className="font-bold text-brand-navy text-sm">
                                 {leg.trip?.public_id || `TRP-${leg.trip_id}`}
                               </div>
-                              <div
-                                className="text-[10px] text-slate-500 font-medium truncate max-w-[180px] mt-0.5"
-                                title={leg.trip?.clientName}
-                              >
+                              <div className="text-[10px] text-slate-500 font-medium mt-0.5">
                                 {leg.trip?.clientName}
                               </div>
                             </td>
@@ -693,19 +631,13 @@ export default function CierreViaje() {
                               <div className="flex flex-col gap-1">
                                 <div className="flex items-center gap-1.5">
                                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"></div>
-                                  <span
-                                    className="text-xs font-semibold text-slate-700 truncate max-w-[150px]"
-                                    title={leg.trip?.origin}
-                                  >
+                                  <span className="text-xs font-semibold text-slate-700 truncate max-w-[150px]">
                                     {leg.trip?.origin}
                                   </span>
                                 </div>
                                 <div className="flex items-center gap-1.5">
                                   <div className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0"></div>
-                                  <span
-                                    className="text-xs font-semibold text-slate-700 truncate max-w-[150px]"
-                                    title={leg.trip?.destination}
-                                  >
+                                  <span className="text-xs font-semibold text-slate-700 truncate max-w-[150px]">
                                     {leg.trip?.destination}
                                   </span>
                                 </div>
@@ -729,16 +661,18 @@ export default function CierreViaje() {
                                   <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-200 border-0 text-[10px] uppercase tracking-wider mb-1">
                                     Pendiente
                                   </Badge>
-                                  {totalAnticipos > 0 && (
-                                    <div className="text-[10px] text-rose-500 font-bold bg-rose-50 px-1.5 py-0.5 rounded">
-                                      Ant: -${totalAnticipos.toLocaleString()}
-                                    </div>
-                                  )}
+                                  {/* 🚀 FASE 4: MOSTRAMOS EL BONO ESTIMADO O VARIABLE */}
+                                  <div className="text-[10px] text-brand-navy font-bold bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
+                                    {leg.leg_type === "ruta_carretera"
+                                      ? "Var %"
+                                      : isFull
+                                        ? "$300"
+                                        : "$200"}
+                                  </div>
                                 </div>
                               ) : (
                                 <div className="flex flex-col items-end">
                                   <span className="font-mono font-black text-emerald-600 text-sm">
-                                    {/* Aquí deberías mostrar el monto real liquidado si lo tienes en el backend */}
                                     $
                                     {(
                                       leg.monto_neto_pagado || 0
@@ -753,35 +687,6 @@ export default function CierreViaje() {
                                 </div>
                               )}
                             </td>
-
-                            {/* COLUMNA DE ACCIONES (Solo en Histórico) */}
-                            {activeTab === "historico" && (
-                              <td
-                                className="px-4 py-3 text-center"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 w-8 p-0 text-slate-600 hover:text-brand-navy hover:bg-slate-100 rounded-full"
-                                    title="Ver y Reimprimir Recibo"
-                                    // onClick={() => handleViewReceipt(leg)}
-                                  >
-                                    <Printer className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 w-8 p-0 text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded-full"
-                                    title="Reabrir Liquidación (Editar)"
-                                    // onClick={() => handleReopenSettlement(leg)}
-                                  >
-                                    <Edit className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </td>
-                            )}
                           </tr>
                         );
                       })
@@ -794,11 +699,10 @@ export default function CierreViaje() {
         </div>
 
         {/* COLUMNA DERECHA: CONFIGURACIÓN FINANCIERA */}
-        <div className="xl:col-span-5 space-y-6">
-          {/* COLUMNA DERECHA: CONFIGURACIÓN FINANCIERA (DINÁMICA) */}
-          {selectedLegIds.length > 0 && liquidacion && (
-            <div className="xl:col-span-5 space-y-6 animate-in fade-in slide-in-from-right-8 duration-500">
-              {/* 1. CONCILIACIÓN DIÉSEL */}
+        {selectedLegIds.length > 0 && liquidacion && (
+          <div className="xl:col-span-5 space-y-6 animate-in fade-in slide-in-from-right-8 duration-500">
+            {/* 🚀 1. CONCILIACIÓN DIÉSEL (SOLO SI HAY VIAJE DE CARRETERA) */}
+            {liquidacion.hasRoadMove && (
               <Card className="border-slate-200 shadow-sm border-t-4 border-t-amber-500">
                 <CardHeader className="bg-amber-50/30 border-b pb-4">
                   <CardTitle className="text-sm font-bold text-amber-800 uppercase flex items-center gap-2">
@@ -853,20 +757,6 @@ export default function CierreViaje() {
                                       {leg.trip?.origin.split(",")[0]} ➔{" "}
                                       {leg.trip?.destination.split(",")[0]}
                                     </span>
-                                    <div className="flex items-center gap-2 mt-1">
-                                      <Badge
-                                        variant="outline"
-                                        className="text-[8px] h-4 bg-slate-50"
-                                      >
-                                        {leg.operator?.name}
-                                      </Badge>
-                                      <Badge
-                                        variant="outline"
-                                        className="text-[8px] h-4 bg-slate-50"
-                                      >
-                                        ECO-{leg.unit?.numero_economico}
-                                      </Badge>
-                                    </div>
                                   </div>
                                   <Button
                                     size="sm"
@@ -881,10 +771,7 @@ export default function CierreViaje() {
                         </div>
                       )}
 
-                      {/* Resumen */}
-                      {/* Resumen */}
                       <div className="bg-slate-100 p-4 rounded-xl text-xs space-y-2 font-mono">
-                        {/* 🚀 3. MOSTRAMOS LAS REGLAS ACTUALES */}
                         <div className="mb-3 pb-2 border-b border-slate-200 flex justify-between items-center text-[9px] text-slate-600 font-sans uppercase font-black tracking-widest">
                           <span>Regla Activa: {rendimientoEsperado} km/L</span>
                           <span>Tolerancia: {toleranciaPct * 100}%</span>
@@ -919,10 +806,7 @@ export default function CierreViaje() {
 
                         <Separator className="my-2 bg-slate-200" />
 
-                        {(previewData?.consumo_real || 0) -
-                          (previewData?.total_kms || 0) / rendimientoEsperado >
-                        ((previewData?.total_kms || 0) / rendimientoEsperado) *
-                          toleranciaPct ? (
+                        {combustibleFaltante > 0 ? (
                           <div className="flex justify-between text-rose-600 font-bold">
                             <span className="font-sans">
                               Exceso a Descontar:
@@ -944,7 +828,6 @@ export default function CierreViaje() {
                         )}
                       </div>
 
-                      {/* Penalización Input */}
                       <div className="space-y-2 pt-2">
                         <Label className="text-[10px] font-black text-rose-700 uppercase tracking-widest">
                           Penalización Económica
@@ -965,166 +848,192 @@ export default function CierreViaje() {
                   )}
                 </CardContent>
               </Card>
+            )}
 
-              {/* 2. RECIBO DE LIQUIDACIÓN */}
-              <Card className="border-slate-200 shadow-xl overflow-hidden border-t-4 border-t-brand-navy">
-                <CardHeader className="bg-slate-50 border-b pb-4">
-                  <CardTitle className="text-sm font-bold text-brand-navy uppercase flex items-center gap-2">
-                    <Receipt className="h-4 w-4" /> 4. Recibo de Liquidación
-                  </CardTitle>
-                </CardHeader>
+            {/* 2. RECIBO DE LIQUIDACIÓN */}
+            <Card
+              className={cn(
+                "border-slate-200 shadow-xl overflow-hidden border-t-4",
+                liquidacion.hasRoadMove
+                  ? "border-t-brand-navy"
+                  : "border-t-emerald-500",
+              )}
+            >
+              <CardHeader className="bg-slate-50 border-b pb-4">
+                <CardTitle className="text-sm font-bold text-slate-800 uppercase flex items-center gap-2">
+                  <Receipt className="h-4 w-4" />{" "}
+                  {liquidacion.hasRoadMove ? "4." : "3."} Recibo de Liquidación
+                </CardTitle>
+              </CardHeader>
 
-                <CardContent className="p-0">
-                  <div className="p-6 space-y-6">
-                    {/* Esquema */}
-                    <Tabs
-                      value={calcMode}
-                      onValueChange={(v) => setCalcMode(v as any)}
-                      className="w-full bg-slate-100/50 p-1 rounded-lg"
-                    >
-                      <TabsList className="grid w-full grid-cols-2">
-                        <TabsTrigger
-                          value="percentage"
-                          className="text-[10px] font-bold"
+              <CardContent className="p-0">
+                <div className="p-6 space-y-6">
+                  {/* SI HAY CARRETERA, MOSTRAMOS INPUT PARA % DEL FLETE */}
+                  {liquidacion.hasRoadMove && (
+                    <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex items-center justify-between">
+                      <div>
+                        <Label className="text-blue-800 font-bold text-[10px] uppercase tracking-widest">
+                          Pactado de Ruta
+                        </Label>
+                        <p className="text-blue-600/70 text-xs">
+                          Porcentaje del flete a pagar.
+                        </p>
+                      </div>
+                      <div className="relative w-24">
+                        <Input
+                          type="number"
+                          value={porcentajeFlete}
+                          onChange={(e) =>
+                            setPorcentajeFlete(Number(e.target.value))
+                          }
+                          className="pr-8 font-bold text-right"
+                        />
+                        <Percent className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-blue-400" />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Desglose */}
+                  <div className="space-y-4">
+                    {/* Ingresos */}
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center text-xs font-bold text-slate-600 uppercase tracking-widest border-b pb-1">
+                        <span>Ingresos</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-5 text-emerald-600 font-black text-[9px] hover:bg-emerald-50"
+                          onClick={() => {
+                            setNewConceptoType("ingreso");
+                            setShowAddConceptoDialog(true);
+                          }}
                         >
-                          PORCENTAJE (%)
-                        </TabsTrigger>
-                        <TabsTrigger
-                          value="fixed"
-                          className="text-[10px] font-bold"
-                        >
-                          CUOTA FIJA ($)
-                        </TabsTrigger>
-                      </TabsList>
-                    </Tabs>
-
-                    {/* Desglose */}
-                    <div className="space-y-4">
-                      {/* Ingresos */}
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center text-xs font-bold text-slate-600 uppercase tracking-widest border-b pb-1">
-                          <span>Ingresos</span>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-5 text-emerald-600 font-black text-[9px] hover:bg-emerald-50"
-                            onClick={() => {
-                              setNewConceptoType("ingreso");
-                              setShowAddConceptoDialog(true);
-                            }}
+                          + BONO
+                        </Button>
+                      </div>
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-slate-600">
+                          Pago Bruto ({selectedLegsData.length} movs)
+                        </span>
+                        <span className="font-mono font-bold text-emerald-600">
+                          +{formatCurrencyLocal(liquidacion.pagoBaseBruto)}
+                        </span>
+                      </div>
+                      {conceptosExtra
+                        .filter((c) => c.tipo === "ingreso")
+                        .map((c) => (
+                          <div
+                            key={c.id}
+                            className="flex justify-between items-center text-sm bg-emerald-50/50 px-2 py-1 rounded"
                           >
-                            + BONO
-                          </Button>
-                        </div>
+                            <span className="text-emerald-700 text-xs font-medium">
+                              {c.descripcion}
+                            </span>
+                            <span className="font-mono font-bold text-emerald-600">
+                              +{formatCurrencyLocal(c.monto)}
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+
+                    {/* Deducciones */}
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center text-xs font-bold text-slate-600 uppercase tracking-widest border-b pb-1">
+                        <span>Deducciones</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-5 text-rose-600 font-black text-[9px] hover:bg-rose-50"
+                          onClick={() => {
+                            setNewConceptoType("deduccion");
+                            setShowAddConceptoDialog(true);
+                          }}
+                        >
+                          + CARGO
+                        </Button>
+                      </div>
+                      {liquidacion.deduccionViaticos > 0 && (
                         <div className="flex justify-between items-center text-sm">
-                          <span className="text-slate-600">
-                            Pago Base ({selectedLegsData.length} movs)
-                          </span>
-                          <span className="font-mono font-bold text-emerald-600">
-                            +{formatCurrency(liquidacion.pagoBaseBruto)}
+                          <span className="text-slate-600">Anticipos</span>
+                          <span className="font-mono font-bold text-rose-600">
+                            -
+                            {formatCurrencyLocal(liquidacion.deduccionViaticos)}
                           </span>
                         </div>
-                        {conceptosExtra
-                          .filter((c) => c.tipo === "ingreso")
-                          .map((c) => (
-                            <div
-                              key={c.id}
-                              className="flex justify-between items-center text-sm bg-emerald-50/50 px-2 py-1 rounded"
-                            >
-                              <span className="text-emerald-700 text-xs font-medium">
-                                {c.descripcion}
-                              </span>
-                              <span className="font-mono font-bold text-emerald-600">
-                                +{formatCurrency(c.monto)}
-                              </span>
-                            </div>
-                          ))}
-                      </div>
-
-                      {/* Deducciones */}
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center text-xs font-bold text-slate-600 uppercase tracking-widest border-b pb-1">
-                          <span>Deducciones</span>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-5 text-rose-600 font-black text-[9px] hover:bg-rose-50"
-                            onClick={() => {
-                              setNewConceptoType("deduccion");
-                              setShowAddConceptoDialog(true);
-                            }}
-                          >
-                            + CARGO
-                          </Button>
-                        </div>
-                        {liquidacion.deduccionViaticos > 0 && (
-                          <div className="flex justify-between items-center text-sm">
-                            <span className="text-slate-600">Anticipos</span>
-                            <span className="font-mono font-bold text-rose-600">
-                              -{formatCurrency(liquidacion.deduccionViaticos)}
-                            </span>
-                          </div>
-                        )}
-                        {combustibleFaltante > 0 && (
-                          <div className="flex justify-between items-center text-sm bg-rose-50/50 px-2 py-1 rounded">
-                            <span className="text-rose-700 text-xs font-medium">
-                              Faltante Combustible
-                            </span>
-                            <span className="font-mono font-bold text-rose-600">
-                              -{formatCurrency(combustibleFaltante)}
-                            </span>
-                          </div>
-                        )}
-                        {conceptosExtra
-                          .filter((c) => c.tipo === "deduccion")
-                          .map((c) => (
-                            <div
-                              key={c.id}
-                              className="flex justify-between items-center text-sm bg-rose-50/50 px-2 py-1 rounded"
-                            >
-                              <span className="text-rose-700 text-xs font-medium">
-                                {c.descripcion}
-                              </span>
-                              <span className="font-mono font-bold text-rose-600">
-                                -{formatCurrency(c.monto)}
-                              </span>
-                            </div>
-                          ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Gran Total */}
-                  <div className="bg-slate-900 p-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-600">
-                        Neto a Depositar
-                      </span>
-                      <span className="text-3xl font-black font-mono text-white tracking-tighter">
-                        {formatCurrency(liquidacion.neto_a_pagar)}
-                      </span>
-                    </div>
-                    <Button
-                      className="w-full bg-brand-navy hover:bg-brand-navy/90 text-white font-black h-12 shadow-lg gap-2"
-                      disabled={isAnimating}
-                      onClick={handleLiquidate}
-                    >
-                      {isAnimating ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <CheckSquare className="h-4 w-4" />
                       )}
-                      REGISTRAR Y EMITIR RECIBO
-                    </Button>
+                      {liquidacion.otrosAnticipos > 0 && (
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-slate-600">Otros Vales</span>
+                          <span className="font-mono font-bold text-rose-600">
+                            -{formatCurrencyLocal(liquidacion.otrosAnticipos)}
+                          </span>
+                        </div>
+                      )}
+                      {liquidacion.combustibleFaltante > 0 && (
+                        <div className="flex justify-between items-center text-sm bg-rose-50/50 px-2 py-1 rounded">
+                          <span className="text-rose-700 text-xs font-medium">
+                            Faltante Diésel
+                          </span>
+                          <span className="font-mono font-bold text-rose-600">
+                            -
+                            {formatCurrencyLocal(
+                              liquidacion.combustibleFaltante,
+                            )}
+                          </span>
+                        </div>
+                      )}
+                      {conceptosExtra
+                        .filter((c) => c.tipo === "deduccion")
+                        .map((c) => (
+                          <div
+                            key={c.id}
+                            className="flex justify-between items-center text-sm bg-rose-50/50 px-2 py-1 rounded"
+                          >
+                            <span className="text-rose-700 text-xs font-medium">
+                              {c.descripcion}
+                            </span>
+                            <span className="font-mono font-bold text-rose-600">
+                              -{formatCurrencyLocal(c.monto)}
+                            </span>
+                          </div>
+                        ))}
+                    </div>
                   </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-        </div>
+                </div>
+
+                {/* Gran Total */}
+                <div className="bg-slate-900 p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-600">
+                      Neto a Depositar
+                    </span>
+                    <span className="text-3xl font-black font-mono text-white tracking-tighter">
+                      {formatCurrencyLocal(liquidacion.neto_a_pagar)}
+                    </span>
+                  </div>
+                  <Button
+                    className="w-full bg-brand-navy hover:bg-brand-navy/90 text-white font-black h-12 shadow-lg gap-2"
+                    disabled={
+                      isAnimating ||
+                      (liquidacion.hasRoadMove && isLoadingPreview)
+                    }
+                    onClick={handleLiquidate}
+                  >
+                    {isAnimating ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <CheckSquare className="h-4 w-4" />
+                    )}
+                    REGISTRAR Y EMITIR RECIBO
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
 
-      {/*  MODALES SECUNDARIOS */}
+      {/* MODALES SECUNDARIOS */}
       <Dialog
         open={showAddConceptoDialog}
         onOpenChange={setShowAddConceptoDialog}
@@ -1200,7 +1109,7 @@ export default function CierreViaje() {
         </DialogContent>
       </Dialog>
 
-      {/*  RECIBO DE IMPRESIÓN OFICIAL (REGLA 5) - FIX PARA 1 SOLA HOJA */}
+      {/* RECIBO DE IMPRESIÓN OFICIAL */}
       <Dialog
         open={showReceiptModal}
         onOpenChange={(open) => {
@@ -1215,21 +1124,16 @@ export default function CierreViaje() {
         }}
       >
         <DialogContent className="max-w-[800px] p-0 overflow-hidden bg-slate-50 sm:rounded-2xl border-slate-200 shadow-2xl print:fixed print:top-0 print:left-0 print:right-0 print:bottom-0 print:w-[100vw] print:h-[100vh] print:max-w-none print:m-0 print:p-8 print:bg-white print:shadow-none print:border-none print:rounded-none print:transform-none print:overflow-hidden print:z-50">
-          {/* Se oculta al imprimir para no gastar tinta azul en la cabecera */}
           <div className="print:hidden">
             <div className="h-2 w-full bg-brand-navy"></div>
           </div>
-
-          {/* WATERMARK LOGO DE FONDO (Ajustado para no desbordar el papel) */}
           <div className="absolute inset-0 z-0 flex items-center justify-center opacity-[0.02] pointer-events-none print:opacity-5 print:overflow-hidden">
             <Truck className="w-[400px] h-[400px] transform -rotate-12" />
           </div>
-
           <div className="p-6 sm:p-8 relative z-10 flex flex-col h-full print:p-0 print:h-auto">
             {/* 1. HEADER (Horizontal) */}
             <div className="flex justify-between items-start mb-6 print:mb-8 border-b-2 border-brand-navy pb-4 print:border-black">
               <div className="flex items-center gap-4">
-                {/* Logo dinámico o ícono por defecto */}
                 <div className="w-16 h-16 bg-white border border-slate-200 shadow-sm rounded-xl flex items-center justify-center shrink-0 print:border-transparent print:shadow-none overflow-hidden">
                   {empresaLogo ? (
                     <img
@@ -1242,7 +1146,6 @@ export default function CierreViaje() {
                   )}
                 </div>
                 <div>
-                  {/* Nombre de empresa dinámico */}
                   <h2 className="text-2xl font-black text-slate-900 uppercase tracking-widest leading-none mb-1">
                     {empresaNombre || "Nombre de Empresa"}
                   </h2>
@@ -1269,17 +1172,13 @@ export default function CierreViaje() {
 
             {/* 2. CUERPO PRINCIPAL A DOS COLUMNAS */}
             <div className="grid grid-cols-1 md:grid-cols-12 gap-8 mb-6 print:grid-cols-12 print:gap-10">
-              {/* COLUMNA IZQUIERDA: Contexto y Operación */}
               <div className="md:col-span-7 print:col-span-7 space-y-4">
                 <div className="grid grid-cols-2 gap-3 print:gap-6">
                   <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm print:shadow-none print:border-slate-300">
                     <span className="text-[12px] uppercase font-bold tracking-widest text-slate-600 mb-1 block print:text-slate-500">
                       Operador Asignado
                     </span>
-                    <span
-                      className="font-bold text-brand-navy text-sm truncate block print:text-black"
-                      title={selectedLegsData[0]?.operator?.name}
-                    >
+                    <span className="font-bold text-brand-navy text-sm truncate block print:text-black">
                       {selectedLegsData[0]?.operator?.name || "N/A"}
                     </span>
                   </div>
@@ -1296,102 +1195,106 @@ export default function CierreViaje() {
                   </div>
                 </div>
 
-                <div className="bg-blue-50/80 border border-blue-100 p-4 rounded-xl relative overflow-hidden h-full print:bg-white print:border-slate-300">
-                  <Fuel className="absolute -right-4 -bottom-4 h-24 w-24 text-blue-200/50 opacity-40 print:hidden" />
-                  <h4 className="text-[12px] font-black uppercase tracking-widest text-blue-800 mb-4 relative z-10 print:text-black">
-                    Telemetría y Diésel
-                  </h4>
-                  <div className="grid grid-cols-3 gap-2 text-xs font-mono text-slate-600 relative z-10 print:text-black">
-                    <div>
-                      <p className="text-[10px] text-blue-600/70 font-sans font-bold uppercase mb-1 print:text-slate-500">
-                        Distancia
-                      </p>
-                      <p className="font-bold text-slate-800 text-sm print:text-black">
-                        {previewData?.total_kms || 0}{" "}
-                        <span className="text-slate-600 text-xs">km</span>
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-blue-600/70 font-sans font-bold uppercase mb-1 print:text-slate-500">
-                        Esperado
-                      </p>
-                      <p className="font-bold text-slate-800 text-sm print:text-black">
-                        {previewData?.consumo_esperado || 0}{" "}
-                        <span className="text-slate-600 text-xs">L</span>
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-blue-600/70 font-sans font-bold uppercase mb-1 print:text-slate-500">
-                        Comprobado
-                      </p>
-                      <p className="font-bold text-slate-800 text-sm print:text-black">
-                        {previewData?.consumo_real || 0}{" "}
-                        <span className="text-slate-600 text-xs">L</span>
-                      </p>
+                {liquidacion?.hasRoadMove && (
+                  <div className="bg-blue-50/80 border border-blue-100 p-4 rounded-xl relative overflow-hidden h-full print:bg-white print:border-slate-300">
+                    <Fuel className="absolute -right-4 -bottom-4 h-24 w-24 text-blue-200/50 opacity-40 print:hidden" />
+                    <h4 className="text-[12px] font-black uppercase tracking-widest text-blue-800 mb-4 relative z-10 print:text-black">
+                      Telemetría y Diésel
+                    </h4>
+                    <div className="grid grid-cols-3 gap-2 text-xs font-mono text-slate-600 relative z-10 print:text-black">
+                      <div>
+                        <p className="text-[10px] text-blue-600/70 font-sans font-bold uppercase mb-1 print:text-slate-500">
+                          Distancia
+                        </p>
+                        <p className="font-bold text-slate-800 text-sm print:text-black">
+                          {previewData?.total_kms || 0}{" "}
+                          <span className="text-slate-600 text-xs">km</span>
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-blue-600/70 font-sans font-bold uppercase mb-1 print:text-slate-500">
+                          Esperado
+                        </p>
+                        <p className="font-bold text-slate-800 text-sm print:text-black">
+                          {previewData?.consumo_esperado || 0}{" "}
+                          <span className="text-slate-600 text-xs">L</span>
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-blue-600/70 font-sans font-bold uppercase mb-1 print:text-slate-500">
+                          Comprobado
+                        </p>
+                        <p className="font-bold text-slate-800 text-sm print:text-black">
+                          {previewData?.consumo_real || 0}{" "}
+                          <span className="text-slate-600 text-xs">L</span>
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
               </div>
 
-              {/* COLUMNA DERECHA: Dinero y Desglose */}
               <div className="md:col-span-5 print:col-span-5 flex flex-col justify-between">
                 <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm space-y-3 flex-1 mb-4 print:shadow-none print:border-slate-300">
                   <h4 className="text-[12px] font-black uppercase tracking-widest text-slate-600 border-b border-slate-100 pb-2 mb-3 print:text-slate-600 print:border-slate-300">
                     Desglose Financiero
                   </h4>
-
                   <div className="space-y-2.5 text-xs font-medium">
                     <div className="flex justify-between items-center text-slate-700 print:text-black">
-                      <span>Flete Base</span>
+                      <span>Pago Base (Ruta / Bonos)</span>
                       <span className="font-mono font-semibold">
-                        {formatCurrency(safeLiquidacion.pagoBaseBruto)}
+                        {formatCurrencyLocal(liquidacion?.pagoBaseBruto || 0)}
                       </span>
                     </div>
-
-                    {safeLiquidacion.bonosAdicionales > 0 && (
+                    {(liquidacion?.bonosAdicionales || 0) > 0 && (
                       <div className="flex justify-between items-center text-emerald-600 print:text-black">
                         <span>Bonos Extra</span>
                         <span className="font-mono font-semibold">
-                          +{formatCurrency(safeLiquidacion.bonosAdicionales)}
+                          +
+                          {formatCurrencyLocal(
+                            liquidacion?.bonosAdicionales || 0,
+                          )}
                         </span>
                       </div>
                     )}
-
-                    {safeLiquidacion.deduccionViaticos +
-                      safeLiquidacion.otrosAnticipos >
+                    {(liquidacion?.deduccionViaticos || 0) +
+                      (liquidacion?.otrosAnticipos || 0) >
                       0 && (
                       <div className="flex justify-between items-center text-rose-600 print:text-black">
                         <span>Anticipos</span>
                         <span className="font-mono font-semibold">
                           -
-                          {formatCurrency(
-                            safeLiquidacion.deduccionViaticos +
-                              safeLiquidacion.otrosAnticipos,
+                          {formatCurrencyLocal(
+                            (liquidacion?.deduccionViaticos || 0) +
+                              (liquidacion?.otrosAnticipos || 0),
                           )}
                         </span>
                       </div>
                     )}
-
-                    {safeLiquidacion.combustibleFaltante > 0 && (
+                    {(liquidacion?.combustibleFaltante || 0) > 0 && (
                       <div className="flex justify-between items-center text-rose-600 print:text-black">
                         <span>Faltante Diésel</span>
                         <span className="font-mono font-semibold">
-                          -{formatCurrency(safeLiquidacion.combustibleFaltante)}
+                          -
+                          {formatCurrencyLocal(
+                            liquidacion?.combustibleFaltante || 0,
+                          )}
                         </span>
                       </div>
                     )}
-
-                    {safeLiquidacion.deduccionesManuales > 0 && (
+                    {(liquidacion?.deduccionesManuales || 0) > 0 && (
                       <div className="flex justify-between items-center text-rose-600 print:text-black">
                         <span>Cargos Varios</span>
                         <span className="font-mono font-semibold">
-                          -{formatCurrency(safeLiquidacion.deduccionesManuales)}
+                          -
+                          {formatCurrencyLocal(
+                            liquidacion?.deduccionesManuales || 0,
+                          )}
                         </span>
                       </div>
                     )}
                   </div>
                 </div>
-
                 <div className="relative bg-slate-900 p-4 sm:p-5 rounded-xl shadow-lg flex justify-between items-center overflow-hidden shrink-0 print:bg-white print:border-2 print:border-slate-800 print:shadow-none">
                   <div className="absolute inset-0 bg-gradient-to-r from-brand-navy to-slate-900 z-0 print:hidden"></div>
                   <div className="relative z-10">
@@ -1399,7 +1302,7 @@ export default function CierreViaje() {
                       Total a Depositar
                     </span>
                     <span className="text-2xl sm:text-3xl font-black font-mono text-white tracking-tight print:text-black">
-                      {formatCurrency(safeLiquidacion.neto_a_pagar)}
+                      {formatCurrencyLocal(liquidacion?.neto_a_pagar || 0)}
                     </span>
                   </div>
                   <div className="relative z-10 w-10 h-10 sm:w-12 sm:h-12 bg-white/10 rounded-full flex items-center justify-center backdrop-blur-sm border border-white/10 print:border-none print:bg-transparent">
@@ -1409,14 +1312,12 @@ export default function CierreViaje() {
               </div>
             </div>
 
-            {/* 3. DIVISOR Y ZONA LEGAL */}
             <div className="mt-auto pt-4 print:pt-16">
               <div className="relative flex items-center pb-11 mb-11 print:pb-12 ">
                 <div className="absolute -left-10 w-6 h-6 bg-slate-800/20 rounded-full blur-[2px] print:hidden"></div>
                 <div className="absolute -right-10 w-6 h-6 bg-slate-800/20 rounded-full blur-[2px] print:hidden"></div>
                 <div className="w-full border-t-2 border-dashed border-slate-300 print:border-slate-400"></div>
               </div>
-
               <div className="flex flex-col sm:flex-row justify-between gap-12 sm:gap-24 px-8 md:px-16 mb-8">
                 <div className="flex-1 text-center">
                   <div className="border-t border-slate-400 pt-2">
@@ -1446,7 +1347,6 @@ export default function CierreViaje() {
                   </div>
                 </div>
               </div>
-
               <p className="text-[8px] text-slate-600 text-center leading-relaxed px-4 md:px-12 print:text-slate-500 print:max-w-2xl print:mx-auto">
                 Este documento ampara la liquidación de los movimientos
                 descritos. Al firmar, el operador acepta de conformidad los
@@ -1455,10 +1355,7 @@ export default function CierreViaje() {
               </p>
             </div>
           </div>
-
-          {/* FOOTER & ACCIONES */}
           <DialogFooter className="p-4 bg-white border-t border-slate-200 flex flex-col-reverse sm:flex-row justify-end gap-3 print:hidden">
-            {/* Botón de Cerrar */}
             <Button
               className="w-full sm:w-auto min-w-[120px] font-bold text-slate-500 hover:text-slate-700 hover:bg-slate-100"
               variant="ghost"
@@ -1466,8 +1363,6 @@ export default function CierreViaje() {
             >
               Cerrar
             </Button>
-
-            {/* Botón de Imprimir */}
             <Button
               className="w-full sm:w-auto min-w-[220px] gap-2 font-bold bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 hover:text-brand-navy shadow-sm transition-all"
               variant="outline"
@@ -1478,14 +1373,16 @@ export default function CierreViaje() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {/* 🚀 MODAL DE TICKETS REUTILIZADO */}
       <AddTicketModal
         open={showAddTicket}
         onOpenChange={(isOpen) => {
           setShowAddTicket(isOpen);
-          if (!isOpen) setTicketPrefill(null); // 🚀 Limpiamos el "fantasma" al cerrar
+          if (!isOpen) setTicketPrefill(null);
         }}
-        onSubmit={handleQuickTicketSubmit}
+        onSubmit={async (d) => {
+          await fuelService.create(d);
+          setShowAddTicket(false);
+        }}
         initialData={ticketPrefill}
       />
     </div>

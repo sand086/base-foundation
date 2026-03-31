@@ -11,8 +11,6 @@ from app.models import models
 from app.models.models import RecordStatus, TripLegType
 from app.schemas import trips as schemas
 
-import uuid
-
 
 def get_trips(db: Session, skip: int = 0, limit: int = 100):
     """
@@ -68,21 +66,15 @@ def create_trip(db: Session, trip: schemas.TripCreate):
     1. Crea el Viaje Padre desempaquetando el esquema (no pierdes datos).
     2. Si trae un Tramo Inicial (No es Standby), crea el TripLeg y bloquea recursos.
     """
-
-    # 1. Extraemos TODOS los datos del frontend, ignorando 'initial_leg' para que no rompa SQLAlchemy
-    # Esto asegura que peso, referencia, descripcion_mercancia, etc., pasen directo a la BD.
     trip_data = trip.model_dump(exclude={"initial_leg"})
 
-    # 2. Creamos el Viaje Padre
     db_trip = models.Trip(**trip_data)
     db.add(db_trip)
-    db.flush()  # Hace el insert para generar el db_trip.id
+    db.flush()
 
-    # 3. Lógica para el Tramo Inicial (Leg)
     if trip.initial_leg:
         leg_data = trip.initial_leg
 
-        # Calculamos el neto a pagar basado en la tarifa y los anticipos
         monto_pagar = (trip.tarifa_base or 0) - (
             (leg_data.anticipo_casetas or 0)
             + (leg_data.anticipo_viaticos or 0)
@@ -98,7 +90,6 @@ def create_trip(db: Session, trip: schemas.TripCreate):
             anticipo_casetas=leg_data.anticipo_casetas,
             anticipo_viaticos=leg_data.anticipo_viaticos,
             anticipo_combustible=leg_data.anticipo_combustible,
-            # 🚀 CORRECCIÓN: Usamos monto_neto_pagado en lugar del campo inexistente saldo_operador
             monto_neto_pagado=monto_pagar,
             odometro_inicial=leg_data.odometro_inicial,
             nivel_tanque_inicial=leg_data.nivel_tanque_inicial,
@@ -106,7 +97,6 @@ def create_trip(db: Session, trip: schemas.TripCreate):
         )
         db.add(db_leg)
 
-        # 4. Bloquear Unidades (Tracto del tramo + Remolques del viaje)
         unit_ids_to_block = [
             leg_data.unit_id,
             trip.remolque_1_id,
@@ -128,7 +118,6 @@ def create_trip(db: Session, trip: schemas.TripCreate):
                 u.status = models.UnitStatus.EN_RUTA
                 db.add(u)
 
-        # 5. Bloquear al Operador
         if leg_data.operator_id:
             operator = (
                 db.query(models.Operator)
@@ -147,10 +136,6 @@ def create_trip(db: Session, trip: schemas.TripCreate):
 def update_trip_status(
     db: Session, trip_id: str, status: str, location: str | None = None
 ):
-    """
-    Actualiza el estado del viaje general y de su tramo activo.
-    Libera recursos si el viaje/tramo termina.
-    """
     trip = get_trip(db, trip_id)
     if not trip:
         return None
@@ -158,16 +143,14 @@ def update_trip_status(
     trip.status = status
     trip.last_update = datetime.utcnow()
 
-    # Buscamos el último tramo creado para este viaje
     active_leg = None
     if trip.legs:
-        active_leg = trip.legs[-1]  # El último tramo agregado
+        active_leg = trip.legs[-1]
         active_leg.status = status
         active_leg.last_update = datetime.utcnow()
         if location:
             active_leg.last_location = location
 
-    # LÓGICA DE LIBERACIÓN DE RECURSOS
     if status in [models.TripStatus.ENTREGADO, models.TripStatus.CERRADO]:
         trip.actual_arrival = datetime.utcnow()
         if active_leg:
@@ -176,7 +159,6 @@ def update_trip_status(
         if status == models.TripStatus.CERRADO:
             trip.closed_at = datetime.utcnow()
 
-        # Liberar Remolques (del viaje padre) y Tracto (del tramo)
         unit_ids_to_free = [
             active_leg.unit_id if active_leg else None,
             trip.remolque_1_id,
@@ -193,12 +175,10 @@ def update_trip_status(
                 u.status = models.UnitStatus.DISPONIBLE
                 db.add(u)
 
-        # Liberar Operador
         if active_leg and active_leg.operator:
             active_leg.operator.status = models.OperatorStatus.ACTIVO
             db.add(active_leg.operator)
 
-    # Timeline (Se amarra al Tramo Activo)
     if active_leg:
         event = models.TripTimelineEvent(
             trip_leg_id=active_leg.id,
@@ -232,10 +212,6 @@ def update_trip(db: Session, trip_id: int, trip_in: schemas.TripUpdate):
 
 
 def delete_trip(db: Session, trip_id: str):
-    """
-    Realiza un borrado lógico del viaje (record_status='E') y 🚀 LIBERA RECURSOS.
-    Actualiza unidades a 'disponible' y operadores a 'activo'.
-    """
     try:
         tid = int(trip_id)
     except (TypeError, ValueError):
@@ -252,8 +228,6 @@ def delete_trip(db: Session, trip_id: str):
     if not trip:
         return False
 
-    # 🚀 LÓGICA DE LIBERACIÓN DE RECURSOS AL ELIMINAR
-    # 1. Identificar unidades y operadores involucrados
     unit_ids_to_free = [trip.remolque_1_id, trip.dolly_id, trip.remolque_2_id]
     operator_ids_to_free = []
 
@@ -263,25 +237,21 @@ def delete_trip(db: Session, trip_id: str):
         if leg.operator_id:
             operator_ids_to_free.append(leg.operator_id)
 
-    # Limpiar nulos
     unit_ids_to_free = list(set([uid for uid in unit_ids_to_free if uid is not None]))
     operator_ids_to_free = list(
         set([oid for oid in operator_ids_to_free if oid is not None])
     )
 
-    # 2. Liberar unidades
     if unit_ids_to_free:
         db.query(models.Unit).filter(models.Unit.id.in_(unit_ids_to_free)).update(
             {"status": models.UnitStatus.DISPONIBLE}, synchronize_session=False
         )
 
-    # 3. Liberar operadores
     if operator_ids_to_free:
         db.query(models.Operator).filter(
             models.Operator.id.in_(operator_ids_to_free)
         ).update({"status": models.OperatorStatus.ACTIVO}, synchronize_session=False)
 
-    # 4. Borrado lógico del viaje y sus tramos
     trip.record_status = RecordStatus.ELIMINADO
     for leg in trip.legs:
         leg.record_status = RecordStatus.ELIMINADO
@@ -294,21 +264,16 @@ def delete_trip(db: Session, trip_id: str):
 def add_timeline_event(
     db: Session, trip_id: int, payload: schemas.TripTimelineEventCreatePayload
 ):
-    # 1. Obtener el viaje con todas sus relaciones
     trip = get_trip(db, str(trip_id))
     if not trip:
         return None
 
-    # 2. Actualizamos el estatus del viaje padre
     trip.status = payload.status
     trip.last_update = datetime.utcnow()
 
-    # 🚀 FASE 1: Guardar la terminal de entrega de vacío si viene en el payload
     if hasattr(payload, "terminal_entrega_vacio") and payload.terminal_entrega_vacio:
         trip.terminal_entrega_vacio = payload.terminal_entrega_vacio
 
-    # 3. Identificamos el Tramo (Leg) activo
-    # Buscamos el último tramo que no esté finalizado; si todos están cerrados, usamos el último.
     active_leg = next(
         (
             leg
@@ -319,39 +284,28 @@ def add_timeline_event(
     )
 
     if active_leg:
-        # 4. Actualizamos datos operativos en el tramo
         active_leg.status = payload.status
         active_leg.last_update = datetime.utcnow()
         active_leg.last_location = payload.location
 
-        # Si el reporte trae telemetría, actualizamos los valores globales del camión
         if active_leg.unit:
             unidad = active_leg.unit
-
-            # Actualizar Odómetro (Kilometraje)
             if payload.odometro:
                 active_leg.odometro_final = payload.odometro
-                # Impactamos el odómetro general de la unidad para el módulo de mantenimientos
                 if hasattr(unidad, "odometro"):
                     unidad.odometro = payload.odometro
-
-            # Actualizar Niveles de Combustible
             if payload.combustible_porcentaje is not None:
                 if hasattr(unidad, "nivel_combustible_porcentaje"):
                     unidad.nivel_combustible_porcentaje = payload.combustible_porcentaje
-
             if payload.combustible_litros is not None:
                 if hasattr(unidad, "nivel_combustible_litros"):
                     unidad.nivel_combustible_litros = payload.combustible_litros
 
-        # 6. Crear el registro en la Bitácora (Timeline)
-        # Guardamos los datos en sus columnas individuales para permitir edición y visualización PRO
         db_event = models.TripTimelineEvent(
             trip_leg_id=active_leg.id,
             time=datetime.utcnow(),
-            # El campo 'event' sirve como el título o resumen del evento
             event=f"{payload.status.replace('_', ' ').title()} en {payload.location}",
-            event_type=payload.status,  # 'en_transito', 'detenido', 'accidente', etc.
+            event_type=payload.status,
             location=payload.location,
             lat=payload.lat,
             lng=payload.lng,
@@ -359,7 +313,6 @@ def add_timeline_event(
         )
         db.add(db_event)
 
-    # 7. Persistir todos los cambios en la base de datos
     db.add(trip)
     db.commit()
     db.refresh(trip)
@@ -368,7 +321,7 @@ def add_timeline_event(
 
 def get_trip_settlement(db: Session, trip_leg_id: int):
     """
-    Liquidación. OJO: Ahora liquida un TRAMO (TripLeg), no un viaje entero.
+    🚀 FASE 4: Liquidación adaptada para Movimientos de Patio y Vacío
     """
     leg = (
         db.query(models.TripLeg)
@@ -380,56 +333,88 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
         return None
 
     trip = leg.trip
+    fecha_viaje = leg.start_date.strftime("%Y-%m-%d") if leg.start_date else "N/A"
+
+    # Banderas operativas
+    is_ruta = leg.leg_type == models.TripLegType.RUTA
+    is_full = (trip.dolly_id is not None) or (trip.remolque_2_id is not None)
 
     kms_recorridos = (
         trip.tariff.distancia_km if trip.tariff and trip.tariff.distancia_km else 0
     )
-    fecha_viaje = leg.start_date.strftime("%Y-%m-%d") if leg.start_date else "N/A"
 
-    # 1. Obtener cargas de combustible asociadas EXACTAMENTE A ESTE TRAMO
     fuel_logs = (
         db.query(models.FuelLog).filter(models.FuelLog.trip_leg_id == trip_leg_id).all()
     )
-    if leg.leg_type == models.TripLegType.RUTA and not fuel_logs:
+
+    # Solo exige combustible si es un viaje de Carretera
+    if is_ruta and not fuel_logs:
         raise ValueError("BLOCKED_NO_FUEL")
 
-    consumo_real_litros = sum(f.litros for f in fuel_logs)
-    precio_promedio_litro = (
-        (sum(f.precio_por_litro for f in fuel_logs) / len(fuel_logs))
-        if fuel_logs
-        else 24.50
-    )
+    consumo_real_litros = 0.0
+    precio_promedio_litro = 24.50
+    consumo_esperado = 0.0
+    diferencia_litros = 0.0
+    litros_a_cobrar = 0.0
+    deduccion_combustible = 0.0
 
-    RENDIMIENTO_ESPERADO = 3.2
-    consumo_esperado = (
-        kms_recorridos / RENDIMIENTO_ESPERADO if kms_recorridos > 0 else 0
-    )
-
-    TOLERANCIA_PCT = 0.05
-    diferencia_litros = consumo_real_litros - consumo_esperado
-    litros_a_cobrar = 0
-    deduccion_combustible = 0
-
-    if diferencia_litros > (consumo_esperado * TOLERANCIA_PCT):
-        litros_a_cobrar = diferencia_litros
-        deduccion_combustible = litros_a_cobrar * precio_promedio_litro
-
-    # 3. Armar los Conceptos de Pago
     conceptos = []
 
-    # INGRESOS (Solo la tarifa del viaje si es el tramo principal)
-    conceptos.append(
-        schemas.ConceptoPago(
-            id=str(uuid.uuid4())[:8],
-            tipo="ingreso",
-            categoria="tarifa",
-            descripcion=f"Tarifa Base ({leg.leg_type.value})",
-            monto=trip.tarifa_base,
-            esAutomatico=True,
-        )
-    )
+    # 🚀 Lógica si es CARRETERA
+    if is_ruta:
+        consumo_real_litros = sum(f.litros for f in fuel_logs)
+        if fuel_logs:
+            precio_promedio_litro = sum(f.precio_por_litro for f in fuel_logs) / len(
+                fuel_logs
+            )
 
-    # DEDUCCIONES (Del Tramo)
+        RENDIMIENTO_ESPERADO = (
+            getattr(leg.unit, "rendimiento_ecm_esperado", 3.2) if leg.unit else 3.2
+        )
+        consumo_esperado = (
+            kms_recorridos / RENDIMIENTO_ESPERADO if kms_recorridos > 0 else 0
+        )
+
+        TOLERANCIA_PCT = 0.05
+        diferencia_litros = consumo_real_litros - consumo_esperado
+
+        if diferencia_litros > (consumo_esperado * TOLERANCIA_PCT):
+            litros_a_cobrar = diferencia_litros
+            deduccion_combustible = litros_a_cobrar * precio_promedio_litro
+
+        conceptos.append(
+            schemas.ConceptoPago(
+                id=str(uuid.uuid4())[:8],
+                tipo="ingreso",
+                categoria="tarifa",
+                descripcion=f"Tarifa Base Carretera",
+                monto=trip.tarifa_base,
+                esAutomatico=True,
+            )
+        )
+    # 🚀 Lógica si es MOVIMIENTO LOCAL (Patio o Vacío)
+    else:
+        # FASE 4: Bonos Fijos por Configuración
+        bono_movimiento = 300.0 if is_full else 200.0
+        tipo_mov_str = (
+            "Mov. Patio"
+            if leg.leg_type == models.TripLegType.CARGA
+            else "Retorno Vacío"
+        )
+        config_str = "FULL" if is_full else "SENCILLO"
+
+        conceptos.append(
+            schemas.ConceptoPago(
+                id=str(uuid.uuid4())[:8],
+                tipo="ingreso",
+                categoria="bono",
+                descripcion=f"Bono {tipo_mov_str} ({config_str})",
+                monto=bono_movimiento,
+                esAutomatico=True,
+            )
+        )
+
+    # DEDUCCIONES (Del Tramo) - Aplican a cualquier caso
     if leg.anticipo_casetas > 0:
         conceptos.append(
             schemas.ConceptoPago(
@@ -515,14 +500,10 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
 def close_trip_settlement(
     db: Session, trip_leg_id: int, payload: schemas.CloseSettlementPayload
 ):
-    """
-    Cierra UN TRAMO y, si es el último, cierra el VIAJE.
-    """
     leg = db.query(models.TripLeg).filter(models.TripLeg.id == trip_leg_id).first()
     if not leg:
         return None
 
-    # Cerramos el Tramo
     leg.status = models.TripStatus.CERRADO
     leg.saldo_operador = payload.neto_a_pagar
     leg.actual_arrival = datetime.utcnow()
@@ -535,7 +516,6 @@ def close_trip_settlement(
     )
     db.add(event)
 
-    # Revisamos si debemos cerrar el viaje completo (Opcional, de momento lo cerramos siempre)
     if leg.trip:
         leg.trip.status = models.TripStatus.CERRADO
         leg.trip.closed_at = datetime.utcnow()
@@ -548,21 +528,15 @@ def close_trip_settlement(
 
 
 def create_next_leg(db: Session, trip_id: str, payload: schemas.TripLegCreate):
-    """
-    Cierra el tramo actual (si existe) liberando el camión/chofer anterior,
-    y crea un nuevo tramo enganchando al nuevo camión/chofer.
-    """
     tid = int(trip_id)
     trip = db.query(models.Trip).filter(models.Trip.id == tid).first()
 
     if not trip:
         return None
 
-    # 1. Cerrar el tramo anterior (si existe alguno)
     if trip.legs:
         last_leg = trip.legs[-1]
 
-        # Si el tramo anterior no estaba entregado, forzamos su cierre/entrega
         if last_leg.status not in [
             models.TripStatus.ENTREGADO,
             models.TripStatus.CERRADO,
@@ -571,7 +545,6 @@ def create_next_leg(db: Session, trip_id: str, payload: schemas.TripLegCreate):
             last_leg.actual_arrival = datetime.utcnow()
             last_leg.last_update = datetime.utcnow()
 
-            # Liberamos la unidad y operador ANTERIORES
             if last_leg.unit_id:
                 old_unit = (
                     db.query(models.Unit)
@@ -592,7 +565,6 @@ def create_next_leg(db: Session, trip_id: str, payload: schemas.TripLegCreate):
                     old_op.status = models.OperatorStatus.ACTIVO
                     db.add(old_op)
 
-            # Dejamos un log en el tramo anterior
             db_event = models.TripTimelineEvent(
                 trip_leg_id=last_leg.id,
                 time=datetime.utcnow(),
@@ -605,7 +577,6 @@ def create_next_leg(db: Session, trip_id: str, payload: schemas.TripLegCreate):
         if not payload.odometro_inicial or payload.odometro_inicial == 0:
             payload.odometro_inicial = get_last_unit_odometer(db, payload.unit_id)
 
-    # 2. Crear el NUEVO Tramo
     new_leg = models.TripLeg(
         trip_id=trip.id,
         leg_type=payload.leg_type,
@@ -620,9 +591,8 @@ def create_next_leg(db: Session, trip_id: str, payload: schemas.TripLegCreate):
         start_date=datetime.utcnow(),
     )
     db.add(new_leg)
-    db.flush()  # Para obtener el new_leg.id
+    db.flush()
 
-    # 3. Bloquear el NUEVO camión y operador
     if payload.unit_id:
         new_unit = (
             db.query(models.Unit).filter(models.Unit.id == payload.unit_id).first()
@@ -641,12 +611,10 @@ def create_next_leg(db: Session, trip_id: str, payload: schemas.TripLegCreate):
             new_op.status = models.OperatorStatus.EN_RUTA
             db.add(new_op)
 
-    # 4. Asegurarnos de que el viaje general vuelva a estar "En Proceso"
     trip.status = models.TripStatus.EN_TRANSITO
     trip.last_update = datetime.utcnow()
     db.add(trip)
 
-    # 5. Guardar todo
     db.commit()
     db.refresh(trip)
     return trip
@@ -660,9 +628,7 @@ def settle_trip_legs_batch(db: Session, leg_ids: list[int], total_pago: float):
     trips_to_check = set()
 
     for leg in legs:
-        # 1. Marcar el tramo como liquidado
         leg.status = "liquidado"
-        # Dividimos el pago total entre los movimientos para el historial financiero
         leg.saldo_operador = total_pago / len(legs)
         leg.actual_arrival = datetime.utcnow()
 
@@ -677,9 +643,7 @@ def settle_trip_legs_batch(db: Session, leg_ids: list[int], total_pago: float):
 
     cxc_creadas = 0
 
-    # 2. Verificar los viajes padre
     for trip in trips_to_check:
-        # Si TODOS los tramos de este viaje ya acabaron, cerramos el viaje general
         all_completed = all(
             l.status in ["entregado", "cerrado", "liquidado"] for l in trip.legs
         )
@@ -688,7 +652,6 @@ def settle_trip_legs_batch(db: Session, leg_ids: list[int], total_pago: float):
             trip.status = "cerrado"
             trip.closed_at = func.now()
 
-            # Generar CxC (Cuentas por Cobrar) si no existe
             existing_cxc = (
                 db.query(models.ReceivableInvoice)
                 .filter(models.ReceivableInvoice.viaje_id == trip.id)
@@ -754,8 +717,9 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
     alertas = []
 
     for leg in legs:
-        # 1. KILOMETRAJE REAL (Diferencia de Odómetros)
         distancia = 0.0
+        is_ruta = leg.leg_type == models.TripLegType.RUTA
+
         if (
             leg.odometro_final
             and leg.odometro_inicial
@@ -763,7 +727,6 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
         ):
             distancia = float(leg.odometro_final - leg.odometro_inicial)
         else:
-            # Fallback a la tarifa si no hay odómetros, pero avisamos
             distancia = float(
                 leg.trip.tariff.distancia_km if leg.trip and leg.trip.tariff else 0.0
             )
@@ -771,27 +734,24 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
                 f"Tramo #{leg.id}: Usando distancia estimada (Faltan odómetros)."
             )
 
-        total_kms_reales += distancia
+        if is_ruta:
+            total_kms_reales += distancia
+            rendimiento = getattr(leg.unit, "rendimiento_ecm_esperado", 3.2) or 3.2
+            total_consumo_esperado += (
+                (distancia / rendimiento) if distancia > 0 else 0.0
+            )
 
-        # 2. RENDIMIENTO PERSONALIZADO (ECM)
-        # Usamos el rendimiento de la unidad (ej. 2.8) o 3.2 como base
-        rendimiento = getattr(leg.unit, "rendimiento_ecm_esperado", 3.2) or 3.2
-        total_consumo_esperado += (distancia / rendimiento) if distancia > 0 else 0.0
-
-        # 3. CONSUMO REAL (Vales)
         fuel_logs_activos = [f for f in leg.fuel_logs if f.record_status == "A"]
         for f in fuel_logs_activos:
             total_real_liters += f.litros
             total_fuel_cost += f.litros * f.precio_por_litro
 
-    # 4. CÁLCULO DE EXCESO (REGLA GUSTAVO)
     precio_promedio = (
         (total_fuel_cost / total_real_liters) if total_real_liters > 0 else 24.50
     )
     diferencia_litros = total_real_liters - total_consumo_esperado
 
     deduccion_combustible = 0.0
-    # Tolerancia de Gustavo: 5% del esperado
     if diferencia_litros > (total_consumo_esperado * 0.05):
         deduccion_combustible = diferencia_litros * precio_promedio
 
@@ -807,8 +767,6 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
 
 
 def get_last_unit_odometer(db: Session, unit_id: int) -> int:
-    """Busca el último kilometraje conocido de la unidad."""
-    # 1. Buscar en el último tramo de viaje que tenga odómetro final
     last_leg = (
         db.query(models.TripLeg)
         .filter(
@@ -821,7 +779,6 @@ def get_last_unit_odometer(db: Session, unit_id: int) -> int:
     if last_leg:
         return last_leg.odometro_final
 
-    # 2. Si no hay viajes, buscar en el último vale de combustible
     last_fuel = (
         db.query(models.FuelLog)
         .filter(models.FuelLog.unit_id == unit_id)
@@ -833,11 +790,6 @@ def get_last_unit_odometer(db: Session, unit_id: int) -> int:
 
 
 def undo_last_leg(db: Session, trip_id: str):
-    """
-    Elimina el tramo (leg) actual que se creó por error.
-    Si había un tramo anterior, lo reabre.
-    Si era el ÚNICO tramo, regresa el viaje a Stand-By (CREADO).
-    """
     tid = int(trip_id)
     trip = db.query(models.Trip).filter(models.Trip.id == tid).first()
 
@@ -846,7 +798,6 @@ def undo_last_leg(db: Session, trip_id: str):
 
     current_leg = trip.legs[-1]
 
-    # 1. Liberamos camión/chofer del tramo actual (que fue un error)
     if current_leg.unit_id:
         u = db.query(models.Unit).filter(models.Unit.id == current_leg.unit_id).first()
         if u:
@@ -860,17 +811,13 @@ def undo_last_leg(db: Session, trip_id: str):
         if o:
             o.status = models.OperatorStatus.ACTIVO
 
-    # 2. Borramos el tramo erróneo
     db.delete(current_leg)
 
-    # 3. Lógica para reajustar el viaje padre
     if len(trip.legs) > 1:
-        # Había un tramo anterior: lo restauramos a "En Tránsito"
         previous_leg = trip.legs[-2]
         previous_leg.status = models.TripStatus.EN_TRANSITO
         previous_leg.actual_arrival = None
 
-        # Bloqueamos de nuevo al chofer/unidad anterior
         if previous_leg.unit_id:
             pu = (
                 db.query(models.Unit)
@@ -890,12 +837,10 @@ def undo_last_leg(db: Session, trip_id: str):
 
         trip.status = models.TripStatus.EN_TRANSITO
     else:
-        # 🚀 Era el ÚNICO tramo. El viaje se queda huérfano, vuelve a Planeador.
         trip.status = models.TripStatus.CREADO
 
     trip.closed_at = None
     db.commit()
 
-    # Refrescamos para devolver el objeto limpio
     db.refresh(trip)
     return trip

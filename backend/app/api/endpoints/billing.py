@@ -269,6 +269,25 @@ def download_invoice_pdf(uuid: str, db: Session = Depends(get_db)):
     )
 
 
+@router.get("/invoice/{uuid}/xml")
+def download_invoice_xml(uuid: str, db: Session = Depends(get_db)):
+    """
+    Busca el archivo XML timbrado en el disco y lo descarga.
+    """
+    service = BillingService(db)
+    xml_path = service.storage_dir / f"{uuid}.xml"
+
+    if not xml_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="El XML timbrado aún no existe o no se pudo generar.",
+        )
+
+    return FileResponse(
+        path=xml_path, filename=f"Carta_Porte_{uuid}.xml", media_type="application/xml"
+    )
+
+
 @router.post("/update-params")
 def update_sat_params(data: dict, db: Session = Depends(get_db)):
     """
