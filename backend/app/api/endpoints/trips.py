@@ -570,3 +570,27 @@ def update_timeline_event(
 
     db.commit()
     return {"message": "Evento actualizado correctamente"}
+
+
+@router.post("/{trip_id}/stamp-real", response_model=schemas.TripResponse)
+def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
+    """
+    🚀 FASE 2: Trigger manual o automático para generar la Carta Porte REAL
+    cuando el viaje inicia su tramo de carretera.
+    """
+    from app.services.billing_service import BillingService
+
+    billing = BillingService(db)
+    # Creamos el objeto de solicitud para el service
+    invoice_data = schemas.ReceivableInvoiceCreate(viaje_id=trip_id, is_nominal=False)
+
+    # Genera el XML Real, Timbra ante el PAC y genera el PDF
+    factura = billing.generar_factura_final_relacionada(invoice_data)
+
+    if not factura:
+        raise HTTPException(
+            status_code=500, detail="No se pudo procesar el timbrado real."
+        )
+
+    trip = crud.get_trip(db, str(trip_id))
+    return trip
