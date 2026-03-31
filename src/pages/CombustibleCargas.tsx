@@ -91,29 +91,37 @@ const CombustibleCargas = () => {
         operatorService.getAll(),
         fuelService.getAll(),
       ]);
-      setUnits(uData || []);
-      setOperators(oData || []);
 
-      const normalizedFuel: FuelLoadDisplay[] = (fData || []).map(
-        (item: any) => {
-          const unit = uData.find((u: Unit) => u.id === item.unit_id);
-          const capacity =
-            item.tipo_combustible === "diesel"
-              ? unit?.capacidad_tanque_diesel || 800
-              : unit?.capacidad_tanque_urea || 60;
+      // 1. Aseguramos que siempre sean arrays antes de usarlos
+      const safeUnits = uData || [];
+      const safeOperators = oData || [];
+      const safeFuel = fData || [];
 
-          return {
-            ...item,
-            unidad_numero:
-              item.unit?.numero_economico || unit?.numero_economico || "N/A",
-            operador_nombre:
-              item.operator?.name || item.operator?.nombre || "N/A",
-            excede_tanque: Number(item.litros) > Number(capacity),
-          };
-        },
-      );
+      setUnits(safeUnits);
+      setOperators(safeOperators);
+
+      // 2. Usamos los arrays seguros para el mapeo
+      const normalizedFuel: FuelLoadDisplay[] = safeFuel.map((item: any) => {
+        const unit = safeUnits.find((u: Unit) => u.id === item.unit_id);
+
+        const capacity =
+          item.tipo_combustible === "diesel"
+            ? unit?.capacidad_tanque_diesel || 800
+            : unit?.capacidad_tanque_urea || 60;
+
+        return {
+          ...item,
+          unidad_numero:
+            item.unit?.numero_economico || unit?.numero_economico || "N/A",
+          operador_nombre:
+            item.operator?.name || item.operator?.nombre || "N/A",
+          excede_tanque: Number(item.litros) > Number(capacity),
+        };
+      });
       setCargas(normalizedFuel);
     } catch (error) {
+      // 3. Imprimimos el error real en consola para saber qué falló en la API
+      console.error("🔥 Error real en loadData:", error);
       toast.error("Fallo de Sincronización Industrial");
     } finally {
       setIsLoading(false);
