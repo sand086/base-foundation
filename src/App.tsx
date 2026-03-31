@@ -30,7 +30,6 @@ import ProveedoresCxP from "./pages/ProveedoresCxP";
 import GestionTarifas from "./pages/GestionTarifas";
 import Compras from "./pages/Compras";
 import Despacho from "./pages/Despacho";
-import DespachoNuevo from "./pages/DespachoNuevo";
 import UsuariosPage from "./pages/UsuariosPage";
 import RolesPermisosPage from "./pages/RolesPermisosPage";
 import Tesoreria from "./pages/Tesoreria";
@@ -99,7 +98,6 @@ const App = () => (
                 <Route path="tarifas" element={<GestionTarifas />} />
 
                 <Route path="despacho" element={<Despacho />} />
-                <Route path="despacho/nuevo" element={<DespachoNuevo />} />
 
                 <Route path="users" element={<UsuariosPage />} />
                 <Route path="roles-permisos" element={<RolesPermisosPage />} />
