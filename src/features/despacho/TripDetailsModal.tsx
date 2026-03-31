@@ -42,10 +42,8 @@ import {
   History,
   Loader2,
   Activity,
-  Box,
   ChevronsUpDown,
   PlusCircle,
-  Route as RouteIcon,
   Edit2,
   Save,
   FileText,
@@ -57,13 +55,24 @@ import {
   DollarSign,
   ArrowRightCircle,
   Flag,
+  Package,
 } from "lucide-react";
-import { Trip, TripLeg } from "@/types/api.types";
+import { Trip, TripLeg, TripStatus } from "@/types/api.types";
 import { useTrips } from "@/hooks/useTrips";
 import { useUnits } from "@/hooks/useUnits";
 import { useBilling } from "@/hooks/useBilling";
 import axiosClient from "@/api/axiosClient";
 import { cn } from "@/lib/utils";
+
+// 🚀 Extendemos TripLeg localmente para enseñarle a TypeScript las propiedades
+// y estados (como "liquidado") que manda el backend pero que aún no están en api.types.ts
+interface ExtendedTripLeg extends Omit<TripLeg, "status"> {
+  status: TripStatus | "liquidado" | string;
+  total_anticipos?: number;
+  monto_neto_pagado?: number;
+  monto_sueldo?: number;
+  monto_maniobras?: number;
+}
 
 interface TripDetailsModalProps {
   open: boolean;
@@ -181,7 +190,10 @@ export function TripDetailsModal({
     const legs = trip.legs || [];
     return (
       legs.find(
-        (l) => !["entregado", "cerrado"].includes(l.status.toLowerCase()),
+        (l) =>
+          !["entregado", "cerrado", "liquidado"].includes(
+            String(l.status).toLowerCase(),
+          ),
       ) ||
       legs[legs.length - 1] ||
       undefined
@@ -327,7 +339,6 @@ export function TripDetailsModal({
     }
   };
 
-  // 🚀 FASE 3: Texto dinámico de botón según el tipo de leg
   const getRelayButtonUI = (legType: string) => {
     switch (legType) {
       case "carga_muelle":
@@ -364,7 +375,7 @@ export function TripDetailsModal({
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-6xl w-[95vw] h-[90vh] bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 flex flex-col p-0 overflow-hidden rounded-2xl shadow-2xl">
-          {/* 🚀 CAPA 2: HEADER TAHOE (Alto contraste) */}
+          {/* 🚀 HEADER CON FULL-WIDTH BREADCRUMBS Y EQUIPOS ASIGNADOS */}
           <DialogHeader className="p-6 pb-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
             <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
             <div className="relative z-10 flex flex-col md:flex-row justify-between md:items-start gap-6">
@@ -429,124 +440,74 @@ export function TripDetailsModal({
               </div>
             </div>
 
-            {/* 🚀 BREADCRUMB DE RUTA (Barra inferior del header) */}
-            <div className="relative z-10 flex items-center flex-wrap gap-3 font-black text-slate-500 dark:text-slate-400 uppercase text-[10px] tracking-widest mt-6 pt-4 border-t border-slate-200 dark:border-white/10">
-              <span className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded shadow-sm border border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-300">
-                <MapPin className="h-3.5 w-3.5 text-emerald-500" />
-                {trip.origin}
-              </span>
-              <span className="text-slate-300 dark:text-slate-600">→</span>
-              <span className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded shadow-sm border border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-300">
-                {trip.destination}
-              </span>
+            {/* 🚀 BREADCRUMB DE RUTA Y EQUIPOS (Nueva Sección Compacta) */}
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4 mt-6 pt-4 border-t border-slate-200 dark:border-white/10">
+              {/* Ruta */}
+              <div className="flex items-center flex-wrap gap-2 font-black text-slate-500 dark:text-slate-400 uppercase text-[10px] tracking-widest">
+                <span className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded shadow-sm border border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-300">
+                  <MapPin className="h-3.5 w-3.5 text-emerald-500" />
+                  {trip.origin}
+                </span>
+                <span className="text-slate-300 dark:text-slate-600">→</span>
+                <span className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded shadow-sm border border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-300">
+                  {trip.destination}
+                </span>
 
-              <Badge
-                variant="outline"
-                className="ml-2 bg-white dark:bg-slate-950 text-brand-navy dark:text-white border-slate-300 dark:border-white/20 shadow-sm font-black tracking-widest text-[9px] px-2.5 py-1"
-              >
-                {isFullTrip ? "FULL / 9 EJES" : "SENCILLO / 5 EJES"}
-              </Badge>
-
-              {(trip as any).referencia && (
                 <Badge
                   variant="outline"
-                  className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800/50 shadow-sm font-black tracking-widest text-[9px] px-2.5 py-1 flex items-center gap-1.5"
+                  className="bg-white dark:bg-slate-950 text-brand-navy dark:text-white border-slate-300 dark:border-white/20 shadow-sm font-black tracking-widest text-[9px] px-2.5 py-1 ml-2"
                 >
-                  <Container className="h-3 w-3" /> CONTENEDOR:{" "}
-                  {(trip as any).referencia}
+                  {isFullTrip ? "FULL / 9 EJES" : "SENCILLO / 5 EJES"}
                 </Badge>
-              )}
+
+                {(trip as any).referencia && (
+                  <Badge
+                    variant="outline"
+                    className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800/50 shadow-sm font-black tracking-widest text-[9px] px-2.5 py-1 flex items-center gap-1.5"
+                  >
+                    <Container className="h-3 w-3" /> CONTENEDOR:{" "}
+                    {(trip as any).referencia}
+                  </Badge>
+                )}
+              </div>
+
+              {/* Equipos Asignados */}
+              <div className="flex items-center flex-wrap gap-2">
+                <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mr-1">
+                  Equipos:
+                </span>
+                <Badge
+                  variant="secondary"
+                  className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono text-[10px] flex items-center gap-1"
+                >
+                  <Truck className="h-3 w-3 text-slate-400" />
+                  ECO-{activeLeg?.unit?.numero_economico || "N/A"}
+                </Badge>
+                {trip.remolque_1 && (
+                  <Badge
+                    variant="secondary"
+                    className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono text-[10px] flex items-center gap-1"
+                  >
+                    <Package className="h-3 w-3 text-amber-500" />
+                    R1: ECO-{trip.remolque_1.numero_economico}
+                  </Badge>
+                )}
+                {trip.remolque_2 && (
+                  <Badge
+                    variant="secondary"
+                    className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono text-[10px] flex items-center gap-1"
+                  >
+                    <Package className="h-3 w-3 text-amber-500" />
+                    R2: ECO-{trip.remolque_2.numero_economico}
+                  </Badge>
+                )}
+              </div>
             </div>
           </DialogHeader>
 
-          {/* 🚀 CAPA 3: CUERPO DUAL */}
-          <div className="flex flex-1 overflow-hidden flex-col lg:flex-row bg-slate-50/50 dark:bg-transparent">
-            {/* PANEL IZQUIERDO (Info Fija) */}
-            <div className="w-full lg:w-[30%] bg-slate-50/80 dark:bg-slate-900/30 border-r border-slate-200 dark:border-white/10 p-6 space-y-6 overflow-y-auto custom-scrollbar">
-              <div className="space-y-3">
-                <h3 className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                  <RouteIcon className="h-3.5 w-3.5 text-blue-500" /> Ruta de
-                  Servicio
-                </h3>
-                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl p-5 shadow-sm space-y-5 text-xs">
-                  <div className="relative pl-6">
-                    <div className="absolute left-2.5 top-2 bottom-2 w-0.5 bg-slate-100 dark:bg-slate-800" />
-                    <div className="mb-5">
-                      <div className="absolute -left-[27px] top-1 w-3.5 h-3.5 bg-blue-500 rounded-full ring-4 ring-white dark:ring-slate-900" />
-                      <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">
-                        Punto de Origen
-                      </p>
-                      <p className="font-black text-sm text-slate-800 dark:text-slate-200 uppercase tracking-tight">
-                        {trip.origin}
-                      </p>
-                    </div>
-                    <div>
-                      <div className="absolute -left-[27px] top-1 w-3.5 h-3.5 bg-emerald-500 rounded-full ring-4 ring-white dark:ring-slate-900" />
-                      <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">
-                        Destino Final
-                      </p>
-                      <p className="font-black text-sm text-slate-800 dark:text-slate-200 uppercase tracking-tight">
-                        {trip.destination}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <Separator className="dark:bg-white/10" />
-
-              <div className="space-y-3">
-                <h3 className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                  <Box className="h-3.5 w-3.5 text-amber-500" /> Equipos
-                  Asignados
-                </h3>
-                <div className="grid grid-cols-1 gap-3">
-                  <div className="p-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-white/10 shadow-sm flex flex-col justify-center">
-                    <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">
-                      Tractocamión Activo
-                    </span>
-                    <span className="font-black text-lg text-brand-navy dark:text-blue-400 uppercase tracking-tighter flex items-center gap-2">
-                      <Truck className="h-4 w-4 text-slate-400" /> ECO-
-                      {activeLeg?.unit?.numero_economico || "S/A"}
-                    </span>
-                  </div>
-
-                  {(trip.remolque_1 || trip.remolque_2) && (
-                    <div className="p-4 bg-slate-100/50 dark:bg-slate-800/30 rounded-xl border border-slate-200 dark:border-white/5 space-y-3">
-                      {trip.remolque_1 && (
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="font-black text-slate-500 uppercase tracking-widest">
-                            Remolque 1
-                          </span>
-                          <Badge
-                            variant="outline"
-                            className="font-mono font-bold bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-200"
-                          >
-                            ECO-{trip.remolque_1.numero_economico}
-                          </Badge>
-                        </div>
-                      )}
-                      {trip.remolque_2 && (
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="font-black text-slate-500 uppercase tracking-widest">
-                            Remolque 2
-                          </span>
-                          <Badge
-                            variant="outline"
-                            className="font-mono font-bold bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-200"
-                          >
-                            ECO-{trip.remolque_2.numero_economico}
-                          </Badge>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* PANEL DERECHO (Tabs: Fases, Finanzas, Bitácora) */}
-            <div className="w-full lg:w-[70%] flex flex-col bg-transparent">
+          {/* 🚀 CAPA 3: CUERPO FULL-WIDTH */}
+          <div className="flex flex-1 overflow-hidden w-full bg-slate-50/50 dark:bg-transparent">
+            <div className="w-full flex flex-col bg-transparent">
               <Tabs
                 value={activeTab}
                 onValueChange={setActiveTab}
@@ -576,7 +537,7 @@ export function TripDetailsModal({
                 </div>
 
                 <ScrollArea className="flex-1 custom-scrollbar">
-                  <div className="p-6 md:p-8">
+                  <div className="p-6 md:p-8 max-w-5xl mx-auto w-full">
                     {/* TAB: FASES OPERATIVAS */}
                     <TabsContent
                       value="fases"
@@ -606,21 +567,26 @@ export function TripDetailsModal({
                       </div>
 
                       <div className="space-y-4">
-                        {trip.legs?.map((leg, idx) => {
+                        {(trip.legs as ExtendedTripLeg[])?.map((leg, idx) => {
                           const btnUI = getRelayButtonUI(leg.leg_type);
                           return (
                             <Card
                               key={leg.id}
                               className={cn(
-                                "border-l-4 shadow-sm overflow-hidden bg-white dark:bg-slate-900 border-t border-r border-b border-slate-200 dark:border-white/10",
+                                "relative border-l-4 shadow-sm overflow-hidden bg-white dark:bg-slate-900 border-t border-r border-b border-slate-200 dark:border-white/10",
                                 leg.id === activeLeg?.id
                                   ? "border-l-emerald-500 ring-1 ring-emerald-500/20"
                                   : "border-l-slate-300 dark:border-l-slate-700 opacity-90",
                               )}
                             >
-                              <CardContent className="p-0 flex flex-col">
+                              <CardContent className="relative p-0 flex flex-col">
+                                <div className="absolute top-4 left-4 pointer-events-none select-none z-0">
+                                  <span className="text-5xl md:text-6xl font-black tracking-tighter text-slate-200/70 dark:text-white/5 leading-none">
+                                    {String(idx + 1).padStart(2, "0")}
+                                  </span>
+                                </div>
                                 {/* Cabecera de la Fase */}
-                                <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
                                   <div className="space-y-1.5 flex-1">
                                     <p className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
                                       Fase Operativa {idx + 1}{" "}
@@ -658,7 +624,7 @@ export function TripDetailsModal({
                                               : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
                                       )}
                                     >
-                                      {leg.status.replace("_", " ")}
+                                      {String(leg.status).replace("_", " ")}
                                     </Badge>
 
                                     <div className="flex gap-2">
@@ -673,7 +639,10 @@ export function TripDetailsModal({
                                               btnUI.color,
                                             )}
                                             onClick={() =>
-                                              onRelayClick(leg, trip)
+                                              onRelayClick(
+                                                leg as unknown as TripLeg,
+                                                trip,
+                                              )
                                             }
                                           >
                                             {btnUI.icon}
@@ -686,7 +655,10 @@ export function TripDetailsModal({
                                             size="sm"
                                             className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[9px] uppercase tracking-widest shadow-lg shadow-emerald-500/20 haptic-press"
                                             onClick={() =>
-                                              onSettleClick(leg, trip)
+                                              onSettleClick(
+                                                leg as unknown as TripLeg,
+                                                trip,
+                                              )
                                             }
                                           >
                                             <Wallet className="h-3.5 w-3.5 mr-1.5" />
@@ -698,8 +670,9 @@ export function TripDetailsModal({
                                 </div>
 
                                 {/* 🚀 FASE 3: Desglose de toda la Info Operativa y Financiera del Tramo */}
-                                <div className="border-t border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-slate-900/30 p-4">
-                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div className="border-t border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-slate-900/30 p-4 px-6 relative z-10">
+                                  {" "}
+                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                                     <div className="space-y-1">
                                       <Label className="text-[9px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-1">
                                         <CalendarDays className="h-3 w-3" />{" "}
@@ -709,7 +682,8 @@ export function TripDetailsModal({
                                         {leg.start_date
                                           ? format(
                                               new Date(leg.start_date),
-                                              "dd/MM/yy HH:mm",
+                                              "dd MMM yy, HH:mm",
+                                              { locale: es },
                                             )
                                           : "Pendiente"}
                                       </p>
@@ -722,7 +696,8 @@ export function TripDetailsModal({
                                         {leg.actual_arrival
                                           ? format(
                                               new Date(leg.actual_arrival),
-                                              "dd/MM/yy HH:mm",
+                                              "dd MMM yy, HH:mm",
+                                              { locale: es },
                                             )
                                           : "Pendiente"}
                                       </p>
@@ -741,12 +716,12 @@ export function TripDetailsModal({
                                     <div className="space-y-1">
                                       <Label className="text-[9px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-1">
                                         <DollarSign className="h-3 w-3" />{" "}
-                                        Anticipos
+                                        Anticipos / Vales
                                       </Label>
                                       <p
                                         className={cn(
-                                          "text-xs font-mono font-bold",
-                                          leg.total_anticipos > 0
+                                          "text-sm font-mono font-black",
+                                          (leg.total_anticipos || 0) > 0
                                             ? "text-amber-600 dark:text-amber-400"
                                             : "text-slate-700 dark:text-slate-300",
                                         )}
@@ -757,33 +732,40 @@ export function TripDetailsModal({
                                       </p>
                                     </div>
                                   </div>
-
                                   {/* Sub-bloque de Liquidación si ya se cerró */}
                                   {leg.status === "liquidado" && (
-                                    <div className="mt-4 p-3 bg-emerald-50 dark:bg-emerald-950/20 rounded-xl border border-emerald-100 dark:border-emerald-900/30 flex flex-wrap gap-4 items-center justify-between">
-                                      <div className="space-y-0.5">
+                                    <div className="mt-4 p-4 bg-emerald-50 dark:bg-emerald-950/20 rounded-xl border border-emerald-100 dark:border-emerald-900/30 flex flex-wrap gap-6 items-center justify-between shadow-sm">
+                                      <div className="space-y-1">
                                         <span className="text-[9px] font-black uppercase text-emerald-600/80 dark:text-emerald-400/80 tracking-widest">
                                           Total Liquidado a Operador
                                         </span>
-                                        <p className="text-sm font-mono font-black text-emerald-700 dark:text-emerald-400">
+                                        <p className="text-lg font-mono font-black text-emerald-700 dark:text-emerald-400">
                                           {formatCurrency(
                                             leg.monto_neto_pagado || 0,
                                           )}
                                         </p>
                                       </div>
-                                      <div className="flex gap-4 text-[10px] font-bold text-slate-500 dark:text-slate-400">
-                                        <span>
-                                          Base/Bono:{" "}
-                                          {formatCurrency(
-                                            leg.monto_sueldo || 0,
-                                          )}
-                                        </span>
-                                        <span>
-                                          Maniobras:{" "}
-                                          {formatCurrency(
-                                            leg.monto_maniobras || 0,
-                                          )}
-                                        </span>
+                                      <div className="flex gap-6 text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                                        <div className="flex flex-col">
+                                          <span className="uppercase text-[8px] text-slate-400">
+                                            Base / Bono
+                                          </span>
+                                          <span className="font-mono text-slate-600 dark:text-slate-300">
+                                            {formatCurrency(
+                                              leg.monto_sueldo || 0,
+                                            )}
+                                          </span>
+                                        </div>
+                                        <div className="flex flex-col">
+                                          <span className="uppercase text-[8px] text-slate-400">
+                                            Maniobras
+                                          </span>
+                                          <span className="font-mono text-slate-600 dark:text-slate-300">
+                                            {formatCurrency(
+                                              leg.monto_maniobras || 0,
+                                            )}
+                                          </span>
+                                        </div>
                                       </div>
                                     </div>
                                   )}
@@ -814,7 +796,7 @@ export function TripDetailsModal({
                     >
                       <Card
                         className={cn(
-                          "shadow-xl border-2 transition-colors",
+                          "shadow-xl border-2 transition-colors max-w-3xl mx-auto",
                           isEditing
                             ? "border-amber-200 dark:border-amber-900/50 bg-amber-50/20 dark:bg-amber-950/10"
                             : "border-emerald-100 dark:border-emerald-900/50 bg-white dark:bg-slate-900",
@@ -874,7 +856,7 @@ export function TripDetailsModal({
 
                         <CardContent className="p-6 md:p-8">
                           {isEditing ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-2xl mx-auto bg-amber-50 dark:bg-amber-950/20 p-6 sm:p-8 rounded-2xl border border-amber-200 dark:border-amber-900/50 shadow-inner">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-amber-50 dark:bg-amber-950/20 p-6 sm:p-8 rounded-2xl border border-amber-200 dark:border-amber-900/50 shadow-inner">
                               <div className="space-y-3">
                                 <Label className="text-[10px] font-black uppercase tracking-widest text-amber-800 dark:text-amber-500">
                                   Flete Base Acordado
@@ -1053,7 +1035,7 @@ export function TripDetailsModal({
                       value="bitacora"
                       className="m-0 space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500"
                     >
-                      <div className="flex justify-between items-center bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-white/10 shadow-sm">
+                      <div className="flex justify-between items-center bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-white/10 shadow-sm max-w-4xl mx-auto">
                         <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-2">
                           <History className="h-4 w-4 text-blue-500" /> Línea de
                           Tiempo del Servicio
@@ -1070,14 +1052,14 @@ export function TripDetailsModal({
                       </div>
 
                       {allEvents.length === 0 ? (
-                        <div className="text-center py-16 px-6 text-slate-500 bg-white/50 dark:bg-slate-900/30 rounded-2xl border-2 border-dashed border-slate-200 dark:border-white/10">
+                        <div className="text-center py-16 px-6 text-slate-500 bg-white/50 dark:bg-slate-900/30 rounded-2xl border-2 border-dashed border-slate-200 dark:border-white/10 max-w-4xl mx-auto">
                           <Clock className="h-12 w-12 mx-auto mb-4 opacity-20" />
                           <p className="font-black uppercase tracking-widest text-xs">
                             El viaje aún no cuenta con movimientos reportados.
                           </p>
                         </div>
                       ) : (
-                        <div className="space-y-4">
+                        <div className="space-y-4 max-w-4xl mx-auto">
                           {allEvents.map((ev, idx) => (
                             <div
                               key={idx}
@@ -1127,7 +1109,7 @@ export function TripDetailsModal({
         </DialogContent>
       </Dialog>
 
-      {/* 🚀 MODAL DE LLEGADA A TERMINAL (4 CAPAS) */}
+      {/* 🚀 MODAL DE LLEGADA A TERMINAL */}
       <Dialog open={showTerminalModal} onOpenChange={setShowTerminalModal}>
         <DialogContent className="sm:max-w-md w-[95vw] rounded-2xl overflow-visible p-0 border-none shadow-2xl bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl flex flex-col max-h-[90vh]">
           <DialogHeader className="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-t-2xl border-b border-slate-200 dark:border-white/10 relative overflow-hidden z-10 shrink-0">

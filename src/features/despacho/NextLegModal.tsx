@@ -37,10 +37,30 @@ import {
   Package,
   Minus,
   FileCode2,
+  Scale,
+  Hash,
+  AlertCircle,
+  ChevronDown,
+  Check,
+  ChevronsUpDown,
 } from "lucide-react";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { useUnits } from "@/hooks/useUnits";
 import { useOperators } from "@/hooks/useOperators";
 import { useBilling } from "@/hooks/useBilling";
+import { useSatCatalogs } from "@/hooks/useSatCatalogs"; // 🚀 Importamos catálogo SAT
 import { Trip, TripLegCreatePayload } from "@/types/api.types";
 import { cn } from "@/lib/utils";
 import axiosClient from "@/api/axiosClient";
@@ -68,7 +88,7 @@ interface ExtendedLegPayload extends TripLegCreatePayload {
   dolly_id?: number | null;
   remolque_2_id?: number | null;
   otros_anticipos: number;
-  destino_vacio?: string; // 🚀 FASE 3: Agregamos el destino textual del vacío
+  destino_vacio?: string;
 }
 
 interface NextLegModalProps {
@@ -77,6 +97,11 @@ interface NextLegModalProps {
   tripPadre: Trip | null;
   onSubmit: (tripId: string, payload: TripLegCreatePayload) => Promise<boolean>;
 }
+
+type SearchableItem = {
+  label: string;
+  value: string;
+};
 
 // ─── Utilidades ───────────────────────────────────────────────────────────────
 
@@ -95,7 +120,86 @@ const normalizeStr = (str?: string | null) =>
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "") || "";
 
-// ─── Componente ───────────────────────────────────────────────────────────────
+// ─── Componentes Auxiliares ───────────────────────────────────────────────────
+
+function SearchableSelect({
+  items,
+  value,
+  onSelect,
+  placeholder,
+  className,
+}: {
+  items: SearchableItem[];
+  value: string;
+  onSelect: (val: string) => void;
+  placeholder: string;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const selectedItem = items.find((item) => item.value === value);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className={cn(
+            "h-11 w-full justify-between rounded-xl border-slate-200/80 bg-white/90 px-4 font-semibold text-slate-800 shadow-sm backdrop-blur-xl hover:bg-white dark:bg-slate-900 dark:border-white/10 dark:text-slate-200",
+            className,
+          )}
+        >
+          {selectedItem ? (
+            <span className="truncate text-left">{selectedItem.label}</span>
+          ) : (
+            <span className="truncate text-left text-slate-400 dark:text-slate-500">
+              {placeholder}
+            </span>
+          )}
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-60" />
+        </Button>
+      </PopoverTrigger>
+
+      <PopoverContent
+        className="w-[var(--radix-popover-trigger-width)] p-0"
+        align="start"
+        sideOffset={8}
+      >
+        <Command className="dark:bg-slate-900">
+          <CommandInput placeholder="Escribe para buscar..." />
+          <CommandList className="max-h-[280px] custom-scrollbar">
+            <CommandEmpty>No se encontraron resultados.</CommandEmpty>
+            <CommandGroup>
+              {items.map((item) => (
+                <CommandItem
+                  key={item.value}
+                  value={item.label}
+                  onSelect={() => {
+                    onSelect(item.value);
+                    setOpen(false);
+                  }}
+                  className="rounded-xl cursor-pointer dark:text-slate-200"
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4 text-emerald-500",
+                      value === item.value ? "opacity-100" : "opacity-0",
+                    )}
+                  />
+                  {item.label}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ─── Componente Principal ─────────────────────────────────────────────────────
 
 export function NextLegModal({
   open,
@@ -106,11 +210,13 @@ export function NextLegModal({
   const { unidades, updateLoadStatus } = useUnits();
   const { operadores } = useOperators();
   const { isStamping, handleStampNominal } = useBilling();
+  const { products: satProducts } = useSatCatalogs();
 
   const [loading, setLoading] = useState(false);
   const [cpGenerada, setCpGenerada] = useState(false);
   const [localUuid, setLocalUuid] = useState<string | null>(null);
   const [shouldStampReal, setShouldStampReal] = useState(false);
+  const [showFiscalData, setShowFiscalData] = useState(false);
 
   const [formData, setFormData] = useState<Partial<ExtendedLegPayload>>({
     leg_type: "ruta_carretera",
@@ -123,7 +229,20 @@ export function NextLegModal({
     anticipo_viaticos: 0,
     anticipo_combustible: 0,
     otros_anticipos: 0,
-    destino_vacio: "", // Inicializamos vacío
+    destino_vacio: "",
+  });
+
+  // 🚀 ESTADO PARA DATOS FISCALES (CARTA PORTE REAL)
+  const [tripFiscalData, setTripFiscalData] = useState({
+    contenedor_1: "",
+    contenedor_2: "",
+    referencia: "",
+    peso_toneladas: 0,
+    descripcion_mercancia: "",
+    sat_clave_producto: "78101802",
+    sat_clave_unidad: "E48",
+    es_material_peligroso: false,
+    clase_imo: "",
   });
 
   useEffect(() => {
@@ -141,9 +260,25 @@ export function NextLegModal({
         otros_anticipos: 0,
         destino_vacio: "",
       });
+
+      // 🚀 Precargamos los datos fiscales si el viaje ya los tiene
+      setTripFiscalData({
+        contenedor_1: (tripPadre as any).contenedor_1 || "",
+        contenedor_2: (tripPadre as any).contenedor_2 || "",
+        referencia: (tripPadre as any).referencia || "",
+        peso_toneladas: tripPadre.peso_toneladas || 0,
+        descripcion_mercancia:
+          tripPadre.descripcion_mercancia || "Carga General",
+        sat_clave_producto: tripPadre.sat_clave_producto || "78101802",
+        sat_clave_unidad: tripPadre.sat_clave_unidad || "E48",
+        es_material_peligroso: tripPadre.es_material_peligroso || false,
+        clase_imo: tripPadre.clase_imo || "",
+      });
+
       setCpGenerada(Boolean(tripPadre.uuid_fiscal));
       setLocalUuid(tripPadre.uuid_fiscal ?? null);
       setShouldStampReal(false);
+      setShowFiscalData(false); // Colapsado por defecto al abrir
     }
   }, [open, tripPadre]);
 
@@ -163,6 +298,25 @@ export function NextLegModal({
       Boolean(tripPadre.dolly_id)
     );
   }, [tripPadre]);
+
+  const availableSatProducts = useMemo(
+    () =>
+      satProducts.map((p) => ({
+        label: `${p.clave} - ${p.descripcion}`,
+        value: p.clave,
+        ...p,
+      })),
+    [satProducts],
+  );
+
+  const isFiscalDataComplete = useMemo(() => {
+    return (
+      tripFiscalData.peso_toneladas > 0 &&
+      tripFiscalData.sat_clave_producto.trim() !== "" &&
+      tripFiscalData.sat_clave_unidad.trim() !== "" &&
+      tripFiscalData.descripcion_mercancia.trim() !== ""
+    );
+  }, [tripFiscalData]);
 
   const finanzas = useMemo(() => {
     if (!tripPadre)
@@ -189,6 +343,7 @@ export function NextLegModal({
     };
   }, [tripPadre]);
 
+  // 🚀 Corrección de la variable `gastoOperativoActual` y `isRoadLeg` basada en `formData`
   const gastoOperativoActual = useMemo(
     () =>
       Number(formData.anticipo_casetas ?? 0) +
@@ -346,8 +501,20 @@ export function NextLegModal({
       toast.error("Indique el destino/patio donde se entregará el vacío.");
       return false;
     }
+
+    // 🚀 VALIDACIÓN FISCAL SI ACTIVÓ EL TIMBRADO REAL
+    if (shouldStampReal) {
+      if (!isFiscalDataComplete) {
+        toast.error(
+          "Faltan datos fiscales para emitir la Carta Porte Real (Peso o Claves SAT).",
+        );
+        setShowFiscalData(true); // Abre la pestaña para que lo vea
+        return false;
+      }
+    }
+
     return true;
-  }, [formData, isFullTrip]);
+  }, [formData, isFullTrip, shouldStampReal, isFiscalDataComplete]);
 
   const handleIniciarTramo = useCallback(async () => {
     if (!tripPadre || !validateForm()) return;
@@ -360,11 +527,17 @@ export function NextLegModal({
 
     setLoading(true);
     try {
+      // 🚀 FASE 4: 1. ACTUALIZAR DATOS FISCALES EN EL VIAJE ANTES DE TIMBRAR SIEMPRE
+      await axiosClient.put(`/trips/${tripPadre.id}`, tripFiscalData);
+
+      // 2. CREAR LA FASE/TRAMO OPERATIVO
       const success = await onSubmit(
         String(tripPadre.id),
         formData as TripLegCreatePayload,
       );
+
       if (success) {
+        // 3. DISPARAR TIMBRADO REAL SI LO ELIGIÓ
         if (shouldStampReal && formData.leg_type === "ruta_carretera") {
           try {
             await axiosClient.post(`/billing/${tripPadre.id}/stamp-real`);
@@ -401,6 +574,7 @@ export function NextLegModal({
     onOpenChange,
     cpGenerada,
     shouldStampReal,
+    tripFiscalData,
   ]);
 
   const referencia = (tripPadre as (Trip & { referencia?: string }) | null)
@@ -719,6 +893,229 @@ export function NextLegModal({
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            {/* 🚀 BLOQUE FISCAL DINÁMICO Y COLAPSABLE SIEMPRE VISIBLE */}
+            <div className="rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/50 shadow-sm overflow-hidden animate-in fade-in transition-all">
+              <button
+                type="button"
+                onClick={() => setShowFiscalData(!showFiscalData)}
+                className="w-full flex items-center justify-between p-5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors haptic-press"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                    <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <span className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-700 dark:text-slate-300">
+                    Datos Complementarios Carta Porte 4.0
+                  </span>
+                </div>
+                <div className="flex items-center gap-4">
+                  {!isFiscalDataComplete && (
+                    <div className="flex items-center gap-1.5 text-rose-500 animate-pulse bg-rose-50 dark:bg-rose-500/10 px-3 py-1 rounded-full border border-rose-200 dark:border-rose-500/30">
+                      <AlertCircle className="h-3.5 w-3.5" />
+                      <span className="text-[9px] font-bold uppercase tracking-widest">
+                        Falta Info
+                      </span>
+                    </div>
+                  )}
+                  {isFiscalDataComplete && (
+                    <div className="flex items-center gap-1.5 text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-200 dark:border-emerald-500/30">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      <span className="text-[9px] font-bold uppercase tracking-widest">
+                        Completo
+                      </span>
+                    </div>
+                  )}
+                  <ChevronDown
+                    className={cn(
+                      "h-5 w-5 text-slate-400 transition-transform duration-300",
+                      showFiscalData && "rotate-180",
+                    )}
+                  />
+                </div>
+              </button>
+
+              {showFiscalData && (
+                <div className="p-6 sm:p-8 border-t border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-slate-950/20 space-y-6 animate-in slide-in-from-top-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                        <Container className="h-3 w-3 text-brand-navy dark:text-blue-400" />{" "}
+                        Contenedor 1
+                      </Label>
+                      <Input
+                        placeholder="Ej. TAMU1234567"
+                        className="h-11 font-mono uppercase bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10"
+                        value={tripFiscalData.contenedor_1}
+                        onChange={(e) =>
+                          setTripFiscalData((p) => ({
+                            ...p,
+                            contenedor_1: e.target.value.toUpperCase(),
+                          }))
+                        }
+                      />
+                    </div>
+
+                    {isFullTrip && (
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                          <Container className="h-3 w-3 text-brand-navy dark:text-blue-400" />{" "}
+                          Contenedor 2
+                        </Label>
+                        <Input
+                          placeholder="Ej. MSCU7654321"
+                          className="h-11 font-mono uppercase bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10"
+                          value={tripFiscalData.contenedor_2}
+                          onChange={(e) =>
+                            setTripFiscalData((p) => ({
+                              ...p,
+                              contenedor_2: e.target.value.toUpperCase(),
+                            }))
+                          }
+                        />
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                        <Hash className="h-3 w-3 text-brand-navy dark:text-blue-400" />{" "}
+                        Referencia / Booking
+                      </Label>
+                      <Input
+                        placeholder="Ej. KH5697143"
+                        className="h-11 font-mono uppercase bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10"
+                        value={tripFiscalData.referencia}
+                        onChange={(e) =>
+                          setTripFiscalData((p) => ({
+                            ...p,
+                            referencia: e.target.value.toUpperCase(),
+                          }))
+                        }
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label
+                        className={cn(
+                          "text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5",
+                          !tripFiscalData.peso_toneladas
+                            ? "text-rose-500"
+                            : "text-slate-600 dark:text-slate-400",
+                        )}
+                      >
+                        <Scale className="h-3 w-3" /> Peso (Toneladas) *
+                      </Label>
+                      <Input
+                        type="number"
+                        placeholder="Ej. 25.5"
+                        className={cn(
+                          "h-11 font-mono bg-white dark:bg-slate-900",
+                          !tripFiscalData.peso_toneladas
+                            ? "border-rose-300 dark:border-rose-800 ring-1 ring-rose-500/20 bg-rose-50/50"
+                            : "border-slate-200 dark:border-white/10",
+                        )}
+                        value={tripFiscalData.peso_toneladas || ""}
+                        onChange={(e) =>
+                          setTripFiscalData((p) => ({
+                            ...p,
+                            peso_toneladas: Number(e.target.value),
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label
+                      className={cn(
+                        "text-[10px] font-bold uppercase tracking-widest",
+                        !tripFiscalData.descripcion_mercancia
+                          ? "text-rose-500"
+                          : "text-slate-600 dark:text-slate-400",
+                      )}
+                    >
+                      Descripción de Mercancía (CATÁLOGO SAT) *
+                    </Label>
+                    <SearchableSelect
+                      items={availableSatProducts}
+                      value={tripFiscalData.sat_clave_producto}
+                      placeholder="Buscar producto SAT..."
+                      onSelect={(val) => {
+                        const prod = availableSatProducts.find(
+                          (p) => p.value === val,
+                        );
+                        if (prod) {
+                          setTripFiscalData((p) => ({
+                            ...p,
+                            sat_clave_producto: prod.clave,
+                            descripcion_mercancia: prod.descripcion,
+                            es_material_peligroso:
+                              prod.es_material_peligroso === "1",
+                            clase_imo:
+                              prod.es_material_peligroso === "1"
+                                ? p.clase_imo
+                                : "",
+                          }));
+                        }
+                      }}
+                    />
+                    <p className="text-[10px] text-slate-500 font-medium ml-1">
+                      Al seleccionar un producto, la clave SAT y descripción se
+                      autocompletan.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <Label
+                        className={cn(
+                          "text-[10px] font-bold uppercase tracking-widest",
+                          !tripFiscalData.sat_clave_producto
+                            ? "text-rose-500"
+                            : "text-slate-600 dark:text-slate-400",
+                        )}
+                      >
+                        Clave Producto SAT *
+                      </Label>
+                      <Input
+                        placeholder="Ej. 78101802"
+                        className="h-11 font-mono bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10"
+                        value={tripFiscalData.sat_clave_producto}
+                        onChange={(e) =>
+                          setTripFiscalData((p) => ({
+                            ...p,
+                            sat_clave_producto: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label
+                        className={cn(
+                          "text-[10px] font-bold uppercase tracking-widest",
+                          !tripFiscalData.sat_clave_unidad
+                            ? "text-rose-500"
+                            : "text-slate-600 dark:text-slate-400",
+                        )}
+                      >
+                        Clave Unidad SAT *
+                      </Label>
+                      <Input
+                        placeholder="Ej. E48"
+                        className="h-11 font-mono uppercase bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10"
+                        value={tripFiscalData.sat_clave_unidad}
+                        onChange={(e) =>
+                          setTripFiscalData((p) => ({
+                            ...p,
+                            sat_clave_unidad: e.target.value.toUpperCase(),
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* 🚀 FASE 3: Campo dinámico de Destino de Vacío */}
