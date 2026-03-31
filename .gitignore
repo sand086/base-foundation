@@ -31,8 +31,8 @@ dist-ssr
 .env
 .env.local
 .env.*.local
-backend/.env
-backend/.env.*
+# backend/.env
+# backend/.env.*
 
 # dependencias
 /node_modules
