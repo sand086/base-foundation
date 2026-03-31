@@ -23,14 +23,12 @@ logger = logging.getLogger(__name__)
 def get_fuel_logs(
     unit_id: Optional[int] = Query(default=None),
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
+    print("ENTRO A /fuel-logs", flush=True)
+
     try:
-        logger.info(
-            "Consultando fuel logs | user_id=%s | unit_id=%s",
-            getattr(current_user, "id", None),
-            unit_id,
-        )
+        print("ANTES DEL SELECT", flush=True)
 
         stmt = (
             select(models.FuelLog)
@@ -42,34 +40,24 @@ def get_fuel_logs(
             .where(models.FuelLog.record_status == "A")
         )
 
+        print("DESPUES DEL SELECT", flush=True)
+
         if unit_id is not None:
             stmt = stmt.where(models.FuelLog.unit_id == unit_id)
 
         stmt = stmt.order_by(models.FuelLog.fecha_hora.desc())
 
         result = db.execute(stmt)
-        logs = result.scalars().unique().all()
+        print("DESPUES DEL EXECUTE", flush=True)
 
-        logger.info("Fuel logs obtenidos correctamente | total=%s", len(logs))
+        logs = result.scalars().unique().all()
+        print(f"TOTAL LOGS: {len(logs)}", flush=True)
+
         return logs
 
-    except HTTPException:
-        raise
-
     except Exception as e:
-        logger.exception(
-            "Error en /fuel-logs | user_id=%s | unit_id=%s",
-            getattr(current_user, "id", None),
-            unit_id,
-        )
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "message": "Error al consultar fuel logs",
-                "error_type": type(e).__name__,
-                "error": str(e),
-            },
-        )
+        print(f"ERROR REAL: {type(e).__name__} - {e}", flush=True)
+        raise
 
 
 @router.put("/fuel-logs/{log_id}", response_model=schemas.FuelLogResponse)
