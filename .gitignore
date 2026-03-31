@@ -29,12 +29,9 @@ dist-ssr
 
 # archivos de entorno
 .env
-.env.local
-.env.*.local
-.env.production.local
+.env.*
 backend/.env
 backend/.env.*
-!backend/.env.example
 
 # dependencias
 /node_modules

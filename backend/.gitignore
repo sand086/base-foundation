@@ -14,7 +14,6 @@ alembic.ini
 app/uploads/
 app/storage/
 
-# Archivos ocultos
+# archivos ocultos
 .*
 !.gitignore
-!.env
