@@ -6,6 +6,7 @@ from app.db.database import Base, engine
 from datetime import datetime
 from fastapi.staticfiles import StaticFiles
 import traceback
+import os
 
 # Crear tablas
 Base.metadata.create_all(bind=engine)
@@ -59,6 +60,10 @@ def health_check():
 
 # Rutas
 app.include_router(api_router, prefix="/api")
+
+upload_path = "app/uploads"
+if not os.path.exists(upload_path):
+    os.makedirs(upload_path)
 app.mount("/api/static", StaticFiles(directory="app/uploads"), name="static")
 
 

@@ -81,3 +81,33 @@ export function getClasificacionColor(
     ? map[clasificacion] || "bg-slate-100 text-slate-700 border-slate-200"
     : "bg-slate-100 text-slate-700";
 }
+
+/*
+  Función para determinar si un viaje es "FULL" o no, basándose en su tipo de unidad, nombre de ruta o si tiene un Dolly asignado.
+*/
+export const checkIsFullTrip = (data: any): boolean => {
+  if (!data) return false;
+
+  const normalize = (s: any) =>
+    String(s || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim();
+
+  // 🚀 Ahora busca 'tipo_unidad' directamente O dentro de 'tariff'
+  const tipoUnidad = normalize(
+    data.tipo_unidad || data.tariff?.tipo_unidad || "",
+  );
+  const routeName = normalize(data.route_name || data.nombre_ruta || "");
+  const tieneDollyId = Boolean(data.dolly_id);
+
+  return (
+    tipoUnidad.includes("full") ||
+    tipoUnidad.includes("9ejes") ||
+    tipoUnidad.includes("9 ejes") ||
+    tipoUnidad.includes("doble") ||
+    routeName.includes("full") ||
+    tieneDollyId
+  );
+};

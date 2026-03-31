@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -216,7 +216,7 @@ const getPasswordStrength = (pass: string) => {
 // Page
 // =====================
 const ProfilePage: React.FC = () => {
-  const { user: authUser } = useAuth();
+  const { user: authUser, updateUser } = useAuth();
 
   const [fullProfile, setFullProfile] = useState<FullProfile | null>(null);
   const [isFetchingProfile, setIsFetchingProfile] = useState(true);
@@ -247,7 +247,7 @@ const ProfilePage: React.FC = () => {
   const [verificationCode, setVerificationCode] = useState("");
   const [showDisable2FADialog, setShowDisable2FADialog] = useState(false);
   const [disablePassword, setDisablePassword] = useState("");
-
+  const [isUploading, setIsUploading] = useState(false);
   const profileForm = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
     defaultValues: { nombre: "", apellidos: "", telefono: "", puesto: "" },
@@ -267,6 +267,51 @@ const ProfilePage: React.FC = () => {
   // Escuchamos el valor de la nueva contraseña en tiempo real para la barra de fuerza
   const newPasswordValue = passwordForm.watch("newPassword");
   const strength = getPasswordStrength(newPasswordValue);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Función para manejar la subida
+  const handleFileChange = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file || !fullProfile) return;
+
+    // Validación básica
+    if (!file.type.startsWith("image/")) {
+      toast.error("Por favor selecciona una imagen válida");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file); // El backend espera el nombre "file"
+
+    setIsLoading(true);
+    try {
+      const { data } = await axiosClient.post(
+        `/users/${fullProfile.id}/avatar`,
+        formData,
+        { headers: { "Content-Type": "multipart/form-data" } },
+      );
+
+      // 1. Actualizamos el estado local de esta página
+      setFullProfile((prev) =>
+        prev ? { ...prev, avatar_url: data.avatar_url } : prev,
+      );
+
+      // 🚀 2. ACTUALIZACIÓN GLOBAL: Esto es lo que actualiza el Header automáticamente
+      if (updateUser && authUser) {
+        updateUser({ ...authUser, avatar_url: data.avatar_url });
+      }
+
+      toast.success("Foto de perfil actualizada correctamente");
+    } catch (error) {
+      console.error("Error upload:", error);
+      toast.error("No se pudo subir la imagen");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const fetchProfile = async () => {
     setIsFetchingProfile(true);
@@ -308,7 +353,14 @@ const ProfilePage: React.FC = () => {
         puesto: data.puesto,
       };
       await axiosClient.put(`/users/${fullProfile.id}`, payload);
+
+      // 1. Actualizamos el estado local
       setFullProfile((prev) => (prev ? { ...prev, ...payload } : prev));
+
+      if (updateUser && authUser) {
+        updateUser({ ...authUser, ...payload });
+      }
+
       toast.success("Perfil actualizado correctamente");
     } catch (error) {
       toast.error("Error al actualizar el perfil");
@@ -452,10 +504,15 @@ const ProfilePage: React.FC = () => {
   };
 
   const avatarUrl = useMemo(() => {
-    if (!fullProfile) return AvatarDefault;
-    return fullProfile.avatar_url?.trim()
-      ? fullProfile.avatar_url
-      : AvatarDefault;
+    if (!fullProfile?.avatar_url) return AvatarDefault;
+
+    const path = fullProfile.avatar_url;
+    if (path.startsWith("http")) return path;
+
+    const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
+    const cleanBase = baseUrl.replace(/\/api$/, "");
+
+    return `${cleanBase}${path}`;
   }, [fullProfile]);
 
   const iniciales = useMemo(() => {
@@ -500,15 +557,28 @@ const ProfilePage: React.FC = () => {
                   {iniciales}
                 </AvatarFallback>
               </Avatar>
+
+              {/* Input de archivo oculto */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                accept="image/*"
+                onChange={handleFileChange}
+              />
+
               <Button
                 size="icon"
                 variant="secondary"
                 className="absolute -bottom-1 -right-1 h-8 w-8 rounded-full shadow"
-                onClick={() =>
-                  toast.info("Subida de avatar pendiente de conectar")
-                }
+                disabled={isLoading}
+                onClick={() => fileInputRef.current?.click()} // Activa el selector de archivos
               >
-                <Camera className="h-4 w-4" />
+                {isLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Camera className="h-4 w-4" />
+                )}
               </Button>
             </div>
 

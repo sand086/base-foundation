@@ -657,7 +657,7 @@ export function NextLegModal({
                   "px-4 py-1.5 uppercase text-[10px] font-black tracking-widest border-none shadow-lg",
                   cpGenerada
                     ? "bg-emerald-600 text-white dark:bg-emerald-500"
-                    : "bg-rose-600 text-white dark:bg-rose-500 animate-pulse",
+                    : "bg-rose-600 text-white dark:bg-rose-500 ",
                 )}
               >
                 {cpGenerada ? "CP $1 MXN GENERADA" : "CP $1 MXN PENDIENTE"}

@@ -1,4 +1,3 @@
-// src/context/AuthContext.tsx
 import React, {
   createContext,
   useContext,
@@ -6,7 +5,6 @@ import React, {
   useEffect,
   ReactNode,
 } from "react";
-// Importamos la interfaz User exacta que me mostraste de tus tipos
 import { User } from "@/types/api.types";
 import { authService } from "@/services/authService";
 
@@ -17,6 +15,8 @@ interface AuthContextType {
   logout: () => void;
   isLoading: boolean;
   verifyOtp: (tempToken: string, code: string) => Promise<void>;
+  // 🚀 AGREGAMOS LA DEFINICIÓN AQUÍ
+  updateUser: (newData: Partial<User>) => void;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(
@@ -28,38 +28,43 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Al cargar la app (F5), intentamos recuperar la sesión
     const storedUser = authService.getCurrentUser();
-
-    // Validamos que exista tanto el usuario como el token válido
     if (storedUser && authService.isAuthenticated()) {
       setUser(storedUser);
     }
-
-    // Una vez que terminó de comprobar, quitamos el loading
     setIsLoading(false);
   }, []);
 
+  // 🚀 IMPLEMENTACIÓN DE UPDATE USER
+  const updateUser = (newData: Partial<User>) => {
+    setUser((prevUser) => {
+      if (!prevUser) return null;
+
+      const updatedUser = { ...prevUser, ...newData };
+
+      // Es vital actualizar localStorage para que el cambio persista al recargar (F5)
+      localStorage.setItem("user_data", JSON.stringify(updatedUser));
+
+      return updatedUser;
+    });
+  };
+
   const login = (userData: User, token: string, refreshToken: string) => {
     localStorage.setItem("access_token", token);
-    localStorage.setItem("refresh_token", refreshToken); // 💾 La llave de 7 días
+    localStorage.setItem("refresh_token", refreshToken);
     localStorage.setItem("user_data", JSON.stringify(userData));
-
     setUser(userData);
   };
 
   const logout = () => {
-    // 🧹 Limpiamos localStorage (Asegúrate que authService.logout()
-    // borre tanto access_token como refresh_token)
     authService.logout();
     setUser(null);
     window.location.href = "/login";
   };
+
   const verifyOtp = async (tempToken: string, code: string) => {
     try {
       const data = await authService.verify2FA({ temp_token: tempToken, code });
-
-      // 🛡️ Validación de seguridad: Aseguramos que el backend mandó todo
       if (data.user && data.access_token && data.refresh_token) {
         login(data.user, data.access_token, data.refresh_token);
       } else {
@@ -70,6 +75,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       throw error;
     }
   };
+
   return (
     <AuthContext.Provider
       value={{
@@ -79,12 +85,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         logout,
         isLoading,
         verifyOtp,
+        // 🚀 PASAMOS LA FUNCIÓN AL PROVIDER
+        updateUser,
       }}
     >
       {children}
     </AuthContext.Provider>
   );
 };
+
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {

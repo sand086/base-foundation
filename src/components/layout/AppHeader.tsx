@@ -45,9 +45,9 @@ const getFullImageUrl = (path?: string) => {
 };
 
 export function AppHeader() {
-  const { user: cachedUser, logout } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [currentUser, setCurrentUser] = useState(cachedUser);
+
   const [notifications, setNotifications] = useState<any[]>([]);
 
   // 🌙 ESTADO Y LÓGICA DEL DARK MODE
@@ -81,19 +81,6 @@ export function AppHeader() {
     }
   };
 
-  useEffect(() => {
-    const fetchFreshUserData = async () => {
-      if (!cachedUser?.id) return;
-      try {
-        const { data } = await axiosClient.get("/users/me");
-        setCurrentUser(data);
-      } catch (error) {
-        setCurrentUser(cachedUser);
-      }
-    };
-    fetchFreshUserData();
-  }, [cachedUser?.id]);
-
   const fetchNotifications = async () => {
     try {
       const { data } = await axiosClient.get("/notifications/me");
@@ -104,10 +91,17 @@ export function AppHeader() {
   };
 
   useEffect(() => {
-    if (cachedUser?.id) fetchNotifications();
+    // Solo disparamos si hay un usuario logueado
+    if (!user?.id) return;
+
+    fetchNotifications();
+
+    // Polling: sigue buscando notificaciones cada 60 segundos
     const interval = setInterval(fetchNotifications, 60000);
+
+    // Limpieza al desmontar o cuando cambie el usuario
     return () => clearInterval(interval);
-  }, [cachedUser?.id]);
+  }, [user?.id]);
 
   const markAllAsRead = async () => {
     try {
@@ -129,9 +123,8 @@ export function AppHeader() {
       : nombre.substring(0, 2).toUpperCase();
   };
 
-  const safeUser = currentUser || cachedUser;
   const userRoleName =
-    safeUser?.role?.nombre || safeUser?.rol || safeUser?.puesto || "Usuario";
+    user?.role?.nombre || user?.rol || user?.puesto || "Usuario";
 
   return (
     <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-slate-200/80 dark:border-white/10 bg-white/90 dark:bg-brand-navy/80 backdrop-blur-2xl px-4 md:px-6 shadow-sm transition-all">
@@ -272,17 +265,17 @@ export function AppHeader() {
             >
               <Avatar className="h-8 w-8 border border-slate-200 dark:border-white/20 shadow-sm transition-transform group-hover:scale-105">
                 <AvatarImage
-                  src={getFullImageUrl(safeUser?.avatar_url)}
+                  src={getFullImageUrl(user?.avatar_url)}
                   alt="Avatar"
                   className="object-cover bg-white dark:bg-brand-navy"
                 />
                 <AvatarFallback className="bg-brand-navy dark:bg-white/10 text-white font-bold text-[11px]">
-                  {getInitials(safeUser?.nombre)}
+                  {getInitials(user?.nombre)}
                 </AvatarFallback>
               </Avatar>
               <div className="hidden md:flex flex-col items-start text-left justify-center">
                 <span className="text-[12px] font-bold leading-none text-slate-800 dark:text-white uppercase tracking-tight truncate max-w-[130px]">
-                  {safeUser?.nombre || "Cargando..."}
+                  {user?.nombre || "Cargando..."}
                 </span>
                 <span className="text-[9px] font-black text-brand-red mt-1.5 truncate max-w-[130px] leading-none uppercase tracking-[0.15em]">
                   {userRoleName}
@@ -300,10 +293,10 @@ export function AppHeader() {
           >
             <DropdownMenuLabel className="p-4 bg-slate-50/80 dark:bg-white/5 border-b border-slate-100 dark:border-white/10">
               <span className="block text-[14px] font-bold text-slate-800 dark:text-white truncate">
-                {safeUser?.nombre} {safeUser?.apellido}
+                {user?.nombre} {user?.apellido}
               </span>
               <span className="block text-[11px] font-medium tracking-wide text-slate-500 dark:text-white/50 truncate mt-1">
-                {safeUser?.email}
+                {user?.email}
               </span>
             </DropdownMenuLabel>
 

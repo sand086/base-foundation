@@ -51,7 +51,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 
-import { cn } from "@/lib/utils";
+import { cn, checkIsFullTrip } from "@/lib/utils";
 import axiosClient from "@/api/axiosClient"; // 🚀 Importante para llamar al timbrado
 
 // Hooks
@@ -398,8 +398,8 @@ export const DespachoWizard = () => {
   );
 
   const isFullTrip = useMemo(() => {
-    const tu = normalizeStr((selectedTariff as any)?.tipo_unidad);
-    return tu === "full" || tu === "9ejes" || tu === "9 ejes" || tu === "doble";
+    // Solo nos importa la tarifa seleccionada para decidir qué camión armar
+    return checkIsFullTrip(selectedTariff);
   }, [selectedTariff]);
 
   const isRoadLeg = data.leg_type === "ruta_carretera";
@@ -459,7 +459,6 @@ export const DespachoWizard = () => {
         peso_toneladas: Number(data.peso_toneladas),
         es_material_peligroso: data.es_material_peligroso,
         clase_imo: data.es_material_peligroso ? data.clase_imo : null,
-        // 🚀 FASE 1: Mapeo correcto al backend
         contenedor_1: data.contenedor_1 || null,
         contenedor_2: isFullTrip ? data.contenedor_2 : null,
         referencia: data.referencia_cliente || null,
@@ -467,12 +466,12 @@ export const DespachoWizard = () => {
         costo_casetas: Number(infoTarifa.casetas || 0),
         status,
         start_date: new Date().toISOString(),
+        remolque_1_id: cleanId(data.remolque1Id) || null,
+        dolly_id: isFullTrip ? cleanId(data.dollyId) || null : null,
+        remolque_2_id: isFullTrip ? cleanId(data.remolque2Id) || null : null,
       };
 
       if (status !== "creado") {
-        payload.remolque_1_id = cleanId(data.remolque1Id);
-        payload.dolly_id = isFullTrip ? cleanId(data.dollyId) : null;
-        payload.remolque_2_id = isFullTrip ? cleanId(data.remolque2Id) : null;
         payload.initial_leg = {
           unit_id: parseInt(data.unitId, 10),
           leg_type: data.leg_type,
