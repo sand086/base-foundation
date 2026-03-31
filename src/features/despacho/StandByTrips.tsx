@@ -8,9 +8,8 @@ import {
   Play,
   Trash2,
   User,
-  Clock,
-  Route as RouteIcon,
   AlertTriangle,
+  Clock,
   CalendarDays,
   Loader2,
 } from "lucide-react";
@@ -24,16 +23,24 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+
+// Componentes y Modales
 import { TripDetailsModal } from "./TripDetailsModal";
+import { NextLegModal } from "./NextLegModal"; // 🚀 IMPORTAMOS EL MODAL DE ARRANQUE
+
 import { Trip } from "@/types/api.types";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { checkIsFullTrip } from "@/lib/utils"; // 🚀 IMPORTAMOS NUESTRA HERRAMIENTA MAESTRA
 
 export const StandByTrips = () => {
-  const { trips, updateTripStatus, loading, deleteTrip } = useTrips();
-  const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
+  // 🚀 Sacamos createNextLeg del hook para poder arrancar el viaje desde el modal
+  const { trips, loading, deleteTrip, createNextLeg } = useTrips();
 
-  // 🚀 Estados para el Dialog de borrado "bonito"
+  const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
+  const [tripToStart, setTripToStart] = useState<Trip | null>(null); // 🚀 Estado para abrir NextLegModal
+
+  // Estados para el Dialog de borrado
   const [tripToDelete, setTripToDelete] = useState<Trip | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -85,11 +92,13 @@ export const StandByTrips = () => {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
         {pendingTrips.map((trip) => {
-          const configText =
-            trip.dolly_id || trip.remolque_2_id ? "FULL" : "SENCILLO";
+          // 🚀 USAMOS LA HERRAMIENTA MAESTRA PARA SABER SI ES FULL O SENCILLO
+          const isFull = checkIsFullTrip(trip);
+          const configText = isFull ? "FULL / 9 EJES" : "SENCILLO / 5 EJES";
+
           const formattedRouteName = trip.route_name
-            ? `${trip.route_name} - ${configText}`
-            : `${trip.origin} - ${trip.destination} - ${configText}`;
+            ? `${trip.route_name}`
+            : `${trip.origin} - ${trip.destination}`;
 
           return (
             <Card
@@ -99,14 +108,24 @@ export const StandByTrips = () => {
             >
               <CardContent className="p-5 space-y-5">
                 <div className="flex justify-between items-start gap-3">
-                  <div className="space-y-1 min-w-0">
+                  <div className="space-y-2 min-w-0">
                     <span className="text-[9px] font-black text-brand-navy dark:text-blue-400 uppercase tracking-widest truncate block">
                       {trip.client?.razon_social || "Cliente General"}
                     </span>
-                    {/* 🚀 FASE 2: Título basado en el Nombre de la Ruta armada */}
                     <h3 className="font-black text-slate-800 dark:text-slate-200 text-sm leading-tight uppercase tracking-tight line-clamp-2">
                       {formattedRouteName}
                     </h3>
+                    {/* 🚀 BADGE DE CONFIGURACIÓN DINÁMICO */}
+                    <Badge
+                      className={cn(
+                        "text-[9px] font-black uppercase tracking-widest border-none shadow-sm",
+                        isFull
+                          ? "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
+                          : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
+                      )}
+                    >
+                      {configText}
+                    </Badge>
                   </div>
                   <Badge
                     variant="outline"
@@ -148,11 +167,8 @@ export const StandByTrips = () => {
                     className="flex-1 bg-brand-green hover:bg-brand-green/80 text-white h-10 font-black uppercase tracking-widest text-[10px] shadow-lg shadow-emerald-500/20 transition-all haptic-press border-none"
                     onClick={(e) => {
                       e.stopPropagation();
-                      updateTripStatus(
-                        String(trip.id),
-                        "en_transito",
-                        "Inicio de viaje autorizado desde Stand-By",
-                      );
+                      // 🚀 AHORA ABRE EL MODAL EN LUGAR DE INICIAR A CIEGAS
+                      setTripToStart(trip);
                     }}
                   >
                     <Play className="h-3 w-3 mr-2 fill-current" /> INICIAR RUTA
@@ -163,7 +179,7 @@ export const StandByTrips = () => {
                     className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 h-10 w-10 rounded-xl transition-colors border border-transparent hover:border-rose-200 dark:hover:border-rose-900/50"
                     onClick={(e) => {
                       e.stopPropagation();
-                      setTripToDelete(trip); // 🚀 Abre el Dialog bonito
+                      setTripToDelete(trip);
                     }}
                   >
                     <Trash2 className="h-4 w-4" />
@@ -182,7 +198,24 @@ export const StandByTrips = () => {
         trip={selectedTrip}
       />
 
-      {/* 🚀 DIALOG DE CONFIRMACIÓN DE ELIMINACIÓN (Estructura Tahoe 4 Capas) */}
+      {/* 🚀 MODAL PARA INICIAR EL VIAJE (NextLegModal) */}
+      <NextLegModal
+        open={!!tripToStart}
+        onOpenChange={(open) => {
+          if (!open) setTripToStart(null);
+        }}
+        tripPadre={tripToStart}
+        onSubmit={async (tripId, payload) => {
+          const result = await createNextLeg(tripId, payload);
+          if (result) {
+            setTripToStart(null);
+            return true;
+          }
+          return false;
+        }}
+      />
+
+      {/* DIALOG DE CONFIRMACIÓN DE ELIMINACIÓN */}
       <AlertDialog
         open={!!tripToDelete}
         onOpenChange={(open) => {
@@ -190,7 +223,6 @@ export const StandByTrips = () => {
         }}
       >
         <AlertDialogContent className="w-[95vw] sm:max-w-lg flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl transition-all duration-300">
-          {/* HEADER TAHOE */}
           <AlertDialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
             <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
             <div className="relative z-10 flex items-center gap-4 sm:gap-5">
@@ -208,7 +240,6 @@ export const StandByTrips = () => {
             </div>
           </AlertDialogHeader>
 
-          {/* BODY */}
           <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
             <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block space-y-6">
               <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -238,7 +269,6 @@ export const StandByTrips = () => {
             </AlertDialogDescription>
           </div>
 
-          {/* FOOTER */}
           <AlertDialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
             <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
               <AlertDialogCancel

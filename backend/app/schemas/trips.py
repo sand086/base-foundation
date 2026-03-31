@@ -170,12 +170,18 @@ class TripCreate(TripBase):
     model_config = ConfigDict(extra="ignore")
 
 
+class TariffBasicInfo(ORMBase):
+    id: int
+    tipo_unidad: str
+
+
 class TripResponse(TripBase):
     id: int
     public_id: Optional[str] = None
     uuid_fiscal: Optional[str] = None
 
     client: Optional[ClientResponse] = None
+    tariff: Optional[TariffBasicInfo] = None  # 🚀 AÑADIR ESTO
     remolque_1: Optional[UnitResponse] = None
     dolly: Optional[UnitResponse] = None
     remolque_2: Optional[UnitResponse] = None
