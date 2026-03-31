@@ -7,7 +7,6 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validat
 
 from app.models.models import RecordStatus  # AuditMixin en FuelLog/FuelDocumentHistory
 
-
 # =========================================================
 # SCHEMAS ANIDADOS con Operadores y Unidades
 # =========================================================
@@ -75,7 +74,7 @@ class FuelLogBase(BaseModel):
     operator_id: int
     trip_leg_id: Optional[int] = None
 
-    estacion: str = Field(..., min_length=3, max_length=200)
+    estacion: str = Field(..., min_length=1, max_length=200)
     tipo_combustible: str  # 'diesel' | 'urea'
 
     litros: float = Field(..., gt=0)
@@ -116,7 +115,7 @@ class FuelLogUpdate(BaseModel):
     unit_id: Optional[int] = None
     operator_id: Optional[int] = None
 
-    estacion: Optional[str] = Field(default=None, min_length=3, max_length=200)
+    estacion: Optional[str] = Field(default=None, min_length=1, max_length=200)
     tipo_combustible: Optional[str] = None
 
     litros: Optional[float] = Field(default=None, gt=0)
