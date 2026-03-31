@@ -153,6 +153,60 @@ def generar_carta_porte_nominal(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+# 🚀 FASE 2: NUEVO ENDPOINT PARA TIMBRADO REAL DESDE LA UI DE DESPACHO
+@router.post("/{trip_id}/stamp-real", response_model=dict)
+def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
+    """
+    Trigger manual o automático para generar la Carta Porte REAL
+    cuando el viaje inicia su tramo de carretera. Automáticamente
+    relaciona y cancela la carta porte nominal previa si existe.
+    """
+    service = BillingService(db)
+
+    # Buscamos la carta porte nominal previa para relacionarla y cancelarla
+    from app.models.models import ReceivableInvoice
+
+    factura_vieja = (
+        db.query(ReceivableInvoice)
+        .filter(
+            ReceivableInvoice.viaje_id == trip_id, ReceivableInvoice.is_nominal == True
+        )
+        .first()
+    )
+
+    uuid_relacionado = factura_vieja.uuid if factura_vieja else None
+
+    # Creamos el objeto de solicitud para el service
+    invoice_data = ReceivableInvoiceCreate(
+        viaje_id=trip_id, is_nominal=False, uuid_relacionado=uuid_relacionado
+    )
+
+    try:
+        # Genera el XML Real, Timbra ante el PAC y genera el PDF
+        factura_final = service.generar_factura_final_relacionada(invoice_data)
+
+        if not factura_final:
+            raise HTTPException(
+                status_code=500, detail="No se pudo procesar el timbrado real."
+            )
+
+        # Cancelar la nominal si existía
+        if factura_vieja:
+            service.cancelar_factura_nominal(
+                invoice_id=factura_vieja.id,
+                motivo="01",
+                uuid_sustituto=factura_final.uuid,
+            )
+
+        return {
+            "status": "success",
+            "message": "Factura Real generada exitosamente y previa cancelada.",
+            "data": {"factura_id": factura_final.id, "uuid": factura_final.uuid},
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.post("/stamp/final", response_model=dict)
 def generar_factura_final(
     invoice_data: ReceivableInvoiceCreate, db: Session = Depends(get_db)

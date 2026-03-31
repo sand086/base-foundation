@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch"; // 🚀 FASE 2: Añadido Switch
 import {
   Select,
   SelectContent,
@@ -113,6 +114,8 @@ export function NextLegModal({
   const [loading, setLoading] = useState(false);
   const [cpGenerada, setCpGenerada] = useState(false);
   const [localUuid, setLocalUuid] = useState<string | null>(null);
+
+  // 🚀 FASE 2: Estado para timbrar al salir a carretera
   const [shouldStampReal, setShouldStampReal] = useState(false);
 
   const [formData, setFormData] = useState<Partial<ExtendedLegPayload>>({
@@ -145,6 +148,7 @@ export function NextLegModal({
       });
       setCpGenerada(Boolean(tripPadre.uuid_fiscal));
       setLocalUuid(tripPadre.uuid_fiscal ?? null);
+      setShouldStampReal(false); // 🚀 FASE 2: reset
     }
   }, [open, tripPadre]);
 
@@ -354,6 +358,16 @@ export function NextLegModal({
         formData as TripLegCreatePayload,
       );
       if (success) {
+        // 🚀 FASE 2: TIMBRADO REAL EN CARRETERA
+        if (shouldStampReal && formData.leg_type === "ruta_carretera") {
+          try {
+            await axiosClient.post(`/billing/${tripPadre.id}/stamp-real`);
+            toast.success("¡Viaje Timbrado con éxito (Carta Porte Real)!");
+          } catch (err) {
+            toast.error("Error al generar la Carta Porte Real.");
+          }
+        }
+
         if (formData.leg_type === "carga_muelle") {
           await updateLoadStatus(Number(formData.remolque_1_id), true);
           if (formData.remolque_2_id) {
@@ -373,6 +387,7 @@ export function NextLegModal({
     updateLoadStatus,
     onOpenChange,
     cpGenerada,
+    shouldStampReal, // Dependencia de Fase 2
   ]);
 
   const referencia = (tripPadre as (Trip & { referencia?: string }) | null)
@@ -873,6 +888,26 @@ export function NextLegModal({
                 )}
               </div>
             </div>
+
+            {/* 🚀 FASE 2: TIMBRADO REAL SWITCH (Aparece en carretera) */}
+            {formData.leg_type === "ruta_carretera" && (
+              <div className="flex items-center justify-between p-5 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-2xl mb-4 shadow-sm animate-in fade-in zoom-in-95">
+                <div>
+                  <Label className="text-amber-900 dark:text-amber-400 font-black uppercase tracking-widest text-[11px]">
+                    Iniciar Tramo con Timbrado Real
+                  </Label>
+                  <p className="text-xs text-amber-700 dark:text-amber-500/70 mt-1 font-medium">
+                    Se generará la Carta Porte fiscal con el operador y equipo
+                    actual, cancelando el bypass de $1.
+                  </p>
+                </div>
+                <Switch
+                  checked={shouldStampReal}
+                  onCheckedChange={setShouldStampReal}
+                  className="data-[state=checked]:bg-amber-600"
+                />
+              </div>
+            )}
 
             {/* Anticipos Operativos — solo en tramo de carretera */}
             {isRoadLeg && (
