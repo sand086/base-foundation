@@ -303,6 +303,10 @@ def add_timeline_event(
     trip.status = payload.status
     trip.last_update = datetime.utcnow()
 
+    # 🚀 FASE 1: Guardar la terminal de entrega de vacío si viene en el payload
+    if hasattr(payload, "terminal_entrega_vacio") and payload.terminal_entrega_vacio:
+        trip.terminal_entrega_vacio = payload.terminal_entrega_vacio
+
     # 3. Identificamos el Tramo (Leg) activo
     # Buscamos el último tramo que no esté finalizado; si todos están cerrados, usamos el último.
     active_leg = next(

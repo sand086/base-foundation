@@ -72,6 +72,7 @@ export interface StatusUpdateData {
   odometro?: string;
   combustible_porcentaje?: string;
   combustible_litros?: string;
+  terminal_entrega_vacio?: string; // 🚀 Agregado aquí
 }
 
 const DEFAULT_LOCATIONS = [
@@ -123,6 +124,7 @@ export function UpdateStatusModal({
     odometro: "",
     combustible_porcentaje: "",
     combustible_litros: "",
+    terminal_entrega_vacio: "", // 🚀 Inicializado
   });
 
   const [openCombobox, setOpenCombobox] = useState(false);
@@ -166,6 +168,7 @@ export function UpdateStatusModal({
           odometro: "",
           combustible_porcentaje: "",
           combustible_litros: "",
+          terminal_entrega_vacio: "",
         });
       } else {
         // MODO CREACIÓN
@@ -180,6 +183,7 @@ export function UpdateStatusModal({
           odometro: "",
           combustible_porcentaje: "",
           combustible_litros: "",
+          terminal_entrega_vacio: "",
         });
       }
       setSearchLocationQuery("");
@@ -241,6 +245,11 @@ export function UpdateStatusModal({
         value: "accidente",
         label: "🚨 Accidente / Siniestro Mayor",
         color: "bg-red-800",
+      },
+      {
+        value: "entrega_vacio",
+        label: "🔄 Retorno / Entrega de Vacío",
+        color: "bg-purple-500",
       },
     ],
     [],
@@ -689,6 +698,27 @@ export function UpdateStatusModal({
                   </div>
                 </div>
               </div>
+
+              {/* 🚀 FASE 1: CAMPO RECUPERADO PARA ENTREGA DE VACÍO */}
+              {formData.status === "entrega_vacio" && (
+                <div className="space-y-2 animate-in fade-in slide-in-from-top-2 p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl">
+                  <Label className="text-[10px] font-black text-purple-700 uppercase tracking-widest flex items-center gap-1.5">
+                    Terminal / Patio de Entrega *
+                  </Label>
+                  <Input
+                    placeholder="Ej: ICAVE, CCS, San Julián..."
+                    value={formData.terminal_entrega_vacio || ""}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        terminal_entrega_vacio: e.target.value.toUpperCase(),
+                      })
+                    }
+                    className="h-11 font-bold bg-white"
+                    required
+                  />
+                </div>
+              )}
 
               {/* TELEMETRÍA (Oculta en modo edición para no sobreescribir datos globales por error) */}
               {!eventToEdit && (

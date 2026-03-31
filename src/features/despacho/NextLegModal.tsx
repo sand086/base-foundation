@@ -113,6 +113,7 @@ export function NextLegModal({
   const [loading, setLoading] = useState(false);
   const [cpGenerada, setCpGenerada] = useState(false);
   const [localUuid, setLocalUuid] = useState<string | null>(null);
+  const [shouldStampReal, setShouldStampReal] = useState(false);
 
   const [formData, setFormData] = useState<Partial<ExtendedLegPayload>>({
     leg_type: "ruta_carretera",

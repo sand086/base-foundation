@@ -465,7 +465,6 @@ class BillingService:
             "iva": f"{iva:.2f}",
             "retenciones": f"{ret:.2f}",
             "total": f"{total:.2f}",
-            # 🚀 USAMOS LAS PLACAS BLINDADAS AQUÍ
             "placas": placa_tracto,
             "anio_modelo": str(_get_safe(unidad, "year", "2024")),
             "config_vehicular": _get_safe(unidad, "config_vehicular_sat", "T3S2"),
@@ -483,6 +482,10 @@ class BillingService:
             "descripcion_mercancia": _get_safe(
                 viaje, "descripcion_mercancia", "CARGA GENERAL"
             ),
+            # 🚀 FASE 2: Mapeo de contenedores reales para el XML/PDF
+            "contenedor_1": _get_safe(viaje, "contenedor_1", "N/A"),
+            "contenedor_2": _get_safe(viaje, "contenedor_2", "N/A"),
+            "referencia_cliente": _get_safe(viaje, "referencia", "S/R"),
             "peso_bruto": peso_bruto_kg,
             "bienes_transp": bienes_transporte,
             "id_ccp": f"CCC{str(uuid.uuid4())[3:]}",
@@ -492,7 +495,6 @@ class BillingService:
             "estado_destino": estado_destino,
             "municipio_destino": municipio_destino,
             "subtipo_remolque": "CTR010",
-            # 🚀 PLACA DEL REMOLQUE BLINDADA
             "placa_remolque": placa_caja,
             "peso_bruto_vehicular": "25.00",
             "leyenda_legal": DEFAULT_LEYENDA,
@@ -608,6 +610,11 @@ class BillingService:
 
         relacion_str = f"04|{relacion_uuid}|" if relacion_uuid else ""
 
+        # 🚀 FASE 2: Armar cadena original dinámica considerando si es FULL (2 remolques)
+        remolques_cadena = f"{d['subtipo_remolque']}|{d['placa_remolque']}|"
+        if d.get("contenedor_2") and d.get("contenedor_2") != "N/A":
+            remolques_cadena += f"{d['subtipo_remolque']}|PLACA2|"
+
         cadena = (
             f"||4.0|CP|{d['folio']}|{d['fecha']}|99|{no_certificado}|CONTADO|{d['subtotal']}|MXN|1|{d['total']}|I|01|PPD|{self.emisor_cp}|"
             f"{relacion_str}"
@@ -625,7 +632,7 @@ class BillingService:
             f"{d['bienes_transp']}|{d['descripcion_mercancia']}|1|21|pza|{d['peso_bruto']}|"
             f"{d['permiso_sct']}|{d['num_permiso']}|{d['config_vehicular']}|{d['peso_bruto_vehicular']}|{d['placas']}|{d['anio_modelo']}|"
             f"{d['aseguradora']}|{d['poliza']}|{d['poliza']}|"
-            f"{d['subtipo_remolque']}|{d['placa_remolque']}|"
+            f"{remolques_cadena}"
             f"01|{d['rfc_operador']}|{d['licencia']}|{d['nombre_operador']}|"
             f"MORELOS|159|193|VER|MEX|91700||"
         )
@@ -651,6 +658,14 @@ class BillingService:
             if relacion_uuid
             else ""
         )
+
+        # 🚀 FASE 2: Lógica dinámica para 1 o 2 remolques
+        remolques_xml = f'<cartaporte31:Remolque SubTipoRem="{d["subtipo_remolque"]}" Placa="{d["placa_remolque"]}" />'
+        if d.get("contenedor_2") and d.get("contenedor_2") != "N/A":
+            # Si hay un segundo contenedor, asumimos configuración FULL y agregamos el segundo remolque
+            # NOTA: Opcionalmente se puede sacar "PLACA2" directo de la BD si se tiene
+            remolques_xml += f'\n                    <cartaporte31:Remolque SubTipoRem="{d["subtipo_remolque"]}" Placa="PLACA2" />'
+
         return f"""<?xml version="1.0" encoding="UTF-8"?>
 <cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:cartaporte31="http://www.sat.gob.mx/CartaPorte31" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/CartaPorte31 http://www.sat.gob.mx/sitio_internet/cfd/CartaPorte/CartaPorte31.xsd" Version="4.0" Fecha="{d['fecha']}" Serie="CP" Folio="{d['folio']}" FormaPago="99" CondicionesDePago="CONTADO" SubTotal="{d['subtotal']}" Moneda="MXN" TipoCambio="1" Total="{d['total']}" TipoDeComprobante="I" Exportacion="01" MetodoPago="PPD" LugarExpedicion="{self.emisor_cp}">{relacion_xml}
     <cfdi:Emisor Rfc="{self.emisor_rfc}" Nombre="{self.emisor_nombre}" RegimenFiscal="{self.emisor_regimen}" />
@@ -682,7 +697,7 @@ class BillingService:
                 <cartaporte31:Autotransporte PermSCT="{d['permiso_sct']}" NumPermisoSCT="{d['num_permiso']}">
                     <cartaporte31:IdentificacionVehicular ConfigVehicular="{d['config_vehicular']}" PesoBrutoVehicular="{d['peso_bruto_vehicular']}" PlacaVM="{d['placas']}" AnioModeloVM="{d['anio_modelo']}" />
                     <cartaporte31:Seguros AseguraRespCivil="{d['aseguradora']}" PolizaRespCivil="{d['poliza']}" PolizaCarga="{d['poliza']}" />
-                    <cartaporte31:Remolques><cartaporte31:Remolque SubTipoRem="{d['subtipo_remolque']}" Placa="{d['placa_remolque']}" /></cartaporte31:Remolques>
+                    <cartaporte31:Remolques>{remolques_xml}</cartaporte31:Remolques>
                 </cartaporte31:Autotransporte>
             </cartaporte31:Mercancias>
             <cartaporte31:FiguraTransporte>
@@ -780,8 +795,12 @@ class BillingService:
             "aseguradora": d["aseguradora"],
             "poliza": d["poliza"],
             "peso_bruto": d["peso_bruto"],
+            # 🚀 FASE 2: Pasamos los contenedores y la referencia al PDF para impresión
             "bienes_transp": d["bienes_transp"],
             "descripcion_mercancia": d["descripcion_mercancia"],
+            "contenedor_1": d["contenedor_1"],
+            "contenedor_2": d["contenedor_2"],
+            "referencia_cliente": d["referencia_cliente"],
             "subtipo_remolque": d["subtipo_remolque"],
             "placa_remolque": d["placa_remolque"],
             "operador_rfc": d["rfc_operador"],

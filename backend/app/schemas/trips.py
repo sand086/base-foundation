@@ -43,6 +43,7 @@ class TripTimelineEventCreatePayload(BaseModel):
     odometro: Optional[int] = None
     combustible_porcentaje: Optional[float] = None
     combustible_litros: Optional[float] = None
+    terminal_entrega_vacio: Optional[str] = None
 
 
 class TripTimelineEventResponse(TripTimelineEventBase):
@@ -124,6 +125,8 @@ class TripBase(ORMBase):
     sub_client_id: int
     tariff_id: Optional[int] = None
     referencia: Optional[str] = Field(default=None, max_length=100)
+    contenedor_1: Optional[str] = Field(default=None, max_length=100)
+    contenedor_2: Optional[str] = Field(default=None, max_length=100)
 
     remolque_1_id: Optional[int] = None
     dolly_id: Optional[int] = None
@@ -208,6 +211,10 @@ class TripUpdate(ORMBase):
     destination: Optional[str] = Field(default=None, max_length=200)
     route_name: Optional[str] = Field(default=None, max_length=200)
     descripcion_mercancia: Optional[str] = Field(default=None, max_length=255)
+    referencia: Optional[str] = None
+    contenedor_1: Optional[str] = None
+    contenedor_2: Optional[str] = None
+    terminal_entrega_vacio: Optional[str] = None
     peso_toneladas: Optional[float] = None
     es_material_peligroso: Optional[bool] = None
     clase_imo: Optional[str] = Field(default=None, max_length=50)

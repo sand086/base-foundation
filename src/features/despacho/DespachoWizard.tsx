@@ -88,7 +88,11 @@ type WizardData = {
   peso_toneladas: number;
   es_material_peligroso: boolean;
   clase_imo: string;
-  contenedor: string;
+
+  // FASE 1: Contenedores y Referencia Separados
+  referencia_cliente: string;
+  contenedor_1: string;
+  contenedor_2: string;
 
   unitId: string;
   remolque1Id: string;
@@ -271,7 +275,9 @@ export const DespachoWizard = () => {
     peso_toneladas: 0,
     es_material_peligroso: false,
     clase_imo: "",
-    contenedor: "",
+    contenedor_1: "",
+    contenedor_2: "",
+    referencia_cliente: "",
     unitId: "",
     remolque1Id: "",
     dollyId: "",
@@ -298,7 +304,6 @@ export const DespachoWizard = () => {
     [clients],
   );
 
-  // 🚀 FIX TRACTOCAMIONES: SÍ llevan el prefijo ECO-
   const availableTractos = useMemo(
     () =>
       arrUnidades
@@ -317,7 +322,6 @@ export const DespachoWizard = () => {
     [arrUnidades],
   );
 
-  // 🚀 FIX REMOLQUES: NO llevan el prefijo ECO- y usan filtro inteligente
   const availableRemolques = useMemo(() => {
     const remolquesReales = arrUnidades
       .filter((u: any) => {
@@ -340,7 +344,6 @@ export const DespachoWizard = () => {
       : remolquesReales;
   }, [arrUnidades]);
 
-  // 🚀 FIX DOLLIES: NO llevan el prefijo ECO-
   const availableDollies = useMemo(() => {
     const dolliesReales = arrUnidades
       .filter(
@@ -357,7 +360,6 @@ export const DespachoWizard = () => {
       : dolliesReales;
   }, [arrUnidades]);
 
-  // 🚀 FIX OPERADORES: Incluimos a los inactivos para que no desaparezcan
   const availableOperators = useMemo(
     () =>
       arrOperadores
@@ -457,7 +459,9 @@ export const DespachoWizard = () => {
         peso_toneladas: Number(data.peso_toneladas),
         es_material_peligroso: data.es_material_peligroso,
         clase_imo: data.es_material_peligroso ? data.clase_imo : null,
-        referencia: data.contenedor || null,
+        contenedor_1: data.contenedor_1 || null,
+        contenedor_2: isFullTrip ? data.contenedor_2 : null,
+        referencia: data.referencia_cliente || null,
         tarifa_base: Number(infoTarifa.base || 0),
         costo_casetas: Number(infoTarifa.casetas || 0),
         status,
@@ -521,16 +525,19 @@ export const DespachoWizard = () => {
     data.routeId &&
     data.fecha_programada,
   );
+
   const isStep2Valid = useMemo(() => {
     const isBasicValid = Boolean(
       data.unitId &&
       data.driverId &&
       data.remolque1Id &&
       data.descripcion_mercancia &&
-      data.contenedor,
+      data.contenedor_1,
     );
     return isFullTrip
-      ? Boolean(isBasicValid && data.dollyId && data.remolque2Id)
+      ? Boolean(
+          isBasicValid && data.dollyId && data.remolque2Id && data.contenedor_2,
+        )
       : isBasicValid;
   }, [isFullTrip, data]);
 
@@ -933,30 +940,68 @@ export const DespachoWizard = () => {
                     />
                   </div>
                 </div>
-                <div className="space-y-2 pt-2">
-                  <Label
-                    variant="brand"
-                    className="flex items-center gap-2 text-brand-red"
-                    required
-                  >
-                    <Container className="h-4 w-4" /> NÚMERO DE CONTENEDOR /
-                    DESGLOSE *
-                  </Label>
-                  <Input
-                    placeholder="Ej: CMA U 1521457"
-                    value={data.contenedor}
-                    onChange={(e) =>
-                      setData((p) => ({
-                        ...p,
-                        contenedor: e.target.value.toUpperCase(),
-                      }))
-                    }
-                    className="h-12 border-blue-200 font-mono text-lg font-black uppercase tracking-wide"
-                  />
-                  <p className="text-[11px] font-medium text-slate-500">
-                    Este número se inyectará en la descripción del concepto de
-                    la Carta Porte.
-                  </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                  <div className="space-y-2">
+                    <Label
+                      variant="brand"
+                      className="flex items-center gap-2 text-brand-red"
+                      required
+                    >
+                      <Container className="h-4 w-4" /> CONTENEDOR 1 *
+                    </Label>
+                    <Input
+                      placeholder="Ej: CMA U 1521457"
+                      value={data.contenedor_1}
+                      onChange={(e) =>
+                        setData((p) => ({
+                          ...p,
+                          contenedor_1: e.target.value.toUpperCase(),
+                        }))
+                      }
+                      className="h-12 border-blue-200 font-mono text-lg font-black uppercase"
+                    />
+                  </div>
+
+                  {isFullTrip && (
+                    <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+                      <Label
+                        variant="brand"
+                        className="flex items-center gap-2 text-brand-red"
+                        required
+                      >
+                        <Container className="h-4 w-4" /> CONTENEDOR 2 *
+                      </Label>
+                      <Input
+                        placeholder="Ej: MSC U 8899221"
+                        value={data.contenedor_2}
+                        onChange={(e) =>
+                          setData((p) => ({
+                            ...p,
+                            contenedor_2: e.target.value.toUpperCase(),
+                          }))
+                        }
+                        className="h-12 border-blue-200 font-mono text-lg font-black uppercase"
+                      />
+                    </div>
+                  )}
+
+                  <div className="space-y-2 md:col-span-2">
+                    <Label variant="brand" className="flex items-center gap-2">
+                      REFERENCIA DEL CLIENTE (OPCIONAL)
+                    </Label>
+                    <Input
+                      placeholder="Booking, BL, Pedimento o Referencia..."
+                      value={data.referencia_cliente}
+                      onChange={(e) =>
+                        setData((p) => ({
+                          ...p,
+                          referencia_cliente: e.target.value.toUpperCase(),
+                        }))
+                      }
+                      className="h-10 border-slate-200 font-semibold"
+                    />
+                  </div>
                 </div>
               </div>
 

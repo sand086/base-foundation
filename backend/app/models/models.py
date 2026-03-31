@@ -626,6 +626,8 @@ class Trip(AuditMixin, Base):
     peso_toneladas = Column(Float, default=0.0)
     es_material_peligroso = Column(Boolean, default=False)
     referencia = Column(String(100), nullable=True)
+    contenedor_1 = Column(String(100), nullable=True)
+    contenedor_2 = Column(String(100), nullable=True)
     clase_imo = Column(String(50), nullable=True)
     sat_clave_producto = Column(String(20), default="78101802")
     sat_clave_unidad = Column(String(10), default="E48")
