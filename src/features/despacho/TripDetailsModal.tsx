@@ -52,6 +52,11 @@ import {
   Undo,
   Link2Off,
   Container,
+  CalendarDays,
+  Gauge,
+  DollarSign,
+  ArrowRightCircle,
+  Flag,
 } from "lucide-react";
 import { Trip, TripLeg } from "@/types/api.types";
 import { useTrips } from "@/hooks/useTrips";
@@ -322,6 +327,37 @@ export function TripDetailsModal({
     }
   };
 
+  // 🚀 FASE 3: Texto dinámico de botón según el tipo de leg
+  const getRelayButtonUI = (legType: string) => {
+    switch (legType) {
+      case "carga_muelle":
+        return {
+          text: "Pasar a Ruta (Despacho)",
+          icon: <ArrowRightCircle className="h-3.5 w-3.5 mr-1.5" />,
+          color: "bg-blue-600 hover:bg-blue-700",
+        };
+      case "ruta_carretera":
+        return {
+          text: "Relevo (Desenganchar)",
+          icon: <Link2Off className="h-3.5 w-3.5 mr-1.5" />,
+          color:
+            "bg-brand-navy hover:bg-slate-800 dark:bg-blue-800 dark:hover:bg-blue-700",
+        };
+      case "entrega_vacio":
+        return {
+          text: "Finalizar Movimiento",
+          icon: <Flag className="h-3.5 w-3.5 mr-1.5" />,
+          color: "bg-emerald-600 hover:bg-emerald-700",
+        };
+      default:
+        return {
+          text: "Siguiente Fase",
+          icon: <ArrowRightCircle className="h-3.5 w-3.5 mr-1.5" />,
+          color: "bg-brand-navy hover:bg-slate-800",
+        };
+    }
+  };
+
   if (!trip) return null;
 
   return (
@@ -549,7 +585,7 @@ export function TripDetailsModal({
                       <div className="flex justify-between items-center mb-6">
                         <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
                           <Activity className="h-4 w-4 text-blue-500" />{" "}
-                          Histórico de Relevos
+                          Histórico de Relevos y Tramos
                         </p>
                         {trip.legs && trip.legs.length > 0 && (
                           <Button
@@ -570,85 +606,192 @@ export function TripDetailsModal({
                       </div>
 
                       <div className="space-y-4">
-                        {trip.legs?.map((leg, idx) => (
-                          <Card
-                            key={leg.id}
-                            className={cn(
-                              "border-l-4 shadow-sm overflow-hidden bg-white dark:bg-slate-900 border-t border-r border-b border-slate-200 dark:border-white/10",
-                              leg.id === activeLeg?.id
-                                ? "border-l-emerald-500 ring-1 ring-emerald-500/20"
-                                : "border-l-slate-300 dark:border-l-slate-700 opacity-80",
-                            )}
-                          >
-                            <CardContent className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                              <div className="space-y-1.5 flex-1">
-                                <p className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                  Fase Operativa {idx + 1}{" "}
-                                  {leg.id === activeLeg?.id && (
-                                    <Badge className="h-4 px-1.5 text-[8px] bg-emerald-500 font-black">
-                                      ACTUAL
+                        {trip.legs?.map((leg, idx) => {
+                          const btnUI = getRelayButtonUI(leg.leg_type);
+                          return (
+                            <Card
+                              key={leg.id}
+                              className={cn(
+                                "border-l-4 shadow-sm overflow-hidden bg-white dark:bg-slate-900 border-t border-r border-b border-slate-200 dark:border-white/10",
+                                leg.id === activeLeg?.id
+                                  ? "border-l-emerald-500 ring-1 ring-emerald-500/20"
+                                  : "border-l-slate-300 dark:border-l-slate-700 opacity-90",
+                              )}
+                            >
+                              <CardContent className="p-0 flex flex-col">
+                                {/* Cabecera de la Fase */}
+                                <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                  <div className="space-y-1.5 flex-1">
+                                    <p className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                      Fase Operativa {idx + 1}{" "}
+                                      {leg.id === activeLeg?.id && (
+                                        <Badge className="h-4 px-1.5 text-[8px] bg-emerald-500 font-black">
+                                          ACTUAL
+                                        </Badge>
+                                      )}
+                                    </p>
+                                    <h4 className="font-black text-brand-navy dark:text-white uppercase text-lg tracking-tighter leading-tight">
+                                      {leg.leg_type.replace("_", " ")}
+                                    </h4>
+                                    <div className="flex items-center gap-4 text-xs font-bold text-slate-600 dark:text-slate-400 pt-2">
+                                      <span className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded border border-slate-200 dark:border-white/5">
+                                        <User className="h-3.5 w-3.5" />{" "}
+                                        {leg.operator?.name || "S/A"}
+                                      </span>
+                                      <span className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded border border-slate-200 dark:border-white/5">
+                                        <Truck className="h-3.5 w-3.5" /> ECO-
+                                        {leg.unit?.numero_economico || "N/A"}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex flex-col sm:items-end gap-3 shrink-0">
+                                    <Badge
+                                      className={cn(
+                                        "uppercase font-black tracking-widest text-[9px] border-0 px-3 py-1 shadow-sm",
+                                        leg.status === "entregado"
+                                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                                          : leg.status === "cerrado"
+                                            ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                                            : leg.status === "liquidado"
+                                              ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
+                                              : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+                                      )}
+                                    >
+                                      {leg.status.replace("_", " ")}
                                     </Badge>
-                                  )}
-                                </p>
-                                <h4 className="font-black text-brand-navy dark:text-white uppercase text-lg tracking-tighter leading-tight">
-                                  {leg.leg_type.replace("_", " ")}
-                                </h4>
-                                <div className="flex items-center gap-4 text-xs font-bold text-slate-600 dark:text-slate-400 pt-2">
-                                  <span className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded border border-slate-200 dark:border-white/5">
-                                    <User className="h-3.5 w-3.5" />{" "}
-                                    {leg.operator?.name || "S/A"}
-                                  </span>
-                                  <span className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded border border-slate-200 dark:border-white/5">
-                                    <Truck className="h-3.5 w-3.5" /> ECO-
-                                    {leg.unit?.numero_economico || "N/A"}
-                                  </span>
-                                </div>
-                              </div>
 
-                              <div className="flex flex-col sm:items-end gap-3 shrink-0">
-                                <Badge
-                                  className={cn(
-                                    "uppercase font-black tracking-widest text-[9px] border-0 px-3 py-1 shadow-sm",
-                                    leg.status === "entregado"
-                                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                                      : leg.status === "cerrado"
-                                        ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                                        : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-                                  )}
-                                >
-                                  {leg.status.replace("_", " ")}
-                                </Badge>
-
-                                <div className="flex gap-2">
-                                  {["creado", "en_transito"].includes(
-                                    leg.status,
-                                  ) &&
-                                    onRelayClick && (
-                                      <Button
-                                        size="sm"
-                                        className="h-8 bg-brand-navy hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-700 font-black text-[9px] uppercase tracking-widest shadow-lg shadow-brand-navy/20 haptic-press text-white"
-                                        onClick={() => onRelayClick(leg, trip)}
-                                      >
-                                        <Link2Off className="h-3.5 w-3.5 mr-1.5" />
-                                        Relevo (Desenganchar)
-                                      </Button>
-                                    )}
-                                  {leg.status === "entregado" &&
-                                    onSettleClick && (
-                                      <Button
-                                        size="sm"
-                                        className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[9px] uppercase tracking-widest shadow-lg shadow-emerald-500/20 haptic-press"
-                                        onClick={() => onSettleClick(leg, trip)}
-                                      >
-                                        <Wallet className="h-3.5 w-3.5 mr-1.5" />
-                                        LIQUIDAR OP.
-                                      </Button>
-                                    )}
+                                    <div className="flex gap-2">
+                                      {["creado", "en_transito"].includes(
+                                        leg.status,
+                                      ) &&
+                                        onRelayClick && (
+                                          <Button
+                                            size="sm"
+                                            className={cn(
+                                              "h-8 font-black text-[9px] uppercase tracking-widest shadow-lg haptic-press text-white",
+                                              btnUI.color,
+                                            )}
+                                            onClick={() =>
+                                              onRelayClick(leg, trip)
+                                            }
+                                          >
+                                            {btnUI.icon}
+                                            {btnUI.text}
+                                          </Button>
+                                        )}
+                                      {leg.status === "entregado" &&
+                                        onSettleClick && (
+                                          <Button
+                                            size="sm"
+                                            className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[9px] uppercase tracking-widest shadow-lg shadow-emerald-500/20 haptic-press"
+                                            onClick={() =>
+                                              onSettleClick(leg, trip)
+                                            }
+                                          >
+                                            <Wallet className="h-3.5 w-3.5 mr-1.5" />
+                                            LIQUIDAR OP.
+                                          </Button>
+                                        )}
+                                    </div>
+                                  </div>
                                 </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        ))}
+
+                                {/* 🚀 FASE 3: Desglose de toda la Info Operativa y Financiera del Tramo */}
+                                <div className="border-t border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-slate-900/30 p-4">
+                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <div className="space-y-1">
+                                      <Label className="text-[9px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-1">
+                                        <CalendarDays className="h-3 w-3" />{" "}
+                                        Inicio
+                                      </Label>
+                                      <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                        {leg.start_date
+                                          ? format(
+                                              new Date(leg.start_date),
+                                              "dd/MM/yy HH:mm",
+                                            )
+                                          : "Pendiente"}
+                                      </p>
+                                    </div>
+                                    <div className="space-y-1">
+                                      <Label className="text-[9px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-1">
+                                        <CalendarDays className="h-3 w-3" /> Fin
+                                      </Label>
+                                      <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                        {leg.actual_arrival
+                                          ? format(
+                                              new Date(leg.actual_arrival),
+                                              "dd/MM/yy HH:mm",
+                                            )
+                                          : "Pendiente"}
+                                      </p>
+                                    </div>
+                                    <div className="space-y-1">
+                                      <Label className="text-[9px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-1">
+                                        <Gauge className="h-3 w-3" /> Odo.
+                                        Inicial
+                                      </Label>
+                                      <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                        {leg.odometro_inicial
+                                          ? `${leg.odometro_inicial} km`
+                                          : "N/A"}
+                                      </p>
+                                    </div>
+                                    <div className="space-y-1">
+                                      <Label className="text-[9px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-1">
+                                        <DollarSign className="h-3 w-3" />{" "}
+                                        Anticipos
+                                      </Label>
+                                      <p
+                                        className={cn(
+                                          "text-xs font-mono font-bold",
+                                          leg.total_anticipos > 0
+                                            ? "text-amber-600 dark:text-amber-400"
+                                            : "text-slate-700 dark:text-slate-300",
+                                        )}
+                                      >
+                                        {formatCurrency(
+                                          leg.total_anticipos || 0,
+                                        )}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  {/* Sub-bloque de Liquidación si ya se cerró */}
+                                  {leg.status === "liquidado" && (
+                                    <div className="mt-4 p-3 bg-emerald-50 dark:bg-emerald-950/20 rounded-xl border border-emerald-100 dark:border-emerald-900/30 flex flex-wrap gap-4 items-center justify-between">
+                                      <div className="space-y-0.5">
+                                        <span className="text-[9px] font-black uppercase text-emerald-600/80 dark:text-emerald-400/80 tracking-widest">
+                                          Total Liquidado a Operador
+                                        </span>
+                                        <p className="text-sm font-mono font-black text-emerald-700 dark:text-emerald-400">
+                                          {formatCurrency(
+                                            leg.monto_neto_pagado || 0,
+                                          )}
+                                        </p>
+                                      </div>
+                                      <div className="flex gap-4 text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                                        <span>
+                                          Base/Bono:{" "}
+                                          {formatCurrency(
+                                            leg.monto_sueldo || 0,
+                                          )}
+                                        </span>
+                                        <span>
+                                          Maniobras:{" "}
+                                          {formatCurrency(
+                                            leg.monto_maniobras || 0,
+                                          )}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
 
                         {trip.status === "en_transito" &&
                           activeLeg?.leg_type === "ruta_carretera" && (
