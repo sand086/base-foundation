@@ -8,7 +8,6 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -36,7 +35,6 @@ import {
   Container,
   Package,
   Minus,
-  FileCode2,
   Scale,
   Hash,
   AlertCircle,
@@ -59,7 +57,6 @@ import {
 } from "@/components/ui/popover";
 import { useUnits } from "@/hooks/useUnits";
 import { useOperators } from "@/hooks/useOperators";
-import { useBilling } from "@/hooks/useBilling";
 import { useSatCatalogs } from "@/hooks/useSatCatalogs";
 import { Trip, TripLegCreatePayload } from "@/types/api.types";
 import { cn, checkIsFullTrip } from "@/lib/utils";
@@ -209,13 +206,9 @@ export function NextLegModal({
 }: NextLegModalProps) {
   const { unidades, updateLoadStatus } = useUnits();
   const { operadores } = useOperators();
-  const { isStamping, handleStampNominal } = useBilling();
   const { products: satProducts } = useSatCatalogs();
 
   const [loading, setLoading] = useState(false);
-  const [cpGenerada, setCpGenerada] = useState(false);
-  const [localUuid, setLocalUuid] = useState<string | null>(null);
-  const [shouldStampReal, setShouldStampReal] = useState(false);
   const [showFiscalData, setShowFiscalData] = useState(false);
 
   const [formData, setFormData] = useState<Partial<ExtendedLegPayload>>({
@@ -232,7 +225,7 @@ export function NextLegModal({
     destino_vacio: "",
   });
 
-  // ESTADO PARA DATOS FISCALES (CARTA PORTE REAL / BYPASS)
+  // ESTADO PARA DATOS FISCALES (MANTENIDO INTACTO)
   const [tripFiscalData, setTripFiscalData] = useState({
     contenedor_1: "",
     contenedor_2: "",
@@ -247,10 +240,15 @@ export function NextLegModal({
 
   useEffect(() => {
     if (open && tripPadre) {
+      // Determinamos si ya existen activos para bloquear el cambio
+      const hasR1 = !!tripPadre.remolque_1_id;
+      const hasDolly = !!tripPadre.dolly_id;
+      const hasR2 = !!tripPadre.remolque_2_id;
+
       setFormData({
         leg_type: "ruta_carretera",
-        unit_id: null,
-        operator_id: null,
+        unit_id: null, // El tracto sí puede cambiar (relevo)
+        operator_id: null, // El operador sí puede cambiar
         remolque_1_id: tripPadre.remolque_1_id ?? null,
         dolly_id: tripPadre.dolly_id ?? null,
         remolque_2_id: tripPadre.remolque_2_id ?? null,
@@ -261,7 +259,6 @@ export function NextLegModal({
         destino_vacio: "",
       });
 
-      // Precargamos los datos fiscales si el viaje ya los tiene
       setTripFiscalData({
         contenedor_1: (tripPadre as any).contenedor_1 || "",
         contenedor_2: (tripPadre as any).contenedor_2 || "",
@@ -275,17 +272,12 @@ export function NextLegModal({
         clase_imo: tripPadre.clase_imo || "",
       });
 
-      setCpGenerada(Boolean(tripPadre.uuid_fiscal));
-      setLocalUuid(tripPadre.uuid_fiscal ?? null);
-      setShouldStampReal(false);
-      setShowFiscalData(false); // Colapsado por defecto al abrir
+      setShowFiscalData(false);
     }
   }, [open, tripPadre]);
-
   // ─── Derivados memorizados ─────────────────────────────────────────────────
 
   const isFullTrip = useMemo(() => {
-    // 🚀 Usamos la herramienta maestra centralizada
     return checkIsFullTrip(tripPadre);
   }, [tripPadre]);
 
@@ -343,6 +335,30 @@ export function NextLegModal({
   );
 
   const isRoadLeg = formData.leg_type === "ruta_carretera";
+
+  const legUiConfig = useMemo(() => {
+    const config = {
+      carga_muelle: {
+        actionLabel: "Registrar carga en patio / muelle",
+        successLabel: "Carga operativa",
+        helperText: "Confirma el enganche y la carga física del equipo.",
+      },
+      ruta_carretera: {
+        actionLabel: "Iniciar ruta carretera",
+        successLabel: "Salida a ruta",
+        helperText: "Confirma la salida del tramo carretero.",
+      },
+      entrega_vacio: {
+        actionLabel: "Registrar retorno de vacío",
+        successLabel: "Entrega de vacío",
+        helperText: "Confirma el desenganche y liberación del equipo vacío.",
+      },
+    } as const;
+
+    return (
+      config[formData.leg_type as keyof typeof config] ?? config.ruta_carretera
+    );
+  }, [formData.leg_type]);
 
   const availableTractos = useMemo(
     () =>
@@ -402,96 +418,6 @@ export function NextLegModal({
 
   // ─── Acciones ─────────────────────────────────────────────────────────────
 
-  const handleDownloadPDF = useCallback(async (uuid: string) => {
-    const toastId = toast.loading("Descargando PDF...");
-    try {
-      const res = await axiosClient.get(`/billing/invoice/${uuid}/pdf`, {
-        responseType: "blob",
-      });
-      const url = window.URL.createObjectURL(
-        new Blob([res.data], { type: "application/pdf" }),
-      );
-      const link = document.createElement("a");
-      link.href = url;
-      link.setAttribute("download", `Carta_Porte_${uuid}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      toast.success("PDF descargado exitosamente.", { id: toastId });
-    } catch {
-      toast.error("Error al descargar el PDF.", { id: toastId });
-    }
-  }, []);
-
-  const handleDownloadXML = useCallback(async (uuid: string) => {
-    const toastId = toast.loading("Descargando XML...");
-    try {
-      const res = await axiosClient.get(`/billing/invoice/${uuid}/xml`, {
-        responseType: "blob",
-      });
-      const url = window.URL.createObjectURL(
-        new Blob([res.data], { type: "application/xml" }),
-      );
-      const link = document.createElement("a");
-      link.href = url;
-      link.setAttribute("download", `Carta_Porte_${uuid}.xml`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      toast.success("XML descargado exitosamente.", { id: toastId });
-    } catch {
-      toast.error("Error al descargar el XML.", { id: toastId });
-    }
-  }, []);
-
-  const handleCartaPorteAction = useCallback(async () => {
-    if (!tripPadre) return;
-
-    if (localUuid) {
-      handleDownloadPDF(localUuid);
-      return;
-    }
-
-    // 🚀 LÓGICA DE AUTO-GUARDADO: Guardamos la data fiscal ANTES de timbrar el $1
-    // Para que los contenedores y el peso salgan impresos en el PDF
-    try {
-      await axiosClient.put(`/trips/${tripPadre.id}`, tripFiscalData);
-    } catch (error) {
-      toast.error("Error al guardar los contenedores en la base de datos.");
-      return;
-    }
-
-    try {
-      await handleStampNominal(tripPadre.id, (responseData: any) => {
-        const generatedUuid =
-          responseData?.data?.uuid ||
-          responseData?.uuid ||
-          responseData?.data?.data?.uuid;
-
-        if (generatedUuid) {
-          setLocalUuid(generatedUuid);
-          setCpGenerada(true);
-          handleDownloadPDF(generatedUuid); // Lo descargamos automáticamente
-          toast.success(
-            "¡Carta Porte generada exitosamente y lista para imprimir!",
-          );
-        } else {
-          toast.warning(
-            "Se timbró correctamente, recarga para ver los archivos.",
-          );
-        }
-      });
-    } catch {
-      toast.error("Error al timbrar Carta Porte de $1.");
-    }
-  }, [
-    tripPadre,
-    localUuid,
-    tripFiscalData,
-    handleStampNominal,
-    handleDownloadPDF,
-  ]);
-
   const validateForm = useCallback((): boolean => {
     if (!formData.unit_id || !formData.operator_id || !formData.remolque_1_id) {
       toast.error(
@@ -499,79 +425,83 @@ export function NextLegModal({
       );
       return false;
     }
+
+    // Si es FULL, validar herencia obligatoria
     if (isFullTrip && (!formData.dolly_id || !formData.remolque_2_id)) {
-      toast.error("Configuración FULL: Debe asignar Dolly y Remolque 2.");
+      toast.error(
+        "Configuración FULL detectada: El Dolly y Remolque 2 son obligatorios.",
+      );
       return false;
     }
-    // Validación del destino de vacío
+
+    // FASE 3: Obligatorio saber dónde queda el contenedor
     if (
       formData.leg_type === "entrega_vacio" &&
       !formData.destino_vacio?.trim()
     ) {
-      toast.error("Indique el destino/patio donde se entregará el vacío.");
+      toast.error(
+        "Para la Fase de Vacío, debe indicar el Destino/Patio de entrega.",
+      );
       return false;
     }
 
-    // VALIDACIÓN FISCAL SI ACTIVÓ EL TIMBRADO REAL
-    if (shouldStampReal) {
-      if (!isFiscalDataComplete) {
+    // FASE 2: Validar peso para la Carta Porte
+    if (formData.leg_type === "ruta_carretera") {
+      if (
+        !tripFiscalData.peso_toneladas ||
+        tripFiscalData.peso_toneladas <= 0
+      ) {
         toast.error(
-          "Faltan datos fiscales para emitir la Carta Porte Real (Peso o Claves SAT).",
+          "El peso es obligatorio para iniciar la ruta carretera (Carta Porte).",
         );
-        setShowFiscalData(true); // Abre la pestaña para que lo vea
+        setShowFiscalData(true);
         return false;
       }
     }
 
     return true;
-  }, [formData, isFullTrip, shouldStampReal, isFiscalDataComplete]);
-
+  }, [formData, isFullTrip, tripFiscalData, isFiscalDataComplete]);
   const handleIniciarTramo = useCallback(async () => {
     if (!tripPadre || !validateForm()) return;
 
-    if (formData.leg_type === "ruta_carretera" && !cpGenerada) {
-      toast.warning(
-        "Iniciando tramo de carretera sin Carta Porte timbrada. Recuerde timbrar más tarde.",
-      );
-    }
-
     setLoading(true);
     try {
-      // 1. ACTUALIZAR DATOS FISCALES EN EL VIAJE ANTES DE ARRANCAR
-      await axiosClient.put(`/trips/${tripPadre.id}`, tripFiscalData);
+      // 🚀 1. SIEMPRE GUARDAMOS LOS DATOS FISCALES ANTES DE LANZAR LA RUTA
+      await axiosClient.put(`/trips/${tripPadre.id}`, {
+        ...tripFiscalData,
+        numero_contenedor: tripFiscalData.contenedor_1,
+        booking: tripFiscalData.referencia,
+      });
 
-      // 2. CREAR LA FASE/TRAMO OPERATIVO
+      // 🚀 2. CREAMOS LA FASE/TRAMO OPERATIVO
       const success = await onSubmit(
         String(tripPadre.id),
         formData as TripLegCreatePayload,
       );
 
       if (success) {
-        // 3. DISPARAR TIMBRADO REAL SI LO ELIGIÓ
-        if (shouldStampReal && formData.leg_type === "ruta_carretera") {
-          try {
-            await axiosClient.post(`/billing/${tripPadre.id}/stamp-real`);
-            toast.success("¡Viaje Timbrado con éxito (Carta Porte Real)!");
-          } catch (err) {
-            toast.error("Error al generar la Carta Porte Real.");
-          }
-        }
-
+        // Fase 1: Los remolques pasan a estado "Cargado"
         if (formData.leg_type === "carga_muelle") {
           await updateLoadStatus(Number(formData.remolque_1_id), true);
           if (formData.remolque_2_id)
             await updateLoadStatus(Number(formData.remolque_2_id), true);
-        } else if (formData.leg_type === "entrega_vacio") {
+        }
+        // Fase 3: Los remolques se liberan (Vacíos)
+        else if (formData.leg_type === "entrega_vacio") {
           await updateLoadStatus(Number(formData.remolque_1_id), false);
           if (formData.remolque_2_id)
             await updateLoadStatus(Number(formData.remolque_2_id), false);
+
+          // LOG DE GUSTAVO: Confirmar liberación
           toast.success(
-            `📦 Contenedores/Remolques liberados (Vacíos) en: ${formData.destino_vacio}`,
+            `Equipo liberado en ${formData.destino_vacio}. Viaje listo para liquidación.`,
           );
         }
 
         onOpenChange(false);
       }
+    } catch (error) {
+      toast.error("Error al iniciar el tramo o guardar los datos.");
     } finally {
       setLoading(false);
     }
@@ -582,9 +512,8 @@ export function NextLegModal({
     onSubmit,
     updateLoadStatus,
     onOpenChange,
-    cpGenerada,
-    shouldStampReal,
     tripFiscalData,
+    legUiConfig,
   ]);
 
   const referencia = (tripPadre as (Trip & { referencia?: string }) | null)
@@ -626,13 +555,9 @@ export function NextLegModal({
                 <div>
                   <DialogTitle className="text-3xl font-black uppercase tracking-tighter text-slate-900 dark:text-white heading-crisp">
                     SERV- {tripPadre.public_id ?? tripPadre.id}
-                    <br></br>
-                    <span className="text-brand-red text-[25px]">
-                      {tripPadre.uuid_fiscal ?? "Sin UUID"}
-                    </span>
                   </DialogTitle>
                   <p className="text-[10px] font-black text-slate-400 dark:text-white/40 uppercase tracking-[0.3em] mt-1">
-                    Logística Operativa
+                    Asignación Logística Operativa
                   </p>
                 </div>
               </div>
@@ -659,44 +584,6 @@ export function NextLegModal({
                   </Badge>
                 )}
               </div>
-            </div>
-
-            {/* 🚀 NUEVA BOTONERA DE CARTA PORTE EN LA CABECERA */}
-            <div className="flex flex-col items-end gap-3">
-              {/*               <Button
-                variant="outline"
-                className={cn(
-                  "h-10 px-4 text-[10px] font-black shadow-lg transition-all uppercase tracking-widest border-none haptic-press",
-                  localUuid
-                    ? "bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-500/20"
-                    : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-500/20",
-                )}
-                onClick={handleCartaPorteAction}
-                disabled={isStamping}
-              >
-                {isStamping ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : localUuid ? (
-                  <FileText className="h-4 w-4 mr-2" />
-                ) : (
-                  <FileCode2 className="h-4 w-4 mr-2" />
-                )}
-                {localUuid
-                  ? "DESCARGAR CP BYPASS ($1)"
-                  : "TIMBRAR CP BYPASS ($1)"}
-              </Button> */}
-
-              {localUuid && (
-                <Button
-                  variant="outline"
-                  className="h-10 px-4 text-[10px] font-black uppercase tracking-widest border-none shadow-sm bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
-                  onClick={() => {
-                    if (localUuid) handleDownloadXML(localUuid);
-                  }}
-                >
-                  <FileCode2 className="h-3.5 w-3.5 mr-2" /> Descargar XML
-                </Button>
-              )}
             </div>
           </div>
         </DialogHeader>
@@ -1190,8 +1077,17 @@ export function NextLegModal({
                     onValueChange={(v) =>
                       setFormData((p) => ({ ...p, remolque_1_id: Number(v) }))
                     }
+                    // BLOQUEO: Si el viaje padre ya tiene este equipo, no se puede cambiar
                   >
-                    <SelectTrigger className="h-10 font-bold border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-slate-800 dark:text-white">
+                    <SelectTrigger
+                      disabled={Boolean(tripPadre.remolque_1_id)}
+                      className={cn(
+                        "h-10 font-bold border-slate-200 dark:border-white/10 dark:text-white",
+                        tripPadre.remolque_1_id // Simplemente la variable, el ternario ya evalúa si existe
+                          ? "bg-slate-100 dark:bg-slate-900/80 opacity-70 cursor-not-allowed shadow-none"
+                          : "bg-slate-50/50 dark:bg-slate-800",
+                      )}
+                    >
                       <SelectValue placeholder="R1" />
                     </SelectTrigger>
                     <SelectContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10">
@@ -1226,8 +1122,17 @@ export function NextLegModal({
                         onValueChange={(v) =>
                           setFormData((p) => ({ ...p, dolly_id: Number(v) }))
                         }
+                        // BLOQUEO: Persistencia de Dolly
                       >
-                        <SelectTrigger className="h-10 font-bold border-rose-200 dark:border-rose-700/50 bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300">
+                        <SelectTrigger
+                          disabled={Boolean(tripPadre.dolly_id)}
+                          className={cn(
+                            "h-10 font-bold border-rose-200 dark:border-rose-700/50 text-rose-700 dark:text-rose-300",
+                            tripPadre.dolly_id // Sin el !!
+                              ? "bg-slate-100 dark:bg-slate-900/80 opacity-70 cursor-not-allowed shadow-none border-slate-200"
+                              : "bg-rose-50 dark:bg-rose-900/20",
+                          )}
+                        >
                           <SelectValue placeholder="Dolly" />
                         </SelectTrigger>
                         <SelectContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10">
@@ -1261,7 +1166,15 @@ export function NextLegModal({
                           }))
                         }
                       >
-                        <SelectTrigger className="h-10 font-bold border-rose-200 dark:border-rose-700/50 bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300">
+                        <SelectTrigger
+                          disabled={Boolean(tripPadre.remolque_2_id)}
+                          className={cn(
+                            "h-10 font-bold border-rose-200 dark:border-rose-700/50 text-rose-700 dark:text-rose-300",
+                            tripPadre.remolque_2_id // Sin el !!
+                              ? "bg-slate-100 dark:bg-slate-900/80 opacity-70 cursor-not-allowed shadow-none border-slate-200"
+                              : "bg-rose-50 dark:bg-rose-900/20",
+                          )}
+                        >
                           <SelectValue placeholder="R2" />
                         </SelectTrigger>
                         <SelectContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10">
@@ -1286,25 +1199,6 @@ export function NextLegModal({
                 )}
               </div>
             </div>
-
-            {formData.leg_type === "ruta_carretera" && (
-              <div className="flex items-center justify-between p-5 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-2xl mb-4 shadow-sm animate-in fade-in zoom-in-95">
-                <div>
-                  <Label className="text-amber-900 dark:text-amber-400 font-black uppercase tracking-widest text-[11px]">
-                    Iniciar Tramo con Timbrado Real
-                  </Label>
-                  <p className="text-xs text-amber-700 dark:text-amber-500/70 mt-1 font-medium">
-                    Se generará la Carta Porte fiscal con el operador y equipo
-                    actual, cancelando el bypass de $1.
-                  </p>
-                </div>
-                <Switch
-                  checked={shouldStampReal}
-                  onCheckedChange={setShouldStampReal}
-                  className="data-[state=checked]:bg-amber-600"
-                />
-              </div>
-            )}
 
             {isRoadLeg && (
               <div
@@ -1404,7 +1298,7 @@ export function NextLegModal({
           <div className="flex items-center gap-3 px-2">
             <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
             <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
-              Validación Física Requerida
+              {legUiConfig.helperText}
             </span>
           </div>
           <div className="flex gap-4">
@@ -1430,7 +1324,7 @@ export function NextLegModal({
               ) : (
                 <CheckCircle2 className="h-5 w-5 mr-2" />
               )}
-              Desenganche o Continuar
+              {legUiConfig.actionLabel}
             </Button>
           </div>
         </DialogFooter>

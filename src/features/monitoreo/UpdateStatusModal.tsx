@@ -74,7 +74,8 @@ export interface StatusUpdateData {
   odometro?: string;
   combustible_porcentaje?: string;
   combustible_litros?: string;
-  terminal_entrega_vacio?: string; // Agregado aquí
+  terminal_entrega_vacio?: string;
+  fase_operativa: string;
 }
 
 const DEFAULT_LOCATIONS = [
@@ -127,6 +128,7 @@ export function UpdateStatusModal({
     combustible_porcentaje: "",
     combustible_litros: "",
     terminal_entrega_vacio: "", // Inicializado
+    fase_operativa: activeLeg?.leg_type || "",
   });
 
   const [openCombobox, setOpenCombobox] = useState(false);
@@ -171,6 +173,7 @@ export function UpdateStatusModal({
           combustible_porcentaje: "",
           combustible_litros: "",
           terminal_entrega_vacio: "",
+          fase_operativa: activeLeg?.leg_type || "",
         });
       } else {
         // MODO CREACIÓN
@@ -186,6 +189,7 @@ export function UpdateStatusModal({
           combustible_porcentaje: "",
           combustible_litros: "",
           terminal_entrega_vacio: "",
+          fase_operativa: activeLeg?.leg_type || "",
         });
       }
       setSearchLocationQuery("");
@@ -265,7 +269,7 @@ export function UpdateStatusModal({
         },
         ...baseOptions,
         {
-          value: "entregado",
+          value: "llegada_patio_3t",
           label: "🏁 En resguardo en patio (Finaliza Fase 1)",
           color: "bg-emerald-500",
         },
@@ -314,7 +318,7 @@ export function UpdateStatusModal({
       },
       ...baseOptions,
       {
-        value: "entregado",
+        value: "arribo_cliente",
         label: "🏁 Arribo a destino con cliente (Finaliza Fase 2)",
         color: "bg-emerald-500",
       },
@@ -344,6 +348,10 @@ export function UpdateStatusModal({
       )
     ) {
       dbStatus = "detenido";
+    }
+
+    if (formData.status === "arribo_cliente") {
+      dbStatus = "arribo_cliente";
     }
 
     const isIncident = [
@@ -393,6 +401,7 @@ export function UpdateStatusModal({
       await onSubmit({
         ...formData,
         status: dbStatus,
+        fase_operativa: activeLeg?.leg_type || "desconocida",
         timestamp: eventToEdit ? formData.timestamp : timestamp,
       });
     } catch (err) {
@@ -774,7 +783,8 @@ export function UpdateStatusModal({
               </div>
 
               {/* 🚀 CAMPO OBLIGATORIO PARA CIERRE DE VACÍO */}
-              {formData.status === "entregado" &&
+              {(formData.status === "entregado" ||
+                formData.status === "retorno_vacio") &&
                 activeLeg?.leg_type === "entrega_vacio" && (
                   <div className="space-y-2 animate-in fade-in slide-in-from-top-2 p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl">
                     <Label className="text-[10px] font-black text-purple-700 uppercase tracking-widest flex items-center gap-1.5">

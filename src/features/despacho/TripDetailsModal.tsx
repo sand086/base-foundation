@@ -287,26 +287,41 @@ export function TripDetailsModal({
   const submitTerminalArrival = async () => {
     if (!activeLeg || !selectedTerminal) return;
     setFinishingLeg(true);
+
+    // Determinamos si es el final absoluto (Fase 3) o solo arribo (Fase 2)
+    const isPhase3 = activeLeg.leg_type === "entrega_vacio";
+    const newStatus = isPhase3 ? "entregado" : "arribo_cliente";
+    const logMessage = isPhase3
+      ? `VIAJE FINALIZADO: Contenedor retornado en: ${selectedTerminal}.`
+      : `ARRIBO A CLIENTE: Unidad reportada en destino: ${selectedTerminal}. pendiente retorno de vacío.`;
+
     try {
       await addTimelineEvent(
         String(trip?.id),
         activeLeg.id,
         {
-          status: "entregado",
+          status: newStatus,
           location: selectedTerminal,
-          comments: `LLEGADA REGISTRADA: El equipo fue entregado en: ${selectedTerminal}.`,
+          comments: logMessage,
         },
-        true,
+        isPhase3, // Solo cerramos el leg (is_final) si es Fase 3
       );
-      if (trip?.remolque_1_id)
-        await updateLoadStatus(trip.remolque_1_id, false);
-      if (trip?.remolque_2_id)
-        await updateLoadStatus(trip.remolque_2_id, false);
+
+      // 🚀 REGLA DE GUSTAVO: Solo liberar remolques si es Fase 3 (Vacío)
+      if (isPhase3) {
+        if (trip?.remolque_1_id)
+          await updateLoadStatus(trip.remolque_1_id, false);
+        if (trip?.remolque_2_id)
+          await updateLoadStatus(trip.remolque_2_id, false);
+        toast.success("Viaje concluido y equipo liberado.");
+      } else {
+        toast.success("Arribo registrado. El viaje continúa en Fase de Vacío.");
+      }
+
       setShowTerminalModal(false);
       await refreshTrips();
-      toast.success("Llegada registrada, viaje finalizado.");
     } catch {
-      toast.error("Error al registrar llegada.");
+      toast.error("Error al registrar el movimiento.");
     } finally {
       setFinishingLeg(false);
     }
@@ -455,10 +470,9 @@ export function TripDetailsModal({
         };
       case "ruta_carretera":
         return {
-          text: "Relevo (Desenganchar)",
-          icon: <Link2Off className="h-3.5 w-3.5 mr-1.5" />,
-          color:
-            "bg-brand-navy hover:bg-slate-800 dark:bg-blue-800 dark:hover:bg-blue-700",
+          text: "Registrar Arribo a Cliente", // Antes: "Relevo (Desenganchar)"
+          icon: <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />,
+          color: "bg-orange-600 hover:bg-orange-700", // Color preventivo (no es el final)
         };
       case "entrega_vacio":
         return {
@@ -940,11 +954,11 @@ export function TripDetailsModal({
                           activeLeg?.leg_type === "ruta_carretera" && (
                             <Button
                               variant="outline"
-                              className="w-full border-dashed border-2 h-14 bg-white dark:bg-slate-900/50 border-slate-300 dark:border-white/10 text-slate-600 dark:text-slate-400 font-black uppercase tracking-widest text-[10px] hover:bg-slate-50 dark:hover:bg-slate-800/80 mt-6 shadow-sm haptic-press"
+                              className="w-full border-dashed border-2 h-14 ..."
                               onClick={() => setShowTerminalModal(true)}
                             >
-                              <MapPin className="h-4 w-4 mr-2 text-emerald-500" />{" "}
-                              REGISTRAR LLEGADA A TERMINAL (CIERRE DE RUTA)
+                              <Flag className="h-4 w-4 mr-2 text-orange-500" />{" "}
+                              REGISTRAR ARRIBO CON CLIENTE (PENDIENTE VACÍO)
                             </Button>
                           )}
                       </div>
@@ -1298,10 +1312,14 @@ export function TripDetailsModal({
               </div>
               <div className="flex flex-col gap-1 text-left min-w-0">
                 <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-emerald-700 dark:text-emerald-400 heading-crisp leading-none">
-                  Cierre Operativo
+                  {activeLeg?.leg_type === "entrega_vacio"
+                    ? "Cierre de Ciclo (Vacío)"
+                    : "Confirmar Llegada a Destino"}
                 </DialogTitle>
                 <DialogDescription className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-1">
-                  Registro de entrega de equipo en destino
+                  {activeLeg?.leg_type === "entrega_vacio"
+                    ? "Indica la terminal donde se entregó el contenedor vacío."
+                    : "Indica el patio o bodega del cliente donde arribó la unidad."}
                 </DialogDescription>
               </div>
             </div>
