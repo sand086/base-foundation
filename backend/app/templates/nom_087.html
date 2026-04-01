@@ -3,153 +3,540 @@
   <head>
     <meta charset="UTF-8" />
     <style>
+      @page {
+        size: A4 landscape;
+        margin: 10mm;
+      }
+
+      :root {
+        --font-family: Arial, Helvetica, sans-serif;
+        --font-size-base: 10px;
+        --font-size-xs: 8px;
+        --font-size-sm: 9px;
+        --font-size-md: 11px;
+        --font-size-lg: 16px;
+
+        --text-color: #111111;
+        --border-color: #1f1f1f;
+        --header-bg: #d9d9d9;
+        --subtle-bg: #f4f4f4;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
       body {
-        font-family: Arial, sans-serif;
-        font-size: 10px;
-        color: #333;
         margin: 0;
         padding: 0;
+        font-family: var(--font-family);
+        font-size: var(--font-size-base);
+        color: var(--text-color);
       }
-      .header {
+
+      .page {
+        width: 100%;
+      }
+
+      .page-break {
+        page-break-before: always;
+      }
+
+      .text-left {
+        text-align: left;
+      }
+
+      .text-center {
         text-align: center;
-        margin-bottom: 20px;
-        border-bottom: 2px solid #000;
-        padding-bottom: 10px;
       }
-      .logo {
-        height: 50px;
-        position: absolute;
-        top: 20px;
-        left: 20px;
+
+      .text-right {
+        text-align: right;
       }
-      .title {
-        font-size: 14px;
+
+      .font-bold {
         font-weight: bold;
-        margin-top: 15px;
       }
-      .subtitle {
-        font-size: 10px;
-        color: #666;
+
+      .uppercase {
+        text-transform: uppercase;
       }
+
+      .mt-4 {
+        margin-top: 8px;
+      }
+
+      .mt-6 {
+        margin-top: 12px;
+      }
+
+      .mb-2 {
+        margin-bottom: 4px;
+      }
+
+      .mb-4 {
+        margin-bottom: 8px;
+      }
+
+      .small {
+        font-size: var(--font-size-sm);
+      }
+
+      .xs {
+        font-size: var(--font-size-xs);
+      }
+
       table {
         width: 100%;
         border-collapse: collapse;
-        margin-bottom: 15px;
       }
+
       th,
       td {
-        border: 1px solid #000;
-        padding: 5px;
-        text-align: left;
+        border: 1px solid var(--border-color);
+        padding: 4px 5px;
+        vertical-align: middle;
       }
+
       th {
-        background-color: #f2f2f2;
+        background: var(--header-bg);
         font-weight: bold;
       }
-      .grid-header th {
+
+      .no-border,
+      .no-border td,
+      .no-border th {
+        border: none !important;
+      }
+
+      .compact th,
+      .compact td {
+        padding: 3px 4px;
+      }
+
+      .title-table td {
+        border: none;
+        padding: 0;
+      }
+
+      .company-logo {
+        max-height: 32px;
+        max-width: 120px;
+      }
+
+      .main-title {
+        font-size: var(--font-size-lg);
+        font-weight: bold;
         text-align: center;
-        background-color: #e2e8f0;
+        margin: 2px 0 8px;
       }
-      .empty-row td {
-        height: 20px;
-      }
-      .signature-box {
-        margin-top: 40px;
+
+      .section-header {
+        background: var(--header-bg);
+        font-weight: bold;
         text-align: center;
-        width: 40%;
-        float: right;
       }
-      .signature-line {
-        border-top: 1px solid #000;
-        margin-top: 40px;
-        padding-top: 5px;
+
+      .hours-summary {
+        width: 42%;
       }
-      .legal-text {
-        font-size: 8px;
-        text-align: justify;
-        margin-top: 30px;
-        color: #555;
-        clear: both;
+
+      .hours-grid th,
+      .hours-grid td {
+        text-align: center;
+        padding: 2px;
+      }
+
+      .row-label {
+        width: 145px;
+        text-align: left;
+        font-weight: bold;
+      }
+
+      .hour-number {
+        width: 26px;
+        font-size: var(--font-size-sm);
+        font-weight: bold;
+      }
+
+      .total-col {
+        width: 50px;
+        font-weight: bold;
+      }
+
+      .hour-cell {
+        width: 26px;
+        height: 24px;
+        padding: 0 !important;
+      }
+
+      .tick-box {
+        position: relative;
+        width: 100%;
+        height: 24px;
+      }
+
+      .tick-box .line-major,
+      .tick-box .line-mid,
+      .tick-box .line-minor {
+        position: absolute;
+        bottom: 0;
+        width: 1px;
+        background: var(--border-color);
+      }
+
+      .tick-box .line-major {
+        right: 0;
+        height: 22px;
+      }
+
+      .tick-box .line-mid {
+        left: 50%;
+        margin-left: -0.5px;
+        height: 14px;
+      }
+
+      .tick-box .line-minor {
+        left: 25%;
+        height: 8px;
+      }
+
+      .legend-table {
+        width: 34%;
+        margin-top: 4px;
+      }
+
+      .legend-table td {
+        border: none;
+        padding: 1px 2px;
+      }
+
+      .bottom-box td {
+        height: 110px;
+        vertical-align: top;
+      }
+
+      .signature-table td {
+        height: 42px;
+      }
+
+      .legal-title {
+        font-size: var(--font-size-md);
+        font-weight: bold;
+        text-align: center;
+        margin: 4px 0 8px;
+      }
+
+      .legal-table th,
+      .legal-table td {
+        padding: 6px;
+        vertical-align: top;
+      }
+
+      .legal-table th {
+        text-align: center;
+      }
+
+      .muted {
+        color: #444444;
+      }
+
+      .underline-fill {
+        display: inline-block;
+        min-width: 120px;
+        border-bottom: 1px solid var(--border-color);
+        height: 12px;
+        vertical-align: bottom;
       }
     </style>
   </head>
   <body>
-    <div class="header">
-      {% if logo_src %}
-      <img src="{{ logo_src }}" class="logo" />
-      {% endif %}
-      <div class="title">BITÁCORA DE HORAS DE SERVICIO DEL CONDUCTOR</div>
-      <div class="subtitle">Cumplimiento NOM-087-SCT-2-2017</div>
-    </div>
+    {% set horas = range(1, 25) %} {% set filas_bitacora = [ "CONDUCIENDO",
+    "PAUSA", "ACTIVIDADES AUXILIARES", "CASOS DE EXCEPCIÓN", "DESCANSO" ] %} {%
+    macro render_hour_cell() %}
+    <td class="hour-cell">
+      <div class="tick-box">
+        <span class="line-minor"></span>
+        <span class="line-mid"></span>
+        <span class="line-major"></span>
+      </div>
+    </td>
+    {% endmacro %} {% macro render_day_grid(day_label) %}
+    <table class="hours-grid compact mt-4">
+      <tr>
+        <th class="section-header" colspan="26">{{ day_label }}</th>
+      </tr>
+      <tr>
+        <th class="row-label">HORAS</th>
+        {% for h in horas %}
+        <th class="hour-number">{{ h }}</th>
+        {% endfor %}
+        <th class="total-col">TOTAL</th>
+      </tr>
 
-    <table>
+      {% for fila in filas_bitacora %}
       <tr>
-        <th width="20%">Nombre del Conductor:</th>
-        <td width="40%">{{ operador_nombre }}</td>
-        <th width="15%">No. Licencia:</th>
-        <td width="25%">{{ operador_licencia }}</td>
-      </tr>
-      <tr>
-        <th>Razón Social:</th>
-        <td>{{ emisor_nombre }}</td>
-        <th>RFC Emisor:</th>
-        <td>{{ emisor_rfc }}</td>
-      </tr>
-      <tr>
-        <th>Placas Unidad:</th>
-        <td>{{ placas }}</td>
-        <th>Origen:</th>
-        <td>{{ origen }}</td>
-      </tr>
-      <tr>
-        <th>Placas Remolque:</th>
-        <td>{{ placas_remolque }}</td>
-        <th>Destino:</th>
-        <td>{{ destino }}</td>
-      </tr>
-    </table>
-
-    <p style="margin: 5px 0">
-      <strong>Registro de Actividades:</strong> (Marcar con 'X' o llenar según
-      corresponda)
-    </p>
-
-    <table>
-      <tr class="grid-header">
-        <th width="15%">Fecha / Hora</th>
-        <th width="15%">Conduciendo</th>
-        <th width="15%">Pausa (30 min)</th>
-        <th width="15%">Descanso (8 hrs)</th>
-        <th width="15%">Excepción</th>
-        <th width="25%">Lugar / Observaciones</th>
-      </tr>
-      {% for i in range(12) %}
-      <tr class="empty-row">
-        <td></td>
-        <td></td>
-        <td></td>
-        <td></td>
-        <td></td>
+        <td class="row-label">{{ fila }}</td>
+        {% for _ in horas %} {{ render_hour_cell() }} {% endfor %}
         <td></td>
       </tr>
       {% endfor %}
     </table>
+    {% endmacro %}
 
-    <div class="legal-text">
-      <strong>Aspectos relevantes a considerar dentro de la NOM-087:</strong
-      ><br />
-      1. Todo conductor debe realizar una pausa de 30 minutos cuando ha
-      concluido un lapso de 5 horas de conducción, o bien después de un lapso de
-      5 horas y media.<br />
-      2. Los periodos de pausa no pueden ser acumulables.<br />
-      3. Durante el tiempo de conducción máximo de 14 horas, el conductor debe
-      tener una pausa no menor a 8 horas continuas.<br />
-      4. El conductor está obligado a portar la bitácora de horas de servicio y
-      exhibirla a la autoridad competente cuando ésta se la requiera.
+    <!-- ANVERSO -->
+    <div class="page">
+      <table class="title-table mb-2">
+        <tr>
+          <td class="text-left" style="width: 20%">
+            {% if logo_src %}
+            <img src="{{ logo_src }}" alt="Logo empresa" class="company-logo" />
+            {% else %}
+            <span class="muted">LOGO EMPRESA</span>
+            {% endif %}
+          </td>
+          <td class="text-center" style="width: 60%"></td>
+          <td class="text-right muted" style="width: 20%">(anverso)</td>
+        </tr>
+      </table>
+
+      <div class="main-title uppercase">BITÁCORA DE HORAS DE SERVICIO</div>
+
+      <table class="compact">
+        <tr>
+          <th class="text-center" colspan="2">FECHA:</th>
+          <th class="text-center">MES:</th>
+          <th class="text-center">AÑO:</th>
+        </tr>
+        <tr>
+          <td colspan="2">{{ fecha or '' }}</td>
+          <td>{{ mes or '' }}</td>
+          <td>{{ anio or '' }}</td>
+        </tr>
+      </table>
+
+      <table class="compact">
+        <tr>
+          <th colspan="2">NOMBRE O RAZÓN SOCIAL DEL PERMISIONARIO</th>
+          <th colspan="2">DOMICILIO</th>
+        </tr>
+        <tr>
+          <td colspan="2">{{ emisor_nombre or '' }}</td>
+          <td colspan="2">{{ emisor_domicilio or '' }}</td>
+        </tr>
+        <tr>
+          <th>TIPO DE SERVICIO</th>
+          <th>MODALIDAD</th>
+          <th>MARCA</th>
+          <th>MODELO</th>
+        </tr>
+        <tr>
+          <td>
+            Autotransporte Carga Federal ____<br />
+            Transporte Privado ____
+          </td>
+          <td>{{ modalidad or '' }}</td>
+          <td>{{ unidad_marca or '' }}</td>
+          <td>{{ unidad_modelo or '' }}</td>
+        </tr>
+        <tr>
+          <th colspan="2">PLACAS No.</th>
+          <th colspan="2">PLACAS REMOLQUE</th>
+        </tr>
+        <tr>
+          <td colspan="2">{{ placas or '' }}</td>
+          <td colspan="2">{{ placas_remolque or '' }}</td>
+        </tr>
+      </table>
+
+      <table class="compact mt-4">
+        <tr>
+          <th>NOMBRE DEL CONDUCTOR</th>
+          <th>LICENCIA No.</th>
+          <th>VIGENCIA</th>
+          <th>ORIGEN</th>
+          <th>PUNTOS INTERMEDIOS</th>
+          <th>DESTINO</th>
+        </tr>
+        <tr>
+          <td>{{ operador_nombre or '' }}</td>
+          <td>{{ operador_licencia or '' }}</td>
+          <td>{{ licencia_vigencia or '' }}</td>
+          <td>{{ origen or '' }}</td>
+          <td>{{ puntos_intermedios or '' }}</td>
+          <td>{{ destino or '' }}</td>
+        </tr>
+      </table>
+
+      <table class="hours-summary compact mt-4">
+        <tr>
+          <th rowspan="2">HORAS</th>
+          <th>DE SALIDA</th>
+          <th>DE LLEGADA</th>
+        </tr>
+        <tr>
+          <td>{{ hora_salida or '' }}</td>
+          <td>{{ hora_llegada or '' }}</td>
+        </tr>
+      </table>
+
+      {{ render_day_grid('DÍA 1') }} {{ render_day_grid('DÍA 2') }}
+
+      <table class="legend-table compact">
+        <tr>
+          <td>Inicio de viaje</td>
+          <td>*</td>
+        </tr>
+        <tr>
+          <td>Comida</td>
+          <td>✓</td>
+        </tr>
+        <tr>
+          <td>Descanso</td>
+          <td>●</td>
+        </tr>
+        <tr>
+          <td>Descarga</td>
+          <td>⬇</td>
+        </tr>
+        <tr>
+          <td>Retenes</td>
+          <td>✚</td>
+        </tr>
+        <tr>
+          <td>Descompostura</td>
+          <td>▲</td>
+        </tr>
+        <tr>
+          <td>Cierre de viaje</td>
+          <td>◐</td>
+        </tr>
+        <tr>
+          <td>Carga</td>
+          <td>⬆</td>
+        </tr>
+      </table>
+
+      <table class="bottom-box compact mt-6">
+        <tr>
+          <th style="width: 50%">CASOS DE EXCEPCIÓN</th>
+          <th style="width: 50%">ACTIVIDADES AUXILIARES</th>
+        </tr>
+        <tr>
+          <td>
+            Percance vial (accidente) <span class="underline-fill"></span
+            ><br /><br />
+            Avería del vehículo <span class="underline-fill"></span><br /><br />
+            Bloqueo carretero <span class="underline-fill"></span><br /><br />
+            Eventos climatológicos <span class="underline-fill"></span
+            ><br /><br />
+            Otros <span class="underline-fill" style="min-width: 220px"></span>
+          </td>
+          <td>
+            Carga o descarga <span class="underline-fill"></span><br /><br />
+            Limpieza y mantenimiento técnico unidad
+            <span class="underline-fill"></span><br /><br />
+            Operativos y/o Retenes <span class="underline-fill"></span
+            ><br /><br />
+            Carga de combustible <span class="underline-fill"></span
+            ><br /><br />
+            Otros <span class="underline-fill" style="min-width: 220px"></span>
+          </td>
+        </tr>
+      </table>
+
+      <table class="signature-table compact">
+        <tr>
+          <th style="width: 50%">FIRMA DEL RESPONSABLE</th>
+          <th style="width: 50%">FIRMA DEL CONDUCTOR</th>
+        </tr>
+        <tr>
+          <td></td>
+          <td></td>
+        </tr>
+      </table>
     </div>
 
-    <div class="signature-box">
-      <div class="signature-line">Firma del Conductor</div>
+    <!-- REVERSO -->
+    <div class="page page-break">
+      <table class="title-table mb-4">
+        <tr>
+          <td class="text-left muted" style="width: 20%">LOGO EMPRESA</td>
+          <td class="text-center" style="width: 60%"></td>
+          <td class="text-right muted" style="width: 20%">(reverso)</td>
+        </tr>
+      </table>
+
+      <div class="legal-title uppercase">
+        ASPECTOS RELEVANTES QUE CONSIDERAR DE LA NOM-087-SCT-2-2017
+      </div>
+
+      <table class="legal-table">
+        <tr>
+          <th style="width: 18%">NUMERAL</th>
+          <th style="width: 82%">ESTABLECE</th>
+        </tr>
+        <tr>
+          <td class="font-bold">3.4. Excepciones temporales</td>
+          <td>
+            Es el tiempo que podrá prolongarse la duración de la conducción y
+            del tiempo de servicio ininterrumpido en caso de percance vial,
+            avería del vehículo, perturbación del servicio u otra circunstancia
+            que interrumpa el tránsito, siempre que pueda evidenciarse
+            documentalmente.
+          </td>
+        </tr>
+        <tr>
+          <td class="font-bold">3.5. Actividades auxiliares</td>
+          <td>
+            Cualquier trabajo distinto al de la conducción, incluyendo carga o
+            descarga, limpieza, mantenimiento técnico, cumplimiento de
+            obligaciones operativas o legales vinculadas al transporte y carga
+            de combustible.
+          </td>
+        </tr>
+        <tr>
+          <td class="font-bold">3.6. Pausa</td>
+          <td>
+            Periodo comprendido dentro del tiempo de servicio durante el cual el
+            conductor no lleva a cabo tareas de conducción ni actividades
+            auxiliares.
+          </td>
+        </tr>
+        <tr>
+          <td class="font-bold">4.1 y 4.2</td>
+          <td>
+            Todo conductor debe realizar una pausa de 30 minutos cuando ha
+            conducido hasta cinco horas continuas, o bien dicha pausa podrá
+            distribuirse dentro de un lapso de cinco horas y media de acuerdo
+            con las condiciones de la ruta.
+          </td>
+        </tr>
+        <tr>
+          <td class="font-bold">4.6</td>
+          <td>
+            En rutas que impliquen una conducción máxima de 14 horas, el
+            conductor debe tener una pausa no menor a 8 horas continuas, sin
+            menoscabo de cumplir con las pausas mínimas establecidas en la
+            norma.
+          </td>
+        </tr>
+        <tr>
+          <td class="font-bold">4.7</td>
+          <td>
+            El tiempo máximo de conducción en 24 horas nunca podrá exceder las
+            14 horas.
+          </td>
+        </tr>
+        <tr>
+          <td class="font-bold">Vigilancia</td>
+          <td>
+            La bitácora debe portarse y exhibirse a la autoridad competente
+            cuando ésta la requiera, como parte de la vigilancia del
+            cumplimiento de la NOM-087.
+          </td>
+        </tr>
+      </table>
     </div>
   </body>
 </html>

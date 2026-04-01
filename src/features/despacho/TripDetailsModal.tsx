@@ -629,18 +629,22 @@ export function TripDetailsModal({
                     "h-10 px-5 text-[10px] font-black shadow-sm transition-all uppercase tracking-widest border-none haptic-press",
                     localUuid
                       ? "bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-500/20"
-                      : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-500/20",
+                      : "bg-brand-red hover:bg-brand-red/80 text-white shadow-brand-red/20",
                   )}
                   onClick={() => {
                     if (localUuid) {
-                      handleDownloadBothFiles(localUuid, false);
+                      // Acción cuando ya está timbrado: Solo Descargar PDF
+                      handleDownloadPDF(localUuid);
                     } else {
+                      // Acción cuando no hay UUID: Timbrar
                       handleStampNominal(trip.id, (responseData) => {
                         const generatedUuid = responseData?.data?.uuid;
                         if (generatedUuid) {
                           setLocalUuid(generatedUuid);
                           handleDownloadBothFiles(generatedUuid, false);
-                          toast.success("¡CARTA PORTE BYPASS GENERADA!");
+                          toast.success(
+                            "¡CARTA PORTE BYPASS GENERADA Y DESCARGADA!",
+                          );
                         }
                         refreshTrips();
                       });
@@ -655,18 +659,21 @@ export function TripDetailsModal({
                   ) : (
                     <Activity className="h-4 w-4 mr-2" />
                   )}
+                  {/* TEXTO DINÁMICO SEGÚN EL ESTADO */}
                   {localUuid
-                    ? "DESCARGAR CP BYPASS ($1)"
-                    : "TIMBRAR CP BYPASS ($1)"}
+                    ? "Descargar Carta Porte (PDF)"
+                    : "Timbrar CP Bypass ($1)"}
                 </Button>
 
+                {/* BOTÓN EXTRA: SOLO APARECE SI YA ESTÁ TIMBRADO PARA DESCARGAR XML */}
                 {localUuid && (
                   <Button
                     variant="outline"
-                    className="h-10 px-4 text-[10px] font-black uppercase tracking-widest border-none shadow-sm bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                    className="h-10 px-4 text-[10px] font-black uppercase tracking-widest border-none shadow-sm bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 haptic-press"
                     onClick={() => handleDownloadXML(localUuid)}
                   >
-                    <FileCode2 className="h-4 w-4 mr-2" /> XML
+                    <FileCode2 className="h-4 w-4 mr-2" />
+                    Descargar XML
                   </Button>
                 )}
               </div>
