@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -45,6 +46,7 @@ import {
   Bookmark,
   Compass,
   Loader2,
+  Mail,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -58,7 +60,7 @@ interface UpdateStatusModalProps {
   serviceId: string;
   activeLeg?: TripLeg;
   onSubmit: (data: StatusUpdateData) => void;
-  eventToEdit?: TripTimelineEvent | null; //  Prop para el modo edición
+  eventToEdit?: TripTimelineEvent | null; // Prop para el modo edición
 }
 
 export interface StatusUpdateData {
@@ -72,7 +74,8 @@ export interface StatusUpdateData {
   odometro?: string;
   combustible_porcentaje?: string;
   combustible_litros?: string;
-  terminal_entrega_vacio?: string; //  Agregado aquí
+  terminal_entrega_vacio?: string;
+  fase_operativa: string;
 }
 
 const DEFAULT_LOCATIONS = [
@@ -114,7 +117,7 @@ export function UpdateStatusModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [formData, setFormData] = useState<StatusUpdateData>({
-    status: "en_transito", //  Predeterminado: Reporte Normal
+    status: "en_transito", // Predeterminado: Reporte Normal
     location: "",
     lat: "",
     lng: "",
@@ -124,7 +127,8 @@ export function UpdateStatusModal({
     odometro: "",
     combustible_porcentaje: "",
     combustible_litros: "",
-    terminal_entrega_vacio: "", //  Inicializado
+    terminal_entrega_vacio: "", // Inicializado
+    fase_operativa: activeLeg?.leg_type || "",
   });
 
   const [openCombobox, setOpenCombobox] = useState(false);
@@ -169,6 +173,7 @@ export function UpdateStatusModal({
           combustible_porcentaje: "",
           combustible_litros: "",
           terminal_entrega_vacio: "",
+          fase_operativa: activeLeg?.leg_type || "",
         });
       } else {
         // MODO CREACIÓN
@@ -184,6 +189,7 @@ export function UpdateStatusModal({
           combustible_porcentaje: "",
           combustible_litros: "",
           terminal_entrega_vacio: "",
+          fase_operativa: activeLeg?.leg_type || "",
         });
       }
       setSearchLocationQuery("");
@@ -209,17 +215,13 @@ export function UpdateStatusModal({
     return () => clearTimeout(timeoutId);
   }, [searchLocationQuery]);
 
-  const statusOptions = useMemo(
-    () => [
+  // 🚀 MÁQUINA DE ESTADOS DINÁMICA POR FASE OPERATIVA
+  const statusOptions = useMemo(() => {
+    const baseOptions = [
       {
         value: "en_transito",
-        label: "Reporte de Posición (Normal)",
+        label: "📍 Reporte de Posición (Normal)",
         color: "bg-blue-500",
-      },
-      {
-        value: "entregado",
-        label: "🏁 Arribo a Destino / Entregado",
-        color: "bg-emerald-500",
       },
       {
         value: "detenido_descanso",
@@ -243,17 +245,93 @@ export function UpdateStatusModal({
       },
       {
         value: "accidente",
-        label: "  Accidente / Siniestro Mayor",
+        label: "💥 Accidente / Siniestro Mayor",
         color: "bg-red-800",
       },
+    ];
+
+    if (activeLeg?.leg_type === "carga_muelle") {
+      const options = [
+        {
+          value: "en_camino_origen",
+          label: "🚛 En tránsito hacia el puerto/muelle",
+          color: "bg-indigo-400",
+        },
+        {
+          value: "cargando_muelle",
+          label: "🏗️ Cargando mercancía en muelle",
+          color: "bg-indigo-500",
+        },
+        {
+          value: "retorno_patio",
+          label: "🔄 Retornando cargado al patio 3T",
+          color: "bg-indigo-600",
+        },
+        ...baseOptions,
+        {
+          value: "llegada_patio_3t",
+          label: "🏁 En resguardo en patio (Finaliza Fase 1)",
+          color: "bg-emerald-500",
+        },
+      ];
+      // Fallback por si editan un estado viejo no mapeado
+      if (eventToEdit && !options.find((o) => o.value === formData.status)) {
+        options.push({
+          value: formData.status,
+          label: formData.status,
+          color: "bg-slate-500",
+        });
+      }
+      return options;
+    }
+
+    if (activeLeg?.leg_type === "entrega_vacio") {
+      const options = [
+        {
+          value: "retorno_vacio",
+          label: "🔄 Inicia retorno de vacío",
+          color: "bg-purple-400",
+        },
+        ...baseOptions,
+        {
+          value: "entregado",
+          label: "🏁 Regreso a patio / Terminal entregado (Finaliza Viaje)",
+          color: "bg-emerald-500",
+        },
+      ];
+      if (eventToEdit && !options.find((o) => o.value === formData.status)) {
+        options.push({
+          value: formData.status,
+          label: formData.status,
+          color: "bg-slate-500",
+        });
+      }
+      return options;
+    }
+
+    // Default (ruta_carretera)
+    const options = [
       {
-        value: "entrega_vacio",
-        label: "🔄 Retorno / Entrega de Vacío",
-        color: "bg-purple-500",
+        value: "inicio_ruta",
+        label: "🛣️ Inicio de ruta fiscal",
+        color: "bg-blue-400",
       },
-    ],
-    [],
-  );
+      ...baseOptions,
+      {
+        value: "arribo_cliente",
+        label: "🏁 Arribo a destino con cliente (Finaliza Fase 2)",
+        color: "bg-emerald-500",
+      },
+    ];
+    if (eventToEdit && !options.find((o) => o.value === formData.status)) {
+      options.push({
+        value: formData.status,
+        label: formData.status,
+        color: "bg-slate-500",
+      });
+    }
+    return options;
+  }, [activeLeg?.leg_type, eventToEdit, formData.status]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -270,6 +348,10 @@ export function UpdateStatusModal({
       )
     ) {
       dbStatus = "detenido";
+    }
+
+    if (formData.status === "arribo_cliente") {
+      dbStatus = "arribo_cliente";
     }
 
     const isIncident = [
@@ -319,6 +401,7 @@ export function UpdateStatusModal({
       await onSubmit({
         ...formData,
         status: dbStatus,
+        fase_operativa: activeLeg?.leg_type || "desconocida",
         timestamp: eventToEdit ? formData.timestamp : timestamp,
       });
     } catch (err) {
@@ -345,7 +428,7 @@ export function UpdateStatusModal({
       }}
     >
       <DialogContent className="w-[95vw] sm:max-w-[550px] p-0 flex flex-col max-h-[90vh] overflow-hidden border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl transition-all duration-300">
-        {/*  CAPA 2: HEADER TAHOE */}
+        {/* CAPA 2: HEADER TAHOE */}
         <DialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center gap-4 sm:gap-5">
@@ -390,7 +473,7 @@ export function UpdateStatusModal({
           </div>
         </DialogHeader>
 
-        {/*  CAPA 3: BODY Y FORMULARIO */}
+        {/* CAPA 3: BODY Y FORMULARIO */}
         <form
           onSubmit={handleSubmit}
           className="flex-1 min-h-0 overflow-hidden flex flex-col"
@@ -489,7 +572,7 @@ export function UpdateStatusModal({
                             : "border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800",
                         )}
                       >
-                        {/*  TRUCO: max-width evita que empuje el botón hacia afuera */}
+                        {/* TRUCO: max-width evita que empuje el botón hacia afuera */}
                         <span className="truncate flex-1 text-left mr-2 max-w-[380px] uppercase text-xs">
                           {formData.location ||
                             "Busca una caseta, ciudad o bodega..."}
@@ -699,26 +782,28 @@ export function UpdateStatusModal({
                 </div>
               </div>
 
-              {/*  FASE 1: CAMPO RECUPERADO PARA ENTREGA DE VACÍO */}
-              {formData.status === "entrega_vacio" && (
-                <div className="space-y-2 animate-in fade-in slide-in-from-top-2 p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl">
-                  <Label className="text-[10px] font-black text-purple-700 uppercase tracking-widest flex items-center gap-1.5">
-                    Terminal / Patio de Entrega *
-                  </Label>
-                  <Input
-                    placeholder="Ej: ICAVE, CCS, San Julián..."
-                    value={formData.terminal_entrega_vacio || ""}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        terminal_entrega_vacio: e.target.value.toUpperCase(),
-                      })
-                    }
-                    className="h-11 font-bold bg-white"
-                    required
-                  />
-                </div>
-              )}
+              {/* 🚀 CAMPO OBLIGATORIO PARA CIERRE DE VACÍO */}
+              {(formData.status === "entregado" ||
+                formData.status === "retorno_vacio") &&
+                activeLeg?.leg_type === "entrega_vacio" && (
+                  <div className="space-y-2 animate-in fade-in slide-in-from-top-2 p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl">
+                    <Label className="text-[10px] font-black text-purple-700 uppercase tracking-widest flex items-center gap-1.5">
+                      Terminal / Patio de Entrega *
+                    </Label>
+                    <Input
+                      placeholder="Ej: ICAVE, CCS, San Julián..."
+                      value={formData.terminal_entrega_vacio || ""}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          terminal_entrega_vacio: e.target.value.toUpperCase(),
+                        })
+                      }
+                      className="h-11 font-bold bg-white"
+                      required
+                    />
+                  </div>
+                )}
 
               {/* TELEMETRÍA (Oculta en modo edición para no sobreescribir datos globales por error) */}
               {!eventToEdit && (
@@ -786,6 +871,26 @@ export function UpdateStatusModal({
                 </div>
               )}
 
+              {/* 🚀 NOTIFICAR AL CLIENTE (MODO UPS) */}
+              <div className="flex items-center justify-between p-4 bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-xl mt-2">
+                <div className="space-y-0.5">
+                  <Label className="text-[11px] font-black uppercase text-blue-800 dark:text-blue-400 tracking-widest flex items-center gap-1.5">
+                    <Mail className="h-4 w-4" /> Notificar al Cliente (Tracking)
+                  </Label>
+                  <p className="text-[10px] text-blue-600 dark:text-blue-500 font-medium">
+                    Enviará un correo automático con este estatus y ubicación
+                    actual.
+                  </p>
+                </div>
+                <Switch
+                  checked={formData.notifyClient}
+                  onCheckedChange={(checked) =>
+                    setFormData({ ...formData, notifyClient: checked })
+                  }
+                  disabled={isSubmitting}
+                />
+              </div>
+
               {/* COMENTARIOS */}
               <div className="space-y-2 pt-2">
                 <Label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
@@ -816,7 +921,7 @@ export function UpdateStatusModal({
             </div>
           </div>
 
-          {/*  CAPA 4: FOOTER TAHOE */}
+          {/* CAPA 4: FOOTER TAHOE */}
           <DialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
             <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
               <Button
@@ -841,10 +946,10 @@ export function UpdateStatusModal({
                 className={cn(
                   "w-full sm:w-auto haptic-press flex-shrink-0 border-none text-white font-black uppercase tracking-widest text-[10px]",
                   eventToEdit
-                    ? "bg-brand-green hover:bg-brand-green/80 shadow-emerald-500/20" // Edit: Green
+                    ? "bg-brand-green hover:bg-brand-green/80 shadow-emerald-500/20"
                     : isIncidentUI
-                      ? "bg-rose-600 hover:bg-rose-700 shadow-rose-600/20" // Create Incident: Red
-                      : "bg-brand-navy hover:bg-slate-800 shadow-blue-500/20", // Create Normal: Navy
+                      ? "bg-rose-600 hover:bg-rose-700 shadow-rose-600/20"
+                      : "bg-brand-navy hover:bg-slate-800 shadow-blue-500/20",
                 )}
               >
                 {isSubmitting ? (

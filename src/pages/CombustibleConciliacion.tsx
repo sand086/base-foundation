@@ -169,7 +169,9 @@ const RegistroValesTab = () => {
       setCargas(normalizedFuel);
     } catch (error) {
       console.error("Error sync:", error);
-      toast.error("Error de Sincronización Industrial");
+      toast.error(
+        "Error de Sincronización de datos. Intente recargar la página.",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -530,7 +532,8 @@ const RegistroValesTab = () => {
             onClick={() => setIsModalOpen(true)}
             className="bg-brand-red hover:bg-red-700 text-white font-black uppercase text-[10px] tracking-[0.15em] h-12 px-8 rounded-2xl shadow-[0_10px_20px_-5px_rgba(239,68,68,0.3)] transition-all hover:-translate-y-0.5"
           >
-            <Plus size={16} className="mr-2 stroke-[3]" /> Nuevo Vale Industrial
+            <Plus size={16} className="mr-2 stroke-[3]" /> Nuevo Vale
+            combustible
           </Button>
         </div>
 
