@@ -418,7 +418,7 @@ export default function CentroMonitoreo() {
     link.click();
     document.body.removeChild(link);
     toast.success("Exportación exitosa", {
-      description: "Se descargó el reporte industrial.",
+      description: "Se descargó el reporte de servicios en formato CSV.",
     }); //  Sintaxis Sonner correcta
   };
 

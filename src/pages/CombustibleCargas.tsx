@@ -122,7 +122,7 @@ const CombustibleCargas = () => {
     } catch (error) {
       // 3. Imprimimos el error real en consola para saber qué falló en la API
       console.error("  Error real en loadData:", error);
-      toast.error("Fallo de Sincronización Industrial");
+      toast.error("Fallo de Sincronización de informacion. Intente de nuevo.");
     } finally {
       setIsLoading(false);
     }

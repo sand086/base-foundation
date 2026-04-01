@@ -594,3 +594,67 @@ def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
 
     trip = crud.get_trip(db, str(trip_id))
     return trip
+
+
+@router.get("/{trip_id}/nom-087")
+def generate_nom_087(trip_id: int, db: Session = Depends(get_db)):
+    if HTML is None:
+        raise HTTPException(
+            status_code=500,
+            detail="WeasyPrint no está instalado.",
+        )
+
+    trip = crud.get_trip(db, str(trip_id))
+    if not trip:
+        raise HTTPException(status_code=404, detail="Viaje no encontrado")
+
+    active_leg = trip.legs[0] if trip.legs else None
+    operador = active_leg.operator if active_leg else None
+    unidad = active_leg.unit if active_leg else None
+
+    # Intentamos cargar el logo de la empresa
+    logo_path = (
+        Path(__file__).resolve().parents[2] / "templates" / "assets" / "logo-black.png"
+    )
+    logo_src = ""
+    if logo_path.exists():
+        import base64
+
+        with open(logo_path, "rb") as img_f:
+            logo_src = f"data:image/png;base64,{base64.b64encode(img_f.read()).decode('utf-8')}"
+
+    # Recuperar configuración de la empresa
+    from app.models.models import SystemConfig
+
+    nombre_conf = db.query(SystemConfig).filter_by(key="empresa_nombre").first()
+    rfc_conf = db.query(SystemConfig).filter_by(key="empresa_rfc").first()
+
+    context = {
+        "logo_src": logo_src,
+        "emisor_nombre": nombre_conf.value if nombre_conf else "OPERADOR LOGÍSTICO",
+        "emisor_rfc": rfc_conf.value if rfc_conf else "RFC NO CONFIGURADO",
+        "operador_nombre": getattr(operador, "name", "") if operador else "",
+        "operador_licencia": (
+            getattr(operador, "license_number", "") if operador else ""
+        ),
+        "placas": getattr(unidad, "placas", "") if unidad else "",
+        "placas_remolque": trip.remolque_1.placas if trip.remolque_1 else "",
+        "origen": trip.origin or "",
+        "destino": trip.destination or "",
+    }
+
+    try:
+        template = jinja_env.get_template("nom_087.html")
+        html_content = template.render(**context)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error template HTML: {str(e)}")
+
+    pdf_file = HTML(string=html_content, base_url=str(TEMPLATE_DIR)).write_pdf()
+
+    return Response(
+        content=pdf_file,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"inline; filename=NOM087_Folio_{trip.public_id or trip.id}.pdf"
+        },
+    )

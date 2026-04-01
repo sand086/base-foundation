@@ -60,9 +60,9 @@ import {
 import { useUnits } from "@/hooks/useUnits";
 import { useOperators } from "@/hooks/useOperators";
 import { useBilling } from "@/hooks/useBilling";
-import { useSatCatalogs } from "@/hooks/useSatCatalogs"; //  Importamos catálogo SAT
+import { useSatCatalogs } from "@/hooks/useSatCatalogs";
 import { Trip, TripLegCreatePayload } from "@/types/api.types";
-import { cn } from "@/lib/utils";
+import { cn, checkIsFullTrip } from "@/lib/utils";
 import axiosClient from "@/api/axiosClient";
 
 // ─── Tipos locales estrictos ──────────────────────────────────────────────────
@@ -232,7 +232,7 @@ export function NextLegModal({
     destino_vacio: "",
   });
 
-  //  ESTADO PARA DATOS FISCALES (CARTA PORTE REAL)
+  // ESTADO PARA DATOS FISCALES (CARTA PORTE REAL / BYPASS)
   const [tripFiscalData, setTripFiscalData] = useState({
     contenedor_1: "",
     contenedor_2: "",
@@ -261,7 +261,7 @@ export function NextLegModal({
         destino_vacio: "",
       });
 
-      //  Precargamos los datos fiscales si el viaje ya los tiene
+      // Precargamos los datos fiscales si el viaje ya los tiene
       setTripFiscalData({
         contenedor_1: (tripPadre as any).contenedor_1 || "",
         contenedor_2: (tripPadre as any).contenedor_2 || "",
@@ -285,18 +285,8 @@ export function NextLegModal({
   // ─── Derivados memorizados ─────────────────────────────────────────────────
 
   const isFullTrip = useMemo(() => {
-    if (!tripPadre) return false;
-    const tipoUnidad =
-      (
-        tripPadre as Trip & { tipo_unidad?: string }
-      ).tipo_unidad?.toLowerCase() ?? "";
-    const routeName = (tripPadre.route_name ?? "").toLowerCase();
-    return (
-      routeName.includes("full") ||
-      tipoUnidad.includes("full") ||
-      tipoUnidad.includes("9ejes") ||
-      Boolean(tripPadre.dolly_id)
-    );
+    // 🚀 Usamos la herramienta maestra centralizada
+    return checkIsFullTrip(tripPadre);
   }, [tripPadre]);
 
   const availableSatProducts = useMemo(
@@ -343,7 +333,6 @@ export function NextLegModal({
     };
   }, [tripPadre]);
 
-  //  Corrección de la variable `gastoOperativoActual` y `isRoadLeg` basada en `formData`
   const gastoOperativoActual = useMemo(
     () =>
       Number(formData.anticipo_casetas ?? 0) +
@@ -456,7 +445,21 @@ export function NextLegModal({
   }, []);
 
   const handleCartaPorteAction = useCallback(async () => {
-    if (!tripPadre || localUuid) return;
+    if (!tripPadre) return;
+
+    if (localUuid) {
+      handleDownloadPDF(localUuid);
+      return;
+    }
+
+    // 🚀 LÓGICA DE AUTO-GUARDADO: Guardamos la data fiscal ANTES de timbrar el $1
+    // Para que los contenedores y el peso salgan impresos en el PDF
+    try {
+      await axiosClient.put(`/trips/${tripPadre.id}`, tripFiscalData);
+    } catch (error) {
+      toast.error("Error al guardar los contenedores en la base de datos.");
+      return;
+    }
 
     try {
       await handleStampNominal(tripPadre.id, (responseData: any) => {
@@ -468,8 +471,9 @@ export function NextLegModal({
         if (generatedUuid) {
           setLocalUuid(generatedUuid);
           setCpGenerada(true);
+          handleDownloadPDF(generatedUuid); // Lo descargamos automáticamente
           toast.success(
-            "¡Carta Porte generada exitosamente! Ya puedes descargar los archivos.",
+            "¡Carta Porte generada exitosamente y lista para imprimir!",
           );
         } else {
           toast.warning(
@@ -480,7 +484,13 @@ export function NextLegModal({
     } catch {
       toast.error("Error al timbrar Carta Porte de $1.");
     }
-  }, [tripPadre, localUuid, handleStampNominal]);
+  }, [
+    tripPadre,
+    localUuid,
+    tripFiscalData,
+    handleStampNominal,
+    handleDownloadPDF,
+  ]);
 
   const validateForm = useCallback((): boolean => {
     if (!formData.unit_id || !formData.operator_id || !formData.remolque_1_id) {
@@ -493,7 +503,7 @@ export function NextLegModal({
       toast.error("Configuración FULL: Debe asignar Dolly y Remolque 2.");
       return false;
     }
-    //  FASE 3: Validación del destino de vacío
+    // Validación del destino de vacío
     if (
       formData.leg_type === "entrega_vacio" &&
       !formData.destino_vacio?.trim()
@@ -502,7 +512,7 @@ export function NextLegModal({
       return false;
     }
 
-    //  VALIDACIÓN FISCAL SI ACTIVÓ EL TIMBRADO REAL
+    // VALIDACIÓN FISCAL SI ACTIVÓ EL TIMBRADO REAL
     if (shouldStampReal) {
       if (!isFiscalDataComplete) {
         toast.error(
@@ -527,7 +537,7 @@ export function NextLegModal({
 
     setLoading(true);
     try {
-      //  FASE 4: 1. ACTUALIZAR DATOS FISCALES EN EL VIAJE ANTES DE TIMBRAR SIEMPRE
+      // 1. ACTUALIZAR DATOS FISCALES EN EL VIAJE ANTES DE ARRANCAR
       await axiosClient.put(`/trips/${tripPadre.id}`, tripFiscalData);
 
       // 2. CREAR LA FASE/TRAMO OPERATIVO
@@ -651,17 +661,42 @@ export function NextLegModal({
               </div>
             </div>
 
+            {/* 🚀 NUEVA BOTONERA DE CARTA PORTE EN LA CABECERA */}
             <div className="flex flex-col items-end gap-3">
-              <Badge
+              {/*               <Button
+                variant="outline"
                 className={cn(
-                  "px-4 py-1.5 uppercase text-[10px] font-black tracking-widest border-none shadow-lg",
-                  cpGenerada
-                    ? "bg-emerald-600 text-white dark:bg-emerald-500"
-                    : "bg-rose-600 text-white dark:bg-rose-500 ",
+                  "h-10 px-4 text-[10px] font-black shadow-lg transition-all uppercase tracking-widest border-none haptic-press",
+                  localUuid
+                    ? "bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-500/20"
+                    : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-500/20",
                 )}
+                onClick={handleCartaPorteAction}
+                disabled={isStamping}
               >
-                {cpGenerada ? "CP $1 MXN GENERADA" : "CP $1 MXN PENDIENTE"}
-              </Badge>
+                {isStamping ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : localUuid ? (
+                  <FileText className="h-4 w-4 mr-2" />
+                ) : (
+                  <FileCode2 className="h-4 w-4 mr-2" />
+                )}
+                {localUuid
+                  ? "DESCARGAR CP BYPASS ($1)"
+                  : "TIMBRAR CP BYPASS ($1)"}
+              </Button> */}
+
+              {localUuid && (
+                <Button
+                  variant="outline"
+                  className="h-10 px-4 text-[10px] font-black uppercase tracking-widest border-none shadow-sm bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                  onClick={() => {
+                    if (localUuid) handleDownloadXML(localUuid);
+                  }}
+                >
+                  <FileCode2 className="h-3.5 w-3.5 mr-2" /> Descargar XML
+                </Button>
+              )}
             </div>
           </div>
         </DialogHeader>
@@ -772,53 +807,6 @@ export function NextLegModal({
                 </CardContent>
               </Card>
             </div>
-
-            <Card
-              className={cn(
-                "border-none shadow-2xl overflow-hidden",
-                "bg-slate-900 dark:bg-slate-950",
-              )}
-            >
-              <CardContent className="p-6 space-y-4">
-                <h5 className="text-[10px] font-black uppercase text-emerald-400 tracking-[0.2em]">
-                  Protocolo Bypass
-                </h5>
-                <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
-                  Genera la Carta Porte de $1 para liberar la unidad
-                  inmediatamente.
-                </p>
-
-                {localUuid ? (
-                  <div className="flex flex-col gap-2">
-                    <Button
-                      onClick={() => handleDownloadPDF(localUuid)}
-                      className="w-full bg-red-600 hover:bg-red-500 text-white font-black text-[10px] uppercase tracking-widest h-10 shadow-lg haptic-press transition-all"
-                    >
-                      <FileText className="h-3 w-3 mr-2" /> Descargar PDF
-                    </Button>
-                    <Button
-                      onClick={() => handleDownloadXML(localUuid)}
-                      className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black text-[10px] uppercase tracking-widest h-10 shadow-lg haptic-press transition-all"
-                    >
-                      <FileCode2 className="h-3 w-3 mr-2" /> Descargar XML
-                    </Button>
-                  </div>
-                ) : (
-                  <Button
-                    onClick={handleCartaPorteAction}
-                    disabled={isStamping}
-                    className="w-full bg-emerald-600 hover:bg-emerald-500 text-white h-11 font-black text-[10px] uppercase tracking-widest shadow-emerald-900/40 haptic-press transition-all"
-                  >
-                    {isStamping ? (
-                      <Loader2 className="h-3 w-3 animate-spin mr-2" />
-                    ) : (
-                      <FileText className="h-3 w-3 mr-2" />
-                    )}
-                    Timbrar Carta Porte $1
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
           </div>
 
           {/* ── Panel derecho: Formulario ── */}
@@ -895,7 +883,7 @@ export function NextLegModal({
               </div>
             </div>
 
-            {/*  BLOQUE FISCAL DINÁMICO Y COLAPSABLE SIEMPRE VISIBLE */}
+            {/* 🚀 BLOQUE FISCAL DINÁMICO Y COLAPSABLE SIEMPRE VISIBLE */}
             <div className="rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/50 shadow-sm overflow-hidden animate-in fade-in transition-all">
               <button
                 type="button"
@@ -1118,7 +1106,7 @@ export function NextLegModal({
               )}
             </div>
 
-            {/*  FASE 3: Campo dinámico de Destino de Vacío */}
+            {/* 🚀 FASE 3: Campo dinámico de Destino de Vacío */}
             {formData.leg_type === "entrega_vacio" && (
               <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
                 <Label className="text-[11px] font-black uppercase text-rose-600 dark:text-rose-400 tracking-widest ml-1 flex items-center gap-1.5">
@@ -1442,7 +1430,7 @@ export function NextLegModal({
               ) : (
                 <CheckCircle2 className="h-5 w-5 mr-2" />
               )}
-              Iniciar Despacho Real
+              Desenganche o Continuar
             </Button>
           </div>
         </DialogFooter>
