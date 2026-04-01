@@ -349,7 +349,7 @@
           </tr>
           <tr>
             <td>
-              <span class="grid-label">Placa</span
+              <span class="grid-label">Placa (Tracto)</span
               ><span class="bold text-dark">{{ placas }}</span> ({{ anio_modelo
               }})
             </td>
@@ -396,17 +396,19 @@
           </tr>
           <tr>
             <td>
-              <span class="grid-label">Remolque</span>
-              <span class="text-dark"
-                >{{ subtipo_remolque }} - Placa: {{ placa_remolque }}</span
-              >
+              <span class="grid-label">Remolques Asignados</span>
+              <span class="text-dark">
+                <b>R1:</b> {{ subtipo_remolque_1 }} - Placa: {{ placa_remolque_1
+                }} {% if placa_remolque_2 and placa_remolque_2 != 'S/P' %}
+                <br /><b>R2:</b> {{ subtipo_remolque_2 }} - Placa: {{
+                placa_remolque_2 }} {% endif %}
+              </span>
             </td>
             <td>
               <span class="grid-label">Operador</span>
               <span class="bold text-dark">{{ operador_rfc }}</span> - {{
-              operador_nombre }} <br /><span
-                class="text-muted"
-                style="font-size: 6pt"
+              operador_nombre }} <br />
+              <span class="text-muted" style="font-size: 6pt"
                 >Lic: {{ operador_licencia }}</span
               >
             </td>
