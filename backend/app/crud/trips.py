@@ -142,31 +142,52 @@ def update_trip_status(
     if not trip:
         return None
 
-    trip.status = status
-    trip.last_update = datetime.utcnow()
-
     active_leg = None
     if trip.legs:
         active_leg = trip.legs[-1]
+
+    # 🚀 PROTECCIÓN DE FASE 2: Misma lógica, mantener vivo el viaje padre
+    if status == models.TripStatus.ENTREGADO:
+        if active_leg and active_leg.leg_type == "entrega_vacio":
+            trip.status = status
+        else:
+            trip.status = models.TripStatus.EN_TRANSITO
+    else:
+        trip.status = status
+
+    trip.last_update = datetime.utcnow()
+
+    if active_leg:
         active_leg.status = status
         active_leg.last_update = datetime.utcnow()
         if location:
             active_leg.last_location = location
 
     if status in [models.TripStatus.ENTREGADO, models.TripStatus.CERRADO]:
-        trip.actual_arrival = datetime.utcnow()
         if active_leg:
             active_leg.actual_arrival = datetime.utcnow()
 
-        if status == models.TripStatus.CERRADO:
+        # Solo registrar llegada total si el viaje padre realmente se entregó o cerró
+        if trip.status in [models.TripStatus.ENTREGADO, models.TripStatus.CERRADO]:
+            trip.actual_arrival = datetime.utcnow()
+
+        if trip.status == models.TripStatus.CERRADO:
             trip.closed_at = datetime.utcnow()
 
-        unit_ids_to_free = [
-            active_leg.unit_id if active_leg else None,
-            trip.remolque_1_id,
-            trip.dolly_id,
-            trip.remolque_2_id,
-        ]
+        # 🚀 LIBERACIÓN DE UNIDADES INTELIGENTE
+        # Solo liberamos chasis y dolly si el viaje se terminó (fase vacía completada)
+        if trip.status in [models.TripStatus.ENTREGADO, models.TripStatus.CERRADO]:
+            unit_ids_to_free = [
+                active_leg.unit_id if active_leg else None,
+                trip.remolque_1_id,
+                trip.dolly_id,
+                trip.remolque_2_id,
+            ]
+        else:
+            # Si el viaje maestro sigue en tránsito (ej. solo terminó la fase carretera),
+            # SOLO liberamos el tractocamión. ¡Los remolques siguen amarrados al viaje!
+            unit_ids_to_free = [active_leg.unit_id if active_leg else None]
+
         valid_unit_ids = [uid for uid in unit_ids_to_free if uid is not None]
 
         if valid_unit_ids:
@@ -270,12 +291,6 @@ def add_timeline_event(
     if not trip:
         return None
 
-    trip.status = payload.status
-    trip.last_update = datetime.utcnow()
-
-    if hasattr(payload, "terminal_entrega_vacio") and payload.terminal_entrega_vacio:
-        trip.terminal_entrega_vacio = payload.terminal_entrega_vacio
-
     active_leg = next(
         (
             leg
@@ -285,10 +300,30 @@ def add_timeline_event(
         trip.legs[-1] if trip.legs else None,
     )
 
+    # 🚀 PROTECCIÓN DE FASE 2: Si reportan "entregado" (Llegó al cliente),
+    # el viaje padre DEBE seguir en tránsito para permitir el retorno de vacío.
+    if payload.status == "entregado":
+        # Solo cerramos el viaje completo si la fase actual es el retorno de vacío
+        if active_leg and active_leg.leg_type == "entrega_vacio":
+            trip.status = "entregado"
+        else:
+            trip.status = "en_transito"
+    else:
+        trip.status = payload.status
+
+    trip.last_update = datetime.utcnow()
+
+    if hasattr(payload, "terminal_entrega_vacio") and payload.terminal_entrega_vacio:
+        trip.terminal_entrega_vacio = payload.terminal_entrega_vacio
+
     if active_leg:
         active_leg.status = payload.status
         active_leg.last_update = datetime.utcnow()
         active_leg.last_location = payload.location
+
+        # Guardar la hora real de llegada a esta fase
+        if payload.status == "entregado":
+            active_leg.actual_arrival = datetime.utcnow()
 
         if active_leg.unit:
             unidad = active_leg.unit
