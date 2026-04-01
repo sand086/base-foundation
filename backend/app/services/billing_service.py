@@ -90,6 +90,8 @@ class SafeData(dict):
                 return "XAXX010101000"
             if "cp" in key:
                 return "91700"
+            if key in ["contenedor_1", "contenedor_2"]:
+                return "N/A"
             return "NO_ESPECIFICADO"
         return val
 
@@ -195,11 +197,11 @@ class BillingService:
     def generar_carta_porte_nominal(
         self, invoice_data: ReceivableInvoiceCreate
     ) -> ReceivableInvoice:
-        viaje, cliente, unidad, operador = self._obtener_datos_completos(
+        viaje, cliente, unidad, operador, r1, r2 = self._obtener_datos_completos(
             invoice_data.viaje_id, is_final=False
         )
         data = self._build_dict_from_models(
-            viaje, cliente, unidad, operador, is_nominal=True
+            viaje, cliente, unidad, operador, r1, r2, is_nominal=True
         )
         resultado_pac = self._importar_comprobante_ws(data, relacion_uuid=None)
 
@@ -239,11 +241,11 @@ class BillingService:
     def generar_factura_final_relacionada(
         self, invoice_data: ReceivableInvoiceCreate
     ) -> ReceivableInvoice:
-        viaje, cliente, unidad, operador = self._obtener_datos_completos(
+        viaje, cliente, unidad, operador, r1, r2 = self._obtener_datos_completos(
             invoice_data.viaje_id, is_final=True
         )
         data = self._build_dict_from_models(
-            viaje, cliente, unidad, operador, is_nominal=False
+            viaje, cliente, unidad, operador, r1, r2, is_nominal=False
         )
         resultado_pac = self._importar_comprobante_ws(
             data, relacion_uuid=invoice_data.uuid_relacionado
@@ -346,30 +348,28 @@ class BillingService:
             raise HTTPException(status_code=404, detail="Viaje no encontrado")
         cliente = self.db.get(ClientModel, viaje.client_id)
 
+        # Buscamos el tramo específico
+        leg_query = self.db.query(TripLeg).filter(TripLeg.trip_id == viaje_id)
         if is_final:
-            leg = (
-                self.db.query(TripLeg)
-                .filter(
-                    TripLeg.trip_id == viaje_id,
-                    TripLeg.leg_type == "ruta_carretera",
-                    TripLeg.unit_id.isnot(None),
-                )
-                .first()
-            )
-            if not leg:
-                leg = self.db.query(TripLeg).filter(TripLeg.trip_id == viaje_id).first()
+            leg = leg_query.filter(TripLeg.leg_type == "ruta_carretera").first()
         else:
-            leg = self.db.query(TripLeg).filter(TripLeg.trip_id == viaje_id).first()
+            leg = leg_query.filter(TripLeg.leg_type == "carga_muelle").first()
 
-        unidad = self.db.get(Unit, leg.unit_id) if leg and leg.unit_id else None
-        operador = (
-            self.db.get(Operator, leg.operator_id) if leg and leg.operator_id else None
-        )
-        return viaje, cliente, unidad, operador
+        if not leg:
+            leg = viaje.legs[0]
+
+        unidad = self.db.get(Unit, leg.unit_id) if leg.unit_id else None
+        operador = self.db.get(Operator, leg.operator_id) if leg.operator_id else None
+
+        # OBTENEMOS REMOLQUES DESDE EL TRIP PARA PERSISTENCIA
+        r1 = self.db.get(Unit, viaje.remolque_1_id) if viaje.remolque_1_id else None
+        r2 = self.db.get(Unit, viaje.remolque_2_id) if viaje.remolque_2_id else None
+
+        return viaje, cliente, unidad, operador, r1, r2
 
     #   EL CONSTRUCTOR DE DATOS SEGURO Y ANTI-RECHAZOS SAT
     def _build_dict_from_models(
-        self, viaje, cliente, unidad, operador, is_nominal: bool
+        self, viaje, cliente, unidad, operador, remolque1, remolque2, is_nominal: bool
     ) -> dict:
         fecha_iso = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
 
@@ -424,31 +424,31 @@ class BillingService:
             bienes_transporte = clave_producto_viaje
 
         #  REGLA DE NEGOCIO 2: ANTI-RECHAZO DE PESO SAT
-        peso_toneladas = float(_get_safe(viaje, "peso_toneladas", 25.0))
-        if peso_toneladas <= 0.0:
-            logger.warning(
-                f"  [SAT FALLBACK] Peso del viaje es 0. Forzando a 25.0 Toneladas."
-            )
-            peso_toneladas = 25.0
-        peso_bruto_kg = f"{peso_toneladas * 1000:.2f}"
+        peso_val = float(_get_safe(viaje, "peso_toneladas", 0.001))
+        if peso_val <= 0:
+            peso_val = 0.001  # Mínimo legal para timbrado bypass
+        peso_bruto_kg = f"{peso_val * 1000:.2f}"
 
         #  REGLA DE NEGOCIO 3: ANTI-RECHAZO DE PLACAS SAT (5 a 7 caracteres, sin espacios)
         def _clean_placa(placa_raw, default="XXXX99"):
-            if not placa_raw or placa_raw == "S/P":
+            # Si viene vacío o con los placeholders antiguos, regresamos el default 100% válido
+            if not placa_raw or str(placa_raw).strip().upper() in [
+                "S/P",
+                "N/A",
+                "NONE",
+                "",
+            ]:
                 return default
-            # Quitar espacios y guiones
-            clean = re.sub(r"[\s\-]", "", str(placa_raw)).upper()
+            # Expresión regular que solo deja letras y números
+            clean = re.sub(r"[^A-Z0-9]", "", str(placa_raw).upper())
             if 5 <= len(clean) <= 7:
                 return clean
             logger.warning(
-                f"  [SAT FALLBACK] Placa '{placa_raw}' inválida (debe medir 5-7 chars). Forzando '{default}'."
+                f"  [SAT FALLBACK] Placa '{placa_raw}' inválida (limpio: {clean}). Forzando '{default}'."
             )
             return default
 
         placa_tracto = _clean_placa(_get_safe(unidad, "placas", "XXXX99"), "XXXX99")
-        placa_caja = _clean_placa(
-            "S/P", "YYYY99"
-        )  # Si luego guardas la caja, extrae de allí
 
         return {
             "folio": str(_get_safe(viaje, "id", "0")),
@@ -486,6 +486,17 @@ class BillingService:
             "contenedor_1": _get_safe(viaje, "contenedor_1", "N/A"),
             "contenedor_2": _get_safe(viaje, "contenedor_2", "N/A"),
             "referencia_cliente": _get_safe(viaje, "referencia", "S/R"),
+            # AQUÍ ES DONDE ESTABA EL ERROR. AHORA ENVÍA PLACAS DUMMY VÁLIDAS EN LUGAR DE "S/P"
+            "placa_remolque_1": _clean_placa(
+                _get_safe(remolque1, "placas", "1XXXX99"), "1XXXX99"
+            ),
+            "placa_remolque_2": _clean_placa(
+                _get_safe(remolque2, "placas", "1XXXX99"), "1XXXX99"
+            ),  # Para R2 enviamos vacío si no existe
+            "subtipo_remolque": _get_safe(remolque1, "config_vehicular_sat", "CTR010"),
+            "subtipo_remolque_2": _get_safe(
+                remolque2, "config_vehicular_sat", "CTR010"
+            ),
             "peso_bruto": peso_bruto_kg,
             "bienes_transp": bienes_transporte,
             "id_ccp": f"CCC{str(uuid.uuid4())[3:]}",
@@ -494,8 +505,6 @@ class BillingService:
             "cp_destino": cp_cliente,
             "estado_destino": estado_destino,
             "municipio_destino": municipio_destino,
-            "subtipo_remolque": "CTR010",
-            "placa_remolque": placa_caja,
             "peso_bruto_vehicular": "25.00",
             "leyenda_legal": DEFAULT_LEYENDA,
         }
@@ -610,10 +619,10 @@ class BillingService:
 
         relacion_str = f"04|{relacion_uuid}|" if relacion_uuid else ""
 
-        #  FASE 2: Armar cadena original dinámica considerando si es FULL (2 remolques)
-        remolques_cadena = f"{d['subtipo_remolque']}|{d['placa_remolque']}|"
-        if d.get("contenedor_2") and d.get("contenedor_2") != "N/A":
-            remolques_cadena += f"{d['subtipo_remolque']}|PLACA2|"
+        # Lógica de Cadena Original para Remolques (Debe coincidir EXACTAMENTE con el XML)
+        remolques_cadena = f"{d['subtipo_remolque']}|{d['placa_remolque_1']}|"
+        if d.get("placa_remolque_2"):  # Solo si no está vacío
+            remolques_cadena += f"{d.get('subtipo_remolque_2', d['subtipo_remolque'])}|{d['placa_remolque_2']}|"
 
         cadena = (
             f"||4.0|CP|{d['folio']}|{d['fecha']}|99|{no_certificado}|CONTADO|{d['subtotal']}|MXN|1|{d['total']}|I|01|PPD|{self.emisor_cp}|"
@@ -631,7 +640,7 @@ class BillingService:
             f"{d['peso_bruto']}|KGM|1|"
             f"{d['bienes_transp']}|{d['descripcion_mercancia']}|1|21|pza|{d['peso_bruto']}|"
             f"{d['permiso_sct']}|{d['num_permiso']}|{d['config_vehicular']}|{d['peso_bruto_vehicular']}|{d['placas']}|{d['anio_modelo']}|"
-            f"{d['aseguradora']}|{d['poliza']}|{d['poliza']}|"
+            f"{d['aseguradora']}|{d['poliza']}|"
             f"{remolques_cadena}"
             f"01|{d['rfc_operador']}|{d['licencia']}|{d['nombre_operador']}|"
             f"MORELOS|159|193|VER|MEX|91700||"
@@ -659,12 +668,11 @@ class BillingService:
             else ""
         )
 
-        #  FASE 2: Lógica dinámica para 1 o 2 remolques
-        remolques_xml = f'<cartaporte31:Remolque SubTipoRem="{d["subtipo_remolque"]}" Placa="{d["placa_remolque"]}" />'
-        if d.get("contenedor_2") and d.get("contenedor_2") != "N/A":
-            # Si hay un segundo contenedor, asumimos configuración FULL y agregamos el segundo remolque
-            # NOTA: Opcionalmente se puede sacar "PLACA2" directo de la BD si se tiene
-            remolques_xml += f'\n                    <cartaporte31:Remolque SubTipoRem="{d["subtipo_remolque"]}" Placa="PLACA2" />'
+        # Lógica dinámica para 1 o 2 remolques (Debe coincidir con Cadena Original)
+        remolques_xml = f'<cartaporte31:Remolque SubTipoRem="{d["subtipo_remolque"]}" Placa="{d["placa_remolque_1"]}" />'
+        if d.get("placa_remolque_2"):  # Solo si hay placa válida del segundo
+            subtipo_r2 = d.get("subtipo_remolque_2", d["subtipo_remolque"])
+            remolques_xml += f'\n                    <cartaporte31:Remolque SubTipoRem="{subtipo_r2}" Placa="{d["placa_remolque_2"]}" />'
 
         return f"""<?xml version="1.0" encoding="UTF-8"?>
 <cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:cartaporte31="http://www.sat.gob.mx/CartaPorte31" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/CartaPorte31 http://www.sat.gob.mx/sitio_internet/cfd/CartaPorte/CartaPorte31.xsd" Version="4.0" Fecha="{d['fecha']}" Serie="CP" Folio="{d['folio']}" FormaPago="99" CondicionesDePago="CONTADO" SubTotal="{d['subtotal']}" Moneda="MXN" TipoCambio="1" Total="{d['total']}" TipoDeComprobante="I" Exportacion="01" MetodoPago="PPD" LugarExpedicion="{self.emisor_cp}">{relacion_xml}
@@ -696,12 +704,12 @@ class BillingService:
                 <cartaporte31:Mercancia BienesTransp="{d['bienes_transp']}" Descripcion="{d['descripcion_mercancia']}" Cantidad="1" ClaveUnidad="21" PesoEnKg="{d['peso_bruto']}" Unidad="pza" />
                 <cartaporte31:Autotransporte PermSCT="{d['permiso_sct']}" NumPermisoSCT="{d['num_permiso']}">
                     <cartaporte31:IdentificacionVehicular ConfigVehicular="{d['config_vehicular']}" PesoBrutoVehicular="{d['peso_bruto_vehicular']}" PlacaVM="{d['placas']}" AnioModeloVM="{d['anio_modelo']}" />
-                    <cartaporte31:Seguros AseguraRespCivil="{d['aseguradora']}" PolizaRespCivil="{d['poliza']}" PolizaCarga="{d['poliza']}" />
+                    <cartaporte31:Seguros AseguraRespCivil="{d['aseguradora']}" PolizaRespCivil="{d['poliza']}" />
                     <cartaporte31:Remolques>{remolques_xml}</cartaporte31:Remolques>
                 </cartaporte31:Autotransporte>
             </cartaporte31:Mercancias>
             <cartaporte31:FiguraTransporte>
-                <cartaporte31:TiposFigura TipoFigura="01" RFCFigura="{d['rfc_operador']}" NumLicencia="{d['licencia']}" NombreFigura="{d['nombre_operador']}">
+                <cartaporte31:TiposFigura TipoFigura="01" RFCFigura="{d['rfc_operador']}" NombreFigura="{d['nombre_operador']}" NumLicencia="{d['licencia']}">
                     <cartaporte31:Domicilio Calle="MORELOS" NumeroExterior="159" Municipio="193" Estado="VER" Pais="MEX" CodigoPostal="91700" />
                 </cartaporte31:TiposFigura>
             </cartaporte31:FiguraTransporte>
@@ -735,6 +743,7 @@ class BillingService:
             return " ".join([text[i : i + length] for i in range(0, len(text), length)])
 
         context = {
+            **d,
             "rfc_emisor": self.emisor_rfc,
             "nombre_emisor": self.emisor_nombre,
             "cp_emisor": self.emisor_cp,
@@ -795,14 +804,13 @@ class BillingService:
             "aseguradora": d["aseguradora"],
             "poliza": d["poliza"],
             "peso_bruto": d["peso_bruto"],
-            #  FASE 2: Pasamos los contenedores y la referencia al PDF para impresión
             "bienes_transp": d["bienes_transp"],
             "descripcion_mercancia": d["descripcion_mercancia"],
             "contenedor_1": d["contenedor_1"],
             "contenedor_2": d["contenedor_2"],
             "referencia_cliente": d["referencia_cliente"],
             "subtipo_remolque": d["subtipo_remolque"],
-            "placa_remolque": d["placa_remolque"],
+            "placa_remolque": d["placa_remolque_1"],
             "operador_rfc": d["rfc_operador"],
             "operador_nombre": d["nombre_operador"],
             "operador_licencia": d["licencia"],
