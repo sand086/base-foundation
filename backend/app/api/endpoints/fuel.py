@@ -228,15 +228,15 @@ def delete_fuel_document(
     return {"message": "Documento eliminado correctamente"}
 
 
-# 🚀 NUEVO: ENDPOINT PARA CREAR EL "VALE DOBLE"
+#  NUEVO: ENDPOINT PARA CREAR EL "VALE DOBLE"
 @router.post("/fuel-logs", response_model=List[schemas.FuelLogResponse])
 async def create_fuel_log(
     unit_id: int = Form(...),
     operator_id: int = Form(...),
     trip_id: Optional[int] = Form(None),
     fecha_hora: str = Form(...),
-    estacion: str = Form("No especificada"),  # 🚀 Estación ya no es obligatoria
-    # 🚀 VALORES SEPARADOS DE DIÉSEL Y UREA
+    estacion: str = Form("No especificada"),  #  Estación ya no es obligatoria
+    #  VALORES SEPARADOS DE DIÉSEL Y UREA
     litros_diesel: float = Form(0.0),
     precio_diesel: float = Form(0.0),
     litros_urea: float = Form(0.0),
@@ -296,11 +296,11 @@ async def create_fuel_log(
 
         created_logs.append(new_log)
 
-    # 🚀 Si el usuario capturó Diésel, creamos el registro de Diésel
+    #  Si el usuario capturó Diésel, creamos el registro de Diésel
     if litros_diesel > 0:
         _crear_registro("diesel", litros_diesel, precio_diesel)
 
-    # 🚀 Si el usuario capturó Urea, creamos el registro de Urea
+    #  Si el usuario capturó Urea, creamos el registro de Urea
     if litros_urea > 0:
         _crear_registro("urea", litros_urea, precio_urea)
 

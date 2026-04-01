@@ -75,7 +75,7 @@ export function MovementDetailModal({
               </p>
             </div>
           </div>
-          {/* 🚀 FIX: Cambiado "danger" por "destructive" para cumplir con el contrato de TS */}
+          {/*  FIX: Cambiado "danger" por "destructive" para cumplir con el contrato de TS */}
           <Badge
             variant={isIngreso ? "success" : "destructive"}
             className="h-7 px-3 text-[10px] font-bold tracking-widest border border-white/20 backdrop-blur-md shadow-sm"

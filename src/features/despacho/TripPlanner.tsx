@@ -126,7 +126,7 @@ const isColumnId = (id: unknown): id is KanbanColumnId =>
     id as string,
   );
 
-// 🚀 REGLA DE NEGOCIO: Separar Desenganchados de Por Liquidar
+//  REGLA DE NEGOCIO: Separar Desenganchados de Por Liquidar
 const groupKeyFromStatusAndLeg = (
   rawStatus: unknown,
   legType: string,
@@ -142,7 +142,7 @@ const groupKeyFromStatusAndLeg = (
   return null;
 };
 
-// 🚀 Helper: Estatus Operativos Reales
+//  Helper: Estatus Operativos Reales
 const getOperationalStatusBadge = (leg: TripLeg) => {
   const status = normalizeStatus(leg.status);
 
@@ -217,7 +217,7 @@ const isIncidentStatus = (status: unknown) => {
   return ["detenido", "retraso", "accidente"].includes(s);
 };
 
-// 🚀 4 COLUMNAS KANBAN EXACTAS (Colores Semánticos Tahoe)
+//  4 COLUMNAS KANBAN EXACTAS (Colores Semánticos Tahoe)
 const KANBAN_COLUMNS: Array<{
   id: KanbanColumnId;
   title: string;
@@ -294,7 +294,7 @@ function KanbanCard({
     : undefined;
   const isIncident = isIncidentStatus(leg.status);
 
-  // 🚀 FASE 2: TITULO INTELIGENTE DEL VIAJE (Origen - Destino - Config)
+  //  FASE 2: TITULO INTELIGENTE DEL VIAJE (Origen - Destino - Config)
   const configText =
     tripPadre.dolly_id || tripPadre.remolque_2_id ? "FULL" : "SENCILLO";
   const formattedRouteName = tripPadre.route_name
@@ -576,7 +576,7 @@ export const TripPlanner = () => {
     for (const trip of safeTrips) {
       if (trip.status === "cerrado") continue;
       if (trip.legs && trip.legs.length > 0) {
-        // 🚀 REGLA DE LA TABLA Y PIZARRÓN (Avance de fase)
+        //  REGLA DE LA TABLA Y PIZARRÓN (Avance de fase)
         const activeLeg =
           trip.legs.find(
             (leg) =>
@@ -633,7 +633,7 @@ export const TripPlanner = () => {
   const handleSaveStatusEvent = async (data: StatusUpdateData) => {
     if (!selectedTripPadre) return;
 
-    // 🚀 REGLA DEL MODAL DE NOVEDADES
+    //  REGLA DEL MODAL DE NOVEDADES
     const activeLeg =
       selectedLegToUpdate ||
       selectedTripPadre.legs?.find(
@@ -715,7 +715,7 @@ export const TripPlanner = () => {
 
   return (
     <div className="h-full flex flex-col space-y-4 animate-in fade-in duration-500">
-      {/* 🚀 HEADER DE PESTAÑAS (Segmented Control Tahoe UI) */}
+      {/*  HEADER DE PESTAÑAS (Segmented Control Tahoe UI) */}
       <div className="flex flex-col md:flex-row md:items-center justify-between bg-white/40 dark:bg-slate-900/40 p-4 rounded-2xl border border-white/20 dark:border-white/10 shadow-sm backdrop-blur-md gap-4">
         <h2 className="text-xl font-black text-brand-navy dark:text-white flex items-center gap-3 px-2 uppercase tracking-tighter heading-crisp">
           <div className="p-2 bg-blue-600 rounded-xl shadow-inner border border-blue-500">
@@ -762,7 +762,7 @@ export const TripPlanner = () => {
         </div>
       </div>
 
-      {/* 🚀 MODO TABLA */}
+      {/*  MODO TABLA */}
       {viewMode === "table" && (
         <Card className="border-slate-200/50 dark:border-white/10 shadow-2xl rounded-2xl overflow-hidden bg-white/50 dark:bg-slate-950/30 backdrop-blur-xl liquid-glass-table">
           <CardContent className="p-0">
@@ -808,7 +808,7 @@ export const TripPlanner = () => {
                   allActiveLegs.map(({ leg, tripPadre }) => {
                     const isIncident = isIncidentStatus(leg.status);
 
-                    // 🚀 FASE 2: Título Limpio en Tabla
+                    //  FASE 2: Título Limpio en Tabla
                     const configText =
                       tripPadre.dolly_id || tripPadre.remolque_2_id
                         ? "FULL"
@@ -931,7 +931,7 @@ export const TripPlanner = () => {
         </Card>
       )}
 
-      {/* 🚀 MODO STANDBY (CALENDARIO) */}
+      {/*  MODO STANDBY (CALENDARIO) */}
       {viewMode === "standby" && (
         <div className="flex flex-col xl:flex-row gap-6 h-full min-h-0">
           {/* Panel Lateral: Atrasados / Sin Asignar */}
@@ -1135,7 +1135,7 @@ export const TripPlanner = () => {
         </div>
       )}
 
-      {/* 🚀 MODO KANBAN (PIZARRÓN) */}
+      {/*  MODO KANBAN (PIZARRÓN) */}
       {viewMode === "kanban" && (
         <DndContext
           collisionDetection={closestCorners}
@@ -1175,7 +1175,7 @@ export const TripPlanner = () => {
         />
       )}
 
-      {/* 🚀 ALERTA DE ELIMINACIÓN DE VIAJE (Estructura Tahoe 4 Capas) */}
+      {/*  ALERTA DE ELIMINACIÓN DE VIAJE (Estructura Tahoe 4 Capas) */}
       <AlertDialog
         open={!!tripToDelete}
         onOpenChange={(open) => !open && setTripToDelete(null)}
@@ -1278,7 +1278,7 @@ export const TripPlanner = () => {
         onUpdateStatusClick={(t, l) => openUpdateStatusModal(t, l)}
       />
 
-      {/* 🚀 MODAL DIA DE VIAJES (Standby) - Estructura 4 Capas */}
+      {/*  MODAL DIA DE VIAJES (Standby) - Estructura 4 Capas */}
       <Dialog
         open={!!selectedDayTrips}
         onOpenChange={() => setSelectedDayTrips(null)}

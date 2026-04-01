@@ -421,7 +421,7 @@ export default function FlotaLlantas() {
 
   return (
     <div className="p-4 md:p-8 space-y-8 animate-in fade-in duration-500 pb-20">
-      {/* 🚀 HEADER TAHOE */}
+      {/*  HEADER TAHOE */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between bg-white/40 dark:bg-slate-900/40 p-5 rounded-2xl border border-white/20 dark:border-white/10 backdrop-blur-md shadow-sm gap-4">
         <div>
           <h1 className="text-2xl font-black text-brand-navy dark:text-white flex items-center gap-3 uppercase tracking-tighter heading-crisp">
@@ -444,7 +444,7 @@ export default function FlotaLlantas() {
         </Button>
       </div>
 
-      {/* 🚀 KPI CARDS (Tahoe UI) */}
+      {/*  KPI CARDS (Tahoe UI) */}
       <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         {/* CRÍTICO */}
         <Card
@@ -537,7 +537,7 @@ export default function FlotaLlantas() {
         </Card>
       </div>
 
-      {/* 🚀 TABLA PRINCIPAL (Liquid Glass Tahoe) */}
+      {/*  TABLA PRINCIPAL (Liquid Glass Tahoe) */}
       <Card
         variant="default"
         className="shadow-2xl border-slate-200/50 dark:border-white/10 overflow-hidden"
@@ -583,7 +583,7 @@ export default function FlotaLlantas() {
         onSubmit={handleMaintenanceSubmit}
       />
 
-      {/* 🚀 ALERTA DE ELIMINACIÓN (Estructura Tahoe 4 Capas) */}
+      {/*  ALERTA DE ELIMINACIÓN (Estructura Tahoe 4 Capas) */}
       <AlertDialog open={deleteAlertOpen} onOpenChange={setDeleteAlertOpen}>
         <AlertDialogContent className="w-[95vw] sm:max-w-2xl p-0 flex flex-col max-h-[90vh] bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 shadow-2xl rounded-2xl transition-all duration-300 overflow-hidden">
           {/* HEADER */}

@@ -26,19 +26,19 @@ import {
 
 // Componentes y Modales
 import { TripDetailsModal } from "./TripDetailsModal";
-import { NextLegModal } from "./NextLegModal"; // 🚀 IMPORTAMOS EL MODAL DE ARRANQUE
+import { NextLegModal } from "./NextLegModal"; //  IMPORTAMOS EL MODAL DE ARRANQUE
 
 import { Trip } from "@/types/api.types";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { checkIsFullTrip } from "@/lib/utils"; // 🚀 IMPORTAMOS NUESTRA HERRAMIENTA MAESTRA
+import { checkIsFullTrip } from "@/lib/utils"; //  IMPORTAMOS NUESTRA HERRAMIENTA MAESTRA
 
 export const StandByTrips = () => {
-  // 🚀 Sacamos createNextLeg del hook para poder arrancar el viaje desde el modal
+  //  Sacamos createNextLeg del hook para poder arrancar el viaje desde el modal
   const { trips, loading, deleteTrip, createNextLeg } = useTrips();
 
   const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
-  const [tripToStart, setTripToStart] = useState<Trip | null>(null); // 🚀 Estado para abrir NextLegModal
+  const [tripToStart, setTripToStart] = useState<Trip | null>(null); //  Estado para abrir NextLegModal
 
   // Estados para el Dialog de borrado
   const [tripToDelete, setTripToDelete] = useState<Trip | null>(null);
@@ -92,7 +92,7 @@ export const StandByTrips = () => {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
         {pendingTrips.map((trip) => {
-          // 🚀 USAMOS LA HERRAMIENTA MAESTRA PARA SABER SI ES FULL O SENCILLO
+          //  USAMOS LA HERRAMIENTA MAESTRA PARA SABER SI ES FULL O SENCILLO
           const isFull = checkIsFullTrip(trip);
           const configText = isFull ? "FULL / 9 EJES" : "SENCILLO / 5 EJES";
 
@@ -115,7 +115,7 @@ export const StandByTrips = () => {
                     <h3 className="font-black text-slate-800 dark:text-slate-200 text-sm leading-tight uppercase tracking-tight line-clamp-2">
                       {formattedRouteName}
                     </h3>
-                    {/* 🚀 BADGE DE CONFIGURACIÓN DINÁMICO */}
+                    {/*  BADGE DE CONFIGURACIÓN DINÁMICO */}
                     <Badge
                       className={cn(
                         "text-[9px] font-black uppercase tracking-widest border-none shadow-sm",
@@ -167,7 +167,7 @@ export const StandByTrips = () => {
                     className="flex-1 bg-brand-green hover:bg-brand-green/80 text-white h-10 font-black uppercase tracking-widest text-[10px] shadow-lg shadow-emerald-500/20 transition-all haptic-press border-none"
                     onClick={(e) => {
                       e.stopPropagation();
-                      // 🚀 AHORA ABRE EL MODAL EN LUGAR DE INICIAR A CIEGAS
+                      //  AHORA ABRE EL MODAL EN LUGAR DE INICIAR A CIEGAS
                       setTripToStart(trip);
                     }}
                   >
@@ -198,7 +198,7 @@ export const StandByTrips = () => {
         trip={selectedTrip}
       />
 
-      {/* 🚀 MODAL PARA INICIAR EL VIAJE (NextLegModal) */}
+      {/*  MODAL PARA INICIAR EL VIAJE (NextLegModal) */}
       <NextLegModal
         open={!!tripToStart}
         onOpenChange={(open) => {

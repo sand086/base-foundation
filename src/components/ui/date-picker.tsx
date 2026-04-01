@@ -108,8 +108,10 @@ export function DatePicker({
               defaultMonth={date}
               selected={date}
               onSelect={(d) => {
-                onDateChange(d);
-                setIsOpen(false);
+                if (d) {
+                  onDateChange(d);
+                  setIsOpen(false);
+                }
               }}
               className="pointer-events-auto"
             />

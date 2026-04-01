@@ -122,7 +122,7 @@ export default function ProveedoresCxP() {
     indirectCategories,
   } = useSuppliers();
 
-  // 🚀 CORRECCIÓN: Usamos alias para mapear lo que devuelve el hook a los nombres que espera tu componente
+  //  CORRECCIÓN: Usamos alias para mapear lo que devuelve el hook a los nombres que espera tu componente
   const { accounts: bankAccounts, isLoading: isLoadingBankAccounts } =
     useBankAccounts();
 
@@ -281,7 +281,7 @@ export default function ProveedoresCxP() {
   // Acciones Facturas
   // =====================
   const handleCreateInvoice = async (invoiceData: Partial<PayableInvoice>) => {
-    // 🚀 Inyectar configuraciones globales si los campos vienen vacíos o en 0
+    //  Inyectar configuraciones globales si los campos vienen vacíos o en 0
     const payloadConDefaults = {
       ...invoiceData,
       moneda: invoiceData.moneda || defaultMoneda || "MXN",

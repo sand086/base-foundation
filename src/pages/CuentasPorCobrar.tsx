@@ -82,7 +82,7 @@ export default function CuentasPorCobrar() {
   const [invoiceToDelete, setInvoiceToDelete] =
     useState<ReceivableInvoice | null>(null);
 
-  // 🚀 CONEXIÓN AL BACKEND REAL
+  //  CONEXIÓN AL BACKEND REAL
   const fetchInvoices = async () => {
     try {
       setLoading(true);
@@ -117,7 +117,7 @@ export default function CuentasPorCobrar() {
     fetchInvoices();
   }, []);
 
-  // 🚀 GUSTAVO UX: EXPORTAR A EXCEL (CSV)
+  //  GUSTAVO UX: EXPORTAR A EXCEL (CSV)
   const handleExportToExcel = () => {
     if (invoices.length === 0) {
       toast.error("No hay datos para exportar");
@@ -245,7 +245,7 @@ export default function CuentasPorCobrar() {
     }
   };
 
-  // 🚀 Utilidad de formateo estándar (MXN)
+  //  Utilidad de formateo estándar (MXN)
   const formatMoney = (amount: number) => {
     return new Intl.NumberFormat("es-MX", {
       style: "currency",
@@ -287,7 +287,7 @@ export default function CuentasPorCobrar() {
         type: "number",
         render: (value, row) => (
           <span className="text-sm font-bold text-slate-700">
-            {formatMoney(value)} {/* 🚀 Formato corregido */}
+            {formatMoney(value)} {/*  Formato corregido */}
             <span className="text-[10px] text-muted-foreground ml-1">
               {row.moneda}
             </span>
@@ -304,7 +304,7 @@ export default function CuentasPorCobrar() {
             <span
               className={`text-sm font-black ${value === 0 ? "text-emerald-600" : statusInfo.status === "danger" ? "text-red-600" : "text-amber-600"}`}
             >
-              {formatMoney(value)} {/* 🚀 Formato corregido */}
+              {formatMoney(value)} {/*  Formato corregido */}
             </span>
           );
         },
@@ -431,7 +431,7 @@ export default function CuentasPorCobrar() {
         description="Gestión de cartera, antigüedad de saldos y cobranza a clientes."
       >
         <div className="flex items-center gap-3">
-          {/* 🚀 BOTÓN GIGANTE PARA GUSTAVO: EXPORTAR A EXCEL */}
+          {/*  BOTÓN GIGANTE PARA GUSTAVO: EXPORTAR A EXCEL */}
           <Button
             variant="outline"
             className="border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 font-bold"

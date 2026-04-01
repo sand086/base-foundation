@@ -14,7 +14,7 @@ const cardVariants = cva(
   {
     variants: {
       variant: {
-        // 🚀 ESTÁNDAR (Mejorado): Blanco puro en modo claro para contrastar con el bg-slate-50 del layout.
+        //  ESTÁNDAR (Mejorado): Blanco puro en modo claro para contrastar con el bg-slate-50 del layout.
         // Sombras más definidas para "separarlo" del fondo.
         default: [
           "bg-white dark:bg-[#151c2c]", // Contraste real contra el fondo del layout
@@ -23,7 +23,7 @@ const cardVariants = cva(
           "hover:shadow-[0_8px_30px_-4px_rgba(0,0,0,0.1)] dark:hover:shadow-[0_8px_30px_-4px_rgba(0,0,0,0.4)]",
         ],
 
-        // 🚀 GLASS: Ultra-translúcido para flotar sobre elementos gráficos (mapas, gráficas)
+        //  GLASS: Ultra-translúcido para flotar sobre elementos gráficos (mapas, gráficas)
         glass: [
           "bg-white/60 dark:bg-[#0a0f1a]/60 backdrop-blur-2xl",
           "border border-white/60 dark:border-white/10",
@@ -31,7 +31,7 @@ const cardVariants = cva(
           "before:absolute before:inset-0 before:bg-gradient-to-br before:from-white/40 dark:before:from-white/5 before:to-transparent before:pointer-events-none z-0",
         ],
 
-        // 🚀 NAVY: Tarjeta de impacto (Métricas principales)
+        //  NAVY: Tarjeta de impacto (Métricas principales)
         navy: [
           "bg-brand-navy dark:bg-black",
           "border border-brand-navy/20 dark:border-white/10",
@@ -39,7 +39,7 @@ const cardVariants = cva(
           "before:absolute before:inset-0 before:bg-gradient-to-br before:from-white/10 before:to-transparent before:pointer-events-none z-0",
         ],
 
-        // 🚀 INTERACTIVE: Para Bento grids. Blanco puro que reacciona al mouse.
+        //  INTERACTIVE: Para Bento grids. Blanco puro que reacciona al mouse.
         interactive: [
           "bg-white dark:bg-[#151c2c] cursor-pointer",
           "border border-slate-200 dark:border-white/10",
@@ -48,7 +48,7 @@ const cardVariants = cva(
           "focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:border-brand-red",
         ],
 
-        // 🚀 FLAT: Para elementos internos o agrupadores dentro de otras tarjetas
+        //  FLAT: Para elementos internos o agrupadores dentro de otras tarjetas
         flat: [
           "bg-slate-50/80 dark:bg-white/5",
           "border border-slate-200 dark:border-white/5",
@@ -155,7 +155,7 @@ const CardFooter = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      // 🚀 FIX: Footer distinguible. Gris súper claro en light mode, negro con opacidad en dark.
+      //  FIX: Footer distinguible. Gris súper claro en light mode, negro con opacidad en dark.
       "flex items-center p-6 pt-4 border-t border-slate-100 dark:border-white/5 relative z-10 bg-slate-50/50 dark:bg-black/20",
       className,
     )}

@@ -29,7 +29,7 @@ interface TruckChassisSVGProps {
 // Helpers de Lógica
 // =====================
 
-// 🚀 Criterio del Mecánico (Opción B): Colores basados en el texto del estado
+//  Criterio del Mecánico (Opción B): Colores basados en el texto del estado
 const getTireStatusByCondition = (condition: string) => {
   const cond = condition?.toLowerCase() || "desconocido";
 
@@ -84,7 +84,7 @@ export function TruckChassisSVG({
 }: TruckChassisSVGProps) {
   const [hoveredTire, setHoveredTire] = useState<string | number | null>(null);
 
-  // 🚀 Lógica de Layout Automático
+  //  Lógica de Layout Automático
   // T3 = Tracto (10 llantas), R2/D2 = Remolque/Dolly (8 llantas, sin dirección)
   const isTrailerOrDolly = [
     "R2",
@@ -322,7 +322,7 @@ export function TruckChassisSVG({
           })}
         </svg>
 
-        {/* 🚀 TARJETAS DE CONTEO FINAL */}
+        {/*  TARJETAS DE CONTEO FINAL */}
         <div className="grid grid-cols-3 gap-4 mt-10 w-full max-w-md">
           <StatCard
             count={stats.mala}

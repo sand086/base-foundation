@@ -95,7 +95,7 @@ export const checkIsFullTrip = (data: any): boolean => {
       .replace(/[\u0300-\u036f]/g, "")
       .trim();
 
-  // 🚀 Ahora busca 'tipo_unidad' directamente O dentro de 'tariff'
+  //  Ahora busca 'tipo_unidad' directamente O dentro de 'tariff'
   const tipoUnidad = normalize(
     data.tipo_unidad || data.tariff?.tipo_unidad || "",
   );

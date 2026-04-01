@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { configService } from "@/services/configService";
 import { SystemConfig } from "@/types/api.types";
 
-// 🚀 Nuestro "Salvavidas": Si la base de datos se borra, el sistema sigue funcionando
+//  Nuestro "Salvavidas": Si la base de datos se borra, el sistema sigue funcionando
 export const DEFAULT_CONFIGS = {
   empresa_nombre: "Transportes TMS",
   iva_porcentaje: "16",
@@ -68,7 +68,7 @@ export function useSystemConfig(key: ConfigKey) {
 
   return {
     value: configValue,
-    // 🚀 Helper matemático (convierte "16" a 16 automáticamente)
+    //  Helper matemático (convierte "16" a 16 automáticamente)
     valueAsNumber: Number(configValue) || 0,
     isLoading,
   };

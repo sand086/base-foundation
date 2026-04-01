@@ -87,7 +87,7 @@ def _update_unit_status(db: Session, unit: models.Unit) -> None:
         razones_bloqueo.append(f"{critical_tires} llantas críticas")
 
     # 2b) Llantas incompletas
-    # 🚀 CAMBIO CLAVE: Usamos tipo_1 (Naturaleza) para saber cuántas llantas pedir
+    #  CAMBIO CLAVE: Usamos tipo_1 (Naturaleza) para saber cuántas llantas pedir
     tipo_fisico = str(unit.tipo_1).upper() if unit.tipo_1 else "TRACTOCAMION"
     llantas_esperadas = EXPECTED_TIRES.get(tipo_fisico, 0)
 
@@ -243,7 +243,7 @@ def create_unit(db: Session, unit: schemas.UnitCreate):
     # Convertimos el esquema a diccionario
     data = unit.model_dump()
 
-    # 🚀 AUTO-GENERACIÓN DE ID SI NO VIENE DEL FRONTEND
+    #  AUTO-GENERACIÓN DE ID SI NO VIENE DEL FRONTEND
     if not data.get("public_id"):
         data["public_id"] = f"UNT-{uuid.uuid4().hex[:8].upper()}"
 

@@ -254,7 +254,7 @@ class WorkOrderBase(ORMBase):
 class WorkOrderCreate(WorkOrderBase):
 
     parts: List[WorkOrderPartCreate] = []
-    # 🚀 Agregamos esto
+    #  Agregamos esto
     tipo_mantenimiento: str = "patio"
     trip_id: Optional[int] = None
 

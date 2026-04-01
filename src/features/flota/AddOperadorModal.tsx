@@ -59,7 +59,7 @@ interface AddOperadorModalProps {
 // =====================
 const operatorSchema = z.object({
   name: z.string().min(2, "El nombre es requerido y debe ser válido"),
-  // 🚀 RFC REQUERIDO (12 o 13 caracteres)
+  //  RFC REQUERIDO (12 o 13 caracteres)
   rfc: z.string().min(12, "RFC inválido").max(13, "RFC inválido"),
   license_number: z.string().min(3, "Número de licencia requerido"),
   license_type: z.string().min(1, "Seleccione el tipo de licencia"),
@@ -95,7 +95,7 @@ export function AddOperadorModal({
     );
   }, [unidades, operatorToEdit]);
 
-  // 🚀 REACT HOOK FORM
+  //  REACT HOOK FORM
   const form = useForm<OperatorFormData>({
     resolver: zodResolver(operatorSchema),
     defaultValues: {
@@ -120,7 +120,7 @@ export function AddOperadorModal({
       if (operatorToEdit) {
         reset({
           name: operatorToEdit.name,
-          rfc: operatorToEdit.rfc || "XAXX010101000", // 🚀 Cargar RFC en edición
+          rfc: operatorToEdit.rfc || "XAXX010101000", //  Cargar RFC en edición
           license_number: operatorToEdit.license_number,
           license_type: operatorToEdit.license_type,
           license_expiry: operatorToEdit.license_expiry
@@ -175,7 +175,7 @@ export function AddOperadorModal({
       ...(isEditMode && { id: operatorToEdit?.id }),
       status: operatorToEdit?.status || "activo",
       name: data.name.trim(),
-      rfc: data.rfc.trim().toUpperCase(), // 🚀 Enviar RFC limpio y en mayúsculas
+      rfc: data.rfc.trim().toUpperCase(), //  Enviar RFC limpio y en mayúsculas
       license_number: data.license_number.trim().toUpperCase(),
       license_type: data.license_type,
       license_expiry: format(data.license_expiry, "yyyy-MM-dd"),
@@ -241,7 +241,7 @@ export function AddOperadorModal({
           >
             <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-slate-50/50 dark:bg-transparent custom-scrollbar">
               <div className="space-y-8">
-                {/* 🚀 SECCIÓN 1: IDENTIFICACIÓN FISCAL Y PERSONAL */}
+                {/*  SECCIÓN 1: IDENTIFICACIÓN FISCAL Y PERSONAL */}
                 <div className="space-y-6">
                   <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-2">
                     <Fingerprint className="h-3.5 w-3.5 text-blue-500" />
@@ -269,7 +269,7 @@ export function AddOperadorModal({
                       )}
                     />
 
-                    {/* 🚀 NUEVO CAMPO RFC */}
+                    {/*  NUEVO CAMPO RFC */}
                     <FormField
                       control={form.control}
                       name="rfc"

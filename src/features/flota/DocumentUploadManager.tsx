@@ -17,7 +17,7 @@ import {
 import { unitService } from "@/services/unitService";
 import { clientService } from "@/services/clientService";
 import { operatorService } from "@/services/operatorService";
-import { fuelService } from "@/services/fuelService"; // ✅ IMPORTANTE
+import { fuelService } from "@/services/fuelService"; //   IMPORTANTE
 import { toast } from "sonner";
 import {
   Dialog,
@@ -34,7 +34,7 @@ import { cn } from "@/lib/utils";
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "/";
 
-// ✅ Extendemos los tipos soportados
+//   Extendemos los tipos soportados
 export type EntityType = "unit" | "client" | "operator" | "fuel";
 
 export type DocHistoryItem = {
@@ -153,7 +153,7 @@ export function DocumentUploadManager({
 
   const inputId = `file-${entityType}-${activeId}-${docType}`;
 
-  // ✅ useCallback (update)
+  //   useCallback (update)
   const loadHistory = useCallback(
     async (showToast = true) => {
       if (!activeId) return;
@@ -176,12 +176,12 @@ export function DocumentUploadManager({
     [activeId, entityType, docType],
   );
 
-  // ✅ useEffect con loadHistory estable
+  //   useEffect con loadHistory estable
   useEffect(() => {
     if (activeId) void loadHistory(false);
   }, [activeId, currentUrl, loadHistory]);
 
-  // ✅ Lógica de servicio dinámica para subida
+  //   Lógica de servicio dinámica para subida
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !activeId) return;
@@ -214,7 +214,7 @@ export function DocumentUploadManager({
     }
   };
 
-  // ✅ Lógica de eliminación dinámica
+  //   Lógica de eliminación dinámica
   const handleDelete = async (docId: number) => {
     const ok = confirm("¿Estás seguro de eliminar esta versión?");
     if (!ok) return;
@@ -256,7 +256,7 @@ export function DocumentUploadManager({
           )}
         </div>
 
-        {/* 🚀 Modal de Historial (Estructura Tahoe 4 Capas) */}
+        {/*  Modal de Historial (Estructura Tahoe 4 Capas) */}
         <Dialog
           open={isHistoryModalOpen}
           onOpenChange={(open) => {

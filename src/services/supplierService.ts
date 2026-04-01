@@ -100,7 +100,7 @@ export const supplierService = {
 
   // 11. Registrar un pago a una factura
   registerPayment: async (invoiceId: number, payment: any) => {
-    // 🚀 Aseguramos que los campos financieros vayan como Python los quiere
+    //  Aseguramos que los campos financieros vayan como Python los quiere
     const normalizedPayment = {
       monto: payment.monto,
       fecha_pago: payment.fechaPago || payment.fecha_pago,
@@ -135,7 +135,7 @@ export const supplierService = {
     );
     return response.data;
   },
-  // ✅ NUEVAS FUNCIONES
+  //   NUEVAS FUNCIONES
   updateIndirectCategory: async (
     id: number,
     data: Partial<IndirectCategory>,

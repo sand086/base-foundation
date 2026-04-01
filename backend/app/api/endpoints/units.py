@@ -2,7 +2,7 @@ import os
 import uuid
 import pandas as pd
 import unicodedata
-import re  # 🚀 IMPORT PARA LIMPIAR EL "ECO-"
+import re  #  IMPORT PARA LIMPIAR EL "ECO-"
 from typing import List
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from sqlalchemy.orm import Session
@@ -53,7 +53,7 @@ def read_units(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
 
 @router.post("", response_model=schemas.UnitResponse)
 def create_unit(unit: schemas.UnitCreate, db: Session = Depends(get_db)):
-    # 🚀 LIMPIAMOS EL NÚMERO ANTES DE VALIDAR
+    #  LIMPIAMOS EL NÚMERO ANTES DE VALIDAR
     clean_eco = clean_eco_prefix(unit.numero_economico)
 
     if db.query(models.Unit).filter(models.Unit.numero_economico == clean_eco).first():
@@ -65,7 +65,7 @@ def create_unit(unit: schemas.UnitCreate, db: Session = Depends(get_db)):
     try:
         unit_data = unit.model_dump()
         unit_data.pop("public_id", None)
-        unit_data["numero_economico"] = clean_eco  # 🚀 LO GUARDAMOS LIMPIO
+        unit_data["numero_economico"] = clean_eco  #  LO GUARDAMOS LIMPIO
 
         db_unit = models.Unit(
             **unit_data, public_id=f"UNT-{uuid.uuid4().hex[:8].upper()}"
@@ -116,7 +116,7 @@ def update_unit(unit_id: str, unit: schemas.UnitUpdate, db: Session = Depends(ge
         if unit.numero_economico:
             unit.numero_economico = clean_eco_prefix(unit.numero_economico)
 
-        # 3. 🚀 ESTRATEGIA "CON TODOS": Limpieza de campos y Valores por Defecto
+        # 3.  ESTRATEGIA "CON TODOS": Limpieza de campos y Valores por Defecto
         # Si un campo obligatorio llega vacío, le ponemos "N/A" para no romper la BD
         # Si un campo ÚNICO llega vacío (""), lo convertimos a None (NULL)
 
@@ -146,7 +146,7 @@ def update_unit(unit_id: str, unit: schemas.UnitUpdate, db: Session = Depends(ge
         db.rollback()
         raw_error = str(e.orig).lower()
 
-        # 🚀 MANEJADOR DE ERRORES INTELIGENTE
+        #  MANEJADOR DE ERRORES INTELIGENTE
         # Caso A: Violación de NOT NULL (Falta un dato)
         if "null value" in raw_error or "not-null" in raw_error:
             # Intentamos extraer el nombre de la columna que falló

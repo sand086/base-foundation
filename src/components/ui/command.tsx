@@ -28,7 +28,7 @@ const Command = React.forwardRef<
 ));
 Command.displayName = CommandPrimitive.displayName;
 
-// 🚀 FIX: Extendemos DialogProps para que acepte className sin que TypeScript se queje
+//  FIX: Extendemos DialogProps para que acepte className sin que TypeScript se queje
 interface CommandDialogProps extends DialogProps {
   className?: string;
 }
@@ -43,7 +43,7 @@ const CommandDialog = ({
       <DialogContent className="overflow-hidden p-0 max-w-2xl border-none bg-white/90 dark:bg-brand-navy/95 backdrop-blur-2xl shadow-[0_30px_60px_rgba(0,0,0,0.2)] dark:shadow-[0_30px_60px_rgba(0,0,0,0.5)] animate-modal-show rounded-2xl">
         <DialogTitle className="sr-only">Buscador de Comandos</DialogTitle>
 
-        {/* 🚀 FIX: Le pasamos el className aquí al Command para que tome los estilos extra */}
+        {/*  FIX: Le pasamos el className aquí al Command para que tome los estilos extra */}
         <Command
           className={cn(
             "bg-transparent",
@@ -108,7 +108,7 @@ const CommandEmpty = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive.Empty>,
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.Empty>
 >((props, ref) => {
-  // 🚀 Usamos el hook useCommandState directamente
+  //  Usamos el hook useCommandState directamente
   const search = useCommandState((state) => state.search);
 
   // Si no hay texto de búsqueda, no mostramos el estado vacío

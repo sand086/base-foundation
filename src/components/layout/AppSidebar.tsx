@@ -189,7 +189,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
             svgFilters,
           )}
           alt={item.title}
-          variant="original" // 🚀 Permite que las clases de Tailwind apliquen los colores (negro/blanco)
+          variant="original" //  Permite que las clases de Tailwind apliquen los colores (negro/blanco)
         />
       );
 

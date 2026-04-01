@@ -13,7 +13,7 @@ export const useBilling = () => {
   ) => {
     setIsStamping(true);
     try {
-      // 🚀 Llama al endpoint /stamp/nominal del backend
+      //  Llama al endpoint /stamp/nominal del backend
       const response = await billingService.stampNominal(viajeId);
       toast({
         title: "¡Timbrado Exitoso!",
@@ -41,7 +41,7 @@ export const useBilling = () => {
   ) => {
     setIsStamping(true);
     try {
-      // 🚀 Llama al endpoint /stamp/final del backend
+      //  Llama al endpoint /stamp/final del backend
       const response = await billingService.stampFinal(
         viajeId,
         uuidRelacionado,

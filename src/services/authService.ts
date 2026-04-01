@@ -27,7 +27,7 @@ export const authService = {
   },
 
   /**
-   * 🚀 3. Renovación de Token (NUEVO)
+   *  3. Renovación de Token (NUEVO)
    * Este método es llamado por el interceptor de Axios cuando el access_token expira.
    */
   refreshToken: async (refreshToken: string): Promise<LoginResponse> => {

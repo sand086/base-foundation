@@ -66,7 +66,7 @@ DEFAULT_LEYENDA = "Condiciones de prestación de servicios que ampara la CARTA D
 
 
 # =========================================================================
-# 🛡️ CLASE BLINDADA: Evita Errores 500 por KeyErrors
+#   CLASE BLINDADA: Evita Errores 500 por KeyErrors
 # =========================================================================
 class SafeData(dict):
     def __getitem__(self, key):
@@ -322,7 +322,7 @@ class BillingService:
             status_sat = int(getattr(res_cancelacion, "statusUUID", 0))
 
             if status_operacion == 200 and status_sat in [201, 202, 211]:
-                logger.info(f"✅ CANCELACIÓN SAT EXITOSA. Status SAT: {status_sat}")
+                logger.info(f"  CANCELACIÓN SAT EXITOSA. Status SAT: {status_sat}")
                 factura.status_sat = (
                     "CANCELADA" if status_sat != 211 else "EN_PROCESO_CANCELACION"
                 )
@@ -367,7 +367,7 @@ class BillingService:
         )
         return viaje, cliente, unidad, operador
 
-    # 🛡️ EL CONSTRUCTOR DE DATOS SEGURO Y ANTI-RECHAZOS SAT
+    #   EL CONSTRUCTOR DE DATOS SEGURO Y ANTI-RECHAZOS SAT
     def _build_dict_from_models(
         self, viaje, cliente, unidad, operador, is_nominal: bool
     ) -> dict:
@@ -407,32 +407,32 @@ class BillingService:
             municipio_destino = ubicacion.municipio_clave
         else:
             logger.warning(
-                f"🚨 [SAT FALLBACK] CP {cp_cliente} inválido. Forzando a CMX/09040."
+                f"  [SAT FALLBACK] CP {cp_cliente} inválido. Forzando a CMX/09040."
             )
             cp_cliente = "09040"
             estado_destino = "CMX"
             municipio_destino = "007"
 
-        # 🚀 REGLA DE NEGOCIO 1: ANTI-RECHAZO DE MERCANCÍAS SAT
+        #  REGLA DE NEGOCIO 1: ANTI-RECHAZO DE MERCANCÍAS SAT
         clave_producto_viaje = str(_get_safe(viaje, "sat_clave_producto", "31111501"))
         if clave_producto_viaje == "78101802":
             logger.warning(
-                f"🚨 [SAT FALLBACK] Clave de Flete (78101802) no permitida en Carta Porte. Forzando a '31111501'."
+                f"  [SAT FALLBACK] Clave de Flete (78101802) no permitida en Carta Porte. Forzando a '31111501'."
             )
             bienes_transporte = "31111501"
         else:
             bienes_transporte = clave_producto_viaje
 
-        # 🚀 REGLA DE NEGOCIO 2: ANTI-RECHAZO DE PESO SAT
+        #  REGLA DE NEGOCIO 2: ANTI-RECHAZO DE PESO SAT
         peso_toneladas = float(_get_safe(viaje, "peso_toneladas", 25.0))
         if peso_toneladas <= 0.0:
             logger.warning(
-                f"🚨 [SAT FALLBACK] Peso del viaje es 0. Forzando a 25.0 Toneladas."
+                f"  [SAT FALLBACK] Peso del viaje es 0. Forzando a 25.0 Toneladas."
             )
             peso_toneladas = 25.0
         peso_bruto_kg = f"{peso_toneladas * 1000:.2f}"
 
-        # 🚀 REGLA DE NEGOCIO 3: ANTI-RECHAZO DE PLACAS SAT (5 a 7 caracteres, sin espacios)
+        #  REGLA DE NEGOCIO 3: ANTI-RECHAZO DE PLACAS SAT (5 a 7 caracteres, sin espacios)
         def _clean_placa(placa_raw, default="XXXX99"):
             if not placa_raw or placa_raw == "S/P":
                 return default
@@ -441,7 +441,7 @@ class BillingService:
             if 5 <= len(clean) <= 7:
                 return clean
             logger.warning(
-                f"🚨 [SAT FALLBACK] Placa '{placa_raw}' inválida (debe medir 5-7 chars). Forzando '{default}'."
+                f"  [SAT FALLBACK] Placa '{placa_raw}' inválida (debe medir 5-7 chars). Forzando '{default}'."
             )
             return default
 
@@ -482,7 +482,7 @@ class BillingService:
             "descripcion_mercancia": _get_safe(
                 viaje, "descripcion_mercancia", "CARGA GENERAL"
             ),
-            # 🚀 FASE 2: Mapeo de contenedores reales para el XML/PDF
+            #  FASE 2: Mapeo de contenedores reales para el XML/PDF
             "contenedor_1": _get_safe(viaje, "contenedor_1", "N/A"),
             "contenedor_2": _get_safe(viaje, "contenedor_2", "N/A"),
             "referencia_cliente": _get_safe(viaje, "referencia", "S/R"),
@@ -610,7 +610,7 @@ class BillingService:
 
         relacion_str = f"04|{relacion_uuid}|" if relacion_uuid else ""
 
-        # 🚀 FASE 2: Armar cadena original dinámica considerando si es FULL (2 remolques)
+        #  FASE 2: Armar cadena original dinámica considerando si es FULL (2 remolques)
         remolques_cadena = f"{d['subtipo_remolque']}|{d['placa_remolque']}|"
         if d.get("contenedor_2") and d.get("contenedor_2") != "N/A":
             remolques_cadena += f"{d['subtipo_remolque']}|PLACA2|"
@@ -659,7 +659,7 @@ class BillingService:
             else ""
         )
 
-        # 🚀 FASE 2: Lógica dinámica para 1 o 2 remolques
+        #  FASE 2: Lógica dinámica para 1 o 2 remolques
         remolques_xml = f'<cartaporte31:Remolque SubTipoRem="{d["subtipo_remolque"]}" Placa="{d["placa_remolque"]}" />'
         if d.get("contenedor_2") and d.get("contenedor_2") != "N/A":
             # Si hay un segundo contenedor, asumimos configuración FULL y agregamos el segundo remolque
@@ -795,7 +795,7 @@ class BillingService:
             "aseguradora": d["aseguradora"],
             "poliza": d["poliza"],
             "peso_bruto": d["peso_bruto"],
-            # 🚀 FASE 2: Pasamos los contenedores y la referencia al PDF para impresión
+            #  FASE 2: Pasamos los contenedores y la referencia al PDF para impresión
             "bienes_transp": d["bienes_transp"],
             "descripcion_mercancia": d["descripcion_mercancia"],
             "contenedor_1": d["contenedor_1"],

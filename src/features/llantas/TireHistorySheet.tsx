@@ -125,7 +125,7 @@ export function TireHistorySheet({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-xl flex flex-col p-0 border-l border-slate-200 dark:border-white/10 bg-slate-50/95 dark:bg-slate-950/95 backdrop-blur-xl shadow-2xl">
-        {/* 🚀 HEADER TAHOE */}
+        {/*  HEADER TAHOE */}
         <SheetHeader className="p-6 sm:px-8 sm:py-6 bg-brand-navy/95 dark:bg-slate-900 backdrop-blur-md shrink-0 border-b border-white/10 relative overflow-hidden z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center justify-between gap-4">
@@ -155,7 +155,7 @@ export function TireHistorySheet({
           </div>
         </SheetHeader>
 
-        {/* 🚀 Contenido scrolleable */}
+        {/*  Contenido scrolleable */}
         <ScrollArea className="flex-1 p-6 sm:p-8 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
           <div className="space-y-8 pb-12">
             {/* KPI Cards Grid */}
@@ -299,7 +299,7 @@ export function TireHistorySheet({
 
             <Separator className="bg-slate-200 dark:bg-white/10" />
 
-            {/* 🚀 TIMELINE SECTION */}
+            {/*  TIMELINE SECTION */}
             <div className="space-y-6">
               <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-brand-navy dark:text-slate-300 flex items-center gap-2">
                 <Eye className="h-4 w-4" /> Historial de Movimientos

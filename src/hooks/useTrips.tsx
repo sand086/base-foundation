@@ -35,7 +35,7 @@ export const useTrips = () => {
   }, [toast]);
 
   /**
-   * 🚀 INICIO DEL CICLO (Etapa 1: Carga)
+   *  INICIO DEL CICLO (Etapa 1: Carga)
    * Crea el viaje raíz y su primer tramo.
    */
   const createTrip = async (tripData: TripCreatePayload) => {

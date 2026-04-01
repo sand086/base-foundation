@@ -15,7 +15,7 @@ interface ImageUploadProps {
   disabled?: boolean;
 }
 
-// 🚀 HELPER AGREGADO: Asegura que la imagen siempre encuentre el servidor backend
+//  HELPER AGREGADO: Asegura que la imagen siempre encuentre el servidor backend
 const getFullImageUrl = (path?: string) => {
   if (!path) return undefined;
   // Si ya es un blob local (vista previa) o una URL completa, la dejamos intacta
@@ -122,7 +122,7 @@ export function ImageUpload({
       >
         <Avatar className="h-28 w-28 border-4 border-white shadow-xl">
           <AvatarImage
-            src={getFullImageUrl(preview?.trim()) || AvatarDefault} // 🚀 HELPER APLICADO AQUÍ
+            src={getFullImageUrl(preview?.trim()) || AvatarDefault} //  HELPER APLICADO AQUÍ
             alt="Profile Preview"
             className="object-cover"
           />

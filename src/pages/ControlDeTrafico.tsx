@@ -67,7 +67,7 @@ export default function ControlDeTrafico() {
   const [eventToDelete, setEventToDelete] = useState<number | null>(null);
   const [isDeletingEvent, setIsDeletingEvent] = useState(false);
 
-  // 🚀 1. FILTROS PRO: Búsqueda de texto + Pestañas de Estados
+  //  1. FILTROS PRO: Búsqueda de texto + Pestañas de Estados
   const filteredTrips = useMemo(() => {
     return trips.filter((trip) => {
       const tripStatus = String(trip.status);
@@ -99,13 +99,13 @@ export default function ControlDeTrafico() {
     });
   }, [trips, search, filterType]);
 
-  // 🚀 2. CORRECCIÓN DE TYPESCRIPT: Evita el error TS(2367) al forzar el casteo a string
+  //  2. CORRECCIÓN DE TYPESCRIPT: Evita el error TS(2367) al forzar el casteo a string
   const activeLeg = useMemo(() => {
     if (!selectedTrip?.legs) return undefined;
     return (
       selectedTrip.legs.find(
         (leg) =>
-          // 🚀 CORRECCIÓN AQUÍ: Todo evaluado como string
+          //  CORRECCIÓN AQUÍ: Todo evaluado como string
           String(leg.status) !== "cerrado" &&
           String(leg.status) !== "entregado" &&
           String(leg.status) !== "liquidado",
@@ -113,7 +113,7 @@ export default function ControlDeTrafico() {
     );
   }, [selectedTrip]);
 
-  // 🚀 BÚSQUEDA ROBUSTA DE EVENTOS
+  //  BÚSQUEDA ROBUSTA DE EVENTOS
   const timelineEvents = useMemo(() => {
     if (!selectedTrip?.legs) return [];
 
@@ -185,14 +185,14 @@ export default function ControlDeTrafico() {
 
   // BUSCA handleStatusSubmit en ControlDeTrafico.tsx y actualiza el modo edición:
   const handleStatusSubmit = async (data: StatusUpdateData) => {
-    // 🚀 IMPORTANTE: Necesitamos asegurar que tenemos el activeLeg
+    //  IMPORTANTE: Necesitamos asegurar que tenemos el activeLeg
     if (!selectedTrip || !activeLeg) {
       toast.error("No hay un tramo activo para registrar la bitácora.");
       return;
     }
 
     try {
-      // 🚀 CONSTRUIMOS EL PAYLOAD EXACTO QUE ESPERA FASTAPI
+      //  CONSTRUIMOS EL PAYLOAD EXACTO QUE ESPERA FASTAPI
       const payloadLimpio = {
         ...data,
         // 1. Vinculamos el evento al tramo actual
@@ -218,7 +218,7 @@ export default function ControlDeTrafico() {
       };
 
       if (eventToEdit) {
-        // 🚀 MODO EDICIÓN
+        //  MODO EDICIÓN
         await axiosClient.put(`/trips/timeline/${eventToEdit.id}`, {
           location: data.location,
           comments: data.comments,
@@ -228,7 +228,7 @@ export default function ControlDeTrafico() {
         });
         toast.success("Registro corregido con éxito");
       } else {
-        // 🚀 MODO CREACIÓN
+        //  MODO CREACIÓN
         await axiosClient.post(
           `/trips/${selectedTrip.id}/timeline`,
           payloadLimpio,
@@ -247,7 +247,7 @@ export default function ControlDeTrafico() {
     }
   };
 
-  // 🚀 ESTILOS SEMÁNTICOS PARA BADGES DE ESTADO (Tahoe Standard)
+  //  ESTILOS SEMÁNTICOS PARA BADGES DE ESTADO (Tahoe Standard)
   const getStatusColor = (status: string) => {
     if (status === "detenido" || status === "retraso")
       return "bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-400 border-amber-300 dark:border-amber-500/30";
@@ -258,7 +258,7 @@ export default function ControlDeTrafico() {
     return "bg-blue-50 dark:bg-blue-900/30 text-brand-navy dark:text-blue-400 border-blue-200 dark:border-blue-500/30";
   };
 
-  // 🚀 3. DISEÑO INTELIGENTE DEL TIMELINE (Detecta palabras clave)
+  //  3. DISEÑO INTELIGENTE DEL TIMELINE (Detecta palabras clave)
   const getTimelineConfig = (eventText: string, eventType?: string) => {
     const text = (eventText + " " + (eventType || "")).toLowerCase();
 
@@ -331,7 +331,7 @@ export default function ControlDeTrafico() {
               />
             </div>
 
-            {/* 🚀 FILTROS PRO (Segmented Control Tahoe) */}
+            {/*  FILTROS PRO (Segmented Control Tahoe) */}
             <div className="flex bg-slate-100/80 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200/50 dark:border-white/5">
               <button
                 onClick={() => setFilterType("activos")}
@@ -488,7 +488,7 @@ export default function ControlDeTrafico() {
             </div>
           ) : (
             <>
-              {/* 🚀 HEADER DEL DETALLE TAHOE */}
+              {/*  HEADER DEL DETALLE TAHOE */}
               <CardHeader className="p-6 md:p-8 border-b border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4 z-10 relative overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
                 <div className="relative z-10">
@@ -532,7 +532,7 @@ export default function ControlDeTrafico() {
 
               <ScrollArea className="flex-1 bg-slate-50/50 dark:bg-transparent custom-scrollbar">
                 <div className="p-6 md:p-8 max-w-4xl mx-auto space-y-8">
-                  {/* 🚀 TARJETAS DE INFORMACIÓN (UNIDAD Y OPERADOR) */}
+                  {/*  TARJETAS DE INFORMACIÓN (UNIDAD Y OPERADOR) */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     {/* Tarjeta Unidad */}
                     <div className="bg-white dark:bg-slate-900/50 p-5 rounded-2xl border border-slate-200 dark:border-white/10 shadow-sm flex items-center gap-5 hover:shadow-md transition-all">
@@ -585,7 +585,7 @@ export default function ControlDeTrafico() {
                     </div>
                   </div>
 
-                  {/* 🚀 LÍNEA DE TIEMPO (TIMELINE) */}
+                  {/*  LÍNEA DE TIEMPO (TIMELINE) */}
                   <div className="bg-white dark:bg-slate-900/30 rounded-3xl border border-slate-200 dark:border-white/10 shadow-sm p-6 md:p-8">
                     <h3 className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.3em] flex items-center gap-2 mb-8 border-b border-slate-100 dark:border-white/5 pb-4">
                       <FileText className="h-4 w-4 text-blue-500" /> Historial
@@ -639,7 +639,7 @@ export default function ControlDeTrafico() {
                                       })}
                                     </span>
 
-                                    {/* 🚀 MOSTRAR COORDENADAS SI EXISTEN (Esto quita tu error) */}
+                                    {/*  MOSTRAR COORDENADAS SI EXISTEN (Esto quita tu error) */}
                                     {(event.lat || event.lng) && (
                                       <span className="text-[9px] font-mono font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded shadow-sm flex items-center gap-1.5 w-fit border border-blue-200 dark:border-blue-800/50">
                                         <Compass className="h-3 w-3" />{" "}
@@ -648,7 +648,7 @@ export default function ControlDeTrafico() {
                                     )}
                                   </div>
 
-                                  {/* 🚀 BOTÓN DE ACCIONES (3 PUNTITOS) */}
+                                  {/*  BOTÓN DE ACCIONES (3 PUNTITOS) */}
                                   <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
                                       <Button
@@ -688,7 +688,7 @@ export default function ControlDeTrafico() {
                                   {event.event}
                                 </p>
 
-                                {/* 🚀 COMENTARIOS SEPARADOS */}
+                                {/*  COMENTARIOS SEPARADOS */}
                                 {event.comments && (
                                   <p className="text-xs text-slate-600 dark:text-slate-400 italic bg-white/60 dark:bg-slate-950/50 p-3 rounded-xl border border-slate-200 dark:border-white/5 shadow-inner mt-3 leading-relaxed">
                                     "{event.comments}"
@@ -725,7 +725,7 @@ export default function ControlDeTrafico() {
         />
       )}
 
-      {/* 🚀 ALERTA DE ELIMINACIÓN DE EVENTO (Estructura Tahoe 4 Capas) */}
+      {/*  ALERTA DE ELIMINACIÓN DE EVENTO (Estructura Tahoe 4 Capas) */}
       <AlertDialog
         open={!!eventToDelete}
         onOpenChange={(open) => {
@@ -795,7 +795,7 @@ export default function ControlDeTrafico() {
                 variant="destructive"
                 size="lg"
                 onClick={(e) => {
-                  e.preventDefault(); // 🚀 Crucial: Evita que el modal se cierre al instante, permitiendo ver el loader
+                  e.preventDefault(); //  Crucial: Evita que el modal se cierre al instante, permitiendo ver el loader
                   executeDeleteEvent();
                 }}
                 disabled={isDeletingEvent}

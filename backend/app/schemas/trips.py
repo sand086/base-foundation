@@ -22,7 +22,7 @@ class TripTimelineEventBase(ORMBase):
     time: datetime
     event: str = Field(..., max_length=500)
     event_type: str = Field(default="info", max_length=20)
-    # 🚀 AGREGAR AQUÍ:
+    #  AGREGAR AQUÍ:
     location: Optional[str] = None
     lat: Optional[str] = None
     lng: Optional[str] = None
@@ -181,7 +181,7 @@ class TripResponse(TripBase):
     uuid_fiscal: Optional[str] = None
 
     client: Optional[ClientResponse] = None
-    tariff: Optional[TariffBasicInfo] = None  # 🚀 AÑADIR ESTO
+    tariff: Optional[TariffBasicInfo] = None  #  AÑADIR ESTO
     remolque_1: Optional[UnitResponse] = None
     dolly: Optional[UnitResponse] = None
     remolque_2: Optional[UnitResponse] = None

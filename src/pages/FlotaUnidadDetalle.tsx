@@ -46,7 +46,7 @@ import { MaintenanceTireModal } from "@/features/llantas/MaintenanceTireModal";
 import { TireHistorySheet } from "@/features/llantas/TireHistorySheet";
 import { CreateTireModal } from "@/features/llantas/CreateTireModal";
 import { MountTireModal } from "@/features/llantas/MountTireModal"; // Añade esta importación
-import { tireService, TIRE_POSITIONS } from "@/services/tireService"; // 🚀 Importamos TIRE_POSITIONS para la tabla
+import { tireService, TIRE_POSITIONS } from "@/services/tireService"; //  Importamos TIRE_POSITIONS para la tabla
 
 /**
  * Helper para badges de fecha
@@ -155,7 +155,7 @@ export default function FlotaUnidadDetalle() {
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<FormState>(emptyForm);
-  const [mountModalOpen, setMountModalOpen] = useState(false); // 🚀 NUEVO ESTADO
+  const [mountModalOpen, setMountModalOpen] = useState(false); //  NUEVO ESTADO
 
   const [selectedTire, setSelectedTire] = useState<UnitTire | null>(null);
   const [modals, setModals] = useState({
@@ -296,7 +296,7 @@ export default function FlotaUnidadDetalle() {
     }
   };
 
-  // 🚀 CAMBIO AQUI: La posicion ahora llega como number | null
+  //  CAMBIO AQUI: La posicion ahora llega como number | null
   const handleAssignTireSubmit = async (
     tireId: string,
     unidadId: string | null,
@@ -467,7 +467,7 @@ export default function FlotaUnidadDetalle() {
     setIsEditing(false);
   };
 
-  // 🚀 Función Helper para encontrar la etiqueta bonita de la posición
+  //  Función Helper para encontrar la etiqueta bonita de la posición
   const getPositionLabel = (pos: string | number | undefined | null) => {
     if (!pos) return "Sin asignar";
     const found = TIRE_POSITIONS.find((p) => p.id === Number(pos));
@@ -952,7 +952,7 @@ export default function FlotaUnidadDetalle() {
           <Card className="backdrop-blur-xl bg-white/10 dark:bg-black/40 border-white/20 shadow-2xl">
             <CardHeader className="flex flex-row items-center justify-between gap-3">
               <CardTitle>Detalle de Llantas</CardTitle>
-              {/* 🚀 EL NUEVO BOTÓN */}
+              {/*  EL NUEVO BOTÓN */}
               <Button
                 size="sm"
                 onClick={() => setMountModalOpen(true)}
@@ -996,7 +996,7 @@ export default function FlotaUnidadDetalle() {
                           className="border-b border-white/5 hover:bg-white/5 transition-colors"
                         >
                           <td className="p-3 font-medium">
-                            {/* 🚀 CAMBIO: Usar getPositionLabel para que se vea "Posición 3" en lugar de "3" */}
+                            {/*  CAMBIO: Usar getPositionLabel para que se vea "Posición 3" en lugar de "3" */}
                             {getPositionLabel(tire.posicion)}
                           </td>
 

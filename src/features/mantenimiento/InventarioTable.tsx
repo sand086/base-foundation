@@ -318,7 +318,7 @@ export const InventarioTable = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-20">
-      {/* 🚀 KPI CARDS (Tahoe UI) */}
+      {/*  KPI CARDS (Tahoe UI) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card
           variant="default"
@@ -398,7 +398,7 @@ export const InventarioTable = () => {
         </Card>
       </div>
 
-      {/* 🚀 TABLA PRINCIPAL (Liquid Glass Tahoe) */}
+      {/*  TABLA PRINCIPAL (Liquid Glass Tahoe) */}
       <Card
         variant="default"
         className="shadow-2xl border-slate-200/50 dark:border-white/10 overflow-hidden"
@@ -446,7 +446,7 @@ export const InventarioTable = () => {
         item={itemToView as any}
       />
 
-      {/* 🚀 DIÁLOGO DE CONFIRMACIÓN DE ELIMINACIÓN (Estructura 4 Capas Tahoe) */}
+      {/*  DIÁLOGO DE CONFIRMACIÓN DE ELIMINACIÓN (Estructura 4 Capas Tahoe) */}
       <AlertDialog
         open={!!itemToDelete}
         onOpenChange={(open) => !open && setItemToDelete(null)}

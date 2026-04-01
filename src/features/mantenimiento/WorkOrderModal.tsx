@@ -57,13 +57,13 @@ export const WorkOrderModal = ({
   // Cargar datos reales
   const { inventory, mechanics } = useMaintenance();
   const { unidades } = useUnits();
-  const { trips } = useTrips(); // 🚀 Traemos los viajes para asociar gastos
+  const { trips } = useTrips(); //  Traemos los viajes para asociar gastos
 
   const [selectedUnit, setSelectedUnit] = useState("");
   const [selectedMechanic, setSelectedMechanic] = useState("");
   const [descripcion, setDescripcion] = useState("");
 
-  // 🚀 OBJETIVO 4: Estados para Patio vs Ruta
+  //  OBJETIVO 4: Estados para Patio vs Ruta
   const [tipoMantenimiento, setTipoMantenimiento] = useState<"patio" | "ruta">(
     "patio",
   );
@@ -78,7 +78,7 @@ export const WorkOrderModal = ({
   const [partQuantity, setPartQuantity] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 🚀 Filtrar solo los viajes de la unidad seleccionada que estén activos
+  //  Filtrar solo los viajes de la unidad seleccionada que estén activos
   const activeTripsForUnit = useMemo(() => {
     if (!selectedUnit || !trips) return [];
     return trips.filter(
@@ -192,7 +192,7 @@ export const WorkOrderModal = ({
       }}
     >
       <DialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-slate-50/50 dark:bg-transparent backdrop-blur-xl rounded-2xl">
-        {/* 🚀 HEADER TAHOE */}
+        {/*  HEADER TAHOE */}
         <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-brand-navy/95 dark:bg-slate-900 backdrop-blur-md shrink-0 border-b border-white/10 relative overflow-hidden z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center gap-4 sm:gap-5">
@@ -210,7 +210,7 @@ export const WorkOrderModal = ({
           </div>
         </DialogHeader>
 
-        {/* 🚀 BODY */}
+        {/*  BODY */}
         <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar">
           <div className="space-y-8">
             {/* Información Base */}
@@ -282,7 +282,7 @@ export const WorkOrderModal = ({
                 </div>
               </div>
 
-              {/* 🚀 OBJETIVO 4: TIPO DE MANTENIMIENTO (PATIO VS RUTA) */}
+              {/*  OBJETIVO 4: TIPO DE MANTENIMIENTO (PATIO VS RUTA) */}
               <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-white/10 space-y-4">
                 <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
                   Tipo de Gasto (Afectación Financiera) *
@@ -606,7 +606,7 @@ export const WorkOrderModal = ({
           </div>
         </div>
 
-        {/* 🚀 FOOTER TAHOE */}
+        {/*  FOOTER TAHOE */}
         <DialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0">
           <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
             <Button

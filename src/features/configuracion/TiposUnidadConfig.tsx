@@ -32,7 +32,7 @@ import {
 import { Plus, Pencil, Trash2, Truck, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-// 🚀 Imports reales desde los tipos y el hook
+//  Imports reales desde los tipos y el hook
 import { TipoUnidad } from "@/types/api.types";
 import { useTiposUnidad } from "@/hooks/useTiposUnidad";
 import { cn } from "@/lib/utils";
@@ -61,7 +61,7 @@ const emojis = [
   "🛵",
   "🚤",
   "⛴️",
-  "🚀",
+  "",
   "🛸",
 ];
 

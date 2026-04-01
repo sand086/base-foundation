@@ -370,20 +370,34 @@
         <table class="grid-table">
           <tr>
             <td width="60%">
-              <span class="grid-label">Bienes</span
-              ><span class="text-dark"
+              <span class="grid-label">Bienes</span>
+              <span class="text-dark"
                 >{{ bienes_transp }} - {{ descripcion_mercancia }}</span
               >
             </td>
             <td width="40%">
-              <span class="grid-label">Peso Bruto Total</span
-              ><span class="bold text-dark">{{ peso_bruto }} KGM</span>
+              <span class="grid-label">Peso Bruto Total</span>
+              <span class="bold text-dark">{{ peso_bruto }} KGM</span>
+            </td>
+          </tr>
+          <tr>
+            <td colspan="2">
+              <span class="grid-label text-primary"
+                >Equipos Especiales y Referencia</span
+              >
+              <span class="bold text-dark" style="font-size: 8pt">
+                {% if contenedor_1 and contenedor_1 != 'N/A' %} CONTENEDOR 1: {{
+                contenedor_1 }} {% endif %} {% if contenedor_2 and contenedor_2
+                != 'N/A' %} | CONTENEDOR 2: {{ contenedor_2 }} {% endif %} {% if
+                referencia_cliente and referencia_cliente != 'S/R' %} | REF
+                CLIENTE: {{ referencia_cliente }} {% endif %}
+              </span>
             </td>
           </tr>
           <tr>
             <td>
-              <span class="grid-label">Remolque</span
-              ><span class="text-dark"
+              <span class="grid-label">Remolque</span>
+              <span class="text-dark"
                 >{{ subtipo_remolque }} - Placa: {{ placa_remolque }}</span
               >
             </td>

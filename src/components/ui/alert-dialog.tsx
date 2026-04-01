@@ -107,7 +107,7 @@ const AlertDialogDescription = React.forwardRef<
 AlertDialogDescription.displayName =
   AlertDialogPrimitive.Description.displayName;
 
-// 🚀 REFACTORIZACIÓN CRÍTICA: AlertDialogAction
+//  REFACTORIZACIÓN CRÍTICA: AlertDialogAction
 // Ahora acepta variant y size de tus botones globales
 const AlertDialogAction = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Action>,
@@ -122,7 +122,7 @@ const AlertDialogAction = React.forwardRef<
 ));
 AlertDialogAction.displayName = AlertDialogPrimitive.Action.displayName;
 
-// 🚀 REFACTORIZACIÓN CRÍTICA: AlertDialogCancel
+//  REFACTORIZACIÓN CRÍTICA: AlertDialogCancel
 const AlertDialogCancel = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Cancel>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Cancel> &

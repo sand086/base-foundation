@@ -116,7 +116,7 @@ def create_timeline_event(
     if not trip:
         raise HTTPException(status_code=404, detail="Viaje no encontrado")
 
-    # 🚀 2. ACTUALIZACIÓN AUTOMÁTICA DEL TRACTOCAMIÓN (UNIDAD)
+    #  2. ACTUALIZACIÓN AUTOMÁTICA DEL TRACTOCAMIÓN (UNIDAD)
     # Buscamos cuál es el tramo (leg) que está en tránsito actualmente
     active_leg = next(
         (
@@ -354,12 +354,12 @@ def generate_carta_porte(trip_id: int, db: Session = Depends(get_db)):
             trip.legs[-1],
         )
 
-    # 🚀 EXTRACCIÓN SEGURA PARA LA CARTA CIEGA
+    #  EXTRACCIÓN SEGURA PARA LA CARTA CIEGA
     unidad = active_leg.unit if active_leg else None
     operador = active_leg.operator if active_leg else None
     cliente = trip.client
 
-    # 🚀 CONSTRUIMOS EL MISMO CONTEXTO PERO VERSIÓN "TRASLADO/CIEGA"
+    #  CONSTRUIMOS EL MISMO CONTEXTO PERO VERSIÓN "TRASLADO/CIEGA"
     context = {
         "rfc_emisor": "EN TRÁNSITO",
         "nombre_emisor": "DOCUMENTO OPERATIVO (CIEGA)",
@@ -453,7 +453,7 @@ def generate_carta_porte(trip_id: int, db: Session = Depends(get_db)):
 
     try:
         template = jinja_env.get_template("carta_porte.html")
-        # 🚀 Le pasamos el CONTEXT extendido en lugar de solo trip y leg
+        #  Le pasamos el CONTEXT extendido en lugar de solo trip y leg
         html_content = template.render(**context)
     except Exception as e:
         raise HTTPException(
@@ -552,7 +552,7 @@ def update_timeline_event(
     if not event:
         raise HTTPException(status_code=404, detail="Evento no encontrado")
 
-    # 🚀 ACTUALIZACIÓN TOTAL DE COLUMNAS
+    #  ACTUALIZACIÓN TOTAL DE COLUMNAS
     if "location" in payload:
         event.location = payload["location"]
     if "lat" in payload:
@@ -575,7 +575,7 @@ def update_timeline_event(
 @router.post("/{trip_id}/stamp-real", response_model=schemas.TripResponse)
 def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
     """
-    🚀 FASE 2: Trigger manual o automático para generar la Carta Porte REAL
+     FASE 2: Trigger manual o automático para generar la Carta Porte REAL
     cuando el viaje inicia su tramo de carretera.
     """
     from app.services.billing_service import BillingService

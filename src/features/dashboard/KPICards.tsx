@@ -8,7 +8,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-// 🚀 Cambiado a dashboardService
+//  Cambiado a dashboardService
 import { ServiceStats } from "@/services/dashboardService";
 import { useMemo } from "react";
 

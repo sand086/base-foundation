@@ -153,7 +153,7 @@ def generar_carta_porte_nominal(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# 🚀 FASE 2: NUEVO ENDPOINT PARA TIMBRADO REAL DESDE LA UI DE DESPACHO
+#  FASE 2: NUEVO ENDPOINT PARA TIMBRADO REAL DESDE LA UI DE DESPACHO
 @router.post("/{trip_id}/stamp-real", response_model=dict)
 def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
     """
@@ -315,7 +315,7 @@ def upload_csd_files(
     cer_file: UploadFile = File(...),
     key_file: UploadFile = File(...),
     password: str = Form(...),
-    environment: str = Form("PROD"),  # 🚀 Recibimos el ambiente
+    environment: str = Form("PROD"),  #  Recibimos el ambiente
     db: Session = Depends(get_db),
 ):
     suffix = "_qa" if environment == "QA" else ""
@@ -374,7 +374,7 @@ def download_csd_secure(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(
         get_current_active_user
-    ),  # 🚀 Obtenemos al usuario logueado
+    ),  #  Obtenemos al usuario logueado
 ):
     # 1. VALIDAR CONTRASEÑA DEL USUARIO (Logueo)
     if not verify_password(password, current_user.password_hash):
@@ -446,7 +446,7 @@ def test_csd_connection(
             detail="El archivo de certificado (.cer) no se encuentra físicamente en el servidor.",
         )
 
-    # 🚀 LECTURA REAL DEL CERTIFICADO PARA SACAR LA FECHA
+    #  LECTURA REAL DEL CERTIFICADO PARA SACAR LA FECHA
     try:
         with open(cer_path, "rb") as cert_file:
             cert_data = cert_file.read()

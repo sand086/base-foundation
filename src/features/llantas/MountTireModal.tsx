@@ -69,7 +69,7 @@ export function MountTireModal({
   const [loadingTires, setLoadingTires] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 🚀 REACT HOOK FORM
+  //  REACT HOOK FORM
   const form = useForm<MountTireFormData>({
     resolver: zodResolver(mountTireSchema),
     defaultValues: {
@@ -127,7 +127,7 @@ export function MountTireModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[95vw] sm:max-w-lg flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl transition-all duration-300">
-        {/* 🚀 CAPA 2: HEADER TAHOE (Blanco en Light, Navy oscuro en Dark) */}
+        {/*  CAPA 2: HEADER TAHOE (Blanco en Light, Navy oscuro en Dark) */}
         <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center gap-4 sm:gap-5">
@@ -149,7 +149,7 @@ export function MountTireModal({
           </div>
         </DialogHeader>
 
-        {/* 🚀 CAPA 3: BODY FORMULARIO */}
+        {/*  CAPA 3: BODY FORMULARIO */}
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit(onFormSubmit)}
@@ -269,7 +269,7 @@ export function MountTireModal({
               </div>
             </div>
 
-            {/* 🚀 CAPA 4: FOOTER TAHOE */}
+            {/*  CAPA 4: FOOTER TAHOE */}
             <DialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
               <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
                 <Button
