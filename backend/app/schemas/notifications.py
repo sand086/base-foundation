@@ -1,6 +1,6 @@
 # backend/app/schemas/notifications.py
 from pydantic import BaseModel, ConfigDict
-from typing import Optional
+from typing import Optional, Dict, Any
 from datetime import datetime
 
 
@@ -56,6 +56,7 @@ class NotificationBase(BaseModel):
     is_read: bool = False
     event_type: Optional[str] = None
     reference_id: Optional[str] = None
+    metadata_info: Optional[Dict[str, Any]] = None
 
 
 class NotificationCreate(NotificationBase):
@@ -65,4 +66,5 @@ class NotificationCreate(NotificationBase):
 class NotificationResponse(NotificationBase):
     id: int
     created_at: datetime
+    metadata_info: Optional[Dict[str, Any]] = None
     model_config = ConfigDict(from_attributes=True)

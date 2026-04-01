@@ -12,6 +12,7 @@ from datetime import date
 from enum import Enum as PyEnum
 from sqlalchemy import Enum as SAEnum
 from typing import List, Optional, Any
+from sqlalchemy.sql import func
 from sqlalchemy import (
     Column,
     Integer,
@@ -26,6 +27,7 @@ from sqlalchemy import (
     Index,
     func,
     UniqueConstraint,
+    JSON,
 )
 from sqlalchemy.orm import relationship, declarative_mixin, declared_attr
 from sqlalchemy.dialects.postgresql import JSONB, DOUBLE_PRECISION
@@ -1465,6 +1467,33 @@ class BankMovement(AuditMixin, Base):
     referencia = Column(String(100))
 
     bank_account = relationship("BankAccount", backref="movements")
+
+
+class UserNotification(AuditMixin, Base):
+    """
+    Historial centralizado de alertas, incidencias y tracking enviado.
+    """
+
+    __tablename__ = "user_notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    title = Column(String(255), nullable=False)
+    message = Column(Text, nullable=False)
+    is_read = Column(Boolean, default=False, server_default="false")
+
+    # ej: 'trip_tracking_update', 'trip_incident', 'fuel_alert'
+    event_type = Column(String(100), index=True)
+
+    # ID del recurso relacionado (Trip ID, Invoice ID, etc.)
+    reference_id = Column(String(100), nullable=True)
+
+    # 🚀 Metadata en JSONB para guardar ubicación, coordenadas o datos del cliente
+    metadata_info = Column(JSONB, nullable=True)
+
+    user = relationship("User", foreign_keys=[user_id])
 
 
 class Notification(AuditMixin, Base):

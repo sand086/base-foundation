@@ -697,9 +697,12 @@ const NotificacionesConfig = () => {
                           )
                         }
                       />
-                      <p className="text-xs text-muted-foreground">
-                        Variables disponibles: [SERVICIO_ID], [FACTURA_ID],
-                        [CLIENTE], [FECHA]
+                      <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-tighter">
+                        Variables:{" "}
+                        <span className="text-blue-500">[SERVICIO_ID]</span>,
+                        <span className="text-blue-500">[CLIENTE]</span>,
+                        <span className="text-blue-500">[ESTATUS]</span>,
+                        <span className="text-blue-500">[UBICACION]</span>
                       </p>
                     </div>
                     <div className="space-y-2">
