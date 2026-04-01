@@ -1,0 +1,144 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        color: #1e293b;
+        margin: 0;
+        padding: 0;
+        background-color: #f1f5f9;
+      }
+      .container {
+        max-width: 600px;
+        margin: 20px auto;
+        background: #ffffff;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        border: 1px solid #e2e8f0;
+      }
+      .header {
+        background-color: #0f172a;
+        padding: 20px;
+        text-align: center;
+        position: relative;
+      }
+      .header img {
+        max-height: 60px;
+      }
+      .robot-section {
+        text-align: center;
+        padding: 20px 0;
+        background: linear-gradient(180deg, #0f172a 0%, #ffffff 100%);
+      }
+      .robot-img {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        border: 4px solid #ffffff;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+      }
+      .content {
+        padding: 30px;
+      }
+      .status-badge {
+        display: inline-block;
+        background-color: #be0811;
+        color: #ffffff;
+        padding: 6px 16px;
+        border-radius: 9999px;
+        font-weight: 800;
+        text-transform: uppercase;
+        font-size: 12px;
+        margin-bottom: 20px;
+      }
+      .bento-card {
+        background-color: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 20px;
+        border-left: 4px solid #be0811;
+      }
+      .bento-label {
+        color: #64748b;
+        font-size: 10px;
+        text-transform: uppercase;
+        font-weight: 700;
+        letter-spacing: 1px;
+        display: block;
+        margin-bottom: 4px;
+      }
+      .bento-value {
+        color: #0f172a;
+        font-size: 16px;
+        font-weight: 700;
+        display: block;
+      }
+      .footer {
+        background-color: #f8fafc;
+        padding: 20px;
+        text-align: center;
+        font-size: 12px;
+        color: #64748b;
+        border-top: 1px solid #e2e8f0;
+      }
+      .footer strong {
+        color: #be0811;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1
+          style="color: white; margin: 0; font-size: 18px; letter-spacing: 2px"
+        >
+          RÁPIDOS 3T
+        </h1>
+      </div>
+
+      <div class="robot-section">
+        <img src="cid:robot_avatar" class="robot-img" alt="Asistente 3T" />
+      </div>
+
+      <div class="content">
+        <h2 style="margin-top: 0; color: #0f172a">¡Hola, [CLIENTE]!</h2>
+        <p>
+          Soy tu asistente de logística. Te informo que tu embarque ha sido
+          actualizado:
+        </p>
+
+        <div class="status-badge">[ESTATUS]</div>
+
+        <div class="bento-card">
+          <span class="bento-label">Número de Servicio</span>
+          <span class="bento-value">#[SERVICIO_ID]</span>
+        </div>
+
+        <div class="bento-card">
+          <span class="bento-label">Ubicación Actual</span>
+          <span class="bento-value">[UBICACION]</span>
+        </div>
+
+        <div class="bento-card">
+          <span class="bento-label">Última Actualización</span>
+          <span class="bento-value">[FECHA_HORA]</span>
+        </div>
+
+        <p style="font-size: 14px; color: #475569; line-height: 1.6">
+          Puedes rastrear tu carga en tiempo real desde nuestro portal SaaS con
+          tu número de folio.
+        </p>
+      </div>
+
+      <div class="footer">
+        Este es un mensaje automático de
+        <strong>Rápidos 3T - Logística de transporte</strong>.<br />
+        Veracruz, México.
+      </div>
+    </div>
+  </body>
+</html>

@@ -240,18 +240,30 @@ export function NextLegModal({
 
   useEffect(() => {
     if (open && tripPadre) {
-      // Determinamos si ya existen activos para bloquear el cambio
-      const hasR1 = !!tripPadre.remolque_1_id;
-      const hasDolly = !!tripPadre.dolly_id;
-      const hasR2 = !!tripPadre.remolque_2_id;
+      // 1. Buscamos la última fase activa para HEREDAR
+      const lastLeg =
+        tripPadre.legs && tripPadre.legs.length > 0
+          ? tripPadre.legs[tripPadre.legs.length - 1]
+          : null;
+
+      // 2. Adivinamos la siguiente fase lógicamente
+      let nextLegType: any = "ruta_carretera";
+      if (lastLeg?.leg_type === "carga_muelle") nextLegType = "ruta_carretera";
+      if (lastLeg?.leg_type === "ruta_carretera") nextLegType = "entrega_vacio";
 
       setFormData({
-        leg_type: "ruta_carretera",
-        unit_id: null, // El tracto sí puede cambiar (relevo)
-        operator_id: null, // El operador sí puede cambiar
-        remolque_1_id: tripPadre.remolque_1_id ?? null,
-        dolly_id: tripPadre.dolly_id ?? null,
-        remolque_2_id: tripPadre.remolque_2_id ?? null,
+        leg_type: nextLegType,
+        // 🚀 HERENCIA AUTOMÁTICA
+        unit_id: lastLeg?.unit_id || null,
+        operator_id: lastLeg?.operator_id || null,
+
+        // Prioridad: 1. Lo que diga el viaje raíz | 2. Lo que traía la fase anterior
+        remolque_1_id:
+          tripPadre.remolque_1_id || (lastLeg as any)?.remolque_1_id || null,
+        dolly_id: tripPadre.dolly_id || (lastLeg as any)?.dolly_id || null,
+        remolque_2_id:
+          tripPadre.remolque_2_id || (lastLeg as any)?.remolque_2_id || null,
+
         anticipo_casetas: tripPadre.costo_casetas ?? 0,
         anticipo_viaticos: 0,
         anticipo_combustible: 0,
@@ -359,19 +371,24 @@ export function NextLegModal({
       config[formData.leg_type as keyof typeof config] ?? config.ruta_carretera
     );
   }, [formData.leg_type]);
+  // 🚜 Tractos: Mostramos disponibles + el que ya trae el viaje
+  const availableTractos = useMemo(() => {
+    // Si tripPadre es null, no intentamos leer legs
+    const currentUnitId =
+      tripPadre?.legs && tripPadre.legs.length > 0
+        ? tripPadre.legs[tripPadre.legs.length - 1].unit_id
+        : null;
 
-  const availableTractos = useMemo(
-    () =>
-      (unidades as Unit[]).filter((u) => {
-        const tipo = `${u.tipo_1} ${u.tipo}`.toLowerCase();
-        return (
-          (tipo.includes("tracto") || tipo.includes("camion")) &&
-          UNIT_STATUSES_AVAILABLE.includes(u.status?.toLowerCase() as any)
-        );
-      }),
-    [unidades],
-  );
-
+    return (unidades as Unit[]).filter((u) => {
+      const tipo = `${u.tipo_1} ${u.tipo}`.toLowerCase();
+      const isTracto = tipo.includes("tracto") || tipo.includes("camion");
+      const isAvailable = UNIT_STATUSES_AVAILABLE.includes(
+        u.status?.toLowerCase() as any,
+      );
+      return isTracto && (isAvailable || u.id === currentUnitId);
+    });
+    // Agregamos tripPadre como dependencia
+  }, [unidades, tripPadre]);
   const availableRemolques = useMemo(
     () =>
       (unidades as Unit[]).filter((u) => {
@@ -405,16 +422,20 @@ export function NextLegModal({
         ];
   }, [unidades]);
 
-  const availableOperators = useMemo(
-    () =>
-      (operadores as Operator[]).filter(
-        (o) =>
-          o.status === "activo" ||
-          o.status === "disponible" ||
-          o.status === "inactivo",
-      ),
-    [operadores],
-  );
+  // 👤 Operadores: Mostramos activos + el que ya trae el viaje
+  const availableOperators = useMemo(() => {
+    const currentOpId =
+      tripPadre?.legs && tripPadre.legs.length > 0
+        ? tripPadre.legs[tripPadre.legs.length - 1].operator_id
+        : null;
+
+    return (operadores as Operator[]).filter(
+      (o) =>
+        o.status === "activo" ||
+        o.status === "disponible" ||
+        o.id === currentOpId,
+    );
+  }, [operadores, tripPadre]);
 
   // ─── Acciones ─────────────────────────────────────────────────────────────
 
@@ -461,6 +482,7 @@ export function NextLegModal({
 
     return true;
   }, [formData, isFullTrip, tripFiscalData, isFiscalDataComplete]);
+
   const handleIniciarTramo = useCallback(async () => {
     if (!tripPadre || !validateForm()) return;
 

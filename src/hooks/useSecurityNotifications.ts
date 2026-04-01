@@ -1,31 +1,49 @@
-// src/hooks/useSecurityNotifications.ts
+import React from "react";
 import { toast } from "sonner";
+import {
+  Mail,
+  AlertTriangle,
+  ShieldAlert,
+  Truck,
+  CheckCircle2,
+  Info,
+  Lock,
+} from "lucide-react";
 import axiosClient from "@/api/axiosClient";
 import { useAuth } from "./useAuth";
 
-// Types of security events
+// 1. Definición de eventos de seguridad y tracking
 export type SecurityEvent =
   | "password_reset"
   | "two_factor_disabled"
   | "two_factor_reset"
   | "trip_stopped"
   | "trip_incident"
-  | "forced_assignment";
+  | "forced_assignment"
+  | "auth_failure"
+  | "trip_tracking_update";
+
+// 2. Interfaz de detalles para el payload
+export interface SecurityNotificationDetails {
+  tripId?: string;
+  userName?: string;
+  userEmail?: string;
+  clientName?: string;
+  reason?: string;
+  adminName?: string;
+  statusLabel?: string;
+  location?: string;
+  comments?: string;
+  isExternal?: boolean;
+}
 
 interface SecurityNotificationParams {
   event: SecurityEvent;
-  details: {
-    userName?: string;
-    userEmail?: string;
-    tripId?: string;
-    clientName?: string;
-    reason?: string;
-    adminName?: string;
-  };
+  details: SecurityNotificationDetails;
 }
 
 export const useSecurityNotifications = () => {
-  const { user } = useAuth(); // Extraemos el usuario actual
+  const { user } = useAuth();
 
   const sendSecurityNotification = async ({
     event,
@@ -39,69 +57,93 @@ export const useSecurityNotifications = () => {
     let title = "Notificación de Sistema";
     let message = "";
 
+    // 🚀 LÓGICA DE INTERFAZ (Toasts) Y MENSAJERÍA
     switch (event) {
-      case "password_reset":
-        title = "Restablecimiento de Contraseña";
-        message = `Se notificó a ${details.userEmail || "usuario"} sobre el restablecimiento de contraseña.`;
-        toast.info("📧 Simulación: Email Enviado", {
+      case "trip_tracking_update":
+        title = "Actualización de Tracking";
+        message = `Viaje ${details.tripId}: ${details.statusLabel} en ${details.location}.`;
+        toast.success("📧 Tracking enviado al cliente", {
           description: message,
-          duration: 5000,
+          icon: React.createElement(Mail, {
+            className: "h-4 w-4 text-emerald-500",
+          }),
+          duration: 4000,
+        });
+        break;
+
+      case "trip_stopped":
+        title = "Unidad Detenida";
+        message = `El viaje ${details.tripId} de ${details.clientName || "Cliente"} se ha detenido por: ${details.reason || "No especificado"}.`;
+        toast.error("🚨 Alerta: Unidad Detenida", {
+          description: message,
+          icon: React.createElement(Truck, { className: "h-4 w-4" }),
+          duration: 6000,
+        });
+        break;
+
+      case "trip_incident":
+        title = "Incidencia en Ruta";
+        message = `Incidencia reportada en viaje ${details.tripId}. Detalles: ${details.comments || details.reason}`;
+        toast.error("⚠️ Incidencia Crítica", {
+          description: message,
+          icon: React.createElement(AlertTriangle, { className: "h-4 w-4" }),
+          duration: 7000,
+        });
+        break;
+
+      case "password_reset":
+        title = "Cambio de Contraseña";
+        message = `Solicitud de reset para: ${details.userEmail}`;
+        toast.info("Seguridad: Email enviado", {
+          description: message,
+          icon: React.createElement(Lock, { className: "h-4 w-4" }),
         });
         break;
 
       case "two_factor_disabled":
         title = "2FA Desactivado";
-        message = `Se desactivó la autenticación de dos factores para ${details.userName}. Se envió notificación por correo.`;
-        toast.warning("🔐 Alerta de Seguridad: 2FA Desactivado", {
+        message = `Se eliminó la protección 2FA para el usuario ${details.userName}.`;
+        toast.warning("🔐 Seguridad Vulnerada", {
           description: message,
-          duration: 6000,
+          icon: React.createElement(ShieldAlert, { className: "h-4 w-4" }),
         });
         break;
 
       case "two_factor_reset":
-        title = "2FA Restablecido";
-        message = `Se restableció el 2FA para ${details.userName}. Se envió correo con nuevas instrucciones.`;
-        toast.warning("🔐 Alerta de Seguridad: 2FA Restablecido", {
+        title = "2FA Reconfigurado";
+        message = `El usuario ${details.userName} ha restablecido sus llaves 2FA.`;
+        toast.success("Seguridad: 2FA Actualizado", {
           description: message,
-          duration: 6000,
-        });
-        break;
-
-      case "trip_stopped":
-        title = "Viaje Detenido";
-        message = `Viaje ${details.tripId} marcado como DETENIDO. Se notificó automáticamente a ${details.clientName || "el cliente"}.`;
-        toast.error("  Viaje Detenido - Notificación al Cliente", {
-          description: message,
-          duration: 8000,
-        });
-        break;
-
-      case "trip_incident":
-        title = "Incidencia Reportada";
-        message = `Incidencia en viaje ${details.tripId}. Motivo: ${details.reason || "No especificado"}. Cliente notificado.`;
-        toast.error("⚠️ Incidencia Reportada - Notificación al Cliente", {
-          description: message,
-          duration: 8000,
+          icon: React.createElement(CheckCircle2, { className: "h-4 w-4" }),
         });
         break;
 
       case "forced_assignment":
         title = "Asignación Forzada";
-        message = `${details.adminName || "Administrador"} forzó asignación. Motivo: ${details.reason}. Acción registrada en auditoría.`;
-        toast.warning("⚡ Asignación Forzada - Admin Override", {
+        message = `${details.adminName} forzó la asignación del viaje ${details.tripId}.`;
+        toast.warning("⚡ Overrider de Sistema", {
           description: message,
-          duration: 6000,
+          icon: React.createElement(Info, { className: "h-4 w-4" }),
         });
         break;
 
+      case "auth_failure":
+        title = "Fallo de Autenticación";
+        message = `Intento de acceso fallido para ${details.userEmail}.`;
+        toast.error("Acceso denegado", { description: message });
+        break;
+
       default:
-        return; // Salir si el evento no existe
+        console.warn("Evento no reconocido:", event);
+        return;
     }
 
-    // 1. Log en consola para historial de la sesión local
-    console.log(`[${event.toUpperCase()}] ${timestamp} - ${message}`);
+    // 1. Log para auditoría en consola
+    console.log(
+      `[NOTIF-LOG] ${timestamp} | Evento: ${event} | Msg: ${message}`,
+    );
 
-    // 2.  GUARDAR EN LA BASE DE DATOS (Backend)
+    // 2. PERSISTENCIA EN BACKEND
     try {
       if (user?.id) {
         await axiosClient.post("/notifications/", {
@@ -109,14 +151,19 @@ export const useSecurityNotifications = () => {
           title: title,
           message: message,
           event_type: event,
-          reference_id: details.tripId || null,
+          reference_id: details.tripId ? String(details.tripId) : null,
+          // 🚀 Usamos metadata_info para evitar el conflicto con SQLAlchemy
+          metadata_info: {
+            is_external: details.isExternal || false,
+            location: details.location,
+            statusLabel: details.statusLabel,
+            client_name: details.clientName,
+            comments: details.comments,
+          },
         });
       }
     } catch (error) {
-      console.error(
-        "No se pudo guardar la notificación en la base de datos",
-        error,
-      );
+      console.error("Error al guardar notificación en base de datos:", error);
     }
   };
 

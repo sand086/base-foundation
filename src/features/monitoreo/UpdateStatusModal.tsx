@@ -50,7 +50,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { TripLeg, TripTimelineEvent } from "@/types/api.types";
+import { TripLeg, TripTimelineEvent, Trip } from "@/types/api.types";
 import { useSecurityNotifications } from "@/hooks/useSecurityNotifications";
 import { geoapifyService } from "@/services/geoapifyService";
 
@@ -58,6 +58,7 @@ interface UpdateStatusModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   serviceId: string;
+  trip?: Trip | null;
   activeLeg?: TripLeg;
   onSubmit: (data: StatusUpdateData) => void;
   eventToEdit?: TripTimelineEvent | null; // Prop para el modo edición
@@ -105,6 +106,7 @@ export function UpdateStatusModal({
   open,
   onOpenChange,
   serviceId,
+  trip,
   activeLeg,
   onSubmit,
   eventToEdit,
@@ -339,9 +341,8 @@ export function UpdateStatusModal({
     const timestamp = new Date().toISOString();
 
     let dbStatus = formData.status;
-    const finalComments = formData.comments;
 
-    // Normalización de estados para la DB
+    // 1. Normalización de estados para la base de datos
     if (
       ["detenido_descanso", "revision_autoridad", "incidencia"].includes(
         formData.status,
@@ -350,53 +351,47 @@ export function UpdateStatusModal({
       dbStatus = "detenido";
     }
 
-    if (formData.status === "arribo_cliente") {
-      dbStatus = "arribo_cliente";
-    }
+    // 2. 📧 LÓGICA DE NOTIFICACIÓN (Tracking Externo o Alerta Interna)
+    if (!eventToEdit) {
+      // Caso A: El monitorista activó "Notificar al Cliente"
+      if (formData.notifyClient) {
+        await sendSecurityNotification({
+          event: "trip_tracking_update",
+          details: {
+            tripId: serviceId,
+            statusLabel: selectedStatus?.label || formData.status,
+            location: formData.location,
+            comments: formData.comments,
+            clientName: trip?.client?.razon_social || "Cliente",
+            isExternal: true, // 🚀 Esto le dice al backend: "Manda el correo"
+          },
+        });
+        toast.success("Tracking enviado al cliente.");
+      }
 
-    const isIncident = [
-      "detenido",
-      "retraso",
-      "accidente",
-      "incidencia",
-      "revision_autoridad",
-    ].includes(formData.status);
-
-    if (isIncident && !eventToEdit) {
-      sendSecurityNotification({
-        event:
-          formData.status === "accidente" ? "trip_incident" : "trip_stopped",
-        details: {
-          tripId: serviceId,
-          reason: finalComments || "Sin comentarios detallados",
-          userName: "Monitorista",
-        },
-      });
-    }
-
-    // Guardar en Caché Local si es un lugar nuevo y tiene coordenadas
-    const cleanLocation = formData.location.trim();
-    if (
-      cleanLocation &&
-      !DEFAULT_LOCATIONS.includes(cleanLocation) &&
-      formData.lat
-    ) {
-      const exists = customLocations.some((c) => c.address === cleanLocation);
-      if (!exists) {
-        const newLocation: CachedLocation = {
-          address: cleanLocation,
-          lat: formData.lat || "",
-          lng: formData.lng || "",
-        };
-        const updatedLocations = [newLocation, ...customLocations].slice(0, 20);
-        setCustomLocations(updatedLocations);
-        localStorage.setItem(
-          "tracking_custom_locations_v2",
-          JSON.stringify(updatedLocations),
-        );
+      // Caso B: Es una incidencia de seguridad (siempre se notifica internamente)
+      const isIncident = [
+        "detenido",
+        "retraso",
+        "accidente",
+        "incidencia",
+        "revision_autoridad",
+      ].includes(formData.status);
+      if (isIncident) {
+        await sendSecurityNotification({
+          event:
+            formData.status === "accidente" ? "trip_incident" : "trip_stopped",
+          details: {
+            tripId: serviceId,
+            reason: formData.comments || "Sin comentarios detallados",
+            userName: "Monitorista",
+            location: formData.location,
+          },
+        });
       }
     }
 
+    // 3. GUARDAR EL EVENTO EN LA LÍNEA DE TIEMPO (Llamada al backend)
     try {
       await onSubmit({
         ...formData,
@@ -404,8 +399,9 @@ export function UpdateStatusModal({
         fase_operativa: activeLeg?.leg_type || "desconocida",
         timestamp: eventToEdit ? formData.timestamp : timestamp,
       });
+      // El toast de éxito lo suele manejar el componente padre o el hook onSubmit
     } catch (err) {
-      // Handle error globally
+      toast.error("Error al guardar el reporte en la base de datos.");
     } finally {
       setIsSubmitting(false);
     }
