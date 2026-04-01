@@ -38,7 +38,7 @@ def seed_sat_catalogs():
     db = SessionLocal()
 
     print(f"--> INFO: Conectado a '{server}/{db_name}' para sembrado")
-    print("🚀 Iniciando sembrado del Catálogo SAT...")
+    print(" Iniciando sembrado del Catálogo SAT...")
 
     # 1. PRODUCTOS EXACTOS DE TUS PDFs + LOS MÁS COMUNES
     productos_base = [
@@ -84,7 +84,7 @@ def seed_sat_catalogs():
         if not existe:
             nuevo_prod = SatProduct(**prod)
             db.add(nuevo_prod)
-            print(f"✅ Producto agregado: {prod['clave']} - {prod['descripcion']}")
+            print(f"  Producto agregado: {prod['clave']} - {prod['descripcion']}")
 
     # 2. UBICACIONES EXACTAS DE TUS PDFs
     ubicaciones_base = [

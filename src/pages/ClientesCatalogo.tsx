@@ -340,7 +340,7 @@ export default function ClientesCatalogo() {
 
   return (
     <div className="p-4 md:p-8 space-y-8 animate-page-enter">
-      {/* 🚀 1. PAGE HEADER TAHOE */}
+      {/*  1. PAGE HEADER TAHOE */}
       <PageHeader
         title="Gestión de Clientes"
         description="Directorio comercial, destinos de entrega y control de tarifas operativas."
@@ -356,7 +356,7 @@ export default function ClientesCatalogo() {
         </Button>
       </PageHeader>
 
-      {/* 🚀 2. KPIs METRICS CARDS */}
+      {/*  2. KPIs METRICS CARDS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card
           variant="default"
@@ -410,7 +410,7 @@ export default function ClientesCatalogo() {
         </Card>
       </div>
 
-      {/* 🚀 3. TABLA LIQUID GLASS CON TOOLBAR */}
+      {/*  3. TABLA LIQUID GLASS CON TOOLBAR */}
       <div className="space-y-4">
         {/* Toolbar de Búsqueda */}
         <div className="flex items-center">
@@ -497,7 +497,7 @@ export default function ClientesCatalogo() {
         </div>
       </div>
 
-      {/* 🚀 4. ALERT DIALOG ELIMINAR (Estructura Triple Tahoe) */}
+      {/*  4. ALERT DIALOG ELIMINAR (Estructura Triple Tahoe) */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
           <AlertDialogHeader className="p-6 sm:p-8 bg-brand-navy/95 dark:bg-slate-900 backdrop-blur-md shrink-0 border-b border-white/10 relative overflow-hidden">

@@ -463,7 +463,7 @@ export function PatrimonialView() {
 
   return (
     <div className="space-y-6">
-      {/* 🚀 KPI Cards (Industrial Premium) */}
+      {/*  KPI Cards (Industrial Premium) */}
       <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         <Card
           variant="default"
@@ -534,7 +534,7 @@ export function PatrimonialView() {
         </Card>
       </div>
 
-      {/* 🚀 Resumen Agrupado */}
+      {/*  Resumen Agrupado */}
       <Card variant="default" className="border-none shadow-xl overflow-hidden">
         <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-white/10 p-6">
           <CardTitle className="text-xl font-black uppercase tracking-tighter text-brand-navy dark:text-white heading-crisp">
@@ -588,7 +588,7 @@ export function PatrimonialView() {
         </CardContent>
       </Card>
 
-      {/* 🚀 Tabla de Activos */}
+      {/*  Tabla de Activos */}
       <Card
         variant="default"
         className="border-none shadow-2xl overflow-hidden"
@@ -613,7 +613,7 @@ export function PatrimonialView() {
         </CardContent>
       </Card>
 
-      {/* 🚀 MODAL DE BAJA (ZOD + RHF + TAHOE UI) */}
+      {/*  MODAL DE BAJA (ZOD + RHF + TAHOE UI) */}
       <Dialog open={isBajaModalOpen} onOpenChange={setIsBajaModalOpen}>
         <DialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
           <DialogHeader className="p-6 sm:p-8 bg-brand-navy/95 dark:bg-slate-900 backdrop-blur-md shrink-0 border-b border-white/10 relative overflow-hidden z-10">

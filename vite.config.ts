@@ -14,7 +14,7 @@ export default defineConfig(({ mode }) => {
     server: {
       host: "::",
       port: 8080,
-      // 🚀 ESTO ES VITAL PARA VER LAS FOTOS EN LOCALHOST
+      //  ESTO ES VITAL PARA VER LAS FOTOS EN LOCALHOST
       proxy: {
         "/api": {
           target: backendUrl,

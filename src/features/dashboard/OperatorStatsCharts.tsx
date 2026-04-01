@@ -7,7 +7,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-// 🚀 Importación actualizada al nuevo servicio
+//  Importación actualizada al nuevo servicio
 import {
   OperatorStats,
   getOperatorTripsData,

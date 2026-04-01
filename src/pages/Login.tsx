@@ -49,7 +49,7 @@ export default function Login() {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // 🚀 REACT HOOK FORM
+  //  REACT HOOK FORM
   const form = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
@@ -95,7 +95,7 @@ export default function Login() {
       }
 
       // 3. Si el login es directo (y tenemos token + user + refresh_token)
-      // 🚀 CORRECCIÓN: Validamos y pasamos el refresh_token exigido por el AuthContext
+      //  CORRECCIÓN: Validamos y pasamos el refresh_token exigido por el AuthContext
       if (response.access_token && response.user && response.refresh_token) {
         // Guardamos en el estado global (Contexto) y en localStorage
         login(response.user, response.access_token, response.refresh_token);

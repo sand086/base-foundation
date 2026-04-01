@@ -43,7 +43,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 
-// 🚀 MAPEO: IDs numéricos directos para la BD
+//  MAPEO: IDs numéricos directos para la BD
 const TIRE_POSITIONS = [
   { id: "1", label: "Posición 1 (Direccional Izq)" },
   { id: "2", label: "Posición 2 (Direccional Der)" },
@@ -105,7 +105,7 @@ export function AssignTireModal({
 
   const unidadesList = useMemo(() => unidades || [], [unidades]);
 
-  // 🚀 REACT HOOK FORM
+  //  REACT HOOK FORM
   const form = useForm<AssignFormData>({
     resolver: zodResolver(assignSchema),
     defaultValues: {
@@ -203,9 +203,9 @@ export function AssignTireModal({
         if (!isOpen && !isSubmitting) handleClose();
       }}
     >
-      {/* 🚀 CAPA 1: CASCARÓN */}
+      {/*  CAPA 1: CASCARÓN */}
       <DialogContent className="w-[95vw] sm:max-w-lg flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
-        {/* 🚀 CAPA 2: CABECERA (Blanca en Light, Navy oscuro en Dark) */}
+        {/*  CAPA 2: CABECERA (Blanca en Light, Navy oscuro en Dark) */}
         <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center gap-4 sm:gap-5">
@@ -226,7 +226,7 @@ export function AssignTireModal({
           </div>
         </DialogHeader>
 
-        {/* 🚀 CAPA 3: CUERPO Y FORMULARIO */}
+        {/*  CAPA 3: CUERPO Y FORMULARIO */}
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit(onSubmit)}
@@ -390,7 +390,7 @@ export function AssignTireModal({
               </div>
             </div>
 
-            {/* 🚀 CAPA 4: FOOTER TAHOE */}
+            {/*  CAPA 4: FOOTER TAHOE */}
             <DialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
               <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
                 <Button

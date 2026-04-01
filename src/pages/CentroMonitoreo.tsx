@@ -22,7 +22,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { toast } from "sonner"; // 🚀 Importación correcta de toast
+import { toast } from "sonner"; //  Importación correcta de toast
 import {
   Search,
   Loader2,
@@ -53,7 +53,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// 🚀 IMPORTACIONES EXACTAS DE TU DATATABLE
+//  IMPORTACIONES EXACTAS DE TU DATATABLE
 import {
   DataTable,
   DataTableHeader,
@@ -419,7 +419,7 @@ export default function CentroMonitoreo() {
     document.body.removeChild(link);
     toast.success("Exportación exitosa", {
       description: "Se descargó el reporte industrial.",
-    }); // 🚀 Sintaxis Sonner correcta
+    }); //  Sintaxis Sonner correcta
   };
 
   const handleDeleteTrip = async (tripId: string | number) => {
@@ -448,7 +448,7 @@ export default function CentroMonitoreo() {
     } catch (error) {
       toast.error("Fallo Operativo", {
         description: "No se pudo compilar la Carta Porte.",
-      }); // 🚀 Sintaxis Sonner correcta
+      }); //  Sintaxis Sonner correcta
     }
   };
 
@@ -463,7 +463,7 @@ export default function CentroMonitoreo() {
     if (!legId)
       return toast.error("Excepción", {
         description: "Tramo activo inalcanzable.",
-      }); // 🚀 Sintaxis Sonner correcta
+      }); //  Sintaxis Sonner correcta
 
     const success = await addTimelineEvent(tripToUpdate.id, legId, {
       status: data.status,
@@ -505,7 +505,7 @@ export default function CentroMonitoreo() {
   }, [filteredTrips]);
 
   return (
-    // 🚀 CAPA 1: CASCARÓN TAHOE (Altura Completa, Fondo Glassmorphism)
+    //  CAPA 1: CASCARÓN TAHOE (Altura Completa, Fondo Glassmorphism)
     <div className="flex flex-col h-[calc(100vh-5rem)] p-4 sm:p-6 md:p-8 space-y-6 bg-white/80 dark:bg-brand-navy/95 backdrop-blur-2xl animate-in fade-in duration-700">
       {/* CAPA 2: HEADER TAHOE (TÍTULO Y BOTONERA) */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 shrink-0 pb-2 border-b border-slate-200/50 dark:border-white/10">

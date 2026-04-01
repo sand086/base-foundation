@@ -89,7 +89,7 @@ import { useSystemConfig } from "@/hooks/useSystemConfig";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-// 🚀 1. ESQUEMA DE VALIDACIÓN ZOD
+//  1. ESQUEMA DE VALIDACIÓN ZOD
 const tollSchema = z.object({
   nombre: z.string().min(2, "El nombre debe tener al menos 2 caracteres"),
   carretera: z.string().optional(),
@@ -143,7 +143,7 @@ export const CatalogoCasetas = () => {
     rutas_count: number;
   } | null>(null);
 
-  // 🚀 2. REACT HOOK FORM
+  //  2. REACT HOOK FORM
   const form = useForm<TollFormData>({
     resolver: zodResolver(tollSchema),
     defaultValues: {
@@ -170,7 +170,7 @@ export const CatalogoCasetas = () => {
     return currentNombre || "";
   }, [currentOrigen, currentDestino, currentNombre, showAdvanced]);
 
-  // 🚀 KPIs
+  //  KPIs
   const kpis = useMemo(() => {
     if (!tollBooths.length)
       return { total: 0, avgSencillo: 0, avgFull: 0, estados: 0 };
@@ -291,7 +291,7 @@ export const CatalogoCasetas = () => {
     setDialogOpen(true);
   };
 
-  // 🚀 3. ONSUBMIT CON ZOD
+  //  3. ONSUBMIT CON ZOD
   const onSubmit = async (data: TollFormData) => {
     const finalTramo = tramoGenerado;
 
@@ -423,7 +423,7 @@ export const CatalogoCasetas = () => {
 
   return (
     <div className="space-y-6">
-      {/* 🚀 KPIs METRICS CARDS */}
+      {/*  KPIs METRICS CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
         {/* 1. TOTAL PEAJES */}
         <Card
@@ -503,7 +503,7 @@ export const CatalogoCasetas = () => {
         </Card>
       </div>
 
-      {/* 🚀 TOOLBAR TAHOE */}
+      {/*  TOOLBAR TAHOE */}
       <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-white/40 dark:bg-slate-900/40 p-4 rounded-2xl border border-white/20 dark:border-white/10 shadow-sm backdrop-blur-md">
         <div className="flex items-center gap-3 w-full md:max-w-md">
           <div className="relative flex-1">
@@ -550,7 +550,7 @@ export const CatalogoCasetas = () => {
         </div>
       </div>
 
-      {/* 🚀 TABLA LIQUID GLASS */}
+      {/*  TABLA LIQUID GLASS */}
       <div className="relative w-full overflow-hidden rounded-2xl border border-slate-200/50 dark:border-white/10 bg-white/30 dark:bg-slate-950/30 backdrop-blur-sm shadow-xl liquid-glass-table">
         <div className="overflow-auto max-h-[60vh] custom-scrollbar">
           <Table className="w-full caption-bottom text-sm">
@@ -714,7 +714,7 @@ export const CatalogoCasetas = () => {
         </div>
       </div>
 
-      {/* 🚀 DIALOG CREAR / EDITAR (FORMULARIO CON ZOD + RHF) */}
+      {/*  DIALOG CREAR / EDITAR (FORMULARIO CON ZOD + RHF) */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="w-[95vw] sm:max-w-2xl p-0 flex flex-col max-h-[90vh] bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 shadow-2xl rounded-2xl transition-all duration-300 overflow-hidden">
           <DialogHeader className="p-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 z-10">
@@ -748,7 +748,7 @@ export const CatalogoCasetas = () => {
             </DialogTitle>
           </DialogHeader>
 
-          {/* 🚀 FORMULARIO ENVOLTURA */}
+          {/*  FORMULARIO ENVOLTURA */}
           <Form {...form}>
             <form
               onSubmit={form.handleSubmit(onSubmit)}
@@ -1036,7 +1036,7 @@ export const CatalogoCasetas = () => {
         </DialogContent>
       </Dialog>
 
-      {/* 🚀 ALERT DIALOG - SINGLE DELETE */}
+      {/*  ALERT DIALOG - SINGLE DELETE */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent className="w-[95vw] sm:max-w-2xl p-0 flex flex-col max-h-[90vh] bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 shadow-2xl rounded-2xl transition-all duration-300 overflow-hidden">
           <AlertDialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0">
@@ -1173,7 +1173,7 @@ export const CatalogoCasetas = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* 🚀 ALERT DIALOG - BULK DELETE */}
+      {/*  ALERT DIALOG - BULK DELETE */}
       <AlertDialog
         open={bulkDeleteDialogOpen}
         onOpenChange={setBulkDeleteDialogOpen}

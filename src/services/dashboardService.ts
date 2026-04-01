@@ -76,13 +76,11 @@ export const getOperatorIncidentsData = (operators: OperatorStats[]) =>
     .map((o) => ({ name: o.shortName, incidencias: o.incidents }));
 
 export const getTopClientsChartData = (clients: ClientServiceCount[]) =>
-  clients
-    .slice(0, 5)
-    .map((c) => ({
-      name: c.shortName,
-      servicios: c.count,
-      ingresos: c.revenue,
-    }));
+  clients.slice(0, 5).map((c) => ({
+    name: c.shortName,
+    servicios: c.count,
+    ingresos: c.revenue,
+  }));
 
 // ==========================================
 // 3. SERVICIO API (¡ACTUALIZADO!)
@@ -97,7 +95,7 @@ export const dashboardService = {
     startDate?: string,
     endDate?: string,
   ): Promise<DashboardData> => {
-    // 🚀 Cambiamos los parámetros para que coincidan con los de Python (snake_case)
+    //  Cambiamos los parámetros para que coincidan con los de Python (snake_case)
     const params = {
       start_date: startDate,
       end_date: endDate,

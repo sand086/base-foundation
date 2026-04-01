@@ -127,7 +127,7 @@ def update_system_config_bulk(
             config.value = item.value
             config.updated_by_id = current_user.id
         else:
-            # 🚀 LÓGICA INTELIGENTE PARA QA:
+            #  LÓGICA INTELIGENTE PARA QA:
             # Si la llave nueva es de QA (ej. empresa_rfc_qa), buscamos la base para heredar su grupo
             base_key = item.key.replace("_qa", "")
             base_config = (

@@ -118,7 +118,7 @@ import {
 } from "@/components/ui/enhanced-data-table";
 import { useSystemConfig } from "@/hooks/useSystemConfig";
 
-// 🚀 1. ESQUEMA DE VALIDACIÓN ZOD PARA LA RUTA
+//  1. ESQUEMA DE VALIDACIÓN ZOD PARA LA RUTA
 const routeSchema = z.object({
   origen: z.string().min(2, "Mínimo 2 caracteres requeridos"),
   destino: z.string().min(2, "Mínimo 2 caracteres requeridos"),
@@ -335,7 +335,7 @@ export const ArmadorRutas: React.FC = () => {
   const { clients } = useClients();
   const { value: monedaBase } = useSystemConfig("moneda_base");
 
-  // 🚀 2. INICIALIZAMOS REACT HOOK FORM
+  //  2. INICIALIZAMOS REACT HOOK FORM
   const form = useForm<RouteFormData>({
     resolver: zodResolver(routeSchema),
     defaultValues: {
@@ -389,7 +389,7 @@ export const ArmadorRutas: React.FC = () => {
     }),
   );
 
-  // 🚀 FIX: Creada función maestra para forzar la actualización de rutas desde la BD
+  //  FIX: Creada función maestra para forzar la actualización de rutas desde la BD
   const fetchRutas = useCallback(async () => {
     try {
       const rs = await tollService.getTemplates();
@@ -509,7 +509,7 @@ export const ArmadorRutas: React.FC = () => {
     if (!routeToDelete) return;
     try {
       await tollService.deleteTemplate(routeToDelete.id);
-      await fetchRutas(); // 🚀 FIX: Forzamos la descarga desde DB para evitar duplicados fantasma
+      await fetchRutas(); //  FIX: Forzamos la descarga desde DB para evitar duplicados fantasma
       toast.success("Ruta eliminada correctamente");
     } catch (error: any) {
       toast.error(error.response?.data?.detail || "Error al eliminar la ruta");
@@ -552,7 +552,7 @@ export const ArmadorRutas: React.FC = () => {
     return Boolean(prevEnd && currentStart && prevEnd !== currentStart);
   };
 
-  // 🚀 3. ONSUBMIT INTEGRADO CON ZOD + SUFIJOS AUTOMÁTICOS + SYNC
+  //  3. ONSUBMIT INTEGRADO CON ZOD + SUFIJOS AUTOMÁTICOS + SYNC
   const onSubmit = async (data: RouteFormData) => {
     if (segments.length === 0) {
       toast.error("Debes agregar al menos un tramo a la ruta.");
@@ -571,7 +571,7 @@ export const ArmadorRutas: React.FC = () => {
       costo_momento_full: s.costo_f,
     }));
 
-    // 🚀 FIX: Agregamos el sufijo para que Gustavo no tenga que poner guiones manuales
+    //  FIX: Agregamos el sufijo para que Gustavo no tenga que poner guiones manuales
     const sufijoConfig =
       data.configuracion === "9ejes" ? "[FULL]" : "[SENCILLO]";
     const finalOrigen = data.variante?.trim()
@@ -599,7 +599,7 @@ export const ArmadorRutas: React.FC = () => {
         toast.success("Nueva ruta guardada exitosamente");
       }
 
-      await fetchRutas(); // 🚀 FIX: Forzar Sync con BD
+      await fetchRutas(); //  FIX: Forzar Sync con BD
 
       setEditingRouteId(null);
       setSegments([]);
@@ -950,7 +950,7 @@ export const ArmadorRutas: React.FC = () => {
           id="form-rutas-top"
           ref={topFormRef}
         >
-          {/* 🚀 FORMULARIO PRINCIPAL TOP */}
+          {/*  FORMULARIO PRINCIPAL TOP */}
           <Card
             variant="default"
             className="overflow-hidden border-t-4 border-t-brand-navy shadow-xl overflow-visible"
@@ -1175,7 +1175,7 @@ export const ArmadorRutas: React.FC = () => {
               </Button>
             </div>
 
-            {/* 🚀 TABLA DND */}
+            {/*  TABLA DND */}
             <CardContent className="p-0">
               <div className="relative w-full overflow-hidden bg-slate-50/50 dark:bg-transparent">
                 <DndContext
@@ -1458,7 +1458,7 @@ export const ArmadorRutas: React.FC = () => {
                     Cancelar
                   </Button>
                 )}
-                {/* 🚀 BOTÓN TIPO SUBMIT CENTRALIZADO */}
+                {/*  BOTÓN TIPO SUBMIT CENTRALIZADO */}
                 <Button
                   type="submit"
                   size="lg"
@@ -1485,7 +1485,7 @@ export const ArmadorRutas: React.FC = () => {
             <RouteIcon className="h-6 w-6 text-brand-red" /> Directorio de Rutas
           </CardTitle>
 
-          {/* 🚀 FIX: Aquí se agregó el Filtro de FULL / SENCILLO que faltaba en la UI */}
+          {/*  FIX: Aquí se agregó el Filtro de FULL / SENCILLO que faltaba en la UI */}
           <Tabs
             value={filtroTipo}
             onValueChange={(v) => setFiltroTipo(v as any)}
@@ -1523,7 +1523,7 @@ export const ArmadorRutas: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* 🚀 MODAL ELIMINAR RUTA */}
+      {/*  MODAL ELIMINAR RUTA */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent className="w-[95vw] sm:max-w-2xl p-0 flex flex-col max-h-[90vh] bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 shadow-2xl rounded-2xl transition-all duration-300 overflow-hidden">
           <AlertDialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0">
@@ -1600,7 +1600,7 @@ export const ArmadorRutas: React.FC = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* 🚀 MODAL DETALLE DE RUTA (BITÁCORA) */}
+      {/*  MODAL DETALLE DE RUTA (BITÁCORA) */}
       <Dialog open={detailModalOpen} onOpenChange={setDetailModalOpen}>
         <DialogContent className="w-[95vw] sm:max-w-3xl p-0 overflow-hidden bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 shadow-2xl rounded-2xl flex flex-col max-h-[90vh]">
           <DialogHeader className="px-6 sm:px-8 py-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 z-10">

@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/select";
 import { Plus, Trash2, FileText, DollarSign, Loader2 } from "lucide-react";
 import { ReceivableInvoice, InvoiceConcept, FinalizableService } from "./types";
-// 🚀 1. Eliminamos el mock e importamos el hook real y el tipo
+//  1. Eliminamos el mock e importamos el hook real y el tipo
 import { useClients } from "@/hooks/useClients";
 import { Client } from "@/types/api.types";
 import {
@@ -51,7 +51,7 @@ export function CreateInvoiceModal({
   onSubmit,
   importedServices,
 }: CreateInvoiceModalProps) {
-  // 🚀 2. Consumimos clientes reales
+  //  2. Consumimos clientes reales
   const { clients, isLoading: loadingClients } = useClients();
 
   const [clienteId, setClienteId] = useState("");
@@ -62,7 +62,7 @@ export function CreateInvoiceModal({
   );
   const [conceptos, setConceptos] = useState<InvoiceConcept[]>([]);
 
-  // 🚀 3. Buscar el cliente seleccionado en la lista real
+  //  3. Buscar el cliente seleccionado en la lista real
   const selectedClient = useMemo(
     () => clients.find((c) => c.id.toString() === clienteId),
     [clients, clienteId],
@@ -149,7 +149,7 @@ export function CreateInvoiceModal({
 
     onSubmit({
       clienteId,
-      cliente: selectedClient?.razon_social || "", // 🚀 Corregido nombre de campo
+      cliente: selectedClient?.razon_social || "", //  Corregido nombre de campo
       clienteRfc: selectedClient?.rfc || "",
       conceptos,
       montoTotal,
@@ -196,7 +196,7 @@ export function CreateInvoiceModal({
                   />
                 </SelectTrigger>
                 <SelectContent className="bg-card">
-                  {/* 🚀 4. Iteramos sobre los clientes reales del backend */}
+                  {/*  4. Iteramos sobre los clientes reales del backend */}
                   {clients.map((client) => (
                     <SelectItem key={client.id} value={client.id.toString()}>
                       {client.razon_social}

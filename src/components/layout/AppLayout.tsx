@@ -13,7 +13,7 @@ export function AppLayout() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#0a0f1a] text-slate-900 dark:text-slate-100 relative selection:bg-brand-red/30 dark:selection:bg-brand-red/40 transition-colors duration-500">
-      {/* 🚀 ATMÓSFERA INDUSTRIAL: Reemplazamos las auroras por un fondo técnico limpio (Dot Grid) */}
+      {/*  ATMÓSFERA INDUSTRIAL: Reemplazamos las auroras por un fondo técnico limpio (Dot Grid) */}
       <div
         className="absolute inset-0 z-0 pointer-events-none opacity-20 dark:opacity-40"
         style={{
@@ -52,7 +52,7 @@ export function AppLayout() {
           </div>
         </main>
 
-        {/* 🚀 FOOTER TAHOE: Barra de estado técnica */}
+        {/*  FOOTER TAHOE: Barra de estado técnica */}
         <footer className="px-8 py-4 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 flex flex-col sm:flex-row justify-between items-center gap-4 relative z-20 transition-all">
           {/* Marca y Copyright */}
           <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 hover:text-brand-navy dark:hover:text-slate-300 transition-colors cursor-default">

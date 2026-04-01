@@ -32,7 +32,7 @@ interface SupplierModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   supplier?: Supplier | null;
-  defaultCredito?: number; // 🚀 NUEVO
+  defaultCredito?: number; //  NUEVO
   onSubmit: (data: Partial<Supplier>) => Promise<void>;
 }
 
@@ -70,7 +70,7 @@ export function SupplierModal({
       if (supplier) {
         setFormData({ ...supplier });
       } else {
-        // 🚀 NUEVO: Inyectamos el valor global aquí
+        //  NUEVO: Inyectamos el valor global aquí
         setFormData({
           ...emptyForm,
           dias_credito: defaultCredito || 0, // Si no hay configuración, por defecto es 0

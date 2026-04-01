@@ -41,6 +41,7 @@ import {
   CheckCircle2,
   History,
   Loader2,
+  Hash,
   Activity,
   ChevronsUpDown,
   PlusCircle,
@@ -62,9 +63,9 @@ import { useTrips } from "@/hooks/useTrips";
 import { useUnits } from "@/hooks/useUnits";
 import { useBilling } from "@/hooks/useBilling";
 import axiosClient from "@/api/axiosClient";
-import { cn } from "@/lib/utils";
+import { cn, checkIsFullTrip } from "@/lib/utils";
 
-// 🚀 Extendemos TripLeg localmente para enseñarle a TypeScript las propiedades
+//  Extendemos TripLeg localmente para enseñarle a TypeScript las propiedades
 // y estados (como "liquidado") que manda el backend pero que aún no están en api.types.ts
 interface ExtendedTripLeg extends Omit<TripLeg, "status"> {
   status: TripStatus | "liquidado" | string;
@@ -129,15 +130,7 @@ export function TripDetailsModal({
     }).format(val || 0);
 
   const isFullTrip = useMemo(() => {
-    if (!trip) return false;
-    const configTarifa = (trip as any).tipo_unidad?.toLowerCase() || "";
-    const configStr = (trip.route_name || "").toLowerCase();
-    return (
-      configStr.includes("full") ||
-      configTarifa.includes("full") ||
-      configTarifa.includes("9ejes") ||
-      Boolean(trip.dolly_id)
-    );
+    return checkIsFullTrip(trip); //  Usa la misma lógica global
   }, [trip]);
 
   useEffect(() => {
@@ -375,7 +368,7 @@ export function TripDetailsModal({
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-6xl w-[95vw] h-[90vh] bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 flex flex-col p-0 overflow-hidden rounded-2xl shadow-2xl">
-          {/* 🚀 HEADER CON FULL-WIDTH BREADCRUMBS Y EQUIPOS ASIGNADOS */}
+          {/*  HEADER CON FULL-WIDTH BREADCRUMBS Y EQUIPOS ASIGNADOS */}
           <DialogHeader className="p-6 pb-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
             <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
             <div className="relative z-10 flex flex-col md:flex-row justify-between md:items-start gap-6">
@@ -440,7 +433,7 @@ export function TripDetailsModal({
               </div>
             </div>
 
-            {/* 🚀 BREADCRUMB DE RUTA Y EQUIPOS (Nueva Sección Compacta) */}
+            {/*  BREADCRUMB DE RUTA Y EQUIPOS (Nueva Sección Compacta) */}
             <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4 mt-6 pt-4 border-t border-slate-200 dark:border-white/10">
               {/* Ruta */}
               <div className="flex items-center flex-wrap gap-2 font-black text-slate-500 dark:text-slate-400 uppercase text-[10px] tracking-widest">
@@ -460,6 +453,36 @@ export function TripDetailsModal({
                   {isFullTrip ? "FULL / 9 EJES" : "SENCILLO / 5 EJES"}
                 </Badge>
 
+                {/*  FIX: MOSTRAR CONTENEDORES REALES */}
+                {(trip as any).contenedor_1 && (
+                  <Badge
+                    variant="outline"
+                    className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800/50 shadow-sm font-black tracking-widest text-[9px] px-2.5 py-1 flex items-center gap-1.5"
+                  >
+                    <Container className="h-3 w-3" /> C1:{" "}
+                    {(trip as any).contenedor_1}
+                  </Badge>
+                )}
+
+                {(trip as any).contenedor_2 && (
+                  <Badge
+                    variant="outline"
+                    className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800/50 shadow-sm font-black tracking-widest text-[9px] px-2.5 py-1 flex items-center gap-1.5"
+                  >
+                    <Container className="h-3 w-3" /> C2:{" "}
+                    {(trip as any).contenedor_2}
+                  </Badge>
+                )}
+
+                {/* Mantener la Referencia si existe */}
+                {(trip as any).referencia && (
+                  <Badge
+                    variant="outline"
+                    className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 shadow-sm font-black tracking-widest text-[9px] px-2.5 py-1 flex items-center gap-1.5"
+                  >
+                    <Hash className="h-3 w-3" /> REF: {(trip as any).referencia}
+                  </Badge>
+                )}
                 {(trip as any).referencia && (
                   <Badge
                     variant="outline"
@@ -505,7 +528,7 @@ export function TripDetailsModal({
             </div>
           </DialogHeader>
 
-          {/* 🚀 CAPA 3: CUERPO FULL-WIDTH */}
+          {/*  CAPA 3: CUERPO FULL-WIDTH */}
           <div className="flex flex-1 overflow-hidden w-full bg-slate-50/50 dark:bg-transparent">
             <div className="w-full flex flex-col bg-transparent">
               <Tabs
@@ -669,7 +692,7 @@ export function TripDetailsModal({
                                   </div>
                                 </div>
 
-                                {/* 🚀 FASE 3: Desglose de toda la Info Operativa y Financiera del Tramo */}
+                                {/*  FASE 3: Desglose de toda la Info Operativa y Financiera del Tramo */}
                                 <div className="border-t border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-slate-900/30 p-4 px-6 relative z-10">
                                   {" "}
                                   <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
@@ -949,7 +972,7 @@ export function TripDetailsModal({
                                 </div>
                               </div>
 
-                              {/* 🚀 CALL TO ACTION FACTURACIÓN */}
+                              {/*  CALL TO ACTION FACTURACIÓN */}
                               <div className="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-2xl border border-slate-200 dark:border-white/10 flex flex-col sm:flex-row items-center justify-between gap-6 mt-8 shadow-sm">
                                 <div className="text-left">
                                   <h4 className="text-brand-navy dark:text-blue-400 font-black text-sm uppercase tracking-tight flex items-center gap-2">
@@ -1109,7 +1132,7 @@ export function TripDetailsModal({
         </DialogContent>
       </Dialog>
 
-      {/* 🚀 MODAL DE LLEGADA A TERMINAL */}
+      {/*  MODAL DE LLEGADA A TERMINAL */}
       <Dialog open={showTerminalModal} onOpenChange={setShowTerminalModal}>
         <DialogContent className="sm:max-w-md w-[95vw] rounded-2xl overflow-visible p-0 border-none shadow-2xl bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl flex flex-col max-h-[90vh]">
           <DialogHeader className="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-t-2xl border-b border-slate-200 dark:border-white/10 relative overflow-hidden z-10 shrink-0">

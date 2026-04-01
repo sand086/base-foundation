@@ -908,7 +908,7 @@ class WorkOrder(AuditMixin, Base):
         Integer, ForeignKey("mechanics.id", ondelete="SET NULL"), nullable=True
     )
 
-    # 🚀 NUEVAS COLUMNAS (Objetivo 4)
+    #  NUEVAS COLUMNAS (Objetivo 4)
     tipo_mantenimiento = Column(
         String(20), default="patio", server_default="patio"
     )  # "patio" o "ruta"
@@ -927,7 +927,7 @@ class WorkOrder(AuditMixin, Base):
 
     unit = relationship("Unit", back_populates="work_orders")
     mechanic = relationship("Mechanic", back_populates="work_orders")
-    trip = relationship("Trip")  # 🚀 Relación con el viaje
+    trip = relationship("Trip")  #  Relación con el viaje
     parts = relationship(
         "WorkOrderPart", back_populates="work_order", cascade="all, delete-orphan"
     )
@@ -1186,7 +1186,7 @@ class TollBooth(AuditMixin, Base):
 class RateTemplate(AuditMixin, Base):
     __tablename__ = "rate_templates"
 
-    # 🚀 FASE 1: Se añade el UniqueConstraint de la combinación exacta
+    #  FASE 1: Se añade el UniqueConstraint de la combinación exacta
     __table_args__ = (
         UniqueConstraint(
             "client_id",

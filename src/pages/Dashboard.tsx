@@ -14,7 +14,7 @@ import { TopClientsChart } from "@/features/dashboard/TopClientsChart";
 import { OperatorStatsCharts } from "@/features/dashboard/OperatorStatsCharts";
 import { RecentServicesTable } from "@/features/dashboard/RecentServicesTable";
 
-// 🚀 Nuestro Hook personalizado conectado al backend
+//  Nuestro Hook personalizado conectado al backend
 import { useDashboard } from "@/hooks/useDashboard";
 
 export default function Dashboard() {

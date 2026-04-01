@@ -8,7 +8,6 @@ from app.models import models
 from app.models.models import RecordStatus, TireEventType
 from app.schemas import tires as schemas
 
-
 # =========================================================
 # Helpers
 # =========================================================
@@ -116,7 +115,7 @@ def create_tire(db: Session, tire_in: schemas.TireCreate):
     history = models.TireHistory(
         tire_id=db_tire.id,
         fecha=datetime.utcnow(),
-        tipo=TireEventType.COMPRA,  # ✅ enum (no string)
+        tipo=TireEventType.COMPRA,  #   enum (no string)
         descripcion=f"Alta inicial - Compra a {tire_in.proveedor}",
         costo=tire_in.precio_compra,
         responsable="Admin",
@@ -213,7 +212,7 @@ def assign_tire(db: Session, tire_id: int, payload: schemas.AssignTirePayload):
     history = models.TireHistory(
         tire_id=tire.id,
         fecha=datetime.utcnow(),
-        tipo=tipo_evento,  # ✅ enum
+        tipo=tipo_evento,  #   enum
         descripcion=desc,
         unidad_economico=unit_economico_str,
         unit_id=payload.unit_id,
@@ -277,7 +276,7 @@ def register_maintenance(
     history = models.TireHistory(
         tire_id=tire.id,
         fecha=datetime.utcnow(),
-        tipo=tipo_enum,  # ✅ enum
+        tipo=tipo_enum,  #   enum
         descripcion=payload.descripcion,
         costo=payload.costo,
         km=tire.km_recorridos,
@@ -350,7 +349,7 @@ def update_tire(db: Session, tire_id: int, tire_in: schemas.TireUpdate):
     history_entry = models.TireHistory(
         tire_id=tire.id,
         fecha=datetime.utcnow(),
-        tipo=TireEventType.INSPECCION,  # ✅ usa un enum válido (no existe "edicion")
+        tipo=TireEventType.INSPECCION,  #   usa un enum válido (no existe "edicion")
         descripcion=f"Datos editados: {campos_editados}",
         unidad_economico=unit_eco,
         unit_id=tire.unit_id,

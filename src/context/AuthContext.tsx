@@ -15,7 +15,7 @@ interface AuthContextType {
   logout: () => void;
   isLoading: boolean;
   verifyOtp: (tempToken: string, code: string) => Promise<void>;
-  // 🚀 AGREGAMOS LA DEFINICIÓN AQUÍ
+  //  AGREGAMOS LA DEFINICIÓN AQUÍ
   updateUser: (newData: Partial<User>) => void;
 }
 
@@ -35,7 +35,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setIsLoading(false);
   }, []);
 
-  // 🚀 IMPLEMENTACIÓN DE UPDATE USER
+  //  IMPLEMENTACIÓN DE UPDATE USER
   const updateUser = (newData: Partial<User>) => {
     setUser((prevUser) => {
       if (!prevUser) return null;
@@ -85,7 +85,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         logout,
         isLoading,
         verifyOtp,
-        // 🚀 PASAMOS LA FUNCIÓN AL PROVIDER
+        //  PASAMOS LA FUNCIÓN AL PROVIDER
         updateUser,
       }}
     >

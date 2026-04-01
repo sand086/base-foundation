@@ -134,7 +134,7 @@ export default function FlotaOperadores() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-20">
-      {/* 🚀 HEADER TAHOE */}
+      {/*  HEADER TAHOE */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between bg-white/40 dark:bg-slate-900/40 p-4 rounded-2xl shadow-sm border border-white/20 dark:border-white/10 backdrop-blur-md gap-4">
         <div>
           <h1 className="text-2xl font-black text-brand-navy dark:text-white flex items-center gap-2 uppercase tracking-tighter heading-crisp">
@@ -157,7 +157,7 @@ export default function FlotaOperadores() {
         </Button>
       </div>
 
-      {/* 🚀 KPI CARDS (Tahoe UI) */}
+      {/*  KPI CARDS (Tahoe UI) */}
       <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         <Card
           variant="default"
@@ -228,7 +228,7 @@ export default function FlotaOperadores() {
         </Card>
       </div>
 
-      {/* 🚀 ALERT BANNER TAHOE */}
+      {/*  ALERT BANNER TAHOE */}
       {alertasTotal > 0 && (
         <div className="p-5 bg-amber-50 dark:bg-amber-950/20 border-l-4 border-amber-500 rounded-r-2xl shadow-sm flex items-start gap-4 animate-in fade-in slide-in-from-top-4">
           <div className="bg-amber-500 rounded-full p-1.5 mt-0.5 shadow-lg shadow-amber-500/20 shrink-0">
@@ -277,7 +277,7 @@ export default function FlotaOperadores() {
         isSaving={isSaving}
       />
 
-      {/* 🚀 DIÁLOGO DE CONFIRMACIÓN DE ELIMINACIÓN (ESTRUCTURA TRIPLE TAHOE) */}
+      {/*  DIÁLOGO DE CONFIRMACIÓN DE ELIMINACIÓN (ESTRUCTURA TRIPLE TAHOE) */}
       <AlertDialog
         open={!!operadorToDelete}
         onOpenChange={(open) => !open && setOperadorToDelete(null)}

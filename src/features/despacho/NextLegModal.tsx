@@ -60,7 +60,7 @@ import {
 import { useUnits } from "@/hooks/useUnits";
 import { useOperators } from "@/hooks/useOperators";
 import { useBilling } from "@/hooks/useBilling";
-import { useSatCatalogs } from "@/hooks/useSatCatalogs"; // 🚀 Importamos catálogo SAT
+import { useSatCatalogs } from "@/hooks/useSatCatalogs"; //  Importamos catálogo SAT
 import { Trip, TripLegCreatePayload } from "@/types/api.types";
 import { cn } from "@/lib/utils";
 import axiosClient from "@/api/axiosClient";
@@ -232,7 +232,7 @@ export function NextLegModal({
     destino_vacio: "",
   });
 
-  // 🚀 ESTADO PARA DATOS FISCALES (CARTA PORTE REAL)
+  //  ESTADO PARA DATOS FISCALES (CARTA PORTE REAL)
   const [tripFiscalData, setTripFiscalData] = useState({
     contenedor_1: "",
     contenedor_2: "",
@@ -261,7 +261,7 @@ export function NextLegModal({
         destino_vacio: "",
       });
 
-      // 🚀 Precargamos los datos fiscales si el viaje ya los tiene
+      //  Precargamos los datos fiscales si el viaje ya los tiene
       setTripFiscalData({
         contenedor_1: (tripPadre as any).contenedor_1 || "",
         contenedor_2: (tripPadre as any).contenedor_2 || "",
@@ -343,7 +343,7 @@ export function NextLegModal({
     };
   }, [tripPadre]);
 
-  // 🚀 Corrección de la variable `gastoOperativoActual` y `isRoadLeg` basada en `formData`
+  //  Corrección de la variable `gastoOperativoActual` y `isRoadLeg` basada en `formData`
   const gastoOperativoActual = useMemo(
     () =>
       Number(formData.anticipo_casetas ?? 0) +
@@ -493,7 +493,7 @@ export function NextLegModal({
       toast.error("Configuración FULL: Debe asignar Dolly y Remolque 2.");
       return false;
     }
-    // 🚀 FASE 3: Validación del destino de vacío
+    //  FASE 3: Validación del destino de vacío
     if (
       formData.leg_type === "entrega_vacio" &&
       !formData.destino_vacio?.trim()
@@ -502,7 +502,7 @@ export function NextLegModal({
       return false;
     }
 
-    // 🚀 VALIDACIÓN FISCAL SI ACTIVÓ EL TIMBRADO REAL
+    //  VALIDACIÓN FISCAL SI ACTIVÓ EL TIMBRADO REAL
     if (shouldStampReal) {
       if (!isFiscalDataComplete) {
         toast.error(
@@ -527,7 +527,7 @@ export function NextLegModal({
 
     setLoading(true);
     try {
-      // 🚀 FASE 4: 1. ACTUALIZAR DATOS FISCALES EN EL VIAJE ANTES DE TIMBRAR SIEMPRE
+      //  FASE 4: 1. ACTUALIZAR DATOS FISCALES EN EL VIAJE ANTES DE TIMBRAR SIEMPRE
       await axiosClient.put(`/trips/${tripPadre.id}`, tripFiscalData);
 
       // 2. CREAR LA FASE/TRAMO OPERATIVO
@@ -895,7 +895,7 @@ export function NextLegModal({
               </div>
             </div>
 
-            {/* 🚀 BLOQUE FISCAL DINÁMICO Y COLAPSABLE SIEMPRE VISIBLE */}
+            {/*  BLOQUE FISCAL DINÁMICO Y COLAPSABLE SIEMPRE VISIBLE */}
             <div className="rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/50 shadow-sm overflow-hidden animate-in fade-in transition-all">
               <button
                 type="button"
@@ -1118,7 +1118,7 @@ export function NextLegModal({
               )}
             </div>
 
-            {/* 🚀 FASE 3: Campo dinámico de Destino de Vacío */}
+            {/*  FASE 3: Campo dinámico de Destino de Vacío */}
             {formData.leg_type === "entrega_vacio" && (
               <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
                 <Label className="text-[11px] font-black uppercase text-rose-600 dark:text-rose-400 tracking-widest ml-1 flex items-center gap-1.5">

@@ -79,7 +79,7 @@ const NotificacionesConfig = () => {
   });
   const [plantillas, setPlantillas] = useState<PlantillaCorreo[]>([]);
 
-  // 🚀 CARGAR DATOS DESDE EL BACKEND AL ABRIR LA PANTALLA
+  //  CARGAR DATOS DESDE EL BACKEND AL ABRIR LA PANTALLA
   useEffect(() => {
     const fetchData = async () => {
       try {

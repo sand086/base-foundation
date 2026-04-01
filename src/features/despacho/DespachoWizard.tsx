@@ -52,7 +52,7 @@ import {
 } from "@/components/ui/popover";
 
 import { cn, checkIsFullTrip } from "@/lib/utils";
-import axiosClient from "@/api/axiosClient"; // 🚀 Importante para llamar al timbrado
+import axiosClient from "@/api/axiosClient"; //  Importante para llamar al timbrado
 
 // Hooks
 import { useUnits } from "@/hooks/useUnits";
@@ -489,7 +489,7 @@ export const DespachoWizard = () => {
       if (result) {
         if (status === "en_transito" && data.generarCartaPorte) {
           try {
-            // 🚀 FASE 2: TIMBRADO NOMINAL REAL ($1)
+            //  FASE 2: TIMBRADO NOMINAL REAL ($1)
             await axiosClient.post("/billing/stamp/nominal", {
               viaje_id: result.id,
               is_nominal: true,
@@ -546,11 +546,11 @@ export const DespachoWizard = () => {
       data.driverId &&
       data.remolque1Id &&
       data.descripcion_mercancia &&
-      data.contenedor_1, // 🚀 FASE 1: Validar el primero
+      data.contenedor_1, //  FASE 1: Validar el primero
     );
     return isFullTrip
       ? Boolean(
-          isBasicValid && data.dollyId && data.remolque2Id && data.contenedor_2, // 🚀 FASE 1: Validar el segundo en FULL
+          isBasicValid && data.dollyId && data.remolque2Id && data.contenedor_2, //  FASE 1: Validar el segundo en FULL
         )
       : isBasicValid;
   }, [isFullTrip, data]);

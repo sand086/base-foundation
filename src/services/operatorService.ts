@@ -9,7 +9,7 @@ export const operatorService = {
   },
 
   create: async (operatorData: Omit<Operator, "id">): Promise<Operator> => {
-    // 🚀 Tip: Si sospechas que vienen campos en camelCase, límpialos aquí
+    //  Tip: Si sospechas que vienen campos en camelCase, límpialos aquí
     const { data } = await axiosClient.post("/operators", operatorData);
     return data;
   },
@@ -30,7 +30,7 @@ export const operatorService = {
     const formData = new FormData();
     formData.append("file", file);
 
-    // 🚀 El header 'multipart/form-data' es vital para que FastAPI
+    //  El header 'multipart/form-data' es vital para que FastAPI
     // lo reciba como UploadFile
     const { data } = await axiosClient.post(
       `/operators/${operatorId}/documents/${docType}`,

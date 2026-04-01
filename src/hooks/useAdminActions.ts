@@ -120,12 +120,12 @@ export function useAdminActions() {
   });
 
   return {
-    // 🚀 Combina inteligentemente la carga local con la de React Query
+    //  Combina inteligentemente la carga local con la de React Query
     isLoading: isLocalLoading || updateBulkConfigMutation.isPending,
     profile,
     users,
     systemConfigs,
-    // 🚀 Funciones correctamente mapeadas
+    //  Funciones correctamente mapeadas
     updateSystemConfig,
     updateBulkSystemConfig: updateBulkConfigMutation.mutateAsync,
     createUser,

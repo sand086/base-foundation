@@ -18,7 +18,7 @@ router = APIRouter()
 
 @router.get("", response_model=List[schemas.TollBoothResponse])
 def list_tolls(search: str = "", db: Session = Depends(get_db)):
-    # 🚀 Filtramos para que SOLO mande las activas
+    #  Filtramos para que SOLO mande las activas
     query = db.query(models.TollBooth).filter(models.TollBooth.record_status == "A")
     if search:
         query = query.filter(
@@ -105,7 +105,7 @@ def update_toll(
             (s.costo_momento_full or 0.0) for s in active_segments
         )
 
-        # 🚀 ACTUALIZAR TARIFAS AUTORIZADAS DE CLIENTES
+        #  ACTUALIZAR TARIFAS AUTORIZADAS DE CLIENTES
         client_tariffs = (
             db.query(models.Tariff)
             .filter(
@@ -137,7 +137,7 @@ def update_toll(
         )
 
 
-# 🚀 NUEVO ENDPOINT: Verifica dependencias ANTES de borrar
+#  NUEVO ENDPOINT: Verifica dependencias ANTES de borrar
 @router.get("/{toll_id}/dependencies")
 def check_toll_dependencies(toll_id: int, db: Session = Depends(get_db)):
     rutas_count = (
@@ -151,7 +151,7 @@ def check_toll_dependencies(toll_id: int, db: Session = Depends(get_db)):
     return {"in_use": rutas_count > 0, "rutas_count": rutas_count}
 
 
-# 🚀 ENDPOINT ACTUALIZADO: Recibe la decisión del usuario y hace borrado lógico
+#  ENDPOINT ACTUALIZADO: Recibe la decisión del usuario y hace borrado lógico
 @router.delete("/{toll_id}")
 def delete_toll(
     toll_id: int, remove_from_routes: bool = Query(False), db: Session = Depends(get_db)
@@ -189,7 +189,7 @@ def delete_toll(
                     db.query(models.RateSegment)
                     .filter(
                         models.RateSegment.rate_template_id == template.id,
-                        models.RateSegment.record_status == "A",  # 🚀 SOLO ACTIVOS
+                        models.RateSegment.record_status == "A",  #  SOLO ACTIVOS
                     )
                     .all()
                 )
@@ -228,7 +228,7 @@ def list_templates(
     client_id: Optional[int] = None,
     db: Session = Depends(get_db),
 ):
-    # 🚀 SOLUCIÓN: Usamos joinedload para asegurar que la ruta padre SIEMPRE cargue.
+    #  SOLUCIÓN: Usamos joinedload para asegurar que la ruta padre SIEMPRE cargue.
     # Evitamos el outerjoin/contains_eager que hacía desaparecer la ruta entera
     # si los segmentos tenían estados inconsistentes.
     query = (
@@ -252,7 +252,7 @@ def list_templates(
     # Ejecutamos la consulta y traemos hasta 50 rutas
     templates = query.order_by(models.RateTemplate.id.desc()).limit(50).all()
 
-    # 🚀 MAGIA EN MEMORIA:
+    #  MAGIA EN MEMORIA:
     # Limpiamos los segmentos eliminados ('E') directamente en Python.
     # Así garantizamos que el Frontend reciba la ruta intacta, pero solo con tramos válidos.
     for template in templates:
@@ -271,7 +271,7 @@ def create_template(
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    # 🚀 1. VALIDACIÓN CORREGIDA (FASE 1): Llave compuesta incluye tipo_unidad
+    #  1. VALIDACIÓN CORREGIDA (FASE 1): Llave compuesta incluye tipo_unidad
     existing_route = (
         db.query(models.RateTemplate)
         .filter(
@@ -286,7 +286,7 @@ def create_template(
     )
 
     if existing_route:
-        # 🚀 Mejoramos el mensaje de error para que Gustavo sepa exactamente qué pasó
+        #  Mejoramos el mensaje de error para que Gustavo sepa exactamente qué pasó
         config_name = (
             "FULL (9 Ejes)" if data.tipo_unidad == "9ejes" else "SENCILLO (5 Ejes)"
         )
@@ -372,7 +372,7 @@ def update_template(
     db_template.updated_by_id = user.id
 
     if data.segments is not None:
-        # 🚀 SOLUCIÓN AL SAWarning y Duplicación:
+        #  SOLUCIÓN AL SAWarning y Duplicación:
         # 1. Vaciamos la relación en memoria
         db_template.segments = []
 
@@ -423,7 +423,7 @@ def update_template(
 
         db.flush()
 
-        # 🚀 ACTUALIZAR TARIFAS AUTORIZADAS DE CLIENTES
+        #  ACTUALIZAR TARIFAS AUTORIZADAS DE CLIENTES
         client_tariffs = (
             db.query(models.Tariff)
             .filter(
@@ -462,7 +462,7 @@ def delete_template(
     if not db_template:
         raise HTTPException(status_code=404, detail="Ruta no encontrada")
 
-    # 🚀 2. MAGIA: Alteramos el nombre para liberar el original
+    #  2. MAGIA: Alteramos el nombre para liberar el original
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M")
     db_template.origen = f"{db_template.origen} [ELIMINADA-{timestamp}]"
 

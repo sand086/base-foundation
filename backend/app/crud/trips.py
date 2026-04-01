@@ -146,7 +146,7 @@ def update_trip_status(
     if trip.legs:
         active_leg = trip.legs[-1]
 
-    # 🚀 PROTECCIÓN DE FASE 2: Misma lógica, mantener vivo el viaje padre
+    #  PROTECCIÓN DE FASE 2: Misma lógica, mantener vivo el viaje padre
     if status == models.TripStatus.ENTREGADO:
         if active_leg and active_leg.leg_type == "entrega_vacio":
             trip.status = status
@@ -174,7 +174,7 @@ def update_trip_status(
         if trip.status == models.TripStatus.CERRADO:
             trip.closed_at = datetime.utcnow()
 
-        # 🚀 LIBERACIÓN DE UNIDADES INTELIGENTE
+        #  LIBERACIÓN DE UNIDADES INTELIGENTE
         # Solo liberamos chasis y dolly si el viaje se terminó (fase vacía completada)
         if trip.status in [models.TripStatus.ENTREGADO, models.TripStatus.CERRADO]:
             unit_ids_to_free = [
@@ -300,7 +300,7 @@ def add_timeline_event(
         trip.legs[-1] if trip.legs else None,
     )
 
-    # 🚀 PROTECCIÓN DE FASE 2: Si reportan "entregado" (Llegó al cliente),
+    #  PROTECCIÓN DE FASE 2: Si reportan "entregado" (Llegó al cliente),
     # el viaje padre DEBE seguir en tránsito para permitir el retorno de vacío.
     if payload.status == "entregado":
         # Solo cerramos el viaje completo si la fase actual es el retorno de vacío
@@ -351,6 +351,25 @@ def add_timeline_event(
         db.add(db_event)
 
     db.add(trip)
+    if hasattr(payload, "notifyClient") and payload.notifyClient:
+        from app.services.email_service import EmailService
+
+        # Fecha formateada para el cliente
+        fecha_str = datetime.utcnow().strftime("%d/%m/%Y %H:%M")
+
+        email_svc = EmailService(db)
+        # Esto envía el correo en segundo plano sin interrumpir el guardado
+        email_svc.send_status_update(
+            trip=trip,
+            status=payload.status,
+            location=payload.location,
+            event_time=fecha_str,
+        )
+
+    db.commit()
+    db.refresh(trip)
+    return trip
+
     db.commit()
     db.refresh(trip)
     return trip
@@ -358,7 +377,7 @@ def add_timeline_event(
 
 def get_trip_settlement(db: Session, trip_leg_id: int):
     """
-    🚀 FASE 4: Liquidación adaptada para Movimientos de Patio y Vacío
+    FASE 4: Liquidación adaptada para Movimientos de Patio y Vacío
     """
     leg = (
         db.query(models.TripLeg)
@@ -397,7 +416,7 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
 
     conceptos = []
 
-    # 🚀 Lógica si es CARRETERA
+    #  Lógica si es CARRETERA
     if is_ruta:
         consumo_real_litros = sum(f.litros for f in fuel_logs)
         if fuel_logs:
@@ -429,7 +448,7 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
                 esAutomatico=True,
             )
         )
-    # 🚀 Lógica si es MOVIMIENTO LOCAL (Patio o Vacío)
+    #  Lógica si es MOVIMIENTO LOCAL (Patio o Vacío)
     else:
         # FASE 4: Bonos Fijos por Configuración
         bono_movimiento = 300.0 if is_full else 200.0

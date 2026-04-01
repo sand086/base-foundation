@@ -1,7 +1,7 @@
 // src/pages/Despacho.tsx
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { PageHeader } from "@/components/ui/page-header"; // 🚀 Importado nuestro Header estándar
+import { PageHeader } from "@/components/ui/page-header"; //  Importado nuestro Header estándar
 import { DespachoWizard } from "@/features/despacho/DespachoWizard";
 import { TripPlanner } from "@/features/despacho/TripPlanner";
 import { StandByTrips } from "@/features/despacho/StandByTrips";
@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 const Despacho = () => {
   return (
     <div className="p-4 md:p-6 space-y-6 min-h-[calc(100vh-4rem)] flex flex-col animate-page-enter pb-20 bg-slate-50/30 dark:bg-transparent">
-      {/* 🚀 PAGE HEADER TAHOE */}
+      {/*  PAGE HEADER TAHOE */}
       <PageHeader
         title="Centro de Despacho"
         description="Gestión de salida, asignación de unidades y monitoreo de equipos en stand-by."
@@ -21,12 +21,12 @@ const Despacho = () => {
         }
       />
 
-      {/* 🚀 TABS CONTENEDOR FLEX PARA SCROLL PERFECTO */}
+      {/*  TABS CONTENEDOR FLEX PARA SCROLL PERFECTO */}
       <Tabs
         defaultValue="planner"
         className="w-full flex-1 flex flex-col min-h-0"
       >
-        {/* 🚀 TABS LIST TAHOE */}
+        {/*  TABS LIST TAHOE */}
         <div className="w-full overflow-x-auto hide-scrollbar pb-2 sm:pb-0">
           <TabsList className="bg-slate-200/50 dark:bg-slate-800/80 backdrop-blur-md p-1 h-12 rounded-xl border border-slate-300/50 dark:border-white/5 inline-flex min-w-max sm:w-full max-w-[600px] grid-cols-3 shadow-sm">
             <TabsTrigger
@@ -56,7 +56,7 @@ const Despacho = () => {
           </TabsList>
         </div>
 
-        {/* 🚀 TABS CONTENT (Con animación de entrada) */}
+        {/*  TABS CONTENT (Con animación de entrada) */}
         <div className="flex-1 mt-6">
           <TabsContent
             value="planner"

@@ -75,7 +75,7 @@ export default function MechanicsPage() {
 
   return (
     <div className="p-4 md:p-8 space-y-8 animate-page-enter pb-20">
-      {/* 🚀 PAGE HEADER TAHOE */}
+      {/*  PAGE HEADER TAHOE */}
       <PageHeader
         title="Administración de Mecánicos"
         description="Gestión de personal técnico, certificaciones y expedientes operativos."
@@ -91,7 +91,7 @@ export default function MechanicsPage() {
         </Button>
       </PageHeader>
 
-      {/* 🚀 TABLA DE MECÁNICOS */}
+      {/*  TABLA DE MECÁNICOS */}
       <MechanicsTable
         data={mechanics}
         isLoading={isLoading}
@@ -99,7 +99,7 @@ export default function MechanicsPage() {
         onOpenExpediente={handleOpenExpediente}
       />
 
-      {/* 🚀 MODAL DE FORMULARIO */}
+      {/*  MODAL DE FORMULARIO */}
       <MechanicFormModal
         open={isFormOpen}
         onOpenChange={setIsFormOpen}
@@ -107,7 +107,7 @@ export default function MechanicsPage() {
         onSave={handleSave}
       />
 
-      {/* 🚀 MODAL DE EXPEDIENTE */}
+      {/*  MODAL DE EXPEDIENTE */}
       <MechanicExpedienteModal
         open={isExpedienteOpen}
         onOpenChange={setIsExpedienteOpen}

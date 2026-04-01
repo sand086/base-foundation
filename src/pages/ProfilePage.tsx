@@ -299,7 +299,7 @@ const ProfilePage: React.FC = () => {
         prev ? { ...prev, avatar_url: data.avatar_url } : prev,
       );
 
-      // 🚀 2. ACTUALIZACIÓN GLOBAL: Esto es lo que actualiza el Header automáticamente
+      //  2. ACTUALIZACIÓN GLOBAL: Esto es lo que actualiza el Header automáticamente
       if (updateUser && authUser) {
         updateUser({ ...authUser, avatar_url: data.avatar_url });
       }

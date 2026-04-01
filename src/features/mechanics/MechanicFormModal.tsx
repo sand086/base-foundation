@@ -88,7 +88,7 @@ export function MechanicFormModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isEditMode = !!mechanicToEdit;
 
-  // 🚀 REACT HOOK FORM
+  //  REACT HOOK FORM
   const form = useForm<MechanicFormData>({
     resolver: zodResolver(mechanicSchema),
     defaultValues: {
@@ -199,7 +199,7 @@ export function MechanicFormModal({
       }}
     >
       <DialogContent className="w-[95vw] sm:max-w-2xl flex flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-slate-50/50 dark:bg-transparent backdrop-blur-xl rounded-2xl">
-        {/* 🚀 HEADER TAHOE */}
+        {/*  HEADER TAHOE */}
         <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-brand-navy/95 dark:bg-slate-900 backdrop-blur-md shrink-0 border-b border-white/10 relative overflow-hidden z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center gap-4 sm:gap-5">
@@ -231,18 +231,18 @@ export function MechanicFormModal({
           </div>
         </DialogHeader>
 
-        {/* 🚀 BODY: FORMULARIO */}
+        {/*  BODY: FORMULARIO */}
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit(onFormSubmit)}
             className="flex-1 min-h-0 overflow-hidden flex flex-col"
           >
-            {/* 🚀 TABS CONTENEDOR FLEX PARA SCROLL PERFECTO */}
+            {/*  TABS CONTENEDOR FLEX PARA SCROLL PERFECTO */}
             <Tabs
               defaultValue="datos"
               className="flex-1 flex flex-col min-h-0 w-full"
             >
-              {/* 🚀 TABS LIST TAHOE (FIJA EN LA PARTE SUPERIOR DEL BODY) */}
+              {/*  TABS LIST TAHOE (FIJA EN LA PARTE SUPERIOR DEL BODY) */}
               <div className="shrink-0 w-full overflow-x-auto hide-scrollbar pt-6 px-6 sm:pt-8 sm:px-8 pb-2 sm:pb-0 z-20">
                 <TabsList className="bg-slate-200/50 dark:bg-slate-800/80 backdrop-blur-md p-1 h-12 rounded-xl border border-slate-300/50 dark:border-white/5 inline-flex min-w-max sm:w-full grid-cols-3">
                   <TabsTrigger
@@ -266,7 +266,7 @@ export function MechanicFormModal({
                 </TabsList>
               </div>
 
-              {/* 🚀 SCROLL AREA PARA LOS TABS CONTENT */}
+              {/*  SCROLL AREA PARA LOS TABS CONTENT */}
               <div className="flex-1 overflow-y-auto px-6 pb-6 sm:px-8 sm:pb-8 custom-scrollbar">
                 {/* TAB: DATOS PERSONALES */}
                 <TabsContent
@@ -600,7 +600,7 @@ export function MechanicFormModal({
               </div>
             </Tabs>
 
-            {/* 🚀 FOOTER TAHOE */}
+            {/*  FOOTER TAHOE */}
             <DialogFooter className="p-6 sm:p-8 bg-slate-50/50 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0">
               <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
                 <Button

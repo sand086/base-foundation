@@ -37,10 +37,10 @@ app.add_middleware(
 # Garantiza que cualquier error 500 se imprima en consola y no sea ocultado por CORS
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    print("\n" + "🔥" * 25)
-    print(f"🚨 ERROR FATAL EN RUTA: {request.url.path}")
+    print("\n" + "error " * 25)
+    print(f"  ERROR FATAL EN RUTA: {request.url.path}")
     traceback.print_exc()  # Imprime el error exacto y la línea que falló
-    print("🔥" * 25 + "\n")
+    print("error " * 25 + "\n")
 
     return JSONResponse(
         status_code=500,

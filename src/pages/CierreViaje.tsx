@@ -68,7 +68,7 @@ export default function CierreViaje() {
   const { operadores = [], operators = [] } = useOperators() as any;
   const { unidades = [], units = [] } = useUnits() as any;
 
-  // 🚀 PARÁMETROS GLOBALES DINÁMICOS
+  //  PARÁMETROS GLOBALES DINÁMICOS
   const { valueAsNumber: rendimientoGlobal } = useSystemConfig(
     "rendimiento_diesel_esperado",
   );
@@ -178,7 +178,7 @@ export default function CierreViaje() {
   }, [allLegs, selectedLegIds]);
 
   // ==========================================
-  // 🚀 FASE 4: CÁLCULOS FINANCIEROS (REGLA GUSTAVO)
+  //  FASE 4: CÁLCULOS FINANCIEROS (REGLA GUSTAVO)
   // ==========================================
   const liquidacion = useMemo(() => {
     if (selectedLegsData.length === 0) return null;
@@ -271,7 +271,7 @@ export default function CierreViaje() {
           })
           .finally(() => setIsLoadingPreview(false));
       } else {
-        // 🚀 Si no hay rutas, limpiamos la penalización y ocultamos lo del diésel
+        //  Si no hay rutas, limpiamos la penalización y ocultamos lo del diésel
         setPreviewData(null);
         setCombustibleFaltante(0);
       }
@@ -661,7 +661,7 @@ export default function CierreViaje() {
                                   <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-200 border-0 text-[10px] uppercase tracking-wider mb-1">
                                     Pendiente
                                   </Badge>
-                                  {/* 🚀 FASE 4: MOSTRAMOS EL BONO ESTIMADO O VARIABLE */}
+                                  {/*  FASE 4: MOSTRAMOS EL BONO ESTIMADO O VARIABLE */}
                                   <div className="text-[10px] text-brand-navy font-bold bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
                                     {leg.leg_type === "ruta_carretera"
                                       ? "Var %"
@@ -701,7 +701,7 @@ export default function CierreViaje() {
         {/* COLUMNA DERECHA: CONFIGURACIÓN FINANCIERA */}
         {selectedLegIds.length > 0 && liquidacion && (
           <div className="xl:col-span-5 space-y-6 animate-in fade-in slide-in-from-right-8 duration-500">
-            {/* 🚀 1. CONCILIACIÓN DIÉSEL (SOLO SI HAY VIAJE DE CARRETERA) */}
+            {/*  1. CONCILIACIÓN DIÉSEL (SOLO SI HAY VIAJE DE CARRETERA) */}
             {liquidacion.hasRoadMove && (
               <Card className="border-slate-200 shadow-sm border-t-4 border-t-amber-500">
                 <CardHeader className="bg-amber-50/30 border-b pb-4">

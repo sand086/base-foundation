@@ -17,7 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CreditCard, Landmark, AlertCircle, Loader2 } from "lucide-react";
-// 🚀 Importamos datos reales
+//  Importamos datos reales
 import { useBankAccounts } from "@/hooks/useBankAccounts";
 import { Supplier, BankAccount } from "@/types/api.types";
 
@@ -25,7 +25,7 @@ interface PaymentModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: any) => void;
-  suppliers: Supplier[]; // 🚀 Ahora usa el tipo real
+  suppliers: Supplier[]; //  Ahora usa el tipo real
 }
 
 const metodosPago = [
@@ -70,7 +70,7 @@ export function PaymentModal({
       return;
     }
 
-    // 🚀 Enviamos los datos con el formato que espera el backend
+    //  Enviamos los datos con el formato que espera el backend
     onSubmit({
       ...formData,
       supplier_id: parseInt(formData.supplier_id),

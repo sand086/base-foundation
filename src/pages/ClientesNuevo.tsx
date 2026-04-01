@@ -774,7 +774,7 @@ export default function ClientsNew() {
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto p-4 md:p-8 animate-page-enter">
-      {/* 🚀 HEADER TAHOE */}
+      {/*  HEADER TAHOE */}
       <div className="flex items-center gap-4 mb-8">
         <Button
           variant="outline"
@@ -795,7 +795,7 @@ export default function ClientsNew() {
         </div>
       </div>
 
-      {/* 🚀 STEP INDICATOR TAHOE */}
+      {/*  STEP INDICATOR TAHOE */}
       <div className="flex items-center gap-4 bg-white/40 backdrop-blur-md p-4 rounded-2xl border border-white/20 shadow-sm">
         <div
           className={`flex items-center gap-3 ${step >= 1 ? "text-brand-navy" : "text-slate-400"}`}
@@ -837,7 +837,7 @@ export default function ClientsNew() {
         </div>
       </div>
 
-      {/* 🚀 STEP 1: DATOS FISCALES */}
+      {/*  STEP 1: DATOS FISCALES */}
       {step === 1 && (
         <Card
           variant="glass"
@@ -1166,7 +1166,7 @@ export default function ClientsNew() {
         </Card>
       )}
 
-      {/* 🚀 STEP 2: DESTINOS / SUBCLIENTES */}
+      {/*  STEP 2: DESTINOS / SUBCLIENTES */}
       {step === 2 && (
         <Card
           variant="glass"
@@ -1500,7 +1500,7 @@ export default function ClientsNew() {
         </Card>
       )}
 
-      {/* 🚀 STEP 3: TARIFAS Y CONVENIOS */}
+      {/*  STEP 3: TARIFAS Y CONVENIOS */}
       {step === 3 && (
         <div className="space-y-6 animate-in fade-in duration-500">
           {/* CONFIGURACIÓN GLOBAL */}
@@ -1784,7 +1784,7 @@ export default function ClientsNew() {
             </Card>
           ))}
 
-          {/* 🚀 MODAL RUTAS SCT (LIQUID GLASS) */}
+          {/*  MODAL RUTAS SCT (LIQUID GLASS) */}
           <Dialog open={isRoutePickerOpen} onOpenChange={setIsRoutePickerOpen}>
             <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col p-0 glass-panel border-none shadow-2xl">
               <DialogHeader className="p-6 pb-4 bg-brand-navy/95 backdrop-blur-md text-white border-b border-white/10">
@@ -1941,7 +1941,7 @@ export default function ClientsNew() {
             </DialogContent>
           </Dialog>
 
-          {/* 🚀 FOOTER FINAL */}
+          {/*  FOOTER FINAL */}
           <div className="flex items-center justify-between pt-8 border-t border-slate-200 mt-12 mb-12">
             <Button
               variant="outline"

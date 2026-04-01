@@ -121,7 +121,7 @@ const CombustibleCargas = () => {
       setCargas(normalizedFuel);
     } catch (error) {
       // 3. Imprimimos el error real en consola para saber qué falló en la API
-      console.error("🔥 Error real en loadData:", error);
+      console.error("  Error real en loadData:", error);
       toast.error("Fallo de Sincronización Industrial");
     } finally {
       setIsLoading(false);
@@ -232,7 +232,7 @@ const CombustibleCargas = () => {
           // El string 'v' ya viene formateado correctamente desde nuestra función loadData
           return (
             <span className="font-mono font-black text-slate-900 dark:text-slate-200 bg-slate-100 dark:bg-white/5 px-2 py-1 rounded text-xs tracking-tight">
-              {v} {/* 🚀 Antes decía ECO-{v}, ahora lo dejamos limpio */}
+              {v} {/*  Antes decía ECO-{v}, ahora lo dejamos limpio */}
             </span>
           );
         },

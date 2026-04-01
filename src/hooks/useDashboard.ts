@@ -8,7 +8,7 @@ export function useDashboard(startDate?: Date, endDate?: Date) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // 🛡️ Controlador para cancelar peticiones si el usuario cambia la fecha rápido
+    //   Controlador para cancelar peticiones si el usuario cambia la fecha rápido
     const controller = new AbortController();
 
     const fetchData = async () => {

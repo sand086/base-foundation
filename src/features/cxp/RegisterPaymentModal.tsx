@@ -20,14 +20,14 @@ import {
 import { CreditCard, DollarSign, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 
-// ✅ 1. ÚNICA FUENTE DE LA VERDAD (api.types.ts)
+//   1. ÚNICA FUENTE DE LA VERDAD (api.types.ts)
 import {
   PayableInvoice,
   BankAccount,
   RegisterPaymentPayload,
 } from "@/types/api.types";
 
-// ✅ 2. INTERFAZ LOCAL (Solo para los props del componente)
+//   2. INTERFAZ LOCAL (Solo para los props del componente)
 interface RegisterPaymentModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;

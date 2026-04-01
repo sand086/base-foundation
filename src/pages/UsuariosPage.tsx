@@ -54,7 +54,7 @@ import { userService } from "@/services/userService";
 import { toast } from "sonner";
 
 const UsuariosPage = () => {
-  // 🚀 FIX: Agregamos fetchUsers aquí para poder llamarlo después de editar
+  //  FIX: Agregamos fetchUsers aquí para poder llamarlo después de editar
   const {
     users,
     isLoading,
@@ -127,7 +127,7 @@ const UsuariosPage = () => {
 
   const handleEditUser = async (userData: any, avatarFile?: File) => {
     try {
-      // 🚀 TRADUCCIÓN DE CAMPOS: Frontend (React) -> Backend (FastAPI)
+      //  TRADUCCIÓN DE CAMPOS: Frontend (React) -> Backend (FastAPI)
       const apiData: any = {
         nombre: userData.nombre,
         apellido: userData.apellidos, // FastAPI espera 'apellido'
@@ -367,7 +367,7 @@ const UsuariosPage = () => {
 
   return (
     <div className="p-8 space-y-8 animate-page-enter">
-      {/* 🚀 1. NUEVO PAGE HEADER: Absorbe el botón principal y elimina redundancia */}
+      {/*  1. NUEVO PAGE HEADER: Absorbe el botón principal y elimina redundancia */}
       <PageHeader
         title="Directorio de Usuarios"
         description="Administración central de accesos, perfiles de colaboradores y seguridad del sistema."
@@ -381,7 +381,7 @@ const UsuariosPage = () => {
         </Button>
       </PageHeader>
 
-      {/* 🚀 2. KPIs METRICS CARDS: Indicadores visuales rápidos */}
+      {/*  2. KPIs METRICS CARDS: Indicadores visuales rápidos */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card variant="glass" className="p-5 flex items-center gap-4">
           <div className="p-3 bg-brand-navy/5 rounded-xl border border-brand-navy/10">
@@ -440,7 +440,7 @@ const UsuariosPage = () => {
         </Card>
       </div>
 
-      {/* 🚀 3. TABLA SIMPLIFICADA: Sin CardHeader redundante */}
+      {/*  3. TABLA SIMPLIFICADA: Sin CardHeader redundante */}
       {/* Como EnhancedDataTable ya es Liquid Glass (desde el paso anterior), solo la llamamos directo */}
       <EnhancedDataTable
         data={users}

@@ -193,7 +193,7 @@ const RolesPermisosPage: React.FC = () => {
     deleteSystemModule: (moduleId: string) => Promise<boolean>;
   };
 
-  // ✅ usuario desde localStorage o /users/me
+  //   usuario desde localStorage o /users/me
   const [meUser, setMeUser] = useState<MeUser | null>(null);
   const [meLoading, setMeLoading] = useState(true);
 
@@ -224,7 +224,7 @@ const RolesPermisosPage: React.FC = () => {
     };
   }, []);
 
-  // ✅ resolver role_key con role_id + roles
+  //   resolver role_key con role_id + roles
   const myRoleResolved = useMemo(() => {
     const roleId = meUser?.role_id ?? null;
     const found = roleId ? roles.find((r) => r.id === roleId) : undefined;
@@ -241,7 +241,7 @@ const RolesPermisosPage: React.FC = () => {
     };
   }, [meUser?.role_id, roles]);
 
-  // ✅ admin
+  //   admin
   const isAdminUser =
     myRoleResolved.roleKey === "admin" || myRoleResolved.roleId === 1;
 
@@ -583,7 +583,7 @@ const RolesPermisosPage: React.FC = () => {
 
               const maxPermisos = availableModules.length * 4;
 
-              // ✅ REGLA FINAL: SOLO depende del usuario (admin elimina todo)
+              //   REGLA FINAL: SOLO depende del usuario (admin elimina todo)
               const canDeleteByUser = isAdminUser;
               const deleteDisabled = !canDeleteByUser;
 
@@ -654,7 +654,7 @@ const RolesPermisosPage: React.FC = () => {
                         </span>
                       </div>
 
-                      {/* ✅ Tooltip + toast cuando esté disabled */}
+                      {/*   Tooltip + toast cuando esté disabled */}
                       <span
                         className="shrink-0"
                         title={

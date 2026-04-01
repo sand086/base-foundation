@@ -101,7 +101,7 @@ export const useMaintenance = () => {
       // 1. Agregamos la orden a la tabla
       setWorkOrders((prev) => [newOrder, ...prev]);
 
-      // 2. 🚀 MAGIA: Recargamos el inventario inmediatamente para que se vea la resta
+      // 2.  MAGIA: Recargamos el inventario inmediatamente para que se vea la resta
       const updatedInventory = await maintenanceService.getInventory();
       setInventory(updatedInventory);
 

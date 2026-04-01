@@ -39,7 +39,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// 🚀 IMPORTAMOS CONFIGURACIONES REALES
+//  IMPORTAMOS CONFIGURACIONES REALES
 import { FUEL_CONFIG } from "@/types/api.types";
 import { useClients } from "@/hooks/useClients";
 import { useTrips } from "@/hooks/useTrips";
@@ -320,7 +320,7 @@ export function AddTicketModal({
     );
   }, [safeTrips]);
 
-  // 🚀 FASE 3: Búsqueda simplificada y centralizada
+  //  FASE 3: Búsqueda simplificada y centralizada
   const searchableTrips = useMemo<SearchableSelectItem[]>(() => {
     const list = activeTrips.map((t) => {
       const foundClient = safeClients.find(

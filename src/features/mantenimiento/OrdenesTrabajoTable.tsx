@@ -271,7 +271,7 @@ export const OrdenesTrabajoTable = () => {
                   Ver detalles
                 </DropdownMenuItem>
 
-                {/* 🚀 BOTÓN FINALIZAR (Solo si no está cerrada ni cancelada) */}
+                {/*  BOTÓN FINALIZAR (Solo si no está cerrada ni cancelada) */}
                 {order.status !== "cerrada" && order.status !== "cancelada" && (
                   <>
                     <DropdownMenuSeparator className="dark:bg-white/10" />
@@ -292,7 +292,7 @@ export const OrdenesTrabajoTable = () => {
                   </>
                 )}
 
-                {/* 🚀 BOTÓN CANCELAR (Solo si no está cerrada ni cancelada) */}
+                {/*  BOTÓN CANCELAR (Solo si no está cerrada ni cancelada) */}
                 {order.status !== "cerrada" && order.status !== "cancelada" && (
                   <DropdownMenuItem
                     className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer text-rose-600 focus:text-rose-700 focus:bg-rose-50 dark:focus:bg-rose-900/30"
@@ -320,7 +320,7 @@ export const OrdenesTrabajoTable = () => {
 
   return (
     <div className="space-y-6">
-      {/* 🚀 TABLA PRINCIPAL (Liquid Glass Tahoe) */}
+      {/*  TABLA PRINCIPAL (Liquid Glass Tahoe) */}
       <Card
         variant="default"
         className="shadow-2xl border-slate-200/50 dark:border-white/10 overflow-hidden"
@@ -364,7 +364,7 @@ export const OrdenesTrabajoTable = () => {
         onCreate={createWorkOrder}
       />
 
-      {/* 🚀 MODAL DE VISTA (Read Only Detail - Estructura Triple Tahoe) */}
+      {/*  MODAL DE VISTA (Read Only Detail - Estructura Triple Tahoe) */}
       <Dialog
         open={!!orderToView}
         onOpenChange={(isOpen) => {

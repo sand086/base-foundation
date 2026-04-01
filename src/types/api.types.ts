@@ -44,7 +44,7 @@ export interface User {
   avatar_url?: string;
   activo?: boolean;
 
-  // 🚀 AGREGAMOS ESTO PARA QUE TYPESCRIPT LO RECONOZCA
+  //  AGREGAMOS ESTO PARA QUE TYPESCRIPT LO RECONOZCA
   role?: {
     id: number;
     nombre: string;

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { TipoUnidad } from "@/types/api.types";
-import axiosClient from "@/api/axiosClient"; // 🚀 Importamos el cliente real
+import axiosClient from "@/api/axiosClient"; //  Importamos el cliente real
 import { toast } from "sonner";
 
 // 1. Definimos el valor por defecto AQUÍ MISMO para que no falle el tipado

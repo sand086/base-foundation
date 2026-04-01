@@ -70,7 +70,7 @@ export function ViewInventarioModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[95vw] sm:max-w-md flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-slate-50/50 dark:bg-transparent backdrop-blur-xl rounded-2xl">
-        {/* 🚀 HEADER TAHOE */}
+        {/*  HEADER TAHOE */}
         <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-brand-navy/95 dark:bg-slate-900 backdrop-blur-md shrink-0 border-b border-white/10 relative overflow-hidden z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center justify-between gap-4">
@@ -101,7 +101,7 @@ export function ViewInventarioModal({
           </div>
         </DialogHeader>
 
-        {/* 🚀 BODY */}
+        {/*  BODY */}
         <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar">
           <div className="space-y-6">
             {/* Título Principal */}
@@ -228,7 +228,7 @@ export function ViewInventarioModal({
           </div>
         </div>
 
-        {/* 🚀 FOOTER */}
+        {/*  FOOTER */}
         <DialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0">
           <div className="flex w-full justify-end">
             <Button

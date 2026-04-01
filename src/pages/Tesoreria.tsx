@@ -132,7 +132,7 @@ export default function Tesoreria() {
     fetchData();
   }, []);
 
-  // 🚀 2. Filtros y Cálculos con snake_case
+  //  2. Filtros y Cálculos con snake_case
   // (Asumiendo que 'tipo' en realidad lo guardas en BD, o que lo filtras por alias/nombre)
   // Para este ejemplo, si tu base no tiene "tipo" cuenta, podrías filtrarlas por el alias
   // o modificar la tabla en postgres para que lo soporte. Asumiré que lo tienes mapeado.
@@ -586,7 +586,7 @@ export default function Tesoreria() {
           >
             <div className="bg-slate-50/50 border-b p-4">
               <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                🔥 Cuentas de Cobranza (Flujo de Entrada)
+                Cuentas de Cobranza (Flujo de Entrada)
               </h3>
             </div>
             {renderMovimientosTable("cobranza")}

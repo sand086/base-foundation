@@ -57,7 +57,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { DatePicker } from "@/components/ui/date-picker"; // 🚀 Importado para reemplazar inputs nativos
+import { DatePicker } from "@/components/ui/date-picker"; //  Importado para reemplazar inputs nativos
 
 interface OperatorDetailSheetProps {
   operator: Operator | null;
@@ -168,7 +168,7 @@ export function OperatorDetailSheet({
 
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
 
-  // 🚀 REACT HOOK FORM
+  //  REACT HOOK FORM
   const form = useForm<EditOperatorData>({
     resolver: zodResolver(editOperatorSchema),
     defaultValues: {
@@ -347,7 +347,7 @@ export function OperatorDetailSheet({
         onOpenChange(isOpen);
       }}
     >
-      {/* 🚀 CAPA 1: CASCARÓN DEL SHEET (Fondo azul/blanco translúcido) */}
+      {/*  CAPA 1: CASCARÓN DEL SHEET (Fondo azul/blanco translúcido) */}
       <SheetContent className="w-full sm:max-w-xl bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl border-l border-slate-200/80 dark:border-white/10 p-0 flex flex-col shadow-2xl transition-all duration-300">
         {/* Hidden Inputs */}
         <input
@@ -363,7 +363,7 @@ export function OperatorDetailSheet({
           accept="image/*"
         />
 
-        {/* 🚀 CAPA 2: HEADER TAHOE (Blanco puro / Navy puro, z-10) */}
+        {/*  CAPA 2: HEADER TAHOE (Blanco puro / Navy puro, z-10) */}
         <SheetHeader className="p-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 z-10 relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex flex-row items-center justify-between">
@@ -430,10 +430,10 @@ export function OperatorDetailSheet({
           </div>
         </SheetHeader>
 
-        {/* 🚀 CAPA 3: CUERPO Y FORMULARIO (Fondo slate-50 para resaltar tarjetas) */}
+        {/*  CAPA 3: CUERPO Y FORMULARIO (Fondo slate-50 para resaltar tarjetas) */}
         <Form {...form}>
           <form className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/50 dark:bg-transparent custom-scrollbar">
-            {/* 🚀 Hero / Avatar Section */}
+            {/*  Hero / Avatar Section */}
             <div className="flex flex-col items-center text-center pb-6 border-b border-slate-200 dark:border-white/10">
               <div className="relative group mt-2">
                 <div
@@ -541,7 +541,7 @@ export function OperatorDetailSheet({
               )}
             </div>
 
-            {/* 🚀 License Card */}
+            {/*  License Card */}
             <div className="relative overflow-hidden rounded-2xl p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-sm transition-all hover:shadow-md">
               <div className="absolute top-0 right-0 p-4 opacity-10 dark:opacity-5 pointer-events-none">
                 <CreditCard className="h-24 w-24 text-blue-600 dark:text-blue-400" />
@@ -646,7 +646,7 @@ export function OperatorDetailSheet({
               )}
             </div>
 
-            {/* 🚀 Medical Check Card */}
+            {/*  Medical Check Card */}
             <div
               className={cn(
                 "rounded-2xl p-6 transition-all shadow-sm relative overflow-hidden",
@@ -741,7 +741,7 @@ export function OperatorDetailSheet({
               </div>
             </div>
 
-            {/* 🚀 Document Management */}
+            {/*  Document Management */}
             <div className="rounded-2xl p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-sm">
               <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 flex items-center gap-2 mb-6 border-b border-slate-100 dark:border-white/5 pb-3">
                 <FileText className="h-4 w-4 text-blue-500" />
@@ -783,7 +783,7 @@ export function OperatorDetailSheet({
               </div>
             </div>
 
-            {/* 🚀 Contact Info */}
+            {/*  Contact Info */}
             <div className="rounded-2xl p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-sm">
               <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 flex items-center gap-2 mb-6 border-b border-slate-100 dark:border-white/5 pb-3">
                 <Phone className="h-4 w-4 text-emerald-500" />

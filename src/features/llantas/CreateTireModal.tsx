@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { format } from "date-fns"; // 🚀 Importante para formatear la fecha al guardar
+import { format } from "date-fns"; //  Importante para formatear la fecha al guardar
 import {
   Dialog,
   DialogContent,
@@ -41,7 +41,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { DatePicker } from "@/components/ui/date-picker"; // 🚀 Nuestro nuevo componente
+import { DatePicker } from "@/components/ui/date-picker"; //  Nuestro nuevo componente
 
 const MARCAS_COMUNES = [
   "Michelin",
@@ -76,7 +76,7 @@ const tireSchema = z.object({
     .optional(),
   profundidad_original: z.string().min(1, "Requerido"),
   precio_compra: z.string().optional(),
-  // 🚀 Ahora exigimos un objeto Date en lugar de un string
+  //  Ahora exigimos un objeto Date en lugar de un string
   fecha_compra: z.date({ required_error: "La fecha de compra es requerida" }),
   proveedor: z.string().optional(),
 });
@@ -92,7 +92,7 @@ export function CreateTireModal({
   const [loading, setLoading] = useState(false);
   const isEditing = !!tireToEdit;
 
-  // 🚀 REACT HOOK FORM
+  //  REACT HOOK FORM
   const form = useForm<TireFormData>({
     resolver: zodResolver(tireSchema),
     defaultValues: {
@@ -103,7 +103,7 @@ export function CreateTireModal({
       dot: "",
       profundidad_original: "",
       precio_compra: "",
-      fecha_compra: new Date(), // 🚀 Objeto Date en lugar de string
+      fecha_compra: new Date(), //  Objeto Date en lugar de string
       proveedor: "",
     },
   });
@@ -123,7 +123,7 @@ export function CreateTireModal({
           profundidad_original:
             tireToEdit.profundidad_original?.toString() || "",
           precio_compra: tireToEdit.precio_compra?.toString() || "",
-          // 🚀 Convertimos el string YYYY-MM-DD del backend a Date (añadimos T12:00:00 para evitar saltos de zona horaria)
+          //  Convertimos el string YYYY-MM-DD del backend a Date (añadimos T12:00:00 para evitar saltos de zona horaria)
           fecha_compra: tireToEdit.fecha_compra
             ? new Date(`${tireToEdit.fecha_compra}T12:00:00`)
             : new Date(),
@@ -138,7 +138,7 @@ export function CreateTireModal({
           dot: "",
           profundidad_original: "",
           precio_compra: "",
-          fecha_compra: new Date(), // 🚀 Objeto Date
+          fecha_compra: new Date(), //  Objeto Date
           proveedor: "",
         });
       }
@@ -159,7 +159,7 @@ export function CreateTireModal({
         ...data,
         profundidad_original: prof,
         precio_compra: precio,
-        // 🚀 Volvemos a convertir el Date al formato de string que espera el backend
+        //  Volvemos a convertir el Date al formato de string que espera el backend
         fecha_compra: format(data.fecha_compra, "yyyy-MM-dd"),
       };
 
@@ -197,9 +197,9 @@ export function CreateTireModal({
         if (!isOpen && !loading) handleClose();
       }}
     >
-      {/* 🚀 CAPA 1: CASCARÓN */}
+      {/*  CAPA 1: CASCARÓN */}
       <DialogContent className="w-[95vw] sm:max-w-2xl flex flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
-        {/* 🚀 CAPA 2: CABECERA (Blanca en Light, Navy oscuro en Dark) */}
+        {/*  CAPA 2: CABECERA (Blanca en Light, Navy oscuro en Dark) */}
         <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center gap-4 sm:gap-5">
@@ -230,7 +230,7 @@ export function CreateTireModal({
           </div>
         </DialogHeader>
 
-        {/* 🚀 CAPA 3: CUERPO (Fondo slate-50 para resaltar inputs) */}
+        {/*  CAPA 3: CUERPO (Fondo slate-50 para resaltar inputs) */}
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit(onFormSubmit)}
@@ -452,7 +452,7 @@ export function CreateTireModal({
                       )}
                     />
 
-                    {/* 🚀 Fecha de Compra usando DatePicker Tahoe */}
+                    {/*  Fecha de Compra usando DatePicker Tahoe */}
                     <FormField
                       control={form.control}
                       name="fecha_compra"
@@ -479,7 +479,7 @@ export function CreateTireModal({
               </div>
             </div>
 
-            {/* 🚀 CAPA 4: FOOTER TAHOE (Con nueva regla de color) */}
+            {/*  CAPA 4: FOOTER TAHOE (Con nueva regla de color) */}
             <DialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
               <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
                 <Button
@@ -493,7 +493,7 @@ export function CreateTireModal({
                   Cancelar
                 </Button>
 
-                {/* 🚀 REGLA APLICADA: brand-green para Editar, brand-red para Crear */}
+                {/*  REGLA APLICADA: brand-green para Editar, brand-red para Crear */}
                 <Button
                   type="submit"
                   variant="default"

@@ -70,7 +70,7 @@ export const useSecurityNotifications = () => {
       case "trip_stopped":
         title = "Viaje Detenido";
         message = `Viaje ${details.tripId} marcado como DETENIDO. Se notificó automáticamente a ${details.clientName || "el cliente"}.`;
-        toast.error("🚨 Viaje Detenido - Notificación al Cliente", {
+        toast.error("  Viaje Detenido - Notificación al Cliente", {
           description: message,
           duration: 8000,
         });
@@ -101,7 +101,7 @@ export const useSecurityNotifications = () => {
     // 1. Log en consola para historial de la sesión local
     console.log(`[${event.toUpperCase()}] ${timestamp} - ${message}`);
 
-    // 2. 🚀 GUARDAR EN LA BASE DE DATOS (Backend)
+    // 2.  GUARDAR EN LA BASE DE DATOS (Backend)
     try {
       if (user?.id) {
         await axiosClient.post("/notifications/", {

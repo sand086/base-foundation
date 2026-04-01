@@ -24,7 +24,7 @@ class StorageService:
         with open(file_path, "wb") as f:
             f.write(content)
 
-        # 🚀 CORRECCIÓN: La URL debe coincidir con el mount de main.py
+        #  CORRECCIÓN: La URL debe coincidir con el mount de main.py
         # Antes era /static/, ahora es /api/static/
         return {
             "url": f"/api/static/{folder}/{unique_name}",

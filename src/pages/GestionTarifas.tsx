@@ -8,7 +8,7 @@ import { Calculator, Map, Route } from "lucide-react";
 const GestionTarifas = () => {
   return (
     <div className="p-4 md:p-8 space-y-8 animate-page-enter">
-      {/* 🚀 PAGE HEADER TAHOE */}
+      {/*  PAGE HEADER TAHOE */}
       <PageHeader
         title="Gestión de Tarifas"
         description="Catálogo maestro de peajes y armador logístico de rutas operativas."
@@ -16,7 +16,7 @@ const GestionTarifas = () => {
       />
 
       <Tabs defaultValue="catalogo" className="w-full">
-        {/* 🚀 TABS LIST: Estilo Switch de macOS en cristal */}
+        {/*  TABS LIST: Estilo Switch de macOS en cristal */}
         <div className="flex justify-start mb-6">
           <TabsList className="bg-slate-100/50 dark:bg-slate-900/50 backdrop-blur-md p-1 h-14 rounded-xl border border-slate-200/50 dark:border-white/10 w-full sm:w-auto inline-flex">
             <TabsTrigger
@@ -37,7 +37,7 @@ const GestionTarifas = () => {
           </TabsList>
         </div>
 
-        {/* 🚀 TABS CONTENT: Con animaciones fluidas al cambiar */}
+        {/*  TABS CONTENT: Con animaciones fluidas al cambiar */}
         <TabsContent
           value="catalogo"
           className="mt-8 m-0 animate-in fade-in slide-in-from-bottom-4 duration-500"

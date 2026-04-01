@@ -180,7 +180,7 @@ class FuelLogResponse(FuelLogBase):
     def operadorNombre(self) -> str:
         return self.operator.name if self.operator else "N/A"
 
-    # 🚀 NUEVO: Exponer el nombre de quien lo registró al Frontend
+    #  NUEVO: Exponer el nombre de quien lo registró al Frontend
     @computed_field
     @property
     def registradoPor(self) -> str:

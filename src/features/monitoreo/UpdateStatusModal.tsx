@@ -58,7 +58,7 @@ interface UpdateStatusModalProps {
   serviceId: string;
   activeLeg?: TripLeg;
   onSubmit: (data: StatusUpdateData) => void;
-  eventToEdit?: TripTimelineEvent | null; // 🚀 Prop para el modo edición
+  eventToEdit?: TripTimelineEvent | null; //  Prop para el modo edición
 }
 
 export interface StatusUpdateData {
@@ -72,7 +72,7 @@ export interface StatusUpdateData {
   odometro?: string;
   combustible_porcentaje?: string;
   combustible_litros?: string;
-  terminal_entrega_vacio?: string; // 🚀 Agregado aquí
+  terminal_entrega_vacio?: string; //  Agregado aquí
 }
 
 const DEFAULT_LOCATIONS = [
@@ -114,7 +114,7 @@ export function UpdateStatusModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [formData, setFormData] = useState<StatusUpdateData>({
-    status: "en_transito", // 🚀 Predeterminado: Reporte Normal
+    status: "en_transito", //  Predeterminado: Reporte Normal
     location: "",
     lat: "",
     lng: "",
@@ -124,7 +124,7 @@ export function UpdateStatusModal({
     odometro: "",
     combustible_porcentaje: "",
     combustible_litros: "",
-    terminal_entrega_vacio: "", // 🚀 Inicializado
+    terminal_entrega_vacio: "", //  Inicializado
   });
 
   const [openCombobox, setOpenCombobox] = useState(false);
@@ -243,7 +243,7 @@ export function UpdateStatusModal({
       },
       {
         value: "accidente",
-        label: "🚨 Accidente / Siniestro Mayor",
+        label: "  Accidente / Siniestro Mayor",
         color: "bg-red-800",
       },
       {
@@ -345,7 +345,7 @@ export function UpdateStatusModal({
       }}
     >
       <DialogContent className="w-[95vw] sm:max-w-[550px] p-0 flex flex-col max-h-[90vh] overflow-hidden border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl transition-all duration-300">
-        {/* 🚀 CAPA 2: HEADER TAHOE */}
+        {/*  CAPA 2: HEADER TAHOE */}
         <DialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center gap-4 sm:gap-5">
@@ -390,7 +390,7 @@ export function UpdateStatusModal({
           </div>
         </DialogHeader>
 
-        {/* 🚀 CAPA 3: BODY Y FORMULARIO */}
+        {/*  CAPA 3: BODY Y FORMULARIO */}
         <form
           onSubmit={handleSubmit}
           className="flex-1 min-h-0 overflow-hidden flex flex-col"
@@ -489,7 +489,7 @@ export function UpdateStatusModal({
                             : "border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800",
                         )}
                       >
-                        {/* 🚀 TRUCO: max-width evita que empuje el botón hacia afuera */}
+                        {/*  TRUCO: max-width evita que empuje el botón hacia afuera */}
                         <span className="truncate flex-1 text-left mr-2 max-w-[380px] uppercase text-xs">
                           {formData.location ||
                             "Busca una caseta, ciudad o bodega..."}
@@ -699,7 +699,7 @@ export function UpdateStatusModal({
                 </div>
               </div>
 
-              {/* 🚀 FASE 1: CAMPO RECUPERADO PARA ENTREGA DE VACÍO */}
+              {/*  FASE 1: CAMPO RECUPERADO PARA ENTREGA DE VACÍO */}
               {formData.status === "entrega_vacio" && (
                 <div className="space-y-2 animate-in fade-in slide-in-from-top-2 p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl">
                   <Label className="text-[10px] font-black text-purple-700 uppercase tracking-widest flex items-center gap-1.5">
@@ -816,7 +816,7 @@ export function UpdateStatusModal({
             </div>
           </div>
 
-          {/* 🚀 CAPA 4: FOOTER TAHOE */}
+          {/*  CAPA 4: FOOTER TAHOE */}
           <DialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
             <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
               <Button

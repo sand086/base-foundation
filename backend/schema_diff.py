@@ -1,8 +1,8 @@
 # schema_diff.py
 from sqlalchemy import inspect
 
-from app.db.database import engine  # ✅ ya lo creas en database.py
-from app.models import models  # ✅ aquí debe estar Base.metadata
+from app.db.database import engine  #   ya lo creas en database.py
+from app.models import models  #   aquí debe estar Base.metadata
 
 insp = inspect(engine)
 

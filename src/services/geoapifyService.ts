@@ -16,7 +16,7 @@ export const geoapifyService = {
     }
 
     try {
-      // 🚀 filter=countrycode:mx restringe los resultados a México para mayor precisión
+      //  filter=countrycode:mx restringe los resultados a México para mayor precisión
       const url = `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(text)}&apiKey=${API_KEY}&lang=es&limit=5&filter=countrycode:mx`;
 
       const requestOptions = {
