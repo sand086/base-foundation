@@ -7,7 +7,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,19 +16,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { toast } from "sonner";
 import {
   Truck,
@@ -43,13 +29,10 @@ import {
   Loader2,
   Hash,
   Activity,
-  ChevronsUpDown,
-  PlusCircle,
   Edit2,
   Save,
   FileText,
   Undo,
-  Link2Off,
   Container,
   CalendarDays,
   Gauge,
@@ -66,8 +49,7 @@ import { useBilling } from "@/hooks/useBilling";
 import axiosClient from "@/api/axiosClient";
 import { cn, checkIsFullTrip } from "@/lib/utils";
 
-// Extendemos TripLeg localmente para enseñarle a TypeScript las propiedades
-// y estados (como "liquidado") que manda el backend pero que aún no están en api.types.ts
+// Extendemos TripLeg localmente
 interface ExtendedTripLeg extends Omit<TripLeg, "status"> {
   status: TripStatus | "liquidado" | string;
   total_anticipos?: number;
@@ -84,12 +66,6 @@ interface TripDetailsModalProps {
   onSettleClick?: (leg: TripLeg, trip: Trip) => void;
   onIncidentClick?: (trip: Trip) => void;
   onUpdateStatusClick?: (trip: Trip, leg?: TripLeg) => void;
-}
-
-interface Terminal {
-  id: number;
-  nombre: string;
-  record_status: string;
 }
 
 export function TripDetailsModal({
@@ -110,12 +86,6 @@ export function TripDetailsModal({
   const [tarifaBase, setTarifaBase] = useState(0);
   const [costoCasetas, setCostoCasetas] = useState(0);
 
-  const [showTerminalModal, setShowTerminalModal] = useState(false);
-  const [terminals, setTerminals] = useState<Terminal[]>([]);
-  const [selectedTerminal, setSelectedTerminal] = useState("");
-  const [searchTerminalQuery, setSearchTerminalQuery] = useState("");
-  const [terminalComboboxOpen, setTerminalComboboxOpen] = useState(false);
-  const [isCreatingTerminal, setIsCreatingTerminal] = useState(false);
   const [finishingLeg, setFinishingLeg] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isUndoing, setIsUndoing] = useState(false);
@@ -136,10 +106,6 @@ export function TripDetailsModal({
   }, [trip]);
 
   useEffect(() => {
-    if (open) loadTerminals();
-  }, [open]);
-
-  useEffect(() => {
     if (trip) {
       if (!isEditing) {
         setTarifaBase(trip.tarifa_base || 0);
@@ -150,35 +116,6 @@ export function TripDetailsModal({
       }
     }
   }, [trip?.id, trip?.uuid_fiscal, isEditing]);
-
-  const loadTerminals = async () => {
-    try {
-      const response = await axiosClient.get("/terminals");
-      setTerminals(response.data);
-    } catch (error) {
-      console.error("Error cargando terminales", error);
-    }
-  };
-
-  const handleCreateTerminal = async (nombre: string) => {
-    if (!nombre.trim()) return;
-    setIsCreatingTerminal(true);
-    try {
-      const response = await axiosClient.post("/terminals", { nombre });
-      setTerminals((prev) =>
-        [...prev, response.data].sort((a, b) =>
-          a.nombre.localeCompare(b.nombre),
-        ),
-      );
-      setSelectedTerminal(response.data.nombre);
-      setTerminalComboboxOpen(false);
-      toast.success("Terminal añadida");
-    } catch {
-      toast.error("Error al crear la terminal");
-    } finally {
-      setIsCreatingTerminal(false);
-    }
-  };
 
   const activeLeg = useMemo(() => {
     if (!trip) return undefined;
@@ -237,7 +174,7 @@ export function TripDetailsModal({
       costo_casetas: Number(costoCasetas),
     });
     if (success) {
-      await refreshTrips();
+      await forceUIRefresh();
       setIsEditing(false);
       toast.success("Montos de facturación actualizados.");
     }
@@ -246,11 +183,23 @@ export function TripDetailsModal({
 
   const handleManualSync = async () => {
     setIsSyncing(true);
-    await refreshTrips();
+    await forceUIRefresh();
     setIsSyncing(false);
     toast.success("Datos sincronizados.");
   };
 
+  // 🚀 FUNCIÓN DE ACTUALIZACIÓN FORZADA PARA ELIMINAR CACHÉ
+  const forceUIRefresh = async () => {
+    try {
+      await refreshTrips();
+      // Despachamos un evento nativo para que cualquier componente que use Caché revalide
+      window.dispatchEvent(new Event("force-trip-refresh"));
+    } catch (e) {
+      console.error("Error al refrescar la UI", e);
+    }
+  };
+
+  // 🚀 DESHACER INTELIGENTE CON ACTUALIZACIÓN FORZADA
   const handleUndoLeg = async () => {
     const isFirstLeg = trip?.legs?.length === 1;
     const msg = isFirstLeg
@@ -262,66 +211,72 @@ export function TripDetailsModal({
 
     setIsUndoing(true);
     try {
-      const response = await axiosClient.post(`/trips/${trip?.id}/undo-leg`);
+      const legs = trip?.legs || [];
+      const targetLegToLog =
+        legs.length > 1 ? legs[legs.length - 2] : activeLeg;
 
-      if (isFirstLeg) {
-        toast.success("Viaje retornado a Planeador exitosamente.");
-        onOpenChange(false);
-        refreshTrips();
-      } else {
-        toast.success("Fase revertida exitosamente.");
-        if (response.data) {
-          await refreshTrips();
-        }
+      if (targetLegToLog) {
+        await addTimelineEvent(
+          String(trip?.id),
+          targetLegToLog.id,
+          {
+            status: "retraso",
+            location: "Sistema Logístico",
+            comments: `⏪ REVERSO OPERATIVO: Se deshizo la fase [${activeLeg?.leg_type.toUpperCase()}]. El viaje retornó al estado previo.`,
+          },
+          false,
+        );
       }
+
+      await axiosClient.post(`/trips/${trip?.id}/undo-leg`);
+
+      toast.success(
+        isFirstLeg
+          ? "Viaje retornado a Planeador exitosamente."
+          : "Fase revertida y bitácora actualizada.",
+      );
+
+      onOpenChange(false);
+
+      // Forzamos actualización de React ignorando Caché
+      await forceUIRefresh();
     } catch (error: any) {
       const errorMsg =
         error.response?.data?.detail ||
-        "Error al deshacer. Es probable que la fase ya esté liquidada.";
+        "Error al deshacer. Es probable que la fase ya esté liquidada o bloqueada.";
       toast.error(errorMsg);
     } finally {
       setIsUndoing(false);
     }
   };
 
-  const submitTerminalArrival = async () => {
-    if (!activeLeg || !selectedTerminal) return;
+  // 🚀 FASE 3: ENTREGA DE VACÍO
+  const submitEmptyReturn = async () => {
+    if (!activeLeg) return;
     setFinishingLeg(true);
-
-    // Determinamos si es el final absoluto (Fase 3) o solo arribo (Fase 2)
-    const isPhase3 = activeLeg.leg_type === "entrega_vacio";
-    const newStatus = isPhase3 ? "entregado" : "arribo_cliente";
-    const logMessage = isPhase3
-      ? `VIAJE FINALIZADO: Contenedor retornado en: ${selectedTerminal}.`
-      : `ARRIBO A CLIENTE: Unidad reportada en destino: ${selectedTerminal}. pendiente retorno de vacío.`;
 
     try {
       await addTimelineEvent(
         String(trip?.id),
         activeLeg.id,
         {
-          status: newStatus,
-          location: selectedTerminal,
-          comments: logMessage,
+          status: "entregado",
+          location: "Terminal / Patio Asignado",
+          comments: `VIAJE FINALIZADO: Equipo/Contenedor retornado vacío exitosamente.`,
         },
-        isPhase3, // Solo cerramos el leg (is_final) si es Fase 3
+        true,
       );
 
-      // 🚀 REGLA DE GUSTAVO: Solo liberar remolques si es Fase 3 (Vacío)
-      if (isPhase3) {
-        if (trip?.remolque_1_id)
-          await updateLoadStatus(trip.remolque_1_id, false);
-        if (trip?.remolque_2_id)
-          await updateLoadStatus(trip.remolque_2_id, false);
-        toast.success("Viaje concluido y equipo liberado.");
-      } else {
-        toast.success("Arribo registrado. El viaje continúa en Fase de Vacío.");
-      }
+      if (trip?.remolque_1_id)
+        await updateLoadStatus(trip.remolque_1_id, false);
+      if (trip?.remolque_2_id)
+        await updateLoadStatus(trip.remolque_2_id, false);
 
-      setShowTerminalModal(false);
-      await refreshTrips();
+      toast.success("Viaje concluido y equipo liberado exitosamente.");
+      onOpenChange(false);
+      await forceUIRefresh();
     } catch {
-      toast.error("Error al registrar el movimiento.");
+      toast.error("Error al registrar la entrega del vacío.");
     } finally {
       setFinishingLeg(false);
     }
@@ -335,7 +290,6 @@ export function TripDetailsModal({
     const toastId = toast.loading("Preparando archivos para descarga...");
 
     try {
-      // 1. Descargar PDF
       const resPdf = await axiosClient.get(
         `/billing/invoice/${uuidToDownload}/pdf`,
         { responseType: "blob" },
@@ -353,7 +307,6 @@ export function TripDetailsModal({
       pdfLink.click();
       document.body.removeChild(pdfLink);
 
-      // 2. Pausa milimétrica para que el navegador no bloquee el popup
       setTimeout(async () => {
         try {
           const resXml = await axiosClient.get(
@@ -385,7 +338,6 @@ export function TripDetailsModal({
     }
   };
 
-  // Función Individual para cuando el usuario hace clic manual
   const handleDownloadXML = async (uuidToDownload: string) => {
     const toastId = toast.loading("Descargando XML...");
     try {
@@ -470,15 +422,15 @@ export function TripDetailsModal({
         };
       case "ruta_carretera":
         return {
-          text: "Registrar Arribo a Cliente", // Antes: "Relevo (Desenganchar)"
-          icon: <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />,
-          color: "bg-orange-600 hover:bg-orange-700", // Color preventivo (no es el final)
+          text: "Siguiente Fase (Retorno Vacío)", // <--- REGRESAMOS AL TEXTO LÓGICO
+          icon: <ArrowRightCircle className="h-3.5 w-3.5 mr-1.5" />,
+          color: "bg-orange-600 hover:bg-orange-700 text-white",
         };
       case "entrega_vacio":
         return {
-          text: "Finalizar Movimiento",
+          text: "Finalizar y Liberar Equipo",
           icon: <Flag className="h-3.5 w-3.5 mr-1.5" />,
-          color: "bg-emerald-600 hover:bg-emerald-700",
+          color: "bg-emerald-600 hover:bg-emerald-700 text-white",
         };
       default:
         return {
@@ -499,7 +451,6 @@ export function TripDetailsModal({
           <DialogHeader className="p-6 pb-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
             <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
 
-            {/* Fila 1: Título e Info del Cliente (Alejado de la X de cerrar) */}
             <div className="relative z-10 flex flex-col md:flex-row justify-between md:items-start gap-6 pr-10">
               <div className="flex items-center gap-4 sm:gap-5">
                 <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shadow-inner shrink-0 icon-plate border border-blue-200 dark:border-blue-500/20">
@@ -523,7 +474,6 @@ export function TripDetailsModal({
               </div>
             </div>
 
-            {/* Fila 2: BREADCRUMB DE RUTA Y EQUIPOS */}
             <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4 mt-5">
               <div className="flex items-center flex-wrap gap-2 font-black text-slate-500 dark:text-slate-400 uppercase text-[10px] tracking-widest">
                 <span className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded shadow-sm border border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-300">
@@ -542,7 +492,6 @@ export function TripDetailsModal({
                   {isFullTrip ? "FULL / 9 EJES" : "SENCILLO / 5 EJES"}
                 </Badge>
 
-                {/* CONTENEDORES REALES */}
                 {(trip as any).contenedor_1 && (
                   <Badge
                     variant="outline"
@@ -573,7 +522,6 @@ export function TripDetailsModal({
                 )}
               </div>
 
-              {/* Equipos Asignados */}
               <div className="flex items-center flex-wrap gap-2">
                 <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mr-1">
                   Equipos:
@@ -606,7 +554,6 @@ export function TripDetailsModal({
               </div>
             </div>
 
-            {/* 🚀 Fila 3: BOTONERA DE ACCIONES (Reubicada abajo para no encimarse) */}
             <div className="relative z-10 flex flex-wrap items-center gap-3 mt-5 pt-4 border-t border-slate-100 dark:border-white/5">
               <Button
                 variant="outline"
@@ -629,15 +576,13 @@ export function TripDetailsModal({
                     "h-10 px-5 text-[10px] font-black shadow-sm transition-all uppercase tracking-widest border-none haptic-press",
                     localUuid
                       ? "bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-500/20"
-                      : "bg-brand-red hover:bg-brand-red/80 text-white shadow-brand-red/20",
+                      : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-500/20",
                   )}
                   onClick={() => {
                     if (localUuid) {
-                      // Acción cuando ya está timbrado: Solo Descargar PDF
                       handleDownloadPDF(localUuid);
                     } else {
-                      // Acción cuando no hay UUID: Timbrar
-                      handleStampNominal(trip.id, (responseData) => {
+                      handleStampNominal(trip.id, async (responseData) => {
                         const generatedUuid = responseData?.data?.uuid;
                         if (generatedUuid) {
                           setLocalUuid(generatedUuid);
@@ -646,7 +591,7 @@ export function TripDetailsModal({
                             "¡CARTA PORTE BYPASS GENERADA Y DESCARGADA!",
                           );
                         }
-                        refreshTrips();
+                        await forceUIRefresh(); // Forzamos reactividad
                       });
                     }
                   }}
@@ -659,13 +604,11 @@ export function TripDetailsModal({
                   ) : (
                     <Activity className="h-4 w-4 mr-2" />
                   )}
-                  {/* TEXTO DINÁMICO SEGÚN EL ESTADO */}
                   {localUuid
                     ? "Descargar Carta Porte (PDF)"
                     : "Timbrar CP Bypass ($1)"}
                 </Button>
 
-                {/* BOTÓN EXTRA: SOLO APARECE SI YA ESTÁ TIMBRADO PARA DESCARGAR XML */}
                 {localUuid && (
                   <Button
                     variant="outline"
@@ -744,8 +687,6 @@ export function TripDetailsModal({
                       <div className="space-y-4">
                         {(trip.legs as ExtendedTripLeg[])?.map((leg, idx) => {
                           const btnUI = getRelayButtonUI(leg.leg_type);
-                          const isEntregaVacio =
-                            leg.leg_type === "entrega_vacio";
 
                           return (
                             <Card
@@ -763,7 +704,6 @@ export function TripDetailsModal({
                                     {String(idx + 1).padStart(2, "0")}
                                   </span>
                                 </div>
-                                {/* Cabecera de la Fase */}
                                 <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
                                   <div className="space-y-1.5 flex-1">
                                     <p className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
@@ -815,11 +755,20 @@ export function TripDetailsModal({
                                             "h-8 font-black text-[9px] uppercase tracking-widest shadow-lg haptic-press text-white",
                                             btnUI.color,
                                           )}
+                                          disabled={finishingLeg}
                                           onClick={() => {
-                                            // 🚀 FIX: Si es entrega vacío, no pedimos relevo (NextLeg). Pedimos cerrar terminal.
-                                            if (isEntregaVacio) {
-                                              setShowTerminalModal(true);
+                                            if (
+                                              leg.leg_type === "entrega_vacio"
+                                            ) {
+                                              // FASE 3: Cierre final directo
+                                              const confirmEmpty =
+                                                window.confirm(
+                                                  "¿Confirmas la entrega del equipo vacío en el patio asignado?",
+                                                );
+                                              if (confirmEmpty)
+                                                submitEmptyReturn();
                                             } else if (onRelayClick) {
+                                              // FASES 1 y 2: Abren el NextLegModal para crear la siguiente etapa
                                               onRelayClick(
                                                 leg as unknown as TripLeg,
                                                 trip,
@@ -827,7 +776,11 @@ export function TripDetailsModal({
                                             }
                                           }}
                                         >
-                                          {btnUI.icon}
+                                          {finishingLeg ? (
+                                            <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                                          ) : (
+                                            btnUI.icon
+                                          )}
                                           {btnUI.text}
                                         </Button>
                                       )}
@@ -851,7 +804,6 @@ export function TripDetailsModal({
                                   </div>
                                 </div>
 
-                                {/* Desglose Info Operativa */}
                                 <div className="border-t border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-slate-900/30 p-4 px-6 relative z-10">
                                   <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                                     <div className="space-y-1">
@@ -913,7 +865,6 @@ export function TripDetailsModal({
                                       </p>
                                     </div>
                                   </div>
-                                  {/* Sub-bloque de Liquidación si ya se cerró */}
                                   {leg.status === "liquidado" && (
                                     <div className="mt-4 p-4 bg-emerald-50 dark:bg-emerald-950/20 rounded-xl border border-emerald-100 dark:border-emerald-900/30 flex flex-wrap gap-6 items-center justify-between shadow-sm">
                                       <div className="space-y-1">
@@ -955,19 +906,6 @@ export function TripDetailsModal({
                             </Card>
                           );
                         })}
-
-                        {/* Botón de Cierre Manual si se quedó atrapado en ruta */}
-                        {trip.status === "en_transito" &&
-                          activeLeg?.leg_type === "ruta_carretera" && (
-                            <Button
-                              variant="outline"
-                              className="w-full border-dashed border-2 h-14 ..."
-                              onClick={() => setShowTerminalModal(true)}
-                            >
-                              <Flag className="h-4 w-4 mr-2 text-orange-500" />{" "}
-                              REGISTRAR ARRIBO CON CLIENTE (PENDIENTE VACÍO)
-                            </Button>
-                          )}
                       </div>
                     </TabsContent>
 
@@ -1179,19 +1117,18 @@ export function TripDetailsModal({
                                         handleStampFinal(
                                           trip.id,
                                           uuidToRelate,
-                                          (responseData: any) => {
+                                          async (responseData: any) => {
                                             const generatedFinalUuid =
                                               responseData?.data?.uuid ||
                                               responseData?.uuid;
                                             if (generatedFinalUuid) {
                                               setFinalUuid(generatedFinalUuid);
-                                              // 🚀 AUTO-DESCARGA DUAL DE LA 4.0
                                               handleDownloadBothFiles(
                                                 generatedFinalUuid,
                                                 true,
                                               );
                                             }
-                                            refreshTrips();
+                                            await forceUIRefresh(); // 🚀 Forzamos reactividad
                                           },
                                         );
                                       }
@@ -1305,164 +1242,6 @@ export function TripDetailsModal({
               </Tabs>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* MODAL DE LLEGADA A TERMINAL */}
-      <Dialog open={showTerminalModal} onOpenChange={setShowTerminalModal}>
-        <DialogContent className="sm:max-w-md w-[95vw] rounded-2xl overflow-visible p-0 border-none shadow-2xl bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl flex flex-col max-h-[90vh]">
-          <DialogHeader className="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-t-2xl border-b border-slate-200 dark:border-white/10 relative overflow-hidden z-10 shrink-0">
-            <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
-            <div className="relative z-10 flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center shadow-inner shrink-0 icon-plate border border-emerald-200 dark:border-emerald-500/20">
-                <MapPin className="h-7 w-7 text-emerald-600 dark:text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.4)]" />
-              </div>
-              <div className="flex flex-col gap-1 text-left min-w-0">
-                <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-emerald-700 dark:text-emerald-400 heading-crisp leading-none">
-                  {activeLeg?.leg_type === "entrega_vacio"
-                    ? "Cierre de Ciclo (Vacío)"
-                    : "Confirmar Llegada a Destino"}
-                </DialogTitle>
-                <DialogDescription className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-1">
-                  {activeLeg?.leg_type === "entrega_vacio"
-                    ? "Indica la terminal donde se entregó el contenedor vacío."
-                    : "Indica el patio o bodega del cliente donde arribó la unidad."}
-                </DialogDescription>
-              </div>
-            </div>
-          </DialogHeader>
-
-          <div className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-6 bg-slate-50/50 dark:bg-transparent custom-scrollbar">
-            <div className="space-y-3">
-              <Label className="font-black text-slate-500 dark:text-slate-400 text-[10px] uppercase tracking-widest flex items-center gap-1.5">
-                <Navigation className="h-3.5 w-3.5 text-brand-navy dark:text-blue-400" />
-                Seleccionar Patio de Arribo *
-              </Label>
-              <Popover
-                open={terminalComboboxOpen}
-                onOpenChange={setTerminalComboboxOpen}
-              >
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={terminalComboboxOpen}
-                    className={cn(
-                      "w-full justify-between h-12 text-left font-black uppercase text-xs tracking-tight shadow-sm border-2 transition-all",
-                      selectedTerminal
-                        ? "bg-emerald-50/50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800/50 text-emerald-800 dark:text-emerald-400"
-                        : "bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800",
-                    )}
-                  >
-                    <span className="truncate mr-2">
-                      {selectedTerminal || "Buscar o escribir terminal..."}
-                    </span>
-                    <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent
-                  className="w-[calc(100vw-3rem)] sm:w-[380px] p-0 shadow-2xl rounded-xl border-slate-200 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl overflow-hidden"
-                  align="start"
-                >
-                  <Command className="bg-transparent">
-                    <div className="relative border-b border-slate-100 dark:border-white/10 bg-slate-50 dark:bg-slate-800">
-                      <CommandInput
-                        placeholder="Escribe el nombre..."
-                        value={searchTerminalQuery}
-                        onValueChange={setSearchTerminalQuery}
-                        className="h-11 border-0 focus:ring-0 font-bold text-xs uppercase tracking-tight"
-                      />
-                    </div>
-                    <CommandList className="max-h-[30vh] sm:max-h-[300px] custom-scrollbar">
-                      <CommandEmpty className="p-6 text-sm flex flex-col items-center gap-4 bg-slate-50/50 dark:bg-slate-900/50">
-                        <span className="text-slate-500 font-black uppercase text-[10px] tracking-widest text-center">
-                          La terminal no existe en el catálogo
-                        </span>
-                        <Button
-                          size="sm"
-                          className="w-full bg-emerald-600 hover:bg-emerald-700 font-black uppercase tracking-widest text-[10px] h-10 shadow-lg shadow-emerald-500/20 haptic-press border-none text-white"
-                          disabled={isCreatingTerminal || !searchTerminalQuery}
-                          onClick={() =>
-                            handleCreateTerminal(searchTerminalQuery)
-                          }
-                        >
-                          {isCreatingTerminal ? (
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          ) : (
-                            <PlusCircle className="h-4 w-4 mr-2" />
-                          )}
-                          AÑADIR COMO NUEVA
-                        </Button>
-                      </CommandEmpty>
-                      <CommandGroup
-                        heading={
-                          <div className="text-[9px] font-black uppercase tracking-widest text-brand-navy dark:text-blue-400 py-1">
-                            Terminales Registradas
-                          </div>
-                        }
-                      >
-                        {terminals
-                          .filter((t) =>
-                            t.nombre
-                              .toLowerCase()
-                              .includes(searchTerminalQuery.toLowerCase()),
-                          )
-                          .map((terminal) => (
-                            <CommandItem
-                              key={terminal.id}
-                              value={terminal.nombre}
-                              onSelect={(v) => {
-                                setSelectedTerminal(v);
-                                setTerminalComboboxOpen(false);
-                              }}
-                              className="py-3 px-4 font-bold text-slate-700 dark:text-slate-200 uppercase text-xs cursor-pointer border-b border-slate-50 dark:border-white/5 last:border-0"
-                            >
-                              <CheckCircle2
-                                className={cn(
-                                  "mr-3 h-4 w-4 shrink-0 transition-all",
-                                  selectedTerminal === terminal.nombre
-                                    ? "opacity-100 text-emerald-600"
-                                    : "opacity-0",
-                                )}
-                              />
-                              <span className="truncate">
-                                {terminal.nombre}
-                              </span>
-                            </CommandItem>
-                          ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-            </div>
-          </div>
-
-          <DialogFooter className="bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl p-6 border-t border-slate-200 dark:border-white/10 shrink-0 z-10 rounded-b-2xl">
-            <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
-              <Button
-                variant="outline"
-                onClick={() => setShowTerminalModal(false)}
-                className="w-full sm:w-auto haptic-press font-black uppercase tracking-widest text-[10px]"
-                size="lg"
-              >
-                Cancelar
-              </Button>
-              <Button
-                onClick={submitTerminalArrival}
-                disabled={finishingLeg || !selectedTerminal}
-                className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-black px-8 shadow-lg shadow-emerald-500/20 rounded-xl haptic-press uppercase tracking-widest text-[10px] border-none"
-                size="lg"
-              >
-                {finishingLeg ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                ) : (
-                  <CheckCircle2 className="h-4 w-4 mr-2" />
-                )}
-                CONFIRMAR LLEGADA
-              </Button>
-            </div>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>
