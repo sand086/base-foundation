@@ -35,7 +35,7 @@ class EmailService:
         to_email = (
             trip.client.email
             if trip.client and trip.client.email
-            else "desarrolloSoft@asicomsystems.com.mx"
+            else "gerencia@3t.com.mx"
         )
         cc_emails = ["desarrolloSoft@asicomsystems.com.mx"]
         destinatarios = [to_email] + cc_emails
