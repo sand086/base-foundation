@@ -388,6 +388,9 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
     FASE 4: Liquidación adaptada para Movimientos de Patio y Vacío
     (Modificado: SIN inyectar Tarifa del Cliente y SIN descontar Casetas)
     """
+    import uuid
+    from app.schemas import trips as schemas
+
     leg = (
         db.query(models.TripLeg)
         .options(joinedload(models.TripLeg.trip))
@@ -404,12 +407,26 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
     is_ruta = leg.leg_type == models.TripLegType.RUTA
     is_full = (trip.dolly_id is not None) or (trip.remolque_2_id is not None)
 
-    kms_recorridos = (
-        trip.tariff.distancia_km if trip.tariff and trip.tariff.distancia_km else 0
-    )
+    # 🚀 REGLA 4: DISTANCIA REAL VS ESTIMADA
+    if (
+        leg.odometro_final
+        and leg.odometro_inicial
+        and leg.odometro_final > leg.odometro_inicial
+    ):
+        kms_recorridos = float(leg.odometro_final - leg.odometro_inicial)
+    else:
+        kms_recorridos = float(
+            trip.tariff.distancia_km if trip.tariff and trip.tariff.distancia_km else 0
+        )
 
+    # 🚀 Filtramos solo los vales activos asignados a este tramo específico
     fuel_logs = (
-        db.query(models.FuelLog).filter(models.FuelLog.trip_leg_id == trip_leg_id).all()
+        db.query(models.FuelLog)
+        .filter(
+            models.FuelLog.trip_leg_id == trip_leg_id,
+            models.FuelLog.record_status == "A",
+        )
+        .all()
     )
 
     # Solo exige combustible si es un viaje de Carretera
@@ -425,27 +442,42 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
 
     conceptos = []
 
-    #  Lógica si es CARRETERA
+    #  Lógica si es CARRETERA (La Matemática de Gustavo)
     if is_ruta:
-        consumo_real_litros = sum(f.litros for f in fuel_logs)
-        if fuel_logs:
-            precio_promedio_litro = sum(f.precio_por_litro for f in fuel_logs) / len(
-                fuel_logs
+        vales_diesel = [f for f in fuel_logs if f.tipo_combustible == "diesel"]
+        consumo_real_litros = sum(f.litros for f in vales_diesel)
+
+        if vales_diesel:
+            precio_promedio_litro = sum(f.precio_por_litro for f in vales_diesel) / len(
+                vales_diesel
             )
 
-        RENDIMIENTO_ESPERADO = (
+        RENDIMIENTO_ESPERADO = float(
             getattr(leg.unit, "rendimiento_ecm_esperado", 3.2) if leg.unit else 3.2
         )
         consumo_esperado = (
             kms_recorridos / RENDIMIENTO_ESPERADO if kms_recorridos > 0 else 0
         )
 
+        # REGLA 3: Algoritmo de Auditoría y Penalización (5%)
         TOLERANCIA_PCT = 0.05
         diferencia_litros = consumo_real_litros - consumo_esperado
 
         if diferencia_litros > (consumo_esperado * TOLERANCIA_PCT):
             litros_a_cobrar = diferencia_litros
             deduccion_combustible = litros_a_cobrar * precio_promedio_litro
+
+            # REGLA 4: DEDUCCIÓN INAMOVIBLE
+            conceptos.append(
+                schemas.ConceptoPago(
+                    id=str(uuid.uuid4())[:8],
+                    tipo="deduccion",
+                    categoria="combustible",
+                    descripcion=f"Vale Exceso Diésel ({litros_a_cobrar:.1f} L extra)",
+                    monto=deduccion_combustible,
+                    esAutomatico=True,
+                )
+            )
 
         # 🚀 FASE 2 RESUELTA:
         # Aquí eliminamos el código que inyectaba `trip.tarifa_base`.
@@ -507,18 +539,6 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
                 categoria="anticipo",
                 descripcion="Otros Anticipos",
                 monto=leg.otros_anticipos,
-                esAutomatico=True,
-            )
-        )
-
-    if deduccion_combustible > 0:
-        conceptos.append(
-            schemas.ConceptoPago(
-                id=str(uuid.uuid4())[:8],
-                tipo="deduccion",
-                categoria="combustible",
-                descripcion=f"Vale Exceso Combustible ({litros_a_cobrar:.1f} L)",
-                monto=deduccion_combustible,
                 esAutomatico=True,
             )
         )
@@ -772,11 +792,13 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
     total_fuel_cost = 0.0
     total_consumo_esperado = 0.0
     alertas = []
+    legs_sin_ticket = []  # 🚀 Agregado para que no falle el frontend
 
     for leg in legs:
         distancia = 0.0
         is_ruta = leg.leg_type == models.TripLegType.RUTA
 
+        # 🚀 REGLA GUSTAVO: Usa el Odómetro de la Auditoría si existe
         if (
             leg.odometro_final
             and leg.odometro_inicial
@@ -787,9 +809,10 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
             distancia = float(
                 leg.trip.tariff.distancia_km if leg.trip and leg.trip.tariff else 0.0
             )
-            alertas.append(
-                f"Tramo #{leg.id}: Usando distancia estimada (Faltan odómetros)."
-            )
+            if is_ruta:
+                alertas.append(
+                    f"Tramo #{leg.id}: Usando distancia teórica (Faltan odómetros en auditoría)."
+                )
 
         if is_ruta:
             total_kms_reales += distancia
@@ -798,17 +821,30 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
                 (distancia / rendimiento) if distancia > 0 else 0.0
             )
 
-        fuel_logs_activos = [f for f in leg.fuel_logs if f.record_status == "A"]
-        for f in fuel_logs_activos:
-            total_real_liters += f.litros
-            total_fuel_cost += f.litros * f.precio_por_litro
+            # Filtramos solo los vales activos de diésel
+            fuel_logs_activos = [
+                f
+                for f in leg.fuel_logs
+                if f.record_status == "A" and f.tipo_combustible == "diesel"
+            ]
 
+            if not fuel_logs_activos:
+                legs_sin_ticket.append(leg.id)
+
+            for f in fuel_logs_activos:
+                total_real_liters += f.litros
+                total_fuel_cost += f.litros * f.precio_por_litro
+
+    # Prevenir división por cero si no hay vales pero sí hay kms
     precio_promedio = (
         (total_fuel_cost / total_real_liters) if total_real_liters > 0 else 24.50
     )
+
+    # 🚀 REGLA GUSTAVO: Diferencia Real
     diferencia_litros = total_real_liters - total_consumo_esperado
 
     deduccion_combustible = 0.0
+    # Si quemó más de la tolerancia permitida
     if diferencia_litros > (total_consumo_esperado * 0.05):
         deduccion_combustible = diferencia_litros * precio_promedio
 
@@ -820,6 +856,7 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
         "precio_promedio": round(precio_promedio, 2),
         "deduccion_combustible": round(deduccion_combustible, 2),
         "alertas": alertas,
+        "legs_sin_ticket": legs_sin_ticket,
     }
 
 

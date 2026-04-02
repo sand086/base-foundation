@@ -11,12 +11,17 @@ export const fuelService = {
   create: async (formData: any) => {
     const dataToSend = new FormData();
 
-    // Mapeamos el objeto plano a FormData
+    // Mapeamos el objeto plano a FormData de forma SEGURA
     Object.keys(formData).forEach((key) => {
-      if (key === "evidencia" && formData[key]) {
-        dataToSend.append("file", formData[key]);
-      } else {
-        dataToSend.append(key, formData[key]);
+      const value = formData[key];
+
+      // Manejo de la imagen
+      if (key === "evidencia" && value) {
+        dataToSend.append("file", value);
+      }
+      // Solo enviamos campos que tengan un valor real (evita mandar "null" o "")
+      else if (value !== null && value !== undefined && value !== "") {
+        dataToSend.append(key, value);
       }
     });
 
@@ -27,7 +32,6 @@ export const fuelService = {
   },
 
   update: async (id: number | string, data: any) => {
-    // Si la edición no incluye archivo, enviamos JSON plano
     const { data: response } = await axiosClient.put(
       `/fuel/fuel-logs/${id}`,
       data,

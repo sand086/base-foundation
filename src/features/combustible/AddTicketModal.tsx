@@ -36,10 +36,11 @@ import {
   Truck,
   FileImage,
   CalendarDays,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// IMPORTAMOS CONFIGURACIONES REALES
 import { FUEL_CONFIG } from "@/types/api.types";
 import { useClients } from "@/hooks/useClients";
 import { useTrips } from "@/hooks/useTrips";
@@ -50,75 +51,30 @@ import { useUnits } from "@/hooks/useUnits";
  * Types
  * ========================= */
 
-export interface TicketFormData {
-  unit_id: string;
-  operator_id: string;
-  trip_id: string;
-  trip_leg_id?: string | null; // 🚀 FIX: Añadido para que el backend lo reconozca
+// Estructura de cada ticket individual dentro del modal
+interface SubTicket {
+  id: string;
   fecha_hora: string;
   estacion: string;
   litros_diesel: number;
   precio_diesel: number;
-  odometro: string | number;
   evidencia: File | null;
+}
+
+export interface TicketFormData {
+  unit_id: string;
+  operator_id: string;
+  trip_id: string;
+  trip_leg_id?: string | null;
+  odometro: string | number;
+  tickets: SubTicket[]; // 🚀 Actualizado para soportar múltiples
 }
 
 interface AddTicketModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (data: TicketFormData) => void;
-  initialData?: Partial<TicketFormData> & {
-    unit_id?: string | number;
-    operator_id?: string | number;
-    trip_id?: string | number;
-  };
-}
-
-interface ClientItem {
-  id: string | number;
-  razon_social?: string;
-  nombre?: string;
-  rfc?: string;
-}
-
-interface TripLegItem {
-  id: string | number;
-  status?: string;
-  unit_id?: string | number;
-  operator_id?: string | number;
-}
-
-interface TripItem {
-  id: string | number;
-  public_id?: string | number;
-  status?: string;
-  client_id?: string | number;
-  origin?: string;
-  destination?: string;
-  start_date?: string;
-  created_at?: string;
-  client?: {
-    razon_social?: string;
-  };
-  legs?: TripLegItem[];
-}
-
-interface UnitItem {
-  id: string | number;
-  numero_economico?: string | number;
-  placas?: string;
-  capacidad_tanque_diesel?: string | number;
-}
-
-interface OperatorItem {
-  id: string | number;
-  name?: string;
-  nombre?: string;
-}
-
-interface SearchableSelectItem {
-  label: string;
-  value: string;
+  onSubmit: (data: any) => void; // Recibe el array de tickets para procesar
+  initialData?: any;
 }
 
 /** =========================
@@ -130,38 +86,25 @@ function SearchableSelect({
   value,
   onSelect,
   placeholder,
-  emptyMessage = "No se encontraron coincidencias.",
   disabled = false,
-}: {
-  items: SearchableSelectItem[];
-  value: string;
-  onSelect: (val: string) => void;
-  placeholder: string;
-  emptyMessage?: string;
-  disabled?: boolean;
-}) {
+}: any) {
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-
-  const selectedItem = items.find((item) => item.value === value);
+  const selectedItem = items.find((item: any) => item.value === value);
 
   const filteredItems = useMemo(() => {
     if (!searchQuery.trim()) return items;
-
     const normalize = (str: string) =>
       str
         .toLowerCase()
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "");
-
     const normalizedSearch = normalize(searchQuery);
-
-    return items.filter((item) =>
+    return items.filter((item: any) =>
       normalize(item.label).includes(normalizedSearch),
     );
   }, [items, searchQuery]);
 
-  // 🚀 FIX: El Popover tiene modal={true} y se eliminó el comentario problemático
   return (
     <Popover open={!disabled && open} onOpenChange={setOpen} modal={true}>
       <PopoverTrigger asChild>
@@ -169,70 +112,49 @@ function SearchableSelect({
           type="button"
           variant="outline"
           role="combobox"
-          aria-expanded={open}
           disabled={disabled}
           className={cn(
-            "h-11 w-full justify-between rounded-2xl px-3 text-left shadow-sm",
-            "border-white/60 bg-white/85 backdrop-blur-xl",
-            "hover:bg-white dark:border-white/10 dark:bg-brand-navy/80 dark:hover:bg-brand-navy/90",
-            "text-slate-800 dark:text-slate-100",
-            disabled &&
-              "opacity-50 cursor-not-allowed bg-slate-100 dark:bg-slate-900",
+            "h-11 w-full justify-between rounded-2xl px-3 text-left shadow-sm border-white/60 bg-white/85 backdrop-blur-xl hover:bg-white text-slate-800",
+            disabled && "opacity-50 cursor-not-allowed bg-slate-100",
           )}
         >
-          {selectedItem ? (
-            <span className="truncate text-sm font-semibold">
-              {selectedItem.label}
-            </span>
-          ) : (
-            <span className="truncate text-sm text-slate-500 dark:text-slate-400">
-              {placeholder}
-            </span>
-          )}
+          <span className="truncate text-sm font-semibold">
+            {selectedItem ? selectedItem.label : placeholder}
+          </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-60" />
         </Button>
       </PopoverTrigger>
-
       <PopoverContent
         align="start"
-        className={cn(
-          "z-[9999] w-[var(--radix-popover-trigger-width)] p-0 rounded-2xl shadow-2xl",
-          "border border-slate-200/80 bg-white/95 backdrop-blur-xl",
-          "dark:border-white/10 dark:bg-slate-950/95",
-        )}
+        className="z-[9999] w-[var(--radix-popover-trigger-width)] p-0 rounded-2xl shadow-2xl border border-slate-200/80 bg-white/95"
       >
-        <Command shouldFilter={false} className="bg-transparent">
+        <Command shouldFilter={false}>
           <CommandInput
-            placeholder="Escribe para buscar..."
-            className="h-11 text-sm"
+            placeholder="Buscar..."
+            className="h-11"
             value={searchQuery}
             onValueChange={setSearchQuery}
           />
-          <CommandList className="max-h-[260px] overflow-y-auto custom-scrollbar">
+          <CommandList className="max-h-[260px] overflow-y-auto">
             {filteredItems.length === 0 ? (
-              <CommandEmpty className="p-4 text-center text-sm text-slate-500 dark:text-slate-400">
-                {emptyMessage}
+              <CommandEmpty className="p-4 text-sm text-slate-500">
+                Sin coincidencias.
               </CommandEmpty>
             ) : (
               <CommandGroup>
-                {filteredItems.map((item) => (
+                {filteredItems.map((item: any) => (
                   <CommandItem
                     key={item.value}
-                    value={item.value}
                     onSelect={() => {
                       onSelect(item.value);
                       setOpen(false);
                       setSearchQuery("");
                     }}
-                    className={cn(
-                      "cursor-pointer py-3 text-sm",
-                      "border-b border-slate-100 last:border-b-0",
-                      "dark:border-white/5",
-                    )}
+                    className="cursor-pointer py-3 text-sm border-b border-slate-100"
                   >
                     <Check
                       className={cn(
-                        "mr-3 h-4 w-4 shrink-0 text-emerald-600",
+                        "mr-3 h-4 w-4 text-emerald-600",
                         value === item.value ? "opacity-100" : "opacity-0",
                       )}
                     />
@@ -250,26 +172,7 @@ function SearchableSelect({
 
 function toDatetimeLocalValue(date: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");
-  const y = date.getFullYear();
-  const m = pad(date.getMonth() + 1);
-  const d = pad(date.getDate());
-  const hh = pad(date.getHours());
-  const mm = pad(date.getMinutes());
-  return `${y}-${m}-${d}T${hh}:${mm}`;
-}
-
-function clampFileSize(file: File, maxMB: number) {
-  return file.size <= maxMB * 1024 * 1024;
-}
-
-function safeNumber(value: string, fallback = 0) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : fallback;
-}
-
-function safeInt(value: string, fallback = 0) {
-  const n = parseInt(value, 10);
-  return Number.isFinite(n) ? n : fallback;
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 export function AddTicketModal({
@@ -278,655 +181,376 @@ export function AddTicketModal({
   onSubmit,
   initialData,
 }: AddTicketModalProps) {
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-
   const { clients = [] } = useClients();
   const { trips = [] } = useTrips();
   const { operadores = [] } = useOperators();
   const { unidades = [] } = useUnits();
 
-  const safeClients = Array.isArray(clients) ? (clients as ClientItem[]) : [];
-  const safeTrips = Array.isArray(trips) ? (trips as TripItem[]) : [];
-  const safeOperators = Array.isArray(operadores)
-    ? (operadores as OperatorItem[])
-    : [];
-  const safeUnits = Array.isArray(unidades) ? (unidades as UnitItem[]) : [];
-
-  const [formData, setFormData] = useState<TicketFormData>({
+  // Estados de vinculación (Padre)
+  const [parentData, setParentData] = useState({
     unit_id: "",
     operator_id: "",
     trip_id: "",
-    fecha_hora: toDatetimeLocalValue(new Date()),
-    estacion: "",
-    litros_diesel: 0,
-    precio_diesel: FUEL_CONFIG.PRECIOS_PROMEDIO.diesel,
-    odometro: "",
-    evidencia: null,
+    trip_leg_id: null as string | null,
+    odometro: "" as string | number,
   });
 
-  useEffect(() => {
-    if (!open) return;
-    setFormData((prev) => ({
-      ...prev,
+  // 🚀 REGLA GUSTAVO: Lista de tickets dinámicos
+  const [tickets, setTickets] = useState<SubTicket[]>([
+    {
+      id: crypto.randomUUID(),
       fecha_hora: toDatetimeLocalValue(new Date()),
-    }));
-  }, [open]);
+      estacion: "",
+      litros_diesel: 0,
+      precio_diesel: FUEL_CONFIG.PRECIOS_PROMEDIO.diesel,
+      evidencia: null,
+    },
+  ]);
 
-  const selectedUnit = useMemo(() => {
-    if (!formData.unit_id) return undefined;
-    return safeUnits.find((u) => String(u.id) === formData.unit_id);
-  }, [safeUnits, formData.unit_id]);
-
-  const activeTrips = useMemo(() => {
-    return safeTrips.filter(
-      (t) => String(t.status ?? "").toLowerCase() !== "liquidado",
-    );
-  }, [safeTrips]);
-
-  // Búsqueda simplificada y centralizada
-  const searchableTrips = useMemo<SearchableSelectItem[]>(() => {
-    const list = activeTrips.map((t) => {
-      const foundClient = safeClients.find(
-        (c) => String(c.id) === String(t.client_id),
-      );
-
-      const clientName =
-        foundClient?.razon_social ||
-        t.client?.razon_social ||
-        foundClient?.nombre ||
-        "Sin Cliente";
-
-      const activeLeg =
-        t.legs?.find(
-          (l) =>
-            !["entregado", "cerrado", "liquidado"].includes(
-              String(l.status ?? "").toLowerCase(),
-            ),
-        ) || t.legs?.[(t.legs?.length || 1) - 1];
-
-      const opName =
-        safeOperators.find(
-          (o) => String(o.id) === String(activeLeg?.operator_id),
-        )?.name || "S/Operador";
-      const unitEco =
-        safeUnits.find((u) => String(u.id) === String(activeLeg?.unit_id))
-          ?.numero_economico || "S/Unidad";
-
-      return {
-        label: `Folio ${t.public_id || t.id} | Eco: ${unitEco} | Op: ${opName} | ${clientName} | ${t.origin || "S/O"} ➔ ${t.destination || "S/D"}`,
-        value: String(t.id),
-      };
-    });
-
-    return [
+  const addSubTicket = () => {
+    const lastTicket = tickets[tickets.length - 1];
+    setTickets([
+      ...tickets,
       {
-        label: "Carga Local / Mantenimiento / Patio (Sin Viaje)",
-        value: "none",
+        id: crypto.randomUUID(),
+        // 🚀 HERENCIA: Jala datos del ticket anterior
+        fecha_hora: lastTicket?.fecha_hora || toDatetimeLocalValue(new Date()),
+        estacion: lastTicket?.estacion || "",
+        litros_diesel: 0,
+        precio_diesel:
+          lastTicket?.precio_diesel || FUEL_CONFIG.PRECIOS_PROMEDIO.diesel,
+        evidencia: null,
       },
+    ]);
+  };
+
+  const removeSubTicket = (id: string) => {
+    if (tickets.length > 1) {
+      setTickets(tickets.filter((t) => t.id !== id));
+    }
+  };
+
+  const updateSubTicket = (id: string, field: keyof SubTicket, value: any) => {
+    setTickets(
+      tickets.map((t) => (t.id === id ? { ...t, [field]: value } : t)),
+    );
+  };
+
+  const activeTrips = useMemo(
+    () =>
+      (trips as any[]).filter(
+        (t) => String(t.status ?? "").toLowerCase() !== "liquidado",
+      ),
+    [trips],
+  );
+
+  const searchableTrips = useMemo(() => {
+    const list = activeTrips.flatMap((t) => {
+      const clientName = t.client?.razon_social || "Sin Cliente";
+      return (t.legs || []).map((leg: any) => ({
+        label: `Folio ${t.public_id || t.id} | Fase: ${leg.leg_type?.replace("_", " ").toUpperCase()} | Eco: ${leg.unit?.numero_economico} | Op: ${leg.operator?.name}`,
+        value: `${t.id}|${leg.id}`,
+      }));
+    });
+    return [
+      { label: "Carga Local / Patio (Sin Viaje)", value: "none|none" },
       ...list,
     ];
-  }, [activeTrips, safeClients, safeOperators, safeUnits]);
+  }, [activeTrips]);
 
-  const searchableUnits = useMemo<SearchableSelectItem[]>(() => {
-    return safeUnits.map((u) => ({
-      label: `ECO-${u.numero_economico ?? "S/N"} - ${u.placas || "S/P"}`,
-      value: String(u.id),
-    }));
-  }, [safeUnits]);
-
-  const searchableOperators = useMemo<SearchableSelectItem[]>(() => {
-    return safeOperators.map((o) => ({
-      label: o.name || o.nombre || `Operador #${o.id}`,
-      value: String(o.id),
-    }));
-  }, [safeOperators]);
-
-  const isLinkedToTrip = Boolean(
-    formData.trip_id && formData.trip_id !== "none",
-  );
-
-  const handleTripSelection = (selectedTripId: string) => {
-    if (selectedTripId === "none") {
-      setFormData((prev) => ({ ...prev, trip_id: "none" }));
-      return;
-    }
-
-    const tripObj = activeTrips.find((t) => String(t.id) === selectedTripId);
-
-    if (tripObj) {
-      const activeLeg =
-        tripObj.legs?.find(
-          (l) =>
-            !["entregado", "cerrado", "liquidado"].includes(
-              String(l.status ?? "").toLowerCase(),
-            ),
-        ) || tripObj.legs?.[tripObj.legs.length - 1];
-
-      setFormData((prev) => ({
+  const handleTripSelection = (selectedValue: string) => {
+    if (selectedValue === "none|none") {
+      setParentData((prev) => ({
         ...prev,
-        trip_id: selectedTripId,
-        unit_id: activeLeg?.unit_id ? String(activeLeg.unit_id) : prev.unit_id,
-        operator_id: activeLeg?.operator_id
-          ? String(activeLeg.operator_id)
-          : prev.operator_id,
+        trip_id: "none",
+        trip_leg_id: null,
       }));
-
-      toast.success("Viaje vinculado", {
-        description:
-          "Unidad y Operador bloqueados automáticamente por seguridad.",
-      });
-    } else {
-      setFormData((prev) => ({ ...prev, trip_id: selectedTripId }));
+      return;
     }
+    const [tId, lId] = selectedValue.split("|");
+    const tripObj = activeTrips.find((t) => String(t.id) === tId);
+    const legObj = tripObj?.legs?.find((l: any) => String(l.id) === lId);
+
+    setParentData((prev) => ({
+      ...prev,
+      trip_id: tId,
+      trip_leg_id: lId,
+      unit_id: legObj?.unit_id ? String(legObj.unit_id) : prev.unit_id,
+      operator_id: legObj?.operator_id
+        ? String(legObj.operator_id)
+        : prev.operator_id,
+    }));
   };
 
-  const capDiesel = selectedUnit?.capacidad_tanque_diesel
-    ? Number(selectedUnit.capacidad_tanque_diesel)
-    : FUEL_CONFIG.CAPACIDADES_DEFAULT.diesel;
-
-  const isDieselOver =
-    Boolean(selectedUnit) && formData.litros_diesel > capDiesel;
-
-  const total = useMemo(
-    () => (formData.litros_diesel || 0) * (formData.precio_diesel || 0),
-    [formData],
+  const totalGeneral = useMemo(
+    () =>
+      tickets.reduce((sum, t) => sum + t.litros_diesel * t.precio_diesel, 0),
+    [tickets],
   );
 
-  const resetForm = () => {
-    setFormData({
-      unit_id: "",
-      operator_id: "",
-      trip_id: "",
-      fecha_hora: toDatetimeLocalValue(new Date()),
-      estacion: "",
-      litros_diesel: 0,
-      precio_diesel: FUEL_CONFIG.PRECIOS_PROMEDIO.diesel,
-      odometro: "",
-      evidencia: null,
-    });
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  };
-
-  const validate = () => {
-    if (!formData.unit_id) return "Selecciona una unidad.";
-    if (!formData.operator_id) return "Selecciona un operador.";
-    if (!formData.fecha_hora) return "Selecciona fecha y hora.";
-    if (formData.litros_diesel <= 0)
-      return "Debes registrar los litros de diésel.";
-    if (isDieselOver)
-      return `Excede capacidad técnica de Diésel (${capDiesel}L).`;
-    if (formData.evidencia && !clampFileSize(formData.evidencia, 5)) {
-      return "El archivo de imagen excede los 5MB.";
-    }
-    return null;
-  };
-
-  const handleSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!parentData.unit_id) return toast.error("Selecciona una unidad.");
 
-    const error = validate();
-    if (error) {
-      toast.error("Datos incompletos", { description: error });
-      return;
+    // Validar que al menos un ticket tenga litros
+    if (tickets.some((t) => t.litros_diesel <= 0)) {
+      return toast.error("Todos los tickets deben tener litros registrados.");
     }
 
-    // 🚀 FIX FASE 4: VINCULACIÓN DOBLE (VIAJE PADRE + TRAMO)
-    let targetLegId = null;
-    let targetTripId = null;
+    // Enviamos los datos al padre (él se encarga de llamar al servicio N veces)
+    onSubmit({
+      ...parentData,
+      tickets,
+    });
 
-    if (formData.trip_id && formData.trip_id !== "none") {
-      targetTripId = formData.trip_id; // Guardamos el ID del viaje padre
-
-      const tripObj = activeTrips.find(
-        (t) => String(t.id) === formData.trip_id,
-      );
-      if (tripObj) {
-        const activeLeg =
-          tripObj.legs?.find(
-            (l) =>
-              !["entregado", "cerrado", "liquidado"].includes(
-                String(l.status ?? "").toLowerCase(),
-              ),
-          ) || tripObj.legs?.[(tripObj.legs?.length || 1) - 1];
-
-        if (activeLeg) {
-          targetLegId = String(activeLeg.id); // Guardamos el ID de la fase
-        }
-      }
-    }
-
-    const finalData: TicketFormData = {
-      ...formData,
-      trip_id: targetTripId || "", // 🚀 ENVIAMOS EL VIAJE PADRE
-      trip_leg_id: targetLegId, // 🚀 ENVIAMOS EL TRAMO OPERATIVO
-      odometro: safeInt(String(formData.odometro), 0),
-    };
-
-    onSubmit(finalData);
-    resetForm();
+    onOpenChange(false);
   };
-
-  const handleFileChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
-    const file = e.target.files?.[0] ?? null;
-
-    if (!file) {
-      setFormData((prev) => ({ ...prev, evidencia: null }));
-      return;
-    }
-
-    if (!file.type.startsWith("image/")) {
-      toast.error("Formato inválido", {
-        description: "Por favor suba una fotografía JPG o PNG.",
-      });
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      return;
-    }
-
-    if (!clampFileSize(file, 5)) {
-      toast.error("Archivo muy pesado", {
-        description: "El límite de subida es de 5MB.",
-      });
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      return;
-    }
-
-    setFormData((prev) => ({ ...prev, evidencia: file }));
-  };
-
-  useEffect(() => {
-    if (!open || !initialData) return;
-
-    setFormData((prev) => ({
-      ...prev,
-      trip_id: initialData.trip_id ? String(initialData.trip_id) : "",
-      unit_id: initialData.unit_id ? String(initialData.unit_id) : "",
-      operator_id: initialData.operator_id
-        ? String(initialData.operator_id)
-        : "",
-      litros_diesel: 0,
-      precio_diesel: FUEL_CONFIG.PRECIOS_PROMEDIO.diesel,
-      estacion: "",
-      odometro: "",
-      evidencia: null,
-    }));
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  }, [open, initialData]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* 🚀 FIX: Aplicamos overflow-hidden general y configuramos el layout flex */}
-      <DialogContent
-        className={cn(
-          "sm:max-w-[1200px] max-h-[90vh] flex flex-col p-0 gap-0 border-0 rounded-[28px] shadow-2xl overflow-hidden",
-          "bg-white/90 backdrop-blur-xl dark:bg-brand-navy/95",
-        )}
-      >
-        <DialogHeader className="shrink-0 border-b border-slate-200 bg-white/95 p-6 backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/95">
-          <DialogTitle className="flex items-start gap-4 text-left">
-            <div
-              className={cn(
-                "flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl shadow-inner",
-                "bg-brand-red/10 text-brand-red dark:bg-brand-red/15",
-              )}
-            >
-              <Fuel className="h-7 w-7" />
+      <DialogContent className="sm:max-w-[1000px] max-h-[95vh] flex flex-col p-0 gap-0 border-0 rounded-[28px] shadow-2xl overflow-hidden bg-slate-50">
+        <DialogHeader className="shrink-0 border-b bg-white p-6 shadow-sm">
+          <DialogTitle className="flex items-start gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-red/10 text-brand-red">
+              <Fuel className="h-6 w-6" />
             </div>
-
-            <div className="space-y-1">
-              <h2 className="heading-crisp text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white">
-                Registro de vale de combustible
+            <div>
+              <h2 className="text-xl font-black uppercase text-slate-900">
+                Registro Multi-Ticket de Combustible
               </h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                Capture los datos del ticket. Busque directamente por FOLIO de
-                viaje para vincular unidad y operador.
+              <p className="text-sm text-slate-500">
+                Vincule el viaje y agregue todos los vales que el operador
+                presente.
               </p>
             </div>
           </DialogTitle>
         </DialogHeader>
 
-        {/* 🚀 FIX: Convertimos el formulario en un flex container que empuje el contenido */}
         <form
           onSubmit={handleSubmit}
           className="flex flex-col flex-1 overflow-hidden"
         >
-          {/* El contenedor principal de los inputs ahora es el que hace scroll */}
-          <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
-            <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-              {/* LADO IZQUIERDO */}
-              <section className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3 border-b border-slate-200 pb-3 dark:border-white/10">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-brand-navy/10 shadow-inner dark:bg-white/10">
-                      <MapPin className="h-4 w-4 text-brand-navy dark:text-slate-200" />
-                    </div>
-                    <div>
-                      <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-700 dark:text-slate-200">
-                        1. Vinculación operativa
-                      </h3>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
-                        Escriba el Folio y el sistema completará el eco y
-                        chofer.
-                      </p>
-                    </div>
-                  </div>
+          <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
+            {/* 1. SECCIÓN VINCULACIÓN */}
+            <section className="bg-white p-6 rounded-[24px] border border-slate-200 shadow-sm space-y-6">
+              <div className="flex items-center gap-2 border-b pb-3 border-slate-100">
+                <MapPin className="h-4 w-4 text-brand-navy" />
+                <h3 className="text-xs font-black uppercase tracking-widest text-slate-700">
+                  1. Datos del Viaje y Unidad
+                </h3>
+              </div>
 
-                  <div
-                    className={cn(
-                      "space-y-4 rounded-2xl border p-4 shadow-sm",
-                      "border-blue-100 bg-slate-50/80 dark:border-white/10 dark:bg-slate-950/30",
-                    )}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <Label
-                        variant="brand"
-                        className="text-[10px] font-black uppercase tracking-[0.2em]"
-                      >
-                        Buscador de Viaje / Folio
-                      </Label>
-                    </div>
-
-                    <SearchableSelect
-                      items={searchableTrips}
-                      value={formData.trip_id}
-                      onSelect={handleTripSelection}
-                      placeholder="Ej: Escriba el Folio '64', el cliente o el Eco..."
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label
-                        variant="brand"
-                        className={cn(
-                          "flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em]",
-                          isLinkedToTrip && "text-slate-400",
-                        )}
-                      >
-                        <Truck className="h-3.5 w-3.5" />
-                        Unidad *
-                      </Label>
-                      <SearchableSelect
-                        items={searchableUnits}
-                        value={formData.unit_id}
-                        disabled={isLinkedToTrip}
-                        onSelect={(value) =>
-                          setFormData((prev) => ({ ...prev, unit_id: value }))
-                        }
-                        placeholder="Buscar unidad..."
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label
-                        variant="brand"
-                        className={cn(
-                          "flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em]",
-                          isLinkedToTrip && "text-slate-400",
-                        )}
-                      >
-                        <User className="h-3.5 w-3.5" />
-                        Operador *
-                      </Label>
-                      <SearchableSelect
-                        items={searchableOperators}
-                        value={formData.operator_id}
-                        disabled={isLinkedToTrip}
-                        onSelect={(value) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            operator_id: value,
-                          }))
-                        }
-                        placeholder="Buscar operador..."
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2 pt-1">
-                    <Label
-                      variant="brand"
-                      className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em]"
-                    >
-                      <Gauge className="h-3.5 w-3.5" />
-                      Lectura de odómetro (km)
-                    </Label>
-                    <Input
-                      type="number"
-                      placeholder="Opcional. Ej: 245890"
-                      value={formData.odometro}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          odometro: e.target.value,
-                        }))
-                      }
-                      className="h-11 font-mono text-sm"
-                    />
-                  </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="space-y-2 md:col-span-2">
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                    Buscador de Viaje / Fase
+                  </Label>
+                  <SearchableSelect
+                    items={searchableTrips}
+                    value={
+                      parentData.trip_id === "none"
+                        ? "none|none"
+                        : `${parentData.trip_id}|${parentData.trip_leg_id || ""}`
+                    }
+                    onSelect={handleTripSelection}
+                    placeholder="Escriba folio, cliente o unidad..."
+                  />
                 </div>
-              </section>
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                    Odómetro Final (KM)
+                  </Label>
+                  <Input
+                    type="number"
+                    className="h-11 font-mono"
+                    value={parentData.odometro}
+                    onChange={(e) =>
+                      setParentData((p) => ({ ...p, odometro: e.target.value }))
+                    }
+                  />
+                </div>
+              </div>
+            </section>
 
-              {/* LADO DERECHO */}
-              <section className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3 border-b border-slate-200 pb-3 dark:border-white/10">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-brand-red/10 shadow-inner dark:bg-brand-red/15">
-                      <Fuel className="h-4 w-4 text-brand-red" />
-                    </div>
-                    <div>
-                      <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-700 dark:text-slate-200">
-                        2. Carga física y evidencia
-                      </h3>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
-                        Registre importes, litros, estación y archivo de
-                        respaldo.
-                      </p>
-                    </div>
-                  </div>
+            {/* 2. SECCIÓN MULTI-TICKET */}
+            <section className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Fuel className="h-4 w-4 text-brand-red" />
+                  <h3 className="text-xs font-black uppercase tracking-widest text-slate-700">
+                    2. Carga de Vales (Tickets)
+                  </h3>
+                </div>
+                {/* 🚀 BOTÓN MÁS: Agrega nuevo bloque de ticket */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={addSubTicket}
+                  className="rounded-full bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100 h-9 font-bold"
+                >
+                  <Plus className="h-4 w-4 mr-1.5" /> Agregar otro ticket
+                </Button>
+              </div>
 
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label
-                        variant="brand"
-                        className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em]"
-                      >
-                        <CalendarDays className="h-3.5 w-3.5" />
-                        Fecha y hora *
-                      </Label>
-                      <Input
-                        type="datetime-local"
-                        value={formData.fecha_hora}
-                        onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            fecha_hora: e.target.value,
-                          }))
-                        }
-                        className="h-11 text-sm"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label
-                        variant="brand"
-                        className="text-[10px] font-black uppercase tracking-[0.2em]"
-                      >
-                        Estación
-                      </Label>
-                      <Input
-                        placeholder="Ej: Parador San Marcos"
-                        value={formData.estacion}
-                        onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            estacion: e.target.value,
-                          }))
-                        }
-                        className="h-11 text-sm"
-                      />
-                    </div>
-                  </div>
-
-                  {/* DIESEL */}
+              <div className="space-y-4">
+                {tickets.map((ticket, index) => (
                   <div
-                    className={cn(
-                      "rounded-2xl border p-4 shadow-sm",
-                      "border-amber-200 bg-amber-50/90",
-                      "dark:border-amber-500/20 dark:bg-amber-500/10",
-                    )}
+                    key={ticket.id}
+                    className="relative group bg-white p-5 rounded-[24px] border border-slate-200 shadow-sm animate-in fade-in slide-in-from-left-2"
                   >
-                    <div className="mb-4 flex items-center gap-2 border-b border-amber-200/60 pb-2 text-xs font-black uppercase tracking-[0.2em] text-amber-700 dark:border-amber-400/10 dark:text-amber-300">
-                      <Fuel className="h-4 w-4" />
-                      Diésel
-                    </div>
+                    {tickets.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeSubTicket(ticket.id)}
+                        className="absolute -top-2 -right-2 h-8 w-8 rounded-full bg-white border border-slate-200 text-rose-500 hover:bg-rose-50 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
 
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label
-                          variant="brand"
-                          className="text-[10px] font-black uppercase tracking-[0.2em]"
-                        >
+                    <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-4 items-end">
+                      <div className="space-y-1.5 lg:col-span-2">
+                        <Label className="text-[9px] font-black uppercase text-slate-400">
+                          Estación / Gasolinera
+                        </Label>
+                        <Input
+                          placeholder="Ej: San Marcos"
+                          value={ticket.estacion}
+                          onChange={(e) =>
+                            updateSubTicket(
+                              ticket.id,
+                              "estacion",
+                              e.target.value,
+                            )
+                          }
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label className="text-[9px] font-black uppercase text-slate-400">
                           Litros
                         </Label>
                         <Input
                           type="number"
-                          step="0.1"
                           placeholder="0.0"
-                          value={formData.litros_diesel || ""}
+                          className="font-mono"
+                          value={ticket.litros_diesel || ""}
                           onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              litros_diesel: safeNumber(e.target.value),
-                            }))
+                            updateSubTicket(
+                              ticket.id,
+                              "litros_diesel",
+                              Number(e.target.value),
+                            )
                           }
-                          className={cn(
-                            "h-11 font-mono",
-                            isDieselOver &&
-                              "border-red-500 ring-1 ring-red-500/70",
-                          )}
                         />
-                        {isDieselOver && (
-                          <p className="text-xs font-semibold text-red-600 dark:text-red-400">
-                            Excede capacidad: {capDiesel}L
-                          </p>
-                        )}
                       </div>
 
-                      <div className="space-y-2">
-                        <Label
-                          variant="brand"
-                          className="text-[10px] font-black uppercase tracking-[0.2em]"
-                        >
-                          Precio x litro
+                      <div className="space-y-1.5">
+                        <Label className="text-[9px] font-black uppercase text-slate-400">
+                          Precio
                         </Label>
                         <Input
                           type="number"
-                          step="0.01"
                           placeholder="0.00"
-                          value={formData.precio_diesel || ""}
+                          className="font-mono"
+                          value={ticket.precio_diesel || ""}
                           onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              precio_diesel: safeNumber(e.target.value),
-                            }))
+                            updateSubTicket(
+                              ticket.id,
+                              "precio_diesel",
+                              Number(e.target.value),
+                            )
                           }
-                          className="h-11 font-mono"
                         />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label className="text-[9px] font-black uppercase text-slate-400">
+                          Fecha/Hora
+                        </Label>
+                        <Input
+                          type="datetime-local"
+                          className="text-xs"
+                          value={ticket.fecha_hora}
+                          onChange={(e) =>
+                            updateSubTicket(
+                              ticket.id,
+                              "fecha_hora",
+                              e.target.value,
+                            )
+                          }
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label className="text-[9px] font-black uppercase text-slate-400">
+                          Evidencia
+                        </Label>
+                        <div className="relative h-10 border-2 border-dashed border-slate-200 rounded-lg hover:border-brand-navy hover:bg-slate-50 transition-colors flex items-center justify-center overflow-hidden">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                            onChange={(e) =>
+                              updateSubTicket(
+                                ticket.id,
+                                "evidencia",
+                                e.target.files?.[0] || null,
+                              )
+                            }
+                          />
+                          {ticket.evidencia ? (
+                            <div className="flex items-center gap-1 text-emerald-600">
+                              <CheckCircle2 className="h-4 w-4" />
+                              <span className="text-[10px] font-bold truncate max-w-[80px]">
+                                {ticket.evidencia.name}
+                              </span>
+                            </div>
+                          ) : (
+                            <Camera className="h-5 w-5 text-slate-400" />
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
-
-                  <div
-                    className={cn(
-                      "mt-2 flex items-center justify-between rounded-2xl border p-4 shadow-inner",
-                      "border-slate-700 bg-slate-900 text-white",
-                      "dark:border-white/10 dark:bg-slate-950",
-                    )}
-                  >
-                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300">
-                      Costo total del vale
-                    </span>
-                    <span className="font-mono text-2xl font-black tracking-tighter text-emerald-400">
-                      $
-                      {total.toLocaleString("es-MX", {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
-                    </span>
-                  </div>
-
-                  <div className="space-y-2 pt-1">
-                    <Label
-                      variant="brand"
-                      className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em]"
-                    >
-                      <FileImage className="h-3.5 w-3.5" />
-                      Comprobante (evidencia)
-                    </Label>
-
-                    <div
-                      className={cn(
-                        "relative min-h-[120px] rounded-2xl border-2 border-dashed p-6 shadow-sm transition-all",
-                        "border-slate-300 bg-white/80 hover:border-blue-300 hover:bg-blue-50/40",
-                        "dark:border-white/10 dark:bg-slate-950/40 dark:hover:border-blue-400/40 dark:hover:bg-slate-900/60",
-                      )}
-                    >
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
-                        onChange={handleFileChange}
-                      />
-
-                      {formData.evidencia ? (
-                        <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-emerald-600 dark:text-emerald-400">
-                          <CheckCircle2 className="h-7 w-7" />
-                          <span className="max-w-[260px] truncate text-sm font-bold">
-                            {formData.evidencia.name}
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-slate-600 dark:text-slate-300">
-                          <Camera className="h-7 w-7" />
-                          <span className="text-sm font-bold">
-                            Tomar foto o subir archivo
-                          </span>
-                          <span className="text-xs text-slate-500 dark:text-slate-400">
-                            JPG o PNG, máximo 5MB
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </section>
-            </div>
+                ))}
+              </div>
+            </section>
           </div>
 
-          {/* 🚀 FIX: Movemos los botones al footer fijo fuera del área de scroll */}
-          <div className="shrink-0 flex justify-end gap-4 border-t border-slate-200 p-6 bg-slate-50/50 dark:bg-slate-950/50 dark:border-white/10">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              className="h-12 min-w-32 font-bold"
-            >
-              Cancelar
-            </Button>
+          {/* FOOTER FIJO CON TOTAL ACUMULADO */}
+          <div className="shrink-0 flex items-center justify-between border-t bg-slate-100 p-6">
+            <div className="flex flex-col">
+              <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                Inversión Total de Carga
+              </span>
+              <span className="text-3xl font-black font-mono text-slate-900 tracking-tighter">
+                $
+                {totalGeneral.toLocaleString("es-MX", {
+                  minimumFractionDigits: 2,
+                })}
+              </span>
+            </div>
 
-            <Button
-              type="submit"
-              variant="default"
-              className="h-12 px-8 font-black"
-            >
-              <Upload className="mr-2 h-4 w-4" />
-              Guardar vales
-            </Button>
+            <div className="flex gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                className="h-12 font-bold px-8"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                className="h-12 px-10 font-black bg-brand-navy shadow-xl"
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                Guardar {tickets.length} Vales
+              </Button>
+            </div>
           </div>
         </form>
       </DialogContent>

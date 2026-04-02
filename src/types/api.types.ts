@@ -460,6 +460,8 @@ export interface TripLeg {
   otros_anticipos: number;
   saldo_operador: number;
   odometro_inicial: number;
+  odometro_final?: number | null;
+  rendimiento_real?: number | null;
   nivel_tanque_inicial: number;
   start_date?: string | null;
   actual_arrival?: string | null;
