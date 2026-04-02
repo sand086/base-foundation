@@ -658,3 +658,104 @@ def generate_nom_087(trip_id: int, db: Session = Depends(get_db)):
             "Content-Disposition": f"inline; filename=NOM087_Folio_{trip.public_id or trip.id}.pdf"
         },
     )
+
+
+@router.put("/{trip_id}/dispatch", response_model=schemas.TripResponse)
+def dispatch_trip(
+    trip_id: int, payload: schemas.TripCreate, db: Session = Depends(get_db)
+):
+    """
+    Actualiza un viaje existente (ej. creado en el Planeador) y lo despacha.
+    Actualiza los datos maestros, inyecta/actualiza su Tramo Inicial (Fase 1)
+    y cambia el estatus de las unidades y operador a EN_RUTA si corresponde.
+    """
+    # 1. Buscar el viaje padre
+    trip = db.query(models.Trip).filter(models.Trip.id == trip_id).first()
+    if not trip:
+        raise HTTPException(status_code=404, detail="Viaje no encontrado")
+
+    # 2. Actualizar los datos generales del viaje (origen, destino, contenedores, etc.)
+    # Excluimos initial_leg para que Pydantic no intente mapearlo directo al modelo Trip
+    trip_data = payload.model_dump(exclude={"initial_leg"}, exclude_unset=True)
+    for key, value in trip_data.items():
+        setattr(trip, key, value)
+
+    # 3. Procesar la inyección del Tramo Inicial (TripLeg)
+    if payload.initial_leg:
+        leg_data = payload.initial_leg
+
+        # Cálculo interno del pago (Tarifa base - anticipos entregados)
+        monto_pagar = (trip.tarifa_base or 0) - (
+            (leg_data.anticipo_casetas or 0)
+            + (leg_data.anticipo_viaticos or 0)
+            + (leg_data.anticipo_combustible or 0)
+        )
+
+        # Revisamos si el viaje ya tenía un tramo creado
+        existing_leg = trip.legs[0] if trip.legs else None
+
+        if existing_leg:
+            # Si ya existía, lo actualizamos
+            existing_leg.unit_id = leg_data.unit_id
+            existing_leg.operator_id = leg_data.operator_id
+            existing_leg.leg_type = leg_data.leg_type
+            existing_leg.anticipo_casetas = leg_data.anticipo_casetas
+            existing_leg.anticipo_viaticos = leg_data.anticipo_viaticos
+            existing_leg.anticipo_combustible = leg_data.anticipo_combustible
+            existing_leg.monto_neto_pagado = monto_pagar
+            existing_leg.status = trip.status
+        else:
+            # Si no existía (ej. viene 100% fresco del planeador), lo creamos
+            new_leg = models.TripLeg(
+                trip_id=trip.id,
+                leg_type=leg_data.leg_type,
+                status=trip.status,
+                unit_id=leg_data.unit_id,
+                operator_id=leg_data.operator_id,
+                anticipo_casetas=leg_data.anticipo_casetas,
+                anticipo_viaticos=leg_data.anticipo_viaticos,
+                anticipo_combustible=leg_data.anticipo_combustible,
+                monto_neto_pagado=monto_pagar,
+                odometro_inicial=leg_data.odometro_inicial,
+                nivel_tanque_inicial=leg_data.nivel_tanque_inicial,
+                start_date=trip.start_date,
+            )
+            db.add(new_leg)
+            db.flush()
+
+        # 4. Bloquear y asignar recursos SOLO si el estado cambia a "en_transito"
+        if trip.status == "en_transito":
+            unit_ids_to_block = [
+                leg_data.unit_id,
+                trip.remolque_1_id,
+                trip.dolly_id,
+                trip.remolque_2_id,
+            ]
+            valid_unit_ids = [uid for uid in unit_ids_to_block if uid is not None]
+
+            if valid_unit_ids:
+                units = (
+                    db.query(models.Unit)
+                    .filter(
+                        models.Unit.id.in_(valid_unit_ids),
+                        models.Unit.record_status != models.RecordStatus.ELIMINADO,
+                    )
+                    .all()
+                )
+                for u in units:
+                    u.status = models.UnitStatus.EN_RUTA
+                    db.add(u)
+
+            if leg_data.operator_id:
+                operator = (
+                    db.query(models.Operator)
+                    .filter(models.Operator.id == leg_data.operator_id)
+                    .first()
+                )
+                if operator:
+                    operator.status = models.OperatorStatus.EN_RUTA
+                    db.add(operator)
+
+    db.commit()
+    db.refresh(trip)
+    return trip

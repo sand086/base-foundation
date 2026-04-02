@@ -42,6 +42,9 @@ import NotFound from "./pages/NotFound";
 import TwoFactorAuth from "./pages/TwoFactorAuth";
 import ControlDeTrafico from "./pages/ControlDeTrafico";
 
+// 🚀 IMPORTANTE: Importar el Wizard que construimos
+import { DespachoWizard } from "@/features/despacho/DespachoWizard";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -63,7 +66,7 @@ const App = () => (
               <Route path="/" element={<AppLayout />}>
                 <Route index element={<Dashboard />} />
                 <Route path="monitoreo" element={<CentroMonitoreo />} />
-                <Route path="/trackingop" element={<ControlDeTrafico />} />
+                <Route path="trackingop" element={<ControlDeTrafico />} />
                 <Route path="flota" element={<FlotaUnidades />} />
                 <Route
                   path="flota/unidad/:id"
@@ -98,6 +101,8 @@ const App = () => (
                 <Route path="tarifas" element={<GestionTarifas />} />
 
                 <Route path="despacho" element={<Despacho />} />
+                {/* 🚀 CORRECCIÓN AQUÍ: Quitamos el "/" del inicio para que el router lo identifique correctamente */}
+                <Route path="despacho/nuevo" element={<DespachoWizard />} />
 
                 <Route path="users" element={<UsuariosPage />} />
                 <Route path="roles-permisos" element={<RolesPermisosPage />} />

@@ -1,4 +1,3 @@
-// src/features/despacho/TripPlanner.tsx
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -21,7 +20,6 @@ import {
   AlertTriangle,
   Clock,
   LayoutGrid,
-  Link as LinkIcon,
   List,
   Trash2,
   Truck,
@@ -32,7 +30,6 @@ import {
   Eye,
   CalendarDays,
   PlayCircle,
-  Box,
   ChevronLeft,
   ChevronRight,
   Plus,
@@ -65,17 +62,9 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 
-import {
-  DndContext,
-  DragEndEvent,
-  closestCorners,
-  useDraggable,
-  useDroppable,
-} from "@dnd-kit/core";
 import {
   DataTable,
   DataTableBody,
@@ -103,17 +92,6 @@ import { cn } from "@/lib/utils";
 // Interfaces & Helpers
 // =====================
 
-type KanbanColumnId =
-  | "creado"
-  | "en_transito"
-  | "desenganchado"
-  | "por_liquidar";
-
-interface KanbanItem {
-  leg: TripLeg;
-  tripPadre: Trip;
-}
-
 const normalizeStatus = (s: unknown) =>
   String(s ?? "")
     .toLowerCase()
@@ -121,28 +99,7 @@ const normalizeStatus = (s: unknown) =>
     .split(" ")
     .join("_");
 
-const isColumnId = (id: unknown): id is KanbanColumnId =>
-  ["creado", "en_transito", "desenganchado", "por_liquidar"].includes(
-    id as string,
-  );
-
-//  REGLA DE NEGOCIO: Separar Desenganchados de Por Liquidar
-const groupKeyFromStatusAndLeg = (
-  rawStatus: unknown,
-  legType: string,
-): KanbanColumnId | null => {
-  const s = normalizeStatus(rawStatus);
-  if (s === "creado") return "creado";
-  if (["en_transito", "detenido", "retraso", "accidente"].includes(s))
-    return "en_transito";
-
-  if (["entregado", "cerrado"].includes(s)) {
-    return legType === "ruta_carretera" ? "desenganchado" : "por_liquidar";
-  }
-  return null;
-};
-
-//  Helper: Estatus Operativos Reales
+// Helper: Estatus Operativos Reales
 const getOperationalStatusBadge = (leg: TripLeg) => {
   const status = normalizeStatus(leg.status);
 
@@ -217,54 +174,6 @@ const isIncidentStatus = (status: unknown) => {
   return ["detenido", "retraso", "accidente"].includes(s);
 };
 
-//  4 COLUMNAS KANBAN EXACTAS (Colores Semánticos Tahoe)
-const KANBAN_COLUMNS: Array<{
-  id: KanbanColumnId;
-  title: string;
-  subtitle: string;
-  icon: any;
-  bg: string;
-  border: string;
-  text: string;
-}> = [
-  {
-    id: "creado",
-    title: "En Carga",
-    subtitle: "Movimientos en patio",
-    icon: Box,
-    bg: "bg-slate-50 dark:bg-slate-900/30",
-    border: "border-slate-200 dark:border-white/10",
-    text: "text-slate-700 dark:text-slate-200",
-  },
-  {
-    id: "en_transito",
-    title: "En Tránsito",
-    subtitle: "Operando en carretera",
-    icon: Truck,
-    bg: "bg-blue-50/60 dark:bg-blue-950/20",
-    border: "border-blue-200 dark:border-blue-900/50",
-    text: "text-blue-800 dark:text-blue-400",
-  },
-  {
-    id: "desenganchado",
-    title: "Desenganchado",
-    subtitle: "Llegó a destino/patio",
-    icon: LinkIcon,
-    bg: "bg-purple-50/60 dark:bg-purple-950/20",
-    border: "border-purple-200 dark:border-purple-900/50",
-    text: "text-purple-800 dark:text-purple-400",
-  },
-  {
-    id: "por_liquidar",
-    title: "Por Liquidar",
-    subtitle: "Listo para pago",
-    icon: Banknote,
-    bg: "bg-emerald-50/60 dark:bg-emerald-950/20",
-    border: "border-emerald-200 dark:border-emerald-900/50",
-    text: "text-emerald-800 dark:text-emerald-400",
-  },
-];
-
 const legTypeShort: Record<string, string> = {
   carga_muelle: "F1: CARGA PATIO",
   ruta_carretera: "F2: RUTA CARRETERA",
@@ -272,262 +181,15 @@ const legTypeShort: Record<string, string> = {
 };
 
 // =====================
-// KANBAN CARD
-// =====================
-function KanbanCard({
-  leg,
-  tripPadre,
-  onOpenCommandCenter,
-  onDeleteClick,
-  onSettleClick,
-}: any) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } =
-    useDraggable({ id: `leg-${leg.id}`, data: { leg, tripPadre } });
-
-  const style = transform
-    ? {
-        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-        zIndex: isDragging ? 50 : 1,
-        opacity: isDragging ? 0.9 : 1,
-        scale: isDragging ? 1.05 : 1,
-      }
-    : undefined;
-  const isIncident = isIncidentStatus(leg.status);
-
-  //  FASE 2: TITULO INTELIGENTE DEL VIAJE (Origen - Destino - Config)
-  const configText =
-    tripPadre.dolly_id || tripPadre.remolque_2_id ? "FULL" : "SENCILLO";
-  const formattedRouteName = tripPadre.route_name
-    ? `${tripPadre.route_name} - ${configText}`
-    : `${tripPadre.origin} - ${tripPadre.destination} - ${configText}`;
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      {...listeners}
-      {...attributes}
-      className="cursor-grab active:cursor-grabbing group relative"
-    >
-      <div className="absolute -top-3 -right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all duration-200 bg-white dark:bg-slate-900 shadow-lg border border-slate-200 dark:border-white/10 rounded-lg p-1 z-10 translate-y-1 group-hover:translate-y-0">
-        <button
-          type="button"
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpenCommandCenter(tripPadre);
-          }}
-          className="p-1.5 hover:bg-brand-navy dark:hover:bg-slate-800 hover:text-white rounded text-brand-navy dark:text-slate-300 transition-colors"
-          title="Abrir Centro de Mando"
-        >
-          <Eye className="h-3.5 w-3.5" />
-        </button>
-        {leg.status === "entregado" && (
-          <button
-            type="button"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              onSettleClick(leg, tripPadre);
-            }}
-            className="p-1.5 hover:bg-emerald-500 hover:text-white rounded text-emerald-600 dark:text-emerald-400 transition-colors"
-            title="Liquidar Tramo"
-          >
-            <Banknote className="h-3.5 w-3.5" />
-          </button>
-        )}
-        <button
-          type="button"
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            onDeleteClick(tripPadre);
-          }}
-          className="p-1.5 hover:bg-rose-500 hover:text-white rounded text-rose-600 dark:text-rose-400 transition-colors"
-          title="Eliminar Viaje Completo"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
-      </div>
-
-      <Card
-        className={cn(
-          "overflow-hidden transition-all border-l-4 bg-white dark:bg-slate-950",
-          isDragging
-            ? "shadow-2xl ring-2 ring-brand-navy dark:ring-white/20"
-            : "shadow-sm hover:shadow-md",
-          isIncident
-            ? "border-l-rose-500 bg-rose-50/40 dark:bg-rose-950/20"
-            : leg.status === "entregado"
-              ? "border-l-emerald-500"
-              : "border-l-blue-500",
-        )}
-      >
-        <CardContent className="p-4">
-          <div className="flex justify-between items-start mb-3 gap-2">
-            <div className="pr-2 flex flex-col min-w-0">
-              <span className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">
-                {legTypeShort[leg.leg_type] || "TRAMO"}
-              </span>
-              <span className="text-sm font-black text-slate-800 dark:text-slate-200 uppercase leading-tight truncate">
-                {tripPadre.client?.razon_social || "CLIENTE GENERAL"}
-              </span>
-            </div>
-            <Badge
-              variant="outline"
-              className="text-[10px] font-mono font-bold bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-400 shrink-0 shadow-sm border-slate-200 dark:border-white/10 py-0.5"
-            >
-              #{tripPadre.public_id || tripPadre.id}
-            </Badge>
-          </div>
-
-          <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-white/5 rounded-xl p-3 mb-4 space-y-2 flex flex-col justify-center items-center text-center shadow-inner">
-            <RouteIcon className="h-4 w-4 text-blue-500 opacity-80" />
-            <div
-              className="text-[11px] font-black text-brand-navy dark:text-blue-100 uppercase tracking-tight line-clamp-3"
-              title={formattedRouteName}
-            >
-              {formattedRouteName}
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between mb-4 gap-3">
-            <div className="flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 px-2 py-1.5 rounded-lg shadow-sm w-1/2 min-w-0">
-              <Truck className="h-3 w-3 text-slate-400 shrink-0" />
-              <span className="truncate">
-                ECO-{leg.unit?.numero_economico || "N/A"}
-              </span>
-            </div>
-            <div className="flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 px-2 py-1.5 rounded-lg shadow-sm w-1/2 min-w-0">
-              <User className="h-3 w-3 text-slate-400 shrink-0" />
-              <span className="truncate">
-                {leg.operator?.name?.split(" ")[0] || "S/A"}
-              </span>
-            </div>
-          </div>
-
-          <div className="pt-3 border-t border-slate-100 dark:border-white/5 space-y-2.5">
-            {getOperationalStatusBadge(leg)}
-            {(tripPadre.remolque_1_id ||
-              tripPadre.dolly_id ||
-              tripPadre.remolque_2_id) && (
-              <div className="flex flex-wrap gap-1.5 justify-center">
-                {tripPadre.remolque_1_id && (
-                  <Badge
-                    variant="outline"
-                    className="text-[8px] font-black py-0 h-4 border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800"
-                  >
-                    R1
-                  </Badge>
-                )}
-                {tripPadre.dolly_id && (
-                  <Badge
-                    variant="outline"
-                    className="text-[8px] font-black py-0 h-4 border-blue-200 dark:border-blue-900/50 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
-                  >
-                    D
-                  </Badge>
-                )}
-                {tripPadre.remolque_2_id && (
-                  <Badge
-                    variant="outline"
-                    className="text-[8px] font-black py-0 h-4 border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800"
-                  >
-                    R2
-                  </Badge>
-                )}
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-// =====================
-// KANBAN COLUMN
-// =====================
-function KanbanColumn({
-  column,
-  items,
-  onOpenCommandCenter,
-  onDeleteClick,
-  onSettleClick,
-  onRelayClick,
-}: any) {
-  const { setNodeRef, isOver } = useDroppable({ id: column.id });
-  const Icon = column.icon;
-
-  return (
-    <div
-      ref={setNodeRef}
-      className={cn(
-        "flex-shrink-0 w-[350px] rounded-3xl border-2 p-4 flex flex-col h-full transition-colors shadow-sm",
-        column.bg,
-        isOver
-          ? "border-brand-navy border-dashed ring-4 ring-brand-navy/10 dark:ring-white/10 dark:border-white/40"
-          : column.border,
-      )}
-    >
-      <div className="flex items-start justify-between mb-4 px-2 pt-1">
-        <div>
-          <div
-            className={`flex items-center gap-2 font-black text-[15px] uppercase tracking-tight ${column.text}`}
-          >
-            <Icon className="h-5 w-5" /> {column.title}
-          </div>
-          <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mt-1">
-            {column.subtitle}
-          </p>
-        </div>
-        <Badge
-          variant="secondary"
-          className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 shadow-sm font-black border border-slate-200 dark:border-white/10 text-sm px-2.5 py-0.5"
-        >
-          {items.length}
-        </Badge>
-      </div>
-      <div className="flex flex-col gap-4 overflow-y-auto pr-1 min-h-[200px] pb-10 custom-scrollbar">
-        {items.length === 0 ? (
-          <div className="p-8 border-2 border-dashed border-slate-300/50 dark:border-white/10 rounded-2xl text-center text-slate-500 dark:text-slate-400 text-xs font-black uppercase tracking-widest bg-white/50 dark:bg-slate-900/30">
-            Zona de Descarga
-          </div>
-        ) : (
-          items.map((item: any) => (
-            <KanbanCard
-              key={`leg-${item.leg.id}`}
-              leg={item.leg}
-              tripPadre={item.tripPadre}
-              onOpenCommandCenter={onOpenCommandCenter}
-              onDeleteClick={onDeleteClick}
-              onSettleClick={onSettleClick}
-              onRelayClick={onRelayClick}
-            />
-          ))
-        )}
-      </div>
-    </div>
-  );
-}
-
-// =====================
 // MAIN COMPONENT
 // =====================
 export const TripPlanner = () => {
   const navigate = useNavigate();
-  const {
-    trips,
-    loading,
-    updateTripStatus,
-    addTimelineEvent,
-    deleteTrip,
-    createNextLeg,
-  } = useTrips();
+  const { trips, loading, addTimelineEvent, deleteTrip, createNextLeg } =
+    useTrips();
 
-  const [viewMode, setViewMode] = useState<"table" | "standby" | "kanban">(
-    "table",
-  );
+  // Solo mantenemos la vista de Tabla y Standby (Planeador)
+  const [viewMode, setViewMode] = useState<"table" | "standby">("table");
 
   const [tripToView, setTripToView] = useState<Trip | null>(null);
   const { updateLoadStatus } = useUnits();
@@ -541,6 +203,8 @@ export const TripPlanner = () => {
     leg: TripLeg;
     tripPadre: Trip;
   } | null>(null);
+
+  // legToRelay se usa ahora solo para el modal NextLegModal en viajes ya en tránsito.
   const [legToRelay, setLegToRelay] = useState<{
     leg: TripLeg;
     tripPadre: Trip;
@@ -572,11 +236,11 @@ export const TripPlanner = () => {
 
   const allActiveLegs = useMemo(() => {
     const safeTrips = Array.isArray(trips) ? trips : [];
-    const items: KanbanItem[] = [];
+    const items: { leg: TripLeg; tripPadre: Trip }[] = [];
     for (const trip of safeTrips) {
       if (trip.status === "cerrado") continue;
       if (trip.legs && trip.legs.length > 0) {
-        //  REGLA DE LA TABLA Y PIZARRÓN (Avance de fase)
+        // REGLA DE LA TABLA (Avance de fase)
         const activeLeg =
           trip.legs.find(
             (leg) =>
@@ -589,51 +253,10 @@ export const TripPlanner = () => {
     return items.sort((a, b) => b.leg.id - a.leg.id);
   }, [trips]);
 
-  const groupedLegs = useMemo(() => {
-    const groups: Record<KanbanColumnId, KanbanItem[]> = {
-      creado: [],
-      en_transito: [],
-      desenganchado: [],
-      por_liquidar: [],
-    };
-    for (const item of allActiveLegs) {
-      const key = groupKeyFromStatusAndLeg(item.leg.status, item.leg.leg_type);
-      if (key) groups[key].push(item);
-    }
-    return groups;
-  }, [allActiveLegs]);
-
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over) return;
-
-    const dragId = String(active.id).replace("leg-", "");
-    const legId = parseInt(dragId, 10);
-    if (isNaN(legId)) return;
-
-    const columnId = isColumnId(over.id) ? over.id : null;
-    if (!columnId) return;
-
-    const draggedItem = allActiveLegs.find((item) => item.leg.id === legId);
-    if (!draggedItem) return;
-
-    const targetStatus =
-      columnId === "desenganchado" || columnId === "por_liquidar"
-        ? "entregado"
-        : (columnId as TripStatus);
-    if (normalizeStatus(draggedItem.leg.status) === targetStatus) return;
-
-    await updateTripStatus(
-      String(draggedItem.tripPadre.id),
-      targetStatus,
-      "Movimiento en Pizarrón",
-    );
-  };
-
   const handleSaveStatusEvent = async (data: StatusUpdateData) => {
     if (!selectedTripPadre) return;
 
-    //  REGLA DEL MODAL DE NOVEDADES
+    // REGLA DEL MODAL DE NOVEDADES
     const activeLeg =
       selectedLegToUpdate ||
       selectedTripPadre.legs?.find(
@@ -703,6 +326,11 @@ export const TripPlanner = () => {
     setUpdateModalOpen(true);
   };
 
+  // Redirección directa al Wizard inyectando el ID y la data
+  const handleAssignInWizard = (trip: Trip) => {
+    navigate(`/despacho/nuevo?tripId=${trip.id}`, { state: { trip } });
+  };
+
   if (loading)
     return (
       <div className="flex flex-col items-center justify-center h-96 gap-4">
@@ -715,7 +343,7 @@ export const TripPlanner = () => {
 
   return (
     <div className="h-full flex flex-col space-y-4 animate-in fade-in duration-500">
-      {/*  HEADER DE PESTAÑAS (Segmented Control Tahoe UI) */}
+      {/* HEADER DE PESTAÑAS */}
       <div className="flex flex-col md:flex-row md:items-center justify-between bg-white/40 dark:bg-slate-900/40 p-4 rounded-2xl border border-white/20 dark:border-white/10 shadow-sm backdrop-blur-md gap-4">
         <h2 className="text-xl font-black text-brand-navy dark:text-white flex items-center gap-3 px-2 uppercase tracking-tighter heading-crisp">
           <div className="p-2 bg-blue-600 rounded-xl shadow-inner border border-blue-500">
@@ -730,7 +358,8 @@ export const TripPlanner = () => {
             onValueChange={(v) => setViewMode(v as any)}
             className="w-full min-w-max"
           >
-            <TabsList className="grid w-full grid-cols-3 h-10 bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
+            {/* Solo 2 columnas (Tabla y Planeador) */}
+            <TabsList className="grid w-full grid-cols-2 h-10 bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
               <TabsTrigger
                 value="table"
                 className="text-[10px] font-black uppercase tracking-widest rounded-md data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:shadow-sm data-[state=active]:text-brand-navy dark:data-[state=active]:text-white transition-all h-full"
@@ -751,18 +380,12 @@ export const TripPlanner = () => {
                   </Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger
-                value="kanban"
-                className="text-[10px] font-black uppercase tracking-widest rounded-md data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:shadow-sm data-[state=active]:text-brand-navy dark:data-[state=active]:text-white transition-all h-full"
-              >
-                <LayoutGrid className="h-3.5 w-3.5 mr-2" /> Pizarrón
-              </TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
       </div>
 
-      {/*  MODO TABLA */}
+      {/* MODO TABLA */}
       {viewMode === "table" && (
         <Card className="border-slate-200/50 dark:border-white/10 shadow-2xl rounded-2xl overflow-hidden bg-white/50 dark:bg-slate-950/30 backdrop-blur-xl liquid-glass-table">
           <CardContent className="p-0">
@@ -808,7 +431,6 @@ export const TripPlanner = () => {
                   allActiveLegs.map(({ leg, tripPadre }) => {
                     const isIncident = isIncidentStatus(leg.status);
 
-                    //  FASE 2: Título Limpio en Tabla
                     const configText =
                       tripPadre.dolly_id || tripPadre.remolque_2_id
                         ? "FULL"
@@ -931,7 +553,7 @@ export const TripPlanner = () => {
         </Card>
       )}
 
-      {/*  MODO STANDBY (CALENDARIO) */}
+      {/* MODO STANDBY (CALENDARIO / PLANEADOR) */}
       {viewMode === "standby" && (
         <div className="flex flex-col xl:flex-row gap-6 h-full min-h-0">
           {/* Panel Lateral: Atrasados / Sin Asignar */}
@@ -959,11 +581,9 @@ export const TripPlanner = () => {
                         <Button
                           size="sm"
                           className="w-full h-8 mt-3 bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-black uppercase tracking-widest shadow-md shadow-rose-500/20 haptic-press"
-                          onClick={() =>
-                            setLegToRelay({ leg: {} as TripLeg, tripPadre: v })
-                          }
+                          onClick={() => handleAssignInWizard(v)}
                         >
-                          Asignar F1 Urgente
+                          Asignar Rápido
                         </Button>
                       </div>
                     ))}
@@ -994,11 +614,9 @@ export const TripPlanner = () => {
                           size="sm"
                           variant="outline"
                           className="w-full h-8 mt-3 text-[10px] font-black uppercase tracking-widest border-blue-200 dark:border-blue-900/50 text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 haptic-press"
-                          onClick={() =>
-                            setLegToRelay({ leg: {} as TripLeg, tripPadre: v })
-                          }
+                          onClick={() => handleAssignInWizard(v)}
                         >
-                          Agendar / Asignar
+                          Despachar Viaje
                         </Button>
                       </div>
                     ))}
@@ -1096,12 +714,7 @@ export const TripPlanner = () => {
                         {tripsOnDay.slice(0, 3).map((v) => (
                           <div
                             key={v.id}
-                            onClick={() =>
-                              setLegToRelay({
-                                leg: {} as TripLeg,
-                                tripPadre: v,
-                              })
-                            }
+                            onClick={() => handleAssignInWizard(v)}
                             className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 p-2 rounded-lg cursor-pointer hover:bg-emerald-100 dark:hover:bg-emerald-900/50 hover:shadow-sm transition-all relative group haptic-press"
                           >
                             <div className="font-black text-[9px] uppercase tracking-widest text-emerald-800 dark:text-emerald-400 truncate pr-4">
@@ -1135,33 +748,7 @@ export const TripPlanner = () => {
         </div>
       )}
 
-      {/*  MODO KANBAN (PIZARRÓN) */}
-      {viewMode === "kanban" && (
-        <DndContext
-          collisionDetection={closestCorners}
-          onDragEnd={handleDragEnd}
-        >
-          <div className="flex gap-6 overflow-x-auto pb-6 min-h-[65vh] items-start mt-2 px-1 custom-scrollbar">
-            {KANBAN_COLUMNS.map((column) => (
-              <KanbanColumn
-                key={column.id}
-                column={column}
-                items={groupedLegs[column.id] || []}
-                onOpenCommandCenter={setTripToView}
-                onDeleteClick={setTripToDelete}
-                onSettleClick={(leg: TripLeg, tripPadre: Trip) =>
-                  setLegToSettle({ leg, tripPadre })
-                }
-                onRelayClick={(leg: TripLeg, tripPadre: Trip) =>
-                  setLegToRelay({ leg, tripPadre })
-                }
-              />
-            ))}
-          </div>
-        </DndContext>
-      )}
-
-      {/* --- MODALES --- */}
+      {/* --- MODALES COMPARTIDOS --- */}
 
       {selectedTripPadre && (
         <UpdateStatusModal
@@ -1175,13 +762,12 @@ export const TripPlanner = () => {
         />
       )}
 
-      {/*  ALERTA DE ELIMINACIÓN DE VIAJE (Estructura Tahoe 4 Capas) */}
+      {/* ALERTA DE ELIMINACIÓN DE VIAJE */}
       <AlertDialog
         open={!!tripToDelete}
         onOpenChange={(open) => !open && setTripToDelete(null)}
       >
         <AlertDialogContent className="w-[95vw] sm:max-w-2xl p-0 flex flex-col max-h-[90vh] bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 shadow-2xl rounded-2xl transition-all duration-300 overflow-hidden">
-          {/* CAPA 2: HEADER */}
           <AlertDialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
             <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
             <div className="relative z-10 flex items-center gap-4 sm:gap-5">
@@ -1199,7 +785,6 @@ export const TripPlanner = () => {
             </div>
           </AlertDialogHeader>
 
-          {/* CAPA 3: BODY */}
           <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
             <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block space-y-6">
               <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -1216,7 +801,7 @@ export const TripPlanner = () => {
                 </div>
                 <p className="text-xs sm:text-sm leading-relaxed text-rose-900 dark:text-rose-200/80">
                   Esta acción desvinculará a los operadores y unidades
-                  asigandos, liberándolos en el sistema. Todo el historial de
+                  asignados, liberándolos en el sistema. Todo el historial de
                   rastreo, bitácoras y liquidaciones se perderán.{" "}
                   <b className="font-black underline">
                     No podrá ser recuperado
@@ -1227,7 +812,6 @@ export const TripPlanner = () => {
             </AlertDialogDescription>
           </div>
 
-          {/* CAPA 4: FOOTER */}
           <AlertDialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
             <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
               <AlertDialogCancel
@@ -1256,6 +840,7 @@ export const TripPlanner = () => {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* NextLegModal solo se usa si ya estaba en curso y alguien solicitó relevo desde la tabla */}
       <NextLegModal
         open={!!legToRelay}
         onOpenChange={(open) => !open && setLegToRelay(null)}
@@ -1278,7 +863,7 @@ export const TripPlanner = () => {
         onUpdateStatusClick={(t, l) => openUpdateStatusModal(t, l)}
       />
 
-      {/*  MODAL DIA DE VIAJES (Standby) - Estructura 4 Capas */}
+      {/* MODAL DIA DE VIAJES (Standby) */}
       <Dialog
         open={!!selectedDayTrips}
         onOpenChange={() => setSelectedDayTrips(null)}
@@ -1331,17 +916,16 @@ export const TripPlanner = () => {
                     className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase tracking-widest text-[10px] h-10 px-4 rounded-xl shadow-lg shadow-emerald-500/20 transition-all active:scale-95 border-none haptic-press"
                     onClick={() => {
                       setSelectedDayTrips(null);
-                      setLegToRelay({ leg: {} as TripLeg, tripPadre: v });
+                      handleAssignInWizard(v);
                     }}
                   >
-                    Asignar Fase 1
+                    Despachar Rápido
                   </Button>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Footer para el botón cerrar del modal del día */}
           <DialogFooter className="p-6 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
             <Button
               type="button"

@@ -1,23 +1,24 @@
-import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useMemo, useState, useEffect } from "react";
+import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { useToast } from "@/components/ui/use-toast";
 import {
   Check,
   ChevronRight,
-  DollarSign,
   Link as LinkIcon,
   Truck,
   ChevronsUpDown,
   Clock,
   User,
-  Info,
   Box,
-  RotateCcw,
   CalendarDays,
   Container,
   FileKey,
   ShieldCheck,
   Loader2,
+  Zap,
+  MapPin,
+  ClipboardList,
+  Download,
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,7 +34,6 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { DatePicker } from "@/components/ui/date-picker";
 
 // Command + Popover
@@ -52,7 +52,7 @@ import {
 } from "@/components/ui/popover";
 
 import { cn, checkIsFullTrip } from "@/lib/utils";
-import axiosClient from "@/api/axiosClient"; //  Importante para llamar al timbrado
+import axiosClient from "@/api/axiosClient";
 
 // Hooks
 import { useUnits } from "@/hooks/useUnits";
@@ -68,6 +68,8 @@ import type {
   Tariff,
   TripStatus,
 } from "@/types/api.types";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
 
 type Step = 1 | 2 | 3;
 
@@ -76,7 +78,7 @@ type SearchableItem = {
   value: string;
 };
 
-type WizardData = {
+export type WizardData = {
   clienteId: string;
   subClienteId: string;
   routeId: string;
@@ -90,7 +92,6 @@ type WizardData = {
   es_material_peligroso: boolean;
   clase_imo: string;
 
-  // FASE 1: Contenedores y Referencia Separados
   referencia_cliente: string;
   contenedor_1: string;
   contenedor_2: string;
@@ -111,6 +112,12 @@ type WizardData = {
   ocultarMontosPdf: boolean;
 };
 
+export interface DespachoWizardProps {
+  initialData?: Partial<WizardData> & { id?: number; status?: string };
+  onSuccess?: () => void;
+  onCancel?: () => void;
+}
+
 const normalizeStr = (str?: string | null) =>
   str
     ?.toLowerCase()
@@ -129,10 +136,10 @@ const footerClass =
   "sticky bottom-0 border-t border-slate-200 dark:border-white/10 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl";
 
 const sunkPanelClass =
-  "rounded-[24px] border border-slate-200/70 bg-slate-50/80 p-6 shadow-inner shadow-slate-200/50 dark:border-white/10 dark:bg-slate-950/35 dark:shadow-black/30";
+  "rounded-[20px] border border-slate-200/70 bg-slate-50/80 p-4 shadow-inner shadow-slate-200/50 dark:border-white/10 dark:bg-slate-950/35 dark:shadow-black/30";
 
 const sectionCardClass =
-  "rounded-[26px] border border-slate-200/70 bg-white/75 p-5 shadow-xl shadow-slate-200/40 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/55 dark:shadow-black/20";
+  "rounded-[20px] border border-slate-200/70 bg-white/75 p-4 shadow-xl shadow-slate-200/40 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/55 dark:shadow-black/20";
 
 function TahoeIconPlate({
   children,
@@ -159,7 +166,7 @@ function TahoeIconPlate({
   return (
     <div
       className={cn(
-        "flex h-14 w-14 items-center justify-center rounded-2xl shadow-inner ring-1 ring-inset",
+        "flex h-12 w-12 items-center justify-center rounded-2xl shadow-inner ring-1 ring-inset",
         toneClass,
         className,
       )}
@@ -194,7 +201,7 @@ function SearchableSelect({
           role="combobox"
           aria-expanded={open}
           className={cn(
-            "h-11 w-full justify-between rounded-xl border-slate-200/80 bg-white/90 px-4 font-semibold text-slate-800 shadow-sm backdrop-blur-xl hover:bg-white",
+            "h-10 w-full justify-between rounded-xl border-slate-200/80 bg-white/90 px-4 font-semibold text-slate-800 shadow-sm backdrop-blur-xl hover:bg-white",
             className,
           )}
         >
@@ -242,15 +249,77 @@ function SearchableSelect({
   );
 }
 
-export const DespachoWizard = () => {
+export const DespachoWizard = ({
+  initialData: propsInitialData,
+  onSuccess,
+  onCancel,
+}: DespachoWizardProps) => {
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const tripIdParam = searchParams.get("tripId");
+  const tripFromState = location.state?.trip;
+
+  // FIX: Se corrigió el error TS añadiendo las propiedades faltantes y haciendo el cast explícito
+  const initialData = useMemo(() => {
+    if (propsInitialData) return propsInitialData;
+    if (tripFromState) {
+      return {
+        id: tripFromState.id,
+        status: tripFromState.status,
+        clienteId: String(tripFromState.client_id || ""),
+        subClienteId: String(tripFromState.sub_client_id || ""),
+        routeId: String(tripFromState.tariff_id || ""),
+        routeNombre: tripFromState.route_name || "",
+        origen: tripFromState.origin || "",
+        destino: tripFromState.destination || "",
+        fecha_programada: tripFromState.fecha_programada
+          ? new Date(tripFromState.fecha_programada)
+          : new Date(),
+        descripcion_mercancia: tripFromState.descripcion_mercancia || "",
+        peso_toneladas: tripFromState.peso_toneladas || 0,
+        es_material_peligroso: tripFromState.es_material_peligroso || false,
+        clase_imo: tripFromState.clase_imo || "",
+        contenedor_1: tripFromState.contenedor_1 || "",
+        contenedor_2: tripFromState.contenedor_2 || "",
+        referencia_cliente: tripFromState.referencia || "",
+        unitId: tripFromState.legs?.[0]?.unit_id
+          ? String(tripFromState.legs[0].unit_id)
+          : "",
+        remolque1Id: tripFromState.remolque_1_id
+          ? String(tripFromState.remolque_1_id)
+          : "",
+        dollyId: tripFromState.dolly_id ? String(tripFromState.dolly_id) : "",
+        remolque2Id: tripFromState.remolque_2_id
+          ? String(tripFromState.remolque_2_id)
+          : "",
+        driverId: tripFromState.legs?.[0]?.operator_id
+          ? String(tripFromState.legs[0].operator_id)
+          : "",
+        leg_type: tripFromState.legs?.[0]?.leg_type || "carga_muelle",
+        anticipo_casetas: tripFromState.legs?.[0]?.anticipo_casetas || 0,
+        anticipo_viaticos: tripFromState.legs?.[0]?.anticipo_viaticos || 0,
+        anticipo_combustible:
+          tripFromState.legs?.[0]?.anticipo_combustible || 0,
+        generarCartaPorte: true, // SOLUCIÓN AL ERROR TS
+        ocultarMontosPdf: true, // SOLUCIÓN AL ERROR TS
+      } as Partial<WizardData> & { id?: number; status?: string };
+    }
+    return undefined;
+  }, [propsInitialData, tripFromState]);
+
   const [currentStep, setCurrentStep] = useState<Step>(1);
   const [isStamping, setIsStamping] = useState(false);
+
+  // ESTADOS DE PERSISTENCIA
+  const [tripId, setTripId] = useState<number | null>(initialData?.id || null);
+  const [generatedPdfUuid, setGeneratedPdfUuid] = useState<string | null>(null);
+
   const navigate = useNavigate();
   const { toast } = useToast();
 
   const { unidades } = useUnits();
   const { operadores } = useOperators();
-  const { createTrip } = useTrips();
+  const { createTrip, trips } = useTrips();
   const { clients } = useClients();
   const { products: satProducts } = useSatCatalogs();
 
@@ -265,32 +334,80 @@ export const DespachoWizard = () => {
   );
 
   const [data, setData] = useState<WizardData>({
-    clienteId: "",
-    subClienteId: "",
-    routeId: "",
-    routeNombre: "",
-    origen: "",
-    destino: "",
-    fecha_programada: new Date(),
-    descripcion_mercancia: "Carga General",
-    peso_toneladas: 0,
-    es_material_peligroso: false,
-    clase_imo: "",
-    contenedor_1: "",
-    contenedor_2: "",
-    referencia_cliente: "",
-    unitId: "",
-    remolque1Id: "",
-    dollyId: "",
-    remolque2Id: "",
-    driverId: "",
-    leg_type: "carga_muelle",
-    anticipo_casetas: 0,
-    anticipo_viaticos: 0,
-    anticipo_combustible: 0,
-    generarCartaPorte: true,
-    ocultarMontosPdf: true,
+    clienteId: initialData?.clienteId || "",
+    subClienteId: initialData?.subClienteId || "",
+    routeId: initialData?.routeId || "",
+    routeNombre: initialData?.routeNombre || "",
+    origen: initialData?.origen || "",
+    destino: initialData?.destino || "",
+    fecha_programada: initialData?.fecha_programada
+      ? new Date(initialData.fecha_programada)
+      : new Date(),
+    descripcion_mercancia: initialData?.descripcion_mercancia || "",
+    peso_toneladas: initialData?.peso_toneladas || 0,
+    es_material_peligroso: initialData?.es_material_peligroso || false,
+    clase_imo: initialData?.clase_imo || "",
+    contenedor_1: initialData?.contenedor_1 || "",
+    contenedor_2: initialData?.contenedor_2 || "",
+    referencia_cliente: initialData?.referencia_cliente || "",
+    unitId: initialData?.unitId || "",
+    remolque1Id: initialData?.remolque1Id || "",
+    dollyId: initialData?.dollyId || "",
+    remolque2Id: initialData?.remolque2Id || "",
+    driverId: initialData?.driverId || "",
+    leg_type: initialData?.leg_type || "carga_muelle",
+    anticipo_casetas: initialData?.anticipo_casetas || 0,
+    anticipo_viaticos: initialData?.anticipo_viaticos || 0,
+    anticipo_combustible: initialData?.anticipo_combustible || 0,
+    generarCartaPorte: initialData?.generarCartaPorte ?? true,
+    ocultarMontosPdf: initialData?.ocultarMontosPdf ?? true,
   });
+
+  // 🚀 ASYNC HYDRATION
+  useEffect(() => {
+    if (!data.clienteId && tripIdParam && trips.length > 0 && !tripFromState) {
+      const foundTrip = trips.find((t) => String(t.id) === tripIdParam) as any;
+      if (foundTrip) {
+        setTripId(foundTrip.id);
+        setData((prev) => ({
+          ...prev,
+          clienteId: String(foundTrip.client_id || ""),
+          subClienteId: String(foundTrip.sub_client_id || ""),
+          routeId: String(foundTrip.tariff_id || ""),
+          routeNombre: foundTrip.route_name || "",
+          origen: foundTrip.origin || "",
+          destino: foundTrip.destination || "",
+          fecha_programada: foundTrip.fecha_programada
+            ? new Date(foundTrip.fecha_programada)
+            : new Date(),
+          descripcion_mercancia: foundTrip.descripcion_mercancia || "",
+          peso_toneladas: foundTrip.peso_toneladas || 0,
+          es_material_peligroso: foundTrip.es_material_peligroso || false,
+          clase_imo: foundTrip.clase_imo || "",
+          contenedor_1: foundTrip.contenedor_1 || "",
+          contenedor_2: foundTrip.contenedor_2 || "",
+          referencia_cliente: foundTrip.referencia || "",
+          unitId: foundTrip.legs?.[0]?.unit_id
+            ? String(foundTrip.legs[0].unit_id)
+            : "",
+          remolque1Id: foundTrip.remolque_1_id
+            ? String(foundTrip.remolque_1_id)
+            : "",
+          dollyId: foundTrip.dolly_id ? String(foundTrip.dolly_id) : "",
+          remolque2Id: foundTrip.remolque_2_id
+            ? String(foundTrip.remolque_2_id)
+            : "",
+          driverId: foundTrip.legs?.[0]?.operator_id
+            ? String(foundTrip.legs[0].operator_id)
+            : "",
+          leg_type: foundTrip.legs?.[0]?.leg_type || "carga_muelle",
+          anticipo_casetas: foundTrip.legs?.[0]?.anticipo_casetas || 0,
+          anticipo_viaticos: foundTrip.legs?.[0]?.anticipo_viaticos || 0,
+          anticipo_combustible: foundTrip.legs?.[0]?.anticipo_combustible || 0,
+        }));
+      }
+    }
+  }, [tripIdParam, trips, data.clienteId, tripFromState]);
 
   const arrUnidades = useMemo(
     () => (Array.isArray(unidades) ? unidades : []),
@@ -357,7 +474,7 @@ export const DespachoWizard = () => {
         value: String(u.id),
       }));
     return dolliesReales.length === 0
-      ? [{ label: "DOLLY-PRUEBA - (No tienes dollies)", value: "9997" }]
+      ? [{ label: "DOLLY-PRUEBA", value: "9997" }]
       : dolliesReales;
   }, [arrUnidades]);
 
@@ -369,10 +486,7 @@ export const DespachoWizard = () => {
             o.status?.toLowerCase(),
           ),
         )
-        .map((o: any) => ({
-          label: o.name,
-          value: String(o.id),
-        })),
+        .map((o: any) => ({ label: o.name, value: String(o.id) })),
     [arrOperadores],
   );
 
@@ -397,12 +511,10 @@ export const DespachoWizard = () => {
     [availableTariffs, data.routeId],
   );
 
-  const isFullTrip = useMemo(() => {
-    // Solo nos importa la tarifa seleccionada para decidir qué camión armar
-    return checkIsFullTrip(selectedTariff);
-  }, [selectedTariff]);
-
-  const isRoadLeg = data.leg_type === "ruta_carretera";
+  const isFullTrip = useMemo(
+    () => checkIsFullTrip(selectedTariff),
+    [selectedTariff],
+  );
 
   const infoTarifa = useMemo(() => {
     if (!selectedTariff)
@@ -418,32 +530,68 @@ export const DespachoWizard = () => {
       };
     const base = Number((selectedTariff as any).tarifa_base || 0);
     const casetas = Number((selectedTariff as any).costo_casetas || 0);
-    const subtotal = base + casetas;
-    const ivaPct = Number((selectedTariff as any).iva_porcentaje ?? 16) / 100;
-    const retPct =
-      Number((selectedTariff as any).retencion_porcentaje ?? 4) / 100;
     return {
       base,
       casetas,
-      subtotal,
-      ivaPct,
-      retPct,
-      iva: subtotal * ivaPct,
-      ret: subtotal * retPct,
-      total: subtotal + subtotal * ivaPct - subtotal * retPct,
     };
   }, [selectedTariff]);
 
-  const handleCreate = async (status: TripStatus = "creado") => {
+  // FUNCIÓN PARA DESCARGAR PDF AUTOMÁTICAMENTE
+  const downloadPdf = async (uuid: string) => {
+    try {
+      const response = await axiosClient.get(`/billing/invoice/${uuid}/pdf`, {
+        responseType: "blob",
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `Carta_Porte_${uuid}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+
+      toast({
+        title: "Descarga Exitosa",
+        description: "El PDF se descargó correctamente en tu equipo.",
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error de Descarga",
+        description:
+          "El SAT procesó el timbre, pero el PDF tardó en generarse. Búscalo en la mesa de control.",
+      });
+    }
+  };
+
+  // Manejador Principal de Creación/Actualización y Timbrado
+  const handleCreate = async (
+    status: TripStatus = "creado",
+    isQuickStamp: boolean = false,
+  ) => {
     const cleanId = (val: string) => {
       const parsed = parseInt(val, 10);
       return isNaN(parsed) || parsed >= 9000 ? null : parsed;
     };
 
     try {
-      if (status === "en_transito" && data.generarCartaPorte) {
+      if (
+        status === "en_transito" &&
+        (data.generarCartaPorte || isQuickStamp)
+      ) {
         setIsStamping(true);
       }
+
+      const finalStatus: TripStatus = isQuickStamp ? "en_transito" : status;
+
+      // Inyectamos valores por defecto si está vacío
+      const mercancia =
+        data.descripcion_mercancia ||
+        (isQuickStamp
+          ? "01010101 - No existe en el catálogo"
+          : "CARGA GENERAL");
+      const contenedor_default =
+        data.contenedor_1 || (isQuickStamp ? "GENU0000000" : null);
 
       const payload: any = {
         client_id: parseInt(data.clienteId, 10),
@@ -455,82 +603,130 @@ export const DespachoWizard = () => {
         fecha_programada: data.fecha_programada
           ? data.fecha_programada.toISOString().split("T")[0]
           : null,
-        descripcion_mercancia: data.descripcion_mercancia,
-        peso_toneladas: Number(data.peso_toneladas),
+        descripcion_mercancia: mercancia,
+        peso_toneladas: Number(data.peso_toneladas) || (isQuickStamp ? 1 : 0),
         es_material_peligroso: data.es_material_peligroso,
         clase_imo: data.es_material_peligroso ? data.clase_imo : null,
-        contenedor_1: data.contenedor_1 || null,
+        contenedor_1: contenedor_default,
         contenedor_2: isFullTrip ? data.contenedor_2 : null,
         referencia: data.referencia_cliente || null,
         tarifa_base: Number(infoTarifa.base || 0),
         costo_casetas: Number(infoTarifa.casetas || 0),
-        status,
+        status: finalStatus,
         start_date: new Date().toISOString(),
-        remolque_1_id: cleanId(data.remolque1Id) || null,
-        dolly_id: isFullTrip ? cleanId(data.dollyId) || null : null,
-        remolque_2_id: isFullTrip ? cleanId(data.remolque2Id) || null : null,
+        is_dummy_stamping: isQuickStamp,
       };
 
-      if (status !== "creado") {
+      // Siempre mandamos el initial_leg si arranca
+      if (finalStatus !== "creado") {
         payload.initial_leg = {
-          unit_id: parseInt(data.unitId, 10),
-          leg_type: data.leg_type,
-          operator_id: parseInt(data.driverId, 10),
+          unit_id: cleanId(data.unitId) || null,
+          leg_type: data.leg_type || "carga_muelle",
+          operator_id: cleanId(data.driverId) || null,
+          remolque_1_id: cleanId(data.remolque1Id) || null,
+          dolly_id: isFullTrip ? cleanId(data.dollyId) || null : null,
+          remolque_2_id: isFullTrip ? cleanId(data.remolque2Id) || null : null,
           odometro_inicial: 0,
           nivel_tanque_inicial: 0,
-          anticipo_casetas: Number(data.anticipo_casetas || 0),
-          anticipo_viaticos: Number(data.anticipo_viaticos || 0),
-          anticipo_combustible: Number(data.anticipo_combustible || 0),
         };
       }
 
-      const result = await createTrip(payload as TripCreatePayload);
+      let resultTripId = tripId;
 
-      if (result) {
-        if (status === "en_transito" && data.generarCartaPorte) {
+      if (resultTripId) {
+        await axiosClient.put(`/trips/${resultTripId}/dispatch`, payload);
+      } else {
+        const result = await createTrip(payload as TripCreatePayload);
+        if (result && result.id) {
+          setTripId(result.id);
+          resultTripId = result.id;
+        }
+      }
+
+      if (resultTripId) {
+        if (
+          finalStatus === "en_transito" &&
+          (data.generarCartaPorte || isQuickStamp)
+        ) {
           try {
-            //  FASE 2: TIMBRADO NOMINAL REAL ($1)
-            await axiosClient.post("/billing/stamp/nominal", {
-              viaje_id: result.id,
+            const stampRes = await axiosClient.post("/billing/stamp/nominal", {
+              viaje_id: resultTripId,
               is_nominal: true,
+              use_dummy: isQuickStamp,
             });
+
+            const uuid = stampRes.data?.data?.uuid || stampRes.data?.uuid;
+
             toast({
               title: "¡Carta Porte Timbrada Exitosamente!",
-              description: data.ocultarMontosPdf
-                ? "Viaje despachado. Se generó PDF Operativo (Montos Ocultos / $1)."
-                : "Viaje despachado. Se generó Factura con Monto Real.",
+              description:
+                data.ocultarMontosPdf || isQuickStamp
+                  ? "Se generó PDF Operativo (Montos Ocultos / $1)."
+                  : "Se generó Factura con Monto Real.",
             });
-          } catch (err) {
+
+            if (isQuickStamp && uuid) {
+              setGeneratedPdfUuid(uuid);
+              await downloadPdf(uuid);
+              return;
+            }
+          } catch (err: any) {
             toast({
               variant: "destructive",
-              title: "Viaje creado pero falló el timbrado",
+              title: "Viaje guardado pero falló el timbrado",
               description:
-                "Deberá timbrar manualmente desde la mesa de control.",
+                err?.response?.data?.detail || "Revisa la mesa de control.",
             });
+            if (isQuickStamp) return;
           }
-        } else {
+        } else if (!isQuickStamp) {
           toast({
             title:
-              status === "en_transito"
+              finalStatus === "en_transito"
                 ? "¡Viaje Despachado!"
-                : "¡Viaje en Planeador!",
+                : "¡Viaje Guardado en Planeación!",
             description:
-              status === "en_transito"
+              finalStatus === "en_transito"
                 ? "El viaje ya se encuentra operando."
-                : "Guardado en el planeador para asignación futura.",
+                : "Datos guardados correctamente.",
           });
         }
-        setTimeout(() => navigate("/despacho"), 1000);
+
+        if (!isQuickStamp) {
+          if (onSuccess) onSuccess();
+          else setTimeout(() => navigate("/despacho"), 1000);
+        }
       }
-    } catch (error) {
+    } catch (error: any) {
+      const detail = error?.response?.data?.detail;
+      const errorMessage = Array.isArray(detail)
+        ? detail.map((d: any) => d.msg).join(", ")
+        : typeof detail === "string"
+          ? detail
+          : "No se pudo procesar el viaje. Revisa la consola.";
+
       toast({
         variant: "destructive",
-        title: "Error",
-        description: "No se pudo crear el viaje. Revisa la consola.",
+        title: "Error del Servidor",
+        description: errorMessage,
       });
     } finally {
       setIsStamping(false);
     }
+  };
+
+  const handleQuickStamp = () => {
+    toast({
+      title: "Generando Carta Porte...",
+      description:
+        "Vinculando viaje y timbrando documento con SAT. La descarga iniciará en breve.",
+    });
+    handleCreate("en_transito", true);
+  };
+
+  const handleCancel = () => {
+    if (onCancel) onCancel();
+    else navigate("/despacho");
   };
 
   const isStep1Valid = Boolean(
@@ -546,88 +742,86 @@ export const DespachoWizard = () => {
       data.driverId &&
       data.remolque1Id &&
       data.descripcion_mercancia &&
-      data.contenedor_1, //  FASE 1: Validar el primero
+      data.contenedor_1,
     );
     return isFullTrip
       ? Boolean(
-          isBasicValid && data.dollyId && data.remolque2Id && data.contenedor_2, //  FASE 1: Validar el segundo en FULL
+          isBasicValid && data.dollyId && data.remolque2Id && data.contenedor_2,
         )
       : isBasicValid;
   }, [isFullTrip, data]);
 
   return (
     <Card className={shellClass}>
-      <CardHeader className={cn(headerClass, "px-6 py-5 md:px-8")}>
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-start gap-4">
+      <CardHeader className={cn(headerClass, "px-6 py-4 md:px-8")}>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-4">
             <TahoeIconPlate tone="blue">
-              <Truck className="h-7 w-7" />
+              <Truck className="h-6 w-6" />
             </TahoeIconPlate>
-            <div className="space-y-1">
+            <div>
               <CardTitle className="text-xl text-slate-900 dark:text-white">
-                DESPACHO WIZARD
+                {tripId || initialData?.id
+                  ? "PLANEAR / EDITAR DESPACHO"
+                  : "DESPACHO WIZARD"}
               </CardTitle>
-              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
-                Planeación operativa, asignación física y salida financiera.
-              </p>
             </div>
           </div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
             <Badge
               variant={currentStep >= 1 ? "info" : "neutral"}
-              className="justify-center rounded-2xl px-4 py-2"
+              className="justify-center rounded-2xl px-4 py-1.5"
             >
-              1. Ruta del Cliente
+              1. Ruta
             </Badge>
             <Badge
               variant={currentStep >= 2 ? "info" : "neutral"}
-              className="justify-center rounded-2xl px-4 py-2"
+              className="justify-center rounded-2xl px-4 py-1.5"
             >
-              2. Operación y Asignación
+              2. Operación
             </Badge>
             <Badge
               variant={currentStep === 3 ? "info" : "neutral"}
-              className="justify-center rounded-2xl px-4 py-2"
+              className="justify-center rounded-2xl px-4 py-1.5"
             >
-              3. Finanzas y Timbrado
+              3. Resumen
             </Badge>
           </div>
         </div>
       </CardHeader>
 
-      <CardContent className={cn(bodyClass, "space-y-6 px-6 py-6 md:px-8")}>
-        {/* PASO 1 */}
+      <CardContent className={cn(bodyClass, "space-y-5 px-6 py-5 md:px-8")}>
+        {/* ========================================================
+            PASO 1: RUTA Y CLIENTE 
+        ======================================================== */}
         {currentStep === 1 && (
-          <div className="animate-in fade-in slide-in-from-bottom-2 space-y-6">
-            <div className={cn(sunkPanelClass, "space-y-6")}>
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-                <div className="md:col-span-3">
-                  <div className="flex flex-col gap-4 rounded-[24px] border border-blue-200/70 bg-blue-50/80 p-5 shadow-inner shadow-blue-100/60 md:flex-row md:items-center md:justify-between">
-                    <div className="flex items-start gap-4">
-                      <TahoeIconPlate tone="blue" className="h-16 w-16">
-                        <CalendarDays className="h-8 w-8" />
-                      </TahoeIconPlate>
-                      <div className="space-y-1">
-                        <Label variant="brand" required>
-                          ¿PARA CUÁNDO LO QUIERES?
-                        </Label>
-                        <p className="text-sm font-semibold text-slate-700">
-                          Fecha programada para la salida del viaje.
-                        </p>
-                      </div>
-                    </div>
-                    <div className="w-full max-w-[240px]">
-                      <DatePicker
-                        date={data.fecha_programada}
-                        onDateChange={(date) =>
-                          setData((p) => ({ ...p, fecha_programada: date }))
-                        }
-                      />
-                    </div>
+          <div className="animate-in fade-in slide-in-from-bottom-2 space-y-5">
+            <div className={cn(sunkPanelClass, "space-y-5")}>
+              {/* Bloque Superior: Fecha */}
+              <div className="flex flex-col gap-4 rounded-2xl border border-blue-200/70 bg-blue-50/80 p-4 shadow-inner shadow-blue-100/60 md:flex-row md:items-center md:justify-between">
+                <div className="flex items-center gap-3">
+                  <TahoeIconPlate tone="blue" className="h-12 w-12">
+                    <CalendarDays className="h-6 w-6" />
+                  </TahoeIconPlate>
+                  <div>
+                    <Label variant="brand" required>
+                      FECHA SALIDA
+                    </Label>
                   </div>
                 </div>
+                <div className="w-full max-w-[240px]">
+                  <DatePicker
+                    date={data.fecha_programada}
+                    onDateChange={(date) =>
+                      setData((p) => ({ ...p, fecha_programada: date }))
+                    }
+                  />
+                </div>
+              </div>
 
-                <div className="space-y-2">
+              {/* FIX: Separamos en 2 columnas Cliente y Destino */}
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                <div className="space-y-1.5">
                   <Label variant="brand" required>
                     CLIENTE *
                   </Label>
@@ -657,7 +851,7 @@ export const DespachoWizard = () => {
                   </Select>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label variant="brand" required>
                     DESTINO (SUBCLIENTE) *
                   </Label>
@@ -692,8 +886,11 @@ export const DespachoWizard = () => {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
 
-                <div className="space-y-2">
+              {/* FIX: TARIFA / RUTA Ocupa el 100% de la fila inferior para que no se vea amontonado */}
+              <div className="grid grid-cols-1 gap-5 mt-5">
+                <div className="space-y-1.5">
                   <Label variant="brand" required>
                     TARIFA / RUTA *
                   </Label>
@@ -705,11 +902,12 @@ export const DespachoWizard = () => {
                         (t) => String(t.id) === v,
                       ) as any;
                       const nextTipo = normalizeStr(tariff?.tipo_unidad);
-                      const nextIsFull =
-                        nextTipo === "full" ||
-                        nextTipo === "9ejes" ||
-                        nextTipo === "9 ejes" ||
-                        nextTipo === "doble";
+                      const nextIsFull = [
+                        "full",
+                        "9ejes",
+                        "9 ejes",
+                        "doble",
+                      ].includes(nextTipo);
                       setData((prev) => ({
                         ...prev,
                         routeId: v,
@@ -721,7 +919,8 @@ export const DespachoWizard = () => {
                       }));
                     }}
                   >
-                    <SelectTrigger className="font-black uppercase tracking-wide">
+                    {/* FIX: h-auto, min-h, text-left, whitespace-normal aseguran que el texto largo se lea completo sin deformar */}
+                    <SelectTrigger className="font-black uppercase tracking-wide h-auto min-h-[2.5rem] py-2 text-left [&>span]:whitespace-normal [&>span]:line-clamp-2">
                       <SelectValue placeholder="Seleccionar ruta autorizada..." />
                     </SelectTrigger>
                     <SelectContent>
@@ -731,25 +930,12 @@ export const DespachoWizard = () => {
                         </SelectItem>
                       ) : (
                         availableTariffs.map((t: any) => {
-                          const base = Number(t.tarifa_base || 0);
-                          const casetas = Number(t.costo_casetas || 0);
-                          const subtotal = base + casetas;
                           const tu = normalizeStr(t.tipo_unidad);
-                          const labelTipo = tu
-                            ? String(t.tipo_unidad).toUpperCase()
-                            : "N/A";
-                          const ivaPct =
-                            Number((t as any).iva_porcentaje ?? 16) / 100;
-                          const retPct =
-                            Number((t as any).retencion_porcentaje ?? 4) / 100;
-                          const total =
-                            subtotal + subtotal * ivaPct - subtotal * retPct;
-
                           return (
                             <SelectItem
                               key={t.id}
                               value={String(t.id)}
-                              className="py-3"
+                              className="py-2"
                             >
                               <div className="flex flex-col gap-1">
                                 <div className="flex flex-wrap items-center gap-2">
@@ -764,15 +950,10 @@ export const DespachoWizard = () => {
                                     }
                                     className="rounded-xl"
                                   >
-                                    {labelTipo}
+                                    {tu
+                                      ? String(t.tipo_unidad).toUpperCase()
+                                      : "N/A"}
                                   </Badge>
-                                </div>
-                                <div className="text-xs font-semibold text-slate-500">
-                                  Base: ${base.toLocaleString("es-MX")} | Total
-                                  Neto:{" "}
-                                  <span className="font-black text-emerald-700">
-                                    ${total.toLocaleString("es-MX")} {t.moneda}
-                                  </span>
                                 </div>
                               </div>
                             </SelectItem>
@@ -788,12 +969,12 @@ export const DespachoWizard = () => {
             <div
               className={cn(
                 footerClass,
-                "flex flex-col gap-4 rounded-[24px] px-5 py-4 md:flex-row md:items-center md:justify-between",
+                "flex flex-col gap-4 rounded-[20px] px-5 py-4 md:flex-row md:items-center md:justify-between",
               )}
             >
               <Button
                 variant="outline"
-                onClick={() => navigate("/despacho")}
+                onClick={handleCancel}
                 className="rounded-2xl font-black uppercase tracking-[0.18em]"
               >
                 Cancelar
@@ -808,313 +989,286 @@ export const DespachoWizard = () => {
                   disabled={!isStep1Valid}
                   className="rounded-2xl font-black uppercase tracking-[0.16em]"
                 >
-                  <Clock className="mr-2 h-4 w-4" /> Guardar en Planeador
+                  <Clock className="mr-2 h-4 w-4" /> Planeador
                 </Button>
                 <Button
                   onClick={() => setCurrentStep(2)}
                   disabled={!isStep1Valid}
                   className="rounded-2xl bg-blue-600 font-black uppercase tracking-[0.16em] text-white shadow-xl shadow-blue-600/20 hover:bg-blue-700"
                 >
-                  Asignar Operación <ChevronRight className="ml-2 h-4 w-4" />
+                  Continuar a Operación{" "}
+                  <ChevronRight className="ml-2 h-4 w-4" />
                 </Button>
               </div>
             </div>
           </div>
         )}
 
-        {/* PASO 2 */}
+        {/* ========================================================
+            PASO 2: OPERACIÓN Y RECURSOS
+        ======================================================== */}
         {currentStep === 2 && (
-          <div className="animate-in fade-in slide-in-from-bottom-2 space-y-6">
-            <div className={cn(sunkPanelClass, "space-y-6")}>
-              <div className="flex flex-col gap-4 border-b border-slate-200/80 pb-5 lg:flex-row lg:items-center lg:justify-between">
-                <div className="flex items-center gap-4">
-                  <TahoeIconPlate tone="indigo">
-                    <RotateCcw className="h-7 w-7" />
-                  </TahoeIconPlate>
-                  <div>
-                    <h3 className="heading-crisp text-lg font-black uppercase tracking-tighter text-slate-900">
-                      Preparación del Viaje
-                    </h3>
-                    <p className="text-sm font-medium text-slate-500">
-                      Asignación física y configuración inicial de operación.
-                    </p>
+          <div className="animate-in fade-in slide-in-from-bottom-2 space-y-5">
+            <div className={cn(sunkPanelClass, "space-y-4")}>
+              {/* HEADER CON BOTÓN MÁGICO Y DESCARGA DINÁMICA */}
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200/80 pb-4">
+                <div className="flex items-center gap-3">
+                  <Badge
+                    variant={isFullTrip ? "destructive" : "success"}
+                    className="w-fit rounded-xl px-3 py-1.5 text-xs uppercase font-black"
+                  >
+                    {isFullTrip ? "🚛 FULL / DOBLE" : "🚚 SENCILLO"}
+                  </Badge>
+                  <div className="flex items-center gap-2 border-l border-slate-300 pl-3">
+                    <span className="text-xs font-black text-slate-500 uppercase tracking-widest">
+                      INICIA EN:
+                    </span>
+                    <div className="flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setData((p) => ({ ...p, leg_type: "carga_muelle" }))
+                        }
+                        className={cn(
+                          "px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all flex items-center gap-1.5",
+                          data.leg_type === "carga_muelle"
+                            ? "bg-brand-red text-white"
+                            : "text-slate-500",
+                        )}
+                      >
+                        <Box className="h-3 w-3" /> Patio
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setData((p) => ({ ...p, leg_type: "ruta_carretera" }))
+                        }
+                        className={cn(
+                          "px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all flex items-center gap-1.5",
+                          data.leg_type === "ruta_carretera"
+                            ? "bg-blue-600 text-white"
+                            : "text-slate-500",
+                        )}
+                      >
+                        <Truck className="h-3 w-3" /> Ruta
+                      </button>
+                    </div>
                   </div>
                 </div>
-                <Badge
-                  variant={isFullTrip ? "destructive" : "success"}
-                  className="w-fit rounded-2xl px-4 py-2 text-sm uppercase font-black"
+
+                {/* BOTÓN MAGICO: Generar y Descargar (Evitando la redirección) */}
+                <Button
+                  onClick={() => {
+                    if (generatedPdfUuid) {
+                      downloadPdf(generatedPdfUuid);
+                    } else {
+                      handleQuickStamp();
+                    }
+                  }}
+                  disabled={isStamping}
+                  className={cn(
+                    "rounded-2xl text-white font-black uppercase tracking-wide shadow-lg transition-all duration-300",
+                    generatedPdfUuid
+                      ? "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/30"
+                      : "bg-amber-500 hover:bg-amber-600 shadow-amber-500/30",
+                  )}
                 >
-                  {isFullTrip
-                    ? "🚛 Modo Configurado: FULL / DOBLE"
-                    : "🚚 Modo Configurado: SENCILLO"}
-                </Badge>
+                  {isStamping ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : generatedPdfUuid ? (
+                    <>
+                      <Download className="h-4 w-4 mr-2" /> Descargar Carta
+                      Porte
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="h-4 w-4 mr-2" /> Emitir Carta Porte 3.1
+                    </>
+                  )}
+                </Button>
               </div>
 
-              <div className="rounded-[24px] border border-indigo-200/60 bg-indigo-50/70 p-5 shadow-inner">
-                <div className="mb-4 flex items-center gap-3">
-                  <TahoeIconPlate tone="indigo" className="h-14 w-14">
-                    <RotateCcw className="h-6 w-6" />
-                  </TahoeIconPlate>
-                  <div>
-                    <Label variant="brand" required>
-                      MODALIDAD DE INICIO
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-3 pt-2">
+                <div className="space-y-1.5 md:col-span-2">
+                  <Label variant="brand" required>
+                    MERCANCÍA (CATÁLOGO SAT) *
+                  </Label>
+                  <SearchableSelect
+                    items={availableSatProducts}
+                    value={data.descripcion_mercancia.split(" ")[0]}
+                    placeholder="Buscar producto SAT..."
+                    onSelect={(val) => {
+                      const prod = availableSatProducts.find(
+                        (p) => p.value === val,
+                      );
+                      if (prod)
+                        setData((p) => ({
+                          ...p,
+                          descripcion_mercancia: prod.label,
+                          es_material_peligroso:
+                            prod.es_material_peligroso === "1",
+                          clase_imo:
+                            prod.es_material_peligroso === "1"
+                              ? p.clase_imo
+                              : "",
+                        }));
+                    }}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label variant="brand" required>
+                    PESO (TON)
+                  </Label>
+                  <Input
+                    type="number"
+                    placeholder="Ej: 25.5"
+                    className="h-10"
+                    value={data.peso_toneladas || ""}
+                    onChange={(e) =>
+                      setData((p) => ({
+                        ...p,
+                        peso_toneladas: parseFloat(e.target.value) || 0,
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                <div className="space-y-1.5">
+                  <Label variant="brand" className="text-brand-red" required>
+                    CONTENEDOR 1 *
+                  </Label>
+                  <Input
+                    placeholder="Ej: CMA U 1521457"
+                    value={data.contenedor_1}
+                    onChange={(e) =>
+                      setData((p) => ({
+                        ...p,
+                        contenedor_1: e.target.value.toUpperCase(),
+                      }))
+                    }
+                    className="border-blue-200 font-mono font-black uppercase"
+                  />
+                </div>
+                {isFullTrip && (
+                  <div className="space-y-1.5 animate-in fade-in">
+                    <Label variant="brand" className="text-brand-red" required>
+                      CONTENEDOR 2 *
                     </Label>
-                    <p className="text-sm font-semibold text-slate-700">
-                      Define si el arranque es local en patio o en ruta.
-                    </p>
+                    <Input
+                      placeholder="Ej: MSC U 8899221"
+                      value={data.contenedor_2}
+                      onChange={(e) =>
+                        setData((p) => ({
+                          ...p,
+                          contenedor_2: e.target.value.toUpperCase(),
+                        }))
+                      }
+                      className="border-blue-200 font-mono font-black uppercase"
+                    />
                   </div>
-                </div>
-                <div className="mx-auto flex w-full max-w-[360px] rounded-[20px] border border-slate-200/80 bg-white/70 p-1.5 shadow-inner">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setData((p) => ({ ...p, leg_type: "carga_muelle" }))
+                )}
+                <div
+                  className={cn(
+                    "space-y-1.5",
+                    isFullTrip ? "md:col-span-1" : "md:col-span-2",
+                  )}
+                >
+                  <Label variant="brand">REFERENCIA (OPCIONAL)</Label>
+                  <Input
+                    placeholder="Booking, Pedimento..."
+                    value={data.referencia_cliente}
+                    onChange={(e) =>
+                      setData((p) => ({
+                        ...p,
+                        referencia_cliente: e.target.value.toUpperCase(),
+                      }))
                     }
-                    className={cn(
-                      "haptic-press flex h-10 flex-1 items-center justify-center gap-2 rounded-2xl text-[10px] font-black uppercase tracking-[0.18em] transition-all",
-                      data.leg_type === "carga_muelle"
-                        ? "bg-brand-red text-white shadow-lg"
-                        : "text-slate-500 hover:text-slate-800",
-                    )}
-                  >
-                    <Box className="h-3.5 w-3.5" /> Patio
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setData((p) => ({ ...p, leg_type: "ruta_carretera" }))
-                    }
-                    className={cn(
-                      "haptic-press flex h-10 flex-1 items-center justify-center gap-2 rounded-2xl text-[10px] font-black uppercase tracking-[0.18em] transition-all",
-                      data.leg_type === "ruta_carretera"
-                        ? "bg-blue-600 text-white shadow-lg"
-                        : "text-slate-500 hover:text-slate-800",
-                    )}
-                  >
-                    <Truck className="h-3.5 w-3.5" /> Carretera
-                  </button>
+                  />
                 </div>
               </div>
+            </div>
 
-              <div className={cn(sunkPanelClass, "space-y-5")}>
-                <div className="flex items-center gap-4">
-                  <TahoeIconPlate tone="blue">
-                    <Box className="h-7 w-7" />
-                  </TahoeIconPlate>
-                  <div>
-                    <h4 className="heading-crisp text-sm font-black uppercase tracking-tighter text-slate-900">
-                      Información de la Mercancía
-                    </h4>
-                    <p className="text-xs font-medium text-slate-500">
-                      Datos de catálogo SAT, peso estimado y referencia.
-                    </p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-                  <div className="space-y-2 md:col-span-2">
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 animate-in slide-in-from-top-4 fade-in duration-300">
+              <div className={sectionCardClass}>
+                <h4 className="text-sm font-black uppercase tracking-tighter text-slate-900 mb-4 flex items-center gap-2 border-b pb-2">
+                  <User className="h-5 w-5 text-brand-red" /> Ejecutor
+                </h4>
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
                     <Label variant="brand" required>
-                      DESCRIPCIÓN DE LA CARGA (CATÁLOGO SAT) *
+                      TRACTOCAMIÓN *
                     </Label>
                     <SearchableSelect
-                      items={availableSatProducts}
-                      value={data.descripcion_mercancia.split(" ")[0]}
-                      placeholder="Buscar producto SAT..."
-                      onSelect={(val) => {
-                        const prod = availableSatProducts.find(
-                          (p) => p.value === val,
-                        );
-                        if (prod)
-                          setData((p) => ({
-                            ...p,
-                            descripcion_mercancia: prod.label,
-                            es_material_peligroso:
-                              prod.es_material_peligroso === "1",
-                            clase_imo:
-                              prod.es_material_peligroso === "1"
-                                ? p.clase_imo
-                                : "",
-                          }));
-                      }}
+                      items={availableTractos}
+                      value={data.unitId}
+                      onSelect={(v) => setData((p) => ({ ...p, unitId: v }))}
+                      placeholder="Buscar..."
                     />
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     <Label variant="brand" required>
-                      PESO ESTIMADO (TON)
+                      OPERADOR *
                     </Label>
-                    <Input
-                      type="number"
-                      placeholder="Ej: 25.5"
-                      value={data.peso_toneladas || ""}
-                      onChange={(e) =>
-                        setData((p) => ({
-                          ...p,
-                          peso_toneladas: parseFloat(e.target.value) || 0,
-                        }))
-                      }
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                  <div className="space-y-2">
-                    <Label
-                      variant="brand"
-                      className="flex items-center gap-2 text-brand-red"
-                      required
-                    >
-                      <Container className="h-4 w-4" /> CONTENEDOR 1 *
-                    </Label>
-                    <Input
-                      placeholder="Ej: CMA U 1521457"
-                      value={data.contenedor_1}
-                      onChange={(e) =>
-                        setData((p) => ({
-                          ...p,
-                          contenedor_1: e.target.value.toUpperCase(),
-                        }))
-                      }
-                      className="h-12 border-blue-200 font-mono text-lg font-black uppercase"
-                    />
-                  </div>
-
-                  {isFullTrip && (
-                    <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
-                      <Label
-                        variant="brand"
-                        className="flex items-center gap-2 text-brand-red"
-                        required
-                      >
-                        <Container className="h-4 w-4" /> CONTENEDOR 2 *
-                      </Label>
-                      <Input
-                        placeholder="Ej: MSC U 8899221"
-                        value={data.contenedor_2}
-                        onChange={(e) =>
-                          setData((p) => ({
-                            ...p,
-                            contenedor_2: e.target.value.toUpperCase(),
-                          }))
-                        }
-                        className="h-12 border-blue-200 font-mono text-lg font-black uppercase"
-                      />
-                    </div>
-                  )}
-
-                  <div className="space-y-2 md:col-span-2">
-                    <Label variant="brand" className="flex items-center gap-2">
-                      REFERENCIA DEL CLIENTE (OPCIONAL)
-                    </Label>
-                    <Input
-                      placeholder="Booking, BL, Pedimento o Referencia..."
-                      value={data.referencia_cliente}
-                      onChange={(e) =>
-                        setData((p) => ({
-                          ...p,
-                          referencia_cliente: e.target.value.toUpperCase(),
-                        }))
-                      }
-                      className="h-10 border-slate-200 font-semibold"
+                    <SearchableSelect
+                      items={availableOperators}
+                      value={data.driverId}
+                      onSelect={(v) => setData((p) => ({ ...p, driverId: v }))}
+                      placeholder="Buscar..."
                     />
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                <div className={sectionCardClass}>
-                  <div className="mb-5 flex items-center gap-4">
-                    <TahoeIconPlate tone="green">
-                      <User className="h-7 w-7" />
-                    </TahoeIconPlate>
-                    <div>
-                      <h4 className="heading-crisp text-sm font-black uppercase tracking-tighter text-slate-900">
-                        Ejecutor del Viaje
-                      </h4>
-                    </div>
+              <div className={sectionCardClass}>
+                <h4 className="text-sm font-black uppercase tracking-tighter text-slate-900 mb-4 flex items-center gap-2 border-b pb-2">
+                  <LinkIcon className="h-5 w-5 text-blue-600" /> Arrastre
+                </h4>
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label variant="brand" required>
+                      REMOLQUE 1 *
+                    </Label>
+                    <SearchableSelect
+                      items={availableRemolques}
+                      value={data.remolque1Id}
+                      onSelect={(v) =>
+                        setData((p) => ({ ...p, remolque1Id: v }))
+                      }
+                      placeholder="Buscar..."
+                    />
                   </div>
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label variant="brand" required>
-                        TRACTOCAMIÓN ASIGNADO *
-                      </Label>
-                      <SearchableSelect
-                        items={availableTractos}
-                        value={data.unitId}
-                        onSelect={(v) => setData((p) => ({ ...p, unitId: v }))}
-                        placeholder="Buscar económico o placa..."
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label variant="brand" required>
-                        OPERADOR / CHÓFER *
-                      </Label>
-                      <SearchableSelect
-                        items={availableOperators}
-                        value={data.driverId}
-                        onSelect={(v) =>
-                          setData((p) => ({ ...p, driverId: v }))
-                        }
-                        placeholder="Buscar por nombre..."
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className={sectionCardClass}>
-                  <div className="mb-5 flex items-center gap-4">
-                    <TahoeIconPlate tone="blue">
-                      <LinkIcon className="h-7 w-7" />
-                    </TahoeIconPlate>
-                    <div>
-                      <h4 className="heading-crisp text-sm font-black uppercase tracking-tighter text-slate-900">
-                        Equipos de Arrastre
-                      </h4>
-                    </div>
-                  </div>
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label variant="brand" required>
-                        REMOLQUE / CHASIS 1 *
-                      </Label>
-                      <SearchableSelect
-                        items={availableRemolques}
-                        value={data.remolque1Id}
-                        onSelect={(v) =>
-                          setData((p) => ({ ...p, remolque1Id: v }))
-                        }
-                        placeholder="Buscar económico..."
-                      />
-                    </div>
-                    {isFullTrip && (
-                      <>
-                        <div className="space-y-2 border-t border-slate-200/80 pt-4">
-                          <Label variant="brand" required>
-                            DOLLY (CONVERTIDOR) *
-                          </Label>
-                          <SearchableSelect
-                            items={availableDollies}
-                            value={data.dollyId}
-                            onSelect={(v) =>
-                              setData((p) => ({ ...p, dollyId: v }))
-                            }
-                            placeholder="Buscar económico del dolly..."
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label variant="brand" required>
-                            REMOLQUE / CHASIS 2 *
-                          </Label>
-                          <SearchableSelect
-                            items={availableRemolques}
-                            value={data.remolque2Id}
-                            onSelect={(v) =>
-                              setData((p) => ({ ...p, remolque2Id: v }))
-                            }
-                            placeholder="Buscar económico..."
-                          />
-                        </div>
-                      </>
-                    )}
-                  </div>
+                  {isFullTrip && (
+                    <>
+                      <div className="space-y-1.5">
+                        <Label variant="brand" required>
+                          DOLLY *
+                        </Label>
+                        <SearchableSelect
+                          items={availableDollies}
+                          value={data.dollyId}
+                          onSelect={(v) =>
+                            setData((p) => ({ ...p, dollyId: v }))
+                          }
+                          placeholder="Buscar..."
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label variant="brand" required>
+                          REMOLQUE 2 *
+                        </Label>
+                        <SearchableSelect
+                          items={availableRemolques}
+                          value={data.remolque2Id}
+                          onSelect={(v) =>
+                            setData((p) => ({ ...p, remolque2Id: v }))
+                          }
+                          placeholder="Buscar..."
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -1122,313 +1276,222 @@ export const DespachoWizard = () => {
             <div
               className={cn(
                 footerClass,
-                "flex flex-col gap-4 rounded-[24px] px-5 py-4 md:flex-row md:items-center md:justify-between",
+                "flex flex-col gap-4 rounded-[20px] px-5 py-4 md:flex-row md:items-center md:justify-between",
               )}
             >
               <Button
                 variant="outline"
-                size="lg"
-                className="w-32 rounded-2xl"
+                className="w-32 rounded-2xl font-black uppercase"
                 onClick={() => setCurrentStep(1)}
+                disabled={isStamping}
               >
                 Atrás
               </Button>
               <Button
                 onClick={() => setCurrentStep(3)}
                 disabled={!isStep2Valid}
-                className="rounded-2xl bg-blue-600 font-black uppercase tracking-[0.16em] text-white shadow-xl shadow-blue-600/20 hover:bg-blue-700"
+                className="rounded-2xl bg-blue-600 font-black uppercase tracking-[0.16em] text-white shadow-xl hover:bg-blue-700"
               >
-                Continuar a Finanzas <ChevronRight className="ml-2 h-5 w-5" />
+                Continuar al Resumen <ChevronRight className="ml-2 h-4 w-4" />
               </Button>
             </div>
           </div>
         )}
 
-        {/* PASO 3 */}
+        {/* ========================================================
+            PASO 3: RESUMEN LITERAL Y TIMBRADO FINAL
+        ======================================================== */}
         {currentStep === 3 && (
-          <div className="animate-in fade-in slide-in-from-bottom-2 space-y-6">
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              <div className="space-y-6">
-                <Card
-                  className={cn(
-                    shellClass,
-                    "border-emerald-200/70 bg-emerald-50/45",
-                  )}
-                >
-                  <CardHeader className={cn(headerClass, "pb-4")}>
-                    <div className="flex items-center gap-4">
-                      <TahoeIconPlate tone="green">
-                        <DollarSign className="h-7 w-7" />
-                      </TahoeIconPlate>
-                      <CardTitle className="text-sm text-emerald-800 font-black uppercase tracking-widest">
-                        INGRESO GLOBAL (A FACTURAR)
-                      </CardTitle>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4 pt-6 text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-600">
-                        Flete Base:
-                      </span>
-                      <span className="font-mono text-lg font-black text-slate-800">
-                        ${infoTarifa.base.toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-600">Casetas:</span>
-                      <span className="font-mono text-lg font-black text-slate-800">
-                        ${infoTarifa.casetas.toLocaleString()}
-                      </span>
-                    </div>
-                    <Separator className="my-4 bg-emerald-200" />
-                    <div className="rounded-[24px] bg-emerald-600 p-5 text-white shadow-2xl shadow-emerald-600/20">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-black uppercase tracking-[0.2em]">
-                          Total Neto
-                        </span>
-                        <span className="font-mono text-2xl font-black tracking-tighter">
-                          ${infoTarifa.total.toLocaleString()}
-                        </span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {isRoadLeg ? (
-                  <Card
-                    className={cn(
-                      shellClass,
-                      "border-amber-200/70 bg-amber-50/40",
-                    )}
-                  >
-                    <CardHeader className={cn(headerClass, "pb-4")}>
-                      <div className="flex items-center gap-4">
-                        <TahoeIconPlate tone="amber">
-                          <Truck className="h-7 w-7" />
-                        </TahoeIconPlate>
-                        <CardTitle className="text-sm text-amber-800 font-black uppercase tracking-widest">
-                          ANTICIPOS FASE INICIAL
-                        </CardTitle>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-6 pt-6">
-                      <div className="space-y-2">
-                        <Label variant="brand" required>
-                          CASETAS
-                        </Label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-3 text-sm font-black text-slate-500">
-                            $
-                          </span>
-                          <Input
-                            type="number"
-                            className="pl-8 font-mono text-lg font-bold"
-                            value={data.anticipo_casetas || ""}
-                            onChange={(e) =>
-                              setData((p) => ({
-                                ...p,
-                                anticipo_casetas:
-                                  parseFloat(e.target.value) || 0,
-                              }))
-                            }
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label variant="brand" required>
-                          VALE DE DIÉSEL
-                        </Label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-3 text-sm font-black text-slate-500">
-                            $
-                          </span>
-                          <Input
-                            type="number"
-                            className="pl-8 font-mono text-lg font-bold"
-                            value={data.anticipo_combustible || ""}
-                            onChange={(e) =>
-                              setData((p) => ({
-                                ...p,
-                                anticipo_combustible:
-                                  parseFloat(e.target.value) || 0,
-                              }))
-                            }
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label variant="brand" required>
-                          VIÁTICOS OPERADOR
-                        </Label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-3 text-sm font-black text-slate-500">
-                            $
-                          </span>
-                          <Input
-                            type="number"
-                            className="pl-8 font-mono text-lg font-bold"
-                            value={data.anticipo_viaticos || ""}
-                            onChange={(e) =>
-                              setData((p) => ({
-                                ...p,
-                                anticipo_viaticos:
-                                  parseFloat(e.target.value) || 0,
-                              }))
-                            }
-                          />
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <Card
-                    className={cn(
-                      shellClass,
-                      "flex min-h-[320px] flex-col items-center justify-center border-slate-200/70 bg-slate-50/70 p-10 text-center",
-                    )}
-                  >
-                    <TahoeIconPlate tone="neutral" className="mb-4 h-16 w-16">
-                      <Info className="h-8 w-8" />
-                    </TahoeIconPlate>
-                    <h3 className="heading-crisp text-lg font-black uppercase tracking-tighter text-slate-900">
-                      Sin Anticipos
-                    </h3>
-                    <p className="mt-2 max-w-xs text-sm font-medium leading-relaxed text-slate-500">
-                      Movimiento local en patio/muelle. Por políticas
-                      operativas, no se requieren registros de anticipos.
-                    </p>
-                  </Card>
-                )}
-              </div>
-
+          <div className="animate-in fade-in slide-in-from-bottom-2 space-y-5">
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+              {/* Tarjeta de Ruta */}
               <Card
-                className={cn(shellClass, "border-brand-navy/20 bg-blue-50/20")}
+                className={cn(shellClass, "border-blue-200/50 bg-blue-50/20")}
               >
-                <CardHeader className={cn(headerClass, "pb-4")}>
-                  <div className="flex items-center gap-4">
-                    <TahoeIconPlate tone="indigo">
-                      <ShieldCheck className="h-7 w-7 text-indigo-600" />
+                <CardHeader className={cn(headerClass, "pb-3 pt-4")}>
+                  <div className="flex items-center gap-3">
+                    <TahoeIconPlate tone="blue" className="h-10 w-10">
+                      <MapPin className="h-5 w-5" />
                     </TahoeIconPlate>
-                    <div>
-                      <CardTitle className="text-sm text-brand-navy font-black uppercase tracking-widest">
-                        Emisión Fiscal (Carta Porte)
-                      </CardTitle>
-                      <p className="text-[10px] font-bold text-slate-500 mt-0.5">
-                        Complemento Carta Porte 3.0 / CFDI 4.0
-                      </p>
-                    </div>
+                    <CardTitle className="text-sm text-blue-900 font-black uppercase tracking-widest">
+                      Datos de la Ruta
+                    </CardTitle>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-6 pt-6">
-                  <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
-                    <div className="space-y-1 pr-4">
-                      <Label className="text-sm font-black text-slate-800">
-                        Generar Timbrado SAT Automático
-                      </Label>
-                      <p className="text-[11px] font-medium text-slate-500 leading-tight">
-                        Emitir XML y PDF con PAC autorizado al momento de
-                        despachar.
-                      </p>
-                    </div>
+                <CardContent className="space-y-3 pt-4 text-sm">
+                  <div className="flex justify-between border-b border-slate-200/50 pb-2">
+                    <span className="font-bold text-slate-500">Cliente:</span>
+                    <span className="font-black text-slate-800 text-right">
+                      {selectedClient?.razon_social || "N/A"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between border-b border-slate-200/50 pb-2">
+                    <span className="font-bold text-slate-500">Destino:</span>
+                    <span className="font-black text-slate-800 text-right">
+                      {selectedSubClient?.ciudad || "N/A"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between border-b border-slate-200/50 pb-2">
+                    <span className="font-bold text-slate-500">
+                      Ruta Asignada:
+                    </span>
+                    <span className="font-black text-blue-700 text-right">
+                      {data.routeNombre || "N/A"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between pb-1">
+                    <span className="font-bold text-slate-500">
+                      Fecha Salida:
+                    </span>
+                    <span className="font-black text-slate-800 text-right">
+                      {data.fecha_programada
+                        ? format(data.fecha_programada, "dd 'de' MMMM, yyyy", {
+                            locale: es,
+                          })
+                        : "N/A"}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Tarjeta de Operación */}
+              <Card
+                className={cn(
+                  shellClass,
+                  "border-emerald-200/50 bg-emerald-50/20",
+                )}
+              >
+                <CardHeader className={cn(headerClass, "pb-3 pt-4")}>
+                  <div className="flex items-center gap-3">
+                    <TahoeIconPlate tone="green" className="h-10 w-10">
+                      <ClipboardList className="h-5 w-5" />
+                    </TahoeIconPlate>
+                    <CardTitle className="text-sm text-emerald-900 font-black uppercase tracking-widest">
+                      Asignación y Mercancía
+                    </CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3 pt-4 text-sm">
+                  <div className="flex justify-between border-b border-slate-200/50 pb-2">
+                    <span className="font-bold text-slate-500">Operador:</span>
+                    <span className="font-black text-emerald-800 text-right">
+                      {availableOperators.find((o) => o.value === data.driverId)
+                        ?.label || "N/A"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between border-b border-slate-200/50 pb-2">
+                    <span className="font-bold text-slate-500">Unidad:</span>
+                    <span className="font-black text-emerald-800 text-right">
+                      {availableTractos
+                        .find((t) => t.value === data.unitId)
+                        ?.label?.split(" ")[0] || "N/A"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between border-b border-slate-200/50 pb-2">
+                    <span className="font-bold text-slate-500">
+                      Contenedor 1:
+                    </span>
+                    <span className="font-mono font-black text-slate-800 text-right">
+                      {data.contenedor_1 || "N/A"}
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-1 pb-1">
+                    <span className="font-bold text-slate-500">
+                      Mercancía SAT:
+                    </span>
+                    <span className="font-semibold text-slate-700 text-xs line-clamp-2 leading-tight">
+                      {data.descripcion_mercancia || "N/A"}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Panel de Emisión Fiscal (Carta Porte) */}
+            <Card
+              className={cn(shellClass, "border-brand-navy/20 bg-slate-50")}
+            >
+              <CardContent className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div className="flex items-center gap-4">
+                  <TahoeIconPlate tone="indigo" className="h-12 w-12">
+                    <ShieldCheck className="h-6 w-6 text-indigo-600" />
+                  </TahoeIconPlate>
+                  <div>
+                    <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">
+                      Opciones de Emisión (SAT)
+                    </h3>
+                    <p className="text-xs font-medium text-slate-500 mt-1">
+                      Configura cómo se generará la Carta Porte al despachar.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex-1 md:flex-none">
+                  <div className="flex items-center gap-3">
                     <Switch
                       checked={data.generarCartaPorte}
                       onCheckedChange={(c) =>
                         setData((p) => ({ ...p, generarCartaPorte: c }))
                       }
                     />
+                    <Label
+                      className="text-xs font-black text-slate-800 cursor-pointer"
+                      onClick={() =>
+                        setData((p) => ({
+                          ...p,
+                          generarCartaPorte: !p.generarCartaPorte,
+                        }))
+                      }
+                    >
+                      Timbrar Automático
+                    </Label>
                   </div>
-
                   {data.generarCartaPorte && (
-                    <div className="animate-in slide-in-from-top-2 p-4 bg-indigo-50/50 rounded-xl border border-indigo-200 space-y-4">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="space-y-1.5">
-                          <Label className="text-sm font-black text-indigo-900">
-                            Ocultar Montos al Operador
-                          </Label>
-                          <p className="text-[11px] font-bold text-indigo-700/70 leading-tight">
-                            Generar versión "Operativa" ($1 MXN impreso) para
-                            entregar al chofer/aduana.
-                          </p>
-                        </div>
+                    <>
+                      <div className="hidden sm:block w-px h-6 bg-slate-200"></div>
+                      <div className="flex items-center gap-3">
                         <Switch
                           checked={data.ocultarMontosPdf}
                           onCheckedChange={(c) =>
                             setData((p) => ({ ...p, ocultarMontosPdf: c }))
                           }
-                          className="data-[state=checked]:bg-indigo-600 mt-1"
+                          className="data-[state=checked]:bg-indigo-600"
                         />
+                        <Label
+                          className="text-xs font-black text-indigo-900 cursor-pointer flex items-center gap-1"
+                          onClick={() =>
+                            setData((p) => ({
+                              ...p,
+                              ocultarMontosPdf: !p.ocultarMontosPdf,
+                            }))
+                          }
+                        >
+                          <FileKey className="h-3.5 w-3.5" /> PDF Operativo ($1)
+                        </Label>
                       </div>
-                      {data.ocultarMontosPdf && (
-                        <div className="bg-white p-3 rounded-lg border border-indigo-100 flex items-start gap-3">
-                          <FileKey className="h-5 w-5 text-indigo-500 shrink-0 mt-0.5" />
-                          <p className="text-[10px] text-slate-600 font-medium">
-                            El XML conservará la validez fiscal y los montos
-                            reales ($
-                            <span className="font-mono font-bold">
-                              {infoTarifa.total.toLocaleString()}
-                            </span>
-                            ). Solo el PDF impreso saldrá en ceros o por $1.
-                          </p>
-                        </div>
-                      )}
-                    </div>
+                    </>
                   )}
-
-                  <div className="bg-slate-900 p-4 rounded-xl text-white space-y-2 shadow-inner">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-800 pb-2">
-                      Resumen de Sellado
-                    </p>
-                    <div className="flex justify-between text-xs font-medium">
-                      <span className="text-slate-400">Tractocamión RFC:</span>
-                      <span className="font-mono text-emerald-400">
-                        {
-                          availableTractos
-                            .find((t) => t.value === data.unitId)
-                            ?.label?.split(" ")[0]
-                        }
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-xs font-medium">
-                      <span className="text-slate-400">Operador:</span>
-                      <span className="font-mono text-emerald-400">
-                        {
-                          availableOperators.find(
-                            (o) => o.value === data.driverId,
-                          )?.label
-                        }
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-xs font-medium">
-                      <span className="text-slate-400">Bienes Transp:</span>
-                      <span className="font-mono text-emerald-400 truncate max-w-[150px]">
-                        {data.descripcion_mercancia}
-                      </span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+                </div>
+              </CardContent>
+            </Card>
 
             <div
               className={cn(
                 footerClass,
-                "flex flex-col gap-4 rounded-[24px] px-5 py-4 md:flex-row md:items-center md:justify-between",
+                "flex flex-col gap-4 rounded-[20px] px-5 py-4 md:flex-row md:items-center md:justify-between",
               )}
             >
               <Button
                 variant="outline"
-                size="lg"
-                className="w-32 rounded-2xl font-black uppercase tracking-widest"
+                className="w-32 rounded-2xl font-black uppercase"
                 onClick={() => setCurrentStep(2)}
                 disabled={isStamping}
               >
                 Atrás
               </Button>
-
               <Button
                 type="button"
-                size="lg"
-                className="rounded-2xl bg-brand-navy hover:bg-slate-800 font-black uppercase tracking-[0.16em] text-white shadow-xl transition-all"
+                className="rounded-2xl bg-brand-navy hover:bg-slate-800 font-black uppercase tracking-[0.16em] text-white shadow-xl py-6 md:py-auto px-8"
                 disabled={isStamping}
                 onClick={(e) => {
                   e.preventDefault();
@@ -1437,15 +1500,15 @@ export const DespachoWizard = () => {
               >
                 {isStamping ? (
                   <>
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Timbrando
-                    SAT...
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />{" "}
+                    Procesando...
                   </>
                 ) : (
                   <>
                     <Check className="mr-2 h-5 w-5" />{" "}
                     {data.generarCartaPorte
-                      ? "Timbrar y Despachar"
-                      : "Despachar Sin Timbrar"}
+                      ? "Timbrar y Confirmar"
+                      : "Confirmar Sin Timbrar"}
                   </>
                 )}
               </Button>
