@@ -300,8 +300,15 @@ def add_timeline_event(
         trip.legs[-1] if trip.legs else None,
     )
 
-    #  PROTECCIÓN DE FASE 2: Si reportan "entregado" (Llegó al cliente),
-    # el viaje padre DEBE seguir en tránsito para permitir el retorno de vacío.
+    # 🚀 MAPEO SEGURO DE ESTADOS (Frontend -> ENUM PostgreSQL)
+    # Si manda un estado válido como "detenido" o "accidente", lo respetamos.
+    # Si manda algo como "en_camino_origen", lo traducimos al estado padre: "en_transito".
+    status_db_validos = ["detenido", "retraso", "accidente", "bloqueado", "entregado"]
+    mapped_status = (
+        payload.status if payload.status in status_db_validos else "en_transito"
+    )
+
+    #  PROTECCIÓN DE FASE 2: Si reportan "entregado" (Llegó al cliente)
     if payload.status == "entregado":
         # Solo cerramos el viaje completo si la fase actual es el retorno de vacío
         if active_leg and active_leg.leg_type == "entrega_vacio":
@@ -309,7 +316,8 @@ def add_timeline_event(
         else:
             trip.status = "en_transito"
     else:
-        trip.status = payload.status
+        # Asignamos el estado mapeado en lugar del string crudo del frontend
+        trip.status = mapped_status
 
     trip.last_update = datetime.utcnow()
 
@@ -317,7 +325,12 @@ def add_timeline_event(
         trip.terminal_entrega_vacio = payload.terminal_entrega_vacio
 
     if active_leg:
-        active_leg.status = payload.status
+        # El tramo también respeta el ENUM
+        if payload.status == "entregado":
+            active_leg.status = "entregado"
+        else:
+            active_leg.status = mapped_status
+
         active_leg.last_update = datetime.utcnow()
         active_leg.last_location = payload.location
 
@@ -338,11 +351,12 @@ def add_timeline_event(
                 if hasattr(unidad, "nivel_combustible_litros"):
                     unidad.nivel_combustible_litros = payload.combustible_litros
 
+        # 🚀 LA BITÁCORA SÍ GUARDA EL TEXTO ORIGINAL DEL EVENTO PARA EL HISTORIAL
         db_event = models.TripTimelineEvent(
             trip_leg_id=active_leg.id,
             time=datetime.utcnow(),
             event=f"{payload.status.replace('_', ' ').title()} en {payload.location}",
-            event_type=payload.status,
+            event_type=payload.status,  # Aquí sí se permite texto libre "en_camino_origen"
             location=payload.location,
             lat=payload.lat,
             lng=payload.lng,
@@ -354,21 +368,15 @@ def add_timeline_event(
     if hasattr(payload, "notifyClient") and payload.notifyClient:
         from app.services.email_service import EmailService
 
-        # Fecha formateada para el cliente
         fecha_str = datetime.utcnow().strftime("%d/%m/%Y %H:%M")
 
         email_svc = EmailService(db)
-        # Esto envía el correo en segundo plano sin interrumpir el guardado
         email_svc.send_status_update(
             trip=trip,
             status=payload.status,
             location=payload.location,
             event_time=fecha_str,
         )
-
-    db.commit()
-    db.refresh(trip)
-    return trip
 
     db.commit()
     db.refresh(trip)
@@ -563,6 +571,12 @@ def close_trip_settlement(
     leg.status = models.TripStatus.CERRADO
     leg.saldo_operador = payload.neto_a_pagar
     leg.actual_arrival = datetime.utcnow()
+
+    # 🚀 NUEVO: Guardar el odómetro en el tramo y en el camión
+    if payload.odometro_final:
+        leg.odometro_final = payload.odometro_final
+        if leg.unit:
+            leg.unit.odometro = payload.odometro_final
 
     event = models.TripTimelineEvent(
         trip_leg_id=leg.id,

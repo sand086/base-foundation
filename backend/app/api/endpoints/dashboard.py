@@ -101,7 +101,11 @@ def get_dashboard_stats(start_date: str, end_date: str, db: Session = Depends(ge
                 "route": f"{t.origin} → {t.destination}",
                 "origin": t.origin,
                 "destination": t.destination,
-                "operator": t.legs[0].operator.name if t.legs else "Sin asignar",
+                "operator": (
+                    t.legs[0].operator.name
+                    if t.legs and t.legs[0].operator
+                    else "Sin asignar"
+                ),
                 "operatorId": str(t.legs[0].operator_id) if t.legs else "0",
                 "status": t.status.value,
                 "date": t.start_date.date(),
