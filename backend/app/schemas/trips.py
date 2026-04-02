@@ -292,6 +292,7 @@ class CloseSettlementPayload(BaseModel):
     total_ingresos: float  # <--- Asegúrate que sea snake_case
     total_deducciones: float  # <--- Asegúrate que sea snake_case
     neto_a_pagar: float
+    odometro_final: Optional[int] = None
 
 
 # ==========================================
