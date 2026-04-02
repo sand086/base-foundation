@@ -132,6 +132,30 @@ const CombustibleCargas = () => {
     loadData();
   }, []);
 
+  // 🚀 NUEVA FUNCIÓN PARA GUARDAR EL TICKET
+  const handleCreateTicket = async (data: TicketFormData) => {
+    const toastId = toast.loading("Guardando registro de combustible...");
+    try {
+      // 1. Enviamos los datos al backend
+      await fuelService.create(data);
+
+      // 2. Cerramos el modal
+      setIsModalOpen(false);
+
+      // 3. Recargamos la tabla para ver el nuevo registro
+      await loadData();
+
+      toast.success("Vale de combustible registrado exitosamente.", {
+        id: toastId,
+      });
+    } catch (error) {
+      console.error("Error al guardar combustible:", error);
+      toast.error("Error al guardar el registro. Verifica tu conexión.", {
+        id: toastId,
+      });
+    }
+  };
+
   // Solo filtramos por Unidad. La búsqueda global de texto se delega al EnhancedDataTable
   const filteredCargas = useMemo(() => {
     if (selectedUnitId === "all") return cargas;
@@ -535,7 +559,7 @@ const CombustibleCargas = () => {
       <AddTicketModal
         open={isModalOpen}
         onOpenChange={setIsModalOpen}
-        onSubmit={loadData as any}
+        onSubmit={handleCreateTicket}
       />
       {cargaToView && (
         <ViewCargaModal
