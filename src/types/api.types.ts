@@ -201,6 +201,9 @@ export interface Unit {
   created_at?: string;
   updated_at?: string;
   is_loaded?: boolean;
+  contenedor_1_id?: number | null;
+  contenedor_2_id?: number | null;
+  referencia?: string | null;
 }
 
 export interface UnitDocument {
