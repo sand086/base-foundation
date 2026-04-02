@@ -386,6 +386,7 @@ def add_timeline_event(
 def get_trip_settlement(db: Session, trip_leg_id: int):
     """
     FASE 4: Liquidación adaptada para Movimientos de Patio y Vacío
+    (Modificado: SIN inyectar Tarifa del Cliente y SIN descontar Casetas)
     """
     leg = (
         db.query(models.TripLeg)
@@ -446,19 +447,13 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
             litros_a_cobrar = diferencia_litros
             deduccion_combustible = litros_a_cobrar * precio_promedio_litro
 
-        conceptos.append(
-            schemas.ConceptoPago(
-                id=str(uuid.uuid4())[:8],
-                tipo="ingreso",
-                categoria="tarifa",
-                descripcion=f"Tarifa Base Carretera",
-                monto=trip.tarifa_base,
-                esAutomatico=True,
-            )
-        )
+        # 🚀 FASE 2 RESUELTA:
+        # Aquí eliminamos el código que inyectaba `trip.tarifa_base`.
+        # El sueldo en ruta empieza en 0 para que Gustavo lo asigne en la UI.
+
     #  Lógica si es MOVIMIENTO LOCAL (Patio o Vacío)
     else:
-        # FASE 4: Bonos Fijos por Configuración
+        # FASE 4: Bonos Fijos por Configuración de maniobra local (esto se mantiene)
         bono_movimiento = 300.0 if is_full else 200.0
         tipo_mov_str = (
             "Mov. Patio"
@@ -478,18 +473,10 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
             )
         )
 
-    # DEDUCCIONES (Del Tramo) - Aplican a cualquier caso
-    if leg.anticipo_casetas > 0:
-        conceptos.append(
-            schemas.ConceptoPago(
-                id=str(uuid.uuid4())[:8],
-                tipo="deduccion",
-                categoria="anticipo",
-                descripcion="Anticipo Casetas",
-                monto=leg.anticipo_casetas,
-                esAutomatico=True,
-            )
-        )
+    # 🚀 FASE 3 RESUELTA:
+    # Se eliminó la deducción automática de `leg.anticipo_casetas`.
+
+    # DEDUCCIONES (Del Tramo) - SÓLO APLICAN VIÁTICOS Y COMBUSTIBLE EXTRA
     if leg.anticipo_viaticos > 0:
         conceptos.append(
             schemas.ConceptoPago(

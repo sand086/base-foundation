@@ -68,10 +68,11 @@ import {
   Truck,
   User,
   MapPin,
+  ShieldCheck,
   ShieldAlert,
   RotateCcw,
   Printer,
-  FilterX,
+  RefreshCw,
 } from "lucide-react";
 
 import { FuelLoad, Unit, Operator } from "@/types/api.types";
@@ -105,7 +106,6 @@ interface FuelLoadDisplay extends FuelLoad {
 }
 
 interface AuditFormData {
-  litrosBomba: string;
   litrosVales: string;
   lecturaInicialECM: string;
   lecturaFinalECM: string;
@@ -148,7 +148,6 @@ const RegistroValesTab = () => {
               ? unit?.capacidad_tanque_diesel || 800
               : unit?.capacidad_tanque_urea || 60;
 
-          // Detectar si es tracto
           const isTracto =
             unit?.tipo_1?.toLowerCase().includes("tracto") ||
             unit?.tipo_1?.toLowerCase().includes("camion");
@@ -158,7 +157,7 @@ const RegistroValesTab = () => {
           return {
             ...item,
             unidad_numero:
-              isTracto && ecoRaw !== "N/A" ? `ECO-${ecoRaw}` : ecoRaw, // Limpio!
+              isTracto && ecoRaw !== "N/A" ? `ECO-${ecoRaw}` : ecoRaw,
             operador_nombre:
               item.operator?.name || item.operator?.nombre || "N/A",
             excede_tanque: Number(item.litros) > Number(capacity),
@@ -294,10 +293,9 @@ const RegistroValesTab = () => {
         key: "unidad_numero",
         header: "Asset ID",
         render: (v) => {
-          // El string 'v' ya viene formateado correctamente desde nuestra función loadData
           return (
             <span className="font-mono font-black text-slate-900 dark:text-slate-200 bg-slate-100 dark:bg-white/5 px-2 py-1 rounded text-xs tracking-tight">
-              {v} {/*  Antes decía ECO-{v}, ahora lo dejamos limpio */}
+              {v}
             </span>
           );
         },
@@ -347,18 +345,18 @@ const RegistroValesTab = () => {
       },
       {
         key: "evidencia_url",
-        header: "Asset Doc",
+        header: "Status Ticket",
         render: (v) =>
           v ? (
-            <Badge className="bg-emerald-500 text-white border-none text-[8px] font-black tracking-widest px-2">
-              VERIFIED
+            <Badge className="bg-emerald-500 dark:bg-emerald-600 text-white border-none text-[8px] font-black tracking-widest px-2 shadow-sm">
+              VALIDATED
             </Badge>
           ) : (
             <Badge
               variant="outline"
-              className="text-rose-400 border-rose-400/30 text-[8px] font-black tracking-widest px-2"
+              className="text-rose-400 border-rose-400/30 text-[8px] font-black tracking-widest px-2 uppercase bg-rose-50 dark:bg-rose-500/10 shadow-sm"
             >
-              MISSING
+              Missing Evidence
             </Badge>
           ),
       },
@@ -372,34 +370,34 @@ const RegistroValesTab = () => {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 haptic-press"
+                className="h-8 w-8 haptic-press rounded-full"
               >
                 <MoreVertical size={16} />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="end"
-              className="rounded-2xl border-slate-200 dark:border-white/10 bg-white/95 dark:bg-brand-navy/95 backdrop-blur-xl"
+              className="rounded-2xl border-slate-200 dark:border-white/10 bg-white/95 dark:bg-brand-navy/95 backdrop-blur-xl shadow-2xl p-1"
             >
               <DropdownMenuItem
                 onClick={() => setCargaToView(row)}
-                className="cursor-pointer font-bold uppercase text-[10px] py-2.5"
+                className="cursor-pointer font-bold uppercase text-[10px] py-2.5 px-3 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
               >
                 <Eye className="h-3.5 w-3.5 mr-2 text-blue-500" /> Consultar
+                Asset
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => setCargaToEdit(row)}
-                className="cursor-pointer font-bold uppercase text-[10px] py-2.5"
+                className="cursor-pointer font-bold uppercase text-[10px] py-2.5 px-3 rounded-xl text-brand-green hover:bg-brand-green/5 transition-colors"
               >
-                <Pencil className="h-3.5 w-3.5 mr-2 text-emerald-500" />{" "}
-                Refactorizar
+                <Pencil className="h-3.5 w-3.5 mr-2" /> Refactorizar
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
+              <DropdownMenuSeparator className="bg-slate-100 dark:bg-white/5 my-1" />
               <DropdownMenuItem
-                className="text-rose-600 focus:bg-rose-50 font-bold uppercase text-[10px] py-2.5"
+                className="text-rose-600 focus:bg-rose-50 dark:focus:bg-rose-500/10 font-bold uppercase text-[10px] py-2.5 px-3 rounded-xl cursor-pointer"
                 onClick={() => setIdParaEliminar(row.id)}
               >
-                <Trash2 className="h-3.5 w-3.5 mr-2" /> Eliminar
+                <Trash2 className="h-3.5 w-3.5 mr-2" /> Purgar Registro
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -411,47 +409,59 @@ const RegistroValesTab = () => {
 
   if (isLoading)
     return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="animate-spin h-12 w-12 text-brand-red" />
+      <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-brand-navy">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="animate-spin h-12 w-12 text-brand-red" />
+          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
+            Iniciando Consola Industrial...
+          </p>
+        </div>
       </div>
     );
 
   return (
-    <div className="space-y-8">
-      {/* TOOLBAR TAHOE: Sunken Industrial */}
-      <div className="flex items-center gap-2 bg-white dark:bg-slate-900 p-1.5 rounded-[1.2rem] border border-slate-200 dark:border-white/10 shadow-inner">
-        <div className="flex items-center gap-3 px-4 border-r border-slate-100 dark:border-white/5">
-          <Search className="h-4 w-4 text-slate-400" />
-          <Input
-            placeholder="Buscar unidad o terminal..."
-            className="border-none shadow-none focus-visible:ring-0 text-[11px] font-bold uppercase w-[220px] bg-transparent"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        <Select value={selectedUnitId} onValueChange={setSelectedUnitId}>
-          <SelectTrigger className="w-[180px] border-none shadow-none focus:ring-0 font-black uppercase text-[10px] tracking-widest text-brand-navy dark:text-white bg-transparent">
-            <SelectValue placeholder="Flota Completa" />
-          </SelectTrigger>
-          <SelectContent className="rounded-xl border-none shadow-2xl">
-            <SelectItem value="all" className="font-bold text-[10px] uppercase">
-              Flota Completa
-            </SelectItem>
-            {units.map((u) => (
+    <div className="p-6 md:p-8 space-y-8 bg-white/80 dark:bg-brand-navy/95 backdrop-blur-2xl min-h-screen animate-in fade-in duration-700">
+      <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-6 pb-4 border-b border-slate-200/60 dark:border-white/10">
+        <PageHeader
+          title="Consola de Combustible"
+          description="Monitoreo de rendimientos técnicos y flujo energético de flota"
+          className="heading-crisp mb-0"
+        />
+
+        <div className="flex flex-wrap items-center gap-3">
+          <Select value={selectedUnitId} onValueChange={setSelectedUnitId}>
+            <SelectTrigger className="w-[200px] h-11 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 font-black uppercase text-[10px] tracking-widest text-slate-700 dark:text-white shadow-inner rounded-xl haptic-press">
+              <SelectValue placeholder="FILTRO DE FLOTA" />
+            </SelectTrigger>
+            <SelectContent className="rounded-2xl border-none shadow-3xl bg-white/95 dark:bg-brand-navy/95 backdrop-blur-xl">
               <SelectItem
-                key={u.id}
-                value={String(u.id)}
-                className="font-mono text-[10px]"
+                value="all"
+                className="font-black text-[10px] uppercase"
               >
-                ECO-{u.numero_economico}
+                Flota Completa
               </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+              {units.map((u) => (
+                <SelectItem
+                  key={u.id}
+                  value={String(u.id)}
+                  className="font-mono text-[10px] font-bold"
+                >
+                  ECO-{u.numero_economico}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Button
+            onClick={() => setIsModalOpen(true)}
+            className="bg-brand-red hover:bg-red-700 text-white font-black uppercase text-[10px] tracking-[0.15em] h-11 px-6 rounded-xl shadow-[0_5px_15px_-5px_rgba(239,68,68,0.5)] haptic-press transition-all hover:-translate-y-0.5 active:scale-95 active:translate-y-0"
+          >
+            <Plus size={16} className="mr-2 stroke-[3]" /> Registrar Ticket
+          </Button>
+        </div>
       </div>
 
-      {/* KPI GRID: macOS Tahoe Glass Widgets */}
-      <div className="grid gap-6 md:grid-cols-4">
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
         {[
           {
             label: "Volumen Semanal",
@@ -459,6 +469,7 @@ const RegistroValesTab = () => {
             icon: Fuel,
             color: "text-amber-500",
             bg: "bg-amber-500/10",
+            metric: "Consumo 7d",
           },
           {
             label: "Inversión Ledger",
@@ -466,38 +477,48 @@ const RegistroValesTab = () => {
             icon: TrendingUp,
             color: "text-emerald-500",
             bg: "bg-emerald-500/10",
+            metric: "Capital 7d",
           },
           {
             label: "Performance Real",
-            val: `${statsAuditoria.rendimiento} km/L`,
+            val: `${statsAuditoria.rendimiento} KM/L`,
             icon: BarChart3,
             color: "text-blue-500",
             bg: "bg-blue-500/10",
+            metric: "Flota Promedio",
           },
           {
-            label: "Último Odómetro",
-            val: `${statsAuditoria.odoActual.toLocaleString()} km`,
-            icon: Gauge,
+            label: "Certificación Auditoría",
+            val: "Nivel A1",
+            icon: ShieldCheck,
             color: "text-slate-200",
             bg: "bg-white/10",
             dark: true,
+            metric: "Status Operativo",
           },
         ].map((kpi, i) => (
           <Card
             key={i}
             className={cn(
-              "border-none shadow-2xl backdrop-blur-xl rounded-[2rem] transition-all hover:scale-[1.02]",
+              "border-none shadow-xl backdrop-blur-xl rounded-[2rem] transition-all duration-300 hover:-translate-y-1 relative overflow-hidden",
               kpi.dark
                 ? "bg-brand-navy text-white"
-                : "bg-white/90 dark:bg-slate-900/90",
+                : "bg-white/90 dark:bg-slate-900/95",
             )}
           >
-            <CardContent className="p-6">
+            <div
+              className={cn(
+                "absolute -top-10 -right-10 w-32 h-32 blur-3xl opacity-20 rounded-full pointer-events-none",
+                kpi.bg.replace("/10", ""),
+              )}
+            />
+
+            <CardContent className="p-6 relative z-10 flex flex-col justify-between h-full">
               <div className="flex justify-between items-start">
-                <div className="space-y-1">
+                <div className="space-y-2">
                   <p
                     className={cn(
-                      "text-[9px] font-black uppercase tracking-[0.25em] opacity-60",
+                      "text-[9px] font-black uppercase tracking-[0.25em] opacity-70",
                       kpi.dark ? "text-slate-400" : "text-slate-500",
                     )}
                   >
@@ -516,40 +537,41 @@ const RegistroValesTab = () => {
                   <kpi.icon className={kpi.color} size={24} strokeWidth={2.5} />
                 </div>
               </div>
+              <div className="mt-5 flex items-center justify-between w-full">
+                <div className="h-1.5 flex-1 bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden mr-3">
+                  <div
+                    className={cn(
+                      "h-full rounded-full transition-all duration-1000",
+                      kpi.color.replace("text", "bg"),
+                    )}
+                    style={{ width: "75%" }}
+                  />
+                </div>
+                <span className="text-[8px] font-black uppercase text-slate-400 tracking-widest whitespace-nowrap">
+                  {kpi.metric}
+                </span>
+              </div>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      {/* SECCIÓN DE DATOS: Liquid Glass Table */}
-      <div className="space-y-4">
-        <div className="flex justify-between items-center px-2">
-          <h3 className="text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.3em] flex items-center gap-3">
-            <div className="h-1 w-8 bg-brand-red rounded-full" /> Registro
-            Maestro de Cargas
-          </h3>
-          <Button
-            onClick={() => setIsModalOpen(true)}
-            className="bg-brand-red hover:bg-red-700 text-white font-black uppercase text-[10px] tracking-[0.15em] h-12 px-8 rounded-2xl shadow-[0_10px_20px_-5px_rgba(239,68,68,0.3)] transition-all hover:-translate-y-0.5"
-          >
-            <Plus size={16} className="mr-2 stroke-[3]" /> Nuevo Vale
-            combustible
-          </Button>
-        </div>
-
-        <Card className="border-none shadow-3xl bg-white/50 dark:bg-slate-900/50 backdrop-blur-md rounded-[2.5rem] overflow-hidden border border-white/20">
+      <div className="space-y-4 pt-4">
+        <Card className="border-none shadow-3xl bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl rounded-[2.5rem] overflow-hidden border border-white/20 dark:border-white/5 ring-1 ring-slate-200/50 dark:ring-white/5">
           <CardContent className="p-0">
-            <EnhancedDataTable
-              data={filteredCargas}
-              columns={columns as any}
-              onRowClick={(row) => setCargaToView(row)}
-              className="liquid-glass"
-            />
+            <div className="[&_thead_tr]:bg-slate-100/90 [&_thead_tr]:dark:bg-slate-900/95">
+              <EnhancedDataTable
+                data={filteredCargas}
+                columns={columns as any}
+                onRowClick={(row) => setCargaToView(row)}
+                className="liquid-glass-standard"
+                searchPlaceholder="BUSCAR UNIDAD O ESTACIÓN..."
+              />
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* MODALS */}
       <AddTicketModal
         open={isModalOpen}
         onOpenChange={setIsModalOpen}
@@ -577,26 +599,30 @@ const RegistroValesTab = () => {
         open={!!idParaEliminar}
         onOpenChange={(o) => !o && setIdParaEliminar(null)}
       >
-        <AlertDialogContent className="rounded-[2rem] bg-white/95 dark:bg-brand-navy/95 backdrop-blur-2xl border-none shadow-3xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-rose-600 font-black uppercase tracking-tighter text-2xl flex items-center gap-3">
-              <div className="p-2 bg-rose-500/10 rounded-xl">
-                <Trash2 size={24} />
-              </div>{" "}
-              ¿Eliminar Asset?
+        <AlertDialogContent className="rounded-[2.5rem] bg-white/95 dark:bg-brand-navy/98 backdrop-blur-2xl border-none shadow-3xl p-8">
+          <AlertDialogHeader className="space-y-4">
+            <div className="w-16 h-16 rounded-2xl bg-rose-500/10 text-rose-600 flex items-center justify-center shadow-inner mb-2 animate-bounce">
+              <Trash2 size={32} />
+            </div>
+            <AlertDialogTitle className="text-slate-900 dark:text-white font-black uppercase tracking-tighter text-3xl">
+              Purgar Registro
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-slate-500 font-bold text-sm">
-              Esta operación es irreversible y afectará el rendimiento km/L de
-              la unidad.
+            <AlertDialogDescription className="text-slate-500 dark:text-slate-400 font-bold text-sm leading-relaxed">
+              Esta acción es irreversible y afectará el historial de rendimiento
+              de la unidad ECO-
+              <span className="text-slate-900 dark:text-white font-black ml-1">
+                {cargas.find((c) => c.id === idParaEliminar)?.unidad_numero}
+              </span>
+              . ¿Desea proceder con la eliminación del activo digital?
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="mt-6 gap-3">
-            <AlertDialogCancel className="rounded-xl h-11 font-black uppercase text-[10px] tracking-widest border-slate-200">
-              Abortar
+          <AlertDialogFooter className="mt-8 gap-4">
+            <AlertDialogCancel className="rounded-2xl h-12 px-8 font-black uppercase text-[10px] tracking-widest border-slate-200 haptic-press">
+              Abortar Operación
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
-              className="bg-rose-600 hover:bg-rose-700 text-white rounded-xl h-11 font-black uppercase text-[10px] tracking-widest"
+              className="bg-rose-600 hover:bg-rose-700 text-white rounded-2xl h-12 px-10 font-black uppercase text-[10px] tracking-widest haptic-press shadow-lg shadow-rose-500/20"
             >
               Confirmar Purga
             </AlertDialogAction>
@@ -608,7 +634,7 @@ const RegistroValesTab = () => {
 };
 
 // ============================================================================
-// COMPONENTE TAB 2: AUDITORÍA OPERATIVA (CÓDIGO PASADO POR EL USUARIO)
+// COMPONENTE TAB 2: AUDITORÍA OPERATIVA (REDISEÑADA PARA DEPENDER DE LOS VALES)
 // ============================================================================
 const ConciliacionOperativaTab = () => {
   const { trips, fetchTrips } = useTrips();
@@ -622,8 +648,7 @@ const ConciliacionOperativaTab = () => {
   const [selectedTripId, setSelectedTripId] = useState<string>("");
 
   const [formData, setFormData] = useState<AuditFormData>({
-    litrosBomba: "",
-    litrosVales: "0",
+    litrosVales: "0", // 🚀 Ahora esto manda, eliminamos 'litrosBomba'
     lecturaInicialECM: "",
     lecturaFinalECM: "",
     litrosConsumidosECM: "",
@@ -632,6 +657,7 @@ const ConciliacionOperativaTab = () => {
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [auditCompleted, setAuditCompleted] = useState(false);
+  const [isFetchingVales, setIsFetchingVales] = useState(false);
 
   const activeTrip = useMemo(() => {
     return trips.find((t) => String(t.id) === selectedTripId) || null;
@@ -651,27 +677,22 @@ const ConciliacionOperativaTab = () => {
     };
   }, [activeTrip]);
 
-  const handleTripSelect = async (id: string) => {
-    setSelectedTripId(id);
-    setAuditCompleted(false);
-
-    setFormData({
-      litrosBomba: "",
-      litrosVales: "...",
-      lecturaInicialECM: "",
-      lecturaFinalECM: "",
-      litrosConsumidosECM: "",
-    });
-
+  // 🚀 FUNCIÓN PARA JALAR LOS VALES (TICKETS) DE LA BASE DE DATOS
+  const fetchValesCombustible = async (tripIdToFetch: string) => {
+    setIsFetchingVales(true);
     try {
       const response = await axiosClient.get("/fuel/fuel-logs");
 
-      const legIds = activeTrip?.legs?.map((l: any) => String(l.id)) || [];
+      // Encontrar el viaje para saber cuáles son sus tramos
+      const targetTrip = trips.find((t) => String(t.id) === tripIdToFetch);
+      const legIds = targetTrip?.legs?.map((l: any) => String(l.id)) || [];
+
       const valesDiesel = response.data.filter((log: any) => {
         const isDiesel = log.tipo_combustible === "diesel";
+        // Si el vale se asignó al viaje maestro o a alguno de sus tramos
         const isMatch =
-          String(log.trip_id) === id ||
-          String(log.trip_leg_id) === id ||
+          String(log.trip_id) === tripIdToFetch ||
+          String(log.trip_leg_id) === tripIdToFetch ||
           legIds.includes(String(log.trip_leg_id));
         return isDiesel && isMatch;
       });
@@ -687,29 +708,51 @@ const ConciliacionOperativaTab = () => {
       }));
 
       if (totalVales > 0) {
-        toast.success("Vales Vinculados", {
+        toast.success("Vales Sincronizados", {
           description: `Se detectaron ${totalVales.toFixed(2)} L registrados en este viaje.`,
+        });
+      } else {
+        toast.warning("Sin vales", {
+          description: `No se encontraron vales de diésel asociados a este viaje.`,
         });
       }
     } catch (error) {
       console.error("Error sincronizando vales:", error);
-      setFormData((prev) => ({ ...prev, litrosVales: "0" }));
       toast.error("Error de Sincronización", {
         description: "No se pudieron obtener los vales de la base de datos.",
       });
+    } finally {
+      setIsFetchingVales(false);
     }
   };
 
+  const handleTripSelect = async (id: string) => {
+    setSelectedTripId(id);
+    setAuditCompleted(false);
+
+    // Limpiamos todo al cambiar de viaje
+    setFormData({
+      litrosVales: "...",
+      lecturaInicialECM: "",
+      lecturaFinalECM: "",
+      litrosConsumidosECM: "",
+    });
+
+    // Llamamos a la API
+    await fetchValesCombustible(id);
+  };
+
   const auditResult = useMemo(() => {
-    const litrosBomba = Number(formData.litrosBomba) || 0;
+    // 🚀 AHORA EL TOTAL FÍSICO DEPENDE 100% DE LOS VALES (SISTEMA)
     const litrosVales = Number(formData.litrosVales) || 0;
+    const totalFisicoLitros = litrosVales;
+
     const litrosConsumidosECM = Number(formData.litrosConsumidosECM) || 0;
     const lecturaInicial = Number(formData.lecturaInicialECM) || 0;
     const lecturaFinal = Number(formData.lecturaFinalECM) || 0;
 
     if (litrosConsumidosECM <= 0) return null;
 
-    const totalFisicoLitros = litrosBomba + litrosVales;
     const totalDigitalLitros = litrosConsumidosECM;
     const diferenciaLitros = totalFisicoLitros - totalDigitalLitros;
     const kmsRecorridos =
@@ -749,7 +792,6 @@ const ConciliacionOperativaTab = () => {
   const handleReset = () => {
     setSelectedTripId("");
     setFormData({
-      litrosBomba: "",
       litrosVales: "0",
       lecturaInicialECM: "",
       lecturaFinalECM: "",
@@ -763,6 +805,7 @@ const ConciliacionOperativaTab = () => {
     setIsProcessing(true);
 
     try {
+      // 🚀 ENVIAMOS LA INFO A LA BITÁCORA (Y AL BACKEND PARA QUE ACTUALICE LA UNIDAD)
       await axiosClient.post(`/trips/${selectedTripId}/timeline`, {
         status: auditResult.esRoboSospechado ? "incidencia" : "info",
         location: "Conciliación de Combustible",
@@ -770,6 +813,7 @@ const ConciliacionOperativaTab = () => {
         odometro: formData.lecturaFinalECM
           ? Number(formData.lecturaFinalECM)
           : null,
+        combustible_litros: auditResult.totalFisicoLitros, // 🚀 SE GUARDA EN BD (Unidad)
       });
 
       setAuditCompleted(true);
@@ -914,62 +958,55 @@ const ConciliacionOperativaTab = () => {
                   <Fuel className="h-5 w-5" /> 1. Suministro Físico (Diésel)
                 </CardTitle>
                 <CardDescription>
-                  Combustible inyectado en Base + Vales
+                  Extraído automáticamente de los vales registrados
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4 pt-6">
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="litrosBomba"
-                    className="font-bold text-slate-700"
-                  >
-                    Carga Inicial Bomba (Patio)
-                  </Label>
-                  <div className="relative">
-                    <Input
-                      id="litrosBomba"
-                      type="number"
-                      step="0.01"
-                      value={formData.litrosBomba}
-                      onChange={(e) =>
-                        handleInputChange("litrosBomba", e.target.value)
-                      }
-                      className="pr-10 h-11 font-mono"
-                    />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">
-                      L
-                    </span>
+              <CardContent className="space-y-6 pt-6">
+                {/* 🚀 CAJA DE VALES (Fuente de Verdad) */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="font-black uppercase tracking-widest text-slate-700 text-[10px]">
+                      Suma de Vales (Sincronizado)
+                    </Label>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2 text-[9px] font-bold uppercase tracking-widest bg-white"
+                      onClick={() => fetchValesCombustible(selectedTripId)}
+                      disabled={isFetchingVales}
+                    >
+                      <RefreshCw
+                        className={cn(
+                          "h-3 w-3 mr-1.5",
+                          isFetchingVales && "animate-spin",
+                        )}
+                      />
+                      Refrescar
+                    </Button>
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="litrosVales"
-                    className="font-bold text-slate-700"
-                  >
-                    Suma de Vales (Sincronizado)
-                  </Label>
                   <div className="relative">
                     <Input
-                      id="litrosVales"
                       type="text"
                       disabled
                       value={formData.litrosVales}
-                      className="pr-10 font-mono h-11 bg-slate-100 font-bold text-slate-600"
+                      className="pr-12 pl-4 font-mono h-14 bg-amber-100/50 border-amber-200 text-2xl font-black text-amber-900"
                     />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-amber-700/50 font-black text-xl">
                       L
                     </span>
                   </div>
-                  <p className="text-[10px] text-slate-500 italic">
-                    Dato calculado automáticamente de los vales del viaje.
+                  <p className="text-[10px] text-slate-500 font-medium">
+                    Dato calculado automáticamente buscando todos los vales de
+                    diésel asignados a este viaje.
                   </p>
                 </div>
+
                 <Separator />
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 shadow-inner flex justify-between items-center">
-                  <span className="text-xs font-black text-amber-800 uppercase">
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 shadow-inner flex justify-between items-center">
+                  <span className="text-[11px] font-black text-amber-800 uppercase tracking-widest">
                     Total Suministrado
                   </span>
-                  <span className="text-2xl font-black font-mono text-amber-700">
+                  <span className="text-3xl font-black font-mono text-amber-700">
                     {auditResult
                       ? auditResult.totalFisicoLitros.toFixed(2)
                       : "0.00"}{" "}
@@ -1003,8 +1040,11 @@ const ConciliacionOperativaTab = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="lecturaFinalECM" className="font-bold">
-                      ODO Final
+                    <Label
+                      htmlFor="lecturaFinalECM"
+                      className="font-bold text-blue-600"
+                    >
+                      ODO Final *
                     </Label>
                     <Input
                       id="lecturaFinalECM"
@@ -1013,14 +1053,14 @@ const ConciliacionOperativaTab = () => {
                       onChange={(e) =>
                         handleInputChange("lecturaFinalECM", e.target.value)
                       }
-                      className="h-11 font-mono"
+                      className="h-11 font-mono border-blue-200 bg-blue-50/50"
                     />
                   </div>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 pt-2">
                   <Label
                     htmlFor="litrosConsumidosECM"
-                    className="font-bold text-blue-800"
+                    className="font-bold text-blue-800 uppercase tracking-widest text-[10px]"
                   >
                     Litros Quemados (Lectura ECM) *
                   </Label>
@@ -1032,15 +1072,15 @@ const ConciliacionOperativaTab = () => {
                     onChange={(e) =>
                       handleInputChange("litrosConsumidosECM", e.target.value)
                     }
-                    className="h-11 border-blue-300 font-bold text-blue-900 bg-blue-50/20"
+                    className="h-12 border-blue-300 font-bold font-mono text-xl text-blue-900 bg-blue-50/30"
                   />
                 </div>
                 <Separator />
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 shadow-inner flex justify-between items-center">
-                  <span className="text-xs font-black text-blue-800 uppercase">
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 shadow-inner flex justify-between items-center">
+                  <span className="text-[11px] font-black text-blue-800 uppercase tracking-widest">
                     Total Quemado
                   </span>
-                  <span className="text-2xl font-black font-mono text-blue-700">
+                  <span className="text-3xl font-black font-mono text-blue-700">
                     {auditResult
                       ? auditResult.totalDigitalLitros.toFixed(2)
                       : "0.00"}{" "}
@@ -1165,7 +1205,7 @@ const ConciliacionOperativaTab = () => {
                     </span>
                   </div>
                   <div className="flex justify-between border-b pb-1">
-                    <span>Total Físico:</span>
+                    <span>Total Físico (Vales):</span>
                     <span className="font-mono">
                       {auditResult.totalFisicoLitros.toFixed(2)} L
                     </span>

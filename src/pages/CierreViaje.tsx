@@ -17,8 +17,6 @@ import {
   Clock,
   History,
   CheckSquare,
-  Percent,
-  Edit,
   Truck,
 } from "lucide-react";
 
@@ -100,7 +98,7 @@ export default function CierreViaje() {
   // ==========================================
   // ESTADOS DE CÁLCULO & PREVIEW API
   // ==========================================
-  const [porcentajeFlete, setPorcentajeFlete] = useState<number>(15);
+  const [sueldoRutaPactado, setSueldoRutaPactado] = useState<number>(0); // 🚀 FASE 2: Sueldo Fijo
   const [combustibleFaltante, setCombustibleFaltante] = useState<number>(0);
   const [previewData, setPreviewData] = useState<any>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
@@ -178,7 +176,7 @@ export default function CierreViaje() {
   }, [allLegs, selectedLegIds]);
 
   // ==========================================
-  //  FASE 4: CÁLCULOS FINANCIEROS (REGLA GUSTAVO)
+  //  CÁLCULOS FINANCIEROS (REGLAS DE GUSTAVO FASE 2 Y 3)
   // ==========================================
   const liquidacion = useMemo(() => {
     if (selectedLegsData.length === 0) return null;
@@ -189,10 +187,10 @@ export default function CierreViaje() {
     let hasRoadMove = false;
 
     selectedLegsData.forEach((leg) => {
-      // 1. REGLA GUSTAVO: Diferenciar Rutas vs Movimientos de Patio/Vacío
+      // 1. REGLA GUSTAVO FASE 2: Rutas vs Movimientos Locales
       if (leg.leg_type === "ruta_carretera") {
         hasRoadMove = true;
-        pagoBaseBruto += (leg.trip?.tarifa_base || 0) * (porcentajeFlete / 100);
+        // No sumamos tarifa base del cliente. Arranca en 0.
       } else {
         // Es Muelle, Patio o Vacío
         const isFull = Boolean(leg.trip?.dolly_id || leg.trip?.remolque_2_id);
@@ -200,12 +198,16 @@ export default function CierreViaje() {
         pagoBaseBruto += bonoFijo;
       }
 
-      // 2. Sumar deducciones automáticas
-      deduccionViaticos +=
-        (leg.anticipo_viaticos || 0) + (leg.anticipo_casetas || 0);
+      // 2. REGLA GUSTAVO FASE 3: Eliminar cobro de casetas
+      deduccionViaticos += leg.anticipo_viaticos || 0; // 🚀 Adiós anticipo_casetas
       otrosAnticipos +=
-        (leg.otros_anticipos || 0) + (leg.anticipo_combustible || 0); // Consideramos diesel un anticipo más
+        (leg.otros_anticipos || 0) + (leg.anticipo_combustible || 0);
     });
+
+    // 🚀 FASE 2: Añadir el sueldo de ruta fijo que el usuario escribe
+    if (hasRoadMove) {
+      pagoBaseBruto += sueldoRutaPactado;
+    }
 
     const bonosAdicionales = conceptosExtra
       .filter((c) => c.tipo === "ingreso")
@@ -233,14 +235,18 @@ export default function CierreViaje() {
       total_deducciones,
       neto_a_pagar: total_ingresos - total_deducciones,
     };
-  }, [selectedLegsData, porcentajeFlete, conceptosExtra, combustibleFaltante]);
+  }, [
+    selectedLegsData,
+    sueldoRutaPactado,
+    conceptosExtra,
+    combustibleFaltante,
+  ]);
 
   // ==========================================
-  // EFECTO: SOLICITAR PRE-LIQUIDACIÓN AL BACKEND (SOLO SI HAY RUTA)
+  // EFECTO: SOLICITAR PRE-LIQUIDACIÓN AL BACKEND (DIÉSEL)
   // ==========================================
   useEffect(() => {
     if (selectedLegIds.length > 0 && getSettlementPreview) {
-      // Verificamos si al menos uno de los tramos seleccionados es carretera
       const hasRoadTrip = selectedLegsData.some(
         (l) => l.leg_type === "ruta_carretera",
       );
@@ -271,7 +277,6 @@ export default function CierreViaje() {
           })
           .finally(() => setIsLoadingPreview(false));
       } else {
-        //  Si no hay rutas, limpiamos la penalización y ocultamos lo del diésel
         setPreviewData(null);
         setCombustibleFaltante(0);
       }
@@ -338,7 +343,6 @@ export default function CierreViaje() {
     }
   };
 
-  // APLICAR FILTROS A LA TABLA
   const applyFilters = (list: any[]) =>
     list.filter((l) => {
       if (filterOperator !== "ALL" && String(l.operator_id) !== filterOperator)
@@ -367,36 +371,6 @@ export default function CierreViaje() {
     carga_muelle: "Muelle / Patio",
     ruta_carretera: "Ruta Carretera",
     entrega_vacio: "Retorno Vacío",
-  };
-
-  const handleQuickTicketSubmit = async (data: any) => {
-    const loadingToast = toast.loading("Registrando vale en el sistema...");
-    try {
-      await fuelService.create(data);
-      toast.success("Vale registrado exitosamente", {
-        id: loadingToast,
-        description: "Recalculando liquidación...",
-      });
-
-      // Refrescar cálculo si es ruta
-      if (
-        getSettlementPreview &&
-        selectedLegIds.length > 0 &&
-        liquidacion?.hasRoadMove
-      ) {
-        setIsLoadingPreview(true);
-        const updatedPreview = await getSettlementPreview(selectedLegIds);
-        setPreviewData(updatedPreview);
-        setCombustibleFaltante(updatedPreview?.deduccion_combustible || 0);
-        setIsLoadingPreview(false);
-      }
-      setShowAddTicket(false);
-    } catch (error: any) {
-      toast.error("Error al guardar el vale", {
-        id: loadingToast,
-        description: error.response?.data?.detail || "Intente de nuevo.",
-      });
-    }
   };
 
   const handleQuickFixTicket = (legId: number) => {
@@ -450,6 +424,7 @@ export default function CierreViaje() {
                   setSelectedLegIds([]);
                   setConceptosExtra([]);
                   setCombustibleFaltante(0);
+                  setSueldoRutaPactado(0); // Resetear sueldo
                   setFilterOperator(val);
                 }}
               >
@@ -661,10 +636,9 @@ export default function CierreViaje() {
                                   <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-200 border-0 text-[10px] uppercase tracking-wider mb-1">
                                     Pendiente
                                   </Badge>
-                                  {/*  FASE 4: MOSTRAMOS EL BONO ESTIMADO O VARIABLE */}
                                   <div className="text-[10px] text-brand-navy font-bold bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
                                     {leg.leg_type === "ruta_carretera"
-                                      ? "Var %"
+                                      ? "Base Fija"
                                       : isFull
                                         ? "$300"
                                         : "$200"}
@@ -701,7 +675,7 @@ export default function CierreViaje() {
         {/* COLUMNA DERECHA: CONFIGURACIÓN FINANCIERA */}
         {selectedLegIds.length > 0 && liquidacion && (
           <div className="xl:col-span-5 space-y-6 animate-in fade-in slide-in-from-right-8 duration-500">
-            {/*  1. CONCILIACIÓN DIÉSEL (SOLO SI HAY VIAJE DE CARRETERA) */}
+            {/* 1. CONCILIACIÓN DIÉSEL (SOLO SI HAY VIAJE DE CARRETERA) */}
             {liquidacion.hasRoadMove && (
               <Card className="border-slate-200 shadow-sm border-t-4 border-t-amber-500">
                 <CardHeader className="bg-amber-50/30 border-b pb-4">
@@ -868,27 +842,28 @@ export default function CierreViaje() {
 
               <CardContent className="p-0">
                 <div className="p-6 space-y-6">
-                  {/* SI HAY CARRETERA, MOSTRAMOS INPUT PARA % DEL FLETE */}
+                  {/* 🚀 FASE 2: SI HAY CARRETERA, MOSTRAMOS INPUT DE SUELDO FIJO */}
                   {liquidacion.hasRoadMove && (
                     <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex items-center justify-between">
                       <div>
                         <Label className="text-blue-800 font-bold text-[10px] uppercase tracking-widest">
-                          Pactado de Ruta
+                          Sueldo Pactado (Ruta)
                         </Label>
                         <p className="text-blue-600/70 text-xs">
-                          Porcentaje del flete a pagar.
+                          Pago fijo por el tramo carretero.
                         </p>
                       </div>
-                      <div className="relative w-24">
+                      <div className="relative w-32">
+                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-blue-400" />
                         <Input
                           type="number"
-                          value={porcentajeFlete}
+                          value={sueldoRutaPactado || ""}
                           onChange={(e) =>
-                            setPorcentajeFlete(Number(e.target.value))
+                            setSueldoRutaPactado(Number(e.target.value))
                           }
-                          className="pr-8 font-bold text-right"
+                          className="pl-8 font-bold text-right font-mono"
+                          placeholder="0.00"
                         />
-                        <Percent className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-blue-400" />
                       </div>
                     </div>
                   )}
@@ -908,12 +883,12 @@ export default function CierreViaje() {
                             setShowAddConceptoDialog(true);
                           }}
                         >
-                          + BONO
+                          + BONO EXTRA
                         </Button>
                       </div>
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-slate-600">
-                          Pago Bruto ({selectedLegsData.length} movs)
+                          Pago Base (Ruta / Patio)
                         </span>
                         <span className="font-mono font-bold text-emerald-600">
                           +{formatCurrencyLocal(liquidacion.pagoBaseBruto)}
@@ -952,23 +927,23 @@ export default function CierreViaje() {
                           + CARGO
                         </Button>
                       </div>
-                      {liquidacion.deduccionViaticos > 0 && (
+                      {/* 🚀 FASE 3: Casetas ya no se muestran como descuento */}
+                      {(liquidacion.deduccionViaticos > 0 ||
+                        liquidacion.otrosAnticipos > 0) && (
                         <div className="flex justify-between items-center text-sm">
-                          <span className="text-slate-600">Anticipos</span>
+                          <span className="text-slate-600">
+                            Anticipos Operativos
+                          </span>
                           <span className="font-mono font-bold text-rose-600">
                             -
-                            {formatCurrencyLocal(liquidacion.deduccionViaticos)}
+                            {formatCurrencyLocal(
+                              liquidacion.deduccionViaticos +
+                                liquidacion.otrosAnticipos,
+                            )}
                           </span>
                         </div>
                       )}
-                      {liquidacion.otrosAnticipos > 0 && (
-                        <div className="flex justify-between items-center text-sm">
-                          <span className="text-slate-600">Otros Vales</span>
-                          <span className="font-mono font-bold text-rose-600">
-                            -{formatCurrencyLocal(liquidacion.otrosAnticipos)}
-                          </span>
-                        </div>
-                      )}
+
                       {liquidacion.combustibleFaltante > 0 && (
                         <div className="flex justify-between items-center text-sm bg-rose-50/50 px-2 py-1 rounded">
                           <span className="text-rose-700 text-xs font-medium">
@@ -1109,7 +1084,7 @@ export default function CierreViaje() {
         </DialogContent>
       </Dialog>
 
-      {/* RECIBO DE IMPRESIÓN OFICIAL */}
+      {/* 🚀 FASE 4: RECIBO DE IMPRESIÓN OFICIAL COMPLETAMENTE DESGLOSADO */}
       <Dialog
         open={showReceiptModal}
         onOpenChange={(open) => {
@@ -1119,6 +1094,7 @@ export default function CierreViaje() {
             setSelectedLegIds([]);
             setConceptosExtra([]);
             setCombustibleFaltante(0);
+            setSueldoRutaPactado(0);
             setPreviewData(null);
           }
         }}
@@ -1241,7 +1217,7 @@ export default function CierreViaje() {
                   </h4>
                   <div className="space-y-2.5 text-xs font-medium">
                     <div className="flex justify-between items-center text-slate-700 print:text-black">
-                      <span>Pago Base (Ruta / Bonos)</span>
+                      <span>Pago Base (Ruta / Patio)</span>
                       <span className="font-mono font-semibold">
                         {formatCurrencyLocal(liquidacion?.pagoBaseBruto || 0)}
                       </span>
@@ -1261,7 +1237,7 @@ export default function CierreViaje() {
                       (liquidacion?.otrosAnticipos || 0) >
                       0 && (
                       <div className="flex justify-between items-center text-rose-600 print:text-black">
-                        <span>Anticipos</span>
+                        <span>Anticipos Operativos</span>
                         <span className="font-mono font-semibold">
                           -
                           {formatCurrencyLocal(

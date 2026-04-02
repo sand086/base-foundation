@@ -161,7 +161,7 @@ function SearchableSelect({
     );
   }, [items, searchQuery]);
 
-  // 🚀 FIX: El comentario se movió AFUERA del return JSX
+  // 🚀 FIX: El Popover tiene modal={true} y se eliminó el comentario problemático
   return (
     <Popover open={!disabled && open} onOpenChange={setOpen} modal={true}>
       <PopoverTrigger asChild>
@@ -470,9 +470,13 @@ export function AddTicketModal({
       return;
     }
 
-    // 🚀 FIX: Buscar el ID de la FASE (Leg) en lugar del Viaje Padre
+    // 🚀 FIX FASE 4: VINCULACIÓN DOBLE (VIAJE PADRE + TRAMO)
     let targetLegId = null;
+    let targetTripId = null;
+
     if (formData.trip_id && formData.trip_id !== "none") {
+      targetTripId = formData.trip_id; // Guardamos el ID del viaje padre
+
       const tripObj = activeTrips.find(
         (t) => String(t.id) === formData.trip_id,
       );
@@ -486,15 +490,15 @@ export function AddTicketModal({
           ) || tripObj.legs?.[(tripObj.legs?.length || 1) - 1];
 
         if (activeLeg) {
-          targetLegId = String(activeLeg.id);
+          targetLegId = String(activeLeg.id); // Guardamos el ID de la fase
         }
       }
     }
 
     const finalData: TicketFormData = {
       ...formData,
-      trip_id: targetLegId || "", // Mapeo por compatibilidad
-      trip_leg_id: targetLegId, // 🚀 Enviamos el ID del tramo correcto
+      trip_id: targetTripId || "", // 🚀 ENVIAMOS EL VIAJE PADRE
+      trip_leg_id: targetLegId, // 🚀 ENVIAMOS EL TRAMO OPERATIVO
       odometro: safeInt(String(formData.odometro), 0),
     };
 

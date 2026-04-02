@@ -33,7 +33,6 @@ import {
 } from "@/components/ui/popover";
 import {
   MapPin,
-  Search,
   Navigation,
   MessageSquare,
   AlertTriangle,
@@ -568,10 +567,9 @@ export function UpdateStatusModal({
                             : "border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800",
                         )}
                       >
-                        {/* TRUCO: max-width evita que empuje el botón hacia afuera */}
                         <span className="truncate flex-1 text-left mr-2 max-w-[380px] uppercase text-xs">
                           {formData.location ||
-                            "Busca una caseta, ciudad o bodega..."}
+                            "Busca o pega la ubicación aquí..."}
                         </span>
                         <ChevronsUpDown className="ml-auto h-4 w-4 shrink-0 opacity-50" />
                       </Button>
@@ -582,12 +580,28 @@ export function UpdateStatusModal({
                     >
                       <Command shouldFilter={false}>
                         <div className="relative border-b border-slate-100 dark:border-white/10 bg-slate-50/80 dark:bg-slate-800">
-                          <Search className="absolute left-4 top-3.5 h-4 w-4 text-slate-400" />
+                          {/* 🚀 FIX 1: Lupa doble eliminada y onKeyDown agregado */}
                           <CommandInput
-                            placeholder="Escribe para buscar en el mapa..."
+                            placeholder="Escribe, pega el GPS y presiona ENTER para agregar..."
                             value={searchLocationQuery}
                             onValueChange={setSearchLocationQuery}
-                            className="h-11 pl-10 border-0 focus:ring-0 font-bold text-xs uppercase tracking-tight dark:text-white"
+                            onKeyDown={(e) => {
+                              if (
+                                e.key === "Enter" &&
+                                searchLocationQuery.trim() !== ""
+                              ) {
+                                e.preventDefault();
+                                setFormData({
+                                  ...formData,
+                                  location: searchLocationQuery.trim(),
+                                  lat: "",
+                                  lng: "",
+                                });
+                                setSearchLocationQuery("");
+                                setOpenCombobox(false);
+                              }
+                            }}
+                            className="h-11 border-0 focus:ring-0 font-bold text-xs uppercase tracking-tight dark:text-white"
                           />
                           {isSearchingGeo && (
                             <Loader2 className="absolute right-4 top-3.5 h-4 w-4 text-blue-500 animate-spin" />
@@ -595,6 +609,42 @@ export function UpdateStatusModal({
                         </div>
 
                         <CommandList className="max-h-[30vh] sm:max-h-[300px] custom-scrollbar">
+                          {/* 🚀 FIX 2: Silenciamos el mensaje por defecto */}
+                          <CommandEmpty className="hidden" />
+
+                          {/* 🚀 FIX 3: Botón SIEMPRE visible si hay texto escrito */}
+                          {searchLocationQuery.trim() !== "" && (
+                            <div className="p-2 border-b border-slate-100 dark:border-white/10 bg-blue-50/50 dark:bg-blue-900/10">
+                              <Button
+                                type="button"
+                                className="w-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/60 shadow-none font-bold text-xs uppercase h-auto py-3 whitespace-normal flex flex-col gap-1"
+                                onClick={() => {
+                                  setFormData({
+                                    ...formData,
+                                    location: searchLocationQuery.trim(),
+                                    lat: "",
+                                    lng: "",
+                                  });
+                                  setSearchLocationQuery("");
+                                  setOpenCombobox(false);
+                                }}
+                              >
+                                <span className="text-slate-500 dark:text-slate-400 text-[10px]">
+                                  ¿Pegaste un texto o coordenada?
+                                </span>
+                                <span className="mt-0.5 flex items-center gap-1.5 text-[10px]">
+                                  Haz clic aquí o presiona{" "}
+                                  <kbd className="bg-white dark:bg-slate-800 text-slate-800 dark:text-white px-1.5 py-0.5 rounded border shadow-sm">
+                                    ENTER
+                                  </kbd>
+                                </span>
+                                <span className="text-brand-navy dark:text-white mt-1 text-sm border-b border-brand-navy/30 dark:border-white/30 pb-0.5">
+                                  "{searchLocationQuery}"
+                                </span>
+                              </Button>
+                            </div>
+                          )}
+
                           {/* RESULTADOS DE GEOAPIFY */}
                           {geoapifyResults.length > 0 && (
                             <CommandGroup
@@ -641,24 +691,6 @@ export function UpdateStatusModal({
                             </CommandGroup>
                           )}
 
-                          <CommandEmpty className="p-4">
-                            <Button
-                              type="button"
-                              className="w-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 shadow-sm font-bold text-xs uppercase h-11"
-                              onClick={() => {
-                                setFormData({
-                                  ...formData,
-                                  location: searchLocationQuery,
-                                  lat: "",
-                                  lng: "",
-                                });
-                                setOpenCombobox(false);
-                              }}
-                            >
-                              Usar texto libre: "{searchLocationQuery}"
-                            </Button>
-                          </CommandEmpty>
-
                           {/* HISTORIAL */}
                           {customLocations.length > 0 &&
                             !searchLocationQuery && (
@@ -673,6 +705,7 @@ export function UpdateStatusModal({
                                 {customLocations.map((loc) => (
                                   <CommandItem
                                     key={`custom-${loc.address}`}
+                                    value={loc.address}
                                     onSelect={() => {
                                       setFormData({
                                         ...formData,
@@ -713,6 +746,7 @@ export function UpdateStatusModal({
                               {DEFAULT_LOCATIONS.map((loc) => (
                                 <CommandItem
                                   key={`default-${loc}`}
+                                  value={loc}
                                   onSelect={() => {
                                     setFormData({
                                       ...formData,
@@ -801,7 +835,7 @@ export function UpdateStatusModal({
                   </div>
                 )}
 
-              {/* TELEMETRÍA (Oculta en modo edición para no sobreescribir datos globales por error) */}
+              {/* TELEMETRÍA */}
               {!eventToEdit && (
                 <div className="grid grid-cols-3 gap-4 p-5 bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-white/10 rounded-2xl mt-2 shadow-sm">
                   <div className="col-span-3 pb-3 border-b border-slate-100 dark:border-white/5 mb-1">
@@ -867,7 +901,7 @@ export function UpdateStatusModal({
                 </div>
               )}
 
-              {/* 🚀 NOTIFICAR AL CLIENTE (MODO UPS) */}
+              {/* NOTIFICAR AL CLIENTE */}
               <div className="flex items-center justify-between p-4 bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-xl mt-2">
                 <div className="space-y-0.5">
                   <Label className="text-[11px] font-black uppercase text-blue-800 dark:text-blue-400 tracking-widest flex items-center gap-1.5">
