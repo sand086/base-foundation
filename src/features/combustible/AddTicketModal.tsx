@@ -39,7 +39,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-//  IMPORTAMOS CONFIGURACIONES REALES
+// IMPORTAMOS CONFIGURACIONES REALES
 import { FUEL_CONFIG } from "@/types/api.types";
 import { useClients } from "@/hooks/useClients";
 import { useTrips } from "@/hooks/useTrips";
@@ -54,6 +54,7 @@ export interface TicketFormData {
   unit_id: string;
   operator_id: string;
   trip_id: string;
+  trip_leg_id?: string | null; // 🚀 FIX: Añadido para que el backend lo reconozca
   fecha_hora: string;
   estacion: string;
   litros_diesel: number;
@@ -81,6 +82,7 @@ interface ClientItem {
 }
 
 interface TripLegItem {
+  id: string | number;
   status?: string;
   unit_id?: string | number;
   operator_id?: string | number;
@@ -159,8 +161,9 @@ function SearchableSelect({
     );
   }, [items, searchQuery]);
 
+  // 🚀 FIX: El comentario se movió AFUERA del return JSX
   return (
-    <Popover open={!disabled && open} onOpenChange={setOpen}>
+    <Popover open={!disabled && open} onOpenChange={setOpen} modal={true}>
       <PopoverTrigger asChild>
         <Button
           type="button"
@@ -320,7 +323,7 @@ export function AddTicketModal({
     );
   }, [safeTrips]);
 
-  //  FASE 3: Búsqueda simplificada y centralizada
+  // Búsqueda simplificada y centralizada
   const searchableTrips = useMemo<SearchableSelectItem[]>(() => {
     const list = activeTrips.map((t) => {
       const foundClient = safeClients.find(
@@ -378,14 +381,13 @@ export function AddTicketModal({
     }));
   }, [safeOperators]);
 
-  // Bloqueo de seguridad: Si hay un viaje seleccionado (que no sea 'none'), bloqueamos Unidad y Operador
   const isLinkedToTrip = Boolean(
     formData.trip_id && formData.trip_id !== "none",
   );
 
   const handleTripSelection = (selectedTripId: string) => {
     if (selectedTripId === "none") {
-      setFormData((prev) => ({ ...prev, trip_id: "none" })); // Para poder desbloquear manualmente
+      setFormData((prev) => ({ ...prev, trip_id: "none" }));
       return;
     }
 
@@ -468,20 +470,36 @@ export function AddTicketModal({
       return;
     }
 
+    // 🚀 FIX: Buscar el ID de la FASE (Leg) en lugar del Viaje Padre
+    let targetLegId = null;
+    if (formData.trip_id && formData.trip_id !== "none") {
+      const tripObj = activeTrips.find(
+        (t) => String(t.id) === formData.trip_id,
+      );
+      if (tripObj) {
+        const activeLeg =
+          tripObj.legs?.find(
+            (l) =>
+              !["entregado", "cerrado", "liquidado"].includes(
+                String(l.status ?? "").toLowerCase(),
+              ),
+          ) || tripObj.legs?.[(tripObj.legs?.length || 1) - 1];
+
+        if (activeLeg) {
+          targetLegId = String(activeLeg.id);
+        }
+      }
+    }
+
     const finalData: TicketFormData = {
       ...formData,
-      trip_id: formData.trip_id === "none" ? "" : formData.trip_id, // Limpiamos el flag de 'none' antes de enviar
+      trip_id: targetLegId || "", // Mapeo por compatibilidad
+      trip_leg_id: targetLegId, // 🚀 Enviamos el ID del tramo correcto
       odometro: safeInt(String(formData.odometro), 0),
     };
 
     onSubmit(finalData);
-
-    toast.success("Carga preparada", {
-      description: "Ticket de combustible preparado para registro.",
-    });
-
     resetForm();
-    onOpenChange(false);
   };
 
   const handleFileChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
@@ -535,13 +553,14 @@ export function AddTicketModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
+      {/* 🚀 FIX: Aplicamos overflow-hidden general y configuramos el layout flex */}
       <DialogContent
         className={cn(
-          "sm:max-w-[1200px] max-h-[90vh] overflow-y-auto p-0 gap-0 border-0 rounded-[28px] shadow-2xl",
+          "sm:max-w-[1200px] max-h-[90vh] flex flex-col p-0 gap-0 border-0 rounded-[28px] shadow-2xl overflow-hidden",
           "bg-white/90 backdrop-blur-xl dark:bg-brand-navy/95",
         )}
       >
-        <DialogHeader className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 p-6 backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/95">
+        <DialogHeader className="shrink-0 border-b border-slate-200 bg-white/95 p-6 backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/95">
           <DialogTitle className="flex items-start gap-4 text-left">
             <div
               className={cn(
@@ -564,224 +583,166 @@ export function AddTicketModal({
           </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="p-6">
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-            {/* LADO IZQUIERDO */}
-            <section className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <div className="space-y-4">
-                <div className="flex items-center gap-3 border-b border-slate-200 pb-3 dark:border-white/10">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-brand-navy/10 shadow-inner dark:bg-white/10">
-                    <MapPin className="h-4 w-4 text-brand-navy dark:text-slate-200" />
-                  </div>
-                  <div>
-                    <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-700 dark:text-slate-200">
-                      1. Vinculación operativa
-                    </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Escriba el Folio y el sistema completará el eco y chofer.
-                    </p>
-                  </div>
-                </div>
-
-                <div
-                  className={cn(
-                    "space-y-4 rounded-2xl border p-4 shadow-sm",
-                    "border-blue-100 bg-slate-50/80 dark:border-white/10 dark:bg-slate-950/30",
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <Label
-                      variant="brand"
-                      className="text-[10px] font-black uppercase tracking-[0.2em]"
-                    >
-                      Buscador de Viaje / Folio
-                    </Label>
+        {/* 🚀 FIX: Convertimos el formulario en un flex container que empuje el contenido */}
+        <form
+          onSubmit={handleSubmit}
+          className="flex flex-col flex-1 overflow-hidden"
+        >
+          {/* El contenedor principal de los inputs ahora es el que hace scroll */}
+          <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+            <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+              {/* LADO IZQUIERDO */}
+              <section className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 border-b border-slate-200 pb-3 dark:border-white/10">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-brand-navy/10 shadow-inner dark:bg-white/10">
+                      <MapPin className="h-4 w-4 text-brand-navy dark:text-slate-200" />
+                    </div>
+                    <div>
+                      <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-700 dark:text-slate-200">
+                        1. Vinculación operativa
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Escriba el Folio y el sistema completará el eco y
+                        chofer.
+                      </p>
+                    </div>
                   </div>
 
-                  <SearchableSelect
-                    items={searchableTrips}
-                    value={formData.trip_id}
-                    onSelect={handleTripSelection}
-                    placeholder="Ej: Escriba el Folio '64', el cliente o el Eco..."
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label
-                      variant="brand"
-                      className={cn(
-                        "flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em]",
-                        isLinkedToTrip && "text-slate-400",
-                      )}
-                    >
-                      <Truck className="h-3.5 w-3.5" />
-                      Unidad *
-                    </Label>
-                    <SearchableSelect
-                      items={searchableUnits}
-                      value={formData.unit_id}
-                      disabled={isLinkedToTrip}
-                      onSelect={(value) =>
-                        setFormData((prev) => ({ ...prev, unit_id: value }))
-                      }
-                      placeholder="Buscar unidad..."
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label
-                      variant="brand"
-                      className={cn(
-                        "flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em]",
-                        isLinkedToTrip && "text-slate-400",
-                      )}
-                    >
-                      <User className="h-3.5 w-3.5" />
-                      Operador *
-                    </Label>
-                    <SearchableSelect
-                      items={searchableOperators}
-                      value={formData.operator_id}
-                      disabled={isLinkedToTrip}
-                      onSelect={(value) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          operator_id: value,
-                        }))
-                      }
-                      placeholder="Buscar operador..."
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2 pt-1">
-                  <Label
-                    variant="brand"
-                    className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em]"
+                  <div
+                    className={cn(
+                      "space-y-4 rounded-2xl border p-4 shadow-sm",
+                      "border-blue-100 bg-slate-50/80 dark:border-white/10 dark:bg-slate-950/30",
+                    )}
                   >
-                    <Gauge className="h-3.5 w-3.5" />
-                    Lectura de odómetro (km)
-                  </Label>
-                  <Input
-                    type="number"
-                    placeholder="Opcional. Ej: 245890"
-                    value={formData.odometro}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        odometro: e.target.value,
-                      }))
-                    }
-                    className="h-11 font-mono text-sm"
-                  />
-                </div>
-              </div>
-            </section>
+                    <div className="flex items-center justify-between gap-3">
+                      <Label
+                        variant="brand"
+                        className="text-[10px] font-black uppercase tracking-[0.2em]"
+                      >
+                        Buscador de Viaje / Folio
+                      </Label>
+                    </div>
 
-            {/* LADO DERECHO */}
-            <section className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <div className="space-y-4">
-                <div className="flex items-center gap-3 border-b border-slate-200 pb-3 dark:border-white/10">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-brand-red/10 shadow-inner dark:bg-brand-red/15">
-                    <Fuel className="h-4 w-4 text-brand-red" />
-                  </div>
-                  <div>
-                    <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-700 dark:text-slate-200">
-                      2. Carga física y evidencia
-                    </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Registre importes, litros, estación y archivo de respaldo.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label
-                      variant="brand"
-                      className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em]"
-                    >
-                      <CalendarDays className="h-3.5 w-3.5" />
-                      Fecha y hora *
-                    </Label>
-                    <Input
-                      type="datetime-local"
-                      value={formData.fecha_hora}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          fecha_hora: e.target.value,
-                        }))
-                      }
-                      className="h-11 text-sm"
+                    <SearchableSelect
+                      items={searchableTrips}
+                      value={formData.trip_id}
+                      onSelect={handleTripSelection}
+                      placeholder="Ej: Escriba el Folio '64', el cliente o el Eco..."
                     />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label
-                      variant="brand"
-                      className="text-[10px] font-black uppercase tracking-[0.2em]"
-                    >
-                      Estación
-                    </Label>
-                    <Input
-                      placeholder="Ej: Parador San Marcos"
-                      value={formData.estacion}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          estacion: e.target.value,
-                        }))
-                      }
-                      className="h-11 text-sm"
-                    />
-                  </div>
-                </div>
-
-                {/* DIESEL */}
-                <div
-                  className={cn(
-                    "rounded-2xl border p-4 shadow-sm",
-                    "border-amber-200 bg-amber-50/90",
-                    "dark:border-amber-500/20 dark:bg-amber-500/10",
-                  )}
-                >
-                  <div className="mb-4 flex items-center gap-2 border-b border-amber-200/60 pb-2 text-xs font-black uppercase tracking-[0.2em] text-amber-700 dark:border-amber-400/10 dark:text-amber-300">
-                    <Fuel className="h-4 w-4" />
-                    Diésel
                   </div>
 
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label
                         variant="brand"
-                        className="text-[10px] font-black uppercase tracking-[0.2em]"
+                        className={cn(
+                          "flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em]",
+                          isLinkedToTrip && "text-slate-400",
+                        )}
                       >
-                        Litros
+                        <Truck className="h-3.5 w-3.5" />
+                        Unidad *
+                      </Label>
+                      <SearchableSelect
+                        items={searchableUnits}
+                        value={formData.unit_id}
+                        disabled={isLinkedToTrip}
+                        onSelect={(value) =>
+                          setFormData((prev) => ({ ...prev, unit_id: value }))
+                        }
+                        placeholder="Buscar unidad..."
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label
+                        variant="brand"
+                        className={cn(
+                          "flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em]",
+                          isLinkedToTrip && "text-slate-400",
+                        )}
+                      >
+                        <User className="h-3.5 w-3.5" />
+                        Operador *
+                      </Label>
+                      <SearchableSelect
+                        items={searchableOperators}
+                        value={formData.operator_id}
+                        disabled={isLinkedToTrip}
+                        onSelect={(value) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            operator_id: value,
+                          }))
+                        }
+                        placeholder="Buscar operador..."
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 pt-1">
+                    <Label
+                      variant="brand"
+                      className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em]"
+                    >
+                      <Gauge className="h-3.5 w-3.5" />
+                      Lectura de odómetro (km)
+                    </Label>
+                    <Input
+                      type="number"
+                      placeholder="Opcional. Ej: 245890"
+                      value={formData.odometro}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          odometro: e.target.value,
+                        }))
+                      }
+                      className="h-11 font-mono text-sm"
+                    />
+                  </div>
+                </div>
+              </section>
+
+              {/* LADO DERECHO */}
+              <section className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 border-b border-slate-200 pb-3 dark:border-white/10">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-brand-red/10 shadow-inner dark:bg-brand-red/15">
+                      <Fuel className="h-4 w-4 text-brand-red" />
+                    </div>
+                    <div>
+                      <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-700 dark:text-slate-200">
+                        2. Carga física y evidencia
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Registre importes, litros, estación y archivo de
+                        respaldo.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label
+                        variant="brand"
+                        className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em]"
+                      >
+                        <CalendarDays className="h-3.5 w-3.5" />
+                        Fecha y hora *
                       </Label>
                       <Input
-                        type="number"
-                        step="0.1"
-                        placeholder="0.0"
-                        value={formData.litros_diesel || ""}
+                        type="datetime-local"
+                        value={formData.fecha_hora}
                         onChange={(e) =>
                           setFormData((prev) => ({
                             ...prev,
-                            litros_diesel: safeNumber(e.target.value),
+                            fecha_hora: e.target.value,
                           }))
                         }
-                        className={cn(
-                          "h-11 font-mono",
-                          isDieselOver &&
-                            "border-red-500 ring-1 ring-red-500/70",
-                        )}
+                        className="h-11 text-sm"
                       />
-                      {isDieselOver && (
-                        <p className="text-xs font-semibold text-red-600 dark:text-red-400">
-                          Excede capacidad: {capDiesel}L
-                        </p>
-                      )}
                     </div>
 
                     <div className="space-y-2">
@@ -789,94 +750,162 @@ export function AddTicketModal({
                         variant="brand"
                         className="text-[10px] font-black uppercase tracking-[0.2em]"
                       >
-                        Precio x litro
+                        Estación
                       </Label>
                       <Input
-                        type="number"
-                        step="0.01"
-                        placeholder="0.00"
-                        value={formData.precio_diesel || ""}
+                        placeholder="Ej: Parador San Marcos"
+                        value={formData.estacion}
                         onChange={(e) =>
                           setFormData((prev) => ({
                             ...prev,
-                            precio_diesel: safeNumber(e.target.value),
+                            estacion: e.target.value,
                           }))
                         }
-                        className="h-11 font-mono"
+                        className="h-11 text-sm"
                       />
                     </div>
                   </div>
-                </div>
 
-                <div
-                  className={cn(
-                    "mt-2 flex items-center justify-between rounded-2xl border p-4 shadow-inner",
-                    "border-slate-700 bg-slate-900 text-white",
-                    "dark:border-white/10 dark:bg-slate-950",
-                  )}
-                >
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300">
-                    Costo total del vale
-                  </span>
-                  <span className="font-mono text-2xl font-black tracking-tighter text-emerald-400">
-                    $
-                    {total.toLocaleString("es-MX", {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
-                  </span>
-                </div>
-
-                <div className="space-y-2 pt-1">
-                  <Label
-                    variant="brand"
-                    className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em]"
+                  {/* DIESEL */}
+                  <div
+                    className={cn(
+                      "rounded-2xl border p-4 shadow-sm",
+                      "border-amber-200 bg-amber-50/90",
+                      "dark:border-amber-500/20 dark:bg-amber-500/10",
+                    )}
                   >
-                    <FileImage className="h-3.5 w-3.5" />
-                    Comprobante (evidencia)
-                  </Label>
+                    <div className="mb-4 flex items-center gap-2 border-b border-amber-200/60 pb-2 text-xs font-black uppercase tracking-[0.2em] text-amber-700 dark:border-amber-400/10 dark:text-amber-300">
+                      <Fuel className="h-4 w-4" />
+                      Diésel
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label
+                          variant="brand"
+                          className="text-[10px] font-black uppercase tracking-[0.2em]"
+                        >
+                          Litros
+                        </Label>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          placeholder="0.0"
+                          value={formData.litros_diesel || ""}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              litros_diesel: safeNumber(e.target.value),
+                            }))
+                          }
+                          className={cn(
+                            "h-11 font-mono",
+                            isDieselOver &&
+                              "border-red-500 ring-1 ring-red-500/70",
+                          )}
+                        />
+                        {isDieselOver && (
+                          <p className="text-xs font-semibold text-red-600 dark:text-red-400">
+                            Excede capacidad: {capDiesel}L
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label
+                          variant="brand"
+                          className="text-[10px] font-black uppercase tracking-[0.2em]"
+                        >
+                          Precio x litro
+                        </Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={formData.precio_diesel || ""}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              precio_diesel: safeNumber(e.target.value),
+                            }))
+                          }
+                          className="h-11 font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
 
                   <div
                     className={cn(
-                      "relative min-h-[120px] rounded-2xl border-2 border-dashed p-6 shadow-sm transition-all",
-                      "border-slate-300 bg-white/80 hover:border-blue-300 hover:bg-blue-50/40",
-                      "dark:border-white/10 dark:bg-slate-950/40 dark:hover:border-blue-400/40 dark:hover:bg-slate-900/60",
+                      "mt-2 flex items-center justify-between rounded-2xl border p-4 shadow-inner",
+                      "border-slate-700 bg-slate-900 text-white",
+                      "dark:border-white/10 dark:bg-slate-950",
                     )}
                   >
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
-                      onChange={handleFileChange}
-                    />
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300">
+                      Costo total del vale
+                    </span>
+                    <span className="font-mono text-2xl font-black tracking-tighter text-emerald-400">
+                      $
+                      {total.toLocaleString("es-MX", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </span>
+                  </div>
 
-                    {formData.evidencia ? (
-                      <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-emerald-600 dark:text-emerald-400">
-                        <CheckCircle2 className="h-7 w-7" />
-                        <span className="max-w-[260px] truncate text-sm font-bold">
-                          {formData.evidencia.name}
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-slate-600 dark:text-slate-300">
-                        <Camera className="h-7 w-7" />
-                        <span className="text-sm font-bold">
-                          Tomar foto o subir archivo
-                        </span>
-                        <span className="text-xs text-slate-500 dark:text-slate-400">
-                          JPG o PNG, máximo 5MB
-                        </span>
-                      </div>
-                    )}
+                  <div className="space-y-2 pt-1">
+                    <Label
+                      variant="brand"
+                      className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em]"
+                    >
+                      <FileImage className="h-3.5 w-3.5" />
+                      Comprobante (evidencia)
+                    </Label>
+
+                    <div
+                      className={cn(
+                        "relative min-h-[120px] rounded-2xl border-2 border-dashed p-6 shadow-sm transition-all",
+                        "border-slate-300 bg-white/80 hover:border-blue-300 hover:bg-blue-50/40",
+                        "dark:border-white/10 dark:bg-slate-950/40 dark:hover:border-blue-400/40 dark:hover:bg-slate-900/60",
+                      )}
+                    >
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
+                        onChange={handleFileChange}
+                      />
+
+                      {formData.evidencia ? (
+                        <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-emerald-600 dark:text-emerald-400">
+                          <CheckCircle2 className="h-7 w-7" />
+                          <span className="max-w-[260px] truncate text-sm font-bold">
+                            {formData.evidencia.name}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-slate-600 dark:text-slate-300">
+                          <Camera className="h-7 w-7" />
+                          <span className="text-sm font-bold">
+                            Tomar foto o subir archivo
+                          </span>
+                          <span className="text-xs text-slate-500 dark:text-slate-400">
+                            JPG o PNG, máximo 5MB
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            </section>
+              </section>
+            </div>
           </div>
 
-          <div className="mt-8 flex justify-end gap-4 border-t border-slate-200 pt-6 dark:border-white/10">
+          {/* 🚀 FIX: Movemos los botones al footer fijo fuera del área de scroll */}
+          <div className="shrink-0 flex justify-end gap-4 border-t border-slate-200 p-6 bg-slate-50/50 dark:bg-slate-950/50 dark:border-white/10">
             <Button
               type="button"
               variant="outline"
