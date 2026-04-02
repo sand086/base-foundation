@@ -133,25 +133,52 @@ const CombustibleCargas = () => {
   }, []);
 
   // 🚀 NUEVA FUNCIÓN PARA GUARDAR EL TICKET
-  const handleCreateTicket = async (data: TicketFormData) => {
-    const toastId = toast.loading("Guardando registro de combustible...");
+  const handleCreateTicket = async (data: any) => {
+    const ticketsArray = data.tickets || [];
+
+    if (ticketsArray.length === 0) {
+      toast.error("No hay tickets para guardar");
+      return;
+    }
+
+    const toastId = toast.loading(
+      `Guardando ${ticketsArray.length} vale(s)...`,
+    );
+
     try {
-      // 1. Enviamos los datos al backend
-      await fuelService.create(data);
+      // 1. Recorremos el arreglo de tickets que mandó el Modal
+      for (const ticket of ticketsArray) {
+        // 2. Construimos el objeto EXACTO que el Backend de Python está esperando
+        const payload = {
+          unit_id: data.unit_id,
+          operator_id: data.operator_id,
+          trip_id: data.trip_id !== "none" ? data.trip_id : null,
+          trip_leg_id: data.trip_leg_id ? data.trip_leg_id : null,
+          odometro: data.odometro || 0,
 
-      // 2. Cerramos el modal
+          // 3. Extraemos los datos individuales de ESTE ticket específico
+          fecha_hora: ticket.fecha_hora, // <-- ¡AQUÍ ESTÁ EL CAMPO QUE FALTABA!
+          estacion: ticket.estacion || "No especificada",
+          litros_diesel: ticket.litros_diesel || 0,
+          precio_diesel: ticket.precio_diesel || 0,
+          evidencia: ticket.evidencia,
+        };
+
+        // 4. Se lo mandamos a tu servicio (que ya lo convertirá bien a FormData)
+        await fuelService.create(payload);
+      }
+
+      // Si todo sale bien, cerramos el modal y recargamos la tabla
       setIsModalOpen(false);
-
-      // 3. Recargamos la tabla para ver el nuevo registro
       await loadData();
-
-      toast.success("Vale de combustible registrado exitosamente.", {
+      toast.success(`Éxito: Se registraron ${ticketsArray.length} vales.`, {
         id: toastId,
       });
     } catch (error) {
-      console.error("Error al guardar combustible:", error);
-      toast.error("Error al guardar el registro. Verifica tu conexión.", {
+      console.error("Error al guardar tickets:", error);
+      toast.error("Fallo al guardar", {
         id: toastId,
+        description: "Revisa tu conexión y que todos los campos estén llenos.",
       });
     }
   };

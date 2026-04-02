@@ -113,6 +113,41 @@ export default function ControlDeTrafico() {
     );
   }, [selectedTrip]);
 
+  const getUnitStatusColor = (status?: string) => {
+    if (status === "bloqueado") {
+      return "bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-500/20";
+    }
+    if (status === "disponible") {
+      return "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20";
+    }
+    if (status === "en_ruta") {
+      return "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-500/20";
+    }
+    return "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-white/10";
+  };
+
+  const getUnitDisplayName = (unit?: any) => {
+    if (!unit) return "Sin asignar";
+
+    const brandModel = [unit.marca, unit.modelo, unit.year]
+      .filter(Boolean)
+      .join(" ");
+
+    return brandModel || `Económico ${unit.numero_economico || "S/N"}`;
+  };
+
+  const getUnitSecondaryInfo = (unit?: any) => {
+    if (!unit) return "";
+
+    const parts = [
+      unit.numero_economico ? `Económico ${unit.numero_economico}` : null,
+      unit.placas ? `Placas ${unit.placas}` : null,
+      unit.tipo ? unit.tipo : null,
+    ].filter(Boolean);
+
+    return parts.join(" · ");
+  };
+
   //  BÚSQUEDA ROBUSTA DE EVENTOS
   const timelineEvents = useMemo(() => {
     if (!selectedTrip?.legs) return [];
@@ -456,9 +491,11 @@ export default function ControlDeTrafico() {
                     </div>
 
                     <div className="flex items-center gap-3 mt-4 pt-3 border-t border-slate-100 dark:border-white/5">
-                      <div className="flex items-center text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md border border-slate-200 dark:border-white/5">
-                        <Truck className="h-3 w-3 mr-1.5 text-brand-navy dark:text-slate-300" />
-                        {trip.legs?.[0]?.unit?.numero_economico || "N/A"}
+                      <div className="flex items-center text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md border border-slate-200 dark:border-white/5 max-w-[140px] truncate">
+                        <Truck className="h-3 w-3 mr-1.5 text-brand-navy dark:text-slate-300 shrink-0" />
+                        {trip.legs?.[0]?.unit
+                          ? `${trip.legs[0].unit.numero_economico} · ${trip.legs[0].unit.placas || "S/P"}`
+                          : "N/A"}
                       </div>
                       <div className="flex items-center text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest truncate">
                         <User className="h-3 w-3 mr-1.5 text-slate-400" />
@@ -539,27 +576,65 @@ export default function ControlDeTrafico() {
                       <div className="h-14 w-14 bg-blue-50 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center shrink-0 shadow-inner icon-plate border border-blue-100 dark:border-blue-500/20">
                         <Truck className="h-7 w-7 text-blue-600 dark:text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.4)]" />
                       </div>
-                      <div className="flex-1">
+
+                      <div className="flex-1 overflow-hidden">
                         <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
-                          Tractocamión Asignado
+                          Unidad en turno
                         </p>
-                        <p className="text-xl font-black uppercase tracking-tighter text-brand-navy dark:text-white leading-tight mt-0.5">
-                          {activeLeg?.unit?.numero_economico || "Sin Asignar"}
+
+                        <p className="text-lg font-black uppercase tracking-tighter text-brand-navy dark:text-white leading-tight mt-0.5 truncate">
+                          {getUnitDisplayName(activeLeg?.unit)}
                         </p>
-                        {(activeLeg?.unit as any)?.odometro && (
-                          <div className="mt-2">
+
+                        <p className="text-[11px] font-mono font-bold text-slate-500 dark:text-slate-400 mt-2 truncate">
+                          {getUnitSecondaryInfo(activeLeg?.unit) ||
+                            "Sin datos de unidad"}
+                        </p>
+
+                        <div className="flex flex-wrap gap-2 mt-3">
+                          {activeLeg?.unit?.status && (
                             <Badge
                               variant="outline"
-                              className="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-mono font-bold px-2 py-0.5 border-slate-200 dark:border-white/10"
+                              className={cn(
+                                "text-[10px] font-black uppercase tracking-widest px-2 py-0.5",
+                                getUnitStatusColor(activeLeg.unit.status),
+                              )}
+                            >
+                              {activeLeg.unit.status.replace("_", " ")}
+                            </Badge>
+                          )}
+
+                          {activeLeg?.unit?.tipo_1 && (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10"
+                            >
+                              {activeLeg.unit.tipo_1}
+                            </Badge>
+                          )}
+
+                          {activeLeg?.unit?.tipo_carga && (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-500/20"
+                            >
+                              {activeLeg.unit.tipo_carga}
+                            </Badge>
+                          )}
+
+                          {(activeLeg?.unit as any)?.odometro && (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] font-mono font-bold px-2 py-0.5 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10"
                             >
                               ODO:{" "}
                               {(
-                                activeLeg?.unit as any
+                                activeLeg.unit as any
                               ).odometro.toLocaleString()}{" "}
                               km
                             </Badge>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
                     </div>
 

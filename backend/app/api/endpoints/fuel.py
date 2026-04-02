@@ -72,46 +72,6 @@ def get_fuel_logs(
         )
 
 
-@router.put("/fuel-logs/{log_id}", response_model=schemas.FuelLogResponse)
-async def update_fuel_log(
-    log_id: int,
-    data: schemas.FuelLogCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    log = db.query(models.FuelLog).filter(models.FuelLog.id == log_id).first()
-    if not log:
-        raise HTTPException(status_code=404, detail="Registro no encontrado")
-
-    log.unit_id = data.unit_id
-    log.operator_id = data.operator_id
-    log.fecha_hora = data.fecha_hora
-    log.estacion = data.estacion
-    log.tipo_combustible = data.tipo_combustible
-    log.litros = data.litros
-    log.precio_por_litro = data.precio_por_litro
-    log.total = data.total
-    log.odometro = data.odometro
-    log.excede_tanque = data.excede_tanque
-    log.capacidad_tanque_snapshot = data.capacidad_tanque_snapshot
-
-    if hasattr(data, "trip_leg_id"):
-        log.trip_leg_id = data.trip_leg_id
-    elif hasattr(data, "trip_id"):
-        log.trip_leg_id = data.trip_id
-
-    log.updated_by_id = current_user.id
-
-    try:
-        db.commit()
-        db.refresh(log)
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=400, detail=f"Error al actualizar: {str(e)}")
-
-    return log
-
-
 @router.delete("/fuel-logs/{log_id}")
 def delete_fuel_log(
     log_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)
@@ -228,15 +188,15 @@ def delete_fuel_document(
     return {"message": "Documento eliminado correctamente"}
 
 
-#  NUEVO: ENDPOINT PARA CREAR EL "VALE DOBLE"
+# NUEVO: ENDPOINT PARA CREAR EL "VALE DOBLE" CORREGIDO
 @router.post("/fuel-logs", response_model=List[schemas.FuelLogResponse])
 async def create_fuel_log(
     unit_id: int = Form(...),
     operator_id: int = Form(...),
-    trip_id: Optional[int] = Form(None),
+    trip_id: Optional[int] = Form(None),  # Viaje Maestro
+    trip_leg_id: Optional[int] = Form(None),  # 🚀 REGLA 1: La Fase Operativa
     fecha_hora: str = Form(...),
-    estacion: str = Form("No especificada"),  #  Estación ya no es obligatoria
-    #  VALORES SEPARADOS DE DIÉSEL Y UREA
+    estacion: str = Form("No especificada"),
     litros_diesel: float = Form(0.0),
     precio_diesel: float = Form(0.0),
     litros_urea: float = Form(0.0),
@@ -246,11 +206,11 @@ async def create_fuel_log(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # Validación mínima
     if litros_diesel <= 0 and litros_urea <= 0:
-        raise HTTPException(
-            status_code=400, detail="Debe registrar litros de diésel o de urea."
-        )
+        raise HTTPException(status_code=400, detail="Debe registrar litros.")
 
+    # Procesamiento de evidencia (si existe)
     evidencia_url = None
     filename = None
     if file:
@@ -262,12 +222,12 @@ async def create_fuel_log(
 
     created_logs = []
 
-    # Helper para no repetir código al crear los registros en la BD
+    # Función interna para crear el registro (Diesel o Urea)
     def _crear_registro(tipo: str, litros: float, precio: float):
         new_log = models.FuelLog(
             unit_id=unit_id,
             operator_id=operator_id,
-            trip_leg_id=trip_id,
+            trip_leg_id=trip_leg_id,  # 🚀 VÍNCULO CRÍTICO PARA CONCILIACIÓN
             fecha_hora=fecha_hora,
             estacion=estacion,
             tipo_combustible=tipo,
@@ -279,11 +239,11 @@ async def create_fuel_log(
             created_by_id=current_user.id,
         )
         db.add(new_log)
-        db.flush()  # Guardar temporalmente para obtener el ID
+        db.flush()
 
-        # Si subió foto, crear el historial del documento asociado a este log
+        # Vincular la foto al historial del documento
         if evidencia_url:
-            history_entry = models.FuelDocumentHistory(
+            history = models.FuelDocumentHistory(
                 fuel_log_id=new_log.id,
                 document_type="ticket",
                 filename=filename,
@@ -292,22 +252,18 @@ async def create_fuel_log(
                 is_active=True,
                 created_by_id=current_user.id,
             )
-            db.add(history_entry)
-
+            db.add(history)
         created_logs.append(new_log)
 
-    #  Si el usuario capturó Diésel, creamos el registro de Diésel
+    # Registro de Diesel
     if litros_diesel > 0:
         _crear_registro("diesel", litros_diesel, precio_diesel)
 
-    #  Si el usuario capturó Urea, creamos el registro de Urea
+    # Registro de Urea
     if litros_urea > 0:
         _crear_registro("urea", litros_urea, precio_urea)
 
-    # Guardar ambos en la base de datos
     db.commit()
-
-    # Recargar los objetos para devolverlos al frontend con todos sus datos relacionados
     for log in created_logs:
         db.refresh(log)
 
@@ -319,15 +275,19 @@ async def update_fuel_log(
     log_id: int,
     data: schemas.FuelLogCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: models.User = Depends(get_current_user),
 ):
+    # 1. Buscar el registro existente
     log = db.query(models.FuelLog).filter(models.FuelLog.id == log_id).first()
     if not log:
-        raise HTTPException(status_code=404, detail="Registro no encontrado")
+        raise HTTPException(
+            status_code=404, detail="Registro de combustible no encontrado"
+        )
 
+    # 2. Actualización de campos operativos
     log.unit_id = data.unit_id
     log.operator_id = data.operator_id
-    log.fecha_hora = data.fecha_hora
+    log.fecha_hora = data.fecha_hora if data.fecha_hora else log.fecha_hora
     log.estacion = data.estacion
     log.tipo_combustible = data.tipo_combustible
     log.litros = data.litros
@@ -337,11 +297,13 @@ async def update_fuel_log(
     log.excede_tanque = data.excede_tanque
     log.capacidad_tanque_snapshot = data.capacidad_tanque_snapshot
 
-    if hasattr(data, "trip_leg_id"):
+    # 🚀 REGLA 1: Vinculación al Tramo (TripLeg)
+    # Es vital que el vale esté amarrado al ID de la fase/tramo para la conciliación.
+    # El modelo FuelLog solo tiene 'trip_leg_id', no 'trip_id'.
+    if data.trip_leg_id:
         log.trip_leg_id = data.trip_leg_id
-    elif hasattr(data, "trip_id"):
-        log.trip_leg_id = data.trip_id
 
+    # 3. Auditoría (updated_at se maneja solo en el Mixin)
     log.updated_by_id = current_user.id
 
     try:
@@ -349,7 +311,10 @@ async def update_fuel_log(
         db.refresh(log)
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=f"Error al actualizar: {str(e)}")
+        logger.error(f"Error al actualizar el vale {log_id}: {str(e)}")
+        raise HTTPException(
+            status_code=400, detail=f"Error de integridad en la base de datos: {str(e)}"
+        )
 
     return log
 
