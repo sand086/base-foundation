@@ -8,16 +8,14 @@ import {
   Receipt,
   ArrowDownCircle,
   ArrowUpCircle,
-  Calculator,
   Loader2,
   CheckCircle,
-  Fuel,
   Printer,
-  AlertTriangle,
   Clock,
   History,
   CheckSquare,
   Truck,
+  ShieldAlert,
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,7 +23,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -43,14 +40,12 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-import { AddTicketModal } from "@/features/combustible/AddTicketModal";
-import { fuelService } from "@/services/fuelService";
 import { cn } from "@/lib/utils";
 import { useTrips } from "@/hooks/useTrips";
 import { useClients } from "@/hooks/useClients";
 import { useOperators } from "@/hooks/useOperators";
-import { useUnits } from "@/hooks/useUnits";
 import { useSystemConfig } from "@/hooks/useSystemConfig";
 
 interface ConceptoExtra {
@@ -64,18 +59,8 @@ export default function CierreViaje() {
   const { trips = [], liquidarLote, getSettlementPreview } = useTrips() as any;
   const { clients = [] } = useClients();
   const { operadores = [], operators = [] } = useOperators() as any;
-  const { unidades = [], units = [] } = useUnits() as any;
 
-  //  PARÁMETROS GLOBALES DINÁMICOS
-  const { valueAsNumber: rendimientoGlobal } = useSystemConfig(
-    "rendimiento_diesel_esperado",
-  );
-  const { valueAsNumber: toleranciaGlobal } = useSystemConfig(
-    "tolerancia_diesel_pct",
-  );
-  const rendimientoEsperado = rendimientoGlobal || 3.2;
-  const toleranciaPct = toleranciaGlobal || 0.05;
-
+  //ARÁMETROS GLOBALES
   const { value: empresaNombre } = useSystemConfig("empresa_nombre");
   const { value: empresaRFC } = useSystemConfig("empresa_rfc");
   const { value: empresaDireccion } = useSystemConfig("empresa_direccion");
@@ -98,7 +83,7 @@ export default function CierreViaje() {
   // ==========================================
   // ESTADOS DE CÁLCULO & PREVIEW API
   // ==========================================
-  const [sueldoRutaPactado, setSueldoRutaPactado] = useState<number>(0); // 🚀 FASE 2: Sueldo Fijo
+  const [sueldoRutaPactado, setSueldoRutaPactado] = useState<number>(0);
   const [combustibleFaltante, setCombustibleFaltante] = useState<number>(0);
   const [previewData, setPreviewData] = useState<any>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
@@ -115,11 +100,6 @@ export default function CierreViaje() {
   const [newConceptoDesc, setNewConceptoDesc] = useState("");
   const [newConceptoAmount, setNewConceptoAmount] = useState("");
   const [isAnimating, setIsAnimating] = useState(false);
-  const [showAddTicket, setShowAddTicket] = useState(false);
-  const [ticketPrefill, setTicketPrefill] = useState<any>(null);
-  const [currentFixingLegId, setCurrentFixingLegId] = useState<number | null>(
-    null,
-  );
 
   // ==========================================
   // DERIVACIONES Y LISTAS
@@ -175,8 +155,10 @@ export default function CierreViaje() {
     return allLegs.filter((l) => selectedLegIds.includes(String(l.id)));
   }, [allLegs, selectedLegIds]);
 
+  const isAuditPending = previewData?.legs_sin_ticket?.length > 0;
+
   // ==========================================
-  //  CÁLCULOS FINANCIEROS (REGLAS DE GUSTAVO FASE 2 Y 3)
+  // CÁLCULOS FINANCIEROS
   // ==========================================
   const liquidacion = useMemo(() => {
     if (selectedLegsData.length === 0) return null;
@@ -187,24 +169,19 @@ export default function CierreViaje() {
     let hasRoadMove = false;
 
     selectedLegsData.forEach((leg) => {
-      // 1. REGLA GUSTAVO FASE 2: Rutas vs Movimientos Locales
       if (leg.leg_type === "ruta_carretera") {
         hasRoadMove = true;
-        // No sumamos tarifa base del cliente. Arranca en 0.
       } else {
-        // Es Muelle, Patio o Vacío
         const isFull = Boolean(leg.trip?.dolly_id || leg.trip?.remolque_2_id);
-        const bonoFijo = isFull ? 300 : 200; // $300 Full, $200 Sencillo
+        const bonoFijo = isFull ? 300 : 200;
         pagoBaseBruto += bonoFijo;
       }
 
-      // 2. REGLA GUSTAVO FASE 3: Eliminar cobro de casetas
-      deduccionViaticos += leg.anticipo_viaticos || 0; // 🚀 Adiós anticipo_casetas
+      deduccionViaticos += leg.anticipo_viaticos || 0;
       otrosAnticipos +=
         (leg.otros_anticipos || 0) + (leg.anticipo_combustible || 0);
     });
 
-    // 🚀 FASE 2: Añadir el sueldo de ruta fijo que el usuario escribe
     if (hasRoadMove) {
       pagoBaseBruto += sueldoRutaPactado;
     }
@@ -243,7 +220,7 @@ export default function CierreViaje() {
   ]);
 
   // ==========================================
-  // EFECTO: SOLICITAR PRE-LIQUIDACIÓN AL BACKEND (DIÉSEL)
+  // EFECTO: SOLICITAR PRE-LIQUIDACIÓN AL BACKEND
   // ==========================================
   useEffect(() => {
     if (selectedLegIds.length > 0 && getSettlementPreview) {
@@ -256,24 +233,13 @@ export default function CierreViaje() {
         getSettlementPreview(selectedLegIds)
           .then((data: any) => {
             setPreviewData(data);
-            const totalKms = data?.total_kms || 0;
-            const consumoReal = data?.consumo_real || 0;
-            const precioPromedio = data?.precio_promedio || 24.5;
-
-            const consumoIdeal =
-              totalKms > 0 ? totalKms / rendimientoEsperado : 0;
-            const diferencia = consumoReal - consumoIdeal;
-            const litrosTolerados = consumoIdeal * toleranciaPct;
-
-            if (diferencia > litrosTolerados) {
-              setCombustibleFaltante(diferencia * precioPromedio);
-            } else {
-              setCombustibleFaltante(0);
-            }
+            // 🚀 MAGIA PURA: El backend ya auditó y nos da el descuento final. Cero cálculos en el front.
+            setCombustibleFaltante(data?.deduccion_combustible || 0);
           })
           .catch(() => {
-            toast.error("Error al calcular telemetría de combustible");
+            toast.error("Error de conexión al verificar estatus del viaje.");
             setPreviewData(null);
+            setCombustibleFaltante(0);
           })
           .finally(() => setIsLoadingPreview(false));
       } else {
@@ -284,7 +250,7 @@ export default function CierreViaje() {
       setPreviewData(null);
       setCombustibleFaltante(0);
     }
-  }, [selectedLegIds, rendimientoEsperado, toleranciaPct]);
+  }, [selectedLegIds, selectedLegsData]);
 
   // ==========================================
   // HANDLERS
@@ -332,8 +298,8 @@ export default function CierreViaje() {
       if (liquidarLote) {
         await liquidarLote(selectedLegIds, liquidacion.neto_a_pagar);
       }
-      toast.success("Liquidación Exitosa", {
-        description: `Se registró el pago de ${formatCurrencyLocal(liquidacion.neto_a_pagar)} correctamente.`,
+      toast.success("Liquidación Emitida Exitosamente", {
+        description: `Se registró el pago de ${formatCurrencyLocal(liquidacion.neto_a_pagar)}.`,
       });
       setShowReceiptModal(true);
     } catch (error) {
@@ -373,30 +339,17 @@ export default function CierreViaje() {
     entrega_vacio: "Retorno Vacío",
   };
 
-  const handleQuickFixTicket = (legId: number) => {
-    const leg = allLegs.find((l) => l.id === legId);
-    if (leg) {
-      setTicketPrefill({
-        trip_id: leg.id,
-        unit_id: leg.unit_id,
-        operator_id: leg.operator_id,
-      });
-      setCurrentFixingLegId(legId);
-      setShowAddTicket(true);
-    }
-  };
-
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto pb-24 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-black text-brand-navy flex items-center gap-2">
             <FileCheck className="h-7 w-7 text-emerald-600" /> Liquidaciones
-            (Nómina Operativa)
+            Operativas
           </h1>
           <p className="text-muted-foreground mt-1 font-medium">
-            Selecciona los movimientos pendientes y genera el recibo de pago del
-            operador.
+            Módulo de Tesorería. Selecciona los movimientos y emite el recibo de
+            pago del operador.
           </p>
         </div>
       </div>
@@ -424,7 +377,7 @@ export default function CierreViaje() {
                   setSelectedLegIds([]);
                   setConceptosExtra([]);
                   setCombustibleFaltante(0);
-                  setSueldoRutaPactado(0); // Resetear sueldo
+                  setSueldoRutaPactado(0);
                   setFilterOperator(val);
                 }}
               >
@@ -486,7 +439,7 @@ export default function CierreViaje() {
                 <h3 className="font-bold text-sm text-slate-600 flex items-center gap-2">
                   <MapPin className="h-4 w-4" />
                   {activeTab === "pendientes"
-                    ? "2. Selecciona Movimientos"
+                    ? "2. Selecciona los tramos a pagar"
                     : "Historial de Liquidaciones"}
                 </h3>
                 {activeTab === "pendientes" && selectedOperatorId && (
@@ -522,7 +475,7 @@ export default function CierreViaje() {
                         Unidad
                       </th>
                       <th scope="col" className="px-6 py-3 text-right">
-                        Estatus / Bono
+                        Estatus / Base
                       </th>
                     </tr>
                   </thead>
@@ -534,11 +487,7 @@ export default function CierreViaje() {
                           className="px-6 py-16 text-center bg-white"
                         >
                           <div className="flex flex-col items-center justify-center text-slate-600">
-                            {activeTab === "pendientes" ? (
-                              <Calculator className="h-10 w-10 mb-3 opacity-20" />
-                            ) : (
-                              <History className="h-10 w-10 mb-3 opacity-20" />
-                            )}
+                            <History className="h-10 w-10 mb-3 opacity-20" />
                             <p className="text-base font-semibold text-slate-600 mb-1">
                               {activeTab === "pendientes"
                                 ? "Sin movimientos pendientes"
@@ -675,156 +624,29 @@ export default function CierreViaje() {
         {/* COLUMNA DERECHA: CONFIGURACIÓN FINANCIERA */}
         {selectedLegIds.length > 0 && liquidacion && (
           <div className="xl:col-span-5 space-y-6 animate-in fade-in slide-in-from-right-8 duration-500">
-            {/* 1. CONCILIACIÓN DIÉSEL (SOLO SI HAY VIAJE DE CARRETERA) */}
-            {liquidacion.hasRoadMove && (
-              <Card className="border-slate-200 shadow-sm border-t-4 border-t-amber-500">
-                <CardHeader className="bg-amber-50/30 border-b pb-4">
-                  <CardTitle className="text-sm font-bold text-amber-800 uppercase flex items-center gap-2">
-                    <Fuel className="h-4 w-4" /> 3. Conciliación Diésel
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-5 space-y-4">
-                  {isLoadingPreview ? (
-                    <div className="flex flex-col items-center justify-center py-6 text-slate-600">
-                      <Loader2 className="h-8 w-8 animate-spin mb-2 text-amber-500" />
-                      <p className="text-sm font-medium">
-                        Cruzando vales vs telemetría...
-                      </p>
-                    </div>
-                  ) : (
-                    <>
-                      {/* Alertas del Backend (Faltan Vales) */}
-                      {previewData?.legs_sin_ticket?.length > 0 && (
-                        <div className="bg-rose-50 border border-rose-200 rounded-xl mb-6 overflow-hidden shadow-sm animate-in zoom-in-95">
-                          <div className="p-3 bg-rose-100/50 border-b border-rose-200 flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <AlertTriangle className="h-4 w-4 text-rose-600" />
-                              <span className="text-[10px] font-black text-rose-700 uppercase tracking-widest">
-                                Pendientes de Comprobación (
-                                {previewData.legs_sin_ticket.length})
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Lista de viajes con problemas */}
-                          <div className="p-2 space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar">
-                            {selectedLegsData
-                              .filter((l) =>
-                                previewData.legs_sin_ticket.includes(l.id),
-                              )
-                              .map((leg) => (
-                                <div
-                                  key={leg.id}
-                                  className={cn(
-                                    "flex items-center justify-between p-3 rounded-lg border transition-all",
-                                    currentFixingLegId === leg.id
-                                      ? "bg-rose-100 border-rose-300"
-                                      : "bg-white border-rose-100 shadow-sm",
-                                  )}
-                                >
-                                  <div className="flex flex-col gap-0.5">
-                                    <span className="text-[9px] font-black text-rose-500 uppercase">
-                                      Tramo #{leg.id}
-                                    </span>
-                                    <span className="text-xs font-bold text-slate-700">
-                                      {leg.trip?.public_id || "S/F"} •{" "}
-                                      {leg.trip?.origin.split(",")[0]} ➔{" "}
-                                      {leg.trip?.destination.split(",")[0]}
-                                    </span>
-                                  </div>
-                                  <Button
-                                    size="sm"
-                                    onClick={() => handleQuickFixTicket(leg.id)}
-                                    className="h-8 px-4 text-[10px] font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-full shadow-sm"
-                                  >
-                                    CARGAR TICKET
-                                  </Button>
-                                </div>
-                              ))}
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="bg-slate-100 p-4 rounded-xl text-xs space-y-2 font-mono">
-                        <div className="mb-3 pb-2 border-b border-slate-200 flex justify-between items-center text-[9px] text-slate-600 font-sans uppercase font-black tracking-widest">
-                          <span>Regla Activa: {rendimientoEsperado} km/L</span>
-                          <span>Tolerancia: {toleranciaPct * 100}%</span>
-                        </div>
-
-                        <div className="flex justify-between text-slate-600">
-                          <span className="font-bold font-sans">
-                            KMs Totales:
-                          </span>
-                          <span>{previewData?.total_kms || 0} km</span>
-                        </div>
-                        <div className="flex justify-between text-slate-600">
-                          <span className="font-bold font-sans">
-                            Consumo ECM:
-                          </span>
-                          <span>
-                            {(
-                              (previewData?.total_kms || 0) /
-                              rendimientoEsperado
-                            ).toFixed(2)}{" "}
-                            L
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-brand-navy">
-                          <span className="font-bold font-sans">
-                            Consumo Real:
-                          </span>
-                          <span className="font-bold">
-                            {previewData?.consumo_real || 0} L
-                          </span>
-                        </div>
-
-                        <Separator className="my-2 bg-slate-200" />
-
-                        {combustibleFaltante > 0 ? (
-                          <div className="flex justify-between text-rose-600 font-bold">
-                            <span className="font-sans">
-                              Exceso a Descontar:
-                            </span>
-                            <span>
-                              {(
-                                (previewData?.consumo_real || 0) -
-                                (previewData?.total_kms || 0) /
-                                  rendimientoEsperado
-                              ).toFixed(2)}{" "}
-                              L
-                            </span>
-                          </div>
-                        ) : (
-                          <div className="flex justify-between text-emerald-600 font-bold text-[10px] uppercase tracking-tighter">
-                            <span>Rendimiento Óptimo</span>
-                            <CheckCircle className="h-3 w-3" />
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="space-y-2 pt-2">
-                        <Label className="text-[10px] font-black text-rose-700 uppercase tracking-widest">
-                          Penalización Económica
-                        </Label>
-                        <div className="relative">
-                          <Input
-                            type="number"
-                            value={combustibleFaltante}
-                            onChange={(e) =>
-                              setCombustibleFaltante(Number(e.target.value))
-                            }
-                            className="pl-10 font-bold border-rose-200 bg-rose-50/30 text-rose-700 focus-visible:ring-rose-500"
-                          />
-                          <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-rose-400" />
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
+            {/* 🚀 CANDADO ROJO: VIAJE NO AUDITADO */}
+            {liquidacion.hasRoadMove && isAuditPending && (
+              <Alert
+                variant="destructive"
+                className="bg-rose-50 border-rose-300 text-rose-900 shadow-md animate-in zoom-in"
+              >
+                <ShieldAlert className="h-5 w-5 !text-rose-600" />
+                <AlertTitle className="font-black uppercase tracking-widest text-[11px] ml-2 text-rose-700">
+                  Auditoría Operativa Pendiente
+                </AlertTitle>
+                <AlertDescription className="text-xs font-bold mt-1 ml-2 leading-relaxed">
+                  El sistema detecta {previewData.legs_sin_ticket.length}{" "}
+                  tramo(s) de carretera en esta selección que{" "}
+                  <span className="underline">no han sido conciliados</span> en
+                  el módulo de Combustible.
+                  <br />
+                  <br />
+                  No puedes liquidar hasta que Finanzas dictamine el
+                  rendimiento.
+                </AlertDescription>
+              </Alert>
             )}
 
-            {/* 2. RECIBO DE LIQUIDACIÓN */}
             <Card
               className={cn(
                 "border-slate-200 shadow-xl overflow-hidden border-t-4",
@@ -835,14 +657,13 @@ export default function CierreViaje() {
             >
               <CardHeader className="bg-slate-50 border-b pb-4">
                 <CardTitle className="text-sm font-bold text-slate-800 uppercase flex items-center gap-2">
-                  <Receipt className="h-4 w-4" />{" "}
-                  {liquidacion.hasRoadMove ? "4." : "3."} Recibo de Liquidación
+                  <Receipt className="h-4 w-4" /> Recibo de Liquidación
                 </CardTitle>
               </CardHeader>
 
               <CardContent className="p-0">
                 <div className="p-6 space-y-6">
-                  {/* 🚀 FASE 2: SI HAY CARRETERA, MOSTRAMOS INPUT DE SUELDO FIJO */}
+                  {/* SUELDO FIJO CARRETERA */}
                   {liquidacion.hasRoadMove && (
                     <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex items-center justify-between">
                       <div>
@@ -873,7 +694,7 @@ export default function CierreViaje() {
                     {/* Ingresos */}
                     <div className="space-y-2">
                       <div className="flex justify-between items-center text-xs font-bold text-slate-600 uppercase tracking-widest border-b pb-1">
-                        <span>Ingresos</span>
+                        <span>Ingresos / Abonos</span>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -888,7 +709,7 @@ export default function CierreViaje() {
                       </div>
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-slate-600">
-                          Pago Base (Ruta / Patio)
+                          Sueldo Base (Ruta/Maniobras)
                         </span>
                         <span className="font-mono font-bold text-emerald-600">
                           +{formatCurrencyLocal(liquidacion.pagoBaseBruto)}
@@ -914,7 +735,7 @@ export default function CierreViaje() {
                     {/* Deducciones */}
                     <div className="space-y-2">
                       <div className="flex justify-between items-center text-xs font-bold text-slate-600 uppercase tracking-widest border-b pb-1">
-                        <span>Deducciones</span>
+                        <span>Cargos / Descuentos</span>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -924,10 +745,10 @@ export default function CierreViaje() {
                             setShowAddConceptoDialog(true);
                           }}
                         >
-                          + CARGO
+                          + AGREGAR CARGO
                         </Button>
                       </div>
-                      {/* 🚀 FASE 3: Casetas ya no se muestran como descuento */}
+
                       {(liquidacion.deduccionViaticos > 0 ||
                         liquidacion.otrosAnticipos > 0) && (
                         <div className="flex justify-between items-center text-sm">
@@ -944,12 +765,14 @@ export default function CierreViaje() {
                         </div>
                       )}
 
+                      {/* 🚀 EL DATO QUE VIENE DIRECTO DE LA AUDITORÍA DE BACKEND */}
                       {liquidacion.combustibleFaltante > 0 && (
-                        <div className="flex justify-between items-center text-sm bg-rose-50/50 px-2 py-1 rounded">
-                          <span className="text-rose-700 text-xs font-medium">
-                            Faltante Diésel
+                        <div className="flex justify-between items-center text-sm bg-rose-50/80 border border-rose-200 px-2 py-1 rounded">
+                          <span className="text-rose-800 text-xs font-bold uppercase tracking-widest flex items-center gap-1.5">
+                            <ShieldAlert className="h-3 w-3 text-rose-600" />
+                            Deducción Faltante Diésel
                           </span>
-                          <span className="font-mono font-bold text-rose-600">
+                          <span className="font-mono font-black text-rose-600">
                             -
                             {formatCurrencyLocal(
                               liquidacion.combustibleFaltante,
@@ -957,6 +780,7 @@ export default function CierreViaje() {
                           </span>
                         </div>
                       )}
+
                       {conceptosExtra
                         .filter((c) => c.tipo === "deduccion")
                         .map((c) => (
@@ -979,7 +803,7 @@ export default function CierreViaje() {
                 {/* Gran Total */}
                 <div className="bg-slate-900 p-6">
                   <div className="flex items-center justify-between mb-4">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-600">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                       Neto a Depositar
                     </span>
                     <span className="text-3xl font-black font-mono text-white tracking-tighter">
@@ -988,13 +812,10 @@ export default function CierreViaje() {
                   </div>
                   <Button
                     className="w-full bg-brand-navy hover:bg-brand-navy/90 text-white font-black h-12 shadow-lg gap-2"
-                    disabled={
-                      isAnimating ||
-                      (liquidacion.hasRoadMove && isLoadingPreview)
-                    }
+                    disabled={isAnimating || isLoadingPreview || isAuditPending}
                     onClick={handleLiquidate}
                   >
-                    {isAnimating ? (
+                    {isAnimating || isLoadingPreview ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <CheckSquare className="h-4 w-4" />
@@ -1008,7 +829,7 @@ export default function CierreViaje() {
         )}
       </div>
 
-      {/* MODALES SECUNDARIOS */}
+      {/* MODAL DE CONCEPTOS MANUALES */}
       <Dialog
         open={showAddConceptoDialog}
         onOpenChange={setShowAddConceptoDialog}
@@ -1084,7 +905,7 @@ export default function CierreViaje() {
         </DialogContent>
       </Dialog>
 
-      {/* 🚀 FASE 4: RECIBO DE IMPRESIÓN OFICIAL COMPLETAMENTE DESGLOSADO */}
+      {/* RECIBO DE IMPRESIÓN OFICIAL */}
       <Dialog
         open={showReceiptModal}
         onOpenChange={(open) => {
@@ -1107,7 +928,7 @@ export default function CierreViaje() {
             <Truck className="w-[400px] h-[400px] transform -rotate-12" />
           </div>
           <div className="p-6 sm:p-8 relative z-10 flex flex-col h-full print:p-0 print:h-auto">
-            {/* 1. HEADER (Horizontal) */}
+            {/* 1. HEADER */}
             <div className="flex justify-between items-start mb-6 print:mb-8 border-b-2 border-brand-navy pb-4 print:border-black">
               <div className="flex items-center gap-4">
                 <div className="w-16 h-16 bg-white border border-slate-200 shadow-sm rounded-xl flex items-center justify-center shrink-0 print:border-transparent print:shadow-none overflow-hidden">
@@ -1146,7 +967,7 @@ export default function CierreViaje() {
               </div>
             </div>
 
-            {/* 2. CUERPO PRINCIPAL A DOS COLUMNAS */}
+            {/* 2. CUERPO PRINCIPAL */}
             <div className="grid grid-cols-1 md:grid-cols-12 gap-8 mb-6 print:grid-cols-12 print:gap-10">
               <div className="md:col-span-7 print:col-span-7 space-y-4">
                 <div className="grid grid-cols-2 gap-3 print:gap-6">
@@ -1170,44 +991,6 @@ export default function CierreViaje() {
                     </span>
                   </div>
                 </div>
-
-                {liquidacion?.hasRoadMove && (
-                  <div className="bg-blue-50/80 border border-blue-100 p-4 rounded-xl relative overflow-hidden h-full print:bg-white print:border-slate-300">
-                    <Fuel className="absolute -right-4 -bottom-4 h-24 w-24 text-blue-200/50 opacity-40 print:hidden" />
-                    <h4 className="text-[12px] font-black uppercase tracking-widest text-blue-800 mb-4 relative z-10 print:text-black">
-                      Telemetría y Diésel
-                    </h4>
-                    <div className="grid grid-cols-3 gap-2 text-xs font-mono text-slate-600 relative z-10 print:text-black">
-                      <div>
-                        <p className="text-[10px] text-blue-600/70 font-sans font-bold uppercase mb-1 print:text-slate-500">
-                          Distancia
-                        </p>
-                        <p className="font-bold text-slate-800 text-sm print:text-black">
-                          {previewData?.total_kms || 0}{" "}
-                          <span className="text-slate-600 text-xs">km</span>
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-blue-600/70 font-sans font-bold uppercase mb-1 print:text-slate-500">
-                          Esperado
-                        </p>
-                        <p className="font-bold text-slate-800 text-sm print:text-black">
-                          {previewData?.consumo_esperado || 0}{" "}
-                          <span className="text-slate-600 text-xs">L</span>
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-blue-600/70 font-sans font-bold uppercase mb-1 print:text-slate-500">
-                          Comprobado
-                        </p>
-                        <p className="font-bold text-slate-800 text-sm print:text-black">
-                          {previewData?.consumo_real || 0}{" "}
-                          <span className="text-slate-600 text-xs">L</span>
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
 
               <div className="md:col-span-5 print:col-span-5 flex flex-col justify-between">
@@ -1217,7 +1000,7 @@ export default function CierreViaje() {
                   </h4>
                   <div className="space-y-2.5 text-xs font-medium">
                     <div className="flex justify-between items-center text-slate-700 print:text-black">
-                      <span>Pago Base (Ruta / Patio)</span>
+                      <span>Sueldo Base Operativo</span>
                       <span className="font-mono font-semibold">
                         {formatCurrencyLocal(liquidacion?.pagoBaseBruto || 0)}
                       </span>
@@ -1237,7 +1020,7 @@ export default function CierreViaje() {
                       (liquidacion?.otrosAnticipos || 0) >
                       0 && (
                       <div className="flex justify-between items-center text-rose-600 print:text-black">
-                        <span>Anticipos Operativos</span>
+                        <span>Anticipos / Descuentos</span>
                         <span className="font-mono font-semibold">
                           -
                           {formatCurrencyLocal(
@@ -1248,9 +1031,9 @@ export default function CierreViaje() {
                       </div>
                     )}
                     {(liquidacion?.combustibleFaltante || 0) > 0 && (
-                      <div className="flex justify-between items-center text-rose-600 print:text-black">
-                        <span>Faltante Diésel</span>
-                        <span className="font-mono font-semibold">
+                      <div className="flex justify-between items-center text-rose-600 print:text-black font-bold">
+                        <span>Faltante Combustible (Auditoría)</span>
+                        <span className="font-mono font-black">
                           -
                           {formatCurrencyLocal(
                             liquidacion?.combustibleFaltante || 0,
@@ -1274,7 +1057,7 @@ export default function CierreViaje() {
                 <div className="relative bg-slate-900 p-4 sm:p-5 rounded-xl shadow-lg flex justify-between items-center overflow-hidden shrink-0 print:bg-white print:border-2 print:border-slate-800 print:shadow-none">
                   <div className="absolute inset-0 bg-gradient-to-r from-brand-navy to-slate-900 z-0 print:hidden"></div>
                   <div className="relative z-10">
-                    <span className="block text-[10px] sm:text-[12px] text-slate-600 font-bold uppercase tracking-widest mb-1 print:text-slate-600">
+                    <span className="block text-[10px] sm:text-[12px] text-slate-400 font-bold uppercase tracking-widest mb-1 print:text-slate-600">
                       Total a Depositar
                     </span>
                     <span className="text-2xl sm:text-3xl font-black font-mono text-white tracking-tight print:text-black">
@@ -1288,6 +1071,7 @@ export default function CierreViaje() {
               </div>
             </div>
 
+            {/* FIRMAS */}
             <div className="mt-auto pt-4 print:pt-16">
               <div className="relative flex items-center pb-11 mb-11 print:pb-12 ">
                 <div className="absolute -left-10 w-6 h-6 bg-slate-800/20 rounded-full blur-[2px] print:hidden"></div>
@@ -1301,8 +1085,9 @@ export default function CierreViaje() {
                       Conformidad
                     </p>
                     <p className="text-[12px] font-bold text-slate-600 mt-1 truncate print:text-black">
-                      {selectedLegsData[0]?.operator?.name ||
-                        "Firma del Operador"}
+                      {selectedLegIds.length > 0
+                        ? selectedLegsData[0]?.operator?.name
+                        : "Firma del Operador"}
                     </p>
                     <p className="text-[8px] text-slate-600 font-medium mt-0.5 print:text-slate-500">
                       Recibe
@@ -1349,18 +1134,6 @@ export default function CierreViaje() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <AddTicketModal
-        open={showAddTicket}
-        onOpenChange={(isOpen) => {
-          setShowAddTicket(isOpen);
-          if (!isOpen) setTicketPrefill(null);
-        }}
-        onSubmit={async (d) => {
-          await fuelService.create(d);
-          setShowAddTicket(false);
-        }}
-        initialData={ticketPrefill}
-      />
     </div>
   );
 }
