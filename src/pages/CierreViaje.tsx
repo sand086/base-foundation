@@ -23,6 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -60,7 +61,7 @@ export default function CierreViaje() {
   const { clients = [] } = useClients();
   const { operadores = [], operators = [] } = useOperators() as any;
 
-  //ARÁMETROS GLOBALES
+  // PARÁMETROS GLOBALES
   const { value: empresaNombre } = useSystemConfig("empresa_nombre");
   const { value: empresaRFC } = useSystemConfig("empresa_rfc");
   const { value: empresaDireccion } = useSystemConfig("empresa_direccion");
@@ -177,6 +178,7 @@ export default function CierreViaje() {
         pagoBaseBruto += bonoFijo;
       }
 
+      // Casetas no se cobran, solo viáticos y otros
       deduccionViaticos += leg.anticipo_viaticos || 0;
       otrosAnticipos +=
         (leg.otros_anticipos || 0) + (leg.anticipo_combustible || 0);
@@ -233,11 +235,11 @@ export default function CierreViaje() {
         getSettlementPreview(selectedLegIds)
           .then((data: any) => {
             setPreviewData(data);
-            // 🚀 MAGIA PURA: El backend ya auditó y nos da el descuento final. Cero cálculos en el front.
+            // 🚀 MAGIA PURA: El backend ya auditó usando el ECM y nos da el monto a cobrar en rojo. Cero cálculos en el frontend.
             setCombustibleFaltante(data?.deduccion_combustible || 0);
           })
           .catch(() => {
-            toast.error("Error de conexión al verificar estatus del viaje.");
+            toast.error("Error de conexión al verificar telemetría del viaje.");
             setPreviewData(null);
             setCombustibleFaltante(0);
           })
