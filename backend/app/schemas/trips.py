@@ -22,7 +22,6 @@ class TripTimelineEventBase(ORMBase):
     time: datetime
     event: str = Field(..., max_length=500)
     event_type: str = Field(default="info", max_length=20)
-    #  AGREGAR AQUÍ:
     location: Optional[str] = None
     lat: Optional[str] = None
     lng: Optional[str] = None
@@ -166,7 +165,6 @@ class TripCreate(TripBase):
     """
 
     initial_leg: Optional[TripLegCreate] = None
-
     model_config = ConfigDict(extra="ignore")
 
 
@@ -181,12 +179,11 @@ class TripResponse(TripBase):
     uuid_fiscal: Optional[str] = None
 
     client: Optional[ClientResponse] = None
-    tariff: Optional[TariffBasicInfo] = None  #  AÑADIR ESTO
+    tariff: Optional[TariffBasicInfo] = None
     remolque_1: Optional[UnitResponse] = None
     dolly: Optional[UnitResponse] = None
     remolque_2: Optional[UnitResponse] = None
 
-    # El Viaje ahora incluye su lista de tramos
     legs: List[TripLegResponse] = Field(default_factory=list)
 
     record_status: RecordStatus
@@ -198,12 +195,10 @@ class TripTimelineEventUpdate(ORMBase):
     time: Optional[datetime] = None
     event: Optional[str] = Field(default=None, max_length=500)
     event_type: Optional[str] = Field(default=None, max_length=20)
-
     model_config = ConfigDict(extra="ignore")
 
 
 class TripUpdate(ORMBase):
-    # Relaciones del viaje general
     client_id: Optional[int] = None
     sub_client_id: Optional[int] = None
     tariff_id: Optional[int] = None
@@ -212,7 +207,6 @@ class TripUpdate(ORMBase):
     dolly_id: Optional[int] = None
     remolque_2_id: Optional[int] = None
 
-    # Datos Generales
     origin: Optional[str] = Field(default=None, max_length=200)
     destination: Optional[str] = Field(default=None, max_length=200)
     route_name: Optional[str] = Field(default=None, max_length=200)
@@ -236,7 +230,6 @@ class TripUpdate(ORMBase):
     start_date: Optional[datetime] = None
     closed_at: Optional[datetime] = None
 
-    # Mantenemos estos campos por compatibilidad temporal con tu endpoint
     unit_id: Optional[int] = None
     operator_id: Optional[int] = None
     anticipo_casetas: Optional[float] = None
@@ -267,7 +260,7 @@ class ConceptoPago(BaseModel):
 
 class TripSettlementResponse(BaseModel):
     viajeId: str
-    legId: int  # Ahora la liquidación se amarra al TRAMO (TripLeg)
+    legId: int
     operadorNombre: str
     unidadNumero: str
     ruta: str
@@ -289,8 +282,8 @@ class TripSettlementResponse(BaseModel):
 
 class CloseSettlementPayload(BaseModel):
     conceptos: List[ConceptoPago]
-    total_ingresos: float  # <--- Asegúrate que sea snake_case
-    total_deducciones: float  # <--- Asegúrate que sea snake_case
+    total_ingresos: float
+    total_deducciones: float
     neto_a_pagar: float
     odometro_final: Optional[int] = None
 
@@ -313,8 +306,18 @@ class BatchSettlementPreviewResponse(BaseModel):
     legs_sin_ticket: List[int] = []
 
 
+# 🚀 NUEVO: EL PAYLOAD ROBUSTO PARA GUARDAR EL DESGLOSE DE NÓMINA EN LOTE
+class BatchSettlementPayload(BaseModel):
+    leg_ids: List[int]
+    monto_sueldo: float = 0.0
+    monto_bonos: float = 0.0
+    monto_maniobras: float = 0.0
+    monto_penalizaciones: float = 0.0
+    neto_a_pagar: float
+
+
 # =========================================================
-# FACTURACIÓN Y RELACIONES SAT (Nuevos Schemas)
+# FACTURACIÓN Y RELACIONES SAT
 # =========================================================
 
 
@@ -327,7 +330,6 @@ class ReceivableInvoiceCreate(BaseModel):
         description="Si es True, genera factura por $1 Peso para Bypass Aduanal",
     )
 
-    # Campos para la Factura Final (Relación 04)
     tipo_relacion: Optional[str] = Field(
         default=None, description="Ej: 04 - Sustitución de CFDI previos"
     )
@@ -335,10 +337,9 @@ class ReceivableInvoiceCreate(BaseModel):
         default=None, description="UUID de la factura nominal a cancelar"
     )
 
-    # Datos del pago por defecto que el usuario puede cambiar en el UI
     metodo_pago: str = Field(default="PUE", pattern="^(PUE|PPD)$")
-    forma_pago: str = Field(default="03")  # Transferencia electrónica de fondos
-    uso_cfdi: str = Field(default="G03")  # Gastos en general
+    forma_pago: str = Field(default="03")
+    uso_cfdi: str = Field(default="G03")
 
     motivo_cancelacion: Optional[str] = None
     acuse_cancelacion_url: Optional[str] = None
@@ -346,7 +347,6 @@ class ReceivableInvoiceCreate(BaseModel):
 
     @validator("uuid_relacionado", always=True)
     def validate_relacion_04(cls, v, values):
-        """Regla de validación crítica: Si hay relación 04, el UUID es obligatorio"""
         if values.get("tipo_relacion") == "04" and not v:
             raise ValueError(
                 "El UUID relacionado es obligatorio para la sustitución de CFDI (Relación 04)"

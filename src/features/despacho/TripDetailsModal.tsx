@@ -16,6 +16,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import {
   Truck,
@@ -71,7 +81,7 @@ interface TripDetailsModalProps {
 export function TripDetailsModal({
   open,
   onOpenChange,
-  trip,
+  trip: initialTrip, // 🚀 Renombramos la prop
   onRelayClick,
   onSettleClick,
   onUpdateStatusClick,
@@ -79,6 +89,9 @@ export function TripDetailsModal({
   const { editTrip, refreshTrips, addTimelineEvent } = useTrips();
   const { updateLoadStatus } = useUnits();
   const { isStamping, handleStampNominal, handleStampFinal } = useBilling();
+
+  // 🚀 ESTADO LOCAL (La copia independiente de la verdad)
+  const [localTrip, setLocalTrip] = useState<Trip | null>(null);
 
   const [activeTab, setActiveTab] = useState("fases");
   const [isEditing, setIsEditing] = useState(false);
@@ -94,6 +107,10 @@ export function TripDetailsModal({
   const [localUuid, setLocalUuid] = useState<string | null>(null);
   const [finalUuid, setFinalUuid] = useState<string | null>(null);
 
+  const [showEmptyDialog, setShowEmptyDialog] = useState(false);
+  const [emptyTerminal, setEmptyTerminal] = useState("");
+  const [showUndoDialog, setShowUndoDialog] = useState(false);
+
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("es-MX", {
       style: "currency",
@@ -101,25 +118,48 @@ export function TripDetailsModal({
       minimumFractionDigits: 2,
     }).format(val || 0);
 
+  // 🚀 Sincronizar prop inicial con estado local cuando se abre el modal
+  useEffect(() => {
+    if (open && initialTrip) {
+      setLocalTrip(initialTrip);
+    } else if (!open) {
+      setLocalTrip(null);
+    }
+  }, [initialTrip, open]);
+
+  // 🚀 FUNCIÓN MAESTRA DE REFRESCO INTERNO
+  const refreshLocalTrip = async () => {
+    if (!localTrip?.id) return;
+    try {
+      // 1. Buscamos el viaje actualizado directo en la base de datos
+      const res = await axiosClient.get(`/trips/${localTrip.id}`);
+      setLocalTrip(res.data);
+      // 2. Avisamos al padre (el tablero) que actualice lo suyo en el fondo
+      await refreshTrips();
+    } catch (e) {
+      console.error("Error recargando viaje local", e);
+    }
+  };
+
   const isFullTrip = useMemo(() => {
-    return checkIsFullTrip(trip);
-  }, [trip]);
+    return checkIsFullTrip(localTrip);
+  }, [localTrip]);
 
   useEffect(() => {
-    if (trip) {
+    if (localTrip) {
       if (!isEditing) {
-        setTarifaBase(trip.tarifa_base || 0);
-        setCostoCasetas(trip.costo_casetas || 0);
+        setTarifaBase(localTrip.tarifa_base || 0);
+        setCostoCasetas(localTrip.costo_casetas || 0);
       }
-      if (trip.uuid_fiscal || !localUuid) {
-        setLocalUuid(trip.uuid_fiscal || null);
+      if (localTrip.uuid_fiscal || !localUuid) {
+        setLocalUuid(localTrip.uuid_fiscal || null);
       }
     }
-  }, [trip?.id, trip?.uuid_fiscal, isEditing]);
+  }, [localTrip?.id, localTrip?.uuid_fiscal, isEditing]);
 
   const activeLeg = useMemo(() => {
-    if (!trip) return undefined;
-    const legs = trip.legs || [];
+    if (!localTrip) return undefined;
+    const legs = localTrip.legs || [];
     return (
       legs.find(
         (l) =>
@@ -130,12 +170,12 @@ export function TripDetailsModal({
       legs[legs.length - 1] ||
       undefined
     );
-  }, [trip]);
+  }, [localTrip]);
 
   const allEvents = useMemo(() => {
-    if (!trip) return [];
+    if (!localTrip) return [];
     return (
-      trip.legs
+      localTrip.legs
         ?.flatMap((leg) =>
           (leg.timeline_events || []).map((ev) => ({
             ...ev,
@@ -149,11 +189,11 @@ export function TripDetailsModal({
           (a, b) => new Date(b.time).getTime() - new Date(a.time).getTime(),
         ) || []
     );
-  }, [trip]);
+  }, [localTrip]);
 
   const finanzasComercial = useMemo(() => {
-    const base = isEditing ? tarifaBase : trip?.tarifa_base || 0;
-    const casetas = isEditing ? costoCasetas : trip?.costo_casetas || 0;
+    const base = isEditing ? tarifaBase : localTrip?.tarifa_base || 0;
+    const casetas = isEditing ? costoCasetas : localTrip?.costo_casetas || 0;
     const subtotal = base + casetas;
     const iva = subtotal * 0.16;
     const retencion = subtotal * 0.04;
@@ -165,16 +205,16 @@ export function TripDetailsModal({
       retencion,
       total: subtotal + iva - retencion,
     };
-  }, [trip, isEditing, tarifaBase, costoCasetas]);
+  }, [localTrip, isEditing, tarifaBase, costoCasetas]);
 
   const handleSaveFinanzas = async () => {
     setSaving(true);
-    const success = await editTrip(String(trip?.id), {
+    const success = await editTrip(String(localTrip?.id), {
       tarifa_base: Number(tarifaBase),
       costo_casetas: Number(costoCasetas),
     });
     if (success) {
-      await forceUIRefresh();
+      await refreshLocalTrip();
       setIsEditing(false);
       toast.success("Montos de facturación actualizados.");
     }
@@ -183,68 +223,50 @@ export function TripDetailsModal({
 
   const handleManualSync = async () => {
     setIsSyncing(true);
-    await forceUIRefresh();
+    await refreshLocalTrip();
     setIsSyncing(false);
     toast.success("Datos sincronizados.");
   };
 
-  // 🚀 FUNCIÓN DE ACTUALIZACIÓN FORZADA PARA ELIMINAR CACHÉ
-  const forceUIRefresh = async () => {
-    try {
-      await refreshTrips();
-      // Despachamos un evento nativo para que cualquier componente que use Caché revalide
-      window.dispatchEvent(new Event("force-trip-refresh"));
-    } catch (e) {
-      console.error("Error al refrescar la UI", e);
-    }
-  };
-
-  // 🚀 DESHACER INTELIGENTE CON ACTUALIZACIÓN FORZADA
-  const handleUndoLeg = async () => {
-    const isFirstLeg = trip?.legs?.length === 1;
-    const msg = isFirstLeg
-      ? "¿Deshacer esta fase? Al ser la primera, el viaje completo regresará al Planeador (Stand-by)."
-      : "¿Estás seguro de deshacer la última fase? El camión y operador de la fase previa volverán a estar activos en la ruta.";
-
-    const ok = window.confirm(msg);
-    if (!ok) return;
-
+  // 🚀 DESHACER INTELIGENTE CON RECARGA LOCAL
+  const executeUndoLeg = async () => {
     setIsUndoing(true);
     try {
-      const legs = trip?.legs || [];
+      const isFirstLeg = localTrip?.legs?.length === 1;
+      const legs = localTrip?.legs || [];
       const targetLegToLog =
         legs.length > 1 ? legs[legs.length - 2] : activeLeg;
 
       if (targetLegToLog) {
         await addTimelineEvent(
-          String(trip?.id),
+          String(localTrip?.id),
           targetLegToLog.id,
           {
             status: "retraso",
             location: "Sistema Logístico",
             comments: `⏪ REVERSO OPERATIVO: Se deshizo la fase [${activeLeg?.leg_type.toUpperCase()}]. El viaje retornó al estado previo.`,
           },
-          false,
+          true,
         );
       }
 
-      await axiosClient.post(`/trips/${trip?.id}/undo-leg`);
+      await axiosClient.post(`/trips/${localTrip?.id}/undo-leg`);
 
       toast.success(
-        isFirstLeg
-          ? "Viaje retornado a Planeador exitosamente."
-          : "Fase revertida y bitácora actualizada.",
+        isFirstLeg ? "Viaje retornado a Planeador." : "Fase revertida.",
       );
 
-      onOpenChange(false);
+      setShowUndoDialog(false); // Cerramos el dialog rojo
 
-      // Forzamos actualización de React ignorando Caché
-      await forceUIRefresh();
+      // 🚀 LÓGICA DE CIERRE CONDICIONAL
+      if (isFirstLeg) {
+        onOpenChange(false); // Si era la única fase, cerramos todo.
+        await refreshTrips(); // Le decimos al padre que recargue
+      } else {
+        await refreshLocalTrip(); // Si quedan fases, repintamos el modal abierto.
+      }
     } catch (error: any) {
-      const errorMsg =
-        error.response?.data?.detail ||
-        "Error al deshacer. Es probable que la fase ya esté liquidada o bloqueada.";
-      toast.error(errorMsg);
+      toast.error(error.response?.data?.detail || "Error al deshacer la fase.");
     } finally {
       setIsUndoing(false);
     }
@@ -252,29 +274,36 @@ export function TripDetailsModal({
 
   // 🚀 FASE 3: ENTREGA DE VACÍO
   const submitEmptyReturn = async () => {
-    if (!activeLeg) return;
+    if (!activeLeg || !emptyTerminal.trim()) {
+      toast.error("Debes indicar el patio o terminal de entrega.");
+      return;
+    }
     setFinishingLeg(true);
 
     try {
       await addTimelineEvent(
-        String(trip?.id),
+        String(localTrip?.id),
         activeLeg.id,
         {
           status: "entregado",
-          location: "Terminal / Patio Asignado",
-          comments: `VIAJE FINALIZADO: Equipo/Contenedor retornado vacío exitosamente.`,
+          location: emptyTerminal.toUpperCase(),
+          terminal_entrega_vacio: emptyTerminal.toUpperCase(),
+          comments: `VIAJE FINALIZADO: Equipo/Contenedor retornado vacío exitosamente en ${emptyTerminal.toUpperCase()}.`,
         },
         true,
       );
 
-      if (trip?.remolque_1_id)
-        await updateLoadStatus(trip.remolque_1_id, false);
-      if (trip?.remolque_2_id)
-        await updateLoadStatus(trip.remolque_2_id, false);
+      if (localTrip?.remolque_1_id)
+        await updateLoadStatus(localTrip.remolque_1_id, false);
+      if (localTrip?.remolque_2_id)
+        await updateLoadStatus(localTrip.remolque_2_id, false);
 
       toast.success("Viaje concluido y equipo liberado exitosamente.");
-      onOpenChange(false);
-      await forceUIRefresh();
+
+      setShowEmptyDialog(false);
+      setEmptyTerminal("");
+
+      await refreshLocalTrip(); // Recargamos para que el modal pinte "ENTREGADO"
     } catch {
       toast.error("Error al registrar la entrega del vacío.");
     } finally {
@@ -282,13 +311,13 @@ export function TripDetailsModal({
     }
   };
 
-  // 🚀 FUNCIÓN MAESTRA PARA DESCARGAS MÚLTIPLES
+  // ... (Las funciones de Descarga y NOM-087 se mantienen igual, solo cambian `trip` por `localTrip`)
   const handleDownloadBothFiles = async (
     uuidToDownload: string,
     isFinal: boolean = false,
   ) => {
+    /* Mismo código, sin cambios */
     const toastId = toast.loading("Preparando archivos para descarga...");
-
     try {
       const resPdf = await axiosClient.get(
         `/billing/invoice/${uuidToDownload}/pdf`,
@@ -306,7 +335,6 @@ export function TripDetailsModal({
       document.body.appendChild(pdfLink);
       pdfLink.click();
       document.body.removeChild(pdfLink);
-
       setTimeout(async () => {
         try {
           const resXml = await axiosClient.get(
@@ -325,7 +353,6 @@ export function TripDetailsModal({
           document.body.appendChild(xmlLink);
           xmlLink.click();
           document.body.removeChild(xmlLink);
-
           toast.success("PDF y XML descargados exitosamente.", { id: toastId });
         } catch (error) {
           toast.error("El PDF se descargó, pero hubo un error con el XML.", {
@@ -383,11 +410,11 @@ export function TripDetailsModal({
   };
 
   const handlePrintNOM087 = async () => {
-    if (!trip) return;
+    if (!localTrip) return;
     setIsGeneratingNom(true);
     const toastId = toast.loading("Generando Bitácora NOM-087...");
     try {
-      const res = await axiosClient.get(`/trips/${trip.id}/nom-087`, {
+      const res = await axiosClient.get(`/trips/${localTrip.id}/nom-087`, {
         responseType: "blob",
       });
       const fileURL = window.URL.createObjectURL(
@@ -397,7 +424,7 @@ export function TripDetailsModal({
       link.href = fileURL;
       link.setAttribute(
         "download",
-        `NOM087_Folio_${trip.public_id || trip.id}.pdf`,
+        `NOM087_Folio_${localTrip.public_id || localTrip.id}.pdf`,
       );
       document.body.appendChild(link);
       link.click();
@@ -422,7 +449,7 @@ export function TripDetailsModal({
         };
       case "ruta_carretera":
         return {
-          text: "Siguiente Fase (Retorno Vacío)", // <--- REGRESAMOS AL TEXTO LÓGICO
+          text: "Siguiente Fase (Retorno Vacío)",
           icon: <ArrowRightCircle className="h-3.5 w-3.5 mr-1.5" />,
           color: "bg-orange-600 hover:bg-orange-700 text-white",
         };
@@ -441,7 +468,7 @@ export function TripDetailsModal({
     }
   };
 
-  if (!trip) return null;
+  if (!localTrip) return null;
 
   return (
     <>
@@ -458,16 +485,16 @@ export function TripDetailsModal({
                 </div>
                 <div>
                   <DialogTitle className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter heading-crisp leading-none">
-                    #{trip.public_id || trip.id}{" "}
+                    #{localTrip.public_id || localTrip.id}{" "}
                     <span className="text-slate-300 dark:text-slate-600 mx-1">
                       |
                     </span>{" "}
-                    {trip.route_name}
+                    {localTrip.route_name}
                   </DialogTitle>
                   <DialogDescription className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-2">
                     Cliente:{" "}
                     <span className="text-brand-navy dark:text-blue-300 ml-1">
-                      {trip.client?.razon_social}
+                      {localTrip.client?.razon_social}
                     </span>
                   </DialogDescription>
                 </div>
@@ -478,11 +505,11 @@ export function TripDetailsModal({
               <div className="flex items-center flex-wrap gap-2 font-black text-slate-500 dark:text-slate-400 uppercase text-[10px] tracking-widest">
                 <span className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded shadow-sm border border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-300">
                   <MapPin className="h-3.5 w-3.5 text-emerald-500" />
-                  {trip.origin}
+                  {localTrip.origin}
                 </span>
                 <span className="text-slate-300 dark:text-slate-600">→</span>
                 <span className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded shadow-sm border border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-300">
-                  {trip.destination}
+                  {localTrip.destination}
                 </span>
 
                 <Badge
@@ -492,32 +519,33 @@ export function TripDetailsModal({
                   {isFullTrip ? "FULL / 9 EJES" : "SENCILLO / 5 EJES"}
                 </Badge>
 
-                {(trip as any).contenedor_1 && (
+                {(localTrip as any).contenedor_1 && (
                   <Badge
                     variant="outline"
                     className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800/50 shadow-sm font-black tracking-widest text-[9px] px-2.5 py-1 flex items-center gap-1.5"
                   >
                     <Container className="h-3 w-3" /> C1:{" "}
-                    {(trip as any).contenedor_1}
+                    {(localTrip as any).contenedor_1}
                   </Badge>
                 )}
 
-                {(trip as any).contenedor_2 && (
+                {(localTrip as any).contenedor_2 && (
                   <Badge
                     variant="outline"
                     className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800/50 shadow-sm font-black tracking-widest text-[9px] px-2.5 py-1 flex items-center gap-1.5"
                   >
                     <Container className="h-3 w-3" /> C2:{" "}
-                    {(trip as any).contenedor_2}
+                    {(localTrip as any).contenedor_2}
                   </Badge>
                 )}
 
-                {(trip as any).referencia && (
+                {(localTrip as any).referencia && (
                   <Badge
                     variant="outline"
                     className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 shadow-sm font-black tracking-widest text-[9px] px-2.5 py-1 flex items-center gap-1.5"
                   >
-                    <Hash className="h-3 w-3" /> REF: {(trip as any).referencia}
+                    <Hash className="h-3 w-3" /> REF:{" "}
+                    {(localTrip as any).referencia}
                   </Badge>
                 )}
               </div>
@@ -533,22 +561,22 @@ export function TripDetailsModal({
                   <Truck className="h-3 w-3 text-slate-400" />
                   ECO-{activeLeg?.unit?.numero_economico || "N/A"}
                 </Badge>
-                {trip.remolque_1 && (
+                {localTrip.remolque_1 && (
                   <Badge
                     variant="secondary"
                     className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono text-[10px] flex items-center gap-1"
                   >
                     <Package className="h-3 w-3 text-amber-500" />
-                    R1: ECO-{trip.remolque_1.numero_economico}
+                    R1: ECO-{localTrip.remolque_1.numero_economico}
                   </Badge>
                 )}
-                {trip.remolque_2 && (
+                {localTrip.remolque_2 && (
                   <Badge
                     variant="secondary"
                     className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono text-[10px] flex items-center gap-1"
                   >
                     <Package className="h-3 w-3 text-amber-500" />
-                    R2: ECO-{trip.remolque_2.numero_economico}
+                    R2: ECO-{localTrip.remolque_2.numero_economico}
                   </Badge>
                 )}
               </div>
@@ -582,7 +610,7 @@ export function TripDetailsModal({
                     if (localUuid) {
                       handleDownloadPDF(localUuid);
                     } else {
-                      handleStampNominal(trip.id, async (responseData) => {
+                      handleStampNominal(localTrip.id, async (responseData) => {
                         const generatedUuid = responseData?.data?.uuid;
                         if (generatedUuid) {
                           setLocalUuid(generatedUuid);
@@ -591,7 +619,7 @@ export function TripDetailsModal({
                             "¡CARTA PORTE BYPASS GENERADA Y DESCARGADA!",
                           );
                         }
-                        await forceUIRefresh(); // Forzamos reactividad
+                        await refreshLocalTrip();
                       });
                     }
                   }}
@@ -615,7 +643,7 @@ export function TripDetailsModal({
                     className="h-10 px-4 text-[10px] font-black uppercase tracking-widest border-none shadow-sm bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 haptic-press"
                     onClick={() => handleDownloadXML(localUuid)}
                   >
-                    <FileCode2 className="h-4 w-4 mr-2" />
+                    <FileCode2 className="h-3.5 w-3.5 mr-2" />
                     Descargar XML
                   </Button>
                 )}
@@ -666,11 +694,11 @@ export function TripDetailsModal({
                           <Activity className="h-4 w-4 text-blue-500" />{" "}
                           Histórico de Relevos y Tramos
                         </p>
-                        {trip.legs && trip.legs.length > 0 && (
+                        {localTrip.legs && localTrip.legs.length > 0 && (
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={handleUndoLeg}
+                            onClick={() => setShowUndoDialog(true)}
                             disabled={isUndoing}
                             className="h-9 text-[9px] font-black text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/20 hover:bg-rose-100 dark:hover:bg-rose-900/40 uppercase tracking-widest shadow-sm haptic-press"
                           >
@@ -685,227 +713,223 @@ export function TripDetailsModal({
                       </div>
 
                       <div className="space-y-4">
-                        {(trip.legs as ExtendedTripLeg[])?.map((leg, idx) => {
-                          const btnUI = getRelayButtonUI(leg.leg_type);
+                        {(localTrip.legs as ExtendedTripLeg[])?.map(
+                          (leg, idx) => {
+                            const btnUI = getRelayButtonUI(leg.leg_type);
 
-                          return (
-                            <Card
-                              key={leg.id}
-                              className={cn(
-                                "relative border-l-4 shadow-sm overflow-hidden bg-white dark:bg-slate-900 border-t border-r border-b border-slate-200 dark:border-white/10",
-                                leg.id === activeLeg?.id
-                                  ? "border-l-emerald-500 ring-1 ring-emerald-500/20"
-                                  : "border-l-slate-300 dark:border-l-slate-700 opacity-90",
-                              )}
-                            >
-                              <CardContent className="relative p-0 flex flex-col">
-                                <div className="absolute top-4 left-4 pointer-events-none select-none z-0">
-                                  <span className="text-5xl md:text-6xl font-black tracking-tighter text-slate-200/70 dark:text-white/5 leading-none">
-                                    {String(idx + 1).padStart(2, "0")}
-                                  </span>
-                                </div>
-                                <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
-                                  <div className="space-y-1.5 flex-1">
-                                    <p className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                      Fase Operativa {idx + 1}{" "}
-                                      {leg.id === activeLeg?.id && (
-                                        <Badge className="h-4 px-1.5 text-[8px] bg-emerald-500 font-black">
-                                          ACTUAL
-                                        </Badge>
-                                      )}
-                                    </p>
-                                    <h4 className="font-black text-brand-navy dark:text-white uppercase text-lg tracking-tighter leading-tight">
-                                      {leg.leg_type.replace("_", " ")}
-                                    </h4>
-                                    <div className="flex items-center gap-4 text-xs font-bold text-slate-600 dark:text-slate-400 pt-2">
-                                      <span className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded border border-slate-200 dark:border-white/5">
-                                        <User className="h-3.5 w-3.5" />{" "}
-                                        {leg.operator?.name || "S/A"}
-                                      </span>
-                                      <span className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded border border-slate-200 dark:border-white/5">
-                                        <Truck className="h-3.5 w-3.5" /> ECO-
-                                        {leg.unit?.numero_economico || "N/A"}
-                                      </span>
-                                    </div>
+                            return (
+                              <Card
+                                key={leg.id}
+                                className={cn(
+                                  "relative border-l-4 shadow-sm overflow-hidden bg-white dark:bg-slate-900 border-t border-r border-b border-slate-200 dark:border-white/10",
+                                  leg.id === activeLeg?.id
+                                    ? "border-l-emerald-500 ring-1 ring-emerald-500/20"
+                                    : "border-l-slate-300 dark:border-l-slate-700 opacity-90",
+                                )}
+                              >
+                                <CardContent className="relative p-0 flex flex-col">
+                                  <div className="absolute top-4 left-4 pointer-events-none select-none z-0">
+                                    <span className="text-5xl md:text-6xl font-black tracking-tighter text-slate-200/70 dark:text-white/5 leading-none">
+                                      {String(idx + 1).padStart(2, "0")}
+                                    </span>
                                   </div>
-
-                                  <div className="flex flex-col sm:items-end gap-3 shrink-0">
-                                    <Badge
-                                      className={cn(
-                                        "uppercase font-black tracking-widest text-[9px] border-0 px-3 py-1 shadow-sm",
-                                        leg.status === "entregado"
-                                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                                          : leg.status === "cerrado"
-                                            ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                                            : leg.status === "liquidado"
-                                              ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
-                                              : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-                                      )}
-                                    >
-                                      {String(leg.status).replace("_", " ")}
-                                    </Badge>
-
-                                    <div className="flex gap-2">
-                                      {["creado", "en_transito"].includes(
-                                        leg.status,
-                                      ) && (
-                                        <Button
-                                          size="sm"
-                                          className={cn(
-                                            "h-8 font-black text-[9px] uppercase tracking-widest shadow-lg haptic-press text-white",
-                                            btnUI.color,
-                                          )}
-                                          disabled={finishingLeg}
-                                          onClick={() => {
-                                            if (
-                                              leg.leg_type === "entrega_vacio"
-                                            ) {
-                                              // FASE 3: Cierre final directo
-                                              const confirmEmpty =
-                                                window.confirm(
-                                                  "¿Confirmas la entrega del equipo vacío en el patio asignado?",
-                                                );
-                                              if (confirmEmpty)
-                                                submitEmptyReturn();
-                                            } else if (onRelayClick) {
-                                              // FASES 1 y 2: Abren el NextLegModal para crear la siguiente etapa
-                                              onRelayClick(
-                                                leg as unknown as TripLeg,
-                                                trip,
-                                              );
-                                            }
-                                          }}
-                                        >
-                                          {finishingLeg ? (
-                                            <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                                          ) : (
-                                            btnUI.icon
-                                          )}
-                                          {btnUI.text}
-                                        </Button>
-                                      )}
-                                      {leg.status === "entregado" &&
-                                        onSettleClick && (
-                                          <Button
-                                            size="sm"
-                                            className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[9px] uppercase tracking-widest shadow-lg shadow-emerald-500/20 haptic-press"
-                                            onClick={() =>
-                                              onSettleClick(
-                                                leg as unknown as TripLeg,
-                                                trip,
-                                              )
-                                            }
-                                          >
-                                            <Wallet className="h-3.5 w-3.5 mr-1.5" />
-                                            LIQUIDAR OP.
-                                          </Button>
+                                  <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
+                                    <div className="space-y-1.5 flex-1">
+                                      <p className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                        Fase Operativa {idx + 1}{" "}
+                                        {leg.id === activeLeg?.id && (
+                                          <Badge className="h-4 px-1.5 text-[8px] bg-emerald-500 font-black">
+                                            ACTUAL
+                                          </Badge>
                                         )}
+                                      </p>
+                                      <h4 className="font-black text-brand-navy dark:text-white uppercase text-lg tracking-tighter leading-tight">
+                                        {leg.leg_type.replace("_", " ")}
+                                      </h4>
+                                      <div className="flex items-center gap-4 text-xs font-bold text-slate-600 dark:text-slate-400 pt-2">
+                                        <span className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded border border-slate-200 dark:border-white/5">
+                                          <User className="h-3.5 w-3.5" />{" "}
+                                          {leg.operator?.name || "S/A"}
+                                        </span>
+                                        <span className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded border border-slate-200 dark:border-white/5">
+                                          <Truck className="h-3.5 w-3.5" /> ECO-
+                                          {leg.unit?.numero_economico || "N/A"}
+                                        </span>
+                                      </div>
                                     </div>
-                                  </div>
-                                </div>
 
-                                <div className="border-t border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-slate-900/30 p-4 px-6 relative z-10">
-                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                                    <div className="space-y-1">
-                                      <Label className="text-[9px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-1">
-                                        <CalendarDays className="h-3 w-3" />{" "}
-                                        Inicio
-                                      </Label>
-                                      <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                                        {leg.start_date
-                                          ? format(
-                                              new Date(leg.start_date),
-                                              "dd MMM yy, HH:mm",
-                                              { locale: es },
-                                            )
-                                          : "Pendiente"}
-                                      </p>
-                                    </div>
-                                    <div className="space-y-1">
-                                      <Label className="text-[9px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-1">
-                                        <CalendarDays className="h-3 w-3" /> Fin
-                                      </Label>
-                                      <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                                        {leg.actual_arrival
-                                          ? format(
-                                              new Date(leg.actual_arrival),
-                                              "dd MMM yy, HH:mm",
-                                              { locale: es },
-                                            )
-                                          : "Pendiente"}
-                                      </p>
-                                    </div>
-                                    <div className="space-y-1">
-                                      <Label className="text-[9px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-1">
-                                        <Gauge className="h-3 w-3" /> Odo.
-                                        Inicial
-                                      </Label>
-                                      <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                                        {leg.odometro_inicial
-                                          ? `${leg.odometro_inicial} km`
-                                          : "N/A"}
-                                      </p>
-                                    </div>
-                                    <div className="space-y-1">
-                                      <Label className="text-[9px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-1">
-                                        <DollarSign className="h-3 w-3" />{" "}
-                                        Anticipos / Vales
-                                      </Label>
-                                      <p
+                                    <div className="flex flex-col sm:items-end gap-3 shrink-0">
+                                      <Badge
                                         className={cn(
-                                          "text-sm font-mono font-black",
-                                          (leg.total_anticipos || 0) > 0
-                                            ? "text-amber-600 dark:text-amber-400"
-                                            : "text-slate-700 dark:text-slate-300",
+                                          "uppercase font-black tracking-widest text-[9px] border-0 px-3 py-1 shadow-sm",
+                                          leg.status === "entregado"
+                                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                                            : leg.status === "cerrado"
+                                              ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                                              : leg.status === "liquidado"
+                                                ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
+                                                : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
                                         )}
                                       >
-                                        {formatCurrency(
-                                          leg.total_anticipos || 0,
+                                        {String(leg.status).replace("_", " ")}
+                                      </Badge>
+
+                                      <div className="flex gap-2">
+                                        {["creado", "en_transito"].includes(
+                                          leg.status,
+                                        ) && (
+                                          <Button
+                                            size="sm"
+                                            className={cn(
+                                              "h-8 font-black text-[9px] uppercase tracking-widest shadow-lg haptic-press text-white",
+                                              btnUI.color,
+                                            )}
+                                            disabled={finishingLeg}
+                                            onClick={() => {
+                                              if (
+                                                leg.leg_type === "entrega_vacio"
+                                              ) {
+                                                setShowEmptyDialog(true);
+                                              } else if (onRelayClick) {
+                                                onRelayClick(
+                                                  leg as unknown as TripLeg,
+                                                  localTrip,
+                                                );
+                                              }
+                                            }}
+                                          >
+                                            {finishingLeg ? (
+                                              <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                                            ) : (
+                                              btnUI.icon
+                                            )}
+                                            {btnUI.text}
+                                          </Button>
                                         )}
-                                      </p>
+                                        {leg.status === "entregado" &&
+                                          onSettleClick && (
+                                            <Button
+                                              size="sm"
+                                              className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[9px] uppercase tracking-widest shadow-lg shadow-emerald-500/20 haptic-press"
+                                              onClick={() =>
+                                                onSettleClick(
+                                                  leg as unknown as TripLeg,
+                                                  localTrip,
+                                                )
+                                              }
+                                            >
+                                              <Wallet className="h-3.5 w-3.5 mr-1.5" />{" "}
+                                              LIQUIDAR OP.
+                                            </Button>
+                                          )}
+                                      </div>
                                     </div>
                                   </div>
-                                  {leg.status === "liquidado" && (
-                                    <div className="mt-4 p-4 bg-emerald-50 dark:bg-emerald-950/20 rounded-xl border border-emerald-100 dark:border-emerald-900/30 flex flex-wrap gap-6 items-center justify-between shadow-sm">
+
+                                  <div className="border-t border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-slate-900/30 p-4 px-6 relative z-10">
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                                       <div className="space-y-1">
-                                        <span className="text-[9px] font-black uppercase text-emerald-600/80 dark:text-emerald-400/80 tracking-widest">
-                                          Total Liquidado a Operador
-                                        </span>
-                                        <p className="text-lg font-mono font-black text-emerald-700 dark:text-emerald-400">
+                                        <Label className="text-[9px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-1">
+                                          <CalendarDays className="h-3 w-3" />{" "}
+                                          Inicio
+                                        </Label>
+                                        <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                          {leg.start_date
+                                            ? format(
+                                                new Date(leg.start_date),
+                                                "dd MMM yy, HH:mm",
+                                                { locale: es },
+                                              )
+                                            : "Pendiente"}
+                                        </p>
+                                      </div>
+                                      <div className="space-y-1">
+                                        <Label className="text-[9px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-1">
+                                          <CalendarDays className="h-3 w-3" />{" "}
+                                          Fin
+                                        </Label>
+                                        <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                          {leg.actual_arrival
+                                            ? format(
+                                                new Date(leg.actual_arrival),
+                                                "dd MMM yy, HH:mm",
+                                                { locale: es },
+                                              )
+                                            : "Pendiente"}
+                                        </p>
+                                      </div>
+                                      <div className="space-y-1">
+                                        <Label className="text-[9px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-1">
+                                          <Gauge className="h-3 w-3" /> Odo.
+                                          Inicial
+                                        </Label>
+                                        <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                          {leg.odometro_inicial
+                                            ? `${leg.odometro_inicial} km`
+                                            : "N/A"}
+                                        </p>
+                                      </div>
+                                      <div className="space-y-1">
+                                        <Label className="text-[9px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-1">
+                                          <DollarSign className="h-3 w-3" />{" "}
+                                          Anticipos / Vales
+                                        </Label>
+                                        <p
+                                          className={cn(
+                                            "text-sm font-mono font-black",
+                                            (leg.total_anticipos || 0) > 0
+                                              ? "text-amber-600 dark:text-amber-400"
+                                              : "text-slate-700 dark:text-slate-300",
+                                          )}
+                                        >
                                           {formatCurrency(
-                                            leg.monto_neto_pagado || 0,
+                                            leg.total_anticipos || 0,
                                           )}
                                         </p>
                                       </div>
-                                      <div className="flex gap-6 text-[10px] font-bold text-slate-500 dark:text-slate-400">
-                                        <div className="flex flex-col">
-                                          <span className="uppercase text-[8px] text-slate-400">
-                                            Base / Bono
+                                    </div>
+                                    {leg.status === "liquidado" && (
+                                      <div className="mt-4 p-4 bg-emerald-50 dark:bg-emerald-950/20 rounded-xl border border-emerald-100 dark:border-emerald-900/30 flex flex-wrap gap-6 items-center justify-between shadow-sm">
+                                        <div className="space-y-1">
+                                          <span className="text-[9px] font-black uppercase text-emerald-600/80 dark:text-emerald-400/80 tracking-widest">
+                                            Total Liquidado a Operador
                                           </span>
-                                          <span className="font-mono text-slate-600 dark:text-slate-300">
+                                          <p className="text-lg font-mono font-black text-emerald-700 dark:text-emerald-400">
                                             {formatCurrency(
-                                              leg.monto_sueldo || 0,
+                                              leg.monto_neto_pagado || 0,
                                             )}
-                                          </span>
+                                          </p>
                                         </div>
-                                        <div className="flex flex-col">
-                                          <span className="uppercase text-[8px] text-slate-400">
-                                            Maniobras
-                                          </span>
-                                          <span className="font-mono text-slate-600 dark:text-slate-300">
-                                            {formatCurrency(
-                                              leg.monto_maniobras || 0,
-                                            )}
-                                          </span>
+                                        <div className="flex gap-6 text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                                          <div className="flex flex-col">
+                                            <span className="uppercase text-[8px] text-slate-400">
+                                              Base / Bono
+                                            </span>
+                                            <span className="font-mono text-slate-600 dark:text-slate-300">
+                                              {formatCurrency(
+                                                leg.monto_sueldo || 0,
+                                              )}
+                                            </span>
+                                          </div>
+                                          <div className="flex flex-col">
+                                            <span className="uppercase text-[8px] text-slate-400">
+                                              Maniobras
+                                            </span>
+                                            <span className="font-mono text-slate-600 dark:text-slate-300">
+                                              {formatCurrency(
+                                                leg.monto_maniobras || 0,
+                                              )}
+                                            </span>
+                                          </div>
                                         </div>
                                       </div>
-                                    </div>
-                                  )}
-                                </div>
-                              </CardContent>
-                            </Card>
-                          );
-                        })}
+                                    )}
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            );
+                          },
+                        )}
                       </div>
                     </TabsContent>
 
@@ -967,13 +991,12 @@ export function TripDetailsModal({
                                   <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
                                 ) : (
                                   <Save className="h-3.5 w-3.5 mr-1.5" />
-                                )}
+                                )}{" "}
                                 Guardar
                               </Button>
                             </div>
                           )}
                         </CardHeader>
-
                         <CardContent className="p-6 md:p-8">
                           {isEditing ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-amber-50 dark:bg-amber-950/20 p-6 sm:p-8 rounded-2xl border border-amber-200 dark:border-amber-900/50 shadow-inner">
@@ -1055,7 +1078,6 @@ export function TripDetailsModal({
                                     )}
                                   </span>
                                 </div>
-
                                 <div className="bg-emerald-600 dark:bg-emerald-500 text-white p-5 rounded-xl flex justify-between items-center shadow-lg mt-6 relative overflow-hidden">
                                   <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
                                     <Wallet className="h-20 w-20" />
@@ -1068,13 +1090,11 @@ export function TripDetailsModal({
                                   </span>
                                 </div>
                               </div>
-
-                              {/* 🚀 CALL TO ACTION FACTURACIÓN 4.0 */}
                               <div className="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-2xl border border-slate-200 dark:border-white/10 flex flex-col sm:flex-row items-center justify-between gap-6 mt-8 shadow-sm">
                                 <div className="text-left">
                                   <h4 className="text-brand-navy dark:text-blue-400 font-black text-sm uppercase tracking-tight flex items-center gap-2">
-                                    <FileText className="h-5 w-5" />
-                                    Emisión Factura Ingreso (CFDI 4.0)
+                                    <FileText className="h-5 w-5" /> Emisión
+                                    Factura Ingreso (CFDI 4.0)
                                   </h4>
                                   <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 max-w-sm leading-relaxed mt-2">
                                     Genera la factura real del servicio
@@ -1095,7 +1115,7 @@ export function TripDetailsModal({
                                       isStamping ||
                                       (!localUuid &&
                                         !finalUuid &&
-                                        !trip.uuid_fiscal)
+                                        !localTrip.uuid_fiscal)
                                     }
                                     onClick={() => {
                                       if (finalUuid) {
@@ -1105,17 +1125,15 @@ export function TripDetailsModal({
                                         );
                                       } else {
                                         const uuidToRelate =
-                                          localUuid || trip.uuid_fiscal;
-
+                                          localUuid || localTrip.uuid_fiscal;
                                         if (!uuidToRelate) {
                                           toast.error(
                                             "Error: No se encontró el UUID de la Carta Porte original.",
                                           );
                                           return;
                                         }
-
                                         handleStampFinal(
-                                          trip.id,
+                                          localTrip.id,
                                           uuidToRelate,
                                           async (responseData: any) => {
                                             const generatedFinalUuid =
@@ -1128,7 +1146,7 @@ export function TripDetailsModal({
                                                 true,
                                               );
                                             }
-                                            await forceUIRefresh(); // 🚀 Forzamos reactividad
+                                            await refreshLocalTrip();
                                           },
                                         );
                                       }
@@ -1145,7 +1163,6 @@ export function TripDetailsModal({
                                       ? "Descargar CFDI Final"
                                       : "Timbrar Factura Final"}
                                   </Button>
-
                                   {finalUuid && (
                                     <Button
                                       variant="outline"
@@ -1180,7 +1197,9 @@ export function TripDetailsModal({
                           size="sm"
                           variant="outline"
                           className="h-9 border-brand-navy dark:border-blue-500/50 text-brand-navy dark:text-blue-400 font-black uppercase tracking-widest text-[9px] hover:bg-blue-50 dark:hover:bg-blue-900/20 shadow-sm haptic-press"
-                          onClick={() => onUpdateStatusClick?.(trip, activeLeg)}
+                          onClick={() =>
+                            onUpdateStatusClick?.(localTrip, activeLeg)
+                          }
                         >
                           <Edit2 className="h-3.5 w-3.5 mr-2" /> Insertar
                           Novedad
@@ -1244,6 +1263,120 @@ export function TripDetailsModal({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* 🚀 ALERT DIALOG PARA CIERRE DE VACÍO */}
+      <AlertDialog open={showEmptyDialog} onOpenChange={setShowEmptyDialog}>
+        <AlertDialogContent className="w-[95vw] sm:max-w-md p-0 overflow-hidden border-none shadow-2xl rounded-2xl bg-white dark:bg-brand-navy">
+          <AlertDialogHeader className="p-6 bg-emerald-50 dark:bg-emerald-900/20 border-b border-emerald-100 dark:border-emerald-800/30">
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-full bg-emerald-100 dark:bg-emerald-800/50 flex items-center justify-center shadow-inner border border-emerald-200 dark:border-emerald-700">
+                <Flag className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div className="text-left">
+                <AlertDialogTitle className="text-xl font-black text-emerald-800 dark:text-emerald-400 uppercase tracking-tighter">
+                  Finalizar Viaje
+                </AlertDialogTitle>
+                <AlertDialogDescription className="text-[10px] font-bold uppercase tracking-widest text-emerald-600/70 dark:text-emerald-500 mt-1">
+                  Confirmar Entrega de Equipo Vacío
+                </AlertDialogDescription>
+              </div>
+            </div>
+          </AlertDialogHeader>
+          <div className="p-6 space-y-5">
+            <p className="text-sm font-medium text-slate-600 dark:text-slate-300 leading-relaxed">
+              El equipo de arrastre será desenganchado y pasará a estatus{" "}
+              <b>Disponible</b> para la asignación de nuevos viajes.
+            </p>
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                Patio / Terminal de Entrega *
+              </Label>
+              <Input
+                placeholder="Ej. Patio CCS, Terminal ICAVE..."
+                value={emptyTerminal}
+                onChange={(e) => setEmptyTerminal(e.target.value)}
+                className="h-12 font-bold uppercase bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-white/10"
+                autoFocus
+              />
+            </div>
+          </div>
+          <AlertDialogFooter className="p-6 bg-slate-50/80 dark:bg-slate-950/50 border-t border-slate-100 dark:border-white/5">
+            <AlertDialogCancel
+              onClick={() => setShowEmptyDialog(false)}
+              className="h-11 font-black uppercase tracking-widest text-[10px]"
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                submitEmptyReturn();
+              }}
+              disabled={!emptyTerminal.trim() || finishingLeg}
+              className="h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase tracking-widest text-[10px] shadow-md border-none"
+            >
+              {finishingLeg ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-4 w-4 mr-2" />
+              )}{" "}
+              Confirmar Entrega
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* 🚀 ALERT DIALOG PARA DESHACER FASE */}
+      <AlertDialog open={showUndoDialog} onOpenChange={setShowUndoDialog}>
+        <AlertDialogContent className="w-[95vw] sm:max-w-md p-0 overflow-hidden border-none shadow-2xl rounded-2xl bg-white dark:bg-brand-navy">
+          <AlertDialogHeader className="p-6 bg-rose-50 dark:bg-rose-900/20 border-b border-rose-100 dark:border-rose-800/30">
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-full bg-rose-100 dark:bg-rose-800/50 flex items-center justify-center shadow-inner border border-rose-200 dark:border-rose-700">
+                <Undo className="h-6 w-6 text-rose-600 dark:text-rose-400" />
+              </div>
+              <div className="text-left">
+                <AlertDialogTitle className="text-xl font-black text-rose-800 dark:text-rose-400 uppercase tracking-tighter">
+                  Reversión Operativa
+                </AlertDialogTitle>
+                <AlertDialogDescription className="text-[10px] font-bold uppercase tracking-widest text-rose-600/70 dark:text-rose-500 mt-1">
+                  Deshacer último movimiento
+                </AlertDialogDescription>
+              </div>
+            </div>
+          </AlertDialogHeader>
+          <div className="p-6 space-y-5">
+            <p className="text-sm font-medium text-slate-600 dark:text-slate-300 leading-relaxed">
+              {localTrip?.legs?.length === 1
+                ? "¿Estás seguro de deshacer esta fase? Al ser la primera, el viaje completo regresará a la bandeja de Planeador (Stand-by) y se liberarán los recursos."
+                : "¿Estás seguro de deshacer la última fase? El camión y operador de la fase previa volverán a estar activos en la ruta y se borrará este tramo."}
+            </p>
+          </div>
+          <AlertDialogFooter className="p-6 bg-slate-50/80 dark:bg-slate-950/50 border-t border-slate-100 dark:border-white/5">
+            <AlertDialogCancel
+              onClick={() => setShowUndoDialog(false)}
+              disabled={isUndoing}
+              className="h-11 font-black uppercase tracking-widest text-[10px]"
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                executeUndoLeg();
+              }}
+              disabled={isUndoing}
+              className="h-11 bg-rose-600 hover:bg-rose-700 text-white font-black uppercase tracking-widest text-[10px] shadow-md border-none haptic-press"
+            >
+              {isUndoing ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Undo className="h-4 w-4 mr-2" />
+              )}{" "}
+              Confirmar Reverso
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

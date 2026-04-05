@@ -8,7 +8,7 @@ from sqlalchemy import func, and_, or_
 from datetime import date, timedelta
 
 from app.models import models
-from app.models.models import RecordStatus, TripLegType
+from app.models.models import RecordStatus, TripStatus, TripLegType
 from app.schemas import trips as schemas
 
 
@@ -146,7 +146,7 @@ def update_trip_status(
     if trip.legs:
         active_leg = trip.legs[-1]
 
-    #  PROTECCIÓN DE FASE 2: Misma lógica, mantener vivo el viaje padre
+    #  PROTECCIÓN DE FASE 2: Misma lógica, mantener vivo el viaje padre
     if status == models.TripStatus.ENTREGADO:
         if active_leg and active_leg.leg_type == "entrega_vacio":
             trip.status = status
@@ -174,7 +174,7 @@ def update_trip_status(
         if trip.status == models.TripStatus.CERRADO:
             trip.closed_at = datetime.utcnow()
 
-        #  LIBERACIÓN DE UNIDADES INTELIGENTE
+        #  LIBERACIÓN DE UNIDADES INTELIGENTE
         # Solo liberamos chasis y dolly si el viaje se terminó (fase vacía completada)
         if trip.status in [models.TripStatus.ENTREGADO, models.TripStatus.CERRADO]:
             unit_ids_to_free = [
@@ -217,18 +217,32 @@ def update_trip_status(
     return trip
 
 
-def update_trip(db: Session, trip_id: int, trip_in: schemas.TripUpdate):
+def update_trip(db: Session, trip_id: int, trip_update_data: dict):
     db_trip = db.query(models.Trip).filter(models.Trip.id == trip_id).first()
     if not db_trip:
         return None
 
-    update_data = trip_in.model_dump(exclude_unset=True)
+    # 1. Asignamos los datos (Remolques, Booking, Pesos, etc.) al Viaje Maestro
+    for key, value in trip_update_data.items():
+        if hasattr(db_trip, key):
+            setattr(db_trip, key, value)
 
-    for field, value in update_data.items():
-        setattr(db_trip, field, value)
+    # 2.  LA PIEZA FALTANTE: Bloquear los remolques que se acaban de asignar
+    unit_ids_to_block = []
+    if "remolque_1_id" in trip_update_data and trip_update_data["remolque_1_id"]:
+        unit_ids_to_block.append(trip_update_data["remolque_1_id"])
+    if "dolly_id" in trip_update_data and trip_update_data["dolly_id"]:
+        unit_ids_to_block.append(trip_update_data["dolly_id"])
+    if "remolque_2_id" in trip_update_data and trip_update_data["remolque_2_id"]:
+        unit_ids_to_block.append(trip_update_data["remolque_2_id"])
 
-    db_trip.last_update = datetime.utcnow()
-    db.add(db_trip)
+    # Si vienen IDs en el payload, los pasamos a EN_RUTA
+    if unit_ids_to_block:
+        db.query(models.Unit).filter(
+            models.Unit.id.in_(unit_ids_to_block),
+            models.Unit.record_status != RecordStatus.ELIMINADO,
+        ).update({"status": models.UnitStatus.EN_RUTA}, synchronize_session=False)
+
     db.commit()
     db.refresh(db_trip)
     return db_trip
@@ -300,15 +314,13 @@ def add_timeline_event(
         trip.legs[-1] if trip.legs else None,
     )
 
-    # 🚀 MAPEO SEGURO DE ESTADOS (Frontend -> ENUM PostgreSQL)
-    # Si manda un estado válido como "detenido" o "accidente", lo respetamos.
-    # Si manda algo como "en_camino_origen", lo traducimos al estado padre: "en_transito".
+    #  MAPEO SEGURO DE ESTADOS (Frontend -> ENUM PostgreSQL)
     status_db_validos = ["detenido", "retraso", "accidente", "bloqueado", "entregado"]
     mapped_status = (
         payload.status if payload.status in status_db_validos else "en_transito"
     )
 
-    #  PROTECCIÓN DE FASE 2: Si reportan "entregado" (Llegó al cliente)
+    #  PROTECCIÓN DE FASE 2: Si reportan "entregado" (Llegó al cliente)
     if payload.status == "entregado":
         # Solo cerramos el viaje completo si la fase actual es el retorno de vacío
         if active_leg and active_leg.leg_type == "entrega_vacio":
@@ -316,7 +328,6 @@ def add_timeline_event(
         else:
             trip.status = "en_transito"
     else:
-        # Asignamos el estado mapeado en lugar del string crudo del frontend
         trip.status = mapped_status
 
     trip.last_update = datetime.utcnow()
@@ -325,7 +336,6 @@ def add_timeline_event(
         trip.terminal_entrega_vacio = payload.terminal_entrega_vacio
 
     if active_leg:
-        # El tramo también respeta el ENUM
         if payload.status == "entregado":
             active_leg.status = "entregado"
         else:
@@ -351,12 +361,12 @@ def add_timeline_event(
                 if hasattr(unidad, "nivel_combustible_litros"):
                     unidad.nivel_combustible_litros = payload.combustible_litros
 
-        # 🚀 LA BITÁCORA SÍ GUARDA EL TEXTO ORIGINAL DEL EVENTO PARA EL HISTORIAL
+        #  LA BITÁCORA SÍ GUARDA EL TEXTO ORIGINAL DEL EVENTO PARA EL HISTORIAL
         db_event = models.TripTimelineEvent(
             trip_leg_id=active_leg.id,
             time=datetime.utcnow(),
             event=f"{payload.status.replace('_', ' ').title()} en {payload.location}",
-            event_type=payload.status,  # Aquí sí se permite texto libre "en_camino_origen"
+            event_type=payload.status,
             location=payload.location,
             lat=payload.lat,
             lng=payload.lng,
@@ -407,7 +417,7 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
     is_ruta = leg.leg_type == models.TripLegType.RUTA
     is_full = (trip.dolly_id is not None) or (trip.remolque_2_id is not None)
 
-    # 🚀 REGLA 4: DISTANCIA REAL VS ESTIMADA
+    #  REGLA 4: DISTANCIA REAL VS ESTIMADA
     if (
         leg.odometro_final
         and leg.odometro_inicial
@@ -419,7 +429,7 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
             trip.tariff.distancia_km if trip.tariff and trip.tariff.distancia_km else 0
         )
 
-    # 🚀 Filtramos solo los vales activos asignados a este tramo específico
+    #  Filtramos solo los vales activos asignados a este tramo específico
     fuel_logs = (
         db.query(models.FuelLog)
         .filter(
@@ -442,7 +452,7 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
 
     conceptos = []
 
-    #  Lógica si es CARRETERA (La Matemática de Gustavo)
+    #  Lógica si es CARRETERA (La Matemática de Gustavo)
     if is_ruta:
         vales_diesel = [f for f in fuel_logs if f.tipo_combustible == "diesel"]
         consumo_real_litros = sum(f.litros for f in vales_diesel)
@@ -479,13 +489,9 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
                 )
             )
 
-        # 🚀 FASE 2 RESUELTA:
-        # Aquí eliminamos el código que inyectaba `trip.tarifa_base`.
-        # El sueldo en ruta empieza en 0 para que Gustavo lo asigne en la UI.
-
-    #  Lógica si es MOVIMIENTO LOCAL (Patio o Vacío)
+    #  Lógica si es MOVIMIENTO LOCAL (Patio o Vacío)
     else:
-        # FASE 4: Bonos Fijos por Configuración de maniobra local (esto se mantiene)
+        # FASE 4: Bonos Fijos por Configuración de maniobra local
         bono_movimiento = 300.0 if is_full else 200.0
         tipo_mov_str = (
             "Mov. Patio"
@@ -504,9 +510,6 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
                 esAutomatico=True,
             )
         )
-
-    # 🚀 FASE 3 RESUELTA:
-    # Se eliminó la deducción automática de `leg.anticipo_casetas`.
 
     # DEDUCCIONES (Del Tramo) - SÓLO APLICAN VIÁTICOS Y COMBUSTIBLE EXTRA
     if leg.anticipo_viaticos > 0:
@@ -579,7 +582,7 @@ def close_trip_settlement(
     leg.saldo_operador = payload.neto_a_pagar
     leg.actual_arrival = datetime.utcnow()
 
-    # 🚀 NUEVO: Guardar el odómetro en el tramo y en el camión
+    #  NUEVO: Guardar el odómetro en el tramo y en el camión
     if payload.odometro_final:
         leg.odometro_final = payload.odometro_final
         if leg.unit:
@@ -697,22 +700,36 @@ def create_next_leg(db: Session, trip_id: str, payload: schemas.TripLegCreate):
     return trip
 
 
-def settle_trip_legs_batch(db: Session, leg_ids: list[int], total_pago: float):
-    legs = db.query(models.TripLeg).filter(models.TripLeg.id.in_(leg_ids)).all()
+# =========================================================
+#  LA VERDADERA MAGIA (LIQUIDACIÓN POR LOTE ACTUALIZADA)
+# =========================================================
+
+
+def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload):
+    legs = db.query(models.TripLeg).filter(models.TripLeg.id.in_(payload.leg_ids)).all()
     if not legs:
         return None
 
     trips_to_check = set()
+    num_legs = len(legs)
 
     for leg in legs:
         leg.status = "liquidado"
-        leg.saldo_operador = total_pago / len(legs)
+
+        # Desglose financiero para los reportes (Dividido equitativamente)
+        leg.monto_sueldo = payload.monto_sueldo / num_legs
+        leg.monto_bonos = payload.monto_bonos / num_legs
+        leg.monto_maniobras = payload.monto_maniobras / num_legs
+        leg.monto_penalizaciones = payload.monto_penalizaciones / num_legs
+
+        leg.saldo_operador = payload.neto_a_pagar / num_legs
+        leg.monto_neto_pagado = payload.neto_a_pagar / num_legs
         leg.actual_arrival = datetime.utcnow()
 
         event = models.TripTimelineEvent(
             trip_leg_id=leg.id,
             time=datetime.utcnow(),
-            event=f"Tramo Liquidado en Lote. Saldo acreditado: ${(total_pago/len(legs)):,.2f}",
+            event=f"Tramo Liquidado en Lote. Saldo acreditado: ${(payload.neto_a_pagar/num_legs):,.2f} (Desc. Auditoría: ${(payload.monto_penalizaciones/num_legs):,.2f})",
             event_type="success",
         )
         db.add(event)
@@ -729,6 +746,34 @@ def settle_trip_legs_batch(db: Session, leg_ids: list[int], total_pago: float):
             trip.status = "cerrado"
             trip.closed_at = func.now()
 
+            #  LIBERAR RECURSOS (UNIDADES Y OPERADORES) AL TERMINAR EL VIAJE
+            unit_ids_to_free = [trip.remolque_1_id, trip.dolly_id, trip.remolque_2_id]
+            operator_ids_to_free = []
+
+            for l in trip.legs:
+                if l.unit_id:
+                    unit_ids_to_free.append(l.unit_id)
+                if l.operator_id:
+                    operator_ids_to_free.append(l.operator_id)
+
+            unit_ids_to_free = list(
+                set([uid for uid in unit_ids_to_free if uid is not None])
+            )
+            operator_ids_to_free = list(
+                set([oid for oid in operator_ids_to_free if oid is not None])
+            )
+
+            if unit_ids_to_free:
+                db.query(models.Unit).filter(
+                    models.Unit.id.in_(unit_ids_to_free)
+                ).update({"status": "disponible"}, synchronize_session=False)
+
+            if operator_ids_to_free:
+                db.query(models.Operator).filter(
+                    models.Operator.id.in_(operator_ids_to_free)
+                ).update({"status": "activo"}, synchronize_session=False)
+
+            #  CREACIÓN DE CXC
             existing_cxc = (
                 db.query(models.ReceivableInvoice)
                 .filter(models.ReceivableInvoice.viaje_id == trip.id)
@@ -766,7 +811,7 @@ def settle_trip_legs_batch(db: Session, leg_ids: list[int], total_pago: float):
 
     db.commit()
     return {
-        "message": "Liquidación completada",
+        "message": "Liquidación completada y Recursos Liberados",
         "legs_procesados": len(legs),
         "cxc_generadas": cxc_creadas,
     }
@@ -792,13 +837,12 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
     total_fuel_cost = 0.0
     total_consumo_esperado = 0.0
     alertas = []
-    legs_sin_ticket = []  # 🚀 Agregado para que no falle el frontend
+    legs_sin_ticket = []
 
     for leg in legs:
         distancia = 0.0
         is_ruta = leg.leg_type == models.TripLegType.RUTA
 
-        # 🚀 REGLA GUSTAVO: Usa el Odómetro de la Auditoría si existe
         if (
             leg.odometro_final
             and leg.odometro_inicial
@@ -821,7 +865,6 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
                 (distancia / rendimiento) if distancia > 0 else 0.0
             )
 
-            # Filtramos solo los vales activos de diésel
             fuel_logs_activos = [
                 f
                 for f in leg.fuel_logs
@@ -835,16 +878,13 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
                 total_real_liters += f.litros
                 total_fuel_cost += f.litros * f.precio_por_litro
 
-    # Prevenir división por cero si no hay vales pero sí hay kms
     precio_promedio = (
         (total_fuel_cost / total_real_liters) if total_real_liters > 0 else 24.50
     )
 
-    # 🚀 REGLA GUSTAVO: Diferencia Real
     diferencia_litros = total_real_liters - total_consumo_esperado
 
     deduccion_combustible = 0.0
-    # Si quemó más de la tolerancia permitida
     if diferencia_litros > (total_consumo_esperado * 0.05):
         deduccion_combustible = diferencia_litros * precio_promedio
 
@@ -938,3 +978,25 @@ def undo_last_leg(db: Session, trip_id: str):
 
     db.refresh(trip)
     return trip
+
+
+def reset_leg_audit(db: Session, leg_id: int):
+    leg = db.query(models.TripLeg).filter(models.TripLeg.id == leg_id).first()
+    if not leg:
+        return None
+
+    # Limpiamos el odómetro final para que la fase vuelva a pedir auditoría
+    leg.odometro_final = None
+
+    # Registramos en la bitácora que la auditoría fue anulada
+    event = models.TripTimelineEvent(
+        trip_leg_id=leg.id,
+        time=datetime.utcnow(),
+        event="Auditoría de combustible revertida por el usuario. Fase pendiente de conciliación.",
+        event_type="info",
+    )
+    db.add(event)
+
+    db.commit()
+    db.refresh(leg)
+    return leg

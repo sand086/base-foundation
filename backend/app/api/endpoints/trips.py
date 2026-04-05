@@ -17,8 +17,6 @@ from pathlib import Path
 from fastapi.responses import Response
 from jinja2 import Environment, FileSystemLoader
 
-from pydantic import BaseModel
-
 try:
     from weasyprint import HTML
 except Exception as e:
@@ -36,7 +34,6 @@ def read_trips(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
 @router.get("/{trip_id}", response_model=schemas.TripResponse)
 def read_trip(trip_id: int, db: Session = Depends(get_db)):
     """Obtiene el detalle completo de un solo viaje"""
-    # Usamos str(trip_id) porque tu función get_trip en el CRUD espera un string
     trip = crud.get_trip(db, str(trip_id))
     if not trip:
         raise HTTPException(status_code=404, detail="Viaje no encontrado")
@@ -48,7 +45,7 @@ def create_trip(
     trip: schemas.TripCreate,
     db: Session = Depends(get_db),
 ):
-    # 1. Validar que la unidad del primer tramo exista (SOLO SI MANDAN TRAMO)
+    # 1. Validar que la unidad del primer tramo exista
     if trip.initial_leg and trip.initial_leg.unit_id:
         unit = (
             db.query(models.Unit)
@@ -73,7 +70,7 @@ def create_trip(
 
 @router.patch("/{trip_id}/status", response_model=schemas.TripResponse)
 def update_status(
-    trip_id: int,  # Cambiado a int
+    trip_id: int,
     status: str,
     location: str = None,
     db: Session = Depends(get_db),
@@ -94,67 +91,44 @@ def delete_trip_endpoint(trip_id: str, db: Session = Depends(get_db)):
     return {"message": "Viaje eliminado correctamente"}
 
 
+# endpoints/trips.py
 @router.put("/{trip_id}", response_model=schemas.TripResponse)
-def update_trip(
-    trip_id: int, trip_in: schemas.TripUpdate, db: Session = Depends(get_db)
+def update_trip_endpoint(
+    trip_id: int, payload: schemas.TripUpdate, db: Session = Depends(get_db)
 ):
-    # Ya puedes usar la función update_trip normal si la tienes en tu crud.
-    trip = crud.update_trip(db, trip_id, trip_in)
-    if not trip:
+    # Convertimos el payload a dict excluyendo valores no enviados (unset)
+    update_data = payload.dict(exclude_unset=True)
+
+    # 🚀 Aquí se guardan los remolques en el Trip Maestro
+    updated_trip = crud.update_trip(
+        db=db, trip_id=trip_id, trip_update_data=update_data
+    )
+
+    if not updated_trip:
         raise HTTPException(status_code=404, detail="Viaje no encontrado")
-    return trip
+
+    return updated_trip
 
 
+# 🚀 RUTA CLAVE: AÑADIR A BITÁCORA Y FINALIZAR
 @router.post("/{trip_id}/timeline", response_model=schemas.TripResponse)
 def create_timeline_event(
     trip_id: int,
     payload: schemas.TripTimelineEventCreatePayload,
     db: Session = Depends(get_db),
 ):
-    # 1. Guardamos el evento histórico normal
+    # 🚀 REGLA DE ARQUITECTURA: Dejamos que crud.add_timeline_event
+    # se encargue de TODO (Liberar unidades, actualizar odómetros, etc.)
+    # Ya lo blindamos en crud.py, no lo volvemos a hacer aquí para evitar conflictos de sesión.
     trip = crud.add_timeline_event(db, trip_id, payload)
     if not trip:
         raise HTTPException(status_code=404, detail="Viaje no encontrado")
 
-    #  2. ACTUALIZACIÓN AUTOMÁTICA DEL TRACTOCAMIÓN (UNIDAD)
-    # Buscamos cuál es el tramo (leg) que está en tránsito actualmente
-    active_leg = next(
-        (
-            leg
-            for leg in trip.legs
-            if leg.status not in ["entregado", "cerrado", "liquidado"]
-        ),
-        None,
-    )
-
-    if active_leg and active_leg.unit:
-        unidad = active_leg.unit
-
-        # Si el monitorista mandó el Odómetro, se lo actualizamos al camión
-        if payload.odometro:
-            # Lo guardamos en el tramo
-            active_leg.odometro_final = payload.odometro
-
-            # NOTA: Asegúrate de tener una columna "odometro" en tu tabla "units"
-            if hasattr(unidad, "odometro"):
-                unidad.odometro = payload.odometro
-
-        # Si mandó combustible, lo guardamos en la unidad (si tienes esos campos)
-        if payload.combustible_porcentaje:
-            if hasattr(unidad, "nivel_combustible_porcentaje"):
-                unidad.nivel_combustible_porcentaje = payload.combustible_porcentaje
-
-        if payload.combustible_litros:
-            if hasattr(unidad, "nivel_combustible_litros"):
-                unidad.nivel_combustible_litros = payload.combustible_litros
-
-    db.commit()
-    db.refresh(trip)
     return trip
 
 
 # =========================================================
-# RUTAS DE LIQUIDACIÓN (Ahora apuntan al TRAMO / LEG)
+# RUTAS DE LIQUIDACIÓN
 # =========================================================
 
 
@@ -213,33 +187,26 @@ jinja_env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
 
 @router.post("/legs/{leg_id}/settle")
 def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(get_db)):
-    # 1. Buscar el tramo
+    # Legacy Single Settle
     leg = db.query(models.TripLeg).filter(models.TripLeg.id == leg_id).first()
     if not leg:
         raise HTTPException(status_code=404, detail="Tramo no encontrado")
 
-    # 2. Guardar el saldo final a favor del operador y cerrar el tramo
     leg.status = "cerrado"
     leg.saldo_operador = data.get("neto_a_pagar", 0.0)
     db.commit()
     db.refresh(leg)
 
-    # 3. LÓGICA GUSTAVO: Verificar si ya se acabaron todas las fases
     trip = db.query(models.Trip).filter(models.Trip.id == leg.trip_id).first()
-
-    # Revisamos si TODOS los tramos están entregados, liquidados o cerrados
     all_completed = all(
         l.status in ["entregado", "cerrado", "liquidado"] for l in trip.legs
     )
-
     cxc_creada = False
 
-    # 4. Si ya acabaron todos, cerramos el viaje y CREAMOS LA FACTURA (CxC)
     if all_completed and trip.status != "cerrado":
         trip.status = "cerrado"
         trip.closed_at = func.now()
 
-        # Evitar duplicados: checar si ya existe una pre-factura para este viaje
         existing_cxc = (
             db.query(models.ReceivableInvoice)
             .filter(models.ReceivableInvoice.viaje_id == trip.id)
@@ -247,24 +214,19 @@ def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(g
         )
 
         if not existing_cxc:
-            # Cálculos Financieros Estándar de Autotransporte
             base = trip.tarifa_base or 0.0
             casetas = trip.costo_casetas or 0.0
             subtotal = base + casetas
-
-            # IVA 16% y Retención 4%
             iva = subtotal * 0.16
             retencion = subtotal * 0.04
             monto_total = subtotal + iva - retencion
 
-            # Días de crédito del cliente (por defecto 15 si no tiene asignados)
             dias_credito = 15
             if trip.client and trip.client.dias_credito:
                 dias_credito = trip.client.dias_credito
 
             fecha_vencimiento = date.today() + timedelta(days=dias_credito)
 
-            # Crear la Pre-Factura en Cuentas por Cobrar
             nueva_cxc = models.ReceivableInvoice(
                 client_id=trip.client_id,
                 sub_client_id=trip.sub_client_id,
@@ -275,7 +237,7 @@ def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(g
                 iva=iva,
                 retenciones=retencion,
                 monto_total=monto_total,
-                saldo_pendiente=monto_total,  # Inicia debiendo todo
+                saldo_pendiente=monto_total,
                 fecha_emision=date.today(),
                 fecha_vencimiento=fecha_vencimiento,
                 estatus=models.InvoiceStatus.PENDIENTE,
@@ -295,34 +257,28 @@ def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(g
 
 @router.post("/legs/{leg_id}/reopen")
 def reopen_trip_leg(leg_id: int, db: Session = Depends(get_db)):
-    # 1. Buscar el tramo
     leg = db.query(models.TripLeg).filter(models.TripLeg.id == leg_id).first()
     if not leg:
         raise HTTPException(status_code=404, detail="Tramo no encontrado")
 
-    # 2. Resetear el tramo a "En Tránsito" y borrar el saldo guardado
     leg.status = "en_transito"
     leg.saldo_operador = 0.0
-
     trip = leg.trip
 
-    # 3. Si el viaje padre se había cerrado por error, lo reabrimos
     if trip.status == "cerrado":
         trip.status = "en_transito"
         trip.closed_at = None
 
-        # 4. Magia de Reversa: Buscar la factura generada y destruirla (si no la han cobrado)
         cxc = (
             db.query(models.ReceivableInvoice)
             .filter(models.ReceivableInvoice.viaje_id == trip.id)
             .first()
         )
         if cxc:
-            # Regla de negocio: Si Tesorería ya le registró un pago, prohibimos deshacer
             if cxc.saldo_pendiente < cxc.monto_total:
                 raise HTTPException(
                     status_code=400,
-                    detail="No se puede reabrir la fase. Tesorería ya registró cobros para este viaje. Cancela los pagos primero.",
+                    detail="No se puede reabrir la fase. Tesorería ya registró cobros.",
                 )
             db.delete(cxc)
 
@@ -335,7 +291,7 @@ def generate_carta_porte(trip_id: int, db: Session = Depends(get_db)):
     if HTML is None:
         raise HTTPException(
             status_code=500,
-            detail="WeasyPrint no está instalado o faltan dependencias del sistema.",
+            detail="WeasyPrint no está instalado.",
         )
 
     trip = db.query(models.Trip).filter(models.Trip.id == trip_id).first()
@@ -354,12 +310,10 @@ def generate_carta_porte(trip_id: int, db: Session = Depends(get_db)):
             trip.legs[-1],
         )
 
-    #  EXTRACCIÓN SEGURA PARA LA CARTA CIEGA
     unidad = active_leg.unit if active_leg else None
     operador = active_leg.operator if active_leg else None
     cliente = trip.client
 
-    #  CONSTRUIMOS EL MISMO CONTEXTO PERO VERSIÓN "TRASLADO/CIEGA"
     context = {
         "rfc_emisor": "EN TRÁNSITO",
         "nombre_emisor": "DOCUMENTO OPERATIVO (CIEGA)",
@@ -383,7 +337,7 @@ def generate_carta_porte(trip_id: int, db: Session = Depends(get_db)):
         ),
         "uso_cfdi": "S01",
         "metodo_pago": "N/A",
-        "tipo_comprobante": "T (Traslado)",  # Es una ciega
+        "tipo_comprobante": "T (Traslado)",
         "moneda": "XXX",
         "tc": "1",
         "forma_pago": "N/A",
@@ -448,12 +402,11 @@ def generate_carta_porte(trip_id: int, db: Session = Depends(get_db)):
         "operador_licencia": (
             getattr(operador, "license_number", "N/A") if operador else "N/A"
         ),
-        "leyenda_legal": "DOCUMENTO DE CARÁCTER INFORMATIVO Y OPERATIVO (CARTA PORTE CIEGA). NO ES UN COMPROBANTE FISCAL.",
+        "leyenda_legal": "DOCUMENTO DE CARÁCTER INFORMATIVO Y OPERATIVO (CARTA PORTE CIEGA).",
     }
 
     try:
         template = jinja_env.get_template("carta_porte.html")
-        #  Le pasamos el CONTEXT extendido en lugar de solo trip y leg
         html_content = template.render(**context)
     except Exception as e:
         raise HTTPException(
@@ -481,24 +434,18 @@ def generate_carta_porte(trip_id: int, db: Session = Depends(get_db)):
 # =========================================================
 
 
-class BatchSettlementPayload(BaseModel):
-    leg_ids: List[int]
-    neto_a_pagar: float
-
-
 @router.post("/legs/settle-batch")
 def settle_trip_legs_batch(
-    payload: BatchSettlementPayload, db: Session = Depends(get_db)
+    payload: schemas.BatchSettlementPayload, db: Session = Depends(get_db)
 ):
-    result = crud.settle_trip_legs_batch(db, payload.leg_ids, payload.neto_a_pagar)
+    result = crud.settle_trip_legs_batch(db, payload)
     if not result:
         raise HTTPException(status_code=404, detail="No se encontraron los tramos")
     return result
 
 
 @router.post(
-    "/legs/settlement-preview",
-    response_model=schemas.BatchSettlementPreviewResponse,
+    "/legs/settlement-preview", response_model=schemas.BatchSettlementPreviewResponse
 )
 def preview_batch_settlement_endpoint(
     payload: schemas.BatchSettlementPreviewRequest, db: Session = Depends(get_db)
@@ -509,9 +456,10 @@ def preview_batch_settlement_endpoint(
     return result
 
 
+# 🚀 RUTA CLAVE: DESHACER MOVIMIENTO (CTRL+Z OPERATIVO)
 @router.post("/{trip_id}/undo-leg", response_model=schemas.TripResponse)
 def undo_trip_leg_endpoint(trip_id: int, db: Session = Depends(get_db)):
-    """Deshace el último desenganche (Me equivoqué)"""
+    """Deshace el último desenganche y libera la unidad/operador afectados."""
     trip = crud.undo_last_leg(db, str(trip_id))
     if not trip:
         raise HTTPException(
@@ -552,7 +500,6 @@ def update_timeline_event(
     if not event:
         raise HTTPException(status_code=404, detail="Evento no encontrado")
 
-    #  ACTUALIZACIÓN TOTAL DE COLUMNAS
     if "location" in payload:
         event.location = payload["location"]
     if "lat" in payload:
@@ -564,7 +511,6 @@ def update_timeline_event(
     if "status" in payload:
         event.event_type = payload["status"]
 
-    # Re-generamos el texto de visualización
     status_label = payload.get("status", "Reporte").replace("_", " ").title()
     event.event = f"{status_label} en {payload.get('location')}"
 
@@ -574,17 +520,10 @@ def update_timeline_event(
 
 @router.post("/{trip_id}/stamp-real", response_model=schemas.TripResponse)
 def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
-    """
-     FASE 2: Trigger manual o automático para generar la Carta Porte REAL
-    cuando el viaje inicia su tramo de carretera.
-    """
     from app.services.billing_service import BillingService
 
     billing = BillingService(db)
-    # Creamos el objeto de solicitud para el service
     invoice_data = schemas.ReceivableInvoiceCreate(viaje_id=trip_id, is_nominal=False)
-
-    # Genera el XML Real, Timbra ante el PAC y genera el PDF
     factura = billing.generar_factura_final_relacionada(invoice_data)
 
     if not factura:
@@ -599,10 +538,7 @@ def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
 @router.get("/{trip_id}/nom-087")
 def generate_nom_087(trip_id: int, db: Session = Depends(get_db)):
     if HTML is None:
-        raise HTTPException(
-            status_code=500,
-            detail="WeasyPrint no está instalado.",
-        )
+        raise HTTPException(status_code=500, detail="WeasyPrint no está instalado.")
 
     trip = crud.get_trip(db, str(trip_id))
     if not trip:
@@ -612,7 +548,6 @@ def generate_nom_087(trip_id: int, db: Session = Depends(get_db)):
     operador = active_leg.operator if active_leg else None
     unidad = active_leg.unit if active_leg else None
 
-    # Intentamos cargar el logo de la empresa
     logo_path = (
         Path(__file__).resolve().parents[2] / "templates" / "assets" / "logo-black.png"
     )
@@ -623,7 +558,6 @@ def generate_nom_087(trip_id: int, db: Session = Depends(get_db)):
         with open(logo_path, "rb") as img_f:
             logo_src = f"data:image/png;base64,{base64.b64encode(img_f.read()).decode('utf-8')}"
 
-    # Recuperar configuración de la empresa
     from app.models.models import SystemConfig
 
     nombre_conf = db.query(SystemConfig).filter_by(key="empresa_nombre").first()
@@ -664,38 +598,26 @@ def generate_nom_087(trip_id: int, db: Session = Depends(get_db)):
 def dispatch_trip(
     trip_id: int, payload: schemas.TripCreate, db: Session = Depends(get_db)
 ):
-    """
-    Actualiza un viaje existente (ej. creado en el Planeador) y lo despacha.
-    Actualiza los datos maestros, inyecta/actualiza su Tramo Inicial (Fase 1)
-    y cambia el estatus de las unidades y operador a EN_RUTA si corresponde.
-    """
-    # 1. Buscar el viaje padre
     trip = db.query(models.Trip).filter(models.Trip.id == trip_id).first()
     if not trip:
         raise HTTPException(status_code=404, detail="Viaje no encontrado")
 
-    # 2. Actualizar los datos generales del viaje (origen, destino, contenedores, etc.)
-    # Excluimos initial_leg para que Pydantic no intente mapearlo directo al modelo Trip
     trip_data = payload.model_dump(exclude={"initial_leg"}, exclude_unset=True)
     for key, value in trip_data.items():
         setattr(trip, key, value)
 
-    # 3. Procesar la inyección del Tramo Inicial (TripLeg)
     if payload.initial_leg:
         leg_data = payload.initial_leg
 
-        # Cálculo interno del pago (Tarifa base - anticipos entregados)
         monto_pagar = (trip.tarifa_base or 0) - (
             (leg_data.anticipo_casetas or 0)
             + (leg_data.anticipo_viaticos or 0)
             + (leg_data.anticipo_combustible or 0)
         )
 
-        # Revisamos si el viaje ya tenía un tramo creado
         existing_leg = trip.legs[0] if trip.legs else None
 
         if existing_leg:
-            # Si ya existía, lo actualizamos
             existing_leg.unit_id = leg_data.unit_id
             existing_leg.operator_id = leg_data.operator_id
             existing_leg.leg_type = leg_data.leg_type
@@ -705,7 +627,6 @@ def dispatch_trip(
             existing_leg.monto_neto_pagado = monto_pagar
             existing_leg.status = trip.status
         else:
-            # Si no existía (ej. viene 100% fresco del planeador), lo creamos
             new_leg = models.TripLeg(
                 trip_id=trip.id,
                 leg_type=leg_data.leg_type,
@@ -723,7 +644,6 @@ def dispatch_trip(
             db.add(new_leg)
             db.flush()
 
-        # 4. Bloquear y asignar recursos SOLO si el estado cambia a "en_transito"
         if trip.status == "en_transito":
             unit_ids_to_block = [
                 leg_data.unit_id,
@@ -759,3 +679,11 @@ def dispatch_trip(
     db.commit()
     db.refresh(trip)
     return trip
+
+
+@router.post("/legs/{leg_id}/reset-audit")
+def reset_audit_endpoint(leg_id: int, db: Session = Depends(get_db)):
+    leg = crud.reset_leg_audit(db, leg_id)
+    if not leg:
+        raise HTTPException(status_code=404, detail="Tramo no encontrado")
+    return {"message": "Auditoría revertida exitosamente"}
