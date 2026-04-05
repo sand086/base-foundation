@@ -185,8 +185,14 @@ const legTypeShort: Record<string, string> = {
 // =====================
 export const TripPlanner = () => {
   const navigate = useNavigate();
-  const { trips, loading, addTimelineEvent, deleteTrip, createNextLeg } =
-    useTrips();
+  const {
+    trips,
+    loading,
+    addTimelineEvent,
+    deleteTrip,
+    createNextLeg,
+    fetchTrips,
+  } = useTrips();
 
   // Solo mantenemos la vista de Tabla y Standby (Planeador)
   const [viewMode, setViewMode] = useState<"table" | "standby">("table");
@@ -846,6 +852,8 @@ export const TripPlanner = () => {
         onOpenChange={(open) => !open && setLegToRelay(null)}
         tripPadre={legToRelay?.tripPadre || null}
         onSubmit={handleNextLegSubmit}
+        // 👇 AGREGA ESTA LÍNEA AQUÍ TAMBIÉN
+        onSuccessRefresh={fetchTrips}
       />
       <TripSettlementModal
         open={!!legToSettle}

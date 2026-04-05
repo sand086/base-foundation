@@ -447,6 +447,20 @@ export interface TripTimelineEvent {
   comments?: string;
 }
 
+export interface TripTimelineEventCreatePayload {
+  status: string;
+  location: string;
+  comments?: string;
+  lat?: string;
+  lng?: string;
+  notifyClient?: boolean;
+  odometro?: number | string;
+  combustible_porcentaje?: number | string;
+  combustible_litros?: number | string;
+  terminal_entrega_vacio?: string;
+  fase_operativa?: string;
+}
+
 export interface TripLeg {
   id: number;
   trip_id: number;

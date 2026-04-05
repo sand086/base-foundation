@@ -35,7 +35,7 @@ import { checkIsFullTrip } from "@/lib/utils"; //  IMPORTAMOS NUESTRA HERRAMIENT
 
 export const StandByTrips = () => {
   //  Sacamos createNextLeg del hook para poder arrancar el viaje desde el modal
-  const { trips, loading, deleteTrip, createNextLeg } = useTrips();
+  const { trips, loading, deleteTrip, createNextLeg, fetchTrips } = useTrips();
 
   const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
   const [tripToStart, setTripToStart] = useState<Trip | null>(null); //  Estado para abrir NextLegModal
@@ -213,6 +213,8 @@ export const StandByTrips = () => {
           }
           return false;
         }}
+        // 👇 AGREGA ESTA LÍNEA (Reemplaza fetchTrips por el nombre real de tu función)
+        onSuccessRefresh={fetchTrips}
       />
 
       {/* DIALOG DE CONFIRMACIÓN DE ELIMINACIÓN */}

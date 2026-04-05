@@ -21,6 +21,30 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
   EnhancedDataTable,
   type ColumnDef,
 } from "@/components/ui/enhanced-data-table";
@@ -37,6 +61,18 @@ import {
   RotateCcw,
   RefreshCw,
   History,
+  MoreVertical,
+  Pencil,
+  Trash2,
+  Eye,
+  XCircle,
+  Save,
+  AlertTriangle,
+  ShieldCheck,
+  Truck,
+  MapPin,
+  Calendar,
+  User,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -45,13 +81,19 @@ import { useTrips } from "@/hooks/useTrips";
 import { useSystemConfig } from "@/hooks/useSystemConfig";
 import axiosClient from "@/api/axiosClient";
 
+// ============================================================================
+// INTERFACES
+// ============================================================================
 interface AuditFormData {
   litrosVales: string;
-  lecturaInicialECM: string;
-  lecturaFinalECM: string;
-  litrosConsumidosECM: string;
+  kilometrosECM: string;
+  litrosECM: string;
+  odometroFinal: string;
 }
 
+// ============================================================================
+// COMPONENTE PRINCIPAL: AUDITORÍA Y CONCILIACIÓN OPERATIVA
+// ============================================================================
 export default function CombustibleConciliacion() {
   const { trips, fetchTrips } = useTrips();
 
@@ -59,20 +101,24 @@ export default function CombustibleConciliacion() {
     useSystemConfig("tolerancia_diesel_pct");
   const { valueAsNumber: rendimientoConfig, isLoading: loadingRend } =
     useSystemConfig("rendimiento_diesel_esperado");
-  const { value: empresaRfc } = useSystemConfig("empresa_rfc");
 
   const [selectedTripId, setSelectedTripId] = useState<string>("");
   const [selectedLegId, setSelectedLegId] = useState<string>("");
 
   const [formData, setFormData] = useState<AuditFormData>({
     litrosVales: "0",
-    lecturaInicialECM: "",
-    lecturaFinalECM: "",
-    litrosConsumidosECM: "",
+    kilometrosECM: "",
+    litrosECM: "",
+    odometroFinal: "",
   });
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [isFetchingVales, setIsFetchingVales] = useState(false);
+
+  // Estados de Modales y Edición
+  const [legToReset, setLegToReset] = useState<string | null>(null);
+  const [legToView, setLegToView] = useState<any | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
 
   // 🚀 HISTÓRICO DE AUDITORÍAS: Filtramos los tramos que ya tienen un odómetro final capturado
   const auditedLegs = useMemo(() => {
@@ -101,12 +147,18 @@ export default function CombustibleConciliacion() {
     if (!activeTrip || !activeLeg) return null;
     return {
       cartaPorteId: activeTrip.public_id || `TRP-${activeTrip.id}`,
-      unidadId: activeLeg?.unit?.numero_economico || "Sin Unidad",
-      ruta: `${activeTrip.origin} → ${activeTrip.destination}`,
-      operador: activeLeg?.operator?.name || "Sin Operador",
+      unidadId: activeLeg?.unit?.numero_economico || "S/N",
+      ruta: `${activeTrip.origin} ➔ ${activeTrip.destination}`,
+      operador: activeLeg?.operator?.name || "Sin Operador Asignado",
+      configuracion: activeTrip.dolly_id ? "FULL" : "SENC",
       fechaViaje: activeTrip.start_date
-        ? new Date(activeTrip.start_date).toLocaleDateString()
+        ? new Date(activeTrip.start_date).toLocaleDateString("es-MX", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+          })
         : "N/A",
+      fase: activeLeg.leg_type.replace("_", " ").toUpperCase(),
     };
   }, [activeTrip, activeLeg]);
 
@@ -116,7 +168,6 @@ export default function CombustibleConciliacion() {
     try {
       const response = await axiosClient.get("/fuel/fuel-logs");
 
-      // Buscar vales de diésel estrictamente amarrados a este tramo y activos
       const valesDiesel = response.data.filter((log: any) => {
         return (
           log.tipo_combustible === "diesel" &&
@@ -137,11 +188,11 @@ export default function CombustibleConciliacion() {
 
       if (totalVales > 0) {
         toast.success("Suministro Sincronizado", {
-          description: `El sistema detectó ${totalVales.toFixed(2)} L en este tramo.`,
+          description: `Se detectaron ${totalVales.toFixed(2)} L en vales.`,
         });
       } else {
-        toast.warning("Sin vales detectados", {
-          description: `No hay vales de diésel para esta fase operativa.`,
+        toast.info("Sin vales detectados", {
+          description: `El tramo no tiene vales (Probable movimiento de patio).`,
         });
       }
     } catch (error) {
@@ -155,64 +206,122 @@ export default function CombustibleConciliacion() {
   const handleTripSelect = (id: string) => {
     setSelectedTripId(id);
     setSelectedLegId("");
+    setIsEditing(false);
     setFormData({
       litrosVales: "0",
-      lecturaInicialECM: "",
-      lecturaFinalECM: "",
-      litrosConsumidosECM: "",
+      kilometrosECM: "",
+      litrosECM: "",
+      odometroFinal: "",
     });
   };
 
   const handleLegSelect = async (legId: string) => {
     setSelectedLegId(legId);
-    const leg = tripLegs.find((l) => String(l.id) === legId);
-
+    setIsEditing(false);
     setFormData({
       litrosVales: "0",
-      lecturaInicialECM: leg?.odometro_inicial?.toString() || "",
-      lecturaFinalECM: leg?.odometro_final?.toString() || "",
-      litrosConsumidosECM: "",
+      kilometrosECM: "",
+      litrosECM: "",
+      odometroFinal: "",
     });
 
     await fetchValesCombustible(legId);
   };
 
-  // 🚀 LA MATEMÁTICA DE GUSTAVO
+  // 🚀 CARGAR PARA EDITAR CON EXTRACCIÓN (Regex)
+  const handleEditAudit = async (leg: any) => {
+    setSelectedTripId(String(leg.trip_id));
+    setSelectedLegId(String(leg.id));
+    setIsEditing(true);
+
+    const auditEvent = leg.timeline_events?.find(
+      (e: any) =>
+        e.location === "Conciliación de Combustible" ||
+        e.comments?.includes("Auditoría Fase"),
+    );
+
+    let kmEcmVal = "";
+    let ltEcmVal = "";
+
+    if (auditEvent && auditEvent.comments) {
+      const kmMatch = auditEvent.comments.match(/Km ECM:\s*([\d.]+)/);
+      const ltMatch = auditEvent.comments.match(/Litros ECM:\s*([\d.]+)/);
+
+      if (kmMatch) kmEcmVal = kmMatch[1];
+      if (ltMatch) ltEcmVal = ltMatch[1];
+    }
+
+    setFormData({
+      litrosVales: "0",
+      kilometrosECM: kmEcmVal,
+      litrosECM: ltEcmVal,
+      odometroFinal: String(leg.odometro_final || ""),
+    });
+
+    await fetchValesCombustible(String(leg.id));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    handleReset();
+  };
+
+  // 🚀 ELIMINAR / REVERTIR AUDITORÍA
+  const handleResetAudit = async () => {
+    if (!legToReset) return;
+    const toastId = toast.loading("Revirtiendo auditoría...");
+
+    try {
+      await axiosClient.post(`/legs/${legToReset}/reset-audit`);
+      toast.success("Auditoría Revertida", {
+        id: toastId,
+        description: "El tramo ha vuelto a estatus pendiente.",
+      });
+      await fetchTrips();
+    } catch (error) {
+      toast.error("Error al revertir", {
+        id: toastId,
+        description: "Hubo un problema comunicándose con el servidor.",
+      });
+    } finally {
+      setLegToReset(null);
+    }
+  };
+
+  // 🚀 LA MATEMÁTICA EXACTA DE GUSTAVO (Blindada contra División por Cero en Patios)
   const auditResult = useMemo(() => {
     const litrosVales = Number(formData.litrosVales) || 0;
-    const litrosConsumidosECM = Number(formData.litrosConsumidosECM) || 0;
-    const lecturaInicial = Number(formData.lecturaInicialECM) || 0;
-    const lecturaFinal = Number(formData.lecturaFinalECM) || 0;
+    const kmECM = Number(formData.kilometrosECM) || 0;
+    const litrosECM = Number(formData.litrosECM) || 0;
 
-    if (litrosConsumidosECM <= 0) return null;
+    // Evitar Infinity. Si es patio y ponen 0, el rendimiento es 0.
+    const rendimientoECM = litrosECM > 0 ? kmECM / litrosECM : 0;
+    const rendimientoReal = litrosVales > 0 ? kmECM / litrosVales : 0;
 
-    const diferenciaLitros = litrosVales - litrosConsumidosECM;
-    const kmsRecorridos =
-      lecturaFinal > lecturaInicial ? lecturaFinal - lecturaInicial : 0;
+    // Diferencia = Lo que dice el camión - Lo que dice el recibo del despachador
+    const diferenciaLitros = litrosECM - litrosVales;
+    const toleranciaPermitida = litrosECM * (tolerancePct || 0.05);
 
-    // Rendimiento Operativo: Kilómetros / Litros PAGADOS (Físicos)
-    const rendimientoKmL = litrosVales > 0 ? kmsRecorridos / litrosVales : 0;
-
-    // Tolerancia se calcula sobre lo que dictó la computadora
-    const toleranciaPermitida = litrosConsumidosECM * (tolerancePct || 0.05);
-
-    let estatus: "CONCILIADO" | "COBRO_OPERADOR" | "PENDIENTE" = "PENDIENTE";
+    let estatus: "CONCILIADO" | "COBRO_OPERADOR" = "CONCILIADO";
     let esRoboSospechado = false;
 
-    if (litrosVales > 0) {
-      if (diferenciaLitros > toleranciaPermitida) {
-        estatus = "COBRO_OPERADOR";
-        esRoboSospechado = true;
-      } else {
-        estatus = "CONCILIADO";
-      }
+    // Si cargó más en bomba de lo que el camión justifica (y excede la tolerancia)
+    if (
+      diferenciaLitros < 0 &&
+      Math.abs(diferenciaLitros) > toleranciaPermitida
+    ) {
+      estatus = "COBRO_OPERADOR";
+      esRoboSospechado = true;
     }
 
     return {
-      totalFisicoLitros: litrosVales,
-      totalDigitalLitros: litrosConsumidosECM,
+      litrosVales,
+      kmECM,
+      litrosECM,
+      rendimientoECM,
+      rendimientoReal,
       diferenciaLitros,
-      rendimientoKmL,
       toleranciaPermitida,
       estatus,
       esRoboSospechado,
@@ -226,48 +335,95 @@ export default function CombustibleConciliacion() {
   const handleReset = () => {
     setSelectedTripId("");
     setSelectedLegId("");
+    setIsEditing(false);
     setFormData({
       litrosVales: "0",
-      lecturaInicialECM: "",
-      lecturaFinalECM: "",
-      litrosConsumidosECM: "",
+      kilometrosECM: "",
+      litrosECM: "",
+      odometroFinal: "",
     });
   };
 
-  // 🚀 GUARDAR Y REGRESAR AL HISTORIAL
+  // 🚀 GUARDAR AUDITORÍA Y VOLVER A LA TABLA
   const handleAuthorizeAndClose = async () => {
-    if (!auditResult || !activeTrip || !selectedLegId) return;
+    if (!activeTrip || !selectedLegId) return;
+
+    if (!formData.odometroFinal) {
+      toast.error("Falta Odómetro Final", {
+        description:
+          "Debe ingresar el Odómetro Final de la unidad para cerrar la auditoría.",
+      });
+      return;
+    }
+
     setIsProcessing(true);
 
     try {
+      const kmECM = auditResult?.kmECM || formData.kilometrosECM || 0;
+      const ltECM = auditResult?.litrosECM || formData.litrosECM || 0;
+      const vales = auditResult?.litrosVales || formData.litrosVales || 0;
+      const rReal = auditResult?.rendimientoReal || 0;
+      const est = auditResult?.estatus || "CONCILIADO";
+      const isRobo = auditResult?.esRoboSospechado || false;
+
       await axiosClient.post(`/trips/${selectedTripId}/timeline`, {
-        status: auditResult.esRoboSospechado ? "incidencia" : "info",
+        status: isRobo ? "incidencia" : "info",
         location: "Conciliación de Combustible",
-        comments: `Auditoría Fase. Tol: ${((tolerancePct || 0.05) * 100).toFixed(1)}%. Dif: ${auditResult.diferenciaLitros.toFixed(2)}L. Rend: ${auditResult.rendimientoKmL.toFixed(2)} km/L. Ver: ${auditResult.estatus}.`,
-        odometro: formData.lecturaFinalECM
-          ? Number(formData.lecturaFinalECM)
-          : null,
-        combustible_litros: auditResult.totalFisicoLitros,
+        comments: `Auditoría Fase. Km ECM: ${kmECM}. Litros ECM: ${ltECM}. Vales: ${vales}. Rend Real: ${rReal.toFixed(2)} km/L. Ver: ${est}.`,
+        odometro: Number(formData.odometroFinal),
+        combustible_litros: vales,
       });
 
-      toast.success("Auditoría Registrada", {
-        description:
-          "Los datos se guardaron exitosamente. La deducción se aplicará en la liquidación de nómina.",
-      });
+      toast.success(
+        isEditing ? "Auditoría Actualizada" : "Auditoría Registrada",
+        {
+          description:
+            "Se aplicará automáticamente en la Liquidación del chofer.",
+        },
+      );
 
       await fetchTrips();
-      handleReset(); // Limpia y regresa a la tabla de historial
+      handleReset();
     } catch (error) {
       console.error("Error al conciliar:", error);
       toast.error("Error de Servidor", {
-        description: "No se pudo guardar el veredicto de la auditoría.",
+        description: "No se pudo guardar el veredicto.",
       });
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // Columnas para la tabla del Historial
+  // 🚀 EXTRACCIÓN DE DATOS PARA EL MODAL DE VISTA (Regex Avanzado)
+  const parsedAuditDetails = useMemo(() => {
+    if (!legToView) return null;
+    const auditEvent = legToView.timeline_events?.find(
+      (e: any) =>
+        e.location === "Conciliación de Combustible" ||
+        e.comments?.includes("Auditoría Fase"),
+    );
+    const text = auditEvent?.comments || "";
+
+    const kmMatch = text.match(/Km ECM:\s*([\d.]+)/);
+    const ltEcmMatch = text.match(/Litros ECM:\s*([\d.]+)/);
+    const valesMatch = text.match(/Vales:\s*([\d.]+)/);
+    const rendMatch = text.match(/Rend Real:\s*([\d.]+)/);
+    const verMatch = text.match(/Ver:\s*([A-Z_]+)/);
+
+    return {
+      km: kmMatch ? kmMatch[1] : "0",
+      ltEcm: ltEcmMatch ? ltEcmMatch[1] : "0",
+      vales: valesMatch ? valesMatch[1] : "0",
+      rend: rendMatch ? rendMatch[1] : "0.00",
+      veredicto: verMatch ? verMatch[1] : "N/A",
+      textOriginal: text,
+      fechaAudit: auditEvent?.time
+        ? new Date(auditEvent.time).toLocaleString("es-MX")
+        : "N/A",
+    };
+  }, [legToView]);
+
+  // Columnas para la tabla
   const auditedColumns: ColumnDef<any>[] = useMemo(
     () => [
       {
@@ -281,9 +437,9 @@ export default function CombustibleConciliacion() {
       },
       {
         key: "trip",
-        header: "Viaje / Folio",
+        header: "Folio",
         render: (trip: any) => (
-          <span className="font-bold text-brand-navy">
+          <span className="font-bold text-brand-navy dark:text-white">
             {trip?.public_id || `TRP-${trip?.id}`}
           </span>
         ),
@@ -294,7 +450,7 @@ export default function CombustibleConciliacion() {
         render: (v: string) => (
           <Badge
             variant="outline"
-            className="bg-slate-50 uppercase text-[9px] tracking-widest text-slate-600 border-slate-200"
+            className="bg-slate-50 dark:bg-white/5 uppercase text-[9px] tracking-widest text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10"
           >
             {v?.replace("_", " ")}
           </Badge>
@@ -304,23 +460,23 @@ export default function CombustibleConciliacion() {
         key: "operator",
         header: "Operador",
         render: (op: any) => (
-          <span className="font-semibold text-slate-700 text-sm">
+          <span className="font-semibold text-slate-700 dark:text-slate-300 text-xs">
             {op?.name || "N/A"}
           </span>
         ),
       },
       {
         key: "odometro_final",
-        header: "Odómetro Final",
+        header: "Odo Final",
         render: (v: number) => (
-          <span className="font-mono font-bold text-blue-600">
+          <span className="font-mono font-bold text-blue-600 dark:text-blue-400 text-xs">
             {v?.toLocaleString() || 0} km
           </span>
         ),
       },
       {
         key: "status",
-        header: "Estatus Fase",
+        header: "Estatus",
         render: (v: string) => {
           const cerrado = ["entregado", "cerrado", "liquidado"].includes(
             String(v).toLowerCase(),
@@ -330,8 +486,8 @@ export default function CombustibleConciliacion() {
               className={cn(
                 "border-none tracking-widest text-[9px] uppercase",
                 cerrado
-                  ? "bg-emerald-100 text-emerald-700"
-                  : "bg-amber-100 text-amber-700",
+                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"
+                  : "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300",
               )}
             >
               {cerrado ? "CERRADO" : "EN CURSO"}
@@ -339,98 +495,171 @@ export default function CombustibleConciliacion() {
           );
         },
       },
+      {
+        key: "acciones",
+        header: "",
+        sortable: false,
+        render: (_, row) => {
+          const isLiquidado = row.status === "liquidado";
+
+          return (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-full hover:bg-slate-100 dark:hover:bg-white/10"
+                >
+                  <MoreVertical
+                    size={16}
+                    className="text-slate-500 dark:text-slate-400"
+                  />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                className="rounded-xl border-slate-200 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl shadow-xl p-1"
+              >
+                <DropdownMenuItem
+                  onClick={() => setLegToView(row)}
+                  className="cursor-pointer font-bold uppercase text-[10px] py-2.5 px-3 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5"
+                >
+                  <Eye className="h-3.5 w-3.5 mr-2 text-slate-400" /> Ver
+                  Detalles
+                </DropdownMenuItem>
+
+                {!isLiquidado && (
+                  <>
+                    <DropdownMenuSeparator className="bg-slate-100 dark:bg-white/10 my-1" />
+                    <DropdownMenuItem
+                      onClick={() => handleEditAudit(row)}
+                      className="cursor-pointer font-bold uppercase text-[10px] py-2.5 px-3 rounded-lg text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10"
+                    >
+                      <Pencil className="h-3.5 w-3.5 mr-2" /> Editar /
+                      Recalcular
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="text-rose-600 dark:text-rose-400 focus:bg-rose-50 dark:focus:bg-rose-500/10 font-bold uppercase text-[10px] py-2.5 px-3 rounded-lg cursor-pointer"
+                      onClick={() => setLegToReset(String(row.id))}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-2" /> Eliminar Auditoría
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          );
+        },
+      },
     ],
-    [],
+    [trips],
   );
 
   return (
-    <div className="p-8 space-y-8 bg-[#F8FAFC] dark:bg-brand-navy/30 min-h-screen animate-in fade-in duration-700">
-      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
+    <div className="p-4 md:p-8 space-y-6 bg-[#F8FAFC] dark:bg-brand-navy min-h-screen animate-in fade-in duration-700">
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
         <PageHeader
-          title="Auditoría y Conciliación Operativa"
-          description="Conciliación Físico (Vales) vs Computadora (ECM) por cada fase del viaje."
-          className="heading-crisp"
+          title="Auditoría Operativa"
+          description="Conciliación de combustible físico (Vales) vs Computadora (ECM)."
+          className="mb-0"
         />
       </div>
 
-      <div className="space-y-6 max-w-6xl mx-auto pb-12">
-        {/* Header de Configuración */}
-        <div className="flex items-center justify-between bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
-          <div>
-            <h1 className="text-xl font-bold flex items-center gap-2 text-brand-navy">
-              <Calculator className="h-5 w-5 text-blue-500" /> Matemática de
-              Auditoría
-            </h1>
-            <p className="text-muted-foreground text-xs mt-1">
-              Tolerancia permitida:{" "}
-              <span className="font-bold text-slate-900">
+      <div className="space-y-4 max-w-7xl mx-auto pb-12">
+        {/* COMPACT LAYOUT: Selectores + Configuración juntos */}
+        <Card
+          className={cn(
+            "shadow-sm border-slate-200 dark:border-white/10 dark:bg-slate-900 transition-all",
+            isEditing && "border-blue-500 ring-2 ring-blue-500/20",
+          )}
+        >
+          <CardHeader className="pb-2 flex flex-col md:flex-row md:items-center justify-between border-b border-slate-100 dark:border-white/5 gap-3">
+            <div className="flex items-center gap-3">
+              <Calculator className="h-5 w-5 text-blue-500" />
+              <CardTitle className="text-sm">Panel de Selección</CardTitle>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+              <Badge
+                variant="outline"
+                className="border-slate-200 dark:border-white/10"
+              >
+                Tol:{" "}
                 {loadingTol ? (
-                  <Loader2 className="h-3 w-3 animate-spin inline" />
+                  <Loader2 className="h-2 w-2 animate-spin" />
                 ) : (
-                  `${((tolerancePct || 0.05) * 100).toFixed(1)}%`
+                  `${((tolerancePct || 0.05) * 100).toFixed(0)}%`
                 )}
-              </span>{" "}
-              | Rend. Esperado:{" "}
-              <span className="font-bold text-slate-900">
+              </Badge>
+              <Badge
+                variant="outline"
+                className="border-slate-200 dark:border-white/10"
+              >
+                Ref:{" "}
                 {loadingRend ? (
-                  <Loader2 className="h-3 w-3 animate-spin inline" />
+                  <Loader2 className="h-2 w-2 animate-spin" />
                 ) : (
                   `${rendimientoConfig || 3.2} km/L`
                 )}
-              </span>
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            onClick={handleReset}
-            className="gap-2 font-bold"
-          >
-            <RotateCcw className="h-4 w-4" /> Limpiar
-          </Button>
-        </div>
-
-        {/* Selectores */}
-        <Card className="shadow-sm border-slate-200">
-          <CardContent className="p-5 grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 rounded-xl">
-            <div className="space-y-2">
-              <Label className="font-bold text-slate-700 flex items-center gap-2">
-                <Search className="h-4 w-4 text-slate-400" /> 1. Buscar Viaje a
-                Auditar:
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50/50 dark:bg-slate-900/50 rounded-b-xl">
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-widest">
+                1. Buscar Viaje:
               </Label>
-              <Select value={selectedTripId} onValueChange={handleTripSelect}>
-                <SelectTrigger className="bg-white border-slate-300 font-medium text-brand-navy h-11 shadow-sm">
+              <Select
+                value={selectedTripId}
+                onValueChange={handleTripSelect}
+                disabled={isEditing}
+              >
+                <SelectTrigger className="bg-white dark:bg-slate-800 border-slate-200 dark:border-white/10 font-bold text-xs h-10 shadow-sm">
                   <SelectValue placeholder="Seleccione viaje..." />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-[300px]">
                   {trips
                     .filter(
                       (t) => String(t.status).toLowerCase() !== "liquidado",
                     )
-                    .map((t) => (
-                      <SelectItem key={t.id} value={String(t.id)}>
-                        {t.public_id || t.id} | {t.origin} ➔ {t.destination}
-                      </SelectItem>
-                    ))}
+                    .map((t) => {
+                      const clientName =
+                        t.client?.razon_social || "Sin Cliente";
+                      const config = t.dolly_id ? "FULL" : "SENC";
+                      return (
+                        <SelectItem
+                          key={t.id}
+                          value={String(t.id)}
+                          className="text-xs"
+                        >
+                          {t.public_id || t.id} • {clientName} • {config} •{" "}
+                          {t.origin}
+                        </SelectItem>
+                      );
+                    })}
                 </SelectContent>
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label className="font-bold text-slate-700">
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-widest">
                 2. Seleccionar Fase / Tramo:
               </Label>
               <Select
                 value={selectedLegId}
                 onValueChange={handleLegSelect}
-                disabled={!selectedTripId}
+                disabled={!selectedTripId || isEditing}
               >
-                <SelectTrigger className="bg-white border-slate-300 font-medium text-brand-navy h-11 shadow-sm">
-                  <SelectValue placeholder="Seleccione el tramo..." />
+                <SelectTrigger className="bg-white dark:bg-slate-800 border-slate-200 dark:border-white/10 font-bold text-xs h-10 shadow-sm">
+                  <SelectValue placeholder="Seleccione tramo..." />
                 </SelectTrigger>
                 <SelectContent>
                   {tripLegs.map((leg) => (
-                    <SelectItem key={leg.id} value={String(leg.id)}>
-                      Fase: {leg.leg_type.replace("_", " ").toUpperCase()} | Op:{" "}
+                    <SelectItem
+                      key={leg.id}
+                      value={String(leg.id)}
+                      className="text-xs"
+                    >
+                      {leg.leg_type.replace("_", " ").toUpperCase()} | Op:{" "}
                       {leg.operator?.name || "N/A"}
                     </SelectItem>
                   ))}
@@ -440,309 +669,438 @@ export default function CombustibleConciliacion() {
           </CardContent>
         </Card>
 
-        {/* RENDER CONDICIONAL: Si no hay fase, muestra Historial. Si hay fase, muestra Formulario */}
+        {/* 🚀 INFO DEL VIAJE (VIAJE EN CAPTURA) - Diseño Compacto y Elegante */}
+        {tripData && (
+          <div className="bg-slate-900 dark:bg-black rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 text-white shadow-xl animate-in slide-in-from-top-2">
+            <div className="flex items-center gap-4 w-full md:w-auto">
+              <div className="bg-white/10 p-2.5 rounded-xl border border-white/10">
+                <Truck className="h-5 w-5 text-blue-400" />
+              </div>
+              <div>
+                <p className="text-[9px] font-black tracking-widest text-slate-400 uppercase mb-0.5">
+                  Viaje en Captura • Fase {tripData.fase}
+                </p>
+                <p className="text-sm font-bold tracking-tight">
+                  {tripData.cartaPorteId} • {tripData.ruta}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap md:flex-nowrap gap-3 md:gap-6 text-xs font-medium bg-white/5 py-2.5 px-5 rounded-xl border border-white/10 w-full md:w-auto">
+              <div className="flex flex-col">
+                <span className="text-[8px] text-slate-400 uppercase font-black tracking-widest flex items-center gap-1">
+                  <User className="h-3 w-3" /> Operador
+                </span>
+                <span className="truncate max-w-[120px]">
+                  {tripData.operador}
+                </span>
+              </div>
+              <div className="hidden md:block w-px bg-white/20"></div>
+              <div className="flex flex-col">
+                <span className="text-[8px] text-slate-400 uppercase font-black tracking-widest flex items-center gap-1">
+                  <Gauge className="h-3 w-3" /> Unidad
+                </span>
+                <span>
+                  ECO-{tripData.unidadId} ({tripData.configuracion})
+                </span>
+              </div>
+              <div className="hidden md:block w-px bg-white/20"></div>
+              <div className="flex flex-col">
+                <span className="text-[8px] text-slate-400 uppercase font-black tracking-widest flex items-center gap-1">
+                  <Calendar className="h-3 w-3" /> Salida
+                </span>
+                <span>{tripData.fechaViaje}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* RENDER CONDICIONAL FORMULARIOS / TABLA */}
         {!tripData ? (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-4 pt-4">
-            <div className="flex items-center gap-2 px-2">
-              <History className="h-5 w-5 text-slate-400" />
-              <h3 className="font-black uppercase tracking-widest text-slate-600 text-sm">
-                Historial de Auditorías Realizadas
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-3 pt-2">
+            <div className="flex items-center gap-2 px-1">
+              <History className="h-4 w-4 text-slate-400" />
+              <h3 className="font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 text-xs">
+                Historial de Auditorías
               </h3>
             </div>
-            <Card className="border-none shadow-3xl bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl rounded-[2.5rem] overflow-hidden border border-white/20 dark:border-white/5 ring-1 ring-slate-200/50 dark:ring-white/5">
+            <Card className="border-slate-200 dark:border-white/10 shadow-sm bg-white dark:bg-slate-900 rounded-2xl overflow-hidden">
               <CardContent className="p-0">
-                <div className="[&_thead_tr]:bg-slate-100/90 [&_thead_tr]:dark:bg-slate-900/95">
-                  <EnhancedDataTable
-                    data={auditedLegs}
-                    columns={auditedColumns as any}
-                    className="liquid-glass-standard"
-                    searchPlaceholder="BUSCAR FOLIO O OPERADOR..."
-                  />
-                </div>
+                <EnhancedDataTable
+                  data={auditedLegs}
+                  columns={auditedColumns as any}
+                  className="border-none"
+                  searchPlaceholder="Buscar por folio o operador..."
+                />
               </CardContent>
             </Card>
           </div>
         ) : (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
-            <Card className="border-l-4 border-l-brand-navy shadow-sm">
-              <CardHeader className="pb-3 bg-slate-50/50">
-                <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2 text-slate-600">
-                  <FileText className="h-4 w-4" /> Resumen Operativo de la Fase
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="space-y-1">
-                    <Label className="text-[10px] uppercase font-bold text-slate-400">
-                      Folio
-                    </Label>
-                    <div className="font-mono font-bold bg-slate-100 p-2.5 rounded-lg truncate text-slate-700">
-                      {tripData.cartaPorteId}
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-[10px] uppercase font-bold text-slate-400">
-                      Unidad
-                    </Label>
-                    <div className="font-bold bg-slate-100 p-2.5 rounded-lg text-slate-700">
-                      ECO-{tripData.unidadId}
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-[10px] uppercase font-bold text-slate-400">
-                      Operador a Cargo
-                    </Label>
-                    <div className="font-bold bg-blue-50 text-blue-700 border border-blue-100 p-2.5 rounded-lg truncate">
-                      {tripData.operador}
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-[10px] uppercase font-bold text-slate-400">
-                      Ruta Asignada
-                    </Label>
-                    <div className="font-bold bg-slate-100 p-2.5 rounded-lg truncate text-slate-700 text-xs">
-                      {tripData.ruta}
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="grid md:grid-cols-2 gap-6">
-              {/* 1. Suministro Físico */}
-              <Card className="border-t-4 border-t-amber-500 shadow-sm overflow-hidden">
-                <CardHeader className="bg-amber-50 pb-4 border-b border-amber-100">
-                  <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2 text-amber-700">
-                    <Fuel className="h-4 w-4" /> 1. Suministro Físico (Vales)
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-4">
+            {/* LADO FÍSICO Y DIGITAL JUNTOS */}
+            <div className="grid md:grid-cols-2 gap-4">
+              {/* LADO FÍSICO */}
+              <Card className="border-t-4 border-t-amber-500 shadow-sm dark:bg-slate-900 dark:border-white/10">
+                <CardHeader className="bg-amber-50/50 dark:bg-amber-900/10 p-4 border-b border-amber-100 dark:border-amber-900/30">
+                  <CardTitle className="text-xs font-black uppercase tracking-widest flex items-center justify-between text-amber-700 dark:text-amber-500">
+                    <span className="flex items-center gap-2">
+                      <Fuel className="h-4 w-4" /> 1. Suministro Vales
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 text-[9px] hover:bg-amber-100 dark:hover:bg-amber-900/50"
+                      onClick={() => fetchValesCombustible(selectedLegId)}
+                      disabled={isFetchingVales}
+                    >
+                      <RefreshCw
+                        className={cn(
+                          "h-3 w-3 mr-1",
+                          isFetchingVales && "animate-spin",
+                        )}
+                      />{" "}
+                      Refrescar
+                    </Button>
                   </CardTitle>
-                  <CardDescription className="text-xs text-amber-600/70">
-                    Suma extraída automáticamente del registro de cargas.
-                  </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-6 pt-6 bg-white">
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label className="font-black uppercase tracking-widest text-slate-700 text-[10px]">
-                        Total Sincronizado
-                      </Label>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 px-3 text-[10px] font-bold uppercase tracking-widest hover:bg-amber-50"
-                        onClick={() => fetchValesCombustible(selectedLegId)}
-                        disabled={isFetchingVales || !selectedLegId}
-                      >
-                        <RefreshCw
-                          className={cn(
-                            "h-3 w-3 mr-2 text-amber-600",
-                            isFetchingVales && "animate-spin",
-                          )}
-                        />
-                        Actualizar
-                      </Button>
-                    </div>
+                <CardContent className="p-5">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+                      Total Sincronizado
+                    </Label>
                     <div className="relative">
                       <Input
                         type="text"
                         disabled
                         value={formData.litrosVales}
-                        className="pr-12 pl-4 font-mono h-14 bg-amber-50 border-amber-200 text-3xl font-black text-amber-900 shadow-inner"
+                        className="pr-12 font-mono h-12 bg-slate-50 dark:bg-slate-800 text-2xl font-black text-slate-700 dark:text-white"
                       />
-                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-amber-700/50 font-black text-xl">
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-black">
                         L
                       </span>
                     </div>
-                  </div>
-                  <Separator className="bg-amber-100" />
-                  <div className="bg-amber-500 text-white rounded-xl p-5 shadow-inner flex justify-between items-center">
-                    <span className="text-[11px] font-black uppercase tracking-widest opacity-90">
-                      Total Cobrado a Tesorería
-                    </span>
-                    <span className="text-3xl font-black font-mono">
-                      {auditResult
-                        ? auditResult.totalFisicoLitros.toFixed(1)
-                        : "0.0"}{" "}
-                      L
-                    </span>
                   </div>
                 </CardContent>
               </Card>
 
-              {/* 2. Lectura ECM */}
-              <Card className="border-t-4 border-t-blue-500 shadow-sm overflow-hidden">
-                <CardHeader className="bg-blue-50 pb-4 border-b border-blue-100">
-                  <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2 text-blue-700">
-                    <Gauge className="h-4 w-4" /> 2. Lectura ECM (Computadora)
+              {/* LADO DIGITAL (ECM) */}
+              <Card className="border-t-4 border-t-blue-500 shadow-sm dark:bg-slate-900 dark:border-white/10">
+                <CardHeader className="bg-blue-50/50 dark:bg-blue-900/10 p-4 border-b border-blue-100 dark:border-blue-900/30">
+                  <CardTitle className="text-xs font-black uppercase tracking-widest flex items-center gap-2 text-blue-700 dark:text-blue-500">
+                    <Gauge className="h-4 w-4" /> 2. Computadora (ECM)
                   </CardTitle>
-                  <CardDescription className="text-xs text-blue-600/70">
-                    Ingrese los datos reportados por la computadora de la
-                    unidad.
-                  </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4 pt-6 bg-white">
+                <CardContent className="p-5 space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label
-                        htmlFor="lecturaInicialECM"
-                        className="font-bold text-[11px] text-slate-500 uppercase tracking-widest"
-                      >
-                        Odo Inicial
+                      <Label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+                        KMs ECM *
                       </Label>
                       <Input
-                        id="lecturaInicialECM"
                         type="number"
-                        value={formData.lecturaInicialECM}
+                        placeholder="Ej. 900"
+                        value={formData.kilometrosECM}
                         onChange={(e) =>
-                          handleInputChange("lecturaInicialECM", e.target.value)
+                          handleInputChange("kilometrosECM", e.target.value)
                         }
-                        className="h-11 font-mono text-slate-600"
+                        className="h-10 font-mono font-bold dark:bg-slate-800 dark:text-white"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label
-                        htmlFor="lecturaFinalECM"
-                        className="font-bold text-[11px] text-blue-600 uppercase tracking-widest"
-                      >
-                        Odo Final *
+                      <Label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+                        Litros ECM *
                       </Label>
                       <Input
-                        id="lecturaFinalECM"
-                        type="number"
-                        value={formData.lecturaFinalECM}
-                        onChange={(e) =>
-                          handleInputChange("lecturaFinalECM", e.target.value)
-                        }
-                        className="h-11 font-mono border-blue-300 bg-blue-50/50 text-blue-900 font-bold"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2 pt-2">
-                    <Label
-                      htmlFor="litrosConsumidosECM"
-                      className="font-bold text-blue-800 uppercase tracking-widest text-[11px]"
-                    >
-                      Litros Quemados (Según ECM) *
-                    </Label>
-                    <div className="relative">
-                      <Input
-                        id="litrosConsumidosECM"
                         type="number"
                         step="0.1"
-                        value={formData.litrosConsumidosECM}
+                        placeholder="Ej. 448"
+                        value={formData.litrosECM}
                         onChange={(e) =>
-                          handleInputChange(
-                            "litrosConsumidosECM",
-                            e.target.value,
-                          )
+                          handleInputChange("litrosECM", e.target.value)
                         }
-                        className="h-14 pr-12 pl-4 border-blue-300 font-black font-mono text-3xl text-blue-900 bg-blue-50 shadow-inner"
+                        className="h-10 font-mono font-bold dark:bg-slate-800 dark:text-white"
                       />
-                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-blue-700/50 font-black text-xl">
-                        L
-                      </span>
                     </div>
                   </div>
-                  <Separator className="bg-blue-100" />
-                  <div className="bg-blue-600 text-white rounded-xl p-5 shadow-inner flex justify-between items-center">
-                    <span className="text-[11px] font-black uppercase tracking-widest opacity-90">
-                      Total Reportado Motor
-                    </span>
-                    <span className="text-3xl font-black font-mono">
-                      {auditResult
-                        ? auditResult.totalDigitalLitros.toFixed(1)
-                        : "0.0"}{" "}
-                      L
-                    </span>
+                  <div className="space-y-2 border-t border-slate-100 dark:border-white/5 pt-3">
+                    <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                      Odómetro Final (Siguiente Viaje) *
+                    </Label>
+                    <Input
+                      type="number"
+                      value={formData.odometroFinal}
+                      onChange={(e) =>
+                        handleInputChange("odometroFinal", e.target.value)
+                      }
+                      className="h-10 font-mono font-bold dark:bg-slate-800 dark:text-white"
+                      placeholder="Ej. 145000"
+                    />
                   </div>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Veredicto del Algoritmo */}
-            {auditResult && (
-              <Card
-                className={`transition-all duration-500 shadow-xl overflow-hidden border-0 ${auditResult.esRoboSospechado ? "bg-rose-600" : "bg-emerald-600"}`}
-              >
-                <div className="bg-black/20 p-4 flex justify-center items-center gap-2 text-white">
-                  <Calculator className="h-4 w-4 opacity-70" />
-                  <span className="text-xs font-black uppercase tracking-widest opacity-90">
-                    Motor de Decisión (Algoritmo Gustavo)
-                  </span>
+            {/* BARRA INFERIOR COMPACTA: VEREDICTO Y BOTONES */}
+            <Card className="border-none shadow-2xl bg-white dark:bg-slate-900 overflow-hidden">
+              <div
+                className={cn(
+                  "h-1.5 w-full",
+                  auditResult?.esRoboSospechado
+                    ? "bg-rose-500"
+                    : "bg-emerald-500",
+                )}
+              />
+              <CardContent className="p-4 flex flex-col lg:flex-row items-center justify-between gap-6">
+                {/* Métricas Calculadas */}
+                <div className="flex flex-wrap gap-4 md:gap-8 justify-center lg:justify-start divide-x divide-slate-200 dark:divide-white/10 w-full lg:w-auto">
+                  <div className="flex flex-col pr-2">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                      Rend. ECM
+                    </span>
+                    <span className="text-2xl font-mono font-black text-slate-700 dark:text-white">
+                      {auditResult?.rendimientoECM.toFixed(2) || "0.00"}
+                    </span>
+                  </div>
+                  <div className="flex flex-col pl-4 md:pl-8 pr-2">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                      Rend. Real
+                    </span>
+                    <span className="text-2xl font-mono font-black text-slate-700 dark:text-white">
+                      {auditResult?.rendimientoReal.toFixed(2) || "0.00"}
+                    </span>
+                  </div>
+                  <div className="flex flex-col pl-4 md:pl-8">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                      Diferencia
+                    </span>
+                    <span
+                      className={cn(
+                        "text-2xl font-mono font-black",
+                        auditResult?.esRoboSospechado
+                          ? "text-rose-600 dark:text-rose-500"
+                          : "text-emerald-600 dark:text-emerald-500",
+                      )}
+                    >
+                      {auditResult?.diferenciaLitros != null &&
+                      auditResult.diferenciaLitros > 0
+                        ? "+"
+                        : ""}
+                      {auditResult?.diferenciaLitros.toFixed(1) || "0.0"}{" "}
+                      <span className="text-sm">L</span>
+                    </span>
+                  </div>
                 </div>
 
-                <CardContent className="pt-6 p-8">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
-                    <div className="text-center p-6 bg-white/10 rounded-2xl border border-white/20 backdrop-blur-sm">
-                      <p className="text-[10px] font-black text-white/70 uppercase tracking-widest mb-2">
-                        Desviación (Físico vs ECM)
-                      </p>
-                      <p className="text-5xl font-black font-mono text-white drop-shadow-md">
-                        {auditResult.diferenciaLitros > 0 ? "+" : ""}
-                        {auditResult.diferenciaLitros.toFixed(1)}{" "}
-                        <span className="text-2xl">L</span>
-                      </p>
-                      <p className="text-[10px] font-bold text-white/60 mt-3 bg-black/20 py-1 px-3 rounded-full inline-block">
-                        Margen ({(tolerancePct || 0.05) * 100}%): ±
-                        {auditResult.toleranciaPermitida.toFixed(1)} L
-                      </p>
+                {/* Botones de Acción */}
+                <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
+                  {auditResult?.esRoboSospechado && (
+                    <div className="flex items-center gap-1.5 text-rose-600 dark:text-rose-500 px-3 py-1.5 bg-rose-50 dark:bg-rose-900/10 rounded-lg border border-rose-100 dark:border-rose-900/30">
+                      <AlertTriangle className="h-4 w-4 animate-pulse" />
+                      <span className="font-black uppercase text-[10px] tracking-widest">
+                        Excede Tol.
+                      </span>
                     </div>
+                  )}
+                  {isEditing ? (
+                    <Button
+                      variant="ghost"
+                      onClick={handleCancelEdit}
+                      className="w-full sm:w-auto font-bold uppercase tracking-widest text-[10px] text-slate-500 hover:text-rose-600 h-11 px-6"
+                    >
+                      Cancelar Edición
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      onClick={handleReset}
+                      className="w-full sm:w-auto font-bold uppercase tracking-widest text-[10px] text-slate-500 hover:text-slate-700 h-11 px-6"
+                    >
+                      Cancelar y regresar
+                    </Button>
+                  )}
 
-                    <div className="text-center p-6 bg-white/10 rounded-2xl border border-white/20 backdrop-blur-sm">
-                      <p className="text-[10px] font-black text-white/70 uppercase tracking-widest mb-2">
-                        Rendimiento Operativo
-                      </p>
-                      <p className="text-5xl font-black font-mono text-white drop-shadow-md">
-                        {auditResult.rendimientoKmL.toFixed(2)}
-                      </p>
-                      <p className="text-[10px] font-bold text-white/60 mt-3 bg-black/20 py-1 px-3 rounded-full inline-block">
-                        Km recorridos / Litros Pagados
-                      </p>
-                    </div>
-
-                    <div className="text-center space-y-5 bg-white p-6 rounded-2xl shadow-xl">
-                      {auditResult.esRoboSospechado ? (
-                        <div className="animate-in zoom-in duration-300">
-                          <ShieldAlert className="h-12 w-12 text-rose-500 mx-auto mb-2 animate-pulse" />
-                          <h3 className="text-sm font-black text-rose-700 uppercase tracking-widest">
-                            Faltante Detectado
-                          </h3>
-                          <p className="text-[10px] text-rose-500/80 font-bold mt-1">
-                            Excede tolerancia operativa.
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="animate-in zoom-in duration-300">
-                          <CheckCircle className="h-12 w-12 text-emerald-500 mx-auto mb-2" />
-                          <h3 className="text-sm font-black text-emerald-700 uppercase tracking-widest">
-                            Consumo Validado
-                          </h3>
-                          <p className="text-[10px] text-emerald-500/80 font-bold mt-1">
-                            Dentro del margen permitido.
-                          </p>
-                        </div>
-                      )}
-
-                      <Button
-                        size="lg"
-                        onClick={handleAuthorizeAndClose}
-                        disabled={isProcessing}
-                        className={`w-full font-black text-white shadow-lg h-12 uppercase tracking-widest text-[10px] ${auditResult.esRoboSospechado ? "bg-rose-600 hover:bg-rose-700" : "bg-emerald-600 hover:bg-emerald-700"}`}
-                      >
-                        {isProcessing ? (
-                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                        ) : (
-                          <CheckCircle className="h-4 w-4 mr-2" />
-                        )}
-                        Registrar y Volver al Historial
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+                  <Button
+                    onClick={handleAuthorizeAndClose}
+                    disabled={isProcessing || !formData.odometroFinal}
+                    className={cn(
+                      "w-full sm:w-auto font-black text-white uppercase tracking-widest text-[11px] h-11 px-8 shadow-lg",
+                      auditResult?.esRoboSospechado
+                        ? "bg-rose-600 hover:bg-rose-700 shadow-rose-500/20"
+                        : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20",
+                    )}
+                  >
+                    {isProcessing ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <Save className="h-4 w-4 mr-2" />
+                    )}
+                    {isEditing ? "Guardar Cambios" : "Guardar Auditoría"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         )}
       </div>
+
+      {/* 🚀 MODAL VER DETALLES ENRIQUECIDO */}
+      <Dialog
+        open={!!legToView}
+        onOpenChange={(open) => !open && setLegToView(null)}
+      >
+        <DialogContent className="sm:max-w-xl rounded-3xl p-0 overflow-hidden border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 shadow-2xl">
+          <div className="bg-slate-100 dark:bg-slate-800 p-6 border-b border-slate-200 dark:border-white/10 flex items-start justify-between">
+            <div>
+              <DialogTitle className="text-lg font-black uppercase tracking-widest flex items-center gap-2 text-slate-800 dark:text-white">
+                <ShieldCheck className="h-5 w-5 text-blue-500" /> Dictamen de
+                Auditoría
+              </DialogTitle>
+              <DialogDescription className="text-slate-500 dark:text-slate-400 mt-1 text-xs font-bold">
+                Folio: {legToView?.trip?.public_id || legToView?.trip_id} •
+                Fase: {legToView?.leg_type?.replace("_", " ").toUpperCase()}
+              </DialogDescription>
+            </div>
+            <div className="text-right">
+              <span className="block text-[9px] uppercase font-black tracking-widest text-slate-400">
+                Fecha Cierre
+              </span>
+              <span className="font-mono text-xs font-bold text-slate-600 dark:text-slate-300">
+                {parsedAuditDetails?.fechaAudit}
+              </span>
+            </div>
+          </div>
+
+          <div className="p-6">
+            <div className="flex items-center gap-3 mb-6 bg-white dark:bg-slate-950 p-3 rounded-xl border border-slate-100 dark:border-white/5">
+              <div className="h-10 w-10 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center">
+                <User className="h-5 w-5 text-slate-400" />
+              </div>
+              <div>
+                <p className="text-[9px] uppercase font-black tracking-widest text-slate-400">
+                  Operador Auditado
+                </p>
+                <p className="text-sm font-bold text-slate-700 dark:text-white">
+                  {legToView?.operator?.name || "N/A"}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 mb-6">
+              <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-white/5 text-center">
+                <p className="text-[9px] uppercase font-bold text-slate-400 mb-1">
+                  KMs ECM
+                </p>
+                <p className="font-mono font-black text-slate-700 dark:text-white text-lg">
+                  {parsedAuditDetails?.km}
+                </p>
+              </div>
+              <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-white/5 text-center">
+                <p className="text-[9px] uppercase font-bold text-slate-400 mb-1">
+                  Litros ECM
+                </p>
+                <p className="font-mono font-black text-slate-700 dark:text-white text-lg">
+                  {parsedAuditDetails?.ltEcm}
+                </p>
+              </div>
+              <div className="bg-amber-50 dark:bg-amber-900/10 p-3 rounded-xl border border-amber-100 dark:border-amber-900/30 text-center">
+                <p className="text-[9px] uppercase font-bold text-amber-600 dark:text-amber-500 mb-1">
+                  Litros Bomba
+                </p>
+                <p className="font-mono font-black text-amber-700 dark:text-amber-400 text-lg">
+                  {parsedAuditDetails?.vales}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mb-6">
+              <div className="flex-1 bg-blue-50 dark:bg-blue-900/10 p-3 rounded-xl border border-blue-100 dark:border-blue-900/30">
+                <p className="text-[9px] uppercase font-bold text-blue-600 dark:text-blue-400 mb-1">
+                  Rendimiento Real
+                </p>
+                <p className="font-mono font-black text-blue-700 dark:text-blue-300 text-2xl">
+                  {parsedAuditDetails?.rend}{" "}
+                  <span className="text-xs text-blue-500/50">km/L</span>
+                </p>
+              </div>
+              <div
+                className={cn(
+                  "flex-1 p-3 rounded-xl border text-center flex flex-col justify-center",
+                  parsedAuditDetails?.veredicto === "COBRO_OPERADOR"
+                    ? "bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-900/10 dark:border-rose-900/30 dark:text-rose-400"
+                    : "bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-900/10 dark:border-emerald-900/30 dark:text-emerald-400",
+                )}
+              >
+                <p className="text-[9px] uppercase font-black tracking-widest mb-1">
+                  Estatus Final
+                </p>
+                <p className="font-black text-sm uppercase">
+                  {parsedAuditDetails?.veredicto?.replace("_", " ")}
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-white/5">
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-1.5">
+                <FileText className="h-3 w-3" /> Nota de Resolución de Finanzas
+              </p>
+              <p className="text-xs font-medium text-slate-600 dark:text-slate-300 leading-relaxed border-l-2 border-brand-navy pl-3">
+                {parsedAuditDetails?.textOriginal}
+              </p>
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-slate-100 dark:border-white/5 text-center">
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                Odómetro Final del Vehículo:{" "}
+                <span className="font-mono text-blue-500">
+                  {legToView?.odometro_final?.toLocaleString()} km
+                </span>
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="p-4 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-white/10">
+            <Button
+              onClick={() => setLegToView(null)}
+              variant="outline"
+              className="w-full font-bold text-xs uppercase tracking-widest bg-white dark:bg-slate-800"
+            >
+              Cerrar Detalles
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Confirmación de Eliminación */}
+      <AlertDialog
+        open={!!legToReset}
+        onOpenChange={(open) => !open && setLegToReset(null)}
+      >
+        <AlertDialogContent className="rounded-3xl p-8 border-none shadow-2xl bg-white dark:bg-slate-900">
+          <AlertDialogHeader>
+            <div className="w-16 h-16 rounded-2xl bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-500 flex items-center justify-center mb-4 border border-rose-100 dark:border-rose-800">
+              <Trash2 size={32} />
+            </div>
+            <AlertDialogTitle className="text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">
+              Revertir Auditoría
+            </AlertDialogTitle>
+            <AlertDialogDescription className="font-medium text-slate-500 dark:text-slate-400">
+              ¿Estás seguro de que deseas eliminar esta conciliación? Los
+              cálculos se borrarán y la fase volverá a quedar pendiente de
+              auditar.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-6">
+            <AlertDialogCancel className="rounded-xl h-11 font-bold uppercase text-[10px] tracking-widest px-6 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-none">
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleResetAudit}
+              className="rounded-xl h-11 font-black uppercase text-[10px] tracking-widest px-6 bg-rose-600 hover:bg-rose-700 text-white"
+            >
+              Sí, Revertir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -28,7 +28,7 @@ export function PageHeader({
   return (
     <div
       className={cn(
-        "flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10 relative z-10 animate-in fade-in slide-in-from-top-4 duration-700",
+        "flex flex-col md:flex-row md:items-center justify-between gap-6 mb-5 relative z-10 animate-in fade-in slide-in-from-top-4 duration-700",
         className,
       )}
     >

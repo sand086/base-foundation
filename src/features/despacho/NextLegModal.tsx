@@ -93,6 +93,7 @@ interface NextLegModalProps {
   onOpenChange: (open: boolean) => void;
   tripPadre: Trip | null;
   onSubmit: (tripId: string, payload: TripLegCreatePayload) => Promise<boolean>;
+  onSuccessRefresh?: () => void;
 }
 
 type SearchableItem = {
@@ -160,7 +161,7 @@ function SearchableSelect({
       </PopoverTrigger>
 
       <PopoverContent
-        className="w-[var(--radix-popover-trigger-width)] p-0"
+        className="w-[var(--radix-popover-trigger-width)] p-0 border-slate-200 dark:border-white/10"
         align="start"
         sideOffset={8}
       >
@@ -203,6 +204,7 @@ export function NextLegModal({
   onOpenChange,
   tripPadre,
   onSubmit,
+  onSuccessRefresh,
 }: NextLegModalProps) {
   const { unidades, updateLoadStatus } = useUnits();
   const { operadores } = useOperators();
@@ -225,7 +227,6 @@ export function NextLegModal({
     destino_vacio: "",
   });
 
-  // ESTADO PARA DATOS FISCALES (MANTENIDO INTACTO)
   const [tripFiscalData, setTripFiscalData] = useState({
     contenedor_1: "",
     contenedor_2: "",
@@ -240,24 +241,22 @@ export function NextLegModal({
 
   useEffect(() => {
     if (open && tripPadre) {
-      // 1. Buscamos la última fase activa para HEREDAR
       const lastLeg =
         tripPadre.legs && tripPadre.legs.length > 0
           ? tripPadre.legs[tripPadre.legs.length - 1]
           : null;
 
-      // 2. Adivinamos la siguiente fase lógicamente
       let nextLegType: any = "ruta_carretera";
       if (lastLeg?.leg_type === "carga_muelle") nextLegType = "ruta_carretera";
       if (lastLeg?.leg_type === "ruta_carretera") nextLegType = "entrega_vacio";
 
+      // 🚀 SOLUCIÓN HERENCIA: Intentar heredar del Viaje Padre, si es nulo, buscar en la última fase.
       setFormData({
         leg_type: nextLegType,
-        // 🚀 HERENCIA AUTOMÁTICA
         unit_id: lastLeg?.unit_id || null,
         operator_id: lastLeg?.operator_id || null,
 
-        // Prioridad: 1. Lo que diga el viaje raíz | 2. Lo que traía la fase anterior
+        // El fallback (lastLeg as any) te salva si el backend lo guardó en el Leg pero no en el Trip
         remolque_1_id:
           tripPadre.remolque_1_id || (lastLeg as any)?.remolque_1_id || null,
         dolly_id: tripPadre.dolly_id || (lastLeg as any)?.dolly_id || null,
@@ -287,7 +286,6 @@ export function NextLegModal({
       setShowFiscalData(false);
     }
   }, [open, tripPadre]);
-  // ─── Derivados memorizados ─────────────────────────────────────────────────
 
   const isFullTrip = useMemo(() => {
     return checkIsFullTrip(tripPadre);
@@ -351,7 +349,7 @@ export function NextLegModal({
   const legUiConfig = useMemo(() => {
     const config = {
       carga_muelle: {
-        actionLabel: "Registrar carga en patio / muelle",
+        actionLabel: "Registrar carga en patio",
         successLabel: "Carga operativa",
         helperText: "Confirma el enganche y la carga física del equipo.",
       },
@@ -371,46 +369,44 @@ export function NextLegModal({
       config[formData.leg_type as keyof typeof config] ?? config.ruta_carretera
     );
   }, [formData.leg_type]);
-  // 🚜 Tractos: Mostramos disponibles + el que ya trae el viaje
-  const availableTractos = useMemo(() => {
-    // Si tripPadre es null, no intentamos leer legs
-    const currentUnitId =
-      tripPadre?.legs && tripPadre.legs.length > 0
-        ? tripPadre.legs[tripPadre.legs.length - 1].unit_id
-        : null;
 
+  // Filtros ajustados: mostramos disponibles O si están actualmente asignados en el form
+  const availableTractos = useMemo(() => {
     return (unidades as Unit[]).filter((u) => {
       const tipo = `${u.tipo_1} ${u.tipo}`.toLowerCase();
       const isTracto = tipo.includes("tracto") || tipo.includes("camion");
       const isAvailable = UNIT_STATUSES_AVAILABLE.includes(
         u.status?.toLowerCase() as any,
       );
-      return isTracto && (isAvailable || u.id === currentUnitId);
+      const isSelected = u.id === formData.unit_id;
+      return isTracto && (isAvailable || isSelected);
     });
-    // Agregamos tripPadre como dependencia
-  }, [unidades, tripPadre]);
-  const availableRemolques = useMemo(
-    () =>
-      (unidades as Unit[]).filter((u) => {
-        const searchIn = `${u.tipo_1} ${u.tipo}`.toLowerCase();
-        const isTracto =
-          searchIn.includes("tracto") || searchIn.includes("camion");
-        const isDolly = searchIn.includes("dolly");
-        return (
-          !isTracto &&
-          !isDolly &&
-          UNIT_STATUSES_AVAILABLE.includes(u.status?.toLowerCase() as any)
-        );
-      }),
-    [unidades],
-  );
+  }, [unidades, formData.unit_id]);
+
+  const availableRemolques = useMemo(() => {
+    return (unidades as Unit[]).filter((u) => {
+      const searchIn = `${u.tipo_1} ${u.tipo}`.toLowerCase();
+      const isTracto =
+        searchIn.includes("tracto") || searchIn.includes("camion");
+      const isDolly = searchIn.includes("dolly");
+      const isAvailable = UNIT_STATUSES_AVAILABLE.includes(
+        u.status?.toLowerCase() as any,
+      );
+      const isSelected =
+        u.id === formData.remolque_1_id || u.id === formData.remolque_2_id;
+      return !isTracto && !isDolly && (isAvailable || isSelected);
+    });
+  }, [unidades, formData.remolque_1_id, formData.remolque_2_id]);
 
   const availableDollies = useMemo(() => {
-    const dollies = (unidades as Unit[]).filter(
-      (u) =>
-        normalizeStr(u.tipo_1).includes("dolly") &&
-        UNIT_STATUSES_AVAILABLE.includes(u.status?.toLowerCase() as any),
-    );
+    const dollies = (unidades as Unit[]).filter((u) => {
+      const isDolly = normalizeStr(u.tipo_1).includes("dolly");
+      const isAvailable = UNIT_STATUSES_AVAILABLE.includes(
+        u.status?.toLowerCase() as any,
+      );
+      const isSelected = u.id === formData.dolly_id;
+      return isDolly && (isAvailable || isSelected);
+    });
     return dollies.length > 0
       ? dollies
       : [
@@ -420,61 +416,50 @@ export function NextLegModal({
             tipo_1: "DOLLY",
           } as Unit,
         ];
-  }, [unidades]);
+  }, [unidades, formData.dolly_id]);
 
-  // 👤 Operadores: Mostramos activos + el que ya trae el viaje
   const availableOperators = useMemo(() => {
-    const currentOpId =
-      tripPadre?.legs && tripPadre.legs.length > 0
-        ? tripPadre.legs[tripPadre.legs.length - 1].operator_id
-        : null;
-
     return (operadores as Operator[]).filter(
       (o) =>
         o.status === "activo" ||
         o.status === "disponible" ||
-        o.id === currentOpId,
+        o.id === formData.operator_id,
     );
-  }, [operadores, tripPadre]);
-
-  // ─── Acciones ─────────────────────────────────────────────────────────────
+  }, [operadores, formData.operator_id]);
 
   const validateForm = useCallback((): boolean => {
     if (!formData.unit_id || !formData.operator_id || !formData.remolque_1_id) {
-      toast.error(
-        "Asignación incompleta: Tracto, Operador y Chasis son obligatorios.",
-      );
+      toast.error("Falta Asignación", {
+        description: "Tracto, Operador y Chasis 1 son obligatorios.",
+      });
       return false;
     }
 
-    // Si es FULL, validar herencia obligatoria
     if (isFullTrip && (!formData.dolly_id || !formData.remolque_2_id)) {
-      toast.error(
-        "Configuración FULL detectada: El Dolly y Remolque 2 son obligatorios.",
-      );
+      toast.error("Falta Asignación FULL", {
+        description: "El Dolly y Remolque 2 son obligatorios.",
+      });
       return false;
     }
 
-    // FASE 3: Obligatorio saber dónde queda el contenedor
     if (
       formData.leg_type === "entrega_vacio" &&
       !formData.destino_vacio?.trim()
     ) {
-      toast.error(
-        "Para la Fase de Vacío, debe indicar el Destino/Patio de entrega.",
-      );
+      toast.error("Falta Destino", {
+        description: "Debe indicar el Destino/Patio de entrega del vacío.",
+      });
       return false;
     }
 
-    // FASE 2: Validar peso para la Carta Porte
     if (formData.leg_type === "ruta_carretera") {
       if (
         !tripFiscalData.peso_toneladas ||
         tripFiscalData.peso_toneladas <= 0
       ) {
-        toast.error(
-          "El peso es obligatorio para iniciar la ruta carretera (Carta Porte).",
-        );
+        toast.error("Carta Porte Incompleta", {
+          description: "El peso es obligatorio para iniciar la ruta carretera.",
+        });
         setShowFiscalData(true);
         return false;
       }
@@ -488,39 +473,42 @@ export function NextLegModal({
 
     setLoading(true);
     try {
-      // 🚀 1. SIEMPRE GUARDAMOS LOS DATOS FISCALES ANTES DE LANZAR LA RUTA
+      // 🚀 AQUÍ APLICAMOS LA CORRECCIÓN:
+      // Enviamos TODO al TripPadre (Datos Fiscales + Configuración de Arrastre)
+      // para asegurar que el backend persista los remolques.
       await axiosClient.put(`/trips/${tripPadre.id}`, {
         ...tripFiscalData,
         numero_contenedor: tripFiscalData.contenedor_1,
         booking: tripFiscalData.referencia,
+        remolque_1_id: formData.remolque_1_id,
+        dolly_id: formData.dolly_id,
+        remolque_2_id: formData.remolque_2_id,
       });
 
-      // 🚀 2. CREAMOS LA FASE/TRAMO OPERATIVO
       const success = await onSubmit(
         String(tripPadre.id),
         formData as TripLegCreatePayload,
       );
 
       if (success) {
-        // Fase 1: Los remolques pasan a estado "Cargado"
+        // Bloqueamos los equipos (cambio de status local)
         if (formData.leg_type === "carga_muelle") {
           await updateLoadStatus(Number(formData.remolque_1_id), true);
           if (formData.remolque_2_id)
             await updateLoadStatus(Number(formData.remolque_2_id), true);
-        }
-        // Fase 3: Los remolques se liberan (Vacíos)
-        else if (formData.leg_type === "entrega_vacio") {
+        } else if (formData.leg_type === "entrega_vacio") {
           await updateLoadStatus(Number(formData.remolque_1_id), false);
           if (formData.remolque_2_id)
             await updateLoadStatus(Number(formData.remolque_2_id), false);
 
-          // LOG DE GUSTAVO: Confirmar liberación
           toast.success(
             `Equipo liberado en ${formData.destino_vacio}. Viaje listo para liquidación.`,
           );
         }
 
         onOpenChange(false);
+        // 🚀 FORZAMOS EL REFRESH EN LA PANTALLA PRINCIPAL
+        if (onSuccessRefresh) onSuccessRefresh();
       }
     } catch (error) {
       toast.error("Error al iniciar el tramo o guardar los datos.");
@@ -536,14 +524,13 @@ export function NextLegModal({
     onOpenChange,
     tripFiscalData,
     legUiConfig,
+    onSuccessRefresh,
   ]);
 
   const referencia = (tripPadre as (Trip & { referencia?: string }) | null)
     ?.referencia;
 
   if (!tripPadre) return null;
-
-  // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -578,9 +565,9 @@ export function NextLegModal({
                   <DialogTitle className="text-3xl font-black uppercase tracking-tighter text-slate-900 dark:text-white heading-crisp">
                     SERV- {tripPadre.public_id ?? tripPadre.id}
                   </DialogTitle>
-                  <p className="text-[10px] font-black text-slate-400 dark:text-white/40 uppercase tracking-[0.3em] mt-1">
+                  <div className="text-[10px] font-black text-slate-400 dark:text-white/40 uppercase tracking-[0.3em] mt-1">
                     Asignación Logística Operativa
-                  </p>
+                  </div>
                 </div>
               </div>
 
@@ -792,7 +779,7 @@ export function NextLegModal({
               </div>
             </div>
 
-            {/* 🚀 BLOQUE FISCAL DINÁMICO Y COLAPSABLE SIEMPRE VISIBLE */}
+            {/* 🚀 BLOQUE FISCAL DINÁMICO */}
             <div className="rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/50 shadow-sm overflow-hidden animate-in fade-in transition-all">
               <button
                 type="button"
@@ -957,10 +944,10 @@ export function NextLegModal({
                         }
                       }}
                     />
-                    <p className="text-[10px] text-slate-500 font-medium ml-1">
+                    <div className="text-[10px] text-slate-500 font-medium ml-1">
                       Al seleccionar un producto, la clave SAT y descripción se
                       autocompletan.
-                    </p>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -1099,17 +1086,8 @@ export function NextLegModal({
                     onValueChange={(v) =>
                       setFormData((p) => ({ ...p, remolque_1_id: Number(v) }))
                     }
-                    // BLOQUEO: Si el viaje padre ya tiene este equipo, no se puede cambiar
                   >
-                    <SelectTrigger
-                      disabled={Boolean(tripPadre.remolque_1_id)}
-                      className={cn(
-                        "h-10 font-bold border-slate-200 dark:border-white/10 dark:text-white",
-                        tripPadre.remolque_1_id // Simplemente la variable, el ternario ya evalúa si existe
-                          ? "bg-slate-100 dark:bg-slate-900/80 opacity-70 cursor-not-allowed shadow-none"
-                          : "bg-slate-50/50 dark:bg-slate-800",
-                      )}
-                    >
+                    <SelectTrigger className="h-10 font-bold border-slate-200 dark:border-white/10 dark:text-white bg-white dark:bg-slate-800">
                       <SelectValue placeholder="R1" />
                     </SelectTrigger>
                     <SelectContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10">
@@ -1144,17 +1122,8 @@ export function NextLegModal({
                         onValueChange={(v) =>
                           setFormData((p) => ({ ...p, dolly_id: Number(v) }))
                         }
-                        // BLOQUEO: Persistencia de Dolly
                       >
-                        <SelectTrigger
-                          disabled={Boolean(tripPadre.dolly_id)}
-                          className={cn(
-                            "h-10 font-bold border-rose-200 dark:border-rose-700/50 text-rose-700 dark:text-rose-300",
-                            tripPadre.dolly_id // Sin el !!
-                              ? "bg-slate-100 dark:bg-slate-900/80 opacity-70 cursor-not-allowed shadow-none border-slate-200"
-                              : "bg-rose-50 dark:bg-rose-900/20",
-                          )}
-                        >
+                        <SelectTrigger className="h-10 font-bold border-slate-200 dark:border-white/10 dark:text-white bg-white dark:bg-slate-800">
                           <SelectValue placeholder="Dolly" />
                         </SelectTrigger>
                         <SelectContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10">
@@ -1188,15 +1157,7 @@ export function NextLegModal({
                           }))
                         }
                       >
-                        <SelectTrigger
-                          disabled={Boolean(tripPadre.remolque_2_id)}
-                          className={cn(
-                            "h-10 font-bold border-rose-200 dark:border-rose-700/50 text-rose-700 dark:text-rose-300",
-                            tripPadre.remolque_2_id // Sin el !!
-                              ? "bg-slate-100 dark:bg-slate-900/80 opacity-70 cursor-not-allowed shadow-none border-slate-200"
-                              : "bg-rose-50 dark:bg-rose-900/20",
-                          )}
-                        >
+                        <SelectTrigger className="h-10 font-bold border-slate-200 dark:border-white/10 dark:text-white bg-white dark:bg-slate-800">
                           <SelectValue placeholder="R2" />
                         </SelectTrigger>
                         <SelectContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10">
