@@ -11,15 +11,15 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { useAdminActions } from "@/hooks/useAdminActions";
+import { useAdminActions } from "@/features/users/hooks/useAdminActions";
 import { cn } from "@/lib/utils";
 
-import { TiposUnidadConfig } from "@/features/configuracion/TiposUnidadConfig";
-import { SatCatalogsConfig } from "@/features/configuracion/SatCatalogsConfig";
-import { TiposLicenciaConfig } from "@/features/configuracion/TiposLicenciaConfig";
-import { ConceptosPagoConfig } from "@/features/configuracion/ConceptosPagoConfig";
-import { AseguradorasConfig } from "@/features/configuracion/AseguradorasConfig";
-import { SatStampsConfig } from "@/features/configuracion/SatStampsConfig";
+import { UnitTypesConfig } from "@/features/settings/components/UnitTypesConfig";
+import { SatCatalogsConfig } from "@/features/settings/components/SatCatalogsConfig";
+import { LicenseTypesConfig } from "@/features/settings/components/LicenseTypesConfig";
+import { PaymentConceptsConfig } from "@/features/settings/components/PaymentConceptsConfig";
+import { InsurersConfig } from "@/features/settings/components/InsurersConfig";
+import { SatStampsConfig } from "@/features/settings/components/SatStampsConfig";
 
 import {
   Building2,
@@ -50,7 +50,7 @@ import {
   FlaskConical,
 } from "lucide-react";
 import { toast } from "sonner";
-import { SystemConfig } from "@/types/api.types";
+import { SystemConfig } from "@/features/settings/types";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 type ConfigCategory =
@@ -236,20 +236,23 @@ const CONFIG_METADATA: Record<string, any> = {
       },
     ],
   },
-  moneda_base: {
-    label: "Moneda Base",
-    description: "Moneda principal de la cuenta.",
-    options: [
-      { label: "MXN - Pesos Mexicanos", value: "MXN" },
-      { label: "USD - Dólares Americanos", value: "USD" },
-    ],
-  },
   empresa_cp: {
     label: "Código Postal",
-    description: "Lugar de expedición requerido para CFDI 4.0.",
+    description: "Lugar de expedición (Fundamental para el Timbrado SAT 4.0).",
     required: true,
     pattern: /^\d{5}$/,
     errorMsg: "Debe ser de 5 dígitos.",
+  },
+  empresa_direccion: {
+    label: "Dirección Fiscal",
+    description:
+      "Dirección completa (Calle, Número, Colonia, Municipio, Estado).",
+    required: true,
+  },
+  empresa_telefono: {
+    label: "Teléfono de Contacto",
+    description: "Teléfono oficial de la empresa que aparecerá en los PDFs.",
+    required: true,
   },
   empresa_email: {
     label: "Correo Electrónico",
@@ -257,6 +260,14 @@ const CONFIG_METADATA: Record<string, any> = {
     required: true,
     pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
     errorMsg: "Correo electrónico no válido.",
+  },
+  moneda_base: {
+    label: "Moneda Base",
+    description: "Moneda principal de la cuenta.",
+    options: [
+      { label: "MXN - Pesos Mexicanos", value: "MXN" },
+      { label: "USD - Dólares Americanos", value: "USD" },
+    ],
   },
   iva_porcentaje: {
     label: "Tasa de IVA",
@@ -273,12 +284,20 @@ const CONFIG_METADATA: Record<string, any> = {
     description:
       "Porcentaje de retención para servicios de flete (típicamente 4%).",
   },
-  dias_credito_default: { label: "Días de Crédito", description: "" },
-  rendimiento_diesel_esperado: {
-    label: "Rendimiento Esperado",
-    description: "",
+  dias_credito_default: {
+    label: "Días de Crédito por Defecto",
+    description:
+      "Días de crédito globales si el cliente no tiene uno específico.",
   },
-  tolerancia_diesel_pct: { label: "Tolerancia", description: "" },
+  rendimiento_diesel_esperado: {
+    label: "Rendimiento Global de Diésel",
+    description: "Parámetro base (km/l) para auditorías operativas.",
+  },
+  tolerancia_diesel_pct: {
+    label: "Tolerancia de Combustible",
+    description:
+      "Margen de error permitido antes de cobrar faltantes (Ej. 0.05 = 5%).",
+  },
 };
 
 const SettingsPage = () => {
@@ -839,25 +858,25 @@ const SettingsPage = () => {
                       value="unidades"
                       className="animate-in fade-in"
                     >
-                      <TiposUnidadConfig />
+                      <UnitTypesConfig />
                     </TabsContent>
                     <TabsContent
                       value="licencias"
                       className="animate-in fade-in"
                     >
-                      <TiposLicenciaConfig />
+                      <LicenseTypesConfig />
                     </TabsContent>
                     <TabsContent
                       value="conceptos"
                       className="animate-in fade-in"
                     >
-                      <ConceptosPagoConfig />
+                      <PaymentConceptsConfig />
                     </TabsContent>
                     <TabsContent
                       value="aseguradoras"
                       className="animate-in fade-in"
                     >
-                      <AseguradorasConfig />
+                      <InsurersConfig />
                     </TabsContent>
                   </Tabs>
                 </div>

@@ -52,21 +52,27 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
-// Feature components
-import { RegisterExpenseModal } from "@/features/cxp/RegisterExpenseModal";
-import { InvoiceDetailSheet } from "@/features/cxp/InvoiceDetailSheet";
-import { RegisterPaymentModal } from "@/features/cxp/RegisterPaymentModal";
-import { SupplierModal } from "@/features/cxp/SupplierModal";
-import { SupplierDetailSheet } from "@/features/cxp/SupplierDetailSheet";
-import { ManageCategoriesModal } from "@/features/cxp/ManageCategoriesModal";
+// --- Feature: SUPPLIERS (Proveedores) ---
+import { SupplierModal } from "@/features/suppliers/components/SupplierModal";
+import { SupplierDetailSheet } from "@/features/suppliers/components/SupplierDetailSheet";
+import { ManageCategoriesModal } from "@/features/suppliers/components/ManageCategoriesModal";
+import { useSuppliers } from "@/features/suppliers/hooks/useSuppliers";
+// Importamos el tipo desde su feature
+import { Supplier } from "@/features/suppliers/types";
 
-// Hooks
-import { useSuppliers } from "@/hooks/useSuppliers";
-import { useBankAccounts } from "@/hooks/useBankAccounts";
-import { useSystemConfig } from "@/hooks/useSystemConfig";
+// --- Feature: PAYABLES (Cuentas por Pagar / Gastos) ---
+import { RegisterExpenseModal } from "@/features/payables/components/RegisterExpenseModal";
+import { InvoiceDetailSheet } from "@/features/payables/components/InvoiceDetailSheet";
+// Importamos el tipo desde su feature
+import { PayableInvoice } from "@/features/payables/types";
 
-// Types (Centralizados)
-import type { PayableInvoice, Supplier } from "@/types/api.types";
+// --- Feature: TREASURY (Tesorería) ---
+// El script movió el registro de pagos aquí porque es donde se maneja el dinero
+import { RegisterPaymentModal } from "@/features/treasury/components/RegisterPaymentModal";
+import { useBankAccounts } from "@/features/treasury/hooks/useBankAccounts";
+
+// --- Feature: SETTINGS (Configuración) ---
+import { useSystemConfig } from "@/features/settings/hooks/useSystemConfig";
 
 // Helpers
 import {
@@ -123,8 +129,7 @@ export default function ProveedoresCxP() {
   } = useSuppliers();
 
   //  CORRECCIÓN: Usamos alias para mapear lo que devuelve el hook a los nombres que espera tu componente
-  const { accounts: bankAccounts, isLoading: isLoadingBankAccounts } =
-    useBankAccounts();
+  const { bankAccounts, isLoading: isLoadingBankAccounts } = useBankAccounts();
 
   const [searchCatalog, setSearchCatalog] = useState("");
   const [searchCxP, setSearchCxP] = useState("");
@@ -871,7 +876,7 @@ export default function ProveedoresCxP() {
           open={isPaymentModalOpen}
           onOpenChange={setIsPaymentModalOpen}
           invoice={selectedInvoice}
-          bankAccounts={bankAccounts} // Pasamos la variable correctamente referenciada
+          bankAccounts={bankAccounts || []} // Pasamos la variable correctamente referenciada
           onSubmit={handleRegisterPayment}
         />
       )}

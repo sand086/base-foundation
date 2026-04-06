@@ -43,12 +43,10 @@ import {
   CalendarDays,
   Filter,
 } from "lucide-react";
-import { useTrips } from "@/hooks/useTrips";
-import { Trip, TripTimelineEvent } from "@/types/api.types";
-import {
-  UpdateStatusModal,
-  StatusUpdateData,
-} from "@/features/monitoreo/UpdateStatusModal";
+import { useTrips } from "@/features/trips/hooks/useTrips";
+import { Trip, TripTimelineEvent } from "@/features/trips/types";
+import { UpdateStatusModal } from "@/features/trips/components/UpdateStatusModal";
+import { StatusUpdateData } from "@/features/trips/types";
 import axiosClient from "@/api/axiosClient";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -274,7 +272,7 @@ export default function ControlDeTrafico() {
       setEventToEdit(null);
       setIsModalOpen(false);
 
-      // 🔄 Refrescamos los datos para que aparezcan en la pantalla
+      //  Refrescamos los datos para que aparezcan en la pantalla
       await refreshCurrentTrip();
     } catch (error) {
       console.error("Error del backend:", error);

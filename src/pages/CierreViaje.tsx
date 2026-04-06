@@ -44,10 +44,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 import { cn } from "@/lib/utils";
-import { useTrips } from "@/hooks/useTrips";
-import { useClients } from "@/hooks/useClients";
-import { useOperators } from "@/hooks/useOperators";
-import { useSystemConfig } from "@/hooks/useSystemConfig";
+import { useTrips } from "@/features/trips/hooks/useTrips";
+import { useClients } from "@/features/clients/hooks/useClients";
+import { useOperators } from "@/features/operators/hooks/useOperators";
+import { useSystemConfig } from "@/features/settings/hooks/useSystemConfig";
 
 interface ConceptoExtra {
   id: string;
@@ -237,6 +237,7 @@ export default function CierreViaje() {
             setPreviewData(data);
             // 🚀 MAGIA PURA: El backend ya auditó usando el ECM y nos da el monto a cobrar en rojo. Cero cálculos en el frontend.
             setCombustibleFaltante(data?.deduccion_combustible || 0);
+            setSueldoRutaPactado(data?.sueldo_operador_pactado || 0);
           })
           .catch(() => {
             toast.error("Error de conexión al verificar telemetría del viaje.");

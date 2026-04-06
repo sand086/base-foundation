@@ -7,15 +7,12 @@ import { PageHeader } from "@/components/ui/page-header";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Button } from "@/components/ui/button";
 
-// Dashboard feature components
-import { KPICards } from "@/features/dashboard/KPICards";
-import { OnTimeChart } from "@/features/dashboard/OnTimeChart";
-import { TopClientsChart } from "@/features/dashboard/TopClientsChart";
-import { OperatorStatsCharts } from "@/features/dashboard/OperatorStatsCharts";
-import { RecentServicesTable } from "@/features/dashboard/RecentServicesTable";
-
-//  Nuestro Hook personalizado conectado al backend
-import { useDashboard } from "@/hooks/useDashboard";
+import { KPICards } from "@/features/dashboard/components/KPICards";
+import { OnTimeChart } from "@/features/dashboard/components/OnTimeChart";
+import { TopClientsChart } from "@/features/dashboard/components/TopClientsChart";
+import { OperatorStatsCharts } from "@/features/dashboard/components/OperatorStatsCharts";
+import { RecentServicesTable } from "@/features/dashboard/components/RecentServicesTable";
+import { useDashboard } from "@/features/dashboard/hooks/useDashboard";
 
 export default function Dashboard() {
   // 1. Estado para el filtro de fechas (por defecto últimos 30 días)

@@ -54,11 +54,11 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 // Features y Hooks
-import { AddUnidadModal } from "@/features/flota/AddUnidadModal";
-import { PatrimonialView } from "@/features/flota/PatrimonialView";
-import { useUnits } from "@/hooks/useUnits";
-import { useTiposUnidad } from "@/hooks/useTiposUnidad";
-import { Unit } from "@/types/api.types";
+import { AddUnidadModal } from "@/features/units/components/AddUnitModal";
+import { PatrimonialView } from "@/features/units/components/PatrimonialView";
+import { useUnits } from "@/features/units/hooks/useUnits";
+import { useUnitTypes } from "@/features/settings/hooks/useUnitTypes";
+import { Unit } from "@/features/units/types";
 
 // --- Helpers Visuales (Industrial Premium) ---
 const getStatusBadge = (status: string) => {

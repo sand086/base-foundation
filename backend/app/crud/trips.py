@@ -320,11 +320,32 @@ def add_timeline_event(
         payload.status if payload.status in status_db_validos else "en_transito"
     )
 
-    #  PROTECCIÓN DE FASE 2: Si reportan "entregado" (Llegó al cliente)
     if payload.status == "entregado":
-        # Solo cerramos el viaje completo si la fase actual es el retorno de vacío
-        if active_leg and active_leg.leg_type == "entrega_vacio":
+        is_last_leg = True
+        if trip.legs:
+            is_last_leg = active_leg.id == trip.legs[-1].id
+
+        # Si es entrega_vacio o es la última fase del viaje, cerramos el viaje.
+        if (active_leg and active_leg.leg_type == "entrega_vacio") or is_last_leg:
             trip.status = "entregado"
+
+            # 🚀 LIBERAR UNIDADES AUTOMÁTICAMENTE PARA QUE NO QUEDEN "EN TRÁNSITO"
+            unit_ids_to_free = [
+                active_leg.unit_id if active_leg else None,
+                trip.remolque_1_id,
+                trip.dolly_id,
+                trip.remolque_2_id,
+            ]
+            valid_unit_ids = [uid for uid in unit_ids_to_free if uid is not None]
+            if valid_unit_ids:
+                db.query(models.Unit).filter(models.Unit.id.in_(valid_unit_ids)).update(
+                    {"status": "disponible"}, synchronize_session=False
+                )
+
+            if active_leg and active_leg.operator_id:
+                db.query(models.Operator).filter(
+                    models.Operator.id == active_leg.operator_id
+                ).update({"status": "activo"}, synchronize_session=False)
         else:
             trip.status = "en_transito"
     else:
@@ -888,6 +909,18 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
     if diferencia_litros > (total_consumo_esperado * 0.05):
         deduccion_combustible = diferencia_litros * precio_promedio
 
+    sueldo_operador_pactado = 0.0
+    if legs and legs[0].trip:
+        trip_padre = legs[0].trip
+        # Priorizamos el sueldo congelado en el viaje, si no, el del catálogo
+        sueldo_operador_pactado = (
+            float(trip_padre.sueldo_operador)
+            if trip_padre.sueldo_operador
+            else (
+                float(trip_padre.tariff.sueldo_operador) if trip_padre.tariff else 0.0
+            )
+        )
+
     return {
         "total_kms": round(total_kms_reales, 2),
         "consumo_esperado": round(total_consumo_esperado, 2),
@@ -895,6 +928,7 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
         "diferencia_litros": round(diferencia_litros, 2),
         "precio_promedio": round(precio_promedio, 2),
         "deduccion_combustible": round(deduccion_combustible, 2),
+        "sueldo_operador_pactado": sueldo_operador_pactado,
         "alertas": alertas,
         "legs_sin_ticket": legs_sin_ticket,
     }

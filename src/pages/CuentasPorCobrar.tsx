@@ -14,6 +14,8 @@ import {
   CheckCircle2,
   Sheet as SheetIcon,
   Loader2,
+  FileCode2, // 🚀 IMPORTADO PARA EL BOTÓN DE XML
+  Upload,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -45,12 +47,15 @@ import {
 
 import axiosClient from "@/api/axiosClient";
 
-// Feature components (Asegúrate de que las rutas a tus modales sean correctas)
-import { ImportServicesModal } from "@/features/cxc/ImportServicesModal";
-import { CreateInvoiceModal } from "@/features/cxc/CreateInvoiceModal";
-import { InvoiceDetailSheet } from "@/features/cxc/InvoiceDetailSheet";
-import { RegisterPaymentModal } from "@/features/cxc/RegisterPaymentModal";
-import { AccountStatementModal } from "@/features/cxc/AccountStatementModal";
+// Feature components
+import { ImportServicesModal } from "@/features/receivables/components/ImportServicesModal";
+import { CreateInvoiceModal } from "@/features/receivables/components/CreateInvoiceModal";
+import { InvoiceDetailSheet } from "@/features/receivables/components/InvoiceDetailSheet";
+import { RegisterPaymentModal } from "@/features/treasury/components/RegisterPaymentModal";
+import { AccountStatementModal } from "@/features/receivables/components/AccountStatementModal";
+import { ImportXMLPaymentModal } from "@/features/receivables/components/ImportXMLPaymentModal";
+
+import { RegisterPaymentPayload } from "@/features/payables/types";
 import {
   ReceivableInvoice,
   InvoicePayment,
@@ -58,12 +63,15 @@ import {
   getInvoiceStatusInfo,
   getAgingCategory,
   calculateDaysOverdue,
-} from "@/features/cxc/types";
+} from "@/features/receivables/types";
+
+import { useBankAccounts } from "@/features/treasury/hooks/useBankAccounts";
 
 export default function CuentasPorCobrar() {
   const [invoices, setInvoices] = useState<ReceivableInvoice[]>([]);
   const [services, setServices] = useState<FinalizableService[]>([]);
   const [loading, setLoading] = useState(true);
+  const { bankAccounts = [] } = useBankAccounts();
 
   // Modal states
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -72,6 +80,7 @@ export default function CuentasPorCobrar() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isAccountStatementOpen, setIsAccountStatementOpen] = useState(false);
+  const [isImportXMLOpen, setIsImportXMLOpen] = useState(false); // 🚀 NUEVO ESTADO PARA EL MODAL XML
 
   // Selected state
   const [selectedInvoice, setSelectedInvoice] =
@@ -86,13 +95,12 @@ export default function CuentasPorCobrar() {
   const fetchInvoices = async () => {
     try {
       setLoading(true);
-      // Esta ruta la crearemos en el paso 2
       const response = await axiosClient.get("/receivables");
 
       // Mapear los datos del backend al formato que espera la tabla
       const formattedData = response.data.map((inv: any) => ({
-        id: String(inv.id),
-        folio: inv.folio_interno || `CXC-${inv.id}`,
+        id: inv.id,
+        folio: inv.folio_interno || `CXC-${String(inv.id)}`,
         cliente: inv.client?.razon_social || "Cliente Desconocido",
         monto_total: inv.monto_total,
         saldo_pendiente: inv.saldo_pendiente,
@@ -198,36 +206,27 @@ export default function CuentasPorCobrar() {
   const handleCreateInvoice = async (
     invoiceData: Omit<ReceivableInvoice, "id" | "folio" | "cobros" | "estatus">,
   ) => {
-    // Aquí conectarías a axiosClient.post('/receivables', invoiceData)
     toast.info("Función de creación manual en desarrollo");
   };
 
-  const handleRegisterPayment = async (invoiceId: string, payment: any) => {
+  const handleRegisterPayment = async (
+    invoiceId: number,
+    payment: RegisterPaymentPayload,
+  ) => {
     try {
-      // 1. Enviamos el pago al backend
       await axiosClient.post(`/receivables/${invoiceId}/payments`, {
         monto: payment.monto,
-        metodo_pago: payment.metodoPago || "TRANSFERENCIA",
+        metodo_pago: payment.metodo_pago, // 👈 Asegúrate que sea snake_case como en el payload
         referencia: payment.referencia || "",
+        bank_account_id: payment.cuenta_retiro, // 👈 Importante enviar la cuenta
       });
 
-      toast.success("¡Cobro Registrado!", {
-        description: `Se abonaron $${payment.monto.toLocaleString("es-MX")} a la factura.`,
-      });
-
-      // 2. Cerramos el modal
+      toast.success("¡Cobro Registrado!");
       setIsPaymentModalOpen(false);
       setSelectedInvoice(null);
-
-      // 3. Recargamos la tabla para que los números en Verde y los semáforos se actualicen solos
       fetchInvoices();
     } catch (error: any) {
-      toast.error("Error al registrar el cobro", {
-        description:
-          error.response?.data?.detail ||
-          "Verifica los datos y vuelve a intentar.",
-      });
-      console.error(error);
+      toast.error("Error al registrar el cobro");
     }
   };
 
@@ -287,7 +286,7 @@ export default function CuentasPorCobrar() {
         type: "number",
         render: (value, row) => (
           <span className="text-sm font-bold text-slate-700">
-            {formatMoney(value)} {/*  Formato corregido */}
+            {formatMoney(value)}
             <span className="text-[10px] text-muted-foreground ml-1">
               {row.moneda}
             </span>
@@ -304,7 +303,7 @@ export default function CuentasPorCobrar() {
             <span
               className={`text-sm font-black ${value === 0 ? "text-emerald-600" : statusInfo.status === "danger" ? "text-red-600" : "text-amber-600"}`}
             >
-              {formatMoney(value)} {/*  Formato corregido */}
+              {formatMoney(value)}
             </span>
           );
         },
@@ -430,11 +429,21 @@ export default function CuentasPorCobrar() {
         title="Cuentas por Cobrar (Tesorería)"
         description="Gestión de cartera, antigüedad de saldos y cobranza a clientes."
       >
-        <div className="flex items-center gap-3">
-          {/*  BOTÓN GIGANTE PARA GUSTAVO: EXPORTAR A EXCEL */}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* 🚀 NUEVO BOTÓN: IMPORTAR PAGO XML (DESTACADO EN ESMERALDA) */}
           <Button
             variant="outline"
-            className="border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 font-bold"
+            className="border-emerald-500 bg-emerald-50/50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 font-black tracking-wide shadow-sm haptic-press transition-all"
+            onClick={() => setIsImportXMLOpen(true)}
+          >
+            <FileCode2 className="h-4 w-4 mr-2 text-emerald-600" /> Cobro
+            Automático (XML)
+          </Button>
+
+          {/* BOTÓN PARA EXPORTAR A EXCEL */}
+          <Button
+            variant="outline"
+            className="border-slate-300 bg-white text-slate-700 hover:bg-slate-50 font-bold haptic-press shadow-sm"
             onClick={handleExportToExcel}
           >
             <SheetIcon className="h-4 w-4 mr-2 text-emerald-600" /> Exportar a
@@ -546,7 +555,9 @@ export default function CuentasPorCobrar() {
         </CardContent>
       </Card>
 
-      {/* Modales Existentes (Mantenemos los que ya tenías) */}
+      {/* =======================================================
+          MODALES DE CUENTAS POR COBRAR
+      ======================================================= */}
       <ImportServicesModal
         open={isImportModalOpen}
         onOpenChange={setIsImportModalOpen}
@@ -570,13 +581,21 @@ export default function CuentasPorCobrar() {
       <RegisterPaymentModal
         open={isPaymentModalOpen}
         onOpenChange={setIsPaymentModalOpen}
-        invoice={selectedInvoice}
+        invoice={selectedInvoice as any}
+        bankAccounts={bankAccounts}
         onSubmit={handleRegisterPayment}
       />
       <AccountStatementModal
         open={isAccountStatementOpen}
         onClose={() => setIsAccountStatementOpen(false)}
         invoices={invoices}
+      />
+
+      {/* 🚀 NUEVO MODAL: IMPORTAR PAGO XML */}
+      <ImportXMLPaymentModal
+        open={isImportXMLOpen}
+        onOpenChange={setIsImportXMLOpen}
+        onSuccess={fetchInvoices}
       />
 
       {/* DIÁLOGO DE ELIMINACIÓN */}

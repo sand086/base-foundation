@@ -346,6 +346,7 @@ class Tariff(AuditMixin, Base):
     nombre_ruta = Column(String(200), nullable=False)
     tipo_unidad = Column(pg_enum(UnitType, "unittype"), nullable=False)
     tarifa_base = Column(Float, nullable=False, default=0.0)
+    sueldo_operador = Column(Float, nullable=False, default=0.0)
 
     iva_porcentaje = Column(Float, default=16.0)
     retencion_porcentaje = Column(Float, default=4.0)
@@ -637,6 +638,7 @@ class Trip(AuditMixin, Base):
     status = Column(pg_enum(TripStatus, "tripstatus"), default=TripStatus.CREADO)
 
     tarifa_base = Column(Float, nullable=False, default=0.0)
+    sueldo_operador = Column(Float, nullable=False, default=0.0)
     costo_casetas = Column(Float, default=0.0)
 
     fecha_programada = Column(Date, nullable=True)

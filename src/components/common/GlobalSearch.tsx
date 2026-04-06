@@ -23,7 +23,7 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command";
-import { DialogTitle } from "@/components/ui/dialog"; // Importación para accesibilidad
+import { DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 interface SearchItem {

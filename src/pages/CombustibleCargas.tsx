@@ -23,22 +23,24 @@ import {
 } from "lucide-react";
 
 // Tipos y Servicios
-import { FuelLoad, Unit, Operator } from "@/types/api.types";
+import { Unit } from "@/features/units/types";
+import { Operator } from "@/features/operators/types";
+import { FuelLoad } from "@/features/settlements/types";
 import {
   AddTicketModal,
   type TicketFormData,
-} from "@/features/combustible/AddTicketModal";
-import { ViewCargaModal } from "@/features/combustible/ViewCargaModal";
-import { EditCargaModal } from "@/features/combustible/EditCargaModal";
+} from "@/features/settlements/components/AddTicketModal";
+import { ViewFuelModal } from "@/features/settlements/components/ViewFuelModal";
+import { EditFuelModal } from "@/features/settlements/components/EditFuelModal";
 import {
   EnhancedDataTable,
   type ColumnDef,
 } from "@/components/ui/enhanced-data-table";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { fuelService } from "@/services/fuelService";
-import { unitService } from "@/services/unitService";
-import { operatorService } from "@/services/operatorService";
+import { fuelService } from "@/features/settlements/services/fuelService";
+import { unitService } from "@/features/units/services/unitService";
+import { operatorService } from "@/features/operators/services/operatorService";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   DropdownMenu,
@@ -589,14 +591,14 @@ const CombustibleCargas = () => {
         onSubmit={handleCreateTicket}
       />
       {cargaToView && (
-        <ViewCargaModal
+        <ViewFuelModal
           open={!!cargaToView}
           onOpenChange={() => setCargaToView(null)}
           carga={cargaToView as any}
         />
       )}
       {cargaToEdit && (
-        <EditCargaModal
+        <EditFuelModal
           open={!!cargaToEdit}
           onOpenChange={() => setCargaToEdit(null)}
           carga={cargaToEdit as any}

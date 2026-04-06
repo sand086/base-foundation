@@ -47,8 +47,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useNavigate } from "react-router-dom";
-import { useClients } from "@/hooks/useClients";
-import { Client } from "@/types/api.types";
+import { useClients } from "@/features/clients/hooks/useClients";
+import { Client } from "@/features/clients/types";
 import { cn } from "@/lib/utils";
 
 // --- CONFIGURACIÓN DE ESTADOS ---

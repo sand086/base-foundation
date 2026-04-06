@@ -15,7 +15,7 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import CentroMonitoreo from "./pages/CentroMonitoreo";
 import FlotaUnidades from "./pages/FlotaUnidades";
-import FlotaUnidadDetalle from "./pages/FlotaUnidadDetalle";
+import FlotaUnitDetail from "./pages/FlotaUnitDetail";
 import FlotaOperadores from "./pages/FlotaOperadores";
 import FlotaLlantas from "./pages/FlotaLlantas";
 import Mecanicos from "./pages/Mecanicos";
@@ -43,7 +43,7 @@ import TwoFactorAuth from "./pages/TwoFactorAuth";
 import ControlDeTrafico from "./pages/ControlDeTrafico";
 
 // 🚀 IMPORTANTE: Importar el Wizard que construimos
-import { DespachoWizard } from "@/features/despacho/DespachoWizard";
+import { DispatchWizard } from "@/features/trips/components/DispatchWizard";
 
 const queryClient = new QueryClient();
 
@@ -68,10 +68,7 @@ const App = () => (
                 <Route path="monitoreo" element={<CentroMonitoreo />} />
                 <Route path="trackingop" element={<ControlDeTrafico />} />
                 <Route path="flota" element={<FlotaUnidades />} />
-                <Route
-                  path="flota/unidad/:id"
-                  element={<FlotaUnidadDetalle />}
-                />
+                <Route path="flota/unidad/:id" element={<FlotaUnitDetail />} />
                 <Route path="flota/operadores" element={<FlotaOperadores />} />
                 <Route path="flota/llantas" element={<FlotaLlantas />} />
                 <Route path="flota/mantenimiento" element={<Mantenimiento />} />
@@ -102,7 +99,7 @@ const App = () => (
 
                 <Route path="despacho" element={<Despacho />} />
                 {/* 🚀 CORRECCIÓN AQUÍ: Quitamos el "/" del inicio para que el router lo identifique correctamente */}
-                <Route path="despacho/nuevo" element={<DespachoWizard />} />
+                <Route path="despacho/nuevo" element={<DispatchWizard />} />
 
                 <Route path="users" element={<UsuariosPage />} />
                 <Route path="roles-permisos" element={<RolesPermisosPage />} />

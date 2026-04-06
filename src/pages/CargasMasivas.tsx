@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { FileSpreadsheet, Upload, ArrowRight } from "lucide-react";
-import { BulkUploadDrawer } from "@/features/cargas-masivas/BulkUploadDrawer";
+import { BulkUploadDrawer } from "@/features/bulk-uploads/components/BulkUploadDrawer";
 import {
   importTypeConfigs,
   ImportTypeConfig,

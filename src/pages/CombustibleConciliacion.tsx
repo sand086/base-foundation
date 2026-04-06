@@ -77,8 +77,8 @@ import {
 
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { useTrips } from "@/hooks/useTrips";
-import { useSystemConfig } from "@/hooks/useSystemConfig";
+import { useTrips } from "@/features/trips/hooks/useTrips";
+import { useSystemConfig } from "@/features/settings/hooks/useSystemConfig";
 import axiosClient from "@/api/axiosClient";
 
 // ============================================================================

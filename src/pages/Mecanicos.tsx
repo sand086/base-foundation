@@ -5,13 +5,13 @@ import { Plus, Wrench } from "lucide-react";
 import { toast } from "sonner";
 
 // Importamos nuestros componentes modulares
-import { MechanicsTable } from "@/features/mechanics/MechanicsTable";
-import { MechanicFormModal } from "@/features/mechanics/MechanicFormModal";
-import { MechanicExpedienteModal } from "@/features/mechanics/MechanicExpedienteModal";
+import { MechanicsTable } from "@/features/maintenance/components/MechanicsTable";
+import { MechanicFormModal } from "@/features/maintenance/components/MechanicFormModal";
+import { MechanicExpedienteModal } from "@/features/maintenance/components/MechanicExpedienteModal";
 
 // Servicios y Tipos
-import { mechanicService } from "@/services/mechanicService";
-import { Mechanic } from "@/types/api.types";
+import { mechanicService } from "@/features/maintenance/services/mechanicService";
+import { Mechanic } from "@/features/maintenance/types";
 
 export default function MechanicsPage() {
   const [mechanics, setMechanics] = useState<Mechanic[]>([]);

@@ -58,10 +58,9 @@ import { cn } from "@/lib/utils";
 
 import axiosClient from "@/api/axiosClient";
 import { toast } from "sonner";
-import { MovementDetailModal } from "@/features/tesoreria/MovementDetailModal";
+import { MovementDetailModal } from "@/features/treasury/components/MovementDetailModal";
 
-import { BankAccount, BankMovement } from "@/types/api.types";
-
+import { BankAccount, BankMovement } from "@/features/treasury/types";
 const bancos = [
   "Banamex",
   "Santander",
