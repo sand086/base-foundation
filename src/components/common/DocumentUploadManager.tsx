@@ -106,13 +106,13 @@ function buildHistoryEndpoint(
 ) {
   switch (entityType) {
     case "unit":
-      return `/units/${activeId}/documents/${docType}/history`;
+      return `/fleet/units/${activeId}/documents/${docType}/history`;
     case "client":
       return `/clients/${activeId}/documents/${docType}/history`;
     case "operator":
-      return `/operators/${activeId}/documents/${docType}/history`;
+      return `/fleet/operators/${activeId}/documents/${docType}/history`;
     case "fuel":
-      return `/fuel-logs/${activeId}/documents/${docType}/history`;
+      return `/fleet/fuel-logs/${activeId}/documents/${docType}/history`;
   }
 }
 
@@ -121,11 +121,11 @@ function buildDeleteEndpoint(entityType: EntityType, docId: number) {
     case "client":
       return `/clients/documents/${docId}`;
     case "unit":
-      return `/units/documents/${docId}`;
+      return `/fleet/units/documents/${docId}`;
     case "operator":
-      return `/operators/documents/${docId}`;
+      return `/fleet/operators/documents/${docId}`;
     case "fuel":
-      return `/fuel-logs/documents/${docId}`;
+      return `/fleet/fuel-logs/documents/${docId}`;
   }
 }
 

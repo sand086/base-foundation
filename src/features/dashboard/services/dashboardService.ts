@@ -1,6 +1,5 @@
 import axiosClient from "@/api/axiosClient";
 
-// 🚀 IMPORTACIONES FSD (Tus tipos consolidados)
 import {
   ServiceStats,
   OperatorStats,
@@ -68,7 +67,7 @@ export const dashboardService = {
     };
 
     // 📡 Mapeo directo al tipado DashboardData
-    const { data } = await axiosClient.get<DashboardData>("/dashboard", {
+    const { data } = await axiosClient.get<DashboardData>("/dashboard/stats", {
       params,
     });
     return data;
