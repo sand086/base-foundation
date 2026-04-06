@@ -1,0 +1,41 @@
+// src/features/purchases/data.ts
+import { PurchaseOrder } from "./types";
+
+export const mockPurchaseOrders: PurchaseOrder[] = [
+  {
+    id: "1",
+    folio: "OC-2026-001",
+    tipo: "compra",
+    supplier_id: "SUP-001",
+    supplier_name: "Refaccionaria Industrial SA",
+    requester: "Juan Pérez",
+    created_at: "2026-04-01",
+    required_date: "2026-04-10",
+    cost_center: "mantenimiento",
+    items: [],
+    subtotal: 13362.07,
+    iva: 2137.93,
+    total: 15500.0,
+    moneda: "MXN",
+    status: "pendiente_aprobacion",
+    converted_to_cxp: false,
+  },
+  {
+    id: "2",
+    folio: "OC-2026-002",
+    tipo: "compra",
+    supplier_id: "SUP-002",
+    supplier_name: "Llantas Premium México",
+    requester: "Carlos Gómez",
+    created_at: "2026-04-03",
+    required_date: "2026-04-05",
+    cost_center: "operaciones",
+    items: [],
+    subtotal: 38793.1,
+    iva: 6206.9,
+    total: 45000.0,
+    moneda: "MXN",
+    status: "recibida",
+    converted_to_cxp: true,
+  },
+];

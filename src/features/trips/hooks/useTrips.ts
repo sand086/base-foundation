@@ -47,7 +47,7 @@ export const useTrips = () => {
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error.response?.data?.detail || "Error al crear despacho",
+        description: error.response?.data?.detail || "Error al crear Dispatch",
         variant: "destructive",
       });
       return null;

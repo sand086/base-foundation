@@ -1,6 +1,5 @@
-
 # --- Fuente: crud_suppliers.py ---
-from __future__ import annotations
+
 
 from sqlalchemy.orm import Session, joinedload
 
@@ -228,4 +227,3 @@ def delete_payment(db: Session, payment_id: int):
     raise NotImplementedError(
         "Si vas a permitir borrar pagos, hay que recalcular saldo/estatus de la factura."
     )
-

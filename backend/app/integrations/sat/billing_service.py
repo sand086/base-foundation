@@ -41,7 +41,7 @@ from app.models.models import (
     SystemConfig,
     SatLocationCode,
 )
-from app.modules.logistics.schemas_trips import ReceivableInvoiceCreate
+from app.modules.logistics.schemas import ReceivableInvoiceCreate
 
 logging.config.dictConfig(
     {

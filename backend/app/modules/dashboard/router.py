@@ -1,4 +1,3 @@
-
 # --- Fuente: api_dashboard.py ---
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
@@ -8,7 +7,7 @@ from typing import Optional
 
 from app.db.database import get_db
 from app.models.models import Trip, Client, Operator, TripLeg, Unit
-from app.schemas.dashboard import DashboardData
+from app.modules.dashboard.schemas import DashboardData
 
 router = APIRouter()
 
@@ -116,4 +115,3 @@ def get_dashboard_stats(start_date: str, end_date: str, db: Session = Depends(ge
             for t in recent
         ],
     }
-

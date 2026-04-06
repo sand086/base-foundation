@@ -1,4 +1,3 @@
-
 # --- Fuente: crud_operators.py ---
 from sqlalchemy.orm import Session
 
@@ -86,7 +85,7 @@ def delete_operator(db: Session, operator_id: str):
 
 
 # --- Fuente: crud_tires.py ---
-from __future__ import annotations
+
 
 from datetime import datetime
 
@@ -368,7 +367,7 @@ def register_maintenance(
         descripcion=payload.descripcion,
         costo=payload.costo,
         km=tire.km_recorridos,
-        responsable="Mantenimiento",
+        responsable="Maintenance",
     )
 
     db.add(history)
@@ -480,7 +479,7 @@ def delete_tire(db: Session, tire_id: int):
 
 
 # --- Fuente: crud_units.py ---
-from __future__ import annotations
+
 
 from datetime import date
 from sqlalchemy.orm import Session, joinedload
@@ -815,4 +814,3 @@ def delete_unit(db: Session, unit_id: str):
     db.add(unit)
     db.commit()
     return True
-

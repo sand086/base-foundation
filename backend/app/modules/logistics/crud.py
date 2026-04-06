@@ -1,6 +1,5 @@
-
 # --- Fuente: crud_trips.py ---
-from __future__ import annotations
+
 
 from datetime import datetime
 import uuid
@@ -1036,4 +1035,3 @@ def reset_leg_audit(db: Session, leg_id: int):
     db.commit()
     db.refresh(leg)
     return leg
-

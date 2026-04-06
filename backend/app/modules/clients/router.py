@@ -1,4 +1,3 @@
-
 # --- Fuente: api_clients.py ---
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -13,7 +12,7 @@ from app.models.models import User, ClientDocumentHistory, Client, AuditLog
 from . import schemas
 from . import crud
 
-from app.modules.auth.api_auth import get_current_user
+from app.modules.auth.router import get_current_user
 from app.integrations.storage.storage import StorageService
 
 router = APIRouter()
@@ -240,4 +239,3 @@ async def delete_client_document(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Error de integridad al intentar eliminar el documento.",
         )
-

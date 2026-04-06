@@ -51,8 +51,8 @@ const searchItems: SearchItem[] = [
     keywords: ["gps", "tracking", "viajes"],
   },
   {
-    title: "Despacho",
-    path: "/despacho",
+    title: "Dispatch",
+    path: "/Dispatch",
     icon: CalendarPlus,
     category: "Navegación",
     keywords: ["asignar", "viaje", "programar"],
@@ -102,7 +102,7 @@ const searchItems: SearchItem[] = [
     keywords: ["neumaticos", "desgaste"],
   },
   {
-    title: "Mantenimiento",
+    title: "Maintenance",
     path: "/flota/mantenimiento",
     icon: Settings,
     category: "Flota",
@@ -112,7 +112,7 @@ const searchItems: SearchItem[] = [
     title: "Mecánicos",
     path: "/flota/mecanicos",
     icon: Settings,
-    category: "Mecanicos",
+    category: "Mechanics",
     keywords: ["mecanicos", "reparacion", "servicio"],
   },
   // Combustible

@@ -285,7 +285,7 @@ export const importTypeConfigs: ImportTypeConfig[] = [
       [
         "Refaccionaria Industrial SA",
         "RIN980512AB1",
-        "compras@refind.mx",
+        "Purchases@refind.mx",
         "55 2222 3333",
         "Av. Industrial 100, Naucalpan",
         "53370",

@@ -690,7 +690,7 @@ export const DispatchWizard = ({
 
         if (!isQuickStamp) {
           if (onSuccess) onSuccess();
-          else setTimeout(() => navigate("/despacho"), 1000);
+          else setTimeout(() => navigate("/Dispatch"), 1000);
         }
       }
     } catch (error: any) {
@@ -722,7 +722,7 @@ export const DispatchWizard = ({
 
   const handleCancel = () => {
     if (onCancel) onCancel();
-    else navigate("/despacho");
+    else navigate("/Dispatch");
   };
 
   const isStep1Valid = Boolean(
@@ -758,8 +758,8 @@ export const DispatchWizard = ({
             <div>
               <CardTitle className="text-xl text-slate-900 dark:text-white">
                 {tripId || initialData?.id
-                  ? "PLANEAR / EDITAR DESPACHO"
-                  : "DESPACHO WIZARD"}
+                  ? "PLANEAR / EDITAR Dispatch"
+                  : "Dispatch WIZARD"}
               </CardTitle>
             </div>
           </div>

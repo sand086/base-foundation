@@ -1,23 +1,28 @@
+import logging
+from typing import List
 
-# --- Fuente: api_notifications.py ---
-# backend/app/api/endpoints/notifications.py
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
-from typing import List
-import logging
 
 from app.db.database import get_db
-from app.models.models import AlertConfig, EmailTemplate
-from . import schemas
-from app.modules.auth.api_auth import get_current_active_user
 from app.models import models
+from app.models.models import AlertConfig, EmailTemplate, UserNotification, Trip
 from app.integrations.email.email_service import EmailService
+from app.modules.auth.router import get_current_active_user
+
+# 🚀 IMPORTACIONES LOCALES (FSD)
+from . import schemas
+
+# Si tienes tu función log_audit aquí, la puedes importar así:
+# from . import crud
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+
+# 🚀 ÚNICA INSTANCIA DEL ROUTER
+router = APIRouter(tags=["Monitoring & Notifications"])
 
 # ==========================================
-# ENDPOINTS PARA CONFIGURACIÓN DE ALERTAS
+# CONFIGURACIÓN DE ALERTAS
 # ==========================================
 
 
@@ -54,7 +59,7 @@ def update_alert_config(
 
 
 # ==========================================
-# ENDPOINTS PARA PLANTILLAS DE CORREO
+# PLANTILLAS DE CORREO
 # ==========================================
 
 
@@ -62,7 +67,7 @@ def update_alert_config(
 def get_all_templates(db: Session = Depends(get_db)):
     templates = db.query(EmailTemplate).all()
 
-    # "Semilla" automática: Si la tabla está vacía, mete las 3 plantillas por defecto de Gustavo
+    # "Semilla" automática: Si la tabla está vacía, mete las 3 plantillas por defecto
     if not templates:
         defaults = [
             EmailTemplate(
@@ -122,14 +127,14 @@ async def create_notification(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_active_user),
 ):
-    # 1. Guardar en la tabla NUEVA (user_notifications)
-    db_notif = models.UserNotification(
+    # 1. Guardar en la tabla UserNotification
+    db_notif = UserNotification(
         user_id=payload.user_id,
         title=payload.title,
         message=payload.message,
         event_type=payload.event_type,
         reference_id=payload.reference_id,
-        metadata_info=payload.metadata_info,  # 🚀 Sincronizado con el Schema
+        metadata_info=payload.metadata_info,
         created_by_id=current_user.id,
     )
 
@@ -137,19 +142,16 @@ async def create_notification(
     db.commit()
     db.refresh(db_notif)
 
-    # 2. 📧 Lógica de envío de correo
-    # 🚀 IMPORTANTE: Cambiamos payload.metadata por payload.metadata_info
+    # 2.  Lógica de envío de correo en Background
     if payload.event_type == "trip_tracking_update" and payload.metadata_info:
         is_external = payload.metadata_info.get("is_external", False)
 
         if is_external and payload.reference_id:
             try:
-                # Búsqueda segura del viaje
                 trip_id = int(payload.reference_id)
-                trip = db.query(models.Trip).filter(models.Trip.id == trip_id).first()
+                trip = db.query(Trip).filter(Trip.id == trip_id).first()
 
                 if trip:
-                    # Extraemos datos del metadata_info que viene de React
                     status_label = payload.metadata_info.get(
                         "statusLabel", "Actualización"
                     )
@@ -178,11 +180,10 @@ def get_my_notifications(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_active_user),
 ):
-    # 🚀 Usamos UserNotification para consistencia
     return (
-        db.query(models.UserNotification)
-        .filter(models.UserNotification.user_id == current_user.id)
-        .order_by(models.UserNotification.created_at.desc())
+        db.query(UserNotification)
+        .filter(UserNotification.user_id == current_user.id)
+        .order_by(UserNotification.created_at.desc())
         .limit(20)
         .all()
     )
@@ -194,12 +195,11 @@ def mark_notification_as_read(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_active_user),
 ):
-    # 🚀 Cambiado models.Notification -> models.UserNotification
     notif = (
-        db.query(models.UserNotification)
+        db.query(UserNotification)
         .filter(
-            models.UserNotification.id == notif_id,
-            models.UserNotification.user_id == current_user.id,
+            UserNotification.id == notif_id,
+            UserNotification.user_id == current_user.id,
         )
         .first()
     )
@@ -217,56 +217,10 @@ def mark_all_as_read(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_active_user),
 ):
-    # 🚀 Cambiado models.Notification -> models.UserNotification
-    db.query(models.UserNotification).filter(
-        models.UserNotification.user_id == current_user.id,
-        models.UserNotification.is_read == False,
+    db.query(UserNotification).filter(
+        UserNotification.user_id == current_user.id,
+        UserNotification.is_read == False,
     ).update({"is_read": True})
 
     db.commit()
     return {"message": "Todas las notificaciones marcadas como leídas"}
-
-
-# --- Fuente: api_operations.py ---
-# (Despacho y Viajes)
-
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
-from app.db.database import get_db
-from app.schemas import schemas
-from app import crud
-
-router = APIRouter()
-
-
-@router.get("/viajes")
-def list_trips(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
-    status: Optional[str] = None,
-    db: Session = Depends(get_db),
-):
-    return crud.get_trips(db, skip=skip, limit=limit, status=status)
-
-
-@router.post("/viajes", status_code=201)
-def create_trip(trip: schemas.TripCreate, db: Session = Depends(get_db)):
-    try:
-        return crud.create_trip(db, trip)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@router.patch("/viajes/{trip_id}/status")
-def update_trip_status(
-    trip_id: str,
-    status: str = Query(...),
-    location: Optional[str] = Query(None),
-    db: Session = Depends(get_db),
-):
-    trip = crud.update_trip_status(db, trip_id, status, location)
-    if not trip:
-        raise HTTPException(status_code=404, detail="Viaje no encontrado")
-    return {"message": "Status actualizado", "trip_id": trip_id, "new_status": status}
-

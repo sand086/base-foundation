@@ -1,10 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# 1. Importamos los routers directamente de sus dominios (Módulos)
+# 🚀 1. Importación de Routers de Dominios (Módulos)
 from app.modules.auth.router import router as auth_router
-from app.modules.users.router import router as users_router
+from app.modules.catalogs.router import router as catalogs_router
 from app.modules.clients.router import router as clients_router
+from app.modules.dashboard.router import router as dashboard_router
 from app.modules.fleet.router import router as fleet_router
 from app.modules.logistics.router import router as logistics_router
 from app.modules.finance.router import router as finance_router
@@ -12,33 +13,46 @@ from app.modules.suppliers.router import router as suppliers_router
 from app.modules.maintenance.router import router as maintenance_router
 from app.modules.monitoring.router import router as monitoring_router
 
-# 🔌 2. Importamos los routers de Integraciones Externas
+# 🔌 2. Importación de Routers de Integraciones Externas
+# Nota: Asegúrate de haber creado un router.py en app/integrations/sat que unifique billing y catalogs_sat
 from app.integrations.sat.router import router as sat_router
 
 app = FastAPI(title="TMS Backend FSD")
 
-# Configuración de CORS, etc...
-app.add_middleware(CORSMiddleware, ...)
+# Configuración de CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # En producción, especifica tus dominios reales
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# 🔌 3. "Enchufamos" los dominios a la App principal
-# Seguridad y Usuarios
+# 🔌 3. Registro de Rutas
+# Seguridad y Usuarios (Users ahora es parte de Auth)
 app.include_router(auth_router, prefix="/auth")
-app.include_router(users_router, prefix="/users")
 
-# Catálogos y Clientes
+# Catálogos y Dashboard
+app.include_router(catalogs_router, prefix="/catalogs")
+app.include_router(dashboard_router, prefix="/dashboard")
+
+# Clientes y Operación Core
 app.include_router(clients_router, prefix="/clients")
+app.include_router(fleet_router, prefix="/fleet")
+app.include_router(logistics_router, prefix="/logistics")
 
-# Operación Core
-app.include_router(fleet_router, prefix="/fleet")  # Units, Operators, Tires, Fuel
-app.include_router(logistics_router, prefix="/logistics")  # Trips, Tolls
+# Finanzas y Proveedores
+app.include_router(finance_router, prefix="/finance")
+app.include_router(suppliers_router, prefix="/suppliers")
 
-# Finanzas
-app.include_router(finance_router, prefix="/finance")  # Receivables, Tesorería
-app.include_router(suppliers_router, prefix="/suppliers")  # Payables
-
-# Mantenimiento y Monitoreo
+# Maintenance y Monitoreo
 app.include_router(maintenance_router, prefix="/maintenance")
 app.include_router(monitoring_router, prefix="/monitoring")
 
-# Integraciones
+# Integraciones Externas
 app.include_router(sat_router, prefix="/sat")
+
+
+@app.get("/")
+async def root():
+    return {"message": "TMS API Modular (FSD) is running"}

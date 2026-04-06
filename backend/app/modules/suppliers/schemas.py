@@ -1,6 +1,5 @@
-
 # --- Fuente: schemas_suppliers.py ---
-from __future__ import annotations
+
 
 from datetime import date, datetime
 from typing import List, Optional
@@ -15,7 +14,7 @@ from app.models.models import (
     TariffStatus,
     UnitType,
 )
-from .tolls import RateTemplateResponse
+from app.modules.logistics.schemas import RateTemplateResponse
 
 
 class ORMBase(BaseModel):
@@ -309,4 +308,3 @@ class SupplierResponse(SupplierBase):
     updated_at: Optional[datetime] = None
     created_by_id: Optional[int] = None
     updated_by_id: Optional[int] = None
-

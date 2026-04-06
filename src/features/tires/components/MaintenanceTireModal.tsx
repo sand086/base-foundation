@@ -152,7 +152,7 @@ export function MaintenanceTireModal({
             </div>
             <div className="flex flex-col gap-1 text-left min-w-0">
               <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white heading-crisp leading-none">
-                Mantenimiento
+                Maintenance
               </DialogTitle>
               <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-1 truncate tracking-normal normal-case">
                 <span className="font-mono font-bold text-amber-600 dark:text-amber-400 uppercase">
@@ -203,7 +203,7 @@ export function MaintenanceTireModal({
                 </div>
 
                 <div className="grid grid-cols-1 gap-6">
-                  {/* ⚙️ Tipo Mantenimiento */}
+                  {/* ⚙️ Tipo Maintenance */}
                   <FormField
                     control={form.control}
                     name="tipo"

@@ -1,13 +1,11 @@
-
 # --- Fuente: schemas_clients.py ---
-from __future__ import annotations
+
 
 from datetime import date, datetime
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field, EmailStr, computed_field
 
-from .tolls import RateTemplateResponse
 from app.models.models import (
     UnitType,
     Currency,
@@ -15,6 +13,9 @@ from app.models.models import (
     OperationType,
     ClientStatus,
 )
+
+if TYPE_CHECKING:
+    from app.modules.logistics.schemas import RateTemplateResponse
 
 
 class ORMBase(BaseModel):
@@ -69,7 +70,7 @@ class TariffResponse(TariffBase):
     id: int
 
     # Para que Pydantic reconozca la relación (si viene cargada)
-    route_template: Optional[RateTemplateResponse] = None
+    route_template: Optional["RateTemplateResponse"] = None
 
     @computed_field
     @property
@@ -222,6 +223,8 @@ class ClientResponse(ClientBase):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     sub_clients: List[SubClientResponse] = Field(default_factory=list)
+    tarifas_autorizadas: List["RateTemplateResponse"]
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ClientDocumentResponse(ORMBase):
@@ -236,3 +239,8 @@ class ClientDocumentResponse(ORMBase):
     is_active: bool
     uploaded_at: datetime
 
+
+from app.modules.logistics.schemas import RateTemplateResponse
+
+ClientResponse.model_rebuild()
+TariffResponse.model_rebuild()

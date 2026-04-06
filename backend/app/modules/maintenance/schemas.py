@@ -1,6 +1,5 @@
-
 # --- Fuente: schemas_maintenance.py ---
-from __future__ import annotations
+
 
 from datetime import date, datetime
 from typing import List, Optional
@@ -305,4 +304,3 @@ class WorkOrderStatusUpdate(ORMBase):
     status: WorkOrderStatus
 
     model_config = ConfigDict(extra="ignore")
-

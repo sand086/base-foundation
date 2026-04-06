@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-import { supplierService } from "@/features/payables/services/supplierService";
+import { supplierService } from "@/features/suppliers/services/supplierService";
 import {
   Supplier,
   PayableInvoice,

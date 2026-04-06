@@ -6,8 +6,6 @@ SQLAlchemy ORM Models for TMS
 - Enum names alineados a los tipos existentes en Postgres.
 """
 
-from __future__ import annotations
-
 from datetime import date
 from enum import Enum as PyEnum
 from sqlalchemy import Enum as SAEnum

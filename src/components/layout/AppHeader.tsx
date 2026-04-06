@@ -83,7 +83,7 @@ export function AppHeader() {
 
   const fetchNotifications = async () => {
     try {
-      const { data } = await axiosClient.get("/notifications/me");
+      const { data } = await axiosClient.get("/monitoring/me");
       setNotifications(data);
     } catch (e) {
       console.error("Error cargando notificaciones", e);
@@ -105,7 +105,7 @@ export function AppHeader() {
 
   const markAllAsRead = async () => {
     try {
-      await axiosClient.post("/notifications/mark-all-read");
+      await axiosClient.post("/monitoring/mark-all-read");
       setNotifications(notifications.map((n) => ({ ...n, is_read: true })));
     } catch (e) {
       console.error("Error al marcar notificaciones como leídas", e);

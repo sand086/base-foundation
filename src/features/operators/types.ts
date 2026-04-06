@@ -10,7 +10,7 @@
 export type OperatorStatus =
   | "activo"
   | "inactivo"
-  | "en_ruta" // 🚀 Añadido: vital para despacho
+  | "en_ruta" // 🚀 Añadido: vital para Dispatch
   | "vacaciones"
   | "incapacidad";
 
