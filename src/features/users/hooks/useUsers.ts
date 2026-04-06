@@ -1,7 +1,15 @@
 import { useState, useEffect, useCallback } from "react";
-import { userService, UserData } from "@/features/users/services/userService";
 import { toast } from "sonner";
+// 1. Importamos todo de tu API generada
+import {
+  AuthenticationService,
+  UserResponse,
+  UserCreate,
+  UserUpdate,
+  ApiError,
+} from "@/api/generated";
 
+// Este tipo se queda porque es solo para tu UI de la tabla
 export interface UserDisplay {
   id: string;
   nombre: string;
@@ -21,7 +29,8 @@ export const useUsers = () => {
   const [users, setUsers] = useState<UserDisplay[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const mapUserToDisplay = (user: any): UserDisplay => ({
+  // 2. Tipamos el parámetro 'user' exactamente como responde el backend
+  const mapUserToDisplay = (user: UserResponse): UserDisplay => ({
     id: user.id.toString(),
     nombre: user.nombre,
     apellidos: user.apellido || "",
@@ -31,7 +40,7 @@ export const useUsers = () => {
     rol: user.role_id?.toString() || "",
     rolNombre: user.role?.nombre || "Sin Rol",
     estado: user.activo ? "activo" : "inactivo",
-    avatar: user.avatar_url,
+    avatar: user.avatar_url || undefined,
     twoFactorEnabled: user.is_2fa_enabled || false,
     ultimoAcceso: user.last_login
       ? new Date(user.last_login).toLocaleDateString()
@@ -41,7 +50,8 @@ export const useUsers = () => {
   const fetchUsers = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await userService.getAll();
+      // 3. Usamos el servicio autogenerado
+      const data = await AuthenticationService.readUsersApiAuthGet();
       setUsers(data.map(mapUserToDisplay));
     } catch (error) {
       toast.error("Error al cargar usuarios");
@@ -55,25 +65,31 @@ export const useUsers = () => {
     fetchUsers();
   }, [fetchUsers]);
 
-  const createUser = async (data: UserData) => {
+  // Usamos el tipo "UserCreate" generado por el backend
+  const createUser = async (data: UserCreate) => {
     try {
-      await userService.create(data);
+      await AuthenticationService.createUserApiAuthPost(data);
       toast.success("Usuario creado correctamente");
       fetchUsers();
       return true;
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || "Error al crear usuario");
+    } catch (error) {
+      if (error instanceof ApiError) {
+        toast.error(error.body?.detail || "Error al crear usuario");
+      } else {
+        toast.error("Error al crear usuario");
+      }
       return false;
     }
   };
 
-  const updateUser = async (id: string, data: Partial<UserData>) => {
+  // Usamos "UserUpdate" y nos aseguramos de que el id sea 'number'
+  const updateUser = async (id: string, data: UserUpdate) => {
     try {
-      await userService.update(id, data);
+      await AuthenticationService.updateUserApiAuthUserIdPut(Number(id), data);
       toast.success("Usuario actualizado");
       fetchUsers();
       return true;
-    } catch (error: any) {
+    } catch (error) {
       toast.error("Error al actualizar usuario");
       return false;
     }
@@ -81,7 +97,9 @@ export const useUsers = () => {
 
   const toggleStatus = async (id: string) => {
     try {
-      await userService.toggleStatus(id);
+      await AuthenticationService.toggleStatusApiAuthUserIdStatusPatch(
+        Number(id),
+      );
       toast.success("Estatus actualizado");
       fetchUsers();
     } catch (error) {
@@ -92,8 +110,14 @@ export const useUsers = () => {
   const resetPassword = async (id: string, customPass?: string) => {
     try {
       const tempPass = customPass || "Temporal123!";
-      await userService.resetPassword(id, tempPass);
-      toast.success(`Contraseña actualizada con éxito`);
+      // El backend exige un modelo PasswordReset, enviamos el objeto
+      await AuthenticationService.resetPasswordApiAuthUserIdResetPasswordPost(
+        Number(id),
+        {
+          new_password: tempPass,
+        },
+      );
+      toast.success("Contraseña actualizada con éxito");
     } catch (error) {
       toast.error("Error al actualizar contraseña");
     }
@@ -101,7 +125,7 @@ export const useUsers = () => {
 
   const deleteUser = async (id: string) => {
     try {
-      await userService.delete(id);
+      await AuthenticationService.deleteUserApiAuthUserIdDelete(Number(id));
       toast.success("Usuario eliminado");
       fetchUsers();
       return true;
