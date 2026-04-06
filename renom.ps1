@@ -1,45 +1,60 @@
-# renombrar_paginas.ps1
-$pagesDir = "src\pages"
+# SCRIPT DE MIGRACIoN AUTOMATIZADA DE TIPOS (TMS)
+$GeneratedModels = "src/api/generated/models"
+$FeaturesPath = "src/features"
 
-$renames = @{
-    "CargasMasivas.tsx" = "BulkUploads.tsx"
-    "MonitoringCenter.tsx" = "MonitoringCenter.tsx"
-    "TripSettlement.tsx" = "TripSettlement.tsx"
-    "ClientsCatalog.tsx" = "ClientsCatalog.tsx"
-    "ClientForm.tsx" = "ClientForm.tsx"
-    "FuelLoads.tsx" = "FuelLoads.tsx"
-    "FuelConciliation.tsx" = "FuelConciliation.tsx"
-    "Purchases.tsx" = "Purchases.tsx"
-    "TrafficControl.tsx" = "TrafficControl.tsx"
-    "Receivables.tsx" = "Receivables.tsx"
-    "Dispatch.tsx" = "Dispatch.tsx"
-    "FinanceDashboard.tsx" = "FinanceDashboard.tsx"
-    "FleetTires.tsx" = "FleetTires.tsx"
-    "FleetOperators.tsx" = "FleetOperators.tsx"
-    "FleetUnitDetail.tsx" = "FleetUnitDetail.tsx"
-    "FleetUnits.tsx" = "FleetUnits.tsx"
-    "RateManagement.tsx" = "RateManagement.tsx"
-    "Maintenance.tsx" = "Maintenance.tsx"
-    "Mechanics.tsx" = "Mechanics.tsx"
-    "NotificationsConfig.tsx" = "NotificationsConfig.tsx"
-    "Payables.tsx" = "Payables.tsx"
-    "RolesPermissions.tsx" = "RolesPermissions.tsx"
-    "Treasury.tsx" = "Treasury.tsx"
-    "Users.tsx" = "Users.tsx"
+# Definicion de mapeos (Prefijo del archivo -> Carpeta en Features)
+$Mappings = @{
+    "Unit"        = "units"
+    "Operator"    = "operators"
+    "Client"      = "clients"
+    "Fuel"        = "settlements"
+    "Supplier"    = "suppliers"
+    "Tire"        = "tires"
+    "Trip"        = "trips"
+    "Inventory"   = "inventory"
+    "Mechanic"    = "maintenance"
+    "WorkOrder"   = "maintenance"
+    "Role"        = "users"
+    "User"        = "users"
+    "Login"       = "users"
+    "Payable"     = "payables"
+    "Receivable"  = "receivables"
+    "Dashboard"   = "dashboard"
 }
 
-Write-Host "Iniciando renombrado de paginas..." -ForegroundColor Cyan
+Write-Host "--- Iniciando Migracion de Tipos ---" -ForegroundColor Cyan
 
-foreach ($old in $renames.Keys) {
-    $new = $renames[$old]
-    $oldPath = Join-Path $pagesDir $old
+foreach ($Mapping in $Mappings.GetEnumerator()) {
+    $Prefix = $Mapping.Name
+    $TargetFolder = $Mapping.Value
+    $TargetFile = "$FeaturesPath/$TargetFolder/types.generated.ts"
     
-    if (Test-Path $oldPath) {
-        Rename-Item -Path $oldPath -NewName $new
-        Write-Host " EXITOSO: $old -> $new" -ForegroundColor Green
-    } else {
-        Write-Host " IGNORADO: $old no se encontro (quizas ya fue renombrado)" -ForegroundColor Yellow
+    # Buscar archivos que coincidan con el prefijo
+    $MatchingFiles = Get-ChildItem "$GeneratedModels/$Prefix*.ts" -ErrorAction SilentlyContinue
+
+    if ($MatchingFiles) {
+        Write-Host " Procesando modulo: $TargetFolder ($($MatchingFiles.Count) archivos)" -ForegroundColor Yellow
+        
+        # Crear encabezado
+        $Content = "/**  ARCHIVO GENERADO AUTOMaTICAMENTE - NO EDITAR DIRECTAMENTE **/" + "`n"
+        $Content += "/** Copia lo que necesites a types.ts **/ `n`n"
+
+        foreach ($File in $MatchingFiles) {
+            $Lines = Get-Content $File.FullName
+            foreach ($Line in $Lines) {
+                # Omitir lineas de importacion que apuntan al core generado
+                if ($Line -notmatch "import .* from") {
+                    $Content += $Line + "`n"
+                }
+            }
+            $Content += "`n"
+        }
+
+        # Guardar en la carpeta de la feature
+        $Content | Out-File -FilePath $TargetFile -Encoding utf8
+        Write-Host " Creado: $TargetFile" -ForegroundColor Green
     }
 }
 
-Write-Host "Renombrado completado." -ForegroundColor Cyan
+Write-Host "--- Proceso Finalizado ---" -ForegroundColor Cyan
+Write-Host "Revisa los archivos 'types.generated.ts' en cada carpeta de feature."

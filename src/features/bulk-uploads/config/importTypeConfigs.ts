@@ -389,7 +389,7 @@ export const importTypeConfigs: ImportTypeConfig[] = [
     description: "Flota de tractocamiones y remolques",
     icon: Truck,
     color: "text-status-success",
-    backendEndpoint: "/units",
+    backendEndpoint: "/fleet/units",
     columns: [
       // Usamos los nombres EXACTOS de tu Excel para que pase la validación
       { name: "numero_economico", type: "string", required: true },
@@ -453,7 +453,7 @@ export const importTypeConfigs: ImportTypeConfig[] = [
       "Conductores con licencias, exámenes médicos y datos de contacto",
     icon: UserCog,
     color: "text-violet-500",
-    backendEndpoint: "/operators",
+    backendEndpoint: "/fleet/operators",
     columns: [
       {
         name: "name",
