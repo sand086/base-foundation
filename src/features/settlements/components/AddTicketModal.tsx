@@ -41,7 +41,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-import { FUEL_CONFIG } from "@/types/api.types";
+import { FUEL_CONFIG } from "../types";
 import { useClients } from "@/features/clients/hooks/useClients";
 import { useTrips } from "@/features/trips/hooks/useTrips";
 import { useOperators } from "@/features/operators/hooks/useOperators";

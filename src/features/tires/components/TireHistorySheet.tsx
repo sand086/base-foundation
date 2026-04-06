@@ -36,7 +36,7 @@ import {
   getTireSemaphoreStatus,
   getEstadoBadge,
 } from "@/features/tires/services/tireService";
-import { Tire, TireHistoryEvent } from "@/types/api.types";
+import { Tire, TireHistoryEvent } from "@/features/tires/types";
 
 interface TireHistorySheetProps {
   tire: Tire | null;

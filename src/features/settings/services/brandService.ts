@@ -1,5 +1,5 @@
 import axiosClient from "@/api/axiosClient";
-import { Brand } from "@/types/api.types";
+import { Brand } from "@/features/settings/types";
 
 export const brandService = {
   getAll: async (): Promise<Brand[]> => {

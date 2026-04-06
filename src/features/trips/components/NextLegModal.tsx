@@ -57,8 +57,8 @@ import {
 } from "@/components/ui/popover";
 import { useUnits } from "@/features/units/hooks/useUnits";
 import { useOperators } from "@/features/operators/hooks/useOperators";
-import { useSatCatalogs } from "@/hooks/useSatCatalogs";
-import { Trip, TripLegCreatePayload } from "@/types/api.types";
+import { useSatCatalogs } from "@/features/settings/hooks/useSatCatalogs";
+import { Trip, TripLegCreatePayload } from "../types";
 import { cn, checkIsFullTrip } from "@/lib/utils";
 import axiosClient from "@/api/axiosClient";
 

@@ -32,7 +32,7 @@ import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
-import { Trip, TripLeg } from "@/types/api.types";
+import { Trip, TripLeg } from "@/features/trips/types";
 import { useTrips } from "@/features/trips/hooks/useTrips";
 
 export interface TripSettlementModalProps {

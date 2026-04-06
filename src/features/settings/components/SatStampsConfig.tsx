@@ -31,7 +31,7 @@ import {
 import { toast } from "sonner";
 import axiosClient from "@/api/axiosClient";
 import { cn } from "@/lib/utils";
-import { SystemConfig } from "@/types/api.types";
+import { SystemConfig } from "@/features/settings/types";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 

@@ -1,7 +1,6 @@
-// src/hooks/useBankAccounts.ts
 import { useState, useEffect } from "react";
 import axiosClient from "@/api/axiosClient";
-import { BankAccount } from "@/types/api.types";
+import { BankAccount } from "@/features/treasury/types";
 
 export function useBankAccounts() {
   const [accounts, setAccounts] = useState<BankAccount[]>([]);

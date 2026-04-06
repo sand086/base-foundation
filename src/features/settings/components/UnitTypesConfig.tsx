@@ -33,7 +33,7 @@ import { Plus, Pencil, Trash2, Truck, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 //  Imports reales desde los tipos y el hook
-import { TipoUnidad } from "@/types/api.types";
+import { UnitType } from "../types";
 import { useTiposUnidad } from "@/features/settings/hooks/useUnitTypes";
 import { cn } from "@/lib/utils";
 
@@ -67,7 +67,7 @@ const emojis = [
 
 export function UnitTypesConfig() {
   const { tiposUnidad, saveTiposUnidad, loading } = useTiposUnidad();
-  const [tipos, setTipos] = useState<TipoUnidad[]>([]);
+  const [tipos, setTipos] = useState<UnitType[]>([]);
 
   // 1. Sincronizar el estado local cuando llegan los datos de Python
   useEffect(() => {
@@ -77,7 +77,7 @@ export function UnitTypesConfig() {
   }, [tiposUnidad, loading]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingTipo, setEditingTipo] = useState<TipoUnidad | null>(null);
+  const [editingTipo, setEditingTipo] = useState<UnitType | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   // 2. Estado del formulario limpio y seguro
@@ -94,7 +94,7 @@ export function UnitTypesConfig() {
     setIsModalOpen(true);
   };
 
-  const handleEdit = (tipo: TipoUnidad) => {
+  const handleEdit = (tipo: UnitType) => {
     setEditingTipo(tipo);
     setFormData({
       id: tipo.id, // Es importante preservar el ID para no crear duplicados
@@ -112,7 +112,7 @@ export function UnitTypesConfig() {
       return;
     }
 
-    let updatedArray: TipoUnidad[];
+    let updatedArray: UnitType[];
 
     if (editingTipo) {
       updatedArray = tipos.map((t) =>
@@ -131,7 +131,7 @@ export function UnitTypesConfig() {
         return;
       }
 
-      const newTipo: TipoUnidad = {
+      const newTipo: UnitType = {
         id: newId,
         nombre: formData.nombre,
         descripcion: formData.descripcion,

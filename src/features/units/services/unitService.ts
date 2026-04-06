@@ -1,6 +1,7 @@
 import axiosClient from "@/api/axiosClient";
 // Asegúrate de importar la interfaz base correcta
-import { Unit, UnitDocument, UnitTire } from "@/types/api.types";
+import { Unit, UnitDocument } from "@/features/units/types";
+import { UnitTire } from "@/features/tires/types";
 
 export interface UnitDetail extends Unit {
   documents: UnitDocument[];

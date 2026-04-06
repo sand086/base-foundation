@@ -1,6 +1,3 @@
-// src/features/trips/types.ts
-
-// 🚨 IMPORTANTE: Importamos las piezas que vienen de otros módulos
 import { Unit } from "@/features/units/types";
 import { Operator } from "@/features/operators/types";
 import { Client, SubClient } from "@/features/clients/types";
@@ -195,4 +192,44 @@ export interface TripLite {
   folio: string; // public_id o formato interno
   origin: string;
   destination: string;
+}
+
+// ==========================================
+// TRACKING & MONITORING TYPES
+// ==========================================
+
+/**
+ * Datos enviados desde el modal de actualización de estatus
+ */
+export interface StatusUpdateData {
+  status: string;
+  location: string;
+  lat?: string;
+  lng?: string;
+  comments: string;
+  notifyClient: boolean;
+  timestamp: string;
+  odometro?: string;
+  combustible_porcentaje?: string;
+  combustible_litros?: string;
+  terminal_entrega_vacio?: string;
+  fase_operativa: string;
+}
+
+/**
+ * Para el caché de ubicaciones recientes en LocalStorage
+ */
+export interface CachedLocation {
+  address: string;
+  lat: string;
+  lng: string;
+}
+
+/**
+ * Estructura de las opciones visuales en el Select de estatus
+ */
+export interface StatusOption {
+  value: string;
+  label: string;
+  color: string;
 }

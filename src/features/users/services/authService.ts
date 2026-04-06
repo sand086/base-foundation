@@ -1,6 +1,5 @@
-// src/services/authService.ts
 import axiosClient from "@/api/axiosClient";
-import { LoginRequest, LoginResponse, User } from "@/types/api.types";
+import { LoginRequest, LoginResponse, User } from "@/features/users/types";
 
 export const authService = {
   // 1. Inicio de sesión primario

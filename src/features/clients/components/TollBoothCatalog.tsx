@@ -83,7 +83,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 
-import type { TollBooth } from "@/types/api.types";
+import type { TollBooth } from "../types";
 import { tollService } from "@/features/clients/services/tollService";
 import { useSystemConfig } from "@/features/settings/hooks/useSystemConfig";
 import { toast } from "sonner";

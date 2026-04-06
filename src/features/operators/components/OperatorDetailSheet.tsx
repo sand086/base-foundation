@@ -43,7 +43,7 @@ import { DocumentUploadManager } from "@/components/common/DocumentUploadManager
 
 // IMPORTANTE: interfaz real del servicio (ID numérico, etc.)
 import { operatorService } from "@/features/operators/services/operatorService";
-import { Operator } from "@/types/api.types";
+import { Operator } from "../types";
 
 import { format, differenceInYears, isValid } from "date-fns";
 import { es } from "date-fns/locale";

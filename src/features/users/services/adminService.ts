@@ -1,5 +1,6 @@
 import axiosClient from "@/api/axiosClient";
-import { User, SystemConfig } from "@/types/api.types";
+import { User } from "@/features/users/types";
+import { SystemConfig } from "@/features/settings/types";
 
 export const adminService = {
   // --- USUARIOS ---

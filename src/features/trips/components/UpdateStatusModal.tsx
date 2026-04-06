@@ -49,10 +49,16 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { TripLeg, TripTimelineEvent, Trip } from "@/types/api.types";
-import { useSecurityNotifications } from "@/hooks/useSecurityNotifications";
-import { geoapifyService } from "@/services/geoapifyService";
-
+import {
+  Trip,
+  TripLeg,
+  TripTimelineEvent,
+  StatusUpdateData,
+  CachedLocation,
+  StatusOption,
+} from "../types";
+import { useSecurityNotifications } from "@/features/notifications/hooks/useSecurityNotifications"; // Ajustado a FSD
+import { geoapifyService } from "@/features/trips/services/geoapifyService"; // Ajustado a FSD
 interface UpdateStatusModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -61,21 +67,6 @@ interface UpdateStatusModalProps {
   activeLeg?: TripLeg;
   onSubmit: (data: StatusUpdateData) => void;
   eventToEdit?: TripTimelineEvent | null; // Prop para el modo edición
-}
-
-export interface StatusUpdateData {
-  status: string;
-  location: string;
-  lat?: string;
-  lng?: string;
-  comments: string;
-  notifyClient: boolean;
-  timestamp: string;
-  odometro?: string;
-  combustible_porcentaje?: string;
-  combustible_litros?: string;
-  terminal_entrega_vacio?: string;
-  fase_operativa: string;
 }
 
 const DEFAULT_LOCATIONS = [
@@ -94,12 +85,6 @@ const DEFAULT_LOCATIONS = [
   "Patio Destino Monterrey",
   "Patio Destino Guadalajara",
 ];
-
-interface CachedLocation {
-  address: string;
-  lat: string;
-  lng: string;
-}
 
 export function UpdateStatusModal({
   open,
@@ -265,7 +250,7 @@ export function UpdateStatusModal({
         },
         {
           value: "retorno_patio",
-          label: "🔄 Retornando cargado al patio 3T",
+          label: " Retornando cargado al patio 3T",
           color: "bg-indigo-600",
         },
         ...baseOptions,
@@ -290,7 +275,7 @@ export function UpdateStatusModal({
       const options = [
         {
           value: "retorno_vacio",
-          label: "🔄 Inicia retorno de vacío",
+          label: " Inicia retorno de vacío",
           color: "bg-purple-400",
         },
         ...baseOptions,

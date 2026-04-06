@@ -1,20 +1,34 @@
-// src/hooks/useAdminActions.ts
 import { useState, useCallback, useEffect } from "react";
 import { toast } from "sonner";
-import { User, SystemConfig } from "@/types/api.types";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { adminService } from "@/services/adminService";
+
+import { User } from "@/features/users/types";
+import { SystemConfig } from "@/features/settings/types";
+import { adminService } from "@/features/users/services/adminService";
 import { useAuth } from "@/hooks/useAuth";
+
+// Definimos la interfaz del payload para la actualización masiva
+interface ConfigUpdateItem {
+  key: string;
+  value: string;
+}
 
 export function useAdminActions() {
   const queryClient = useQueryClient();
-  // Renombramos el estado local para no chocar con React Query
+
+  // Estado para cargas manuales
   const [isLocalLoading, setIsLocalLoading] = useState(false);
+
+  // Datos del perfil actual
   const { user: profile } = useAuth();
+
+  // Estados de datos administrativos
   const [users, setUsers] = useState<User[]>([]);
   const [systemConfigs, setSystemConfigs] = useState<SystemConfig[]>([]);
 
-  // 1. Cargar datos iniciales
+  // ==========================================
+  // 1. CARGA DE DATOS
+  // ==========================================
   const loadAdminData = useCallback(async () => {
     setIsLocalLoading(true);
     try {
@@ -35,7 +49,9 @@ export function useAdminActions() {
     loadAdminData();
   }, [loadAdminData]);
 
-  // 2. Acciones de Usuario
+  // ==========================================
+  // 2. ACCIONES DE USUARIO
+  // ==========================================
   const createUser = useCallback(async (data: any) => {
     setIsLocalLoading(true);
     try {
@@ -45,6 +61,7 @@ export function useAdminActions() {
       return newUser;
     } catch (error: any) {
       toast.error(error.response?.data?.detail || "Error al crear usuario");
+      throw error;
     } finally {
       setIsLocalLoading(false);
     }
@@ -65,12 +82,14 @@ export function useAdminActions() {
     }
   }, []);
 
-  // 3. Acciones de 2FA
+  // ==========================================
+  // 3. ACCIONES DE SEGURIDAD (2FA)
+  // ==========================================
   const initiate2FA = useCallback(async () => {
     setIsLocalLoading(true);
     try {
       const data = await adminService.setup2FA();
-      return data; // { secret, qrCodeUrl }
+      return data; // Retorna { secret, qrCodeUrl }
     } catch (error) {
       toast.error("Error al iniciar configuración 2FA");
       throw error;
@@ -93,45 +112,72 @@ export function useAdminActions() {
     }
   }, []);
 
-  // 4. Configuración del Sistema (Actualización individual)
-  const updateSystemConfig = useCallback(
-    async (key: string, valor: string) => {
-      setIsLocalLoading(true);
-      try {
-        await adminService.updateConfig(key, valor);
-        toast.success("Configuración actualizada");
-        loadAdminData(); // Recargamos para asegurar sincronía
-      } catch (error) {
-        toast.error("Error al guardar configuración");
-      } finally {
-        setIsLocalLoading(false);
-      }
-    },
-    [loadAdminData],
-  );
+  // ==========================================
+  // 4. CONFIGURACIÓN DEL SISTEMA
+  // ==========================================
 
-  // 5. Configuración del Sistema (Actualización en Bloque / Bulk)
-  const updateBulkConfigMutation = useMutation({
-    mutationFn: adminService.updateBulkSystemConfig,
+  // Actualización individual (vía Callback estándar)
+  const updateSystemConfig = useCallback(async (key: string, valor: string) => {
+    setIsLocalLoading(true);
+    try {
+      await adminService.updateConfig(key, valor);
+      toast.success("Configuración actualizada");
+      // Recargamos datos locales para sincronía
+      const updatedConfigs = await adminService.getConfigs();
+      setSystemConfigs(updatedConfigs);
+    } catch (error) {
+      toast.error("Error al guardar configuración");
+    } finally {
+      setIsLocalLoading(false);
+    }
+  }, []);
+
+  /**
+   * ACTUALIZACIÓN MASIVA (Bulk)
+   * 🛠️ Solución al error ts(2345):
+   * Definimos que TVariables es ConfigUpdateItem[]
+   */
+  const updateBulkConfigMutation = useMutation<any, Error, ConfigUpdateItem[]>({
+    mutationFn: (payload: ConfigUpdateItem[]) =>
+      adminService.updateBulkSystemConfig(payload),
     onSuccess: () => {
+      // Invalidamos caché global de React Query
       queryClient.invalidateQueries({ queryKey: ["systemConfigs"] });
-      loadAdminData(); // Sincronizamos la UI después del guardado masivo
+      // Sincronizamos estado local
+      loadAdminData();
+    },
+    onError: (error: any) => {
+      const msg =
+        error.response?.data?.detail || "Error en la actualización masiva";
+      toast.error(msg);
     },
   });
 
+  // ==========================================
+  // RETORNO DEL HOOK
+  // ==========================================
   return {
-    //  Combina inteligentemente la carga local con la de React Query
+    // Estado de carga combinado
     isLoading: isLocalLoading || updateBulkConfigMutation.isPending,
+
+    // Datos
     profile,
     users,
     systemConfigs,
-    //  Funciones correctamente mapeadas
-    updateSystemConfig,
-    updateBulkSystemConfig: updateBulkConfigMutation.mutateAsync,
+
+    // Funciones de Usuario
     createUser,
     toggleUserStatus,
+
+    // Funciones de Seguridad
     initiate2FA,
     verify2FACode,
+
+    // Funciones de Configuración
+    updateSystemConfig,
+    updateBulkSystemConfig: updateBulkConfigMutation.mutateAsync,
+
+    // Utilidades
     refreshData: loadAdminData,
   };
 }

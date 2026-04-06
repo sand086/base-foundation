@@ -34,7 +34,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Unit } from "@/types/api.types";
+import { Unit } from "@/features/units/types";
 import { cn } from "@/lib/utils";
 
 // Form Components (Tahoe UI)

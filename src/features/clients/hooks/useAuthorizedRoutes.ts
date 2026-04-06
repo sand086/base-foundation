@@ -1,17 +1,17 @@
 import { useState, useEffect, useCallback } from "react";
 import axiosClient from "@/api/axiosClient";
-import { RutaAutorizada } from "@/types/api.types";
+import { AuthorizedRoute } from "../types";
 import { toast } from "sonner";
 
-export const useRutasAutorizadas = () => {
-  const [rutas, setRutas] = useState<RutaAutorizada[]>([]);
+export const useAuthorizedRoutes = () => {
+  const [rutas, setRutas] = useState<AuthorizedRoute[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchRutas = useCallback(async () => {
     setIsLoading(true);
     try {
       const { data } =
-        await axiosClient.get<RutaAutorizada[]>("/catalogs/routes");
+        await axiosClient.get<AuthorizedRoute[]>("/catalogs/routes");
       setRutas(data);
     } catch (error) {
       toast.error("Error al cargar el catálogo de rutas");
@@ -24,7 +24,7 @@ export const useRutasAutorizadas = () => {
     fetchRutas();
   }, [fetchRutas]);
 
-  const addRuta = async (ruta: Omit<RutaAutorizada, "id">) => {
+  const addRuta = async (ruta: Omit<AuthorizedRoute, "id">) => {
     try {
       await axiosClient.post("/catalogs/routes", ruta);
       fetchRutas();
@@ -35,7 +35,7 @@ export const useRutasAutorizadas = () => {
     }
   };
 
-  const updateRuta = async (id: number, ruta: Partial<RutaAutorizada>) => {
+  const updateRuta = async (id: number, ruta: Partial<AuthorizedRoute>) => {
     try {
       await axiosClient.put(`/catalogs/routes/${id}`, ruta);
       fetchRutas();

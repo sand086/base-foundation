@@ -2,6 +2,8 @@ import { useState, useCallback } from "react";
 import { auditService } from "@/features/audit/services/auditService";
 import { toast } from "sonner";
 
+import { AuditLog } from "@/features/audit/types";
+
 export const useAuditLogs = () => {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [isLoading, setIsLoading] = useState(false);

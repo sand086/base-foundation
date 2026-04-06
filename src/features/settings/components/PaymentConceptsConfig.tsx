@@ -1,5 +1,5 @@
 import { GenericCatalogManager } from "./GenericCatalogManager";
-import { useSettlementConcepts } from "@/hooks/useSettlementConcepts";
+import { useSettlementConcepts } from "@/features/settings/hooks/useSettlementConcepts";
 import {
   Select,
   SelectContent,

@@ -30,16 +30,18 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import type {
+import {
   PayableInvoice,
   Supplier,
-  TripLite,
-  UnitLite,
+  PurchaseOrder,
   IndirectCategory,
-  PrefillData,
-  RegisterExpensePayload,
   FinancialClassification,
-} from "@/types/api.types";
+  RegisterExpensePayload,
+  PrefillData,
+  getOrderTypeLabel,
+} from "@/features/payables/types";
+import { Trip } from "@/features/trips/types";
+import { Unit } from "@/features/units/types";
 
 export type UploadResult = {
   url: string;
@@ -56,8 +58,8 @@ interface RegisterExpenseModalProps {
   suppliers: Supplier[];
   editInvoice?: PayableInvoice | null;
   prefillData?: PrefillData | null;
-  trips?: TripLite[];
-  units?: UnitLite[];
+  trips?: Trip[];
+  units?: Unit[];
   indirectCategories?: IndirectCategory[];
   onCreateIndirectCategory?: (input: {
     nombre: string;
@@ -584,7 +586,7 @@ export function RegisterExpenseModal({
                     {trips.map((t) => (
                       <SelectItem key={t.id} value={String(t.id)}>
                         <span className="font-mono text-xs mr-2">
-                          {t.folio}
+                          {t.uuid_fiscal.slice(0, 8).toUpperCase()}
                         </span>
                         {t.origin} → {t.destination}
                       </SelectItem>

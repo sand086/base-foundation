@@ -25,7 +25,7 @@ import {
   Building2,
   Calendar,
 } from "lucide-react";
-import { ReceivableInvoice } from "./types";
+import { ReceivableInvoice } from "@/features/receivables/types";
 
 interface RegisterPaymentModalProps {
   open: boolean;

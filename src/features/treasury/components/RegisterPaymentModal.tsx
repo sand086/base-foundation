@@ -23,9 +23,9 @@ import { toast } from "sonner";
 //   1. ÚNICA FUENTE DE LA VERDAD (api.types.ts)
 import {
   PayableInvoice,
-  BankAccount,
   RegisterPaymentPayload,
-} from "@/types/api.types";
+} from "@/features/payables/types";
+import { BankAccount } from "@/features/treasury/types";
 
 //   2. INTERFAZ LOCAL (Solo para los props del componente)
 interface RegisterPaymentModalProps {

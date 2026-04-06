@@ -1,3 +1,5 @@
+// src/features/settlements/components/SettlementReceiptModal.tsx
+
 import {
   Receipt,
   CheckCircle,
@@ -20,9 +22,8 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
 
-import { ConceptoPago, TripSettlement } from "@/types/api.types";
+import { TripSettlement } from "../types";
 
 interface SettlementReceiptModalProps {
   open: boolean;
@@ -47,240 +48,246 @@ export function SettlementReceiptModal({
     }).format(amount);
   };
 
-  // Separar ingresos y deducciones
-  const ingresos = settlement.conceptos.filter((c) => c.tipo === "ingreso");
-  const deducciones = settlement.conceptos.filter(
-    (c) => c.tipo === "deduccion",
-  );
+  // Separar ingresos y deducciones del arreglo de conceptos
+  const ingresos =
+    settlement.conceptos?.filter((c) => c.tipo === "ingreso") || [];
+  const deducciones =
+    settlement.conceptos?.filter((c) => c.tipo === "deduccion") || [];
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-brand-navy">
-            <Receipt className="h-5 w-5" />
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-white dark:bg-slate-950 border-none shadow-2xl rounded-2xl">
+        <DialogHeader className="p-2">
+          <DialogTitle className="flex items-center gap-2 text-brand-navy dark:text-white text-xl font-black uppercase tracking-tighter">
+            <Receipt className="h-6 w-6 text-emerald-500" />
             Recibo de Liquidación
           </DialogTitle>
-          <DialogDescription>Comprobante de pago autorizado</DialogDescription>
+          <DialogDescription className="text-slate-500 dark:text-slate-400 font-medium">
+            Comprobante de pago autorizado para la operación logística.
+          </DialogDescription>
         </DialogHeader>
 
-        {/* Receipt Content */}
-        <div className="bg-white border-2 border-dashed border-slate-200 rounded-xl p-6 space-y-6 shadow-sm">
+        {/* Receipt Content - Estilo "Ticket" */}
+        <div className="bg-white dark:bg-slate-900 border-2 border-dashed border-slate-200 dark:border-white/10 rounded-2xl p-6 sm:p-8 space-y-6 shadow-inner relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+            <Receipt className="h-32 w-32 rotate-12" />
+          </div>
+
           {/* Header del Recibo */}
-          <div className="text-center border-b pb-4">
-            <h2 className="text-xl font-bold text-brand-navy flex justify-center items-center">
-              <img src="/logo-white.svg" alt="3T Logistics" className="h-6" />
-            </h2>
-            <p className="text-sm text-slate-500 mt-1">
+          <div className="text-center border-b border-slate-100 dark:border-white/5 pb-6">
+            <div className="bg-brand-navy dark:bg-white inline-block p-2 rounded-lg mb-3">
+              <img
+                src="/logo-white.svg"
+                alt="3T Logistics"
+                className="h-5 dark:invert"
+              />
+            </div>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
               Sistema de Gestión de Transporte
             </p>
-            <Badge className="mt-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold">
-              <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
-              LIQUIDADO
+            <Badge className="mt-4 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20 px-4 py-1 rounded-full font-black text-[10px] tracking-widest">
+              <CheckCircle className="h-3 w-3 mr-1.5" />
+              LIQUIDADO / POSTEADO
             </Badge>
           </div>
 
-          {/* Información del Viaje */}
-          <div className="grid grid-cols-2 gap-4 text-sm bg-slate-50 p-4 rounded-xl border border-slate-100">
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Receipt className="h-4 w-4 text-slate-600" />
-                <span className="text-slate-500 uppercase text-[10px] font-bold tracking-wider">
-                  Folio Viaje:
+          {/* Información del Viaje - Grid de 2 columnas */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-sm bg-slate-50 dark:bg-black/20 p-5 rounded-2xl border border-slate-100 dark:border-white/5">
+            <div className="space-y-4">
+              <div className="flex flex-col gap-1">
+                <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                  Folio Viaje
                 </span>
-                <span className="font-bold text-slate-700">
-                  {settlement.trip_id}
+                <span className="font-mono font-bold text-brand-navy dark:text-blue-400 text-base">
+                  #{settlement.trip_id}
                 </span>
               </div>
-              <div className="flex items-center gap-2">
-                <User className="h-4 w-4 text-slate-600" />
-                <span className="text-slate-500 uppercase text-[10px] font-bold tracking-wider">
-                  Operador:
+              <div className="flex flex-col gap-1">
+                <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                  Operador
                 </span>
-                <span className="font-bold text-slate-700">
+                <div className="flex items-center gap-2 font-bold text-slate-700 dark:text-slate-200">
+                  <User className="h-3.5 w-3.5 text-slate-400" />
                   {settlement.operador_nombre}
-                </span>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Truck className="h-4 w-4 text-slate-600" />
-                <span className="text-slate-500 uppercase text-[10px] font-bold tracking-wider">
-                  Unidad:
+              <div className="flex flex-col gap-1">
+                <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                  Unidad Asignada
                 </span>
-                <span className="font-mono font-bold text-brand-navy bg-brand-navy/5 px-2 py-0.5 rounded">
+                <div className="flex items-center gap-2 font-mono font-bold text-slate-700 dark:text-slate-200">
+                  <Truck className="h-3.5 w-3.5 text-slate-400" />
                   ECO-{settlement.unidad_numero}
-                </span>
+                </div>
               </div>
             </div>
 
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <MapPin className="h-4 w-4 text-slate-600" />
-                <span className="text-slate-500 uppercase text-[10px] font-bold tracking-wider">
-                  Ruta:
+            <div className="space-y-4">
+              <div className="flex flex-col gap-1">
+                <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                  Ruta Operativa
                 </span>
-                <span
-                  className="font-bold text-slate-700 truncate"
-                  title={settlement.ruta}
-                >
+                <div className="flex items-center gap-2 font-bold text-slate-700 dark:text-slate-200 truncate">
+                  <MapPin className="h-3.5 w-3.5 text-slate-400" />
                   {settlement.ruta}
-                </span>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-slate-600" />
-                <span className="text-slate-500 uppercase text-[10px] font-bold tracking-wider">
-                  Fecha:
+              <div className="flex flex-col gap-1">
+                <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                  Fecha de Viaje
                 </span>
-                <span className="font-bold text-slate-700">
+                <div className="flex items-center gap-2 font-bold text-slate-700 dark:text-slate-200">
+                  <Calendar className="h-3.5 w-3.5 text-slate-400" />
                   {settlement.fecha_viaje}
-                </span>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-slate-500 uppercase text-[10px] font-bold tracking-wider ml-6">
-                  Kms:
+              <div className="flex flex-col gap-1">
+                <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                  Distancia Recorrida
                 </span>
-                <span className="font-bold text-slate-700">
+                <div className="font-bold text-slate-700 dark:text-slate-200 ml-5">
                   {(settlement.kms_recorridos || 0).toLocaleString()} km
-                </span>
+                </div>
               </div>
             </div>
           </div>
 
-          <Separator />
+          <Separator className="dark:bg-white/5" />
 
           {/* Sección de Ingresos */}
           <div>
-            <h3 className="font-black text-emerald-600 mb-3 flex items-center gap-2 uppercase tracking-widest text-sm">
-              <DollarSign className="h-4 w-4" /> Ingresos
+            <h3 className="font-black text-emerald-600 dark:text-emerald-400 mb-4 flex items-center gap-2 uppercase tracking-widest text-[11px]">
+              <DollarSign className="h-4 w-4" /> Percepciones / Ingresos
             </h3>
-            <div className="space-y-2.5">
+            <div className="space-y-3 px-2">
               {ingresos.map((concepto) => (
                 <div
                   key={concepto.id}
-                  className="flex justify-between text-sm items-center"
+                  className="flex justify-between text-sm items-center group"
                 >
-                  <div>
-                    <span className="font-medium text-slate-700">
+                  <div className="flex flex-col">
+                    <span className="font-bold text-slate-700 dark:text-slate-300 uppercase text-xs">
                       {concepto.descripcion}
                     </span>
                     {concepto.referencia && (
-                      <span className="text-slate-600 text-xs ml-2 italic">
-                        ({concepto.referencia})
+                      <span className="text-slate-500 text-[10px] italic">
+                        Ref: {concepto.referencia}
                       </span>
                     )}
                   </div>
-                  <span className="font-mono font-bold text-emerald-600">
+                  <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
                     +{formatCurrency(concepto.monto)}
                   </span>
                 </div>
               ))}
-              <div className="flex justify-between font-black pt-3 border-t border-slate-100 mt-2">
-                <span className="text-slate-600 uppercase text-xs tracking-wider">
-                  Subtotal Ingresos
+              <div className="flex justify-between font-black pt-4 border-t border-slate-100 dark:border-white/5 mt-4">
+                <span className="text-slate-500 uppercase text-[10px] tracking-widest">
+                  SUBTOTAL INGRESOS
                 </span>
-                <span className="font-mono text-emerald-600 text-base">
+                <span className="font-mono text-emerald-600 dark:text-emerald-400 text-lg">
                   {formatCurrency(settlement.total_ingresos)}
                 </span>
               </div>
             </div>
           </div>
 
-          <Separator />
+          <Separator className="dark:bg-white/5" />
 
           {/* Sección de Deducciones */}
           <div>
-            <h3 className="font-black text-red-600 mb-3 flex items-center gap-2 uppercase tracking-widest text-sm">
-              <DollarSign className="h-4 w-4" /> Deducciones
+            <h3 className="font-black text-rose-600 dark:text-rose-400 mb-4 flex items-center gap-2 uppercase tracking-widest text-[11px]">
+              <DollarSign className="h-4 w-4" /> Deducciones / Retenciones
             </h3>
-            <div className="space-y-2.5">
+            <div className="space-y-3 px-2">
               {deducciones.map((concepto) => (
                 <div
                   key={concepto.id}
                   className="flex justify-between text-sm items-center"
                 >
-                  <div>
+                  <div className="flex flex-col">
                     <span
                       className={cn(
-                        "font-medium text-slate-700",
+                        "font-bold uppercase text-xs",
                         concepto.categoria === "combustible"
-                          ? "text-red-600"
-                          : "",
+                          ? "text-rose-600"
+                          : "text-slate-700 dark:text-slate-300",
                       )}
                     >
                       {concepto.descripcion}
                     </span>
                     {concepto.referencia && (
-                      <span className="text-slate-600 text-xs ml-2 italic">
-                        ({concepto.referencia})
+                      <span className="text-slate-500 text-[10px] italic">
+                        Ref: {concepto.referencia}
                       </span>
                     )}
                   </div>
-                  <span className="font-mono font-bold text-red-600">
+                  <span className="font-mono font-bold text-rose-600 dark:text-rose-400">
                     -{formatCurrency(concepto.monto)}
                   </span>
                 </div>
               ))}
-              <div className="flex justify-between font-black pt-3 border-t border-slate-100 mt-2">
-                <span className="text-slate-600 uppercase text-xs tracking-wider">
-                  Subtotal Deducciones
+              <div className="flex justify-between font-black pt-4 border-t border-slate-100 dark:border-white/5 mt-4">
+                <span className="text-slate-500 uppercase text-[10px] tracking-widest">
+                  SUBTOTAL DEDUCCIONES
                 </span>
-                <span className="font-mono text-red-600 text-base">
+                <span className="font-mono text-rose-600 dark:text-rose-400 text-lg">
                   -{formatCurrency(settlement.total_deducciones)}
                 </span>
               </div>
             </div>
           </div>
 
-          <Separator className="border-2" />
-
-          {/* Total a Pagar */}
-          <div className="bg-brand-navy rounded-xl p-5 text-white shadow-md">
-            <div className="flex justify-between items-center">
-              <div>
-                <span className="text-sm font-black tracking-widest uppercase opacity-80">
-                  NETO A PAGAR
+          <div className="pt-4">
+            <div className="bg-brand-navy dark:bg-slate-800 rounded-2xl p-6 text-white shadow-xl ring-4 ring-slate-50 dark:ring-slate-900">
+              <div className="flex justify-between items-center">
+                <div className="space-y-1">
+                  <span className="text-[10px] font-black tracking-[0.2em] uppercase opacity-70">
+                    NETO TOTAL A PAGAR
+                  </span>
+                  <p className="text-[10px] text-white/50 font-medium">
+                    Autorizado el {authorizationDate} por {authorizationUser}
+                  </p>
+                </div>
+                <span className="text-4xl font-black font-mono tracking-tighter">
+                  {formatCurrency(settlement.neto_a_pagar)}
                 </span>
-                <p className="text-xs text-white/70 mt-1">
-                  Aut: {authorizationDate} por {authorizationUser}
-                </p>
               </div>
-              <span className="text-3xl font-black font-mono">
-                {formatCurrency(settlement.neto_a_pagar)}
-              </span>
             </div>
           </div>
 
           {/* Footer del recibo */}
-          <div className="text-center text-xs text-slate-600 pt-6 border-t border-dashed">
-            <p>
-              Este documento es un comprobante de liquidación generado y
-              validado automáticamente.
+          <div className="text-center text-[10px] text-slate-400 dark:text-slate-600 pt-8 border-t border-dashed border-slate-200 dark:border-white/10 space-y-2">
+            <p className="font-medium">
+              Este documento es un comprobante interno de liquidación. La
+              validez legal reside en la factura CFDI correspondiente.
             </p>
-            <p className="mt-2 flex items-center justify-center gap-2 font-bold">
-              <img
-                src="/logo-white.svg"
-                alt="3T Logistics"
-                className="h-4 opacity-50 grayscale"
-              />
-              © {new Date().getFullYear()}
+            <p className="font-black flex items-center justify-center gap-2 uppercase tracking-widest">
+              © {new Date().getFullYear()} 3T Logistics TMS
             </p>
           </div>
         </div>
 
-        {/* Acciones */}
-        <div className="flex justify-end gap-3 pt-2">
-          <Button variant="outline" className="gap-2 rounded-xl text-slate-600">
+        {/* Botonera de Acciones */}
+        <div className="flex flex-col sm:flex-row justify-end gap-3 p-2">
+          <Button
+            variant="outline"
+            className="gap-2 rounded-xl text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/10 font-bold text-xs uppercase tracking-widest h-11"
+          >
             <Printer className="h-4 w-4" />
             Imprimir
           </Button>
-          <Button variant="outline" className="gap-2 rounded-xl text-slate-600">
+          <Button
+            variant="outline"
+            className="gap-2 rounded-xl text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/10 font-bold text-xs uppercase tracking-widest h-11"
+          >
             <Download className="h-4 w-4" />
-            Descargar PDF
+            PDF
           </Button>
           <Button
             onClick={onClose}
-            className="rounded-xl bg-brand-navy text-white hover:bg-brand-navy/90 px-8"
+            className="rounded-xl bg-brand-navy hover:bg-slate-800 text-white font-black text-xs uppercase tracking-widest h-11 px-10 shadow-lg transition-all active:scale-95"
           >
-            Cerrar
+            Finalizar
           </Button>
         </div>
       </DialogContent>

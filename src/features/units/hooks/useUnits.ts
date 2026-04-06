@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 // Asegúrate de importar AxiosError si usas axios, o usa 'any' controladamente
 import { AxiosError } from "axios";
 import { unitService } from "@/features/units/services/unitService";
-import { Unit } from "@/types/api.types";
+import { Unit } from "@/features/units/types";
 import { toast } from "sonner";
 
 export const useUnits = () => {

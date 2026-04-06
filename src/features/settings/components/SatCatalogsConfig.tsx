@@ -54,7 +54,10 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-import { useSatCatalogs, SatProduct } from "@/hooks/useSatCatalogs";
+import {
+  useSatCatalogs,
+  SatProduct,
+} from "@/features/settings/hooks/useSatCatalogs";
 
 export function SatCatalogsConfig() {
   const { products, loading, saveProduct, deleteProduct } = useSatCatalogs();

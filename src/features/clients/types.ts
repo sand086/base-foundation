@@ -1,3 +1,4 @@
+import { FormaPago } from "@/features/billing/types";
 // ==========================================
 // COMERCIAL: CLIENTES Y TARIFAS
 // ==========================================
@@ -93,4 +94,15 @@ export interface RateTemplate {
   costo_total_full: number;
   created_at: string;
   segments: RateSegment[];
+}
+
+export interface AuthorizedRoute {
+  id: number;
+  origen: string;
+  destino: string;
+  kilometros?: number;
+  tarifa_base?: number;
+  cliente_id?: number;
+  sub_cliente_id?: number;
+  activo: boolean;
 }

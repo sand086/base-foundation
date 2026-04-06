@@ -76,15 +76,15 @@ import {
 
 import { useTrips } from "@/features/trips/hooks/useTrips";
 import { useUnits } from "@/features/units/hooks/useUnits";
-import { Trip, TripLeg, TripStatus } from "@/types/api.types";
+import { Trip, TripLeg, TripStatus, StatusUpdateData } from "../types";
 
-import {
-  UpdateStatusModal,
-  StatusUpdateData,
-} from "@/features/monitoreo/UpdateStatusModal";
-import TripSettlementModal from "@/features/cierre/TripSettlementModal";
+//  Módulo de Viajes (Trips)
+import { UpdateStatusModal } from "@/features/trips/components/UpdateStatusModal";
 import { NextLegModal } from "@/features/trips/components/NextLegModal";
 import { TripDetailsModal } from "@/features/trips/components/TripDetailsModal";
+import TripSettlementModal from "@/features/settlements/components/TripSettlementModal";
+
+// 🛠️ Utilidades Globales
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -146,7 +146,7 @@ const getOperationalStatusBadge = (leg: TripLeg) => {
     if (leg.leg_type === "entrega_vacio")
       return (
         <Badge className="bg-indigo-100 text-indigo-800 border-indigo-300 dark:bg-indigo-900/30 dark:text-indigo-400 dark:border-indigo-500/30 shadow-sm w-full justify-center py-1">
-          🔄 RETORNANDO VACÍO
+          RETORNANDO VACÍO
         </Badge>
       );
   }

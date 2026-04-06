@@ -1,5 +1,5 @@
 import axiosClient from "@/api/axiosClient";
-import { Tire, TireHistoryEvent } from "@/types/api.types";
+import { Tire, TireHistoryEvent } from "@/features/tires/types";
 
 export interface AssignTirePayload {
   unit_id: number | null;

@@ -1,5 +1,6 @@
 import axiosClient from "@/api/axiosClient";
-import { Unit, Operator } from "@/types/api.types";
+import { Unit } from "@/features/units/types";
+import { Operator } from "@/features/operators/types";
 
 export const fleetService = {
   // Unidades

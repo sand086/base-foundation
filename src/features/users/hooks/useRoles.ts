@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { roleService, RoleData, ModuleData } from "@/services/roleService";
+import { roleService } from "@/features/users/services/roleService";
+import { RoleData, ModuleData } from "@/features/users/types";
 import { toast } from "sonner";
 
 export const useRoles = () => {

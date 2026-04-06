@@ -43,9 +43,7 @@ export function MechanicExpedienteModal({
                   <DialogTitle className="text-xl font-bold flex items-center uppercase gap-2">
                     {mechanic.nombre} {mechanic.apellido}
                     <Badge
-                      variant={
-                        mechanic.activo ? "successSoft" : "destructiveSoft"
-                      }
+                      variant={mechanic.activo ? "success" : "destructive"}
                       className="text-xs"
                     >
                       {mechanic.activo ? "Activo" : "Inactivo"}

@@ -57,7 +57,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useUnits } from "@/features/units/hooks/useUnits";
-import { Unit } from "@/types/api.types";
+import { Unit } from "@/features/units/types";
+
 import { cn } from "@/lib/utils";
 
 // Form Components

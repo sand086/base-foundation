@@ -10,7 +10,7 @@ import {
   Lock,
 } from "lucide-react";
 import axiosClient from "@/api/axiosClient";
-import { useAuth } from "./useAuth";
+import { useAuth } from "@/hooks/useAuth";
 
 // 1. Definición de eventos de seguridad y tracking
 export type SecurityEvent =

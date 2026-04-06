@@ -18,7 +18,7 @@ import {
   DataTableCell,
 } from "@/components/ui/data-table";
 import { Search, FileInput, Truck } from "lucide-react";
-import { FinalizableService } from "./types";
+import { FinalizableService } from "@/features/receivables/types";
 
 interface ImportServicesModalProps {
   open: boolean;

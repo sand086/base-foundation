@@ -1,5 +1,5 @@
-// src/features/inventory/types.ts
-
+export type InventoryItemCreate = Omit<InventoryItem, "id">;
+export type InventoryItemUpdate = Partial<InventoryItemCreate>;
 export interface InventoryItem {
   id: number;
   sku: string;
@@ -18,6 +18,7 @@ export interface InventoryItem {
   stock_actual: number;
   stock_minimo: number;
   precio_unitario: number;
+  unidad?: string;
   ubicacion?: string;
 
   // Campos del AuditMixin (opcionales por si los necesitas en la UI)

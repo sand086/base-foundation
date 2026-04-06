@@ -8,11 +8,11 @@ import {
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 //  Importación actualizada al nuevo servicio
+import { OperatorStats } from "@/features/dashboard/types";
 import {
-  OperatorStats,
   getOperatorTripsData,
   getOperatorIncidentsData,
-} from "@/services/dashboardService";
+} from "@/features/dashboard/services/dashboardService";
 
 interface OperatorStatsChartsProps {
   operators: OperatorStats[];

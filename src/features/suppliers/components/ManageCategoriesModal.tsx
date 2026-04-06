@@ -9,7 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Trash2, Edit2, Check, X, Settings2 } from "lucide-react";
-import { IndirectCategory } from "@/types/api.types";
+import { IndirectCategory } from "@/features/payables/types";
 import { Badge } from "@/components/ui/badge";
 
 interface ManageCategoriesModalProps {

@@ -59,15 +59,11 @@ import { useUnits } from "@/features/units/hooks/useUnits";
 import { useOperators } from "@/features/operators/hooks/useOperators";
 import { useTrips } from "@/features/trips/hooks/useTrips";
 import { useClients } from "@/features/clients/hooks/useClients";
-import { useSatCatalogs } from "@/hooks/useSatCatalogs";
+import { useSatCatalogs } from "@/features/settings/hooks/useSatCatalogs";
 
 // Types
-import type {
-  TripCreatePayload,
-  SubClient,
-  Tariff,
-  TripStatus,
-} from "@/types/api.types";
+import type { TripCreatePayload, TripStatus } from "@/features/trips/types";
+import { SubClient, Tariff } from "@/features/clients/types";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 

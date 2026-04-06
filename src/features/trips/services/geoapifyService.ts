@@ -1,5 +1,3 @@
-// src/services/geoapifyService.ts
-
 // Obtenemos la llave desde el archivo .env
 const API_KEY = import.meta.env.VITE_GEOAPIFY_API_KEY;
 

@@ -29,7 +29,7 @@ import {
   ReceivableInvoice,
   getInvoiceStatusInfo,
   calculateDaysOverdue,
-} from "./types";
+} from "@/features/receivables/types";
 
 interface InvoiceDetailSheetProps {
   open: boolean;

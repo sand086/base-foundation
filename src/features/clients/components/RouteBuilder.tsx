@@ -107,7 +107,7 @@ import {
 } from "@/components/ui/form";
 
 // Services & Hooks
-import { TollBooth, RateTemplate } from "@/types/api.types";
+import { TollBooth, RateTemplate } from "../types";
 import { useClients } from "@/features/clients/hooks/useClients";
 import { tollService } from "@/features/clients/services/tollService";
 import { cn } from "@/lib/utils";

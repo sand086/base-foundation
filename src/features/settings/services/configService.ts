@@ -1,5 +1,5 @@
 import axiosClient from "@/api/axiosClient";
-import { SystemConfig } from "@/types/api.types";
+import { SystemConfig } from "@/features/settings/types";
 
 export const configService = {
   // Trae TODAS las configuraciones operativas

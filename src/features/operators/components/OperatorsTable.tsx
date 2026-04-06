@@ -28,7 +28,8 @@ import {
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { OperatorDetailSheet } from "./OperatorDetailSheet";
-import { Operator } from "@/types/api.types";
+import { Operator } from "../types";
+
 import { cn } from "@/lib/utils";
 
 interface OperadoresTableProps {

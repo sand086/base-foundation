@@ -26,7 +26,7 @@ import {
   Receipt,
   CreditCard,
 } from "lucide-react";
-import type { PayableInvoice } from "@/types/api.types";
+import type { PayableInvoice } from "@/features/payables/types";
 import { getInvoiceStatusInfo } from "@/lib/utils";
 
 type AnyInvoice = PayableInvoice & Record<string, any>;

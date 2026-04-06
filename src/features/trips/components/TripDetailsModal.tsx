@@ -52,7 +52,7 @@ import {
   Package,
   FileCode2,
 } from "lucide-react";
-import { Trip, TripLeg, TripStatus } from "@/types/api.types";
+import { Trip, TripLeg, TripStatus } from "../types";
 import { useTrips } from "@/features/trips/hooks/useTrips";
 import { useUnits } from "@/features/units/hooks/useUnits";
 import { useBilling } from "@/features/receivables/hooks/useBilling";

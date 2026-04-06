@@ -6,7 +6,7 @@ import {
   WorkOrder,
   CreateInventoryPayload,
   CreateWorkOrderPayload,
-} from "@/services/maintenanceService";
+} from "@/features/maintenance/services/maintenanceService";
 
 export const useMaintenance = () => {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);

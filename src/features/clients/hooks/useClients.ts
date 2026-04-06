@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { clientService } from "@/features/clients/services/clientService";
-import { Client } from "@/types/api.types"; // <--- Importar desde tipos centrales
+import { Client } from "../types";
 import { toast } from "sonner";
 import { AxiosError } from "axios";
 

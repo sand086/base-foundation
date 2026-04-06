@@ -274,7 +274,7 @@ export default function ControlDeTrafico() {
       setEventToEdit(null);
       setIsModalOpen(false);
 
-      // 🔄 Refrescamos los datos para que aparezcan en la pantalla
+      //  Refrescamos los datos para que aparezcan en la pantalla
       await refreshCurrentTrip();
     } catch (error) {
       console.error("Error del backend:", error);

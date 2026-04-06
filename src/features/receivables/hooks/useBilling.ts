@@ -1,7 +1,7 @@
 // src/hooks/useBilling.ts
 import { useState } from "react";
 import { useToast } from "@/components/ui/use-toast";
-import { billingService } from "@/services/billingService";
+import { billingService } from "@/features/settings/services/billingService";
 
 export const useBilling = () => {
   const [isStamping, setIsStamping] = useState(false);

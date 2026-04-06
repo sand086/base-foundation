@@ -1,5 +1,5 @@
 import { GenericCatalogManager } from "./GenericCatalogManager";
-import { useLicenseTypes } from "@/hooks/useLicenseTypes";
+import { useLicenseTypes } from "@/features/settings/hooks/useLicenseTypes";
 import { Input } from "@/components/ui/input";
 
 export const LicenseTypesConfig = () => {

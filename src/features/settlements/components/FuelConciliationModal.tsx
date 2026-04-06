@@ -11,7 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Fuel, Activity, AlertTriangle, CheckCircle2 } from "lucide-react";
-import { Trip, FuelLoad } from "@/types/api.types";
+import { FuelLoad } from "../types";
+import { Trip } from "@/features/trips/types";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 

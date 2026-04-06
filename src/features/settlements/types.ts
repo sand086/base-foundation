@@ -42,6 +42,49 @@ export interface SettlementReceipt {
   fecha_liquidacion: string;
   estatus: "pendiente" | "liquidado";
 }
+
+/** * Traducido de ConceptoPago.
+ * Representa los conceptos de ingresos o deducciones (Viáticos, Maniobras, etc.)
+ */
+export interface SettlementConcept {
+  id: number;
+  nombre: string;
+  tipo: "ingreso" | "deduccion";
+  descripcion?: string;
+  activo: boolean;
+}
+
+export interface TripSettlement {
+  id: number;
+  trip_id: number;
+  operador_nombre: string;
+  unidad_numero: string;
+  ruta: string;
+  fecha_viaje: string;
+  fecha_liquidacion: string;
+  kms_recorridos: number;
+  estatus: "pendiente" | "liquidado";
+
+  // Detalle de conceptos
+  conceptos: SettlementItem[];
+
+  // Totales calculados
+  total_ingresos: number;
+  total_deducciones: number;
+  neto_a_pagar: number;
+}
+/**
+ * Representa un concepto ya aplicado a una liquidación específica
+ */
+export interface SettlementItem {
+  id: number;
+  descripcion: string; // Ej: "Bono por puntualidad"
+  monto: number;
+  tipo: "ingreso" | "deduccion";
+  referencia?: string;
+  categoria?: string;
+}
+
 export const FUEL_CONFIG = {
   PRECIOS_PROMEDIO: {
     diesel: 23.85,

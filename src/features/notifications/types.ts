@@ -1,5 +1,3 @@
-// src/features/notifications/types.ts
-
 export interface UserNotification {
   id: number;
   title: string;

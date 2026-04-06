@@ -1,12 +1,12 @@
 import { useState, useCallback, useEffect } from "react";
-import axiosClient from "../api/axiosClient";
+import axiosClient from "@/api/axiosClient";
 import { useToast } from "@/components/ui/use-toast";
 import {
   Trip,
   TripCreatePayload,
   TripLegCreatePayload,
-  TripTimelineEventCreatePayload, // 🚀 AHORA USAMOS LA INTERFAZ OFICIAL
-} from "@/types/api.types";
+  TripTimelineEventCreatePayload,
+} from "@/features/trips/types";
 
 export const useTrips = () => {
   const [trips, setTrips] = useState<Trip[]>([]);
@@ -14,7 +14,7 @@ export const useTrips = () => {
   const { toast } = useToast();
 
   /**
-   * 🔄 REFRESH MAESTRO
+   *  REFRESH MAESTRO
    * Trae la lista actualizada de viajes y sus tramos.
    */
   const fetchTrips = useCallback(async () => {
@@ -55,7 +55,7 @@ export const useTrips = () => {
   };
 
   /**
-   * 🔄 DESENGANCHE / RELEVO (Etapa 2 y 3)
+   *  DESENGANCHE / RELEVO (Etapa 2 y 3)
    * Registra el "Drop" de un tractor y crea la siguiente fase para otro recurso.
    */
   const createNextLeg = async (
@@ -250,7 +250,7 @@ export const useTrips = () => {
   };
 
   /**
-   * 🔄 REFRESH MANUAL
+   *  REFRESH MANUAL
    */
   const refreshTrips = useCallback(async () => {
     await fetchTrips();

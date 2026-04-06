@@ -58,7 +58,7 @@ import { AddUnidadModal } from "@/features/units/components/AddUnitModal";
 import { PatrimonialView } from "@/features/units/components/PatrimonialView";
 import { useUnits } from "@/features/units/hooks/useUnits";
 import { useTiposUnidad } from "@/features/settings/hooks/useUnitTypes";
-import { Unit } from "@/types/api.types";
+import { Unit } from "@/features/units/types";
 
 // --- Helpers Visuales (Industrial Premium) ---
 const getStatusBadge = (status: string) => {

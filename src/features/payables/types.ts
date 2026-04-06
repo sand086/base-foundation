@@ -4,6 +4,9 @@
 // TIPOS DE CUENTAS POR PAGAR (EX-CXP)
 // ==========================================
 
+export type OrderType = "compra" | "servicio" | "gasto_indirecto";
+export type CostCenter = "mantenimiento" | "operaciones" | "administracion";
+
 export type FinancialClassification =
   | "costo_directo_viaje"
   | "costo_mantenimiento"
@@ -11,6 +14,32 @@ export type FinancialClassification =
   | "gasto_indirecto_variable"
   | "ingreso_flete"
   | "maniobras";
+
+/* export type IndirectCategory =
+  | "papeleria"
+  | "renta"
+  | "limpieza"
+  | "servicios"
+  | "nomina"
+  | "otros"
+  | string;
+ */
+
+export interface IndirectCategory {
+  id: number;
+  nombre: string;
+  tipo: "fijo" | "variable";
+  estatus?: "activo" | "inactivo" | string; // 👈 ¡AÑADE ESTA LÍNEA!
+}
+
+export interface OrderItem {
+  id: string;
+  descripcion: string;
+  cantidad: number;
+  unidad: string;
+  precioUnitario: number;
+  subtotal: number;
+}
 
 export interface Supplier {
   id: number;
@@ -73,13 +102,6 @@ export interface PayableInvoice {
   payments?: InvoicePayment[];
 }
 
-export interface IndirectCategory {
-  id: number;
-  nombre: string;
-  tipo: "fijo" | "variable";
-  estatus?: "activo" | "inactivo" | string;
-}
-
 export interface PrefillData {
   proveedor: string;
   proveedorId: string;
@@ -123,24 +145,28 @@ export interface RegisterPaymentPayload {
 export interface PurchaseOrder {
   id: string;
   folio: string;
-  tipo: "compra" | "servicio" | "gasto_indirecto" | string;
-  proveedorNombre: string;
-  solicitante: string;
+  tipo: OrderType;
+  supplier_id: string;
+  supplier_name: string;
+  requester: string;
+  created_at: string;
+  required_date?: string;
+  cost_center: CostCenter;
+  indirect_category?: IndirectCategory;
+  items: OrderItem[];
+  service_description?: string;
+  subtotal: number;
+  iva: number;
   total: number;
-  moneda: string;
-  estatus:
+  moneda: "MXN" | "USD";
+  status:
     | "borrador"
-    | "pendiente_aprobacion"
-    | "aprobada"
-    | "recibida"
-    | "cancelada"
-    | string;
-  convertidoACxP?: boolean;
-  fechaAprobacion?: Date;
-  aprobadoPor?: string;
-  fechaRecepcion?: Date;
-  recepcionCompleta?: boolean;
-  notasRecepcion?: string;
+    | "autorizada"
+    | "rechazada"
+    | "en_transito"
+    | "entregada"
+    | "cancelada";
+  converted_to_cxp: boolean;
 }
 
 // Funciones de utilidad que usaba tu tabla de Compras

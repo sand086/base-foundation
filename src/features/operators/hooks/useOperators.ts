@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { operatorService } from "@/features/operators/services/operatorService";
-import { Operator } from "@/types/api.types";
+import { Operator } from "../types";
+
 import { toast } from "sonner";
 
 export const useOperators = () => {

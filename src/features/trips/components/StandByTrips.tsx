@@ -28,7 +28,7 @@ import {
 import { TripDetailsModal } from "./TripDetailsModal";
 import { NextLegModal } from "./NextLegModal"; //  IMPORTAMOS EL MODAL DE ARRANQUE
 
-import { Trip } from "@/types/api.types";
+import { Trip } from "../types";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { checkIsFullTrip } from "@/lib/utils"; //  IMPORTAMOS NUESTRA HERRAMIENTA MAESTRA

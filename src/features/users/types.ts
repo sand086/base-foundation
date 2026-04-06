@@ -88,3 +88,18 @@ export interface CreatePermissionModalProps {
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
 }
+
+export interface RoleData {
+  id: number;
+  name_key: string;
+  nombre: string;
+  descripcion?: string;
+  permisos: Record<string, any>;
+}
+
+export interface ModuleData {
+  id: string;
+  nombre: string;
+  icono: string;
+  descripcion?: string;
+}

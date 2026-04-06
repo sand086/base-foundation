@@ -1,5 +1,5 @@
 import axiosClient from "@/api/axiosClient";
-import { Mechanic, MechanicDocument } from "@/types/api.types";
+import { Mechanic, MechanicDocument } from "../types";
 
 export const mechanicService = {
   // Obtener todos los mecánicos

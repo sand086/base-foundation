@@ -1,6 +1,6 @@
 // src/services/operatorService.ts
 import axiosClient from "@/api/axiosClient";
-import { Operator } from "@/types/api.types";
+import { Operator } from "../types";
 
 export const operatorService = {
   getAll: async (): Promise<Operator[]> => {

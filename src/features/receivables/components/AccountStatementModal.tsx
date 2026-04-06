@@ -33,7 +33,7 @@ import {
   ReceivableInvoice,
   getInvoiceStatusInfo,
   calculateDaysOverdue,
-} from "./types";
+} from "@/features/receivables/types";
 import { toast } from "sonner";
 
 interface AccountStatementModalProps {
@@ -77,26 +77,26 @@ export function AccountStatementModal({
 
   // Filter invoices by client and pending balance
   const filteredInvoices = useMemo(() => {
-    let filtered = invoices.filter((inv) => inv.saldoPendiente > 0);
+    let filtered = invoices.filter((inv) => inv.saldo_pendiente > 0);
     if (selectedClient !== "all") {
       filtered = filtered.filter((inv) => inv.cliente === selectedClient);
     }
     return filtered.sort(
       (a, b) =>
-        new Date(a.fechaVencimiento).getTime() -
-        new Date(b.fechaVencimiento).getTime(),
+        new Date(a.fecha_vencimiento).getTime() -
+        new Date(b.fecha_vencimiento).getTime(),
     );
   }, [invoices, selectedClient]);
 
   // Calculate totals
   const totals = useMemo(() => {
     const corriente = filteredInvoices
-      .filter((inv) => calculateDaysOverdue(inv.fechaVencimiento) <= 0)
-      .reduce((sum, inv) => sum + inv.saldoPendiente, 0);
+      .filter((inv) => calculateDaysOverdue(inv.fecha_vencimiento) <= 0)
+      .reduce((sum, inv) => sum + inv.saldo_pendiente, 0);
 
     const vencido = filteredInvoices
-      .filter((inv) => calculateDaysOverdue(inv.fechaVencimiento) > 0)
-      .reduce((sum, inv) => sum + inv.saldoPendiente, 0);
+      .filter((inv) => calculateDaysOverdue(inv.fecha_vencimiento) > 0)
+      .reduce((sum, inv) => sum + inv.saldo_pendiente, 0);
 
     return {
       corriente,

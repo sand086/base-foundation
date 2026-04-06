@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/sheet";
 import { Building2, Mail, Phone, MapPin, CreditCard, Hash } from "lucide-react";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { Supplier } from "@/types/api.types";
+import { Supplier } from "../types";
 
 interface SupplierDetailSheetProps {
   open: boolean;

@@ -1,19 +1,5 @@
 import axiosClient from "@/api/axiosClient";
-
-export interface RoleData {
-  id: number;
-  name_key: string;
-  nombre: string;
-  descripcion?: string;
-  permisos: Record<string, any>;
-}
-
-export interface ModuleData {
-  id: string;
-  nombre: string;
-  icono: string;
-  descripcion?: string;
-}
+import { RoleData, ModuleData } from "@/features/users/types";
 
 export const roleService = {
   getAll: async () => {
