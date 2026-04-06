@@ -34,7 +34,7 @@ import { toast } from "sonner";
 
 //  Imports reales desde los tipos y el hook
 import { UnitType } from "../types";
-import { useTiposUnidad } from "@/features/settings/hooks/useUnitTypes";
+import { useUnitTypes } from "@/features/settings/hooks/useUnitTypes";
 import { cn } from "@/lib/utils";
 
 const emojis = [
@@ -66,7 +66,7 @@ const emojis = [
 ];
 
 export function UnitTypesConfig() {
-  const { tiposUnidad, saveTiposUnidad, loading } = useTiposUnidad();
+  const { tiposUnidad, saveTiposUnidad, loading } = useUnitTypes();
   const [tipos, setTipos] = useState<UnitType[]>([]);
 
   // 1. Sincronizar el estado local cuando llegan los datos de Python

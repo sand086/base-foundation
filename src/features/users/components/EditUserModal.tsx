@@ -31,8 +31,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PasswordInput } from "@/components/usuarios/PasswordInput";
-import { ImageUpload } from "@/components/usuarios/ImageUpload";
+import { PasswordInput } from "@/features/users/components/PasswordInput";
+import { ImageUpload } from "@/features/users/components/ImageUpload";
 import {
   Edit,
   User,

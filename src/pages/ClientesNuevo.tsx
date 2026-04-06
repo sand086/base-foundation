@@ -69,12 +69,12 @@ import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-import { useTiposUnidad } from "@/features/settings/hooks/useUnitTypes";
+import { useUnitTypes } from "@/features/settings/hooks/useUnitTypes";
 import { useClients } from "@/features/clients/hooks/useClients";
 import { useSystemConfig } from "@/features/settings/hooks/useSystemConfig";
 import { DocumentUploadManager } from "@/components/common/DocumentUploadManager";
 import { clientService } from "@/features/clients/services/clientService";
-import type { Client, RateTemplate } from "@/types/api.types";
+import type { Client, RateTemplate } from "@/features/clients/types";
 import { tollService } from "@/features/clients/services/tollService";
 
 /** =========================
@@ -264,7 +264,7 @@ export default function ClientsNew() {
     getTipoLabel,
     getTipoIcono,
     loading: loadingTipos,
-  } = useTiposUnidad();
+  } = useUnitTypes();
   const [step, setStep] = useState(1);
   const [loadingData, setLoadingData] = useState(false);
   const { clients, isLoading: loadingClients } = useClients();

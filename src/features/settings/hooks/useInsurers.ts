@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import axiosClient from "@/api/axiosClient";
-import { Insurer } from "@/types/api.types";
+import { Insurer } from "@/features/settings/types";
 import { toast } from "sonner";
 
 export function useInsurers() {

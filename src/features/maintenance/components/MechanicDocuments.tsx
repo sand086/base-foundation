@@ -12,7 +12,6 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Loader2, Upload, FileText, Trash2, Eye } from "lucide-react";
 import { toast } from "sonner";
-import { Mechanic } from "@/features/maintenance/types";
 import { mechanicService } from "@/features/maintenance/services/mechanicService";
 
 //  Dialog shadcn/ui
@@ -25,17 +24,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-interface MechanicDocument {
-  id: number;
-  tipo_documento: string;
-  nombre_archivo: string;
-  url_archivo: string;
-  subido_en: string;
-}
-
-interface Props {
-  mechanic: Mechanic;
-}
+import { Mechanic, MechanicDocument } from "@/features/maintenance/types";
 
 const DOC_TYPES = [
   { value: "ine", label: "INE / Identificación" },
@@ -47,7 +36,7 @@ const DOC_TYPES = [
   { value: "otro", label: "Otro Documento" },
 ];
 
-export function MechanicDocuments({ mechanic }: Props) {
+export function MechanicDocuments({ mechanic }: { mechanic: Mechanic }) {
   const [documents, setDocuments] = useState<MechanicDocument[]>([]);
   const [isLoadingDocs, setIsLoadingDocs] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -288,8 +277,10 @@ export function MechanicDocuments({ mechanic }: Props) {
                     <p className="text-xs text-muted-foreground truncate">
                       {doc.nombre_archivo}
                     </p>
-                    <p className=" text-slate-600">
-                      {new Date(doc.subido_en).toLocaleDateString()}
+                    <p className="text-slate-600 text-[10px]">
+                      {doc.subido_en
+                        ? new Date(doc.subido_en).toLocaleDateString()
+                        : "Fecha no disp."}
                     </p>
                   </div>
                 </div>

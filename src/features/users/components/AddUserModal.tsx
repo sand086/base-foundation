@@ -24,7 +24,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { PasswordInput } from "@/components/usuarios/PasswordInput";
+import { PasswordInput } from "@/features/users/components/PasswordInput";
 import { useRoles } from "@/features/users/hooks/useRoles";
 import { UserPlus, Loader2 } from "lucide-react";
 

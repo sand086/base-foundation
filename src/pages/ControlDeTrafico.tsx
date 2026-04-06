@@ -44,11 +44,9 @@ import {
   Filter,
 } from "lucide-react";
 import { useTrips } from "@/features/trips/hooks/useTrips";
-import { Trip, TripTimelineEvent } from "@/types/api.types";
-import {
-  UpdateStatusModal,
-  StatusUpdateData,
-} from "@/features/monitoreo/UpdateStatusModal";
+import { Trip, TripTimelineEvent } from "@/features/trips/types";
+import { UpdateStatusModal } from "@/features/trips/components/UpdateStatusModal";
+import { StatusUpdateData } from "@/features/trips/types";
 import axiosClient from "@/api/axiosClient";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";

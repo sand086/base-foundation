@@ -23,7 +23,8 @@ import {
 } from "lucide-react";
 
 // Tipos y Servicios
-import { Unit, Operator } from "@/types/api.types";
+import { Unit } from "@/features/units/types";
+import { Operator } from "@/features/operators/types";
 import { FuelLoad } from "@/features/settlements/types";
 import {
   AddTicketModal,

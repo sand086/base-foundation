@@ -1,4 +1,4 @@
-import { PurchaseOrder } from "./types";
+import { PurchaseOrder } from "@/features/payables/types";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -10,13 +10,16 @@ export function printOrderPDF(order: PurchaseOrder) {
     }).format(amount);
   };
 
-  const tipoLabel = order.tipo === 'compra' 
-    ? 'ORDEN DE COMPRA' 
-    : order.tipo === 'servicio' 
-      ? 'ORDEN DE SERVICIO' 
-      : 'ORDEN DE GASTO';
+  const tipoLabel =
+    order.tipo === "compra"
+      ? "ORDEN DE COMPRA"
+      : order.tipo === "servicio"
+        ? "ORDEN DE SERVICIO"
+        : "ORDEN DE GASTO";
 
-  const itemsRows = order.items.map((item, i) => `
+  const itemsRows = order.items
+    .map(
+      (item, i) => `
     <tr>
       <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">${i + 1}</td>
       <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">${item.descripcion}</td>
@@ -25,7 +28,9 @@ export function printOrderPDF(order: PurchaseOrder) {
       <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; text-align: right;">${formatCurrency(item.precioUnitario)}</td>
       <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; text-align: right;">${formatCurrency(item.subtotal)}</td>
     </tr>
-  `).join('');
+  `,
+    )
+    .join("");
 
   const html = `
     <!DOCTYPE html>
@@ -161,24 +166,30 @@ export function printOrderPDF(order: PurchaseOrder) {
       <div class="info-grid">
         <div class="info-box">
           <h3>Proveedor</h3>
-          <p><strong>${order.proveedorNombre}</strong></p>
+          <p><strong>${order.supplier_name}</strong></p>
         </div>
         <div class="info-box">
           <h3>Información de Orden</h3>
-          <p><strong>Fecha:</strong> ${format(order.fechaCreacion, "dd/MM/yyyy", { locale: es })}</p>
-          <p><strong>Fecha Requerida:</strong> ${format(order.fechaRequerida, "dd/MM/yyyy", { locale: es })}</p>
-          <p><strong>Solicitante:</strong> ${order.solicitante}</p>
+          <p><strong>Fecha:</strong> ${format(order.created_at, "dd/MM/yyyy", { locale: es })}</p>
+          <p><strong>Fecha Requerida:</strong> ${format(order.required_date, "dd/MM/yyyy", { locale: es })}</p>
+          <p><strong>Solicitante:</strong> ${order.requester}</p>
         </div>
       </div>
 
-      ${order.tipo === 'servicio' && order.descripcionServicio ? `
+      ${
+        order.tipo === "servicio" && order.service_description
+          ? `
         <div class="service-desc">
           <h3 style="margin: 0 0 10px 0; font-size: 12px; text-transform: uppercase; color: #6b7280;">Descripción del Servicio</h3>
-          <p style="margin: 0; line-height: 1.6;">${order.descripcionServicio}</p>
+          <p style="margin: 0; line-height: 1.6;">${order.service_description}</p>
         </div>
-      ` : ''}
+      `
+          : ""
+      }
 
-      ${order.items.length > 0 ? `
+      ${
+        order.items.length > 0
+          ? `
         <table>
           <thead>
             <tr>
@@ -194,7 +205,9 @@ export function printOrderPDF(order: PurchaseOrder) {
             ${itemsRows}
           </tbody>
         </table>
-      ` : ''}
+      `
+          : ""
+      }
 
       <div class="totals">
         <div class="totals-row">
@@ -223,7 +236,7 @@ export function printOrderPDF(order: PurchaseOrder) {
     </html>
   `;
 
-  const printWindow = window.open('', '_blank');
+  const printWindow = window.open("", "_blank");
   if (printWindow) {
     printWindow.document.write(html);
     printWindow.document.close();

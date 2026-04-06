@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import axiosClient from "@/api/axiosClient";
-import { LicenseType } from "@/types/api.types";
+import { LicenseType } from "@/features/settings/types";
 import { toast } from "sonner";
 
 export function useLicenseTypes() {

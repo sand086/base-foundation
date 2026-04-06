@@ -1,5 +1,3 @@
-// src/features/tesoreria/types.ts
-
 export interface BankAccount {
   id: number;
   alias: string;

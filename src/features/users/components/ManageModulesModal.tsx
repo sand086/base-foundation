@@ -17,7 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Pencil, Trash2, Save, X, LayoutDashboard } from "lucide-react";
-import { ModuleData } from "@/services/roleService";
+import { ModuleData } from "../types";
 
 interface ManageModulesModalProps {
   open: boolean;

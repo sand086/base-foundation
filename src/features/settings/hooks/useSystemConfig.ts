@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { configService } from "@/services/configService";
-import { SystemConfig } from "@/types/api.types";
+
+import { configService } from "../services/configService";
+import { SystemConfig } from "../types";
 
 //  Nuestro "Salvavidas": Si la base de datos se borra, el sistema sigue funcionando
 export const DEFAULT_CONFIGS = {

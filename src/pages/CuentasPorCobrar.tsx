@@ -51,9 +51,11 @@ import axiosClient from "@/api/axiosClient";
 import { ImportServicesModal } from "@/features/receivables/components/ImportServicesModal";
 import { CreateInvoiceModal } from "@/features/receivables/components/CreateInvoiceModal";
 import { InvoiceDetailSheet } from "@/features/receivables/components/InvoiceDetailSheet";
-import { RegisterPaymentModal } from "@/features/receivables/components/RegisterPaymentModal";
+import { RegisterPaymentModal } from "@/features/treasury/components/RegisterPaymentModal";
 import { AccountStatementModal } from "@/features/receivables/components/AccountStatementModal";
 import { ImportXMLPaymentModal } from "@/features/receivables/components/ImportXMLPaymentModal";
+
+import { RegisterPaymentPayload } from "@/features/payables/types";
 import {
   ReceivableInvoice,
   InvoicePayment,
@@ -63,10 +65,13 @@ import {
   calculateDaysOverdue,
 } from "@/features/receivables/types";
 
+import { useBankAccounts } from "@/features/treasury/hooks/useBankAccounts";
+
 export default function CuentasPorCobrar() {
   const [invoices, setInvoices] = useState<ReceivableInvoice[]>([]);
   const [services, setServices] = useState<FinalizableService[]>([]);
   const [loading, setLoading] = useState(true);
+  const { bankAccounts = [] } = useBankAccounts();
 
   // Modal states
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -94,8 +99,8 @@ export default function CuentasPorCobrar() {
 
       // Mapear los datos del backend al formato que espera la tabla
       const formattedData = response.data.map((inv: any) => ({
-        id: String(inv.id),
-        folio: inv.folio_interno || `CXC-${inv.id}`,
+        id: inv.id,
+        folio: inv.folio_interno || `CXC-${String(inv.id)}`,
         cliente: inv.client?.razon_social || "Cliente Desconocido",
         monto_total: inv.monto_total,
         saldo_pendiente: inv.saldo_pendiente,
@@ -204,32 +209,24 @@ export default function CuentasPorCobrar() {
     toast.info("Función de creación manual en desarrollo");
   };
 
-  const handleRegisterPayment = async (invoiceId: string, payment: any) => {
+  const handleRegisterPayment = async (
+    invoiceId: number,
+    payment: RegisterPaymentPayload,
+  ) => {
     try {
-      // 1. Enviamos el pago al backend
       await axiosClient.post(`/receivables/${invoiceId}/payments`, {
         monto: payment.monto,
-        metodo_pago: payment.metodoPago || "TRANSFERENCIA",
+        metodo_pago: payment.metodo_pago, // 👈 Asegúrate que sea snake_case como en el payload
         referencia: payment.referencia || "",
+        bank_account_id: payment.cuenta_retiro, // 👈 Importante enviar la cuenta
       });
 
-      toast.success("¡Cobro Registrado!", {
-        description: `Se abonaron $${payment.monto.toLocaleString("es-MX")} a la factura.`,
-      });
-
-      // 2. Cerramos el modal
+      toast.success("¡Cobro Registrado!");
       setIsPaymentModalOpen(false);
       setSelectedInvoice(null);
-
-      // 3. Recargamos la tabla para que los números en Verde y los semáforos se actualicen solos
       fetchInvoices();
     } catch (error: any) {
-      toast.error("Error al registrar el cobro", {
-        description:
-          error.response?.data?.detail ||
-          "Verifica los datos y vuelve a intentar.",
-      });
-      console.error(error);
+      toast.error("Error al registrar el cobro");
     }
   };
 
@@ -584,7 +581,8 @@ export default function CuentasPorCobrar() {
       <RegisterPaymentModal
         open={isPaymentModalOpen}
         onOpenChange={setIsPaymentModalOpen}
-        invoice={selectedInvoice}
+        invoice={selectedInvoice as any}
+        bankAccounts={bankAccounts}
         onSubmit={handleRegisterPayment}
       />
       <AccountStatementModal

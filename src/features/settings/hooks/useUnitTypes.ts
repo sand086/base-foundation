@@ -1,18 +1,18 @@
 import { useState, useEffect, useCallback } from "react";
-import { TipoUnidad } from "@/types/api.types";
+import { UnitType } from "@/features/settings/types";
 import axiosClient from "@/api/axiosClient"; //  Importamos el cliente real
 import { toast } from "sonner";
 
 // 1. Definimos el valor por defecto AQUÍ MISMO para que no falle el tipado
 // Esto solo se usará si el backend falla o está vacío.
-const FALLBACK_TIPOS: TipoUnidad[] = [
+const FALLBACK_TIPOS: UnitType[] = [
   { id: "tractocamion", nombre: "Tractocamión", icono: "🚛", activo: true },
   { id: "remolque", nombre: "Remolque", icono: "📦", activo: true },
   { id: "rabon", nombre: "Rabón", icono: "🚚", activo: true },
 ];
 
-export function useTiposUnidad() {
-  const [tiposUnidad, setTiposUnidad] = useState<TipoUnidad[]>([]);
+export function useUnitTypes() {
+  const [tiposUnidad, setTiposUnidad] = useState<UnitType[]>([]);
   const [loading, setLoading] = useState(true);
 
   // 2. Función para traer los datos reales de Python (FastAPI)
@@ -20,7 +20,7 @@ export function useTiposUnidad() {
     try {
       setLoading(true);
       // Asegúrate de tener este endpoint en tu backend
-      const { data } = await axiosClient.get<TipoUnidad[]>(
+      const { data } = await axiosClient.get<UnitType[]>(
         "/catalogs/unit-types",
       );
 
@@ -43,7 +43,7 @@ export function useTiposUnidad() {
   }, [fetchTipos]);
 
   // 3. Función para guardar (Admin)
-  const saveTiposUnidad = useCallback(async (tipos: TipoUnidad[]) => {
+  const saveTiposUnidad = useCallback(async (tipos: UnitType[]) => {
     try {
       setLoading(true);
       await axiosClient.post("/catalogs/unit-types/bulk", tipos);

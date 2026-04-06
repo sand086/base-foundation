@@ -67,10 +67,8 @@ import {
 import { useTrips } from "@/features/trips/hooks/useTrips";
 import axiosClient from "@/api/axiosClient";
 import { TripDetailsModal } from "@/features/trips/components/TripDetailsModal";
-import {
-  UpdateStatusModal,
-  StatusUpdateData,
-} from "@/features/monitoreo/UpdateStatusModal";
+import { UpdateStatusModal } from "@/features/trips/components/UpdateStatusModal";
+import { StatusUpdateData } from "@/features/trips/types";
 
 // ==========================================
 // HELPERS (Formateo y Extracción de Datos)
