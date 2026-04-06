@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { dashboardService, DashboardData } from "@/services/dashboardService";
+import { dashboardService } from "@/features/dashboard/services/dashboardService";
+import { DashboardData } from "@/features/dashboard/types";
 
 export function useDashboard(startDate?: Date, endDate?: Date) {
   const [data, setData] = useState<DashboardData | null>(null);

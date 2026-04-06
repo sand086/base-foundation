@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge, StatusType } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
 //  Cambiamos la ruta al nuevo servicio centralizado
-import { RecentService } from "@/services/dashboardService";
+import { RecentService } from "@/features/dashboard/types";
 import {
   Tooltip,
   TooltipContent,

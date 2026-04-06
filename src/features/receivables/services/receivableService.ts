@@ -1,5 +1,5 @@
 import axiosClient from "@/api/axiosClient";
-import { ReceivableInvoice } from "@/types/api.types";
+import { ReceivableInvoice } from "@/features/receivables/types";
 
 export const receivableService = {
   // ==========================================

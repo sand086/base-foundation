@@ -41,8 +41,8 @@ export function PaymentModal({
   onSubmit,
   suppliers,
 }: PaymentModalProps) {
-  const { accounts, isLoading: loadingAccounts } = useBankAccounts();
-
+  const { bankAccounts: accounts, isLoading: loadingAccounts } =
+    useBankAccounts();
   const [formData, setFormData] = useState({
     supplier_id: "",
     folio_factura: "",

@@ -22,10 +22,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { OperadoresTable } from "@/features/operators/components/OperatorsTable";
-import { AddOperadorModal } from "@/features/operators/components/AddOperatorModal";
+import { AddOperatorModal } from "@/features/operators/components/AddOperatorModal";
 import { useToast } from "@/hooks/use-toast";
 import { useOperators } from "@/features/operators/hooks/useOperators";
-import { Operator } from "@/types/api.types";
+import { Operator } from "@/features/operators/types";
 
 // Helper de fechas
 const getExpiryStatus = (dateString: string) => {
@@ -269,7 +269,7 @@ export default function FlotaOperadores() {
       />
 
       {/* Add/Edit Operator Modal */}
-      <AddOperadorModal
+      <AddOperatorModal
         open={isModalOpen}
         onOpenChange={handleCloseModal}
         operatorToEdit={operadorToEdit}

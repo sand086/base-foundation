@@ -37,7 +37,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import { TruckChassisSVG } from "@/features/units/components/TruckChassisSVG";
 import { toast } from "@/hooks/use-toast";
 import { unitService, UnitDetail } from "@/features/units/services/unitService";
-import { UnitDocument, UnitTire } from "@/types/api.types";
+import { UnitDocument } from "@/features/units/types";
+import { UnitTire } from "@/features/tires/types";
 import { DocumentUploadManager } from "@/components/common/DocumentUploadManager";
 
 // MODALES / SHEETS DE LLANTAS
