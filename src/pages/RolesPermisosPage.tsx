@@ -56,10 +56,10 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
-import { CreatePermissionModal } from "@/features/permisos/CreatePermissionModal";
-import { ManageModulesModal } from "@/features/permisos/ManageModulesModal";
-import { AuditLogPanel } from "@/features/auditoria/AuditLogPanel";
-import { useRoles } from "@/hooks/useRoles";
+import { CreatePermissionModal } from "@/features/users/components/CreatePermissionModal";
+import { ManageModulesModal } from "@/features/users/components/ManageModulesModal";
+import { AuditLogPanel } from "@/features/audit/components/AuditLogPanel";
+import { useRoles } from "@/features/users/hooks/useRoles";
 
 /**
  * Tipos

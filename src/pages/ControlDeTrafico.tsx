@@ -43,7 +43,7 @@ import {
   CalendarDays,
   Filter,
 } from "lucide-react";
-import { useTrips } from "@/hooks/useTrips";
+import { useTrips } from "@/features/trips/hooks/useTrips";
 import { Trip, TripTimelineEvent } from "@/types/api.types";
 import {
   UpdateStatusModal,

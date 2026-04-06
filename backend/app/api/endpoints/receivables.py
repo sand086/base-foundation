@@ -1,9 +1,16 @@
 # src/api/endpoints/receivables.py
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, Body
+from fastapi import APIRouter, Depends, HTTPException, Body, UploadFile, File
 from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.models import models
+from app.api.endpoints.auth import get_current_active_user
+from app import crud
+
+from lxml import etree
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -126,3 +133,79 @@ def register_receivable_payment(
         "nuevo_saldo": invoice.saldo_pendiente,
         "estatus": invoice.estatus,
     }
+
+
+@router.post("/payments/upload-xml")
+async def upload_payment_xml(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """
+    Lee un XML de Complemento de Pago (REP), busca el UUID de la factura relacionada
+    y aplica el pago automáticamente matando el saldo pendiente.
+    """
+    try:
+        content = await file.read()
+        root = etree.fromstring(content)
+
+        # Namespace de pagos SAT 2.0 (como en el archivo de Gustavo)
+        ns = {"pago20": "http://www.sat.gob.mx/Pagos20"}
+
+        # Buscar el pago
+        pagos = root.xpath("//pago20:Pago", namespaces=ns)
+        if not pagos:
+            raise HTTPException(
+                status_code=400, detail="El XML no contiene complementos de pago."
+            )
+
+        pago = pagos[0]
+        fecha_pago_str = pago.get("FechaPago")
+        forma_pago = pago.get("FormaDePagoP", "03")
+
+        # Buscar documentos relacionados (Facturas pagadas)
+        doctos = root.xpath("//pago20:DoctoRelacionado", namespaces=ns)
+
+        pagos_procesados = 0
+        for doc in doctos:
+            uuid_factura = doc.get("IdDocumento").upper()
+            monto_pagado = float(doc.get("ImpPagado", "0.00"))
+
+            # Buscar factura en CxC
+            factura = (
+                db.query(models.ReceivableInvoice)
+                .filter(models.ReceivableInvoice.uuid == uuid_val)
+                .first()
+            )
+
+            if factura and factura.saldo_pendiente > 0:
+                nuevo_pago = models.ReceivableInvoicePayment(
+                    invoice_id=factura.id,
+                    fecha_pago=fecha_pago_str[:10],
+                    monto=monto_pagado,
+                    metodo_pago=forma_pago,
+                    referencia="Carga XML REP",
+                    cuenta_deposito="Banco Automático",
+                    created_by_id=current_user.id,
+                )
+                db.add(nuevo_pago)
+
+                # Actualizar saldos
+                factura.saldo_pendiente -= monto_pagado
+                if factura.saldo_pendiente <= 0:
+                    factura.saldo_pendiente = 0
+                    factura.estatus = "pagado"
+                else:
+                    factura.estatus = "pago_parcial"
+
+                pagos_procesados += 1
+
+        db.commit()
+        return {
+            "status": "success",
+            "message": f"Se procesaron {pagos_procesados} pagos automáticamente.",
+        }
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"Error al leer XML: {str(e)}")

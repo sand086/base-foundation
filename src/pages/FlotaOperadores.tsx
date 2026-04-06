@@ -21,10 +21,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { OperadoresTable } from "@/features/flota/OperadoresTable";
-import { AddOperadorModal } from "@/features/flota/AddOperadorModal";
+import { OperadoresTable } from "@/features/operators/components/OperatorsTable";
+import { AddOperadorModal } from "@/features/operators/components/AddOperatorModal";
 import { useToast } from "@/hooks/use-toast";
-import { useOperators } from "@/hooks/useOperators";
+import { useOperators } from "@/features/operators/hooks/useOperators";
 import { Operator } from "@/types/api.types";
 
 // Helper de fechas

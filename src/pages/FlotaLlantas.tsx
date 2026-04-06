@@ -42,20 +42,20 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 
-// Imports de Tipos y Hooks
+// Servicios y Hooks
 import {
   getTireLifePercentage,
   getTireSemaphoreStatus,
   getEstadoBadge,
-} from "@/services/tireService";
-import { useTires } from "@/hooks/useTires";
-import { Tire } from "@/types/api.types";
+} from "@/features/tires/services/tireService";
+import { useTires } from "@/features/tires/hooks/useTires";
+import { Tire } from "@/features/tires/types";
 
 // Componentes Modales
-import { TireHistorySheet } from "@/features/llantas/TireHistorySheet";
-import { AssignTireModal } from "@/features/llantas/AssignTireModal";
-import { MaintenanceTireModal } from "@/features/llantas/MaintenanceTireModal";
-import { CreateTireModal } from "@/features/llantas/CreateTireModal";
+import { TireHistorySheet } from "@/features/tires/components/TireHistorySheet";
+import { AssignTireModal } from "@/features/tires/components/AssignTireModal";
+import { MaintenanceTireModal } from "@/features/tires/components/MaintenanceTireModal";
+import { CreateTireModal } from "@/features/tires/components/CreateTireModal";
 
 export default function FlotaLlantas() {
   // 1. Hook Principal (CRUD completo)

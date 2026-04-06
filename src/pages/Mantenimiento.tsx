@@ -1,7 +1,7 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/ui/page-header";
-import { InventarioTable } from "@/features/mantenimiento/InventarioTable";
-import { OrdenesTrabajoTable } from "@/features/mantenimiento/OrdenesTrabajoTable";
+import { InventoryTable } from "@/features/inventory/components/InventoryTable";
+import { WorkOrdersTable } from "@/features/maintenance/components/WorkOrdersTable";
 import { Settings2, Package, Wrench } from "lucide-react";
 
 const Mantenimiento = () => {
@@ -40,14 +40,14 @@ const Mantenimiento = () => {
           value="inventario"
           className="m-0 focus-visible:outline-none animate-in fade-in slide-in-from-bottom-2 duration-500"
         >
-          <InventarioTable />
+          <InventoryTable />
         </TabsContent>
 
         <TabsContent
           value="ordenes"
           className="m-0 focus-visible:outline-none animate-in fade-in slide-in-from-bottom-2 duration-500"
         >
-          <OrdenesTrabajoTable />
+          <WorkOrdersTable />
         </TabsContent>
       </Tabs>
     </div>

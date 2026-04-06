@@ -69,13 +69,13 @@ import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-import { useTiposUnidad } from "@/hooks/useTiposUnidad";
-import { useClients } from "@/hooks/useClients";
-import { useSystemConfig } from "@/hooks/useSystemConfig";
-import { DocumentUploadManager } from "@/features/flota/DocumentUploadManager";
-import { clientService } from "@/services/clientService";
+import { useTiposUnidad } from "@/features/settings/hooks/useUnitTypes";
+import { useClients } from "@/features/clients/hooks/useClients";
+import { useSystemConfig } from "@/features/settings/hooks/useSystemConfig";
+import { DocumentUploadManager } from "@/components/common/DocumentUploadManager";
+import { clientService } from "@/features/clients/services/clientService";
 import type { Client, RateTemplate } from "@/types/api.types";
-import { tollService } from "@/services/tollService";
+import { tollService } from "@/features/clients/services/tollService";
 
 /** =========================
  * Types / Interfaces del Form
@@ -87,6 +87,7 @@ interface TarifaAutorizada {
   nombreRuta: string;
   tipoUnidad: string;
   tarifaBase: number;
+  sueldoOperador: number;
   costoCasetas: number;
   iva_porcentaje: number;
   retencion_porcentaje: number;
@@ -148,6 +149,7 @@ const emptyTarifa: TarifaAutorizada = {
   nombreRuta: "",
   tipoUnidad: "sencillo",
   tarifaBase: 0,
+  sueldoOperador: 0,
   costoCasetas: 0,
   iva_porcentaje: 16,
   retencion_porcentaje: 4,
@@ -707,6 +709,7 @@ export default function ClientsNew() {
             nombre_ruta: t.nombreRuta,
             tipo_unidad: t.tipoUnidad,
             tarifa_base: t.tarifaBase,
+            sueldo_operador: t.sueldoOperador || 0,
             costo_casetas: t.costoCasetas,
             distancia_km: Number(t.distancia_km || 0),
             iva_porcentaje: Number(globalIVA),
@@ -1722,26 +1725,50 @@ export default function ClientsNew() {
                           </div>
                         </div>
 
-                        {/* 4. FLETE BASE (INPUT) */}
-                        <div className="col-span-2 flex flex-col justify-center space-y-1.5">
-                          <Label variant="brand" className="text-brand-navy">
-                            3. Flete a Cobrar
-                          </Label>
-                          <div className="relative">
-                            <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                            <Input
-                              type="number"
-                              value={tarifa.tarifaBase || ""}
-                              onChange={(e) =>
-                                updateTarifa(
-                                  idx,
-                                  tIdx,
-                                  "tarifaBase",
-                                  Number(e.target.value),
-                                )
-                              }
-                              className="h-10 pl-8 text-sm font-black border-slate-200 bg-white focus-visible:ring-brand-navy shadow-sm"
-                            />
+                        {/* 4. FLETE BASE Y SUELDO OPERADOR */}
+                        <div className="col-span-3 grid grid-cols-1 md:grid-cols-2 gap-4 flex-col justify-center space-y-0">
+                          <div className="space-y-1.5">
+                            <Label variant="brand" className="text-brand-navy">
+                              3. Flete a Cobrar
+                            </Label>
+                            <div className="relative">
+                              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                              <Input
+                                type="number"
+                                value={tarifa.tarifaBase || ""}
+                                onChange={(e) =>
+                                  updateTarifa(
+                                    idx,
+                                    tIdx,
+                                    "tarifaBase",
+                                    Number(e.target.value),
+                                  )
+                                }
+                                className="h-10 pl-8 text-sm font-black border-slate-200 bg-white focus-visible:ring-brand-navy shadow-sm"
+                              />
+                            </div>
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label variant="brand" className="text-emerald-600">
+                              4. Sueldo Operador
+                            </Label>
+                            <div className="relative">
+                              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-400" />
+                              <Input
+                                type="number"
+                                value={tarifa.sueldoOperador || ""}
+                                onChange={(e) =>
+                                  updateTarifa(
+                                    idx,
+                                    tIdx,
+                                    "sueldoOperador",
+                                    Number(e.target.value),
+                                  )
+                                }
+                                className="h-10 pl-8 text-sm font-black border-emerald-200 bg-emerald-50 focus-visible:ring-emerald-500 shadow-sm text-emerald-700"
+                                placeholder="Pago Chofer"
+                              />
+                            </div>
                           </div>
                         </div>
 

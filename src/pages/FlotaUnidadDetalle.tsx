@@ -34,19 +34,22 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 import { useNavigate, useParams } from "react-router-dom";
-import { TruckChassisSVG } from "@/features/flota/TruckChassisSVG";
+import { TruckChassisSVG } from "@/features/units/components/TruckChassisSVG";
 import { toast } from "@/hooks/use-toast";
-import { unitService, UnidadDetalle } from "@/services/unitService";
+import { unitService, UnitDetail } from "@/features/units/services/unitService";
 import { UnitDocument, UnitTire } from "@/types/api.types";
-import { DocumentUploadManager } from "@/features/flota/DocumentUploadManager";
+import { DocumentUploadManager } from "@/components/common/DocumentUploadManager";
 
 // MODALES / SHEETS DE LLANTAS
-import { AssignTireModal } from "@/features/llantas/AssignTireModal";
-import { MaintenanceTireModal } from "@/features/llantas/MaintenanceTireModal";
-import { TireHistorySheet } from "@/features/llantas/TireHistorySheet";
-import { CreateTireModal } from "@/features/llantas/CreateTireModal";
-import { MountTireModal } from "@/features/llantas/MountTireModal"; // Añade esta importación
-import { tireService, TIRE_POSITIONS } from "@/services/tireService"; //  Importamos TIRE_POSITIONS para la tabla
+import { AssignTireModal } from "@/features/tires/components/AssignTireModal";
+import { MaintenanceTireModal } from "@/features/tires/components/MaintenanceTireModal";
+import { TireHistorySheet } from "@/features/tires/components/TireHistorySheet";
+import { CreateTireModal } from "@/features/tires/components/CreateTireModal";
+import { MountTireModal } from "@/features/tires/components/MountTireModal"; // Añade esta importación
+import {
+  tireService,
+  TIRE_POSITIONS,
+} from "@/features/tires/services/tireService"; //  Importamos TIRE_POSITIONS para la tabla
 
 /**
  * Helper para badges de fecha
@@ -147,11 +150,11 @@ const emptyForm: FormState = {
   tarjeta_circulacion_folio: "",
 };
 
-export default function FlotaUnidadDetalle() {
+export default function FlotaUnitDetail() {
   const navigate = useNavigate();
   const { id } = useParams();
 
-  const [unit, setUnit] = useState<UnidadDetalle | null>(null);
+  const [unit, setUnit] = useState<UnitDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<FormState>(emptyForm);
@@ -236,7 +239,7 @@ export default function FlotaUnidadDetalle() {
         },
       ];
 
-      const enrichedUnit: UnidadDetalle = {
+      const enrichedUnit: UnitDetail = {
         ...apiData,
         documents: constructedDocuments,
         tires: apiData.tires || [],
@@ -356,7 +359,7 @@ export default function FlotaUnidadDetalle() {
   };
 
   const syncUnitDocumentsWithFormDates = (
-    currentUnit: UnidadDetalle,
+    currentUnit: UnitDetail,
     fd: FormState,
   ) => {
     const mapVence: Record<string, string> = {

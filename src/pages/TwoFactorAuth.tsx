@@ -17,7 +17,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { AxiosError } from "axios"; // <--- Importamos AxiosError
+import { AxiosError } from "axios";
 import { logos_3t } from "@/assets/img";
 
 interface LocationState {

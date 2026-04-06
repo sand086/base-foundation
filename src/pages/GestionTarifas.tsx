@@ -1,8 +1,8 @@
 import * as React from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/ui/page-header";
-import { CatalogoCasetas } from "@/features/tarifas/CatalogoCasetas";
-import { ArmadorRutas } from "@/features/tarifas/ArmadorRutas";
+import { TollBoothCatalog } from "@/features/clients/components/TollBoothCatalog";
+import { RouteBuilder } from "@/features/clients/components/RouteBuilder";
 import { Calculator, Map, Route } from "lucide-react";
 
 const GestionTarifas = () => {
@@ -42,14 +42,14 @@ const GestionTarifas = () => {
           value="catalogo"
           className="mt-8 m-0 animate-in fade-in slide-in-from-bottom-4 duration-500"
         >
-          <CatalogoCasetas />
+          <TollBoothCatalog />
         </TabsContent>
 
         <TabsContent
           value="armador"
           className="mt-8 m-0 animate-in fade-in slide-in-from-bottom-4 duration-500"
         >
-          <ArmadorRutas />
+          <RouteBuilder />
         </TabsContent>
       </Tabs>
     </div>

@@ -2,9 +2,9 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/ui/page-header"; //  Importado nuestro Header estándar
-import { DespachoWizard } from "@/features/despacho/DespachoWizard";
-import { TripPlanner } from "@/features/despacho/TripPlanner";
-import { StandByTrips } from "@/features/despacho/StandByTrips";
+import { DispatchWizard } from "@/features/trips/components/DispatchWizard";
+import { TripPlanner } from "@/features/trips/components/TripPlanner";
+import { StandByTrips } from "@/features/trips/components/StandByTrips";
 
 import { Clock, LayoutDashboard, PlusCircle, Route } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -76,7 +76,7 @@ const Despacho = () => {
             value="wizard"
             className="m-0 h-full animate-in fade-in slide-in-from-bottom-2 duration-500 focus-visible:outline-none"
           >
-            <DespachoWizard />
+            <DispatchWizard />
           </TabsContent>
         </div>
       </Tabs>

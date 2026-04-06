@@ -25,7 +25,6 @@ import {
   EnhancedDataTable,
   ColumnDef,
 } from "@/components/ui/enhanced-data-table";
-import { useUsers, UserDisplay } from "@/hooks/useUsers";
 import { cn } from "@/lib/utils";
 import {
   Users,
@@ -44,13 +43,14 @@ import {
   Activity,
   ShieldAlert,
 } from "lucide-react";
+import { useUsers, UserDisplay } from "@/features/users/hooks/useUsers";
+
 import {
   AddUserModal,
   type UserFormData,
-} from "@/features/usuarios/AddUserModal";
-import { EditUserModal } from "@/features/usuarios/EditUserModal";
-
-import { userService } from "@/services/userService";
+} from "@/features/users/components/AddUserModal";
+import { EditUserModal } from "@/features/users/components/EditUserModal";
+import { userService } from "@/features/users/services/userService";
 import { toast } from "sonner";
 
 const UsuariosPage = () => {

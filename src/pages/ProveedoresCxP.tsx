@@ -53,17 +53,17 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
 // Feature components
-import { RegisterExpenseModal } from "@/features/cxp/RegisterExpenseModal";
-import { InvoiceDetailSheet } from "@/features/cxp/InvoiceDetailSheet";
-import { RegisterPaymentModal } from "@/features/cxp/RegisterPaymentModal";
-import { SupplierModal } from "@/features/cxp/SupplierModal";
-import { SupplierDetailSheet } from "@/features/cxp/SupplierDetailSheet";
-import { ManageCategoriesModal } from "@/features/cxp/ManageCategoriesModal";
+import { RegisterExpenseModal } from "@/features/payables/components/RegisterExpenseModal";
+import { InvoiceDetailSheet } from "/features/payables/components/InvoiceDetailSheet";
+import { RegisterPaymentModal } from "/features/payables/components/RegisterPaymentModal";
+import { SupplierModal } from "/features/payables/components/SupplierModal";
+import { SupplierDetailSheet } from "/features/payables/components/SupplierDetailSheet";
+import { ManageCategoriesModal } from "/features/payables/components/ManageCategoriesModal";
 
 // Hooks
-import { useSuppliers } from "@/hooks/useSuppliers";
-import { useBankAccounts } from "@/hooks/useBankAccounts";
-import { useSystemConfig } from "@/hooks/useSystemConfig";
+import { useSuppliers } from "@/features/payables/hooks/useSuppliers";
+import { useBankAccounts } from "@/features/treasury/hooks/useBankAccounts";
+import { useSystemConfig } from "@/features/settings/hooks/useSystemConfig";
 
 // Types (Centralizados)
 import type { PayableInvoice, Supplier } from "@/types/api.types";

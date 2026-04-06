@@ -26,7 +26,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-import { useSystemConfig } from "@/hooks/useSystemConfig";
+import { useSystemConfig } from "@/features/settings/hooks/useSystemConfig";
 import { useAuth } from "@/hooks/useAuth";
 import { openGlobalSearch } from "@/components/common/GlobalSearch";
 import axiosClient from "@/api/axiosClient";
