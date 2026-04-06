@@ -1,30 +1,24 @@
-
-# --- Fuente: api_suppliers.py ---
-from __future__ import annotations
-
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
-from . import schemas
-from app.crud import suppliers as crud
+from . import schemas, crud
 
-router = APIRouter()
-
+router = APIRouter(tags=["Suppliers"])
 
 # =========================================================
-# SUPPLIERS
+# SUPPLIERS (La ruta base ya es /suppliers en main.py)
 # =========================================================
 
 
-@router.get("/suppliers", response_model=List[schemas.SupplierResponse])
+@router.get("", response_model=List[schemas.SupplierResponse])
 def read_suppliers(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return crud.get_suppliers(db, skip, limit)
 
 
-@router.get("/suppliers/{supplier_id}", response_model=schemas.SupplierResponse)
+@router.get("/{supplier_id}", response_model=schemas.SupplierResponse)
 def read_supplier(supplier_id: int, db: Session = Depends(get_db)):
     supplier = crud.get_supplier(db, supplier_id)
     if not supplier:
@@ -32,12 +26,12 @@ def read_supplier(supplier_id: int, db: Session = Depends(get_db)):
     return supplier
 
 
-@router.post("/suppliers", response_model=schemas.SupplierResponse)
+@router.post("", response_model=schemas.SupplierResponse)
 def create_supplier(payload: schemas.SupplierCreate, db: Session = Depends(get_db)):
     return crud.create_supplier(db, payload)
 
 
-@router.put("/suppliers/{supplier_id}", response_model=schemas.SupplierResponse)
+@router.put("/{supplier_id}", response_model=schemas.SupplierResponse)
 def update_supplier(
     supplier_id: int, payload: schemas.SupplierUpdate, db: Session = Depends(get_db)
 ):
@@ -47,7 +41,7 @@ def update_supplier(
     return supplier
 
 
-@router.delete("/suppliers/{supplier_id}")
+@router.delete("/{supplier_id}")
 def delete_supplier(supplier_id: int, db: Session = Depends(get_db)):
     if not crud.delete_supplier(db, supplier_id):
         raise HTTPException(status_code=404, detail="Proveedor no encontrado")
@@ -55,7 +49,8 @@ def delete_supplier(supplier_id: int, db: Session = Depends(get_db)):
 
 
 # =========================================================
-# INVOICES (CXP)
+# INVOICES (CXP - Cuentas por Pagar)
+# Quedarán accesibles en /suppliers/invoices
 # =========================================================
 
 
@@ -99,7 +94,7 @@ def delete_invoice(invoice_id: int, db: Session = Depends(get_db)):
 
 
 # =========================================================
-# PAYMENTS
+# PAYMENTS (Pagos a Proveedores)
 # =========================================================
 
 
@@ -115,4 +110,3 @@ def register_payment(
     if not invoice:
         raise HTTPException(status_code=404, detail="Factura no encontrada")
     return invoice
-

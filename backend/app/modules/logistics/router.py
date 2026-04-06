@@ -1,26 +1,49 @@
-
-# --- Fuente: api_tolls.py ---
-# backend/app/api/endpoints/tolls.py
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session, contains_eager, joinedload
+import os
+import datetime
+from datetime import date, timedelta
+from pathlib import Path
 from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Body
+from fastapi.responses import Response
+from sqlalchemy.orm import Session, contains_eager, joinedload
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func
+from jinja2 import Environment, FileSystemLoader
+
 from app.db.database import get_db
 from app.models import models
-from . import schemas
-from app.modules.auth.api_auth import get_current_user
-from sqlalchemy.exc import IntegrityError
-import datetime
+from app.models.models import SystemConfig
 
-router = APIRouter()
+# 🚀 IMPORTACIÓN LOCAL (FSD): Solo busca en la misma carpeta "logistics"
+from . import schemas, crud
+
+# Autenticación
+from app.modules.auth.router import get_current_user
+
+try:
+    from weasyprint import HTML
+except Exception as e:
+    print(f"⚠️ Advertencia: WeasyPrint no se cargó correctamente ({e})")
+    HTML = None
+
+# 🚀 ÚNICA INSTANCIA DEL ROUTER
+router = APIRouter(tags=["Logistics"])
+
+# Configuración de Plantillas para PDFs
+TEMPLATE_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "../../templates"
+)
+jinja_env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
+
 
 # =====================================================================
 # CASETAS (TOLL BOOTHS)
 # =====================================================================
 
 
-@router.get("", response_model=List[schemas.TollBoothResponse])
+@router.get("/tolls", response_model=List[schemas.TollBoothResponse])
 def list_tolls(search: str = "", db: Session = Depends(get_db)):
-    #  Filtramos para que SOLO mande las activas
     query = db.query(models.TollBooth).filter(models.TollBooth.record_status == "A")
     if search:
         query = query.filter(
@@ -30,7 +53,7 @@ def list_tolls(search: str = "", db: Session = Depends(get_db)):
     return query.all()
 
 
-@router.post("", response_model=schemas.TollBoothResponse)
+@router.post("/tolls", response_model=schemas.TollBoothResponse)
 def create_toll(
     toll: schemas.TollBoothCreate,
     db: Session = Depends(get_db),
@@ -44,7 +67,6 @@ def create_toll(
         db.refresh(db_toll)
         return db_toll
     except IntegrityError:
-        # Revertimos la transacción si hay error de llave duplicada
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -52,7 +74,7 @@ def create_toll(
         )
 
 
-@router.put("/{toll_id}", response_model=schemas.TollBoothResponse)
+@router.put("/tolls/{toll_id}", response_model=schemas.TollBoothResponse)
 def update_toll(
     toll_id: int,
     toll: schemas.TollBoothUpdate,
@@ -63,13 +85,11 @@ def update_toll(
     if not db_toll:
         raise HTTPException(status_code=404, detail="Caseta no encontrada")
 
-    # 1. Actualizamos la caseta en el catálogo maestro
     for k, v in toll.model_dump(exclude_unset=True).items():
         setattr(db_toll, k, v)
     db_toll.updated_by_id = user.id
     db.flush()
 
-    # 2. Buscamos todos los segmentos ACTIVOS que usan esta caseta
     segments = (
         db.query(models.RateSegment)
         .filter(
@@ -81,7 +101,6 @@ def update_toll(
 
     templates_to_update = set()
     for seg in segments:
-        # Actualizamos la foto del precio en el segmento
         seg.costo_momento_sencillo = db_toll.costo_5_ejes_sencillo
         seg.costo_momento_full = db_toll.costo_9_ejes_full
         if seg.template:
@@ -89,7 +108,6 @@ def update_toll(
 
     db.flush()
 
-    # 3. Recalculamos totales de cada ruta e impactamos convenios de clientes
     for template in templates_to_update:
         active_segments = (
             db.query(models.RateSegment)
@@ -107,7 +125,6 @@ def update_toll(
             (s.costo_momento_full or 0.0) for s in active_segments
         )
 
-        #  ACTUALIZAR TARIFAS AUTORIZADAS DE CLIENTES
         client_tariffs = (
             db.query(models.Tariff)
             .filter(
@@ -131,7 +148,6 @@ def update_toll(
         db.refresh(db_toll)
         return db_toll
     except IntegrityError:
-        # Si el usuario intentó actualizar el nombre/tramo a uno que ya existe
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -139,22 +155,20 @@ def update_toll(
         )
 
 
-#  NUEVO ENDPOINT: Verifica dependencias ANTES de borrar
-@router.get("/{toll_id}/dependencies")
+@router.get("/tolls/{toll_id}/dependencies")
 def check_toll_dependencies(toll_id: int, db: Session = Depends(get_db)):
     rutas_count = (
         db.query(models.RateSegment)
         .filter(
             models.RateSegment.toll_booth_id == toll_id,
-            models.RateSegment.record_status == "A",  # Solo cuenta en rutas activas
+            models.RateSegment.record_status == "A",
         )
         .count()
     )
     return {"in_use": rutas_count > 0, "rutas_count": rutas_count}
 
 
-#  ENDPOINT ACTUALIZADO: Recibe la decisión del usuario y hace borrado lógico
-@router.delete("/{toll_id}")
+@router.delete("/tolls/{toll_id}")
 def delete_toll(
     toll_id: int, remove_from_routes: bool = Query(False), db: Session = Depends(get_db)
 ):
@@ -162,7 +176,6 @@ def delete_toll(
     if not db_toll:
         raise HTTPException(status_code=404, detail="Caseta no encontrada")
 
-    # Buscar en qué segmentos está viva esta caseta
     segments = (
         db.query(models.RateSegment)
         .filter(
@@ -176,7 +189,6 @@ def delete_toll(
         if remove_from_routes:
             templates_to_update = set()
 
-            # 1. Borrado Lógico: En lugar de destruir, cambiamos el estatus a "E"
             for seg in segments:
                 if seg.template:
                     templates_to_update.add(seg.template)
@@ -185,13 +197,12 @@ def delete_toll(
 
             db.flush()
 
-            # 2. Recalculamos los totales de las rutas afectadas (Ignorando los "E")
             for template in templates_to_update:
                 active_segments = (
                     db.query(models.RateSegment)
                     .filter(
                         models.RateSegment.rate_template_id == template.id,
-                        models.RateSegment.record_status == "A",  #  SOLO ACTIVOS
+                        models.RateSegment.record_status == "A",
                     )
                     .all()
                 )
@@ -208,7 +219,6 @@ def delete_toll(
                 template.distancia_total_km = total_km
                 template.tiempo_total_minutos = total_min
 
-        # Inactivamos la caseta en el catálogo ('I')
         db_toll.record_status = "I"
         msg = "Caseta inactivada y sus tramos marcados como eliminados en las rutas (Borrado lógico)."
     else:
@@ -230,9 +240,6 @@ def list_templates(
     client_id: Optional[int] = None,
     db: Session = Depends(get_db),
 ):
-    #  SOLUCIÓN: Usamos joinedload para asegurar que la ruta padre SIEMPRE cargue.
-    # Evitamos el outerjoin/contains_eager que hacía desaparecer la ruta entera
-    # si los segmentos tenían estados inconsistentes.
     query = (
         db.query(models.RateTemplate)
         .options(
@@ -251,12 +258,8 @@ def list_templates(
     if client_id:
         query = query.filter(models.RateTemplate.client_id == client_id)
 
-    # Ejecutamos la consulta y traemos hasta 50 rutas
     templates = query.order_by(models.RateTemplate.id.desc()).limit(50).all()
 
-    #  MAGIA EN MEMORIA:
-    # Limpiamos los segmentos eliminados ('E') directamente en Python.
-    # Así garantizamos que el Frontend reciba la ruta intacta, pero solo con tramos válidos.
     for template in templates:
         template.segments = [
             seg
@@ -273,22 +276,19 @@ def create_template(
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    #  1. VALIDACIÓN CORREGIDA (FASE 1): Llave compuesta incluye tipo_unidad
     existing_route = (
         db.query(models.RateTemplate)
         .filter(
             models.RateTemplate.origen == data.origen,
             models.RateTemplate.destino == data.destino,
             models.RateTemplate.client_id == data.client_id,
-            models.RateTemplate.tipo_unidad
-            == data.tipo_unidad,  # <--- ESTA ES LA LÍNEA MÁGICA QUE FALTABA
-            models.RateTemplate.record_status == "A",  # Solo buscamos entre las activas
+            models.RateTemplate.tipo_unidad == data.tipo_unidad,
+            models.RateTemplate.record_status == "A",
         )
         .first()
     )
 
     if existing_route:
-        #  Mejoramos el mensaje de error para que Gustavo sepa exactamente qué pasó
         config_name = (
             "FULL (9 Ejes)" if data.tipo_unidad == "9ejes" else "SENCILLO (5 Ejes)"
         )
@@ -367,19 +367,13 @@ def update_template(
     if not db_template:
         raise HTTPException(status_code=404, detail="Ruta no encontrada")
 
-    # Actualizamos campos básicos
     update_data = data.model_dump(exclude={"segments"}, exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_template, key, value)
     db_template.updated_by_id = user.id
 
     if data.segments is not None:
-        #  SOLUCIÓN AL SAWarning y Duplicación:
-        # 1. Vaciamos la relación en memoria
         db_template.segments = []
-
-        # 2. Borramos físicamente con synchronize_session='fetch' para que
-        # SQLAlchemy actualice su estado interno y no de errores en el flush
         db.query(models.RateSegment).filter(
             models.RateSegment.rate_template_id == template_id
         ).delete(synchronize_session="fetch")
@@ -388,7 +382,6 @@ def update_template(
 
         total_s, total_f, total_km, total_min = 0.0, 0.0, 0.0, 0
 
-        # 3. Insertamos los nuevos segmentos
         for seg_data in data.segments:
             cost_s, cost_f = 0.0, 0.0
             if seg_data.toll_booth_id:
@@ -425,7 +418,6 @@ def update_template(
 
         db.flush()
 
-        #  ACTUALIZAR TARIFAS AUTORIZADAS DE CLIENTES
         client_tariffs = (
             db.query(models.Tariff)
             .filter(
@@ -464,11 +456,9 @@ def delete_template(
     if not db_template:
         raise HTTPException(status_code=404, detail="Ruta no encontrada")
 
-    #  2. MAGIA: Alteramos el nombre para liberar el original
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M")
     db_template.origen = f"{db_template.origen} [ELIMINADA-{timestamp}]"
 
-    # Hacemos el borrado lógico
     db_template.record_status = "E"
     db_template.updated_by_id = user.id
     db.commit()
@@ -479,55 +469,26 @@ def delete_template(
     }
 
 
-# --- Fuente: api_trips.py ---
-# src/api/endpoints/trips.py
-import os
-from datetime import date, timedelta, datetime
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Body
-from sqlalchemy.orm import Session
-from app.db.database import get_db
-from app.models import models
-from . import schemas
-from app.crud import trips as crud
-from app.modules.auth.api_auth import (
-    get_current_user,
-)
-
-from sqlalchemy import func
-from pathlib import Path
-from fastapi.responses import Response
-from jinja2 import Environment, FileSystemLoader
-
-try:
-    from weasyprint import HTML
-except Exception as e:
-    print(f"⚠️ Advertencia: WeasyPrint no se cargó correctamente ({e})")
-    HTML = None
-
-router = APIRouter()
+# =========================================================
+# VIAJES (TRIPS) Y BITÁCORA
+# =========================================================
 
 
-@router.get("", response_model=List[schemas.TripResponse])
+@router.get("/trips", response_model=List[schemas.TripResponse])
 def read_trips(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return crud.get_trips(db, skip, limit)
 
 
-@router.get("/{trip_id}", response_model=schemas.TripResponse)
+@router.get("/trips/{trip_id}", response_model=schemas.TripResponse)
 def read_trip(trip_id: int, db: Session = Depends(get_db)):
-    """Obtiene el detalle completo de un solo viaje"""
     trip = crud.get_trip(db, str(trip_id))
     if not trip:
         raise HTTPException(status_code=404, detail="Viaje no encontrado")
     return trip
 
 
-@router.post("", response_model=schemas.TripResponse)
-def create_trip(
-    trip: schemas.TripCreate,
-    db: Session = Depends(get_db),
-):
-    # 1. Validar que la unidad del primer tramo exista
+@router.post("/trips", response_model=schemas.TripResponse)
+def create_trip(trip: schemas.TripCreate, db: Session = Depends(get_db)):
     if trip.initial_leg and trip.initial_leg.unit_id:
         unit = (
             db.query(models.Unit)
@@ -537,7 +498,6 @@ def create_trip(
         if not unit:
             raise HTTPException(status_code=404, detail="La unidad principal no existe")
 
-        # 2. Validar estatus
         estatus_permitidos = ["disponible", "bloqueado"]
         if unit.status.lower() not in estatus_permitidos:
             raise HTTPException(
@@ -545,17 +505,13 @@ def create_trip(
                 detail=f"La unidad {unit.numero_economico} no puede ser despachada. Estatus actual: {unit.status}",
             )
 
-    # 3. Crear el objeto en BD
     db_trip = crud.create_trip(db, trip)
     return db_trip
 
 
-@router.patch("/{trip_id}/status", response_model=schemas.TripResponse)
+@router.patch("/trips/{trip_id}/status", response_model=schemas.TripResponse)
 def update_status(
-    trip_id: int,
-    status: str,
-    location: str = None,
-    db: Session = Depends(get_db),
+    trip_id: int, status: str, location: str = None, db: Session = Depends(get_db)
 ):
     trip = crud.update_trip_status(db, str(trip_id), status, location)
     if not trip:
@@ -563,7 +519,7 @@ def update_status(
     return trip
 
 
-@router.delete("/{trip_id}", response_model=dict)
+@router.delete("/trips/{trip_id}", response_model=dict)
 def delete_trip_endpoint(trip_id: str, db: Session = Depends(get_db)):
     success = crud.delete_trip(db, trip_id)
     if not success:
@@ -573,49 +529,38 @@ def delete_trip_endpoint(trip_id: str, db: Session = Depends(get_db)):
     return {"message": "Viaje eliminado correctamente"}
 
 
-# endpoints/trips.py
-@router.put("/{trip_id}", response_model=schemas.TripResponse)
+@router.put("/trips/{trip_id}", response_model=schemas.TripResponse)
 def update_trip_endpoint(
     trip_id: int, payload: schemas.TripUpdate, db: Session = Depends(get_db)
 ):
-    # Convertimos el payload a dict excluyendo valores no enviados (unset)
     update_data = payload.dict(exclude_unset=True)
-
-    # 🚀 Aquí se guardan los remolques en el Trip Maestro
     updated_trip = crud.update_trip(
         db=db, trip_id=trip_id, trip_update_data=update_data
     )
-
     if not updated_trip:
         raise HTTPException(status_code=404, detail="Viaje no encontrado")
-
     return updated_trip
 
 
-# 🚀 RUTA CLAVE: AÑADIR A BITÁCORA Y FINALIZAR
-@router.post("/{trip_id}/timeline", response_model=schemas.TripResponse)
+@router.post("/trips/{trip_id}/timeline", response_model=schemas.TripResponse)
 def create_timeline_event(
     trip_id: int,
     payload: schemas.TripTimelineEventCreatePayload,
     db: Session = Depends(get_db),
 ):
-    # 🚀 REGLA DE ARQUITECTURA: Dejamos que crud.add_timeline_event
-    # se encargue de TODO (Liberar unidades, actualizar odómetros, etc.)
-    # Ya lo blindamos en crud.py, no lo volvemos a hacer aquí para evitar conflictos de sesión.
     trip = crud.add_timeline_event(db, trip_id, payload)
     if not trip:
         raise HTTPException(status_code=404, detail="Viaje no encontrado")
-
     return trip
 
 
 # =========================================================
-# RUTAS DE LIQUIDACIÓN
+# LIQUIDACIÓN DE TRAMOS
 # =========================================================
 
 
 @router.get(
-    "/leg/{trip_leg_id}/settlement", response_model=schemas.TripSettlementResponse
+    "/trips/leg/{trip_leg_id}/settlement", response_model=schemas.TripSettlementResponse
 )
 def get_trip_settlement(trip_leg_id: int, db: Session = Depends(get_db)):
     try:
@@ -634,7 +579,9 @@ def get_trip_settlement(trip_leg_id: int, db: Session = Depends(get_db)):
         raise e
 
 
-@router.post("/leg/{trip_leg_id}/close-settlement", response_model=schemas.TripResponse)
+@router.post(
+    "/trips/leg/{trip_leg_id}/close-settlement", response_model=schemas.TripResponse
+)
 def close_trip_settlement(
     trip_leg_id: int,
     payload: schemas.CloseSettlementPayload,
@@ -646,30 +593,18 @@ def close_trip_settlement(
     return trip
 
 
-@router.post("/{trip_id}/next-leg", response_model=schemas.TripResponse)
+@router.post("/trips/{trip_id}/next-leg", response_model=schemas.TripResponse)
 def create_next_leg_endpoint(
-    trip_id: int,
-    payload: schemas.TripLegCreate,
-    db: Session = Depends(get_db),
+    trip_id: int, payload: schemas.TripLegCreate, db: Session = Depends(get_db)
 ):
-    """
-    Desengancha el viaje actual y crea una nueva fase/tramo asignando nuevo operador y unidad.
-    """
     trip = crud.create_next_leg(db, str(trip_id), payload)
     if not trip:
         raise HTTPException(status_code=404, detail="Viaje no encontrado")
     return trip
 
 
-TEMPLATE_DIR = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "../../templates"
-)
-jinja_env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
-
-
-@router.post("/legs/{leg_id}/settle")
+@router.post("/trips/legs/{leg_id}/settle")
 def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(get_db)):
-    # Legacy Single Settle
     leg = db.query(models.TripLeg).filter(models.TripLeg.id == leg_id).first()
     if not leg:
         raise HTTPException(status_code=404, detail="Tramo no encontrado")
@@ -737,7 +672,7 @@ def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(g
     }
 
 
-@router.post("/legs/{leg_id}/reopen")
+@router.post("/trips/legs/{leg_id}/reopen")
 def reopen_trip_leg(leg_id: int, db: Session = Depends(get_db)):
     leg = db.query(models.TripLeg).filter(models.TripLeg.id == leg_id).first()
     if not leg:
@@ -768,13 +703,15 @@ def reopen_trip_leg(leg_id: int, db: Session = Depends(get_db)):
     return {"message": "Fase reabierta exitosamente. Facturas anuladas."}
 
 
-@router.get("/{trip_id}/carta-porte-ciega")
+# =========================================================
+# IMPRESIÓN DE DOCUMENTOS
+# =========================================================
+
+
+@router.get("/trips/{trip_id}/carta-porte-ciega")
 def generate_carta_porte(trip_id: int, db: Session = Depends(get_db)):
     if HTML is None:
-        raise HTTPException(
-            status_code=500,
-            detail="WeasyPrint no está instalado.",
-        )
+        raise HTTPException(status_code=500, detail="WeasyPrint no está instalado.")
 
     trip = db.query(models.Trip).filter(models.Trip.id == trip_id).first()
     if not trip:
@@ -803,7 +740,7 @@ def generate_carta_porte(trip_id: int, db: Session = Depends(get_db)):
         "regimen_emisor": "N/A",
         "uuid": "NO APLICA - DOCUMENTO DE TRASLADO INTERNO",
         "folio_interno": f"CIEGA-{trip.public_id or trip.id}",
-        "fecha_emision": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+        "fecha_emision": datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
         "logo_src": "",
         "qr_src": "",
         "nombre_cliente": getattr(cliente, "razon_social", "N/A") if cliente else "N/A",
@@ -911,113 +848,7 @@ def generate_carta_porte(trip_id: int, db: Session = Depends(get_db)):
     )
 
 
-# =========================================================
-# LIQUIDACIÓN POR LOTE (MULTIPLE LEGS)
-# =========================================================
-
-
-@router.post("/legs/settle-batch")
-def settle_trip_legs_batch(
-    payload: schemas.BatchSettlementPayload, db: Session = Depends(get_db)
-):
-    result = crud.settle_trip_legs_batch(db, payload)
-    if not result:
-        raise HTTPException(status_code=404, detail="No se encontraron los tramos")
-    return result
-
-
-@router.post(
-    "/legs/settlement-preview", response_model=schemas.BatchSettlementPreviewResponse
-)
-def preview_batch_settlement_endpoint(
-    payload: schemas.BatchSettlementPreviewRequest, db: Session = Depends(get_db)
-):
-    result = crud.preview_batch_settlement(db, payload.leg_ids)
-    if result is None:
-        raise HTTPException(status_code=404, detail="Error al generar pre-liquidación")
-    return result
-
-
-# 🚀 RUTA CLAVE: DESHACER MOVIMIENTO (CTRL+Z OPERATIVO)
-@router.post("/{trip_id}/undo-leg", response_model=schemas.TripResponse)
-def undo_trip_leg_endpoint(trip_id: int, db: Session = Depends(get_db)):
-    """Deshace el último desenganche y libera la unidad/operador afectados."""
-    trip = crud.undo_last_leg(db, str(trip_id))
-    if not trip:
-        raise HTTPException(
-            status_code=400, detail="No se puede deshacer la fase inicial."
-        )
-    return trip
-
-
-# =========================================================
-# EDICIÓN Y BORRADO DE EVENTOS DEL TIMELINE
-# =========================================================
-
-
-@router.delete("/timeline/{event_id}")
-def delete_timeline_event(event_id: int, db: Session = Depends(get_db)):
-    event = (
-        db.query(models.TripTimelineEvent)
-        .filter(models.TripTimelineEvent.id == event_id)
-        .first()
-    )
-    if not event:
-        raise HTTPException(status_code=404, detail="Evento no encontrado")
-
-    db.delete(event)
-    db.commit()
-    return {"message": "Evento eliminado correctamente"}
-
-
-@router.put("/timeline/{event_id}")
-def update_timeline_event(
-    event_id: int, payload: dict = Body(...), db: Session = Depends(get_db)
-):
-    event = (
-        db.query(models.TripTimelineEvent)
-        .filter(models.TripTimelineEvent.id == event_id)
-        .first()
-    )
-    if not event:
-        raise HTTPException(status_code=404, detail="Evento no encontrado")
-
-    if "location" in payload:
-        event.location = payload["location"]
-    if "lat" in payload:
-        event.lat = payload["lat"]
-    if "lng" in payload:
-        event.lng = payload["lng"]
-    if "comments" in payload:
-        event.comments = payload["comments"]
-    if "status" in payload:
-        event.event_type = payload["status"]
-
-    status_label = payload.get("status", "Reporte").replace("_", " ").title()
-    event.event = f"{status_label} en {payload.get('location')}"
-
-    db.commit()
-    return {"message": "Evento actualizado correctamente"}
-
-
-@router.post("/{trip_id}/stamp-real", response_model=schemas.TripResponse)
-def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
-    from app.integrations.sat.billing_service import BillingService
-
-    billing = BillingService(db)
-    invoice_data = schemas.ReceivableInvoiceCreate(viaje_id=trip_id, is_nominal=False)
-    factura = billing.generar_factura_final_relacionada(invoice_data)
-
-    if not factura:
-        raise HTTPException(
-            status_code=500, detail="No se pudo procesar el timbrado real."
-        )
-
-    trip = crud.get_trip(db, str(trip_id))
-    return trip
-
-
-@router.get("/{trip_id}/nom-087")
+@router.get("/trips/{trip_id}/nom-087")
 def generate_nom_087(trip_id: int, db: Session = Depends(get_db)):
     if HTML is None:
         raise HTTPException(status_code=500, detail="WeasyPrint no está instalado.")
@@ -1039,8 +870,6 @@ def generate_nom_087(trip_id: int, db: Session = Depends(get_db)):
 
         with open(logo_path, "rb") as img_f:
             logo_src = f"data:image/png;base64,{base64.b64encode(img_f.read()).decode('utf-8')}"
-
-    from app.models.models import SystemConfig
 
     nombre_conf = db.query(SystemConfig).filter_by(key="empresa_nombre").first()
     rfc_conf = db.query(SystemConfig).filter_by(key="empresa_rfc").first()
@@ -1076,7 +905,111 @@ def generate_nom_087(trip_id: int, db: Session = Depends(get_db)):
     )
 
 
-@router.put("/{trip_id}/dispatch", response_model=schemas.TripResponse)
+# =========================================================
+# LOTE (BATCH) Y TIMELINE (EVENTOS)
+# =========================================================
+
+
+@router.post("/trips/legs/settle-batch")
+def settle_trip_legs_batch(
+    payload: schemas.BatchSettlementPayload, db: Session = Depends(get_db)
+):
+    result = crud.settle_trip_legs_batch(db, payload)
+    if not result:
+        raise HTTPException(status_code=404, detail="No se encontraron los tramos")
+    return result
+
+
+@router.post(
+    "/trips/legs/settlement-preview",
+    response_model=schemas.BatchSettlementPreviewResponse,
+)
+def preview_batch_settlement_endpoint(
+    payload: schemas.BatchSettlementPreviewRequest, db: Session = Depends(get_db)
+):
+    result = crud.preview_batch_settlement(db, payload.leg_ids)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Error al generar pre-liquidación")
+    return result
+
+
+@router.post("/trips/{trip_id}/undo-leg", response_model=schemas.TripResponse)
+def undo_trip_leg_endpoint(trip_id: int, db: Session = Depends(get_db)):
+    trip = crud.undo_last_leg(db, str(trip_id))
+    if not trip:
+        raise HTTPException(
+            status_code=400, detail="No se puede deshacer la fase inicial."
+        )
+    return trip
+
+
+@router.delete("/trips/timeline/{event_id}")
+def delete_timeline_event(event_id: int, db: Session = Depends(get_db)):
+    event = (
+        db.query(models.TripTimelineEvent)
+        .filter(models.TripTimelineEvent.id == event_id)
+        .first()
+    )
+    if not event:
+        raise HTTPException(status_code=404, detail="Evento no encontrado")
+    db.delete(event)
+    db.commit()
+    return {"message": "Evento eliminado correctamente"}
+
+
+@router.put("/trips/timeline/{event_id}")
+def update_timeline_event(
+    event_id: int, payload: dict = Body(...), db: Session = Depends(get_db)
+):
+    event = (
+        db.query(models.TripTimelineEvent)
+        .filter(models.TripTimelineEvent.id == event_id)
+        .first()
+    )
+    if not event:
+        raise HTTPException(status_code=404, detail="Evento no encontrado")
+
+    if "location" in payload:
+        event.location = payload["location"]
+    if "lat" in payload:
+        event.lat = payload["lat"]
+    if "lng" in payload:
+        event.lng = payload["lng"]
+    if "comments" in payload:
+        event.comments = payload["comments"]
+    if "status" in payload:
+        event.event_type = payload["status"]
+
+    status_label = payload.get("status", "Reporte").replace("_", " ").title()
+    event.event = f"{status_label} en {payload.get('location')}"
+
+    db.commit()
+    return {"message": "Evento actualizado correctamente"}
+
+
+# =========================================================
+# Dispatch Y TIMBRADO
+# =========================================================
+
+
+@router.post("/trips/{trip_id}/stamp-real", response_model=schemas.TripResponse)
+def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
+    from app.integrations.sat.billing_service import BillingService
+
+    billing = BillingService(db)
+    invoice_data = schemas.ReceivableInvoiceCreate(viaje_id=trip_id, is_nominal=False)
+    factura = billing.generar_factura_final_relacionada(invoice_data)
+
+    if not factura:
+        raise HTTPException(
+            status_code=500, detail="No se pudo procesar el timbrado real."
+        )
+
+    trip = crud.get_trip(db, str(trip_id))
+    return trip
+
+
+@router.put("/trips/{trip_id}/dispatch", response_model=schemas.TripResponse)
 def dispatch_trip(
     trip_id: int, payload: schemas.TripCreate, db: Session = Depends(get_db)
 ):
@@ -1090,7 +1023,6 @@ def dispatch_trip(
 
     if payload.initial_leg:
         leg_data = payload.initial_leg
-
         monto_pagar = (trip.tarifa_base or 0) - (
             (leg_data.anticipo_casetas or 0)
             + (leg_data.anticipo_viaticos or 0)
@@ -1098,7 +1030,6 @@ def dispatch_trip(
         )
 
         existing_leg = trip.legs[0] if trip.legs else None
-
         if existing_leg:
             existing_leg.unit_id = leg_data.unit_id
             existing_leg.operator_id = leg_data.operator_id
@@ -1163,10 +1094,9 @@ def dispatch_trip(
     return trip
 
 
-@router.post("/legs/{leg_id}/reset-audit")
+@router.post("/trips/legs/{leg_id}/reset-audit")
 def reset_audit_endpoint(leg_id: int, db: Session = Depends(get_db)):
     leg = crud.reset_leg_audit(db, leg_id)
     if not leg:
         raise HTTPException(status_code=404, detail="Tramo no encontrado")
     return {"message": "Auditoría revertida exitosamente"}
-

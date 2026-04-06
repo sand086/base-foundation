@@ -443,7 +443,7 @@ export function TripDetailsModal({
     switch (legType) {
       case "carga_muelle":
         return {
-          text: "Pasar a Ruta (Despacho)",
+          text: "Pasar a Ruta (Dispatch)",
           icon: <ArrowRightCircle className="h-3.5 w-3.5 mr-1.5" />,
           color: "bg-blue-600 hover:bg-blue-700",
         };

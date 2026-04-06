@@ -56,7 +56,7 @@ export function getClasificacionLabel(
 ): string {
   const map: Record<string, string> = {
     costo_directo: "Costo Directo (Viaje)",
-    mantenimiento: "Mantenimiento (Taller)",
+    mantenimiento: "Maintenance (Taller)",
     indirecto: "Gasto Indirecto",
     ingreso_flete: "Ingreso Flete", // Para cuando hagas CxC
     maniobras: "Maniobras/Estadías", // Para cuando hagas CxC

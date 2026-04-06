@@ -1,17 +1,20 @@
-
-# --- Fuente: api_maintenance.py ---
 from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+
 from app.db.database import get_db
-from . import schemas
 
-from app.crud import maintenance as crud
+# 🚀 IMPORTACIÓN LOCAL (FSD): Busca dentro de la misma carpeta "maintenance"
+from . import schemas, crud
 
-router = APIRouter()
+# 🚀 ÚNICA INSTANCIA DEL ROUTER CON SU TAG
+router = APIRouter(tags=["Maintenance"])
 
-# --- INVENTARIO ---
+# =========================================================
+# INVENTARIO (Inventory)
+# =========================================================
 
 
 @router.get("/inventory", response_model=List[schemas.InventoryItemResponse])
@@ -68,7 +71,9 @@ def delete_inventory_item(item_id: int, db: Session = Depends(get_db)):
         )
 
 
-# --- MECANICOS ---
+# =========================================================
+# MECÁNICOS (Mechanics)
+# =========================================================
 
 
 @router.get("/mechanics", response_model=List[schemas.MechanicResponse])
@@ -147,7 +152,9 @@ def delete_mechanic_document(document_id: int, db: Session = Depends(get_db)):
     return {"message": "Documento eliminado"}
 
 
-# --- ORDENES DE TRABAJO ---
+# =========================================================
+# ÓRDENES DE TRABAJO (Work Orders)
+# =========================================================
 
 
 @router.get("/work-orders", response_model=List[schemas.WorkOrderResponse])
@@ -188,4 +195,3 @@ def update_order_status(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Error de integridad al intentar cambiar el estado de la orden.",
         )
-

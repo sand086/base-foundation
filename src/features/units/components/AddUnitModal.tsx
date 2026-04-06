@@ -779,7 +779,7 @@ export function AddUnidadModal({
                                   value="mantenimiento"
                                   className="font-bold text-xs uppercase text-amber-600 dark:text-amber-400"
                                 >
-                                  🟡 Mantenimiento
+                                  🟡 Maintenance
                                 </SelectItem>
                                 <SelectItem
                                   value="bloqueado"

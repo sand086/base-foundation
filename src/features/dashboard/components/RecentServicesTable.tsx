@@ -56,7 +56,7 @@ export function RecentServicesTable({ services }: RecentServicesTableProps) {
       serviceId: service.id,
       filter: "service",
     });
-    navigate(`/despacho?${params.toString()}`);
+    navigate(`/Dispatch?${params.toString()}`);
   };
 
   return (
@@ -160,7 +160,7 @@ export function RecentServicesTable({ services }: RecentServicesTableProps) {
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent>
-                              <p>Ver en Despacho</p>
+                              <p>Ver en Dispatch</p>
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>

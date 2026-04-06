@@ -1,4 +1,3 @@
-
 # --- Fuente: api_auth.py ---
 from datetime import datetime
 from fastapi import (
@@ -20,7 +19,7 @@ from app.core.config import settings
 
 from . import schemas
 
-from app.modules.monitoring.crud_audit import log_audit
+from app.modules.monitoring.crud import log_audit
 
 router = APIRouter(tags=["Authentication"])
 
@@ -332,7 +331,7 @@ def enable_2fa(
 
 
 # --- Fuente: api_users.py ---
-from __future__ import annotations
+
 
 import json
 from typing import List, Dict, Any
@@ -346,9 +345,7 @@ from app.db.database import get_db
 from . import crud
 from app.models import models
 from . import schemas
-from app.modules.auth.api_auth import get_current_active_user
-
-router = APIRouter()
+from app.modules.auth.router import get_current_active_user
 
 # =========================================================
 # ROLES (Deben ir primero para evitar conflicto con {user_id})
@@ -576,4 +573,3 @@ async def upload_user_avatar(
         raise HTTPException(
             status_code=500, detail=f"Error al guardar imagen: {str(e)}"
         )
-

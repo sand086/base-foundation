@@ -334,7 +334,7 @@ export const TripPlanner = () => {
 
   // Redirección directa al Wizard inyectando el ID y la data
   const handleAssignInWizard = (trip: Trip) => {
-    navigate(`/despacho/nuevo?tripId=${trip.id}`, { state: { trip } });
+    navigate(`/Dispatch/nuevo?tripId=${trip.id}`, { state: { trip } });
   };
 
   if (loading)
@@ -342,7 +342,7 @@ export const TripPlanner = () => {
       <div className="flex flex-col items-center justify-center h-96 gap-4">
         <Loader2 className="h-10 w-10 animate-spin text-brand-red" />
         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 animate-pulse">
-          Sincronizando Tablero de Despacho...
+          Sincronizando Tablero de Dispatch...
         </p>
       </div>
     );
@@ -703,7 +703,7 @@ export const TripPlanner = () => {
                         <button
                           onClick={() =>
                             navigate(
-                              `/despacho/nuevo?date=${format(day, "yyyy-MM-dd")}`,
+                              `/Dispatch/nuevo?date=${format(day, "yyyy-MM-dd")}`,
                             )
                           }
                           className={cn(

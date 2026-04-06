@@ -520,7 +520,7 @@ export function PurchaseOrderWizard({
                         value="mantenimiento"
                         className="font-bold text-xs uppercase"
                       >
-                        Mantenimiento
+                        Maintenance
                       </SelectItem>
                       <SelectItem
                         value="operaciones"

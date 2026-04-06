@@ -68,7 +68,7 @@ export const dashboardService = {
     };
 
     // 📡 Mapeo directo al tipado DashboardData
-    const { data } = await axiosClient.get<DashboardData>("/dashboard/stats", {
+    const { data } = await axiosClient.get<DashboardData>("/dashboard", {
       params,
     });
     return data;

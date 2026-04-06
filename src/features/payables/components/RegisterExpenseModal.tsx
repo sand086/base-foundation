@@ -191,7 +191,7 @@ export function RegisterExpenseModal({
     }
   }, [formData.fecha_emision, formData.dias_credito]);
 
-  // Prefill Compras
+  // Prefill Purchases
   useEffect(() => {
     if (!open || !prefillData) return;
     const byId = toIntOrNull(prefillData.proveedorId);
@@ -301,7 +301,7 @@ export function RegisterExpenseModal({
       formData.clasificacion === "costo_mantenimiento" &&
       !toIntOrNull(formData.unidad_id)
     ) {
-      errors.push("Debes vincular una unidad para Costo de Mantenimiento");
+      errors.push("Debes vincular una unidad para Costo de Maintenance");
     }
     if (
       (formData.clasificacion === "gasto_indirecto_fijo" ||
@@ -549,7 +549,7 @@ export function RegisterExpenseModal({
                   <SelectItem value="costo_mantenimiento">
                     <div className="flex items-center gap-2">
                       <span className="w-2 h-2 rounded-full bg-amber-500" />
-                      Costo de Mantenimiento
+                      Costo de Maintenance
                     </div>
                   </SelectItem>
                   <SelectItem value="gasto_indirecto_fijo">
@@ -635,7 +635,7 @@ export function RegisterExpenseModal({
                   <button
                     type="button"
                     onClick={() => {
-                      // Disparamos un evento personalizado que atraparemos en ProveedoresCxP
+                      // Disparamos un evento personalizado que atraparemos en Payables
                       document.dispatchEvent(
                         new CustomEvent("open-manage-categories"),
                       );

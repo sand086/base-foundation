@@ -1,11 +1,10 @@
-
 # --- Fuente: api_brands.py ---
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from app.db.database import get_db
 from app.models.models import Brand
-from app.modules.catalogs import BrandResponse, BrandCreate
+from .schemas import BrandResponse, BrandCreate
 
 router = APIRouter()
 
@@ -50,10 +49,10 @@ from app.db.database import get_db
 from app.models import models
 from app.models.models import RecordStatus
 from pydantic import BaseModel
-from app.models import catalogs as schemas
+from . import schemas
 from typing import List
 import json
-from app.modules.auth.api_auth import get_current_active_user
+from app.modules.auth.router import get_current_active_user
 
 router = APIRouter()
 
@@ -68,7 +67,7 @@ DEFAULT_MODULES = [
     {"id": "flota", "nombre": "Flota", "icono": "Truck"},
     {"id": "combustible", "nombre": "Combustible", "icono": "Fuel"},
     {"id": "tarifas", "nombre": "Tarifas", "icono": "DollarSign"},
-    {"id": "despacho", "nombre": "Despacho", "icono": "FileText"},
+    {"id": "Dispatch", "nombre": "Dispatch", "icono": "FileText"},
     {"id": "cxc", "nombre": "Cuentas por Cobrar", "icono": "Receipt"},
     {"id": "cxp", "nombre": "Cuentas por Pagar", "icono": "CreditCard"},
     {"id": "reportes", "nombre": "Reportes", "icono": "BarChart3"},
@@ -515,7 +514,7 @@ from app.db.database import get_db
 from app.models import models
 from pydantic import BaseModel
 from typing import List
-from app.modules.auth.api_auth import get_current_user
+from app.modules.auth.router import get_current_user
 
 router = APIRouter()
 
@@ -593,4 +592,3 @@ def update_terminal(
     db.commit()
     db.refresh(terminal)
     return terminal
-

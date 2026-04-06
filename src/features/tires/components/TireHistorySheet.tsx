@@ -265,7 +265,7 @@ export function TireHistorySheet({
               </div>
             </div>
 
-            {/* Compras / Proveedor */}
+            {/* Purchases / Proveedor */}
             <div className="grid grid-cols-2 gap-6 p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/30 border border-slate-200/50 dark:border-white/5">
               <div>
                 <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">

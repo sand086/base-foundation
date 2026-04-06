@@ -302,7 +302,7 @@ export const WorkOrderModal = ({
                         : "border-slate-200",
                     )}
                   >
-                    <Home className="h-4 w-4" /> Mantenimiento en Patio
+                    <Home className="h-4 w-4" /> Maintenance en Patio
                   </Button>
                   <Button
                     type="button"

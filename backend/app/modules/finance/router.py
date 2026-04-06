@@ -1,32 +1,38 @@
-
-# --- Fuente: api_finance.py ---
+import logging
 from datetime import datetime, timedelta, date
-from pydantic import BaseModel
 from typing import List, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+
+from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Body, status
 from sqlalchemy.orm import Session
+from lxml import etree
+
 from app.db.database import get_db
 from app.models import models
-from app.modules.auth.api_auth import get_current_active_user
-import logging
-from app import crud
-from app.modules import finance
+from app.modules.auth.router import get_current_active_user
 
-from lxml import etree
+# 🚀 IMPORTACIONES LOCALES (FSD)
+from . import schemas, crud
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+# 🚀 ÚNICA INSTANCIA DEL ROUTER
+router = APIRouter(tags=["Finance"])
 
 
-@router.get("/providers", response_model=List[finance.ProviderResponse])
+# =====================================================================
+# PAYABLES (Cuentas por Pagar) & PROVIDERS
+# =====================================================================
+
+
+@router.get("/providers", response_model=List[schemas.ProviderResponse])
 def read_providers(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return crud.get_providers(db, skip, limit)
 
 
-@router.post("/providers", response_model=finance.ProviderResponse)
-def create_provider(provider: finance.ProviderCreate, db: Session = Depends(get_db)):
-    if db.query(models.Provider).filter(models.Provider.rfc == provider.rfc).first():
+@router.post("/providers", response_model=schemas.ProviderResponse)
+def create_provider(provider: schemas.ProviderCreate, db: Session = Depends(get_db)):
+    if db.query(models.Supplier).filter(models.Supplier.rfc == provider.rfc).first():
         raise HTTPException(status_code=400, detail="RFC ya registrado")
     return crud.create_provider(db, provider)
 
@@ -44,14 +50,24 @@ def read_indirect_categories(db: Session = Depends(get_db)):
     return crud.get_indirect_categories(db)
 
 
-@router.get("/bank-accounts", response_model=List[finance.BankAccountResponse])
+# =====================================================================
+# TREASURY & BANKS
+# =====================================================================
+
+
+@router.get("/bank-accounts", response_model=List[schemas.BankAccountResponse])
 def read_bank_accounts(db: Session = Depends(get_db)):
     return crud.get_bank_accounts(db)
 
 
-@router.get("/movements", response_model=List[finance.BankMovementResponse])
+@router.get("/movements", response_model=List[schemas.BankMovementResponse])
 def read_movements(db: Session = Depends(get_db)):
     return crud.get_bank_movements(db)
+
+
+# =====================================================================
+# INVOICES (Carga Masiva CxP)
+# =====================================================================
 
 
 class BulkInvoicePayload(BaseModel):
@@ -88,7 +104,6 @@ def bulk_upload_invoices(
         concepto = str(row.get("concepto", "")).strip() or "Importación SAT"
         moneda = str(row.get("moneda", "MXN")).strip().upper()
 
-        # Parseo de días de crédito específicos si vienen en el Excel
         dias_csv = str(row.get("dias_credito", "")).strip()
         dias_credito_final = (
             int(dias_csv) if dias_csv.isdigit() else dias_credito_default
@@ -133,7 +148,6 @@ def bulk_upload_invoices(
         retenciones = safe_float(row.get("retenciones"))
         total = safe_float(row.get("total"))
 
-        # Fechas
         fecha_str = str(row.get("fecha_emision", "")).strip()
         try:
             fecha_emision = datetime.strptime(fecha_str[:10], "%Y-%m-%d").date()
@@ -164,108 +178,18 @@ def bulk_upload_invoices(
         facturas_creadas += 1
 
     db.commit()
-
     return {
         "status": "success",
         "message": f"Se procesaron {facturas_creadas} facturas y se crearon {proveedores_creados} proveedores nuevos.",
     }
 
 
-@router.post("/payments/upload-xml")
-async def upload_payment_xml(
-    file: UploadFile = File(...),
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
-):
-    """
-    Lee un XML de Complemento de Pago (REP), busca el UUID de la factura relacionada
-    y aplica el pago automáticamente matando el saldo pendiente.
-    """
-    try:
-        content = await file.read()
-        root = etree.fromstring(content)
-
-        # Namespace de pagos SAT 2.0 (como en el archivo de Gustavo)
-        ns = {"pago20": "http://www.sat.gob.mx/Pagos20"}
-
-        # Buscar el pago
-        pagos = root.xpath("//pago20:Pago", namespaces=ns)
-        if not pagos:
-            raise HTTPException(
-                status_code=400, detail="El XML no contiene complementos de pago."
-            )
-
-        pago = pagos[0]
-        fecha_pago_str = pago.get("FechaPago")
-        forma_pago = pago.get("FormaDePagoP", "03")
-
-        # Buscar documentos relacionados (Facturas pagadas)
-        doctos = root.xpath("//pago20:DoctoRelacionado", namespaces=ns)
-
-        pagos_procesados = 0
-        for doc in doctos:
-            uuid_factura = doc.get("IdDocumento").upper()
-            monto_pagado = float(doc.get("ImpPagado", "0.00"))
-
-            # Buscar factura en CxC
-            factura = (
-                db.query(models.ReceivableInvoice)
-                .filter(models.ReceivableInvoice.uuid == uuid_val)
-                .first()
-            )
-
-            if factura and factura.saldo_pendiente > 0:
-                nuevo_pago = models.ReceivableInvoicePayment(
-                    invoice_id=factura.id,
-                    fecha_pago=fecha_pago_str[:10],
-                    monto=monto_pagado,
-                    metodo_pago=forma_pago,
-                    referencia="Carga XML REP",
-                    cuenta_deposito="Banco Automático",
-                    created_by_id=current_user.id,
-                )
-                db.add(nuevo_pago)
-
-                # Actualizar saldos
-                factura.saldo_pendiente -= monto_pagado
-                if factura.saldo_pendiente <= 0:
-                    factura.saldo_pendiente = 0
-                    factura.estatus = "pagado"
-                else:
-                    factura.estatus = "pago_parcial"
-
-                pagos_procesados += 1
-
-        db.commit()
-        return {
-            "status": "success",
-            "message": f"Se procesaron {pagos_procesados} pagos automáticamente.",
-        }
-
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=400, detail=f"Error al leer XML: {str(e)}")
+# =====================================================================
+# RECEIVABLES (Cuentas por Cobrar)
+# =====================================================================
 
 
-# --- Fuente: api_receivables.py ---
-# src/api/endpoints/receivables.py
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException, Body, UploadFile, File
-from sqlalchemy.orm import Session
-from app.db.database import get_db
-from app.models import models
-from app.modules.auth.api_auth import get_current_active_user
-from app import crud
-
-from lxml import etree
-import logging
-
-logger = logging.getLogger(__name__)
-
-router = APIRouter()
-
-
-@router.get("")
+@router.get("/receivables")
 def get_receivable_invoices(
     skip: int = 0, limit: int = 100, db: Session = Depends(get_db)
 ):
@@ -278,13 +202,12 @@ def get_receivable_invoices(
         .filter(
             models.ReceivableInvoice.record_status == models.RecordStatus.ACTIVO.value
         )
-        .order_by(models.ReceivableInvoice.id.desc())  # Las más recientes primero
+        .order_by(models.ReceivableInvoice.id.desc())
         .offset(skip)
         .limit(limit)
         .all()
     )
 
-    # Formateamos la respuesta para React
     response = []
     for inv in invoices:
         response.append(
@@ -302,7 +225,6 @@ def get_receivable_invoices(
                 ),
                 "estatus": inv.estatus,
                 "moneda": inv.moneda,
-                # Cargamos los datos del cliente gracias a la relación en models.py
                 "client": (
                     {"id": inv.client.id, "razon_social": inv.client.razon_social}
                     if inv.client
@@ -310,11 +232,10 @@ def get_receivable_invoices(
                 ),
             }
         )
-
     return response
 
 
-@router.delete("/{invoice_id}")
+@router.delete("/receivables/{invoice_id}")
 def delete_receivable_invoice(invoice_id: int, db: Session = Depends(get_db)):
     invoice = (
         db.query(models.ReceivableInvoice)
@@ -335,11 +256,10 @@ def delete_receivable_invoice(invoice_id: int, db: Session = Depends(get_db)):
     return {"message": "Factura eliminada"}
 
 
-@router.post("/{invoice_id}/payments")
+@router.post("/receivables/{invoice_id}/payments")
 def register_receivable_payment(
     invoice_id: int, payment: dict = Body(...), db: Session = Depends(get_db)
 ):
-    # 1. Buscar la factura
     invoice = (
         db.query(models.ReceivableInvoice)
         .filter(models.ReceivableInvoice.id == invoice_id)
@@ -348,7 +268,6 @@ def register_receivable_payment(
     if not invoice:
         raise HTTPException(status_code=404, detail="Factura no encontrada")
 
-    # 2. Validar el monto
     monto_pago = float(payment.get("monto", 0))
     if monto_pago <= 0:
         raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0")
@@ -357,7 +276,6 @@ def register_receivable_payment(
             status_code=400, detail="El monto supera el saldo pendiente"
         )
 
-    # 3. Registrar el pago
     nuevo_pago = models.ReceivableInvoicePayment(
         invoice_id=invoice.id,
         monto=monto_pago,
@@ -366,10 +284,8 @@ def register_receivable_payment(
     )
     db.add(nuevo_pago)
 
-    # 4. Actualizar el saldo de la factura principal
     invoice.saldo_pendiente -= monto_pago
 
-    # 5. Cambiar el semáforo automáticamente
     if invoice.saldo_pendiente <= 0:
         invoice.estatus = models.InvoiceStatus.PAGADO
     else:
@@ -399,10 +315,7 @@ async def upload_payment_xml(
         content = await file.read()
         root = etree.fromstring(content)
 
-        # Namespace de pagos SAT 2.0 (como en el archivo de Gustavo)
         ns = {"pago20": "http://www.sat.gob.mx/Pagos20"}
-
-        # Buscar el pago
         pagos = root.xpath("//pago20:Pago", namespaces=ns)
         if not pagos:
             raise HTTPException(
@@ -413,7 +326,6 @@ async def upload_payment_xml(
         fecha_pago_str = pago.get("FechaPago")
         forma_pago = pago.get("FormaDePagoP", "03")
 
-        # Buscar documentos relacionados (Facturas pagadas)
         doctos = root.xpath("//pago20:DoctoRelacionado", namespaces=ns)
 
         pagos_procesados = 0
@@ -421,10 +333,10 @@ async def upload_payment_xml(
             uuid_factura = doc.get("IdDocumento").upper()
             monto_pagado = float(doc.get("ImpPagado", "0.00"))
 
-            # Buscar factura en CxC
+            # 🚀 SOLUCIÓN AL BUG: Cambié uuid_val a uuid_factura
             factura = (
                 db.query(models.ReceivableInvoice)
-                .filter(models.ReceivableInvoice.uuid == uuid_val)
+                .filter(models.ReceivableInvoice.uuid == uuid_factura)
                 .first()
             )
 
@@ -440,7 +352,6 @@ async def upload_payment_xml(
                 )
                 db.add(nuevo_pago)
 
-                # Actualizar saldos
                 factura.saldo_pendiente -= monto_pagado
                 if factura.saldo_pendiente <= 0:
                     factura.saldo_pendiente = 0
@@ -459,4 +370,3 @@ async def upload_payment_xml(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=f"Error al leer XML: {str(e)}")
-

@@ -13,10 +13,10 @@ from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 
 from app.db.database import get_db
-from app.modules.logistics.schemas_trips import ReceivableInvoiceCreate
+from app.modules.logistics.schemas import ReceivableInvoiceCreate
 from app.integrations.sat.billing_service import BillingService
 from app.models import models
-from app.modules.auth.api_auth import get_current_active_user
+from app.modules.auth.router import get_current_active_user
 from app.core.security import verify_password
 import base64
 
@@ -153,7 +153,7 @@ def generar_carta_porte_nominal(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-#  FASE 2: NUEVO ENDPOINT PARA TIMBRADO REAL DESDE LA UI DE DESPACHO
+#  FASE 2: NUEVO ENDPOINT PARA TIMBRADO REAL DESDE LA UI DE Dispatch
 @router.post("/{trip_id}/stamp-real", response_model=dict)
 def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
     """

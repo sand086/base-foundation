@@ -1,8 +1,10 @@
-
 # --- Fuente: crud_finance.py ---
 from sqlalchemy.orm import Session
+from sqlalchemy import func
+from typing import List, Optional
+
 from app.models import models
-from app.modules import finance as schemas
+from . import schemas
 
 
 def get_providers(db: Session, skip: int = 0, limit: int = 100):
@@ -57,4 +59,3 @@ def get_bank_movements(db: Session):
     return (
         db.query(models.BankMovement).order_by(models.BankMovement.fecha.desc()).all()
     )
-

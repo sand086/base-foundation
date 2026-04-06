@@ -51,14 +51,14 @@ export const useTires = () => {
     }
   };
 
-  // 2. Mantenimiento
+  // 2. Maintenance
   const registerMaintenance = async (
     tireId: number,
     payload: MaintenanceTirePayload,
   ) => {
     try {
       await tireService.maintenance(tireId, payload);
-      toast.success("Mantenimiento registrado");
+      toast.success("Maintenance registrado");
       fetchTires();
       return true;
     } catch (error: unknown) {

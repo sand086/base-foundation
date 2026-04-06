@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 //  Cambiado a dashboardService
-import { ServiceStats } from "@/services/dashboardService";
+import { ServiceStats } from "@/features/dashboard/types";
 import { useMemo } from "react";
 
 interface KPICardsProps {
@@ -130,12 +130,12 @@ export function KPICards({ stats }: KPICardsProps) {
         </CardContent>
       </Card>
 
-      {/* Mantenimiento */}
+      {/* Maintenance */}
       {maintenanceAlerts.length > 0 && (
         <Card className="kpi-card rounded-2xl border-0 shadow-none overflow-hidden bg-amber-50 border-l-4 border-l-amber-500">
           <CardHeader className="flex flex-row items-center justify-between pb-2 pt-4 px-4">
             <CardTitle className="text-[11px] font-semibold text-amber-700 uppercase tracking-wider">
-              Mantenimiento
+              Maintenance
             </CardTitle>
             <Wrench className="h-4 w-4 text-amber-600" />
           </CardHeader>

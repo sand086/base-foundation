@@ -1,6 +1,5 @@
-
 # --- Fuente: crud_maintenance.py ---
-from __future__ import annotations
+
 
 import os
 import shutil
@@ -445,4 +444,3 @@ def delete_work_order(db: Session, order_id: int):
     order.record_status = models.RecordStatus.ELIMINADO.value
     db.commit()
     return True
-

@@ -1,14 +1,12 @@
-
-# --- Fuente: schemas_tolls.py ---
-from __future__ import annotations
-
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.models import RecordStatus, TollUnitType, PaymentMethod
 
+if TYPE_CHECKING:
+    from app.modules.clients.schemas import ClientResponse
 
 # =========================================================
 # Base helper
@@ -237,15 +235,14 @@ class RateTemplateResponse(RateTemplateBase):
 
 
 # --- Fuente: schemas_trips.py ---
-from __future__ import annotations
+
 from datetime import datetime, date
 from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field, computed_field, validator
 
 from app.models.models import RecordStatus, TripStatus, TripLegType
-from app.schemas.clients import ClientResponse
-from app.schemas.units import UnitResponse
-from app.schemas.operators import OperatorResponse
+from app.modules.clients.schemas import ClientResponse
+from app.modules.fleet.schemas import UnitResponse, OperatorResponse
 
 
 class ORMBase(BaseModel):
@@ -417,8 +414,8 @@ class TripResponse(TripBase):
     public_id: Optional[str] = None
     uuid_fiscal: Optional[str] = None
 
-    client: Optional[ClientResponse] = None
-    tariff: Optional[TariffBasicInfo] = None
+    client: Optional["ClientResponse"] = None
+    tariff: Optional["TariffBasicInfo"] = None
     remolque_1: Optional[UnitResponse] = None
     dolly: Optional[UnitResponse] = None
     remolque_2: Optional[UnitResponse] = None
@@ -592,3 +589,8 @@ class ReceivableInvoiceCreate(BaseModel):
             )
         return v
 
+
+from app.modules.clients.schemas import ClientResponse
+from app.modules.fleet.schemas import UnitResponse
+
+TripResponse.model_rebuild()
