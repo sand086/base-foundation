@@ -1,21 +1,25 @@
 import { useState, useEffect, useCallback } from "react";
-import { clientService } from "@/features/clients/services/clientService";
-import { Client } from "../types";
 import { toast } from "sonner";
-import { AxiosError } from "axios";
+// 1. ✨ Magia: Importamos TODO desde la carpeta generada (Modelos, Servicios y Errores)
+import { DefaultService, ClientResponse, ApiError } from "@/api/generated";
+// (Nota: si tu endpoint no está en DefaultService, escribe "Service" y VS Code te autocompletará el correcto)
 
 export const useClients = () => {
-  const [clients, setClients] = useState<Client[]>([]);
+  // 2. ✨ Usamos el tipo exacto que escupió tu backend (ClientResponse)
+  const [clients, setClients] = useState<ClientResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchClients = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await clientService.getClients();
+      // 3. ✨ Cero Axios manual: Llamamos al servicio generado.
+      // (Borra "readClients" y presiona Ctrl + Espacio para que VS Code te sugiera el nombre exacto que le dio FastAPI)
+      const data = await DefaultService.readClientsApiClientsGet();
+
       setClients(data);
     } catch (error) {
       console.error(error);
-      toast.error("Error al cargar clients");
+      toast.error("Error al cargar clientes");
     } finally {
       setIsLoading(false);
     }
@@ -25,11 +29,11 @@ export const useClients = () => {
     fetchClients();
   }, [fetchClients]);
 
-  // CORRECCIÓN: id ahora es number
   const deleteClient = async (id: number) => {
     try {
-      await clientService.deleteClient(id);
-      toast.success("Client eliminado");
+      // 4. ✨ Otro endpoint generado
+      await DefaultService.deleteClientApiClientsClientIdDelete(id);
+      toast.success("Cliente eliminado");
       fetchClients(); // Recargar lista para asegurar sincronía
       return true;
     } catch (error) {
@@ -37,10 +41,11 @@ export const useClients = () => {
 
       let message = "Error al eliminar cliente";
 
-      // Manejo de errores seguro
-      if (error instanceof AxiosError) {
-        // Si el backend envía un detalle específico (ej: "Tiene viajes activos")
-        message = error.response?.data?.detail || message;
+      // 5. ✨ Manejo de errores seguro:
+      // La carpeta generada usa "ApiError" en lugar de "AxiosError"
+      if (error instanceof ApiError) {
+        // En FastAPI, el detalle del error viene en error.body.detail
+        message = error.body?.detail || message;
       }
 
       toast.error(message);
