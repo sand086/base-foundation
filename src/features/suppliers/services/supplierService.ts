@@ -1,10 +1,7 @@
 import axiosClient from "@/api/axiosClient";
-import {
-  Supplier,
-  PayableInvoice,
-  InvoicePayment,
-  IndirectCategory,
-} from "@/types/api.types";
+import { Supplier, IndirectCategory } from "@/features/suppliers/types";
+import { BankAccount, BankMovement } from "@/features/treasury/types";
+import { PayableInvoice, InvoicePayment } from "@/features/payables/types";
 
 // ==========================================
 // SERVICIOS
