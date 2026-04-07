@@ -66,6 +66,7 @@ import {
 } from "@/features/receivables/types";
 
 import { useBankAccounts } from "@/features/treasury/hooks/useBankAccounts";
+import { receivableService } from "@/features/receivables/services/receivableService";
 
 export default function Receivables() {
   const [invoices, setInvoices] = useState<ReceivableInvoice[]>([]);
@@ -95,21 +96,23 @@ export default function Receivables() {
   const fetchInvoices = async () => {
     try {
       setLoading(true);
-      const response = await axiosClient.get("/api/receivables");
+      const data = await receivableService.getInvoices();
 
-      // Mapear los datos del backend al formato que espera la tabla
-      const formattedData = response.data.map((inv: any) => ({
-        id: inv.id,
+      // Mapeamos asegurando que se incluyan todas las propiedades de ReceivableInvoice
+      const formattedData: ReceivableInvoice[] = data.map((inv: any) => ({
+        ...inv, // Mantenemos todas las propiedades originales (client_id, fecha_emision, etc.)
+
+        // Sobrescribimos o añadimos campos específicos para la lógica de la tabla
         folio: inv.folio_interno || `CXC-${String(inv.id)}`,
         cliente: inv.client?.razon_social || "Cliente Desconocido",
-        monto_total: inv.monto_total,
-        saldo_pendiente: inv.saldo_pendiente,
         requiereREP: inv.saldo_pendiente > 0,
+
+        // Mapeo para facilitar el uso en las columnas de la tabla si usas camelCase ahí
         fechaEmision: inv.fecha_emision,
         fechaVencimiento: inv.fecha_vencimiento,
-        estatus: inv.estatus,
-        moneda: inv.moneda,
-        cobros: [], // Por ahora vacío hasta que implementes abonos
+
+        // Aseguramos que existan arrays para evitar errores de renderizado
+        cobros: inv.payments || [],
       }));
 
       setInvoices(formattedData);
@@ -214,7 +217,7 @@ export default function Receivables() {
     payment: RegisterPaymentPayload,
   ) => {
     try {
-      await axiosClient.post(`/api/receivables/${invoiceId}/payments`, {
+      await axiosClient.post(`/api/finance/receivables/${invoiceId}/payments`, {
         monto: payment.monto,
         metodo_pago: payment.metodo_pago, // 👈 Asegúrate que sea snake_case como en el payload
         referencia: payment.referencia || "",
