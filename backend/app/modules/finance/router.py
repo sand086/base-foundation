@@ -65,6 +65,16 @@ def read_bank_accounts(db: Session = Depends(get_db)):
     return crud.get_bank_accounts(db)
 
 
+@router.post("/bank-accounts", response_model=schemas.BankAccountResponse)
+def create_bank_account(
+    account: schemas.BankAccountCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """Crea una nueva cuenta bancaria en Tesorería"""
+    return crud.create_bank_account(db, account, current_user.id)
+
+
 @router.get("/movements", response_model=List[schemas.BankMovementResponse])
 def read_movements(db: Session = Depends(get_db)):
     return crud.get_bank_movements(db)
@@ -263,7 +273,12 @@ def delete_receivable_invoice(invoice_id: int, db: Session = Depends(get_db)):
 
 @router.post("/receivables/{invoice_id}/payments")
 def register_receivable_payment(
-    invoice_id: int, payment: dict = Body(...), db: Session = Depends(get_db)
+    invoice_id: int,
+    payment: dict = Body(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(
+        get_current_active_user
+    ),  # Importante traer el usuario
 ):
     invoice = (
         db.query(models.ReceivableInvoice)
@@ -286,6 +301,7 @@ def register_receivable_payment(
         monto=monto_pago,
         metodo_pago=payment.get("metodo_pago", "TRANSFERENCIA"),
         referencia=payment.get("referencia", ""),
+        created_by_id=current_user.id,
     )
     db.add(nuevo_pago)
 
@@ -296,12 +312,26 @@ def register_receivable_payment(
     else:
         invoice.estatus = models.InvoiceStatus.PAGO_PARCIAL
 
+    # 🚀 MAGIA DE TESORERÍA: Si el front nos manda la cuenta bancaria elegida, la afectamos.
+    bank_account_id = payment.get("bank_account_id")
+    if bank_account_id:
+        movimiento_schema = schemas.BankMovementCreate(
+            bank_account_id=int(bank_account_id),
+            tipo="ingreso",  # Es un pago de cliente (CXC), entonces entra dinero
+            monto=monto_pago,
+            concepto=f"Cobro de Fra. {invoice.folio_interno or invoice.uuid}",
+            referencia=payment.get("referencia", ""),
+        )
+        # Llamamos al CRUD con bloqueo pesimista
+        crud.create_bank_movement(db, movimiento_schema, current_user.id)
+
+    # 1 solo Commit para asegurar que si falla el saldo, no se guarda el pago (Transacción Atómica)
     db.commit()
     db.refresh(invoice)
 
     return {
-        "message": "Pago registrado exitosamente",
-        "nuevo_saldo": invoice.saldo_pendiente,
+        "message": "Pago y movimiento bancario registrados exitosamente",
+        "nuevo_saldo_factura": invoice.saldo_pendiente,
         "estatus": invoice.estatus,
     }
 
