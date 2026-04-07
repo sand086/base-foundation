@@ -71,7 +71,7 @@ export default function TripSettlementModal({
   const [rendimientoReal, setRendimientoReal] = useState(0);
   const [conceptosExtra, setConceptosExtra] = useState<ConceptoExtra[]>([]);
 
-  //  NUEVOS ESTADOS DE CONCILIACIÓN DE DIÉSEL
+  // ESTADOS DE CONCILIACIÓN DE DIÉSEL
   const [consumoEsperado, setConsumoEsperado] = useState(0);
   const [consumoReal, setConsumoReal] = useState(0);
   const [diferenciaLitros, setDiferenciaLitros] = useState(0);
@@ -98,7 +98,6 @@ export default function TripSettlementModal({
           if (data) {
             setKmsRecorridos(data.kmsRecorridos || 0);
 
-            //  GUARDAMOS LA INFO DEL DIÉSEL PARA LA UI
             setConsumoEsperado(data.consumoEsperadoLitros || 0);
             setConsumoReal(data.consumoRealLitros || 0);
             setDiferenciaLitros(data.diferenciaLitros || 0);
@@ -109,13 +108,41 @@ export default function TripSettlementModal({
               setRendimientoReal(0);
             }
 
-            const conceptosBack = (data.conceptos || []).map((c: any) => ({
-              id: c.id,
-              tipo: c.tipo,
-              descripcion: c.descripcion,
-              monto: c.monto,
-              esAutomatico: c.esAutomatico,
-            }));
+            const conceptosBack: ConceptoExtra[] = (data.conceptos || []).map(
+              (c: any) => ({
+                id: c.id,
+                tipo: c.tipo,
+                descripcion: c.descripcion,
+                monto: c.monto,
+                esAutomatico: c.esAutomatico,
+              }),
+            );
+
+            // 🎯 LÓGICA DE NEGOCIO: INYECTAR SUELDO PACTADO AUTOMÁTICAMENTE
+            const hasSueldo = conceptosBack.some(
+              (c) =>
+                c.descripcion.toLowerCase().includes("sueldo") ||
+                c.descripcion.toLowerCase().includes("bono movimiento"),
+            );
+
+            if (!hasSueldo && tripPadre) {
+              // Buscamos el sueldo en la tarifa heredada o en el viaje
+              const sueldoPactado = Number(
+                (tripPadre as any).sueldo_operador ||
+                  (tripPadre as any).tariff?.sueldo_operador ||
+                  0,
+              );
+
+              if (sueldoPactado > 0) {
+                conceptosBack.unshift({
+                  id: `sueldo-auto-${Date.now()}`,
+                  tipo: "ingreso",
+                  descripcion: "Sueldo Base (Pactado en Tarifa)",
+                  monto: sueldoPactado,
+                  esAutomatico: true,
+                });
+              }
+            }
 
             setConceptosExtra(conceptosBack);
           }
@@ -128,7 +155,7 @@ export default function TripSettlementModal({
     };
 
     if (open) fetchData();
-  }, [open, activeLegs, getTripSettlement]);
+  }, [open, activeLegs, getTripSettlement, tripPadre]);
 
   // REGLA DE ORO: Las casetas no se cobran al operador
   const sumAnticipos = activeLegs.reduce(
@@ -234,7 +261,7 @@ export default function TripSettlementModal({
         total_ingresos: totalPercepciones,
         total_deducciones: totalDeducciones,
         neto_a_pagar: totalNeto,
-        odometro_final: Number(odometroFinal), //  AHORA SÍ ENVIAMOS EL ODÓMETRO
+        odometro_final: Number(odometroFinal),
       };
 
       await closeTripSettlement(legId, payloadLiquidacion);
@@ -294,7 +321,6 @@ export default function TripSettlementModal({
               COLUMNA IZQUIERDA: RENDIMIENTO Y DIÉSEL 
           ========================================= */}
           <div className="lg:col-span-4 space-y-6">
-            {/* TARJETA DE RENDIMIENTO Y KILOMETRAJE */}
             <div className="space-y-4">
               <h3 className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em] flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 text-blue-500" /> Rendimiento /
@@ -357,7 +383,6 @@ export default function TripSettlementModal({
               </Card>
             </div>
 
-            {/*  TARJETA DE CONCILIACIÓN DE DIÉSEL */}
             <div className="space-y-4">
               <h3 className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em] flex items-center gap-2">
                 <Fuel className="h-4 w-4 text-amber-500" /> Conciliación Diésel
@@ -397,7 +422,6 @@ export default function TripSettlementModal({
                     </div>
                   </div>
 
-                  {/* ALERTA DE EXCESO DE COMBUSTIBLE */}
                   {diferenciaLitros > consumoEsperado * 0.05 && (
                     <div className="bg-rose-50 border-t border-rose-100 p-4">
                       <div className="flex gap-3">
@@ -525,7 +549,6 @@ export default function TripSettlementModal({
                   </Button>
                 </div>
 
-                {/* Aclaración Visual de Regla de Oro */}
                 {sumAnticipos > 0 && (
                   <div className="p-3.5 bg-muted/50 border border-border rounded-xl mb-4">
                     <div className="flex justify-between items-center text-[10px] font-bold text-muted-foreground">
@@ -617,7 +640,6 @@ export default function TripSettlementModal({
                 </div>
               </div>
 
-              {/* TOTAL NETO GIGANTE EN LA CALCULADORA */}
               <div className="md:col-span-2 mt-4">
                 <div className="bg-brand-navy p-6 md:p-8 rounded-2xl flex justify-between items-center shadow-2xl border-t-4 border-emerald-500 relative overflow-hidden">
                   <div className="absolute right-0 top-0 opacity-10 pointer-events-none transform translate-x-4 -translate-y-4">
@@ -646,7 +668,6 @@ export default function TripSettlementModal({
           </div>
         </div>
 
-        {/* FOOTER */}
         <DialogFooter className="bg-muted p-5 px-8 border-t border-border flex justify-end gap-4 rounded-b-2xl">
           <Button
             variant="ghost"
