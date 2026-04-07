@@ -147,7 +147,7 @@ const searchItems: SearchItem[] = [
   },
   {
     title: "Cuentas por Cobrar",
-    path: "/receivables",
+    path: "/api/finance/receivables",
     icon: DollarSign,
     category: "Finanzas",
     keywords: ["cobranza", "facturas", "aging"],
