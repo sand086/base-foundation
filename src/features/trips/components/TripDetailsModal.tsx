@@ -103,8 +103,6 @@ export function TripDetailsModal({
   const [localUuid, setLocalUuid] = useState<string | null>(null);
   const [finalUuid, setFinalUuid] = useState<string | null>(null);
 
-  const [showEmptyDialog, setShowEmptyDialog] = useState(false);
-  const [emptyTerminal, setEmptyTerminal] = useState("");
   const [showUndoDialog, setShowUndoDialog] = useState(false);
 
   const formatCurrency = (val: number) =>
@@ -117,11 +115,13 @@ export function TripDetailsModal({
   //  Sincronizar prop inicial con estado local cuando se abre el modal
   useEffect(() => {
     if (open && initialTrip) {
-      setLocalTrip(initialTrip);
+      if (localTrip?.id !== initialTrip.id) {
+        setLocalTrip(initialTrip);
+      }
     } else if (!open) {
       setLocalTrip(null);
     }
-  }, [initialTrip, open]);
+  }, [initialTrip?.id, open]);
 
   //  FUNCIÓN MAESTRA DE REFRESCO INTERNO
   const refreshLocalTrip = async () => {
@@ -270,10 +270,7 @@ export function TripDetailsModal({
 
   //  FASE 3: ENTREGA DE VACÍO
   const submitEmptyReturn = async () => {
-    if (!activeLeg || !emptyTerminal.trim()) {
-      toast.error("Debes indicar el patio o terminal de entrega.");
-      return;
-    }
+    if (!activeLeg) return; // Quitamos la validación de emptyTerminal
     setFinishingLeg(true);
 
     try {
@@ -282,9 +279,8 @@ export function TripDetailsModal({
         activeLeg.id,
         {
           status: "entregado",
-          location: emptyTerminal.toUpperCase(),
-          terminal_entrega_vacio: emptyTerminal.toUpperCase(),
-          comments: `VIAJE FINALIZADO: Equipo/Contenedor retornado vacío exitosamente en ${emptyTerminal.toUpperCase()}.`,
+          location: "Patio de Retorno Asignado", // Ya no dependemos del input
+          comments: `VIAJE FINALIZADO: Equipo/Contenedor retornado vacío exitosamente.`,
         },
         true,
       );
@@ -296,10 +292,7 @@ export function TripDetailsModal({
 
       toast.success("Viaje concluido y equipo liberado exitosamente.");
 
-      setShowEmptyDialog(false);
-      setEmptyTerminal("");
-
-      await refreshLocalTrip(); // Recargamos para que el modal pinte "ENTREGADO"
+      await refreshLocalTrip();
     } catch {
       toast.error("Error al registrar la entrega del vacío.");
     } finally {
@@ -772,55 +765,74 @@ export function TripDetailsModal({
                                       >
                                         {String(leg.status).replace("_", " ")}
                                       </Badge>
-
-                                      <div className="flex gap-2">
-                                        {["creado", "en_transito"].includes(
-                                          leg.status,
-                                        ) && (
-                                          <Button
-                                            size="sm"
-                                            className={cn(
-                                              "h-8 font-black text-[9px] uppercase tracking-widest shadow-lg haptic-press text-white",
-                                              btnUI.color,
-                                            )}
-                                            disabled={finishingLeg}
-                                            onClick={() => {
-                                              if (
-                                                leg.leg_type === "entrega_vacio"
-                                              ) {
-                                                setShowEmptyDialog(true);
-                                              } else if (onRelayClick) {
-                                                onRelayClick(
-                                                  leg as unknown as TripLeg,
-                                                  localTrip,
-                                                );
-                                              }
-                                            }}
-                                          >
-                                            {finishingLeg ? (
-                                              <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                                            ) : (
-                                              btnUI.icon
-                                            )}
-                                            {btnUI.text}
-                                          </Button>
-                                        )}
-                                        {leg.status === "entregado" &&
-                                          onSettleClick && (
+                                      <div className="flex flex-col gap-3">
+                                        {/* SI ES ENTREGA DE VACÍO: Mostramos Input + Botón Finalizar */}
+                                        {leg.id === activeLeg?.id &&
+                                        leg.leg_type === "entrega_vacio" &&
+                                        leg.status !== "entregado" ? (
+                                          <div className="mt-2 pt-2 border-t border-slate-100 dark:border-white/5">
                                             <Button
                                               size="sm"
-                                              className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[9px] uppercase tracking-widest shadow-lg shadow-emerald-500/20 haptic-press"
-                                              onClick={() =>
-                                                onSettleClick(
-                                                  leg as unknown as TripLeg,
-                                                  localTrip,
-                                                )
-                                              }
+                                              disabled={finishingLeg}
+                                              onClick={submitEmptyReturn}
+                                              className="w-full sm:w-auto h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-black px-6 uppercase text-[10px] tracking-widest shadow-lg shadow-emerald-500/20 haptic-press border-none"
                                             >
-                                              <Wallet className="h-3.5 w-3.5 mr-1.5" />{" "}
-                                              LIQUIDAR OP.
+                                              {finishingLeg ? (
+                                                <Loader2 className="animate-spin h-4 w-4 mr-2" />
+                                              ) : (
+                                                <Flag className="h-4 w-4 mr-2" />
+                                              )}
+                                              Finalizar y Liberar Equipo
                                             </Button>
-                                          )}
+                                          </div>
+                                        ) : (
+                                          /* SI ES CUALQUIER OTRA FASE: Botón normal de Siguiente Fase */
+                                          <div className="flex gap-2">
+                                            {["creado", "en_transito"].includes(
+                                              leg.status,
+                                            ) && (
+                                              <Button
+                                                size="sm"
+                                                className={cn(
+                                                  "h-8 font-black text-[9px] uppercase tracking-widest shadow-lg haptic-press text-white",
+                                                  btnUI.color,
+                                                )}
+                                                disabled={finishingLeg}
+                                                onClick={() =>
+                                                  onRelayClick?.(
+                                                    leg as any,
+                                                    localTrip!,
+                                                  )
+                                                }
+                                              >
+                                                {finishingLeg ? (
+                                                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                                                ) : (
+                                                  btnUI.icon
+                                                )}
+                                                {btnUI.text}
+                                              </Button>
+                                            )}
+
+                                            {/* Botón de Liquidar (se queda igual) */}
+                                            {leg.status === "entregado" &&
+                                              onSettleClick && (
+                                                <Button
+                                                  size="sm"
+                                                  className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[9px] uppercase shadow-lg shadow-emerald-500/20"
+                                                  onClick={() =>
+                                                    onSettleClick(
+                                                      leg as any,
+                                                      localTrip!,
+                                                    )
+                                                  }
+                                                >
+                                                  <Wallet className="h-3.5 w-3.5 mr-1.5" />{" "}
+                                                  LIQUIDAR OP.
+                                                </Button>
+                                              )}
+                                          </div>
+                                        )}
                                       </div>
                                     </div>
                                   </div>
@@ -1262,68 +1274,6 @@ export function TripDetailsModal({
           </div>
         </DialogContent>
       </Dialog>
-
-      {/*  ALERT DIALOG PARA CIERRE DE VACÍO */}
-      <AlertDialog open={showEmptyDialog} onOpenChange={setShowEmptyDialog}>
-        <AlertDialogContent className="w-[95vw] sm:max-w-md p-0 overflow-hidden border-none shadow-2xl rounded-2xl bg-white dark:bg-brand-navy">
-          <AlertDialogHeader className="p-6 bg-emerald-50 dark:bg-emerald-900/20 border-b border-emerald-100 dark:border-emerald-800/30">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-full bg-emerald-100 dark:bg-emerald-800/50 flex items-center justify-center shadow-inner border border-emerald-200 dark:border-emerald-700">
-                <Flag className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
-              </div>
-              <div className="text-left">
-                <AlertDialogTitle className="text-xl font-black text-emerald-800 dark:text-emerald-400 uppercase tracking-tighter">
-                  Finalizar Viaje
-                </AlertDialogTitle>
-                <AlertDialogDescription className="text-[10px] font-bold uppercase tracking-widest text-emerald-600/70 dark:text-emerald-500 mt-1">
-                  Confirmar Entrega de Equipo Vacío
-                </AlertDialogDescription>
-              </div>
-            </div>
-          </AlertDialogHeader>
-          <div className="p-6 space-y-5">
-            <p className="text-sm font-medium text-slate-600 dark:text-slate-300 leading-relaxed">
-              El equipo de arrastre será desenganchado y pasará a estatus{" "}
-              <b>Disponible</b> para la asignación de nuevos viajes.
-            </p>
-            <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
-                Patio / Terminal de Entrega *
-              </Label>
-              <Input
-                placeholder="Ej. Patio CCS, Terminal ICAVE..."
-                value={emptyTerminal}
-                onChange={(e) => setEmptyTerminal(e.target.value)}
-                className="h-12 font-bold uppercase bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-white/10"
-                autoFocus
-              />
-            </div>
-          </div>
-          <AlertDialogFooter className="p-6 bg-slate-50/80 dark:bg-slate-950/50 border-t border-slate-100 dark:border-white/5">
-            <AlertDialogCancel
-              onClick={() => setShowEmptyDialog(false)}
-              className="h-11 font-black uppercase tracking-widest text-[10px]"
-            >
-              Cancelar
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                submitEmptyReturn();
-              }}
-              disabled={!emptyTerminal.trim() || finishingLeg}
-              className="h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase tracking-widest text-[10px] shadow-md border-none"
-            >
-              {finishingLeg ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <CheckCircle2 className="h-4 w-4 mr-2" />
-              )}{" "}
-              Confirmar Entrega
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/*  ALERT DIALOG PARA DESHACER FASE */}
       <AlertDialog open={showUndoDialog} onOpenChange={setShowUndoDialog}>

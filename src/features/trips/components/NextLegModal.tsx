@@ -41,6 +41,7 @@ import {
   ChevronDown,
   Check,
   ChevronsUpDown,
+  Lock,
 } from "lucide-react";
 import {
   Command,
@@ -250,18 +251,32 @@ export function NextLegModal({
       if (lastLeg?.leg_type === "carga_muelle") nextLegType = "ruta_carretera";
       if (lastLeg?.leg_type === "ruta_carretera") nextLegType = "entrega_vacio";
 
-      //  SOLUCIÓN HERENCIA: Intentar heredar del Viaje Padre, si es nulo, buscar en la última fase.
+      // 💡 FIX LEAD: Casteo estricto a Number para asegurar que los comparadores === funcionen en los filtros.
+      const inheritedR1 = tripPadre.remolque_1_id
+        ? Number(tripPadre.remolque_1_id)
+        : (lastLeg as any)?.remolque_1_id
+          ? Number((lastLeg as any).remolque_1_id)
+          : null;
+      const inheritedDolly = tripPadre.dolly_id
+        ? Number(tripPadre.dolly_id)
+        : (lastLeg as any)?.dolly_id
+          ? Number((lastLeg as any).dolly_id)
+          : null;
+      const inheritedR2 = tripPadre.remolque_2_id
+        ? Number(tripPadre.remolque_2_id)
+        : (lastLeg as any)?.remolque_2_id
+          ? Number((lastLeg as any).remolque_2_id)
+          : null;
+
       setFormData({
         leg_type: nextLegType,
-        unit_id: lastLeg?.unit_id || null,
-        operator_id: lastLeg?.operator_id || null,
+        // El tracto y operador los dejamos null (o heredados) para que despachen al nuevo relevo.
+        unit_id: lastLeg?.unit_id ? Number(lastLeg.unit_id) : null,
+        operator_id: lastLeg?.operator_id ? Number(lastLeg.operator_id) : null,
 
-        // El fallback (lastLeg as any) te salva si el backend lo guardó en el Leg pero no en el Trip
-        remolque_1_id:
-          tripPadre.remolque_1_id || (lastLeg as any)?.remolque_1_id || null,
-        dolly_id: tripPadre.dolly_id || (lastLeg as any)?.dolly_id || null,
-        remolque_2_id:
-          tripPadre.remolque_2_id || (lastLeg as any)?.remolque_2_id || null,
+        remolque_1_id: inheritedR1,
+        dolly_id: inheritedDolly,
+        remolque_2_id: inheritedR2,
 
         anticipo_casetas: tripPadre.costo_casetas ?? 0,
         anticipo_viaticos: 0,
@@ -370,7 +385,6 @@ export function NextLegModal({
     );
   }, [formData.leg_type]);
 
-  // Filtros ajustados: mostramos disponibles O si están actualmente asignados en el form
   const availableTractos = useMemo(() => {
     return (unidades as Unit[]).filter((u) => {
       const tipo = `${u.tipo_1} ${u.tipo}`.toLowerCase();
@@ -378,7 +392,7 @@ export function NextLegModal({
       const isAvailable = UNIT_STATUSES_AVAILABLE.includes(
         u.status?.toLowerCase() as any,
       );
-      const isSelected = u.id === formData.unit_id;
+      const isSelected = Number(u.id) === Number(formData.unit_id);
       return isTracto && (isAvailable || isSelected);
     });
   }, [unidades, formData.unit_id]);
@@ -393,7 +407,8 @@ export function NextLegModal({
         u.status?.toLowerCase() as any,
       );
       const isSelected =
-        u.id === formData.remolque_1_id || u.id === formData.remolque_2_id;
+        Number(u.id) === Number(formData.remolque_1_id) ||
+        Number(u.id) === Number(formData.remolque_2_id);
       return !isTracto && !isDolly && (isAvailable || isSelected);
     });
   }, [unidades, formData.remolque_1_id, formData.remolque_2_id]);
@@ -404,7 +419,7 @@ export function NextLegModal({
       const isAvailable = UNIT_STATUSES_AVAILABLE.includes(
         u.status?.toLowerCase() as any,
       );
-      const isSelected = u.id === formData.dolly_id;
+      const isSelected = Number(u.id) === Number(formData.dolly_id);
       return isDolly && (isAvailable || isSelected);
     });
     return dollies.length > 0
@@ -423,7 +438,7 @@ export function NextLegModal({
       (o) =>
         o.status === "activo" ||
         o.status === "disponible" ||
-        o.id === formData.operator_id,
+        Number(o.id) === Number(formData.operator_id),
     );
   }, [operadores, formData.operator_id]);
 
@@ -473,9 +488,6 @@ export function NextLegModal({
 
     setLoading(true);
     try {
-      //  AQUÍ APLICAMOS LA CORRECCIÓN:
-      // Enviamos TODO al TripPadre (Datos Fiscales + Configuración de Arrastre)
-      // para asegurar que el backend persista los remolques.
       await axiosClient.put(`/api/logistics/trips/${tripPadre.id}`, {
         ...tripFiscalData,
         numero_contenedor: tripFiscalData.contenedor_1,
@@ -491,7 +503,6 @@ export function NextLegModal({
       );
 
       if (success) {
-        // Bloqueamos los equipos (cambio de status local)
         if (formData.leg_type === "carga_muelle") {
           await updateLoadStatus(Number(formData.remolque_1_id), true);
           if (formData.remolque_2_id)
@@ -507,7 +518,6 @@ export function NextLegModal({
         }
 
         onOpenChange(false);
-        //  FORZAMOS EL REFRESH EN LA PANTALLA PRINCIPAL
         if (onSuccessRefresh) onSuccessRefresh();
       }
     } catch (error) {
@@ -779,7 +789,7 @@ export function NextLegModal({
               </div>
             </div>
 
-            {/*  BLOQUE FISCAL DINÁMICO */}
+            {/* BLOQUE FISCAL DINÁMICO */}
             <div className="rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/50 shadow-sm overflow-hidden animate-in fade-in transition-all">
               <button
                 type="button"
@@ -1002,7 +1012,7 @@ export function NextLegModal({
               )}
             </div>
 
-            {/*  FASE 3: Campo dinámico de Destino de Vacío */}
+            {/* FASE 3: Campo dinámico de Destino de Vacío */}
             {formData.leg_type === "entrega_vacio" && (
               <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
                 <Label className="text-[11px] font-black uppercase text-rose-600 dark:text-rose-400 tracking-widest ml-1 flex items-center gap-1.5">
