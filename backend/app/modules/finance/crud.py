@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
 from fastapi import HTTPException
-
+from datetime import datetime, timedelta
 from app.models import models
 from . import schemas
 
@@ -36,8 +36,11 @@ def get_indirect_categories(db: Session):
 
 
 def get_bank_accounts(db: Session):
-
-    return db.query(models.BankAccount).all()
+    return (
+        db.query(models.BankAccount)
+        .filter(models.BankAccount.estatus == "activo")  # Solo traemos las activas
+        .all()
+    )
 
 
 def get_bank_accounts(db: Session):
@@ -62,7 +65,20 @@ def get_bank_movements(db: Session):
     )
 
 
-from datetime import datetime, timedelta
+def delete_bank_account(db: Session, account_id: int):
+    account = (
+        db.query(models.BankAccount).filter(models.BankAccount.id == account_id).first()
+    )
+
+    if not account:
+        return False
+
+    # 🎯 MAGIA: SOFT DELETE (No usamos db.delete(account))
+    account.estatus = "inactivo"
+    account.record_status = "I"  # Si usas tu AuditMixin
+
+    db.commit()
+    return True
 
 
 def process_bulk_payables(db: Session, payload_data: list[dict]):

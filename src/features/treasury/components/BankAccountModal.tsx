@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Landmark, Plus, Save } from "lucide-react";
+import { Landmark, Plus, Save, Loader2, Check } from "lucide-react";
 
 import {
   Dialog,
@@ -30,6 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useBankAccounts } from "../hooks/useBankAccounts";
 import { BankAccount } from "../types";
+import { cn } from "@/lib/utils";
 
 const bancos = [
   "Banamex",
@@ -49,27 +50,27 @@ const bankLogos: Record<string, string> = {
   Scotiabank: "🍁",
 };
 
+// 🎯 1. SCHEMA ACTUALIZADO (Con Saldo Inicial)
 const formSchema = z.object({
-  banco: z.string().min(1, "Debes seleccionar una institución bancaria."),
+  banco: z.string().min(1, "Selecciona un banco."),
   tipo_cuenta: z.string().min(1, "Selecciona el tipo de cuenta."),
   numero_cuenta: z
     .string()
-    .min(4, "El número debe tener al menos 4 dígitos.")
-    .max(20, "El número es demasiado largo."),
-  moneda: z.string().min(1, "Selecciona la divisa."),
+    .min(4, "Mínimo 4 dígitos.")
+    .max(20, "Máximo 20 dígitos."),
+  moneda: z.string().min(1, "Selecciona divisa."),
   clabe: z
     .string()
     .max(18, "La CLABE no puede superar los 18 dígitos.")
     .optional(),
-  alias: z
-    .string()
-    .min(3, "El alias debe tener al menos 3 caracteres para identificarla."),
+  alias: z.string().min(3, "Mínimo 3 caracteres."),
+  saldo_inicial: z.coerce.number().min(0, "No puede ser negativo.").default(0),
 });
 
 interface BankAccountModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  account?: BankAccount | null; // Si viene null, es CREAR. Si trae datos, es EDITAR.
+  account?: BankAccount | null;
 }
 
 export function BankAccountModal({
@@ -80,7 +81,7 @@ export function BankAccountModal({
   const [isPending, setIsPending] = useState(false);
   const { createAccount, updateAccount } = useBankAccounts();
 
-  const isEditMode = !!account; // Variable mágica para saber el modo
+  const isEditMode = !!account;
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -91,10 +92,10 @@ export function BankAccountModal({
       moneda: "MXN",
       clabe: "",
       alias: "",
+      saldo_inicial: 0,
     },
   });
 
-  // 🎯 REACCIONA A LOS CAMBIOS: Rellena o limpia el formulario según el modo
   useEffect(() => {
     if (open) {
       if (isEditMode && account) {
@@ -105,6 +106,7 @@ export function BankAccountModal({
           moneda: account.moneda || "MXN",
           clabe: account.clabe || "",
           alias: account.alias,
+          saldo_inicial: account.saldo || 0, // Mostramos el saldo actual, pero estará bloqueado
         });
       } else {
         form.reset({
@@ -114,6 +116,7 @@ export function BankAccountModal({
           moneda: "MXN",
           clabe: "",
           alias: "",
+          saldo_inicial: 0,
         });
       }
     }
@@ -123,17 +126,25 @@ export function BankAccountModal({
     setIsPending(true);
 
     const payload = {
-      ...values,
+      banco: values.banco,
+      tipo_cuenta: values.tipo_cuenta,
+      numero_cuenta: values.numero_cuenta,
+      moneda: values.moneda,
+      clabe: values.clabe,
+      alias: values.alias,
       banco_logo: bankLogos[values.banco] || "🏦",
     };
 
     let result;
     if (isEditMode && account) {
-      // MODO EDICIÓN
       result = await updateAccount(account.id, payload);
     } else {
-      // MODO CREACIÓN
-      result = await createAccount({ ...payload, saldo: 0, estatus: "activo" });
+      // 🎯 AL CREAR, ENVIAMOS EL SALDO INICIAL
+      result = await createAccount({
+        ...payload,
+        saldo: values.saldo_inicial,
+        estatus: "activo",
+      });
     }
 
     if (result) {
@@ -143,33 +154,101 @@ export function BankAccountModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[480px] rounded-2xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-brand-navy font-black text-xl">
-            <Landmark className="h-6 w-6" />
-            {isEditMode ? "Editar Cuenta Bancaria" : "Alta de Cuenta Bancaria"}
-          </DialogTitle>
+    <Dialog
+      open={open}
+      onOpenChange={(isOpen) => {
+        if (!isOpen && !isPending) onOpenChange(false);
+      }}
+    >
+      <DialogContent className="w-[95vw] sm:max-w-2xl p-0 flex flex-col max-h-[90vh] bg-card/95 backdrop-blur-xl border border-border shadow-2xl rounded-2xl overflow-hidden">
+        {/* HEADER TAHOE */}
+        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-card border-b border-border shrink-0 relative overflow-hidden z-10">
+          <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
+          <div className="relative z-10 flex items-center gap-4 sm:gap-5">
+            <div
+              className={cn(
+                "w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shadow-inner shrink-0 border",
+                isEditMode
+                  ? "bg-amber-100 dark:bg-amber-900/30 border-amber-200"
+                  : "bg-blue-100 dark:bg-blue-900/30 border-blue-200",
+              )}
+            >
+              <Landmark
+                className={cn(
+                  "h-7 w-7 sm:h-8 sm:w-8",
+                  isEditMode
+                    ? "text-amber-600 dark:text-amber-400"
+                    : "text-blue-600 dark:text-blue-400",
+                )}
+              />
+            </div>
+            <div className="flex flex-col gap-1 text-left">
+              <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-foreground heading-crisp leading-none">
+                {isEditMode ? "Editar Cuenta" : "Nueva Cuenta Bancaria"}
+              </DialogTitle>
+              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mt-1">
+                Tesorería y Flujo de Efectivo
+              </p>
+            </div>
+          </div>
         </DialogHeader>
 
+        {/* BODY FORMULARIO */}
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit(onSubmit)}
-            className="space-y-5 pt-2"
+            className="flex-1 overflow-y-auto custom-scrollbar p-6 sm:p-8 space-y-6"
           >
-            <div className="grid grid-cols-2 gap-4">
+            {/* SALDO INICIAL (ESTILO PRECIO GIGANTE) */}
+            <FormField
+              control={form.control}
+              name="saldo_inicial"
+              render={({ field }) => (
+                <FormItem className="p-6 bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/50 dark:border-emerald-900/50 rounded-2xl transition-colors">
+                  <div className="flex justify-between items-center">
+                    <FormLabel className="text-[10px] font-black text-emerald-800 dark:text-emerald-500 tracking-[0.2em] uppercase flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />{" "}
+                      Saldo Inicial (Apertura)
+                    </FormLabel>
+                    {isEditMode && (
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                        Bloqueado en Edición
+                      </span>
+                    )}
+                  </div>
+                  <div className="relative mt-3 flex items-baseline gap-2">
+                    <span className="text-3xl font-bold text-emerald-600/50 dark:text-emerald-500/50">
+                      $
+                    </span>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        disabled={isEditMode} // 🔒 BLOQUEADO EN EDICIÓN (Auditoría)
+                        {...field}
+                        className="h-auto p-0 text-5xl font-mono font-black text-emerald-700 dark:text-emerald-400 bg-transparent border-none focus-visible:ring-0 shadow-none disabled:opacity-100"
+                      />
+                    </FormControl>
+                  </div>
+                  <FormMessage className="text-[10px]" />
+                </FormItem>
+              )}
+            />
+
+            {/* DATOS GENERALES */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField
                 control={form.control}
                 name="banco"
                 render={({ field }) => (
                   <FormItem className="space-y-1.5">
-                    <FormLabel className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                      Institución Bancaria *
+                    <FormLabel variant="brand" required>
+                      Institución Bancaria
                     </FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
-                        <SelectTrigger className="h-11 rounded-xl bg-slate-50">
-                          <SelectValue placeholder="Seleccionar banco" />
+                        <SelectTrigger className="h-11 rounded-xl bg-card border-border shadow-sm font-bold uppercase text-xs">
+                          <SelectValue placeholder="Seleccionar..." />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent className="rounded-xl">
@@ -177,17 +256,14 @@ export function BankAccountModal({
                           <SelectItem
                             key={banco}
                             value={banco}
-                            className="rounded-lg cursor-pointer"
+                            className="font-bold text-xs uppercase"
                           >
-                            <div className="flex items-center gap-2 font-medium text-slate-700">
-                              <span>{bankLogos[banco]}</span>
-                              {banco}
-                            </div>
+                            {bankLogos[banco]} {banco}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    <FormMessage className="text-[10px]" />
+                    <FormMessage />
                   </FormItem>
                 )}
               />
@@ -197,54 +273,52 @@ export function BankAccountModal({
                 name="tipo_cuenta"
                 render={({ field }) => (
                   <FormItem className="space-y-1.5">
-                    <FormLabel className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                      Tipo de Cuenta *
+                    <FormLabel variant="brand" required>
+                      Tipo de Flujo
                     </FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
-                        <SelectTrigger className="h-11 rounded-xl bg-slate-50">
+                        <SelectTrigger className="h-11 rounded-xl bg-card border-border shadow-sm font-bold uppercase text-xs">
                           <SelectValue />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent className="rounded-xl">
                         <SelectItem
                           value="operativa"
-                          className="rounded-lg cursor-pointer"
+                          className="font-bold text-xs uppercase"
                         >
                           Operativa (Salidas)
                         </SelectItem>
                         <SelectItem
                           value="cobranza"
-                          className="rounded-lg cursor-pointer"
+                          className="font-bold text-xs uppercase"
                         >
-                          Cobranza (Entradas)
+                          Cobranza (Ingresos)
                         </SelectItem>
                       </SelectContent>
                     </Select>
-                    <FormMessage className="text-[10px]" />
+                    <FormMessage />
                   </FormItem>
                 )}
               />
-            </div>
 
-            <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="numero_cuenta"
                 render={({ field }) => (
                   <FormItem className="space-y-1.5">
-                    <FormLabel className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                      Número de Cuenta *
+                    <FormLabel variant="brand" required>
+                      Número de Cuenta
                     </FormLabel>
                     <FormControl>
                       <Input
                         placeholder="Ej: 0123456789"
                         type="number"
-                        className="h-11 font-mono text-sm rounded-xl bg-slate-50"
+                        className="h-11 font-mono text-sm rounded-xl bg-card shadow-sm"
                         {...field}
                       />
                     </FormControl>
-                    <FormMessage className="text-[10px]" />
+                    <FormMessage />
                   </FormItem>
                 )}
               />
@@ -254,31 +328,31 @@ export function BankAccountModal({
                 name="moneda"
                 render={({ field }) => (
                   <FormItem className="space-y-1.5">
-                    <FormLabel className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                      Divisa Base *
+                    <FormLabel variant="brand" required>
+                      Divisa
                     </FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
-                        <SelectTrigger className="h-11 rounded-xl bg-slate-50 font-bold">
+                        <SelectTrigger className="h-11 rounded-xl bg-card shadow-sm font-bold">
                           <SelectValue />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent className="rounded-xl">
                         <SelectItem
                           value="MXN"
-                          className="rounded-lg cursor-pointer font-bold text-emerald-700"
+                          className="font-bold text-emerald-700"
                         >
                           🇲🇽 MXN
                         </SelectItem>
                         <SelectItem
                           value="USD"
-                          className="rounded-lg cursor-pointer font-bold text-blue-700"
+                          className="font-bold text-blue-700"
                         >
                           🇺🇸 USD
                         </SelectItem>
                       </SelectContent>
                     </Select>
-                    <FormMessage className="text-[10px]" />
+                    <FormMessage />
                   </FormItem>
                 )}
               />
@@ -289,19 +363,17 @@ export function BankAccountModal({
               name="clabe"
               render={({ field }) => (
                 <FormItem className="space-y-1.5">
-                  <FormLabel className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                    CLABE Interbancaria
-                  </FormLabel>
+                  <FormLabel variant="brand">CLABE Interbancaria</FormLabel>
                   <FormControl>
                     <Input
                       placeholder="18 dígitos"
                       type="number"
                       maxLength={18}
-                      className="h-11 font-mono text-sm tracking-widest rounded-xl bg-slate-50"
+                      className="h-11 font-mono tracking-widest rounded-xl bg-card shadow-sm"
                       {...field}
                     />
                   </FormControl>
-                  <FormMessage className="text-[10px]" />
+                  <FormMessage />
                 </FormItem>
               )}
             />
@@ -311,48 +383,49 @@ export function BankAccountModal({
               name="alias"
               render={({ field }) => (
                 <FormItem className="space-y-1.5">
-                  <FormLabel className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                    Alias (Identificador Interno) *
+                  <FormLabel variant="brand" required>
+                    Alias (Identificador Interno)
                   </FormLabel>
                   <FormControl>
                     <Input
                       placeholder="Ej: Fiscal Banamex Principal..."
-                      className="h-11 text-sm rounded-xl bg-slate-50 font-bold text-slate-700"
+                      className="h-11 text-sm rounded-xl bg-card font-bold shadow-sm"
                       {...field}
                     />
                   </FormControl>
-                  <FormMessage className="text-[10px]" />
+                  <FormMessage />
                 </FormItem>
               )}
             />
 
-            <DialogFooter className="pt-6 border-t mt-2">
+            {/* FOOTER TAHOE */}
+            <div className="pt-6 border-t border-border mt-8 flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3">
               <Button
                 type="button"
-                variant="ghost"
+                variant="outline"
+                size="lg"
                 onClick={() => onOpenChange(false)}
-                className="h-11 px-6 rounded-xl font-bold text-slate-500"
+                disabled={isPending}
+                className="w-full sm:w-auto text-[10px] font-black uppercase tracking-widest"
               >
                 Cancelar
               </Button>
               <Button
                 type="submit"
+                size="lg"
                 disabled={isPending}
-                className="h-11 px-8 bg-brand-navy hover:bg-brand-navy/90 text-white rounded-xl font-black shadow-lg shadow-brand-navy/20"
+                className="w-full sm:w-auto font-black text-white bg-brand-navy hover:bg-brand-navy/90 shadow-lg shadow-brand-navy/20"
               >
                 {isPending ? (
-                  "Procesando..."
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : isEditMode ? (
-                  <>
-                    <Save className="h-4 w-4 mr-2" /> Guardar Cambios
-                  </>
+                  <Save className="mr-2 h-4 w-4" />
                 ) : (
-                  <>
-                    <Plus className="h-4 w-4 mr-2" /> Dar de Alta
-                  </>
+                  <Plus className="mr-2 h-4 w-4" />
                 )}
+                {isEditMode ? "Actualizar Cuenta" : "Aperturar Cuenta"}
               </Button>
-            </DialogFooter>
+            </div>
           </form>
         </Form>
       </DialogContent>
