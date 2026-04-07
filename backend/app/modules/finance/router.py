@@ -20,6 +20,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Finance"])
 
 
+# Definimos un esquema rápido para recibir el array dinámico
+class BulkUploadPayload(BaseModel):
+    data: List[dict]
+
+
 # =====================================================================
 # PAYABLES (Cuentas por Pagar) & PROVIDERS
 # =====================================================================
@@ -370,3 +375,17 @@ async def upload_payment_xml(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=f"Error al leer XML: {str(e)}")
+
+
+@router.post("/invoices/bulk-upload")
+def bulk_upload_invoices(payload: BulkUploadPayload, db: Session = Depends(get_db)):
+    """
+    Endpoint para procesar la carga masiva de facturas del SAT (CXP).
+    """
+    try:
+        resultado = crud.process_bulk_payables(db=db, payload_data=payload.data)
+        return resultado
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error procesando facturas: {str(e)}"
+        )

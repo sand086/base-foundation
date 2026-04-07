@@ -53,6 +53,7 @@ import {
   TrendingUp,
   TrendingDown,
   Loader2,
+  Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -60,7 +61,10 @@ import axiosClient from "@/api/axiosClient";
 import { toast } from "sonner";
 import { MovementDetailModal } from "@/features/treasury/components/MovementDetailModal";
 
-import { BankAccount, BankMovement } from "@/features/treasury/types";
+import { BankMovement } from "@/features/treasury/types";
+// 🎯 IMPORTAMOS TU HOOK MAESTRO
+import { useBankAccounts } from "@/features/treasury/hooks/useBankAccounts";
+
 const bancos = [
   "Banamex",
   "Santander",
@@ -80,9 +84,16 @@ const bankLogos: Record<string, string> = {
 };
 
 export default function Treasury() {
-  const [accounts, setAccounts] = useState<BankAccount[]>([]);
+  // 🎯 REEMPLAZAMOS EL FETCH MANUAL POR EL HOOK
+  const {
+    bankAccounts,
+    isLoading: isAccountsLoading,
+    createAccount,
+    refresh: refreshAccounts,
+  } = useBankAccounts();
+
   const [movimientos, setMovimientos] = useState<BankMovement[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isMovementsLoading, setIsMovementsLoading] = useState(true);
 
   // Modal States
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -105,42 +116,42 @@ export default function Treasury() {
     clabe: "",
     moneda: "MXN",
     alias: "",
-    // Usamos el estatus temporalmente en el form para guardar si es operativa o cobranza
-    // ya que BankAccount no tiene 'tipo' definido explícitamente en api.types (solo estatus).
-    // NOTA: Si en BD lo guardas en una columna, se mandará aquí.
     tipo_cuenta: "operativa",
   });
 
-  const fetchData = async () => {
-    setIsLoading(true);
+  // Fetch de movimientos (se queda con Axios hasta que haya un useMovements hook)
+  const fetchMovements = async () => {
+    setIsMovementsLoading(true);
     try {
-      const [accRes, movRes] = await Promise.all([
-        axiosClient.get<BankAccount[]>("/api/finance/bank-accounts"),
-        axiosClient.get<BankMovement[]>("/api/finance/movements"),
-      ]);
-      setAccounts(accRes.data || []);
+      const movRes = await axiosClient.get<BankMovement[]>(
+        "/api/finance/movements",
+      );
       setMovimientos(movRes.data || []);
     } catch (error) {
-      toast.error("Error al cargar la información financiera");
+      toast.error("Error al cargar los movimientos financieros");
     } finally {
-      setIsLoading(false);
+      setIsMovementsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchData();
+    fetchMovements();
   }, []);
 
-  //  2. Filtros y Cálculos con snake_case
-  // (Asumiendo que 'tipo' en realidad lo guardas en BD, o que lo filtras por alias/nombre)
-  // Para este ejemplo, si tu base no tiene "tipo" cuenta, podrías filtrarlas por el alias
-  // o modificar la tabla en postgres para que lo soporte. Asumiré que lo tienes mapeado.
-  const operativaAccounts = accounts.filter(
-    (a: any) => a.tipo_cuenta === "operativa" && a.estatus === "activo",
+  const operativaAccounts = useMemo(
+    () =>
+      bankAccounts.filter(
+        (a) => a.tipo_cuenta === "operativa" && a.estatus === "activo",
+      ),
+    [bankAccounts],
   );
 
-  const cobranzaAccounts = accounts.filter(
-    (a: any) => a.tipo_cuenta === "cobranza" && a.estatus === "activo",
+  const cobranzaAccounts = useMemo(
+    () =>
+      bankAccounts.filter(
+        (a) => a.tipo_cuenta === "cobranza" && a.estatus === "activo",
+      ),
+    [bankAccounts],
   );
 
   const saldoOperativa = useMemo(() => {
@@ -154,7 +165,6 @@ export default function Treasury() {
   const getMovimientosByTipo = (tipo: "operativa" | "cobranza" | "all") => {
     if (tipo === "all") return movimientos;
 
-    // Obtenemos los números de cuenta (en string) de las cuentas que cumplen el criterio
     const accountNumbers =
       tipo === "operativa"
         ? operativaAccounts.map((a) => a.numero_cuenta)
@@ -179,21 +189,20 @@ export default function Treasury() {
   }, [movimientos]);
 
   const handleAddAccount = async () => {
-    try {
-      await axiosClient.post("/api/finance/bank-accounts", {
-        banco: formData.banco,
-        banco_logo: bankLogos[formData.banco] || "🏦",
-        numero_cuenta: formData.numero_cuenta,
-        clabe: formData.clabe,
-        moneda: formData.moneda,
-        alias: formData.alias,
-        saldo: 0,
-        estatus: "activo",
-        tipo_cuenta: formData.tipo_cuenta, // Si tu backend lo soporta
-      });
+    // 🎯 USAMOS LA MUTACIÓN DE TU HOOK EN LUGAR DE AXIOS DIRECTO
+    const newAcc = await createAccount({
+      banco: formData.banco,
+      banco_logo: bankLogos[formData.banco] || "🏦",
+      numero_cuenta: formData.numero_cuenta,
+      clabe: formData.clabe,
+      moneda: formData.moneda,
+      alias: formData.alias,
+      saldo: 0,
+      estatus: "activo",
+      tipo_cuenta: formData.tipo_cuenta,
+    });
 
-      await fetchData();
-
+    if (newAcc) {
       setFormData({
         banco: "",
         numero_cuenta: "",
@@ -203,9 +212,6 @@ export default function Treasury() {
         tipo_cuenta: "operativa",
       });
       setIsAddModalOpen(false);
-      toast.success("Cuenta bancaria agregada exitosamente");
-    } catch (error) {
-      toast.error("Error al guardar la cuenta bancaria");
     }
   };
 
@@ -216,7 +222,6 @@ export default function Treasury() {
     const newConciliado = !movement.conciliado;
 
     try {
-      // Usamos PATCH para actualizar solo ese campo en el backend
       await axiosClient.patch(
         `/api/finance/movements/${movementId}/conciliation`,
         {
@@ -232,6 +237,10 @@ export default function Treasury() {
           m.id === movementId ? { ...m, conciliado: newConciliado } : m,
         ),
       );
+
+      // Al conciliar un movimiento, debemos refrescar los saldos de las cuentas
+      refreshAccounts();
+
       toast.success(
         `Movimiento ${newConciliado ? "conciliado" : "desconciliado"}`,
       );
@@ -260,9 +269,10 @@ export default function Treasury() {
     }
 
     try {
-      await axiosClient.delete(`api/finance/movements/${movementToDelete.id}`);
+      await axiosClient.delete(`/api/finance/movements/${movementToDelete.id}`);
 
       setMovimientos(movimientos.filter((m) => m.id !== movementToDelete.id));
+      refreshAccounts(); // Refrescar saldos al eliminar
       toast.success("Movimiento eliminado", {
         description: movementToDelete.concepto,
       });
@@ -410,7 +420,7 @@ export default function Treasury() {
           </tbody>
         </table>
 
-        {filteredMovimientos.length === 0 && !isLoading && (
+        {filteredMovimientos.length === 0 && !isMovementsLoading && (
           <div className="p-12 text-center text-slate-600 flex flex-col items-center gap-2">
             <Landmark className="h-10 w-10 opacity-20" />
             <span className="font-bold">No hay movimientos registrados</span>
@@ -420,7 +430,7 @@ export default function Treasury() {
           </div>
         )}
 
-        {isLoading && (
+        {isMovementsLoading && (
           <div className="p-12 flex justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-brand-navy/50" />
           </div>
@@ -431,13 +441,119 @@ export default function Treasury() {
 
   return (
     <div className="p-6 space-y-6 bg-slate-50/50 min-h-[calc(100vh-64px)] pb-20">
-      <PageHeader
-        title="Tesorería Corporativa"
-        description="Auditoría financiera, conciliación bancaria y flujo de efectivo"
-      />
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <PageHeader
+          title="Tesorería Corporativa"
+          description="Auditoría financiera, cuentas bancarias y flujo de efectivo"
+        />
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            onClick={() => setShowBalances(!showBalances)}
+            className="h-10 gap-2 text-xs font-bold rounded-xl border-slate-200 text-slate-600 hover:bg-slate-50 bg-white"
+          >
+            {showBalances ? (
+              <EyeOff className="h-4 w-4" />
+            ) : (
+              <Eye className="h-4 w-4" />
+            )}
+            {showBalances ? "Ocultar Saldos" : "Mostrar Saldos"}
+          </Button>
+          <Button
+            onClick={() => setIsAddModalOpen(true)}
+            className="h-10 gap-2 text-xs bg-brand-navy hover:bg-brand-navy/90 text-white font-bold rounded-xl shadow-lg shadow-brand-navy/20"
+          >
+            <Plus className="h-4 w-4" />
+            Nueva Cuenta
+          </Button>
+        </div>
+      </div>
+
+      {/* 🎯 NUEVA SECCIÓN: CUENTAS BANCARIAS VISUALES */}
+      <div className="space-y-4">
+        <h3 className="text-xs font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
+          <Wallet className="h-4 w-4 text-brand-navy" /> Cuentas Bancarias
+          Activas
+        </h3>
+
+        {isAccountsLoading ? (
+          <div className="flex items-center justify-center p-8 bg-white/50 rounded-2xl border border-slate-200 border-dashed">
+            <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+          </div>
+        ) : bankAccounts.length === 0 ? (
+          <div className="text-center p-8 bg-white/50 rounded-2xl border border-slate-200 border-dashed text-slate-500 text-sm font-bold">
+            No hay cuentas bancarias registradas. Crea una para comenzar.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {bankAccounts.map((account) => (
+              <Card
+                key={account.id}
+                className="border-slate-200 shadow-sm hover:shadow-md transition-shadow bg-white rounded-2xl overflow-hidden relative"
+              >
+                <div
+                  className={cn(
+                    "absolute top-0 left-0 w-1.5 h-full",
+                    account.tipo_cuenta === "operativa"
+                      ? "bg-red-500"
+                      : "bg-emerald-500",
+                  )}
+                />
+                <CardContent className="p-5 flex flex-col justify-between h-full">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="text-3xl leading-none bg-slate-50 p-2 rounded-xl border border-slate-100">
+                        {account.banco_logo || "🏦"}
+                      </div>
+                      <div>
+                        <h4 className="font-black text-slate-800 uppercase tracking-tight text-sm">
+                          {account.alias}
+                        </h4>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                          {account.banco} • {account.moneda}
+                        </p>
+                      </div>
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "text-[9px] uppercase font-black tracking-widest border-none shadow-sm",
+                        account.tipo_cuenta === "operativa"
+                          ? "bg-red-50 text-red-600"
+                          : "bg-emerald-50 text-emerald-600",
+                      )}
+                    >
+                      {account.tipo_cuenta}
+                    </Badge>
+                  </div>
+
+                  <div className="space-y-1 mt-2">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                      Saldo Disponible
+                    </p>
+                    <p className="text-2xl font-mono font-black text-slate-800">
+                      {showBalances
+                        ? `$${(account.saldo || 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}`
+                        : "••••••••"}
+                    </p>
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center text-[10px] font-bold text-slate-500 font-mono">
+                    <span>
+                      CLABE:{" "}
+                      {account.clabe ? `...${account.clabe.slice(-4)}` : "S/N"}
+                    </span>
+                    <span>CTA: *{account.numero_cuenta.slice(-4)}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-8">
         <Card className="border-none shadow-sm rounded-2xl hover:shadow-md transition-shadow">
           <CardHeader className="pb-2">
             <CardTitle className="text-[10px] uppercase tracking-widest font-black text-emerald-600 flex items-center gap-2">
@@ -501,29 +617,6 @@ export default function Treasury() {
         </Card>
       </div>
 
-      {/* Toolbar */}
-      <div className="flex items-center justify-end gap-3 mt-8">
-        <Button
-          variant="outline"
-          onClick={() => setShowBalances(!showBalances)}
-          className="h-10 gap-2 text-xs font-bold rounded-xl border-slate-200 text-slate-600 hover:bg-slate-50"
-        >
-          {showBalances ? (
-            <EyeOff className="h-4 w-4" />
-          ) : (
-            <Eye className="h-4 w-4" />
-          )}
-          {showBalances ? "Ocultar" : "Mostrar"} Saldos
-        </Button>
-        <Button
-          onClick={() => setIsAddModalOpen(true)}
-          className="h-10 gap-2 text-xs bg-brand-navy hover:bg-brand-navy/90 text-white font-bold rounded-xl shadow-lg shadow-brand-navy/20"
-        >
-          <Plus className="h-4 w-4" />
-          Agregar Cuenta
-        </Button>
-      </div>
-
       {/* Tabs by Bank Type */}
       <Tabs defaultValue="all" className="space-y-4">
         <TabsList className="bg-slate-200/50 p-1 rounded-xl h-12">
@@ -539,14 +632,6 @@ export default function Treasury() {
           >
             <ArrowDownLeft className="h-4 w-4 text-red-500" />
             Operativas (Pagos)
-            <Badge
-              variant="secondary"
-              className="ml-1 bg-slate-100 text-slate-500 hover:bg-slate-100 font-mono"
-            >
-              {showBalances
-                ? `$${saldoOperativa.toLocaleString("es-MX")}`
-                : "•••"}
-            </Badge>
           </TabsTrigger>
           <TabsTrigger
             value="cobranza"
@@ -554,14 +639,6 @@ export default function Treasury() {
           >
             <ArrowUpRight className="h-4 w-4 text-emerald-500" />
             Cobranza (Ingresos)
-            <Badge
-              variant="secondary"
-              className="ml-1 bg-slate-100 text-slate-500 hover:bg-slate-100 font-mono"
-            >
-              {showBalances
-                ? `$${saldoCobranza.toLocaleString("es-MX")}`
-                : "•••"}
-            </Badge>
           </TabsTrigger>
         </TabsList>
 

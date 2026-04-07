@@ -59,3 +59,109 @@ def get_bank_movements(db: Session):
     return (
         db.query(models.BankMovement).order_by(models.BankMovement.fecha.desc()).all()
     )
+
+
+from datetime import datetime, timedelta
+
+
+def process_bulk_payables(db: Session, payload_data: list[dict]):
+    """
+    Procesa un array de diccionarios proveniente del Excel del SAT.
+    Reglas de negocio:
+    1. Evita duplicados por UUID.
+    2. Crea el proveedor automáticamente si no existe por RFC.
+    3. Calcula fecha de vencimiento basada en días de crédito.
+    """
+    facturas_creadas = 0
+    proveedores_creados = 0
+
+    for item in payload_data:
+        rfc = str(item.get("rfc_emisor") or "").strip()
+        nombre = str(item.get("nombre_emisor") or "").strip()
+        uuid_fiscal = str(item.get("uuid") or "").strip()
+
+        # Ignorar filas vacías o inválidas
+        if not rfc or not uuid_fiscal:
+            continue
+
+        # 1. EVITAR DUPLICADOS
+        existing_invoice = (
+            db.query(models.PayableInvoice)
+            .filter(models.PayableInvoice.uuid == uuid_fiscal)
+            .first()
+        )
+        if existing_invoice:
+            continue  # Ya existe, nos la saltamos
+
+        # 2. GESTIÓN DEL PROVEEDOR
+        provider = db.query(models.Provider).filter(models.Provider.rfc == rfc).first()
+
+        # Obtener días de crédito (del Excel o 0 por defecto)
+        try:
+            dias_credito_excel = int(item.get("dias_credito") or 0)
+        except (ValueError, TypeError):
+            dias_credito_excel = 0
+
+        if not provider:
+            # Crear proveedor al vuelo
+            provider = models.Provider(
+                razon_social=nombre,
+                rfc=rfc,
+                dias_credito=dias_credito_excel,
+                estatus="activo",
+            )
+            db.add(provider)
+            db.flush()  # Guardar temporalmente para obtener el ID
+            proveedores_creados += 1
+
+        # Los días de crédito finales son los del proveedor o los del Excel
+        dias_finales = (
+            dias_credito_excel
+            if dias_credito_excel > 0
+            else (provider.dias_credito or 0)
+        )
+
+        # 3. GESTIÓN DE FECHAS
+        fecha_str = str(item.get("fecha_emision") or "")
+        try:
+            # El SAT a veces manda '2023-08-01 06:00:00' o '2023-08-01'
+            fecha_obj = datetime.fromisoformat(fecha_str.replace("Z", "").split(" ")[0])
+        except ValueError:
+            fecha_obj = datetime.utcnow()
+
+        vencimiento = fecha_obj + timedelta(days=dias_finales)
+
+        # 4. GESTIÓN DE MONTOS
+        try:
+            subtotal = float(item.get("subtotal") or 0)
+            total = float(item.get("total") or 0)
+        except (ValueError, TypeError):
+            subtotal = 0.0
+            total = 0.0
+
+        # 5. CREACIÓN DE FACTURA (CXP)
+        concepto = str(item.get("concepto") or "Factura importada del SAT")
+
+        invoice = models.PayableInvoice(
+            supplier_id=provider.id,
+            uuid=uuid_fiscal,
+            folio=str(item.get("folio") or ""),
+            concepto=concepto[:200],  # Truncar por si viene muy largo
+            monto_total=total,
+            saldo_pendiente=total,  # Al importarse, se debe todo
+            fecha_emision=fecha_obj.date(),
+            fecha_vencimiento=vencimiento.date(),
+            dias_credito=dias_finales,
+            moneda=str(item.get("moneda") or "MXN").strip()[:3],
+            estatus="pendiente",
+            clasificacion="gasto_indirecto_variable",  # Clasificación por defecto al subir
+        )
+        db.add(invoice)
+        facturas_creadas += 1
+
+    # Guardar todos los cambios en la BD
+    db.commit()
+
+    return {
+        "message": f"Se procesaron con éxito {facturas_creadas} facturas y se crearon {proveedores_creados} proveedores nuevos."
+    }
