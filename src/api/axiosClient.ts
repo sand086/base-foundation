@@ -68,13 +68,25 @@ axiosClient.interceptors.response.use(
         }
       }
 
+      const is2FAEndpoint =
+        originalRequest.url?.includes("/auth/verify-2fa") ||
+        originalRequest.url?.includes("/auth/request-emergency-code");
+
+      // Si es un error de 2FA, dejamos que el componente Verify2FA maneje el error
+      if (is2FAEndpoint) {
+        return Promise.reject(error);
+      }
       // 4. Si llegamos aquí: no había refresh token o el refresh falló
       // Limpiamos todo y sacamos al usuario
       localStorage.removeItem("access_token");
       localStorage.removeItem("refresh_token");
       localStorage.removeItem("user_data");
 
-      if (!window.location.pathname.includes("/login")) {
+      const currentPath = window.location.pathname;
+      const isPublicPage =
+        currentPath.includes("/login") || currentPath.includes("/verify-2fa");
+
+      if (!isPublicPage) {
         window.location.href = "/login?session=expired";
       }
     }

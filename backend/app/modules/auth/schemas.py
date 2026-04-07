@@ -1,4 +1,3 @@
-
 # --- Fuente: schemas_auth.py ---
 from pydantic import BaseModel, EmailStr, ConfigDict, Field
 from typing import Optional, Dict, Any
@@ -101,7 +100,6 @@ from typing import Any, Dict, Optional
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.models.models import RecordStatus
-
 
 # =========================================================
 # Base helper
@@ -277,3 +275,6 @@ class PasswordReset(ORMBase):
 
     model_config = ConfigDict(extra="ignore")
 
+
+class EmergencyRequest(BaseModel):
+    temp_token: str
