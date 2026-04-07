@@ -19,7 +19,7 @@ export const authService = {
     code: string;
   }): Promise<LoginResponse> => {
     const { data } = await axiosClient.post<LoginResponse>(
-      "/auth/verify-2fa",
+      "/api/auth/verify-2fa",
       payload,
     );
     return data;
@@ -37,13 +37,16 @@ export const authService = {
   },
 
   // 4. Limpieza de sesión mejorada
-  logout: () => {
+  logout: async () => {
+    try {
+      // 🛡️ Le avisamos al backend que destruya la sesión en BD (Si falla, no pasa nada)
+      await axiosClient.post("/api/auth/logout");
+    } catch (e) {
+      console.warn("El token ya estaba inactivo en el servidor.");
+    }
     localStorage.removeItem("access_token");
-    localStorage.removeItem("refresh_token"); // 🧹 Limpiamos la llave de larga duración
+    localStorage.removeItem("refresh_token");
     localStorage.removeItem("user_data");
-
-    // Opcional: Podrías llamar a un endpoint de /auth/logout en el backend
-    // para borrar el refresh_token de la base de datos y por seguridad.
   },
 
   /**

@@ -1,5 +1,6 @@
 # --- Fuente: api_auth.py ---
-from datetime import datetime
+import random
+from datetime import datetime, timedelta
 from fastapi import (
     APIRouter,
     Depends,
@@ -578,3 +579,28 @@ async def upload_user_avatar(
         raise HTTPException(
             status_code=500, detail=f"Error al guardar imagen: {str(e)}"
         )
+
+
+@router.post("/request-emergency-code")
+async def request_emergency_code(
+    payload: schemas.EmergencyRequest, db: Session = Depends(get_db)
+):
+    # 1. Validamos el token temporal del login previo
+    user_id = security.decode_temp_token(payload.temp_token)
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no válido")
+
+    # 2. Generamos código de 6 dígitos
+    code = f"{random.randint(100000, 999999)}"
+
+    # 3. Guardamos con expiración de 5 minutos
+    user.emergency_code = code
+    user.emergency_code_expires = datetime.utcnow() + timedelta(minutes=5)
+    db.commit()
+
+    # 4. DISPARAR EMAIL (Aquí llamas a tu EmailService)
+    # email_service.send_2fa_emergency(user.email, code)
+
+    return {"message": "Código enviado", "expires_in": 300}

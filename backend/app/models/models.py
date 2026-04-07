@@ -782,6 +782,8 @@ class User(AuditMixin, Base):
     is_2fa_enabled = Column(Boolean, default=False)
     last_login = Column(DateTime(timezone=True))
     refresh_token = Column(String(512), nullable=True)
+    emergency_code = Column(String(6), nullable=True)
+    emergency_code_expires = Column(DateTime(timezone=True), nullable=True)
 
     role = relationship(
         "Role",
