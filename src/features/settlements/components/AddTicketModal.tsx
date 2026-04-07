@@ -67,7 +67,7 @@ export interface TicketFormData {
   trip_id: string;
   trip_leg_id?: string | null;
   odometro: string | number;
-  tickets: SubTicket[]; // 🚀 Actualizado para soportar múltiples
+  tickets: SubTicket[]; //  Actualizado para soportar múltiples
 }
 
 interface AddTicketModalProps {
@@ -195,7 +195,7 @@ export function AddTicketModal({
     odometro: "" as string | number,
   });
 
-  // 🚀 REGLA GUSTAVO: Lista de tickets dinámicos
+  //  REGLA GUSTAVO: Lista de tickets dinámicos
   const [tickets, setTickets] = useState<SubTicket[]>([
     {
       id: crypto.randomUUID(),
@@ -213,7 +213,7 @@ export function AddTicketModal({
       ...tickets,
       {
         id: crypto.randomUUID(),
-        // 🚀 HERENCIA: Jala datos del ticket anterior
+        //  HERENCIA: Jala datos del ticket anterior
         fecha_hora: lastTicket?.fecha_hora || toDatetimeLocalValue(new Date()),
         estacion: lastTicket?.estacion || "",
         litros_diesel: 0,
@@ -381,7 +381,7 @@ export function AddTicketModal({
                     2. Carga de Vales (Tickets)
                   </h3>
                 </div>
-                {/* 🚀 BOTÓN MÁS: Agrega nuevo bloque de ticket */}
+                {/*  BOTÓN MÁS: Agrega nuevo bloque de ticket */}
                 <Button
                   type="button"
                   variant="outline"

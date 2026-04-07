@@ -754,7 +754,7 @@ export const RouteBuilder: React.FC = () => {
             </tbody>
           </table>
           <div class="warning">
-            ⚠️ NOTA IMPORTANTE PARA EL OPERADOR ⚠️<br/>
+             NOTA IMPORTANTE PARA EL OPERADOR <br/>
             Las desviaciones de esta ruta o los cobros de casetas no autorizadas serán descontados en la liquidación del viaje.
           </div>
           <script>

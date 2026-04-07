@@ -250,7 +250,7 @@ export function NextLegModal({
       if (lastLeg?.leg_type === "carga_muelle") nextLegType = "ruta_carretera";
       if (lastLeg?.leg_type === "ruta_carretera") nextLegType = "entrega_vacio";
 
-      // 🚀 SOLUCIÓN HERENCIA: Intentar heredar del Viaje Padre, si es nulo, buscar en la última fase.
+      //  SOLUCIÓN HERENCIA: Intentar heredar del Viaje Padre, si es nulo, buscar en la última fase.
       setFormData({
         leg_type: nextLegType,
         unit_id: lastLeg?.unit_id || null,
@@ -473,10 +473,10 @@ export function NextLegModal({
 
     setLoading(true);
     try {
-      // 🚀 AQUÍ APLICAMOS LA CORRECCIÓN:
+      //  AQUÍ APLICAMOS LA CORRECCIÓN:
       // Enviamos TODO al TripPadre (Datos Fiscales + Configuración de Arrastre)
       // para asegurar que el backend persista los remolques.
-      await axiosClient.put(`/trips/${tripPadre.id}`, {
+      await axiosClient.put(`/api/trips/${tripPadre.id}`, {
         ...tripFiscalData,
         numero_contenedor: tripFiscalData.contenedor_1,
         booking: tripFiscalData.referencia,
@@ -507,7 +507,7 @@ export function NextLegModal({
         }
 
         onOpenChange(false);
-        // 🚀 FORZAMOS EL REFRESH EN LA PANTALLA PRINCIPAL
+        //  FORZAMOS EL REFRESH EN LA PANTALLA PRINCIPAL
         if (onSuccessRefresh) onSuccessRefresh();
       }
     } catch (error) {
@@ -779,7 +779,7 @@ export function NextLegModal({
               </div>
             </div>
 
-            {/* 🚀 BLOQUE FISCAL DINÁMICO */}
+            {/*  BLOQUE FISCAL DINÁMICO */}
             <div className="rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/50 shadow-sm overflow-hidden animate-in fade-in transition-all">
               <button
                 type="button"
@@ -1002,7 +1002,7 @@ export function NextLegModal({
               )}
             </div>
 
-            {/* 🚀 FASE 3: Campo dinámico de Destino de Vacío */}
+            {/*  FASE 3: Campo dinámico de Destino de Vacío */}
             {formData.leg_type === "entrega_vacio" && (
               <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
                 <Label className="text-[11px] font-black uppercase text-rose-600 dark:text-rose-400 tracking-widest ml-1 flex items-center gap-1.5">

@@ -172,7 +172,7 @@ export function MaintenanceTireModal({
           >
             <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-muted/30 dark:bg-transparent custom-scrollbar">
               <div className="space-y-6">
-                {/* 📍 Resumen Estado Actual */}
+                {/*  Resumen Estado Actual */}
                 <div className="p-5 bg-card rounded-2xl border border-border shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
                     <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground mb-1 flex items-center gap-1.5">
@@ -309,7 +309,7 @@ export function MaintenanceTireModal({
                   />
                 </div>
 
-                {/* ⚠️ Advertencia de Desecho */}
+                {/*  Advertencia de Desecho */}
                 {currentTipo === "desecho" && (
                   <div className="p-5 bg-rose-50 dark:bg-rose-950/20 border-l-4 border-rose-500 rounded-r-xl shadow-sm flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
                     <AlertTriangle className="h-5 w-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />

@@ -47,7 +47,11 @@ const getFullImageUrl = (path?: string) => {
   return `${apiBase.replace(/\/api$/, "")}${path}`;
 };
 
-export function AppHeader({ onMobileMenuToggle }: { onMobileMenuToggle?: () => void }) {
+export function AppHeader({
+  onMobileMenuToggle,
+}: {
+  onMobileMenuToggle?: () => void;
+}) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { resolvedTheme, setTheme } = useTheme();
@@ -60,7 +64,7 @@ export function AppHeader({ onMobileMenuToggle }: { onMobileMenuToggle?: () => v
 
   const fetchNotifications = async () => {
     try {
-      const { data } = await axiosClient.get("/monitoring/me");
+      const { data } = await axiosClient.get("/api/monitoring/me");
       setNotifications(data);
     } catch (e) {
       console.error("Error cargando notificaciones", e);
@@ -82,7 +86,7 @@ export function AppHeader({ onMobileMenuToggle }: { onMobileMenuToggle?: () => v
 
   const markAllAsRead = async () => {
     try {
-      await axiosClient.post("/monitoring/mark-all-read");
+      await axiosClient.post("/api/monitoring/mark-all-read");
       setNotifications(notifications.map((n) => ({ ...n, is_read: true })));
     } catch (e) {
       console.error("Error al marcar notificaciones como leídas", e);

@@ -170,7 +170,7 @@ export function BulkUploadDrawer({
     try {
       let success = false;
 
-      // 🚀 LECTURA INTELIGENTE POR NOMBRE DE COLUMNA (No por índice)
+      //  LECTURA INTELIGENTE POR NOMBRE DE COLUMNA (No por índice)
       const headers = previewData[0].map((h) => h.trim().toLowerCase());
       const rows = previewData.slice(1);
 

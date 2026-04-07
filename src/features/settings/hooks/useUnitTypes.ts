@@ -21,7 +21,7 @@ export function useUnitTypes() {
       setLoading(true);
       // Asegúrate de tener este endpoint en tu backend
       const { data } = await axiosClient.get<UnitType[]>(
-        "/catalogs/unit-types",
+        "/api/catalogs/unit-types",
       );
 
       if (data && data.length > 0) {
@@ -46,7 +46,7 @@ export function useUnitTypes() {
   const saveTiposUnidad = useCallback(async (tipos: UnitType[]) => {
     try {
       setLoading(true);
-      await axiosClient.post("/catalogs/unit-types/bulk", tipos);
+      await axiosClient.post("/api/catalogs/unit-types/bulk", tipos);
       setTiposUnidad(tipos);
       toast.success("Catálogo actualizado en el servidor");
     } catch (error) {

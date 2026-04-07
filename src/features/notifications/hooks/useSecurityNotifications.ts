@@ -57,7 +57,7 @@ export const useSecurityNotifications = () => {
     let title = "Notificación de Sistema";
     let message = "";
 
-    // 🚀 LÓGICA DE INTERFAZ (Toasts) Y MENSAJERÍA
+    //  LÓGICA DE INTERFAZ (Toasts) Y MENSAJERÍA
     switch (event) {
       case "trip_tracking_update":
         title = "Actualización de Tracking";
@@ -74,7 +74,7 @@ export const useSecurityNotifications = () => {
       case "trip_stopped":
         title = "Unidad Detenida";
         message = `El viaje ${details.tripId} de ${details.clientName || "Cliente"} se ha detenido por: ${details.reason || "No especificado"}.`;
-        toast.error("🚨 Alerta: Unidad Detenida", {
+        toast.error(" Alerta: Unidad Detenida", {
           description: message,
           icon: React.createElement(Truck, { className: "h-4 w-4" }),
           duration: 6000,
@@ -84,7 +84,7 @@ export const useSecurityNotifications = () => {
       case "trip_incident":
         title = "Incidencia en Ruta";
         message = `Incidencia reportada en viaje ${details.tripId}. Detalles: ${details.comments || details.reason}`;
-        toast.error("⚠️ Incidencia Crítica", {
+        toast.error(" Incidencia Crítica", {
           description: message,
           icon: React.createElement(AlertTriangle, { className: "h-4 w-4" }),
           duration: 7000,
@@ -146,20 +146,22 @@ export const useSecurityNotifications = () => {
     // 2. PERSISTENCIA EN BACKEND
     try {
       if (user?.id) {
-        await MonitoringNotificationsService.createNotificationApiMonitoringPost({
-          user_id: user.id,
-          title: title,
-          message: message,
-          event_type: event,
-          reference_id: details.tripId ? String(details.tripId) : null,
-          metadata_info: {
-            is_external: details.isExternal || false,
-            location: details.location,
-            statusLabel: details.statusLabel,
-            client_name: details.clientName,
-            comments: details.comments,
-          },
-        } as any);
+        await MonitoringNotificationsService.createNotificationApiMonitoringPost(
+          {
+            user_id: user.id,
+            title: title,
+            message: message,
+            event_type: event,
+            reference_id: details.tripId ? String(details.tripId) : null,
+            metadata_info: {
+              is_external: details.isExternal || false,
+              location: details.location,
+              statusLabel: details.statusLabel,
+              client_name: details.clientName,
+              comments: details.comments,
+            },
+          } as any,
+        );
       }
     } catch (error) {
       console.error("Error al guardar notificación en base de datos:", error);

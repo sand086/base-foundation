@@ -122,7 +122,7 @@ class EmailService:
         # Adjuntar HTML
         msg.attach(MIMEText(html_content, "html"))
 
-        # 6. 🚀 ADJUNTAR IMAGEN DEL ROBOT (CID)
+        # 6.  ADJUNTAR IMAGEN DEL ROBOT (CID)
         if os.path.exists(self.avatar_path):
             try:
                 with open(self.avatar_path, "rb") as f:
@@ -148,8 +148,8 @@ class EmailService:
             server.login(self.smtp_user, self.smtp_pass)
             server.send_message(msg, from_addr=self.from_email, to_addrs=destinatarios)
             server.quit()
-            logger.info("✅ Correo SaaS de Tracking enviado exitosamente.")
+            logger.info(" Correo SaaS de Tracking enviado exitosamente.")
             return True
         except Exception as e:
-            logger.error(f"❌ Error crítico en EmailService: {str(e)}")
+            logger.error(f" Error crítico en EmailService: {str(e)}")
             return False

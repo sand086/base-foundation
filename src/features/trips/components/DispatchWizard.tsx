@@ -123,8 +123,7 @@ const normalizeStr = (str?: string | null) =>
 const shellClass =
   "overflow-hidden rounded-[28px] border border-border bg-card/90 shadow-2xl shadow-slate-200/50 dark:shadow-black/30 backdrop-blur-xl";
 
-const headerClass =
-  "border-b border-border bg-card";
+const headerClass = "border-b border-border bg-card";
 
 const bodyClass = "bg-muted/30 dark:bg-transparent";
 
@@ -212,7 +211,11 @@ function SearchableSelect({
         </Button>
       </PopoverTrigger>
 
-      <PopoverContent className="w-[min(380px,calc(100vw-2rem))] p-0" align="start" sideOffset={8}>
+      <PopoverContent
+        className="w-[min(380px,calc(100vw-2rem))] p-0"
+        align="start"
+        sideOffset={8}
+      >
         <Command>
           <CommandInput placeholder="Escribe para buscar..." />
           <CommandList className="max-h-[280px]">
@@ -359,7 +362,7 @@ export const DispatchWizard = ({
     ocultarMontosPdf: initialData?.ocultarMontosPdf ?? true,
   });
 
-  // 🚀 ASYNC HYDRATION
+  //  ASYNC HYDRATION
   useEffect(() => {
     if (!data.clienteId && tripIdParam && trips.length > 0 && !tripFromState) {
       const foundTrip = trips.find((t) => String(t.id) === tripIdParam) as any;
@@ -630,7 +633,7 @@ export const DispatchWizard = ({
       let resultTripId = tripId;
 
       if (resultTripId) {
-        await axiosClient.put(`/trips/${resultTripId}/dispatch`, payload);
+        await axiosClient.put(`/api/trips/${resultTripId}/dispatch`, payload);
       } else {
         const result = await createTrip(payload as TripCreatePayload);
         if (result && result.id) {
@@ -645,11 +648,14 @@ export const DispatchWizard = ({
           (data.generarCartaPorte || isQuickStamp)
         ) {
           try {
-            const stampRes = await axiosClient.post("/billing/stamp/nominal", {
-              viaje_id: resultTripId,
-              is_nominal: true,
-              use_dummy: isQuickStamp,
-            });
+            const stampRes = await axiosClient.post(
+              "/api/billing/stamp/nominal",
+              {
+                viaje_id: resultTripId,
+                is_nominal: true,
+                use_dummy: isQuickStamp,
+              },
+            );
 
             const uuid = stampRes.data?.data?.uuid || stampRes.data?.uuid;
 
@@ -1302,7 +1308,10 @@ export const DispatchWizard = ({
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
               {/* Tarjeta de Ruta */}
               <Card
-                className={cn(shellClass, "border-blue-200/50 dark:border-blue-800/30 bg-blue-50/20 dark:bg-blue-950/10")}
+                className={cn(
+                  shellClass,
+                  "border-blue-200/50 dark:border-blue-800/30 bg-blue-50/20 dark:bg-blue-950/10",
+                )}
               >
                 <CardHeader className={cn(headerClass, "pb-3 pt-4")}>
                   <div className="flex items-center gap-3">
@@ -1316,13 +1325,17 @@ export const DispatchWizard = ({
                 </CardHeader>
                 <CardContent className="space-y-3 pt-4 text-sm text-foreground">
                   <div className="flex justify-between border-b border-border pb-2">
-                    <span className="font-bold text-muted-foreground">Cliente:</span>
+                    <span className="font-bold text-muted-foreground">
+                      Cliente:
+                    </span>
                     <span className="font-black text-foreground text-right">
                       {selectedClient?.razon_social || "N/A"}
                     </span>
                   </div>
                   <div className="flex justify-between border-b border-border pb-2">
-                    <span className="font-bold text-muted-foreground">Destino:</span>
+                    <span className="font-bold text-muted-foreground">
+                      Destino:
+                    </span>
                     <span className="font-black text-foreground text-right">
                       {selectedSubClient?.ciudad || "N/A"}
                     </span>
@@ -1369,14 +1382,18 @@ export const DispatchWizard = ({
                 </CardHeader>
                 <CardContent className="space-y-3 pt-4 text-sm text-foreground">
                   <div className="flex justify-between border-b border-border pb-2">
-                    <span className="font-bold text-muted-foreground">Operador:</span>
+                    <span className="font-bold text-muted-foreground">
+                      Operador:
+                    </span>
                     <span className="font-black text-emerald-800 dark:text-emerald-300 text-right">
                       {availableOperators.find((o) => o.value === data.driverId)
                         ?.label || "N/A"}
                     </span>
                   </div>
                   <div className="flex justify-between border-b border-border pb-2">
-                    <span className="font-bold text-muted-foreground">Unidad:</span>
+                    <span className="font-bold text-muted-foreground">
+                      Unidad:
+                    </span>
                     <span className="font-black text-emerald-800 dark:text-emerald-300 text-right">
                       {availableTractos
                         .find((t) => t.value === data.unitId)

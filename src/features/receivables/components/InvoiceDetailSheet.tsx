@@ -54,7 +54,7 @@ export function InvoiceDetailSheet({
   const paymentPercentage =
     montoTotal > 0 ? ((montoTotal - saldoPendiente) / montoTotal) * 100 : 0;
 
-  // 🚀 AQUÍ ESTÁ TU LÓGICA INTELIGENTE (Fallback)
+  //  AQUÍ ESTÁ TU LÓGICA INTELIGENTE (Fallback)
   const listaConceptos =
     invoice.conceptos && Array.isArray(invoice.conceptos)
       ? invoice.conceptos
@@ -257,7 +257,7 @@ export function InvoiceDetailSheet({
                   </DataTableRow>
                 </DataTableHeader>
                 <DataTableBody>
-                  {/* 🚀 MAGIA APLICADA: Aquí usamos listaConceptos en lugar de invoice.conceptos */}
+                  {/*  MAGIA APLICADA: Aquí usamos listaConceptos en lugar de invoice.conceptos */}
                   {listaConceptos.map((concepto: any, i: number) => (
                     <DataTableRow
                       key={concepto.id || i}

@@ -133,7 +133,7 @@ const FuelLoads = () => {
     loadData();
   }, []);
 
-  // 🚀 NUEVA FUNCIÓN PARA GUARDAR EL TICKET
+  //  NUEVA FUNCIÓN PARA GUARDAR EL TICKET
   const handleCreateTicket = async (data: any) => {
     const ticketsArray = data.tickets || [];
 

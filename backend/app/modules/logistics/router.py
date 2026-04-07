@@ -15,7 +15,7 @@ from app.db.database import get_db
 from app.models import models
 from app.models.models import SystemConfig
 
-# 🚀 IMPORTACIÓN LOCAL (FSD): Solo busca en la misma carpeta "logistics"
+#  IMPORTACIÓN LOCAL (FSD): Solo busca en la misma carpeta "logistics"
 from . import schemas, crud
 
 # Autenticación
@@ -24,10 +24,10 @@ from app.modules.auth.router import get_current_user
 try:
     from weasyprint import HTML
 except Exception as e:
-    print(f"⚠️ Advertencia: WeasyPrint no se cargó correctamente ({e})")
+    print(f" Advertencia: WeasyPrint no se cargó correctamente ({e})")
     HTML = None
 
-# 🚀 ÚNICA INSTANCIA DEL ROUTER
+#  ÚNICA INSTANCIA DEL ROUTER
 router = APIRouter(tags=["Logistics"])
 
 # Configuración de Plantillas para PDFs

@@ -73,7 +73,7 @@ class SafeData(dict):
         val = self.get(key)
         if val is None or str(val).strip() == "" or str(val).strip() == "None":
             logger.warning(
-                f"⚠️ [BLINDAJE ACTIVO] Llave faltante o vacía en diccionario: '{key}'. Inyectando valor por defecto."
+                f" [BLINDAJE ACTIVO] Llave faltante o vacía en diccionario: '{key}'. Inyectando valor por defecto."
             )
             if key in [
                 "subtotal",
@@ -195,7 +195,7 @@ class BillingService:
         )
         self.emisor_cp = cp_conf.value if cp_conf and cp_conf.value else "91700"
 
-        # 🚀 EXTRAER MUNICIPIO Y ESTADO DEL EMISOR O PONER HARDCODE
+        #  EXTRAER MUNICIPIO Y ESTADO DEL EMISOR O PONER HARDCODE
         loc_emisor = (
             self.db.query(SatLocationCode)
             .filter(SatLocationCode.codigo_postal == self.emisor_cp)
@@ -344,7 +344,7 @@ class BillingService:
                 self.db.commit()
                 return True
             else:
-                logger.warning(f"⚠️ SAT Respondió Status: {status_sat}")
+                logger.warning(f" SAT Respondió Status: {status_sat}")
                 return False
         except Exception as e:
             self.db.rollback()
@@ -619,7 +619,7 @@ class BillingService:
         if d.get("placa_remolque_2") and d["placa_remolque_2"] != "1XXXX99":
             remolques_cadena += f"{d.get('subtipo_remolque_2', d['subtipo_remolque'])}|{d['placa_remolque_2']}|"
 
-        # 🚀 CADENA ORIGINAL 100% SINCRONIZADA CON EL XML ARRIBA
+        #  CADENA ORIGINAL 100% SINCRONIZADA CON EL XML ARRIBA
         cadena = (
             f"||4.0|CP|{d['folio']}|{d['fecha']}|99|{no_certificado}|CONTADO|{d['subtotal']}|MXN|1|{d['total']}|I|01|PPD|{self.emisor_cp}|"
             f"{relacion_str}"
@@ -669,7 +669,7 @@ class BillingService:
             subtipo_r2 = d.get("subtipo_remolque_2", d["subtipo_remolque"])
             remolques_xml += f'\n                    <cartaporte31:Remolque SubTipoRem="{subtipo_r2}" Placa="{d["placa_remolque_2"]}" />'
 
-        # 🚀 SE ELIMINARON LOS NODOS "CALLE", SOLO SE MANDAN LOS REQUERIDOS. SE METE EL BIEN TRANS DINÁMICO
+        #  SE ELIMINARON LOS NODOS "CALLE", SOLO SE MANDAN LOS REQUERIDOS. SE METE EL BIEN TRANS DINÁMICO
         return f"""<?xml version="1.0" encoding="UTF-8"?>
 <cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:cartaporte31="http://www.sat.gob.mx/CartaPorte31" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/CartaPorte31 http://www.sat.gob.mx/sitio_internet/cfd/CartaPorte/CartaPorte31.xsd" Version="4.0" Fecha="{d['fecha']}" Serie="CP" Folio="{d['folio']}" FormaPago="99" CondicionesDePago="CONTADO" SubTotal="{d['subtotal']}" Moneda="MXN" TipoCambio="1" Total="{d['total']}" TipoDeComprobante="I" Exportacion="01" MetodoPago="PPD" LugarExpedicion="{self.emisor_cp}">{relacion_xml}
     <cfdi:Emisor Rfc="{self.emisor_rfc}" Nombre="{self.emisor_nombre}" RegimenFiscal="{self.emisor_regimen}" />

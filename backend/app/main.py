@@ -53,7 +53,7 @@ api_router.include_router(monitoring_router, prefix="/monitoring")
 # Integraciones Externas
 api_router.include_router(sat_router, prefix="/sat")
 
-# ⚠️ ¡MUY IMPORTANTE! Registrar el api_router en la app principal
+#  ¡MUY IMPORTANTE! Registrar el api_router en la app principal
 app.include_router(api_router)
 
 

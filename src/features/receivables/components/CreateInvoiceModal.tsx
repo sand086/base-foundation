@@ -19,7 +19,7 @@ import {
 import { Plus, Trash2, FileText, DollarSign, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// 🚀 IMPORTACIONES FSD
+//  IMPORTACIONES FSD
 import {
   ReceivableInvoice,
   FinalizableService,

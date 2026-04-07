@@ -14,7 +14,11 @@ import {
   FileArchive,
   File as FileIcon,
 } from "lucide-react";
-import { FleetUnitsService, FleetOperatorsService, FleetFuelService } from "@/api/generated";
+import {
+  FleetUnitsService,
+  FleetOperatorsService,
+  FleetFuelService,
+} from "@/api/generated";
 import { clientService } from "@/features/clients/services/clientService";
 import { toast } from "sonner";
 import {
@@ -104,26 +108,26 @@ function buildHistoryEndpoint(
 ) {
   switch (entityType) {
     case "unit":
-      return `/fleet/units/${activeId}/documents/${docType}/history`;
+      return `/api/fleet/units/${activeId}/documents/${docType}/history`;
     case "client":
-      return `/clients/${activeId}/documents/${docType}/history`;
+      return `/api/clients/${activeId}/documents/${docType}/history`;
     case "operator":
-      return `/fleet/operators/${activeId}/documents/${docType}/history`;
+      return `/api/fleet/operators/${activeId}/documents/${docType}/history`;
     case "fuel":
-      return `/fleet/fuel-logs/${activeId}/documents/${docType}/history`;
+      return `/api/fleet/fuel-logs/${activeId}/documents/${docType}/history`;
   }
 }
 
 function buildDeleteEndpoint(entityType: EntityType, docId: number) {
   switch (entityType) {
     case "client":
-      return `/clients/documents/${docId}`;
+      return `/api/clients/documents/${docId}`;
     case "unit":
-      return `/fleet/units/documents/${docId}`;
+      return `/api/fleet/units/documents/${docId}`;
     case "operator":
-      return `/fleet/operators/documents/${docId}`;
+      return `/api/fleet/operators/documents/${docId}`;
     case "fuel":
-      return `/fleet/fuel-logs/documents/${docId}`;
+      return `/api/fleet/fuel-logs/documents/${docId}`;
   }
 }
 
@@ -189,13 +193,28 @@ export function DocumentUploadManager({
       let result: any;
 
       if (entityType === "unit") {
-        result = await FleetUnitsService.uploadUnitDocumentApiFleetUnitsUnitTermDocumentsDocTypePost(String(activeId), docType, { file });
+        result =
+          await FleetUnitsService.uploadUnitDocumentApiFleetUnitsUnitTermDocumentsDocTypePost(
+            String(activeId),
+            docType,
+            { file },
+          );
       } else if (entityType === "client") {
         result = await clientService.uploadDocument(activeId, docType, file);
       } else if (entityType === "operator") {
-        result = await FleetOperatorsService.uploadOperatorDocumentApiFleetOperatorsOperatorIdDocumentsDocTypePost(Number(activeId), docType, { file });
+        result =
+          await FleetOperatorsService.uploadOperatorDocumentApiFleetOperatorsOperatorIdDocumentsDocTypePost(
+            Number(activeId),
+            docType,
+            { file },
+          );
       } else if (entityType === "fuel") {
-        result = await FleetFuelService.uploadFuelDocumentApiFleetFuelLogsLogIdDocumentsDocTypePost(Number(activeId), docType, { file });
+        result =
+          await FleetFuelService.uploadFuelDocumentApiFleetFuelLogsLogIdDocumentsDocTypePost(
+            Number(activeId),
+            docType,
+            { file },
+          );
       }
 
       if (result?.url) {

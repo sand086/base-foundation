@@ -223,7 +223,7 @@ class ClientResponse(ClientBase):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     sub_clients: List[SubClientResponse] = Field(default_factory=list)
-    tarifas_autorizadas: List["RateTemplateResponse"]
+    tarifas_autorizadas: List["RateTemplateResponse"] = Field(default_factory=list)
     model_config = ConfigDict(from_attributes=True)
 
 

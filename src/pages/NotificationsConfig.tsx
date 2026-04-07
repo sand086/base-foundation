@@ -84,8 +84,8 @@ const NotificationsConfig = () => {
     const fetchData = async () => {
       try {
         const [configRes, tplRes] = await Promise.all([
-          axiosClient.get("/notifications/config"),
-          axiosClient.get("/notifications/templates"),
+          axiosClient.get("/api/notifications/config"),
+          axiosClient.get("/api/notifications/templates"),
         ]);
 
         setConfigAlertas({

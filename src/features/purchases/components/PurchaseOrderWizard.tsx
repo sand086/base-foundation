@@ -41,7 +41,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-// 🚀 IMPORTACIONES FSD (Ahora sí encontrarán a OrderItem e IndirectCategory)
+//  IMPORTACIONES FSD (Ahora sí encontrarán a OrderItem e IndirectCategory)
 import {
   PurchaseOrder,
   OrderItem,
@@ -128,7 +128,9 @@ export function PurchaseOrderWizard({
   // Filtramos proveedores según el tipo de orden
   const filteredSuppliers = (suppliers || []).filter((s: any) => {
     if (tipo === "compra")
-      return s.tipo_proveedor === "refacciones" || s.tipo_proveedor === "general";
+      return (
+        s.tipo_proveedor === "refacciones" || s.tipo_proveedor === "general"
+      );
     if (tipo === "servicio")
       return s.tipo_proveedor === "servicios" || s.tipo_proveedor === "general";
     return true;
@@ -151,7 +153,7 @@ export function PurchaseOrderWizard({
   // ==========================================
 
   const handleAddItem = () => {
-    // ✅ Cambiado a inventoryItems y comparación de ID string
+    //  Cambiado a inventoryItems y comparación de ID string
     const inventoryItem = inventoryItems.find(
       (i) => i.id.toString() === selectedInventoryItem,
     );
@@ -162,10 +164,10 @@ export function PurchaseOrderWizard({
 
     const newItem: OrderItem = {
       id: `item-${Date.now()}`,
-      descripcion: inventoryItem.descripcion, // ✅ Antes era .nombre
+      descripcion: inventoryItem.descripcion, //  Antes era .nombre
       cantidad: itemCantidad,
-      unidad: inventoryItem.unidad || "PZ", // ✅ Antes era .unidad (agregamos fallback "PZ")
-      precioUnitario: inventoryItem.precio_unitario || 0, // ✅ Antes era .precio_promedio
+      unidad: inventoryItem.unidad || "PZ", //  Antes era .unidad (agregamos fallback "PZ")
+      precioUnitario: inventoryItem.precio_unitario || 0, //  Antes era .precio_promedio
       subtotal: (inventoryItem.precio_unitario || 0) * itemCantidad,
     };
 
@@ -180,7 +182,7 @@ export function PurchaseOrderWizard({
     setSupplierId("");
     setRequiredDate(undefined);
     setCostCenter("mantenimiento");
-    setIndirectCategoryId(""); // ✅ Nombre de función corregido
+    setIndirectCategoryId(""); //  Nombre de función corregido
     setRequester("");
     setItems([]);
     setServiceDescription("");
@@ -189,7 +191,7 @@ export function PurchaseOrderWizard({
   };
 
   const handleSubmit = () => {
-    // ✅ Cambiado a 'suppliers'
+    //  Cambiado a 'suppliers'
     const proveedor = suppliers.find((s) => s.id.toString() === supplierId);
     const categoriaSeleccionada = indirectCategories.find(
       (c) => c.id.toString() === indirectCategoryId,
@@ -198,7 +200,7 @@ export function PurchaseOrderWizard({
     const payload: PurchaseOrder = {
       ...editingOrder,
       id: editingOrder?.id || `po-${Date.now()}`,
-      folio: editingOrder?.folio || "PENDIENTE", // ✅ Eliminada función generateFolio
+      folio: editingOrder?.folio || "PENDIENTE", //  Eliminada función generateFolio
       tipo,
       supplier_id: supplierId,
       supplier_name: (proveedor as any)?.razon_social || "Proveedor",
@@ -632,7 +634,7 @@ export function PurchaseOrderWizard({
                           {inventoryItems.map((item) => (
                             <SelectItem
                               key={item.id}
-                              value={item.id.toString()} // ✅ ID a string
+                              value={item.id.toString()} //  ID a string
                               className="py-3 border-b last:border-0 border-slate-100 dark:border-white/5"
                             >
                               <div className="flex flex-col">
@@ -642,7 +644,7 @@ export function PurchaseOrderWizard({
                                 <span className="text-[10px] text-slate-500 font-medium">
                                   Stock en almacén: {item.stock_actual}{" "}
                                   {item.unidad}{" "}
-                                  {/* ✅ stock_actual en snake_case */}
+                                  {/*  stock_actual en snake_case */}
                                 </span>
                               </div>
                             </SelectItem>

@@ -10,7 +10,7 @@ from app.models.models import AlertConfig, EmailTemplate, UserNotification, Trip
 from app.integrations.email.email_service import EmailService
 from app.modules.auth.router import get_current_active_user
 
-# 🚀 IMPORTACIONES LOCALES (FSD)
+#  IMPORTACIONES LOCALES (FSD)
 from . import schemas
 
 # Si tienes tu función log_audit aquí, la puedes importar así:
@@ -18,7 +18,7 @@ from . import schemas
 
 logger = logging.getLogger(__name__)
 
-# 🚀 ÚNICA INSTANCIA DEL ROUTER
+#  ÚNICA INSTANCIA DEL ROUTER
 router = APIRouter(tags=["Monitoring & Notifications"])
 
 # ==========================================
@@ -116,7 +116,7 @@ def update_template(
 
 
 # ==========================================
-# NOTIFICACIONES Y ENVÍO DE EMAIL 🚀
+# NOTIFICACIONES Y ENVÍO DE EMAIL
 # ==========================================
 
 

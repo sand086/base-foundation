@@ -71,7 +71,7 @@ export default function TripSettlementModal({
   const [rendimientoReal, setRendimientoReal] = useState(0);
   const [conceptosExtra, setConceptosExtra] = useState<ConceptoExtra[]>([]);
 
-  // 🚀 NUEVOS ESTADOS DE CONCILIACIÓN DE DIÉSEL
+  //  NUEVOS ESTADOS DE CONCILIACIÓN DE DIÉSEL
   const [consumoEsperado, setConsumoEsperado] = useState(0);
   const [consumoReal, setConsumoReal] = useState(0);
   const [diferenciaLitros, setDiferenciaLitros] = useState(0);
@@ -98,7 +98,7 @@ export default function TripSettlementModal({
           if (data) {
             setKmsRecorridos(data.kmsRecorridos || 0);
 
-            // 🚀 GUARDAMOS LA INFO DEL DIÉSEL PARA LA UI
+            //  GUARDAMOS LA INFO DEL DIÉSEL PARA LA UI
             setConsumoEsperado(data.consumoEsperadoLitros || 0);
             setConsumoReal(data.consumoRealLitros || 0);
             setDiferenciaLitros(data.diferenciaLitros || 0);
@@ -234,7 +234,7 @@ export default function TripSettlementModal({
         total_ingresos: totalPercepciones,
         total_deducciones: totalDeducciones,
         neto_a_pagar: totalNeto,
-        odometro_final: Number(odometroFinal), // 🚀 AHORA SÍ ENVIAMOS EL ODÓMETRO
+        odometro_final: Number(odometroFinal), //  AHORA SÍ ENVIAMOS EL ODÓMETRO
       };
 
       await closeTripSettlement(legId, payloadLiquidacion);
@@ -357,7 +357,7 @@ export default function TripSettlementModal({
               </Card>
             </div>
 
-            {/* 🚀 TARJETA DE CONCILIACIÓN DE DIÉSEL */}
+            {/*  TARJETA DE CONCILIACIÓN DE DIÉSEL */}
             <div className="space-y-4">
               <h3 className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em] flex items-center gap-2">
                 <Fuel className="h-4 w-4 text-amber-500" /> Conciliación Diésel

@@ -10,7 +10,7 @@ export function useInsurers() {
   const fetchInsurers = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await axiosClient.get("/catalogs/insurers");
+      const { data } = await axiosClient.get("/api/catalogs/insurers");
       setInsurers(data);
     } catch (error) {
       toast.error("Error al cargar aseguradoras");
@@ -21,7 +21,7 @@ export function useInsurers() {
 
   const saveInsurers = async (payload: Insurer[]) => {
     try {
-      await axiosClient.post("/catalogs/insurers/bulk", payload);
+      await axiosClient.post("/api/catalogs/insurers/bulk", payload);
       await fetchInsurers();
       return true;
     } catch (error) {

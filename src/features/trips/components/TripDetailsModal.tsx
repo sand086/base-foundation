@@ -77,7 +77,7 @@ interface TripDetailsModalProps {
 export function TripDetailsModal({
   open,
   onOpenChange,
-  trip: initialTrip, // 🚀 Renombramos la prop
+  trip: initialTrip, //  Renombramos la prop
   onRelayClick,
   onSettleClick,
   onUpdateStatusClick,
@@ -86,7 +86,7 @@ export function TripDetailsModal({
   const { updateLoadStatus } = useUnits();
   const { isStamping, handleStampNominal, handleStampFinal } = useBilling();
 
-  // 🚀 ESTADO LOCAL (La copia independiente de la verdad)
+  //  ESTADO LOCAL (La copia independiente de la verdad)
   const [localTrip, setLocalTrip] = useState<Trip | null>(null);
 
   const [activeTab, setActiveTab] = useState("fases");
@@ -114,7 +114,7 @@ export function TripDetailsModal({
       minimumFractionDigits: 2,
     }).format(val || 0);
 
-  // 🚀 Sincronizar prop inicial con estado local cuando se abre el modal
+  //  Sincronizar prop inicial con estado local cuando se abre el modal
   useEffect(() => {
     if (open && initialTrip) {
       setLocalTrip(initialTrip);
@@ -123,7 +123,7 @@ export function TripDetailsModal({
     }
   }, [initialTrip, open]);
 
-  // 🚀 FUNCIÓN MAESTRA DE REFRESCO INTERNO
+  //  FUNCIÓN MAESTRA DE REFRESCO INTERNO
   const refreshLocalTrip = async () => {
     if (!localTrip?.id) return;
     try {
@@ -224,7 +224,7 @@ export function TripDetailsModal({
     toast.success("Datos sincronizados.");
   };
 
-  // 🚀 DESHACER INTELIGENTE CON RECARGA LOCAL
+  //  DESHACER INTELIGENTE CON RECARGA LOCAL
   const executeUndoLeg = async () => {
     setIsUndoing(true);
     try {
@@ -254,7 +254,7 @@ export function TripDetailsModal({
 
       setShowUndoDialog(false); // Cerramos el dialog rojo
 
-      // 🚀 LÓGICA DE CIERRE CONDICIONAL
+      //  LÓGICA DE CIERRE CONDICIONAL
       if (isFirstLeg) {
         onOpenChange(false); // Si era la única fase, cerramos todo.
         await refreshTrips(); // Le decimos al padre que recargue
@@ -268,7 +268,7 @@ export function TripDetailsModal({
     }
   };
 
-  // 🚀 FASE 3: ENTREGA DE VACÍO
+  //  FASE 3: ENTREGA DE VACÍO
   const submitEmptyReturn = async () => {
     if (!activeLeg || !emptyTerminal.trim()) {
       toast.error("Debes indicar el patio o terminal de entrega.");
@@ -1260,7 +1260,7 @@ export function TripDetailsModal({
         </DialogContent>
       </Dialog>
 
-      {/* 🚀 ALERT DIALOG PARA CIERRE DE VACÍO */}
+      {/*  ALERT DIALOG PARA CIERRE DE VACÍO */}
       <AlertDialog open={showEmptyDialog} onOpenChange={setShowEmptyDialog}>
         <AlertDialogContent className="w-[95vw] sm:max-w-md p-0 overflow-hidden border-none shadow-2xl rounded-2xl bg-white dark:bg-brand-navy">
           <AlertDialogHeader className="p-6 bg-emerald-50 dark:bg-emerald-900/20 border-b border-emerald-100 dark:border-emerald-800/30">
@@ -1322,7 +1322,7 @@ export function TripDetailsModal({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* 🚀 ALERT DIALOG PARA DESHACER FASE */}
+      {/*  ALERT DIALOG PARA DESHACER FASE */}
       <AlertDialog open={showUndoDialog} onOpenChange={setShowUndoDialog}>
         <AlertDialogContent className="w-[95vw] sm:max-w-md p-0 overflow-hidden border-none shadow-2xl rounded-2xl bg-white dark:bg-brand-navy">
           <AlertDialogHeader className="p-6 bg-rose-50 dark:bg-rose-900/20 border-b border-rose-100 dark:border-rose-800/30">

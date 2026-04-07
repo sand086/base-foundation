@@ -10,8 +10,9 @@ export const useAuthorizedRoutes = () => {
   const fetchRutas = useCallback(async () => {
     setIsLoading(true);
     try {
-      const { data } =
-        await axiosClient.get<AuthorizedRoute[]>("/catalogs/routes");
+      const { data } = await axiosClient.get<AuthorizedRoute[]>(
+        "/api/catalogs/routes",
+      );
       setRutas(data);
     } catch (error) {
       toast.error("Error al cargar el catálogo de rutas");
@@ -26,7 +27,7 @@ export const useAuthorizedRoutes = () => {
 
   const addRuta = async (ruta: Omit<AuthorizedRoute, "id">) => {
     try {
-      await axiosClient.post("/catalogs/routes", ruta);
+      await axiosClient.post("/api/catalogs/routes", ruta);
       fetchRutas();
       return true;
     } catch (error) {
@@ -37,7 +38,7 @@ export const useAuthorizedRoutes = () => {
 
   const updateRuta = async (id: number, ruta: Partial<AuthorizedRoute>) => {
     try {
-      await axiosClient.put(`/catalogs/routes/${id}`, ruta);
+      await axiosClient.put(`/api/catalogs/routes/${id}`, ruta);
       fetchRutas();
       return true;
     } catch (error) {
@@ -48,7 +49,7 @@ export const useAuthorizedRoutes = () => {
 
   const deleteRuta = async (id: number) => {
     try {
-      await axiosClient.delete(`/catalogs/routes/${id}`);
+      await axiosClient.delete(`api/catalogs/routes/${id}`);
       fetchRutas();
       return true;
     } catch (error) {

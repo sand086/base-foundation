@@ -6,10 +6,10 @@ from sqlalchemy.exc import IntegrityError
 
 from app.db.database import get_db
 
-# 🚀 IMPORTACIÓN LOCAL (FSD): Busca dentro de la misma carpeta "maintenance"
+#  IMPORTACIÓN LOCAL (FSD): Busca dentro de la misma carpeta "maintenance"
 from . import schemas, crud
 
-# 🚀 ÚNICA INSTANCIA DEL ROUTER CON SU TAG
+#  ÚNICA INSTANCIA DEL ROUTER CON SU TAG
 router = APIRouter(tags=["Maintenance"])
 
 # =========================================================

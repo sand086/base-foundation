@@ -292,6 +292,9 @@ class Client(AuditMixin, Base):
     document_history = relationship(
         "ClientDocumentHistory", back_populates="client", cascade="all, delete-orphan"
     )
+    tarifas_autorizadas = relationship(
+        "RateTemplate", back_populates="client", cascade="all, delete-orphan"
+    )
 
 
 class SubClient(AuditMixin, Base):
@@ -1210,7 +1213,7 @@ class RateTemplate(AuditMixin, Base):
     costo_total_full = Column(Float, default=0.0)
     distancia_total_km = Column(Float, default=0.0)
     tiempo_total_minutos = Column(Integer, default=0)
-    client = relationship("Client")
+    client = relationship("Client", back_populates="tarifas_autorizadas")
 
     segments = relationship(
         "RateSegment",
@@ -1490,7 +1493,7 @@ class UserNotification(AuditMixin, Base):
     # ID del recurso relacionado (Trip ID, Invoice ID, etc.)
     reference_id = Column(String(100), nullable=True)
 
-    # 🚀 Metadata en JSONB para guardar ubicación, coordenadas o datos del cliente
+    #  Metadata en JSONB para guardar ubicación, coordenadas o datos del cliente
     metadata_info = Column(JSONB, nullable=True)
 
     user = relationship("User", foreign_keys=[user_id])
