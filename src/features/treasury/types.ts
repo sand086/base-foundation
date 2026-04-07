@@ -1,13 +1,8 @@
-export interface BankAccount {
-  id: number;
-  alias: string;
-  banco: string;
-  numero_cuenta: string;
-  clabe?: string;
-  moneda: "MXN" | "USD";
-  saldo: number;
-  estatus: "activo" | "inactivo";
-  banco_logo?: string;
+// src/features/treasury/types.ts
+import type { BankAccountResponse } from "@/api/generated";
+
+export interface BankAccount extends BankAccountResponse {
+  // All fields come from BankAccountResponse now
 }
 
 export interface BankMovement {

@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { FileText, Save, RotateCcw, AlertCircle } from "lucide-react";
 import { useSystemConfig } from "@/features/settings/hooks/useSystemConfig";
 import { toast } from "sonner";
-import axiosClient from "@/api/axiosClient";
+import { DefaultService } from "@/api/generated";
 
 // El texto que extrajimos de tu factura real (OCR)
 const LEYENDA_DEFAULT = `PRIMERA.- Para los efectos del presente contrato de transporte se denomina "Transportista" al que realiza el servicio de transportación... (Insertar las 15 cláusulas aquí)`;
@@ -26,7 +26,7 @@ export function SatLegalConfig() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await axiosClient.post("/sat-config/update-params", {
+      await DefaultService.updateSatParamsApiSatUpdateParamsPost({
         sat_leyenda_legal: leyenda,
       });
       toast.success("Leyenda legal actualizada");

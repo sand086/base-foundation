@@ -39,8 +39,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { fuelService } from "@/features/settlements/services/fuelService";
-import { unitService } from "@/features/units/services/unitService";
-import { operatorService } from "@/features/operators/services/operatorService";
+import { FleetUnitsService, FleetOperatorsService } from "@/api/generated";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   DropdownMenu,
@@ -89,8 +88,8 @@ const FuelLoads = () => {
   const loadData = async () => {
     try {
       const [uData, oData, fData] = await Promise.all([
-        unitService.getAll(),
-        operatorService.getAll(),
+        FleetUnitsService.readUnitsApiFleetUnitsGet() as Promise<any>,
+        FleetOperatorsService.readOperatorsApiFleetOperatorsGet() as Promise<any>,
         fuelService.getAll(),
       ]);
 

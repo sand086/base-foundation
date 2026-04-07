@@ -47,8 +47,8 @@ import {
   OrderItem,
   OrderType,
   CostCenter,
-  IndirectCategory,
-} from "@/features/payables/types";
+} from "@/features/purchases/types";
+import { IndirectCategory } from "@/features/payables/types";
 
 import { useSuppliers } from "@/features/suppliers/hooks/useSuppliers";
 import { useInventory } from "@/features/inventory/hooks/useInventory";
@@ -126,11 +126,11 @@ export function PurchaseOrderWizard({
   // ==========================================
 
   // Filtramos proveedores según el tipo de orden
-  const filteredSuppliers = (suppliers || []).filter((s) => {
+  const filteredSuppliers = (suppliers || []).filter((s: any) => {
     if (tipo === "compra")
-      return s.tipo === "refacciones" || s.tipo === "general";
+      return s.tipo_proveedor === "refacciones" || s.tipo_proveedor === "general";
     if (tipo === "servicio")
-      return s.tipo === "servicios" || s.tipo === "general";
+      return s.tipo_proveedor === "servicios" || s.tipo_proveedor === "general";
     return true;
   });
   // Cálculo de Subtotal inteligente
@@ -201,7 +201,7 @@ export function PurchaseOrderWizard({
       folio: editingOrder?.folio || "PENDIENTE", // ✅ Eliminada función generateFolio
       tipo,
       supplier_id: supplierId,
-      supplier_name: proveedor?.nombre || "Proveedor",
+      supplier_name: (proveedor as any)?.razon_social || "Proveedor",
       requester,
       required_date: requiredDate?.toISOString(),
       cost_center: costCenter,
@@ -462,10 +462,10 @@ export function PurchaseOrderWizard({
                       {filteredSuppliers.map((s) => (
                         <SelectItem
                           key={s.id}
-                          value={s.id}
+                          value={String(s.id)}
                           className="font-bold text-xs uppercase"
                         >
-                          {s.nombre}
+                          {(s as any).razon_social || (s as any).nombre}
                         </SelectItem>
                       ))}
                     </SelectContent>

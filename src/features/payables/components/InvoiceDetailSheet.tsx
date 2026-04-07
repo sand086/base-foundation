@@ -124,7 +124,7 @@ export function InvoiceDetailSheet({
               <p className="text-xs text-muted-foreground uppercase tracking-wide">
                 ID Factura
               </p>
-              <p className="font-mono font-bold text-lg text-brand-dark">
+              <p className="font-mono font-bold text-lg text-foreground">
                 {id}
               </p>
               {ordenFolio ? (
@@ -146,7 +146,7 @@ export function InvoiceDetailSheet({
                 Proveedor
               </span>
             </div>
-            <p className="font-semibold text-brand-dark">{proveedor}</p>
+            <p className="font-semibold text-foreground">{proveedor}</p>
           </div>
 
           {/* Concepto */}
@@ -169,7 +169,7 @@ export function InvoiceDetailSheet({
 
           {/* Fechas */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="p-3 bg-slate-50 rounded border">
+            <div className="p-3 bg-muted/50 rounded border border-border">
               <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
                 <Calendar className="h-3 w-3" />
                 Fecha Emisión
@@ -200,12 +200,12 @@ export function InvoiceDetailSheet({
 
           {/* Montos */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="p-4 bg-slate-100 rounded-lg">
+            <div className="p-4 bg-muted rounded-lg">
               <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
                 <DollarSign className="h-3 w-3" />
                 Monto Total
               </div>
-              <p className="text-xl font-bold text-brand-dark">
+              <p className="text-xl font-bold text-foreground">
                 ${montoTotal.toLocaleString("es-MX")}{" "}
                 <span className="text-xs">{moneda}</span>
               </p>

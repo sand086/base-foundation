@@ -119,12 +119,12 @@ export function SupplierModal({
         <div className="space-y-6 pt-4">
           {/* SECCIÓN 1: DATOS GENERALES */}
           <div className="space-y-4">
-            <h3 className="text-xs font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2 border-b pb-2">
+            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2 border-b pb-2">
               <Building2 className="h-3 w-3" /> Datos Generales
             </h3>
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2 space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">
+                <Label className="text-xs font-medium text-foreground">
                   Razón Social <span className="text-red-500">*</span>
                 </Label>
                 <Input
@@ -136,7 +136,7 @@ export function SupplierModal({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">
+                <Label className="text-xs font-medium text-foreground">
                   RFC <span className="text-red-500">*</span>
                 </Label>
                 <Input
@@ -153,7 +153,7 @@ export function SupplierModal({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">
+                <Label className="text-xs font-medium text-foreground">
                   Estatus
                 </Label>
                 <Select
@@ -173,7 +173,7 @@ export function SupplierModal({
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">
+                <Label className="text-xs font-medium text-foreground">
                   Tipo de Proveedor
                 </Label>
                 <Select
@@ -199,7 +199,7 @@ export function SupplierModal({
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">
+                <Label className="text-xs font-medium text-foreground">
                   Días de Crédito Base
                 </Label>
                 <Input
@@ -212,7 +212,7 @@ export function SupplierModal({
                       dias_credito: parseInt(e.target.value) || 0,
                     })
                   }
-                  className="bg-white"
+                  className="bg-card"
                   placeholder="Ej: 15"
                 />
               </div>
@@ -221,12 +221,12 @@ export function SupplierModal({
 
           {/* SECCIÓN 2: CONTACTO Y UBICACIÓN */}
           <div className="space-y-4">
-            <h3 className="text-xs font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2 border-b pb-2">
+            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2 border-b pb-2">
               <Phone className="h-3 w-3" /> Contacto y Ubicación
             </h3>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">
+                <Label className="text-xs font-medium text-foreground">
                   Contacto Principal
                 </Label>
                 <Input
@@ -240,7 +240,7 @@ export function SupplierModal({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">
+                <Label className="text-xs font-medium text-foreground">
                   Teléfono
                 </Label>
                 <Input
@@ -251,7 +251,7 @@ export function SupplierModal({
                 />
               </div>
               <div className="col-span-2 space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">
+                <Label className="text-xs font-medium text-foreground">
                   Correo Electrónico
                 </Label>
                 <Input
@@ -263,7 +263,7 @@ export function SupplierModal({
                 />
               </div>
               <div className="col-span-2 space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">
+                <Label className="text-xs font-medium text-foreground">
                   Dirección
                 </Label>
                 <Input
@@ -278,12 +278,12 @@ export function SupplierModal({
 
           {/* SECCIÓN 3: DATOS BANCARIOS */}
           <div className="space-y-4">
-            <h3 className="text-xs font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2 border-b pb-2">
+            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2 border-b pb-2">
               <CreditCard className="h-3 w-3" /> Datos Bancarios
             </h3>
-            <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-lg border">
+            <div className="grid grid-cols-2 gap-4 bg-muted/50 p-4 rounded-xl border border-border">
               <div className="col-span-2 space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">
+                <Label className="text-xs font-medium text-foreground">
                   Banco
                 </Label>
                 <Input
@@ -291,11 +291,11 @@ export function SupplierModal({
                   onChange={(e) =>
                     setFormData({ ...formData, banco: e.target.value })
                   }
-                  className="bg-white"
+                  className="bg-card"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">
+                <Label className="text-xs font-medium text-foreground">
                   Cuenta Bancaria
                 </Label>
                 <Input
@@ -310,7 +310,7 @@ export function SupplierModal({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">
+                <Label className="text-xs font-medium text-foreground">
                   CLABE (18 dígitos)
                 </Label>
                 <Input

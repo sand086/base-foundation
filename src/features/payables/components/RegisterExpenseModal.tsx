@@ -33,13 +33,12 @@ import { toast } from "sonner";
 import {
   PayableInvoice,
   Supplier,
-  PurchaseOrder,
   IndirectCategory,
   FinancialClassification,
   RegisterExpensePayload,
   PrefillData,
-  getOrderTypeLabel,
 } from "@/features/payables/types";
+import { PurchaseOrder, getOrderTypeLabel } from "@/features/purchases/types";
 import { Trip } from "@/features/trips/types";
 import { Unit } from "@/features/units/types";
 
@@ -445,7 +444,7 @@ export function RegisterExpenseModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-brand-dark">
+          <DialogTitle className="flex items-center gap-2 text-foreground">
             <FileText className="h-5 w-5" />
             {editInvoice ? "Editar Gasto" : "Registrar Gasto"}
             {formData.orden_compra_folio && (
@@ -457,14 +456,14 @@ export function RegisterExpenseModal({
         </DialogHeader>
 
         {validationErrors.length > 0 && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+          <div className="p-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/50 rounded-lg">
             <div className="flex items-start gap-2">
-              <AlertCircle className="h-4 w-4 text-red-600 mt-0.5" />
+              <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 mt-0.5" />
               <div>
-                <p className="text-sm font-medium text-red-800">
+                <p className="text-sm font-medium text-red-800 dark:text-red-300">
                   Errores de validación:
                 </p>
-                <ul className="list-disc list-inside text-xs text-red-700 mt-1">
+                <ul className="list-disc list-inside text-xs text-red-700 dark:text-red-400 mt-1">
                   {validationErrors.map((error, i) => (
                     <li key={i}>{error}</li>
                   ))}
@@ -816,7 +815,7 @@ export function RegisterExpenseModal({
               <span className="text-sm text-muted-foreground">
                 Fecha de Vencimiento (calculada):
               </span>
-              <span className="font-semibold text-brand-dark">
+              <span className="font-semibold text-foreground">
                 {fecha_vencimiento}
               </span>
             </div>

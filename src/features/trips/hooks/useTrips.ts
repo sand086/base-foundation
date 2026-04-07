@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
-import axiosClient from "@/api/axiosClient";
+import { LogisticsService } from "@/api/generated";
+import { ApiError } from "@/api/generated/core/ApiError";
 import { useToast } from "@/components/ui/use-toast";
 import {
   Trip,
@@ -13,15 +14,11 @@ export const useTrips = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  /**
-   *  REFRESH MAESTRO
-   * Trae la lista actualizada de viajes y sus tramos.
-   */
   const fetchTrips = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await axiosClient.get("/trips");
-      setTrips(response.data);
+      const data = await LogisticsService.readTripsApiLogisticsTripsGet();
+      setTrips(data as Trip[]);
     } catch (error) {
       console.error("Error fetching trips:", error);
       toast({
@@ -34,68 +31,49 @@ export const useTrips = () => {
     }
   }, [toast]);
 
-  /**
-   * 🚀 INICIO DEL CICLO (Etapa 1: Carga)
-   * Crea el viaje raíz y su primer tramo.
-   */
   const createTrip = async (tripData: TripCreatePayload) => {
     try {
-      const response = await axiosClient.post("/trips", tripData);
+      const data = await LogisticsService.createTripApiLogisticsTripsPost(tripData as any);
       toast({ title: "Éxito", description: "Viaje despachado correctamente" });
-      await fetchTrips(); // Actualiza la UI
-      return response.data;
-    } catch (error: any) {
+      await fetchTrips();
+      return data;
+    } catch (error) {
+      const msg = error instanceof ApiError ? error.body?.detail : "Error al crear Dispatch";
       toast({
         title: "Error",
-        description: error.response?.data?.detail || "Error al crear Dispatch",
+        description: msg || "Error al crear Dispatch",
         variant: "destructive",
       });
       return null;
     }
   };
 
-  /**
-   *  DESENGANCHE / RELEVO (Etapa 2 y 3)
-   * Registra el "Drop" de un tractor y crea la siguiente fase para otro recurso.
-   */
-  const createNextLeg = async (
-    tripId: string | number,
-    legData: TripLegCreatePayload,
-  ) => {
+  const createNextLeg = async (tripId: string | number, legData: TripLegCreatePayload) => {
     try {
-      const response = await axiosClient.post(
-        `/trips/${tripId}/next-leg`,
-        legData,
+      const data = await LogisticsService.createNextLegEndpointApiLogisticsTripsTripIdNextLegPost(
+        Number(tripId),
+        legData as any,
       );
       toast({
         title: "Relevo Exitoso",
         description: "La fase ha sido asignada a la nueva unidad y operador.",
       });
-      await fetchTrips(); // Mueve el viaje en el Pizarrón
-      return response.data;
-    } catch (error: any) {
+      await fetchTrips();
+      return data;
+    } catch (error) {
+      const msg = error instanceof ApiError ? error.body?.detail : "No se pudo realizar el desenganche.";
       toast({
         title: "Error",
-        description:
-          error.response?.data?.detail || "No se pudo realizar el desenganche.",
+        description: msg || "No se pudo realizar el desenganche.",
         variant: "destructive",
       });
       return null;
     }
   };
 
-  /**
-   * 📈 ACTUALIZAR ESTATUS OPERATIVO RÁPIDO
-   */
-  const updateTripStatus = async (
-    id: string | number,
-    status: string,
-    location?: string,
-  ) => {
+  const updateTripStatus = async (id: string | number, status: string, location?: string) => {
     try {
-      await axiosClient.patch(`/trips/${id}/status`, null, {
-        params: { status, location },
-      });
+      await LogisticsService.updateStatusApiLogisticsTripsTripIdStatusPatch(Number(id), status, location);
       toast({
         title: "Estatus Actualizado",
         description: `Viaje movido a ${status.replace("_", " ").toUpperCase()}`,
@@ -110,16 +88,10 @@ export const useTrips = () => {
     }
   };
 
-  /**
-   * 🛠️ EDITAR DATOS MAESTROS
-   */
   const editTrip = async (id: string | number, tripData: Partial<Trip>) => {
     try {
-      await axiosClient.put(`/trips/${id}`, tripData);
-      toast({
-        title: "Éxito",
-        description: "Datos actualizados correctamente",
-      });
+      await LogisticsService.updateTripEndpointApiLogisticsTripsTripIdPut(Number(id), tripData as any);
+      toast({ title: "Éxito", description: "Datos actualizados correctamente" });
       await fetchTrips();
       return true;
     } catch (error) {
@@ -132,16 +104,10 @@ export const useTrips = () => {
     }
   };
 
-  /**
-   * 🗑️ ELIMINACIÓN TOTAL
-   */
   const deleteTrip = async (id: string | number) => {
     try {
-      await axiosClient.delete(`/trips/${id}`);
-      toast({
-        title: "Viaje Eliminado",
-        description: "El registro ha sido borrado del sistema.",
-      });
+      await LogisticsService.deleteTripEndpointApiLogisticsTripsTripIdDelete(String(id));
+      toast({ title: "Viaje Eliminado", description: "El registro ha sido borrado del sistema." });
       await fetchTrips();
     } catch (error) {
       toast({
@@ -152,20 +118,15 @@ export const useTrips = () => {
     }
   };
 
-  /**
-   * 📝 BITÁCORA Y FINALIZACIÓN (TIMELINE)
-   * 🚀 CORRECCIÓN DE BUG "ATRAPADO EN TRÁNSITO": Forzamos refresh.
-   */
   const addTimelineEvent = async (
     tripId: string | number,
     legId: string | number,
-    data: TripTimelineEventCreatePayload, // 🚀 REEMPLAZAMOS EL TIPO INLINE POR EL OFICIAL
+    data: TripTimelineEventCreatePayload,
     silent: boolean = false,
   ) => {
     try {
-      // 🚀 AGREGAMOS EL CAMPO NUEVO AL PAYLOAD QUE VIAJA AL BACKEND
       const payload = {
-        trip_leg_id: legId,
+        trip_leg_id: Number(legId),
         status: data.status,
         event:
           data.comments ||
@@ -174,28 +135,23 @@ export const useTrips = () => {
         lat: data.lat || null,
         lng: data.lng || null,
         notifyClient: data.notifyClient || false,
-        terminal_entrega_vacio: data.terminal_entrega_vacio || null, // <-- ¡AQUÍ ESTÁ LA MAGIA!
+        terminal_entrega_vacio: data.terminal_entrega_vacio || null,
         event_type: ["retraso", "accidente", "detenido"].includes(data.status)
           ? "alert"
           : "info",
-      };
+      } as any;
 
-      await axiosClient.post(`/trips/${tripId}/timeline`, payload);
+      await LogisticsService.createTimelineEventApiLogisticsTripsTripIdTimelinePost(Number(tripId), payload);
 
       if (!silent) {
         toast({
-          title:
-            data.status === "entregado"
-              ? "Viaje Finalizado"
-              : "Bitácora actualizada",
-          description:
-            data.status === "entregado"
-              ? "Equipos liberados correctamente."
-              : "El evento se guardó correctamente.",
+          title: data.status === "entregado" ? "Viaje Finalizado" : "Bitácora actualizada",
+          description: data.status === "entregado"
+            ? "Equipos liberados correctamente."
+            : "El evento se guardó correctamente.",
         });
       }
 
-      // 🚀 FORZAR REFRESH PARA QUE DESAPAREZCA DEL PIZARRÓN SIN F5
       await fetchTrips();
       return true;
     } catch (error) {
@@ -210,13 +166,9 @@ export const useTrips = () => {
     }
   };
 
-  /**
-   * 💰 OBTENER LIQUIDACIÓN PREVIA
-   */
   const getTripSettlement = async (legId: string | number) => {
     try {
-      const response = await axiosClient.get(`/trips/leg/${legId}/settlement`);
-      return response.data;
+      return await LogisticsService.getTripSettlementApiLogisticsTripsLegTripLegIdSettlementGet(Number(legId));
     } catch (error) {
       toast({
         title: "Error",
@@ -227,12 +179,9 @@ export const useTrips = () => {
     }
   };
 
-  /**
-   * 💰 CERRAR LIQUIDACIÓN (UNO POR UNO - LEGACY)
-   */
   const closeTripSettlement = async (legId: string | number, payload: any) => {
     try {
-      await axiosClient.post(`/trips/leg/${legId}/close-settlement`, payload);
+      await LogisticsService.closeTripSettlementApiLogisticsTripsLegTripLegIdCloseSettlementPost(Number(legId), payload);
       toast({
         title: "Tramo Liquidado",
         description: "Ciclo de fase cerrado y registrado en finanzas.",
@@ -249,47 +198,35 @@ export const useTrips = () => {
     }
   };
 
-  /**
-   *  REFRESH MANUAL
-   */
   const refreshTrips = useCallback(async () => {
     await fetchTrips();
   }, [fetchTrips]);
 
-  /**
-   * 🚀 LIQUIDACIÓN POR LOTE
-   */
   const liquidarLote = async (legIds: string[], neto_a_pagar: number) => {
     try {
-      const response = await axiosClient.post("/trips/legs/settle-batch", {
+      const response = await LogisticsService.settleTripLegsBatchApiLogisticsTripsLegsSettleBatchPost({
         leg_ids: legIds.map(Number),
         neto_a_pagar,
       });
       await fetchTrips();
-      return response.data;
+      return response;
     } catch (error) {
       console.error("Error al liquidar lote:", error);
       throw error;
     }
   };
 
-  /**
-   * 🚀 PRE-LIQUIDACIÓN POR LOTE (CÁLCULO DE DIÉSEL)
-   */
   const getSettlementPreview = async (legIds: string[]) => {
     try {
-      const response = await axiosClient.post(
-        "/trips/legs/settlement-preview",
-        { leg_ids: legIds.map(Number) },
-      );
-      return response.data;
+      return await LogisticsService.previewBatchSettlementEndpointApiLogisticsTripsLegsSettlementPreviewPost({
+        leg_ids: legIds.map(Number),
+      });
     } catch (error) {
       console.error("Error al obtener la pre-liquidación:", error);
       throw error;
     }
   };
 
-  // Carga inicial al montar el hook
   useEffect(() => {
     fetchTrips();
   }, [fetchTrips]);

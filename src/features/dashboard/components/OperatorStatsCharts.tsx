@@ -12,7 +12,7 @@ import { OperatorStats } from "@/features/dashboard/types";
 import {
   getOperatorTripsData,
   getOperatorIncidentsData,
-} from "@/features/dashboard/services/dashboardService";
+} from "@/features/dashboard/utils/dashboardUtils";
 
 interface OperatorStatsChartsProps {
   operators: OperatorStats[];

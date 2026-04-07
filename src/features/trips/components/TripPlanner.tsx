@@ -350,31 +350,30 @@ export const TripPlanner = () => {
   return (
     <div className="h-full flex flex-col space-y-4 animate-in fade-in duration-500">
       {/* HEADER DE PESTAÑAS */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between bg-white/40 dark:bg-slate-900/40 p-4 rounded-2xl border border-white/20 dark:border-white/10 shadow-sm backdrop-blur-md gap-4">
-        <h2 className="text-xl font-black text-brand-navy dark:text-white flex items-center gap-3 px-2 uppercase tracking-tighter heading-crisp">
+      <div className="flex flex-col md:flex-row md:items-center justify-between bg-card/40 p-4 rounded-2xl border border-border shadow-sm backdrop-blur-md gap-4">
+        <h2 className="text-lg sm:text-xl font-black text-foreground flex items-center gap-3 px-2 uppercase tracking-tighter heading-crisp">
           <div className="p-2 bg-blue-600 rounded-xl shadow-inner border border-blue-500">
             <LayoutGrid className="h-5 w-5 text-white" />
           </div>
           Centro de Operaciones
         </h2>
 
-        <div className="w-full md:w-auto overflow-x-auto hide-scrollbar bg-white dark:bg-slate-900 p-1.5 rounded-xl border border-slate-200 dark:border-white/10 shadow-sm">
+        <div className="w-full md:w-auto overflow-x-auto hide-scrollbar bg-card p-1.5 rounded-xl border border-border shadow-sm">
           <Tabs
             value={viewMode}
             onValueChange={(v) => setViewMode(v as any)}
             className="w-full min-w-max"
           >
-            {/* Solo 2 columnas (Tabla y Planeador) */}
-            <TabsList className="grid w-full grid-cols-2 h-10 bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
+            <TabsList className="grid w-full grid-cols-2 h-10 bg-muted/50 rounded-lg p-1">
               <TabsTrigger
                 value="table"
-                className="text-[10px] font-black uppercase tracking-widest rounded-md data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:shadow-sm data-[state=active]:text-brand-navy dark:data-[state=active]:text-white transition-all h-full"
+                className="text-[10px] font-black uppercase tracking-widest rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground transition-all h-full"
               >
                 <List className="h-3.5 w-3.5 mr-2" /> Tabla
               </TabsTrigger>
               <TabsTrigger
                 value="standby"
-                className="text-[10px] font-black uppercase tracking-widest rounded-md data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:shadow-sm data-[state=active]:text-brand-navy dark:data-[state=active]:text-white transition-all h-full"
+                className="text-[10px] font-black uppercase tracking-widest rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground transition-all h-full"
               >
                 <CalendarDays className="h-3.5 w-3.5 mr-2" /> Planeador{" "}
                 {standbyTrips.length > 0 && (
@@ -393,32 +392,33 @@ export const TripPlanner = () => {
 
       {/* MODO TABLA */}
       {viewMode === "table" && (
-        <Card className="border-slate-200/50 dark:border-white/10 shadow-2xl rounded-2xl overflow-hidden bg-white/50 dark:bg-slate-950/30 backdrop-blur-xl liquid-glass-table">
+        <Card className="border-border shadow-2xl rounded-2xl overflow-hidden bg-card/50 backdrop-blur-xl liquid-glass-table">
           <CardContent className="p-0">
-            <DataTable>
-              <DataTableHeader className="bg-slate-50/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-white/10 backdrop-blur-md">
+            <div className="overflow-x-auto">
+            <DataTable className="min-w-[800px]">
+              <DataTableHeader className="bg-muted/50 border-b border-border backdrop-blur-md">
                 <DataTableRow className="hover:bg-transparent border-none">
-                  <DataTableHead className="font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] text-[10px] h-12">
+                  <DataTableHead className="font-black text-muted-foreground uppercase tracking-[0.2em] text-[10px] h-12">
                     Folio / Cliente
                   </DataTableHead>
-                  <DataTableHead className="font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] text-[10px] h-12">
+                  <DataTableHead className="font-black text-muted-foreground uppercase tracking-[0.2em] text-[10px] h-12">
                     Fase del Servicio
                   </DataTableHead>
-                  <DataTableHead className="font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] text-[10px] h-12">
+                  <DataTableHead className="font-black text-muted-foreground uppercase tracking-[0.2em] text-[10px] h-12 hidden lg:table-cell">
                     Ruta Registrada
                   </DataTableHead>
-                  <DataTableHead className="font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] text-[10px] h-12">
+                  <DataTableHead className="font-black text-muted-foreground uppercase tracking-[0.2em] text-[10px] h-12 hidden md:table-cell">
                     Asignación Física
                   </DataTableHead>
-                  <DataTableHead className="font-black text-slate-500 dark:text-slate-400 text-center uppercase tracking-[0.2em] text-[10px] h-12">
+                  <DataTableHead className="font-black text-muted-foreground text-center uppercase tracking-[0.2em] text-[10px] h-12">
                     Estatus Operativo
                   </DataTableHead>
-                  <DataTableHead className="text-right font-black text-slate-500 dark:text-slate-400 pr-6 uppercase tracking-[0.2em] text-[10px] h-12">
+                  <DataTableHead className="text-right font-black text-muted-foreground pr-6 uppercase tracking-[0.2em] text-[10px] h-12">
                     Acciones
                   </DataTableHead>
                 </DataTableRow>
               </DataTableHeader>
-              <DataTableBody className="table-staggered bg-white dark:bg-slate-950">
+              <DataTableBody className="table-staggered bg-card">
                 {allActiveLegs.length === 0 ? (
                   <DataTableRow>
                     <DataTableCell
@@ -477,9 +477,9 @@ export const TripPlanner = () => {
                           </Badge>
                         </DataTableCell>
 
-                        <DataTableCell className="py-4">
+                        <DataTableCell className="py-4 hidden lg:table-cell">
                           <span
-                            className="text-[10px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-tighter"
+                            className="text-[10px] font-black text-foreground uppercase tracking-tighter"
                             title={formattedRouteName}
                           >
                             <RouteIcon className="inline h-3.5 w-3.5 mr-1.5 text-blue-500" />
@@ -487,7 +487,7 @@ export const TripPlanner = () => {
                           </span>
                         </DataTableCell>
 
-                        <DataTableCell className="py-4">
+                        <DataTableCell className="py-4 hidden md:table-cell">
                           <div className="flex flex-col gap-1.5">
                             <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-brand-navy dark:text-blue-400 bg-slate-50 dark:bg-slate-900 w-fit px-2 py-1 rounded border border-slate-200 dark:border-white/10 shadow-sm">
                               <Truck className="h-3 w-3 text-slate-400 shrink-0" />{" "}
@@ -555,6 +555,7 @@ export const TripPlanner = () => {
                 )}
               </DataTableBody>
             </DataTable>
+            </div>
           </CardContent>
         </Card>
       )}

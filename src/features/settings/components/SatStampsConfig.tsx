@@ -29,7 +29,7 @@ import {
   ShieldX,
 } from "lucide-react";
 import { toast } from "sonner";
-import axiosClient from "@/api/axiosClient";
+import { DefaultService } from "@/api/generated";
 import { cn } from "@/lib/utils";
 import { SystemConfig } from "@/features/settings/types";
 import { format } from "date-fns";
@@ -96,17 +96,15 @@ export function SatStampsConfig({
     if (!files.cer || !files.key || !password)
       return toast.error("Faltan datos obligatorios.");
 
-    const formData = new FormData();
-    formData.append("cer_file", files.cer);
-    formData.append("key_file", files.key);
-    formData.append("password", password);
-    formData.append("environment", environment);
 
     setLoading(true);
     try {
-      await axiosClient.post("/billing/csd", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      await DefaultService.uploadCsdFilesApiSatCsdPost({
+        cer_file: files.cer,
+        key_file: files.key,
+        password,
+        environment,
+      } as any);
       toast.success(`Certificados de ${environment} actualizados`);
       setFiles({ cer: null, key: null });
       setPassword("");
@@ -124,20 +122,16 @@ export function SatStampsConfig({
     if (!downloadPassword || !downloadModal.type) return;
 
     setIsDownloading(true);
-    const formData = new FormData();
-    formData.append("password", downloadPassword); // <--- Esta es la de LOGUEO
-    formData.append("file_type", downloadModal.type);
-    formData.append("environment", environment);
 
     try {
-      const response = await axiosClient.post(
-        "/billing/csd/download",
-        formData,
-        { responseType: "blob" },
-      );
+      const response = await DefaultService.downloadCsdSecureApiSatCsdDownloadPost({
+        password: downloadPassword,
+        file_type: downloadModal.type,
+        environment,
+      } as any);
 
       // Crear el link de descarga
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const url = window.URL.createObjectURL(new Blob([response]));
       const link = document.createElement("a");
       link.href = url;
       link.setAttribute("download", `CSD_${environment}.${downloadModal.type}`);
@@ -161,10 +155,10 @@ export function SatStampsConfig({
   const handleTestConnection = async () => {
     setIsTesting(true);
     try {
-      const { data } = await axiosClient.post("/billing/csd/test", {
+      const data = await DefaultService.testCsdConnectionApiSatCsdTestPost({
         environment,
       });
-      setCertInfo(data.cert_info);
+      setCertInfo((data as any).cert_info);
       toast.success("Verificación de sellos completa");
     } catch (error: any) {
       toast.error("Fallo la verificación");

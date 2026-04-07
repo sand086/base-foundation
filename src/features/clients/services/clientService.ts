@@ -1,57 +1,47 @@
-import axiosClient from "@/api/axiosClient";
+import { DefaultService } from "@/api/generated";
 import { Client } from "@/types/api.types";
 
 export const clientService = {
-  // RUTA: /clients (Inglés, coincide con backend)
   getClients: async (): Promise<Client[]> => {
-    const { data } = await axiosClient.get<Client[]>("/clients");
-    return data;
+    const data = await DefaultService.readClientsApiClientsGet();
+    return data as Client[];
   },
 
-  // ID: number (Coincide con backend)
   getClient: async (id: number): Promise<Client> => {
-    const { data } = await axiosClient.get<Client>(`/clients/${id}`);
-    return data;
+    const data = await DefaultService.readClientApiClientsClientIdGet(Number(id));
+    return data as Client;
   },
 
   createClient: async (client: Partial<Client>): Promise<Client> => {
-    const { data } = await axiosClient.post<Client>("/clients", client);
-    return data;
+    const data = await DefaultService.createClientApiClientsPost(client as any);
+    return data as Client;
   },
 
-  updateClient: async (
-    id: number,
-    client: Partial<Client>,
-  ): Promise<Client> => {
-    const { data } = await axiosClient.put<Client>(`/clients/${id}`, client);
-    return data;
+  updateClient: async (id: number, client: Partial<Client>): Promise<Client> => {
+    const data = await DefaultService.updateClientApiClientsClientIdPut(Number(id), client as any);
+    return data as Client;
   },
 
   deleteClient: async (id: number): Promise<void> => {
-    await axiosClient.delete(`/clients/${id}`);
+    await DefaultService.deleteClientApiClientsClientIdDelete(Number(id));
   },
+
   uploadDocument: async (clientId: number, docType: string, file: File) => {
-    const formData = new FormData();
-    formData.append("file", file);
-    const response = await axiosClient.post(
-      `/clients/${clientId}/documents/${docType}`,
-      formData,
-      {
-        headers: { "Content-Type": "multipart/form-data" },
-      },
+    return await DefaultService.uploadClientDocumentApiClientsClientIdDocumentsDocTypePost(
+      Number(clientId),
+      docType,
+      { file },
     );
-    return response.data;
   },
+
   getDocumentHistory: async (clientId: number, docType: string) => {
-    const response = await axiosClient.get(
-      `/clients/${clientId}/documents/${docType}/history`,
+    return await DefaultService.getClientDocumentHistoryApiClientsClientIdDocumentsDocTypeHistoryGet(
+      Number(clientId),
+      docType,
     );
-    return response.data;
   },
+
   deleteDocument: async (documentId: number) => {
-    const response = await axiosClient.delete(
-      `/clients/documents/${documentId}`,
-    );
-    return response.data;
+    return await DefaultService.deleteClientDocumentApiClientsDocumentsDocumentIdDelete(Number(documentId));
   },
 };

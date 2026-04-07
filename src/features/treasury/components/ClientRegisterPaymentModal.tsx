@@ -90,19 +90,19 @@ export function RegisterPaymentModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[450px] bg-white/95 dark:bg-brand-navy/95 backdrop-blur-xl border border-slate-200 dark:border-white/10 shadow-2xl rounded-2xl overflow-hidden p-0">
-        <DialogHeader className="p-6 bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-white/5">
-          <DialogTitle className="flex items-center gap-2 text-xl font-black text-brand-navy dark:text-white uppercase tracking-tighter">
-            <CreditCard className="h-6 w-6 text-emerald-600" /> Registrar Cobro
+      <DialogContent className="sm:max-w-[450px] bg-card/95 backdrop-blur-xl border border-border shadow-2xl rounded-2xl overflow-hidden p-0">
+        <DialogHeader className="p-6 bg-muted/50 border-b border-border">
+          <DialogTitle className="flex items-center gap-2 text-xl font-black text-foreground uppercase tracking-tighter">
+            <CreditCard className="h-6 w-6 text-emerald-600 dark:text-emerald-400" /> Registrar Cobro
           </DialogTitle>
-          <DialogDescription className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">
+          <DialogDescription className="text-xs font-bold text-muted-foreground uppercase tracking-widest mt-1">
             {invoice.folio_interno} • {invoice.cliente}
           </DialogDescription>
         </DialogHeader>
 
         <div className="p-6 space-y-5">
           {/* RESUMEN DE LA DEUDA */}
-          <div className="bg-slate-900 rounded-xl p-4 flex justify-between items-center shadow-inner">
+          <div className="bg-brand-navy rounded-xl p-4 flex justify-between items-center shadow-inner">
             <div>
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                 Saldo Pendiente Actual
@@ -121,11 +121,11 @@ export function RegisterPaymentModal({
 
           {/* MONTO A COBRAR */}
           <div className="space-y-1.5">
-            <Label variant="brand" className="text-emerald-600">
+            <Label variant="brand" className="text-emerald-600 dark:text-emerald-400">
               Monto Recibido (Abono) *
             </Label>
             <div className="relative">
-              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 type="number"
                 value={formData.monto || ""}
@@ -136,7 +136,7 @@ export function RegisterPaymentModal({
                   });
                   setError("");
                 }}
-                className="pl-8 h-12 text-lg font-black font-mono border-emerald-200 bg-emerald-50 focus-visible:ring-emerald-500 text-emerald-700"
+                className="pl-8 h-12 text-lg font-black font-mono border-emerald-200 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-950/20 focus-visible:ring-emerald-500 text-emerald-700 dark:text-emerald-300"
               />
             </div>
             <div className="flex justify-between mt-1">
@@ -145,7 +145,7 @@ export function RegisterPaymentModal({
                 onClick={() =>
                   setFormData({ ...formData, monto: invoice.saldo_pendiente })
                 }
-                className="text-[10px] font-bold uppercase text-brand-navy hover:text-blue-600 tracking-widest"
+                className="text-[10px] font-bold uppercase text-primary hover:text-primary/80 tracking-widest"
               >
                 Liquidar todo el saldo
               </button>
@@ -155,14 +155,14 @@ export function RegisterPaymentModal({
           {/* PREVIEW DEL SALDO */}
           {formData.monto > 0 && formData.monto <= invoice.saldo_pendiente && (
             <div
-              className={`p-3 rounded-xl border ${isPartialPayment ? "bg-amber-50 border-amber-200" : "bg-emerald-50 border-emerald-200"} transition-colors`}
+              className={`p-3 rounded-xl border ${isPartialPayment ? "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/50" : "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/50"} transition-colors`}
             >
               <div className="flex justify-between items-center">
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
                   Nuevo Saldo:
                 </span>
                 <span
-                  className={`font-mono font-black ${isPartialPayment ? "text-amber-700" : "text-emerald-700"}`}
+                  className={`font-mono font-black ${isPartialPayment ? "text-amber-700 dark:text-amber-400" : "text-emerald-700 dark:text-emerald-400"}`}
                 >
                   $
                   {remainingAfterPayment.toLocaleString("es-MX", {
@@ -171,7 +171,7 @@ export function RegisterPaymentModal({
                 </span>
               </div>
               <p
-                className={`text-[10px] font-bold uppercase tracking-widest mt-1 ${isPartialPayment ? "text-amber-600" : "text-emerald-600"}`}
+                className={`text-[10px] font-bold uppercase tracking-widest mt-1 ${isPartialPayment ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}
               >
                 {isPartialPayment
                   ? "⚠️ Quedará como Pago Parcial"
@@ -192,7 +192,7 @@ export function RegisterPaymentModal({
                 onChange={(e) =>
                   setFormData({ ...formData, fecha: e.target.value })
                 }
-                className="h-10 bg-slate-50"
+                className="h-10 bg-muted/50"
               />
             </div>
             <div className="space-y-1.5">
@@ -205,10 +205,10 @@ export function RegisterPaymentModal({
                   setFormData({ ...formData, metodoPago: v })
                 }
               >
-                <SelectTrigger className="h-10 bg-slate-50 font-bold text-xs">
+                <SelectTrigger className="h-10 bg-muted/50 font-bold text-xs">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="glass-panel">
+                <SelectContent>
                   <SelectItem value="03">03 - Transferencia</SelectItem>
                   <SelectItem value="01">01 - Efectivo</SelectItem>
                   <SelectItem value="02">02 - Cheque</SelectItem>
@@ -225,19 +225,19 @@ export function RegisterPaymentModal({
               onChange={(e) =>
                 setFormData({ ...formData, referencia: e.target.value })
               }
-              className="h-10 text-sm bg-slate-50"
+              className="h-10 text-sm bg-muted/50"
             />
           </div>
 
           {error && (
-            <div className="flex items-center gap-2 text-red-600 text-[11px] font-black uppercase tracking-widest p-3 bg-red-50 rounded-xl border border-red-200 animate-in zoom-in-95">
+            <div className="flex items-center gap-2 text-red-600 dark:text-red-400 text-[11px] font-black uppercase tracking-widest p-3 bg-red-50 dark:bg-red-950/20 rounded-xl border border-red-200 dark:border-red-800/50 animate-in zoom-in-95">
               <AlertCircle className="h-4 w-4 shrink-0" />
               {error}
             </div>
           )}
         </div>
 
-        <DialogFooter className="p-4 bg-slate-50/80 border-t border-slate-200">
+        <DialogFooter className="p-4 bg-muted/50 border-t border-border">
           <Button
             variant="ghost"
             onClick={() => onOpenChange(false)}

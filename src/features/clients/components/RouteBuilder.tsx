@@ -879,7 +879,7 @@ export const RouteBuilder: React.FC = () => {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl shadow-sm border border-slate-200/50 dark:border-white/10 bg-white dark:bg-slate-900/50"
+                className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl shadow-sm border border-slate-200/50 dark:border-white/10 bg-card"
               >
                 <MoreVertical className="h-4 w-4 text-slate-500 dark:text-slate-400" />
               </Button>
@@ -955,7 +955,7 @@ export const RouteBuilder: React.FC = () => {
             variant="default"
             className="overflow-hidden border-t-4 border-t-brand-navy shadow-xl overflow-visible"
           >
-            <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-white/10 p-6">
+            <CardHeader className="bg-muted/50 border-b border-slate-200 dark:border-white/10 p-6">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-start">
                 <FormField
                   control={form.control}
@@ -968,7 +968,7 @@ export const RouteBuilder: React.FC = () => {
                       <FormControl>
                         <Input
                           placeholder="Ej: VERACRUZ"
-                          className="h-11 font-black uppercase bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                          className="h-11 font-black uppercase bg-card border-border shadow-sm"
                           {...field}
                           onChange={(e) =>
                             field.onChange(e.target.value.toUpperCase())
@@ -992,7 +992,7 @@ export const RouteBuilder: React.FC = () => {
                       <FormControl>
                         <Input
                           placeholder="Ej: TOLUCA"
-                          className="h-11 font-black uppercase bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                          className="h-11 font-black uppercase bg-card border-border shadow-sm"
                           {...field}
                           onChange={(e) =>
                             field.onChange(e.target.value.toUpperCase())
@@ -1016,7 +1016,7 @@ export const RouteBuilder: React.FC = () => {
                       <FormControl>
                         <Input
                           placeholder="Ej: BRAUN-IMO"
-                          className="h-11 font-bold uppercase bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                          className="h-11 font-bold uppercase bg-card border-border shadow-sm"
                           {...field}
                           onChange={(e) =>
                             field.onChange(e.target.value.toUpperCase())
@@ -1045,7 +1045,7 @@ export const RouteBuilder: React.FC = () => {
                             <SelectValue />
                           </SelectTrigger>
                         </FormControl>
-                        <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-slate-200 dark:border-white/10">
+                        <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
                           <SelectItem
                             value="5ejes"
                             className="font-bold uppercase text-xs"
@@ -1103,11 +1103,11 @@ export const RouteBuilder: React.FC = () => {
                           }
                         >
                           <FormControl>
-                            <SelectTrigger className="h-10 w-full sm:w-[280px] font-bold text-xs bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm">
+                            <SelectTrigger className="h-10 w-full sm:w-[280px] font-bold text-xs bg-card border-border shadow-sm">
                               <SelectValue placeholder="Ruta libre (Sin cliente)" />
                             </SelectTrigger>
                           </FormControl>
-                          <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-slate-200 dark:border-white/10 max-h-[40vh]">
+                          <SelectContent className="bg-card/95 backdrop-blur-xl border-border max-h-[40vh]">
                             <SelectItem
                               value="none"
                               className="font-bold italic text-slate-500"
@@ -1143,7 +1143,7 @@ export const RouteBuilder: React.FC = () => {
             </CardHeader>
 
             {/* TOOLBAR SECUNDARIO */}
-            <div className="bg-slate-100/50 dark:bg-slate-900/30 border-b border-slate-200 dark:border-white/10 p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="bg-muted/50 border-b border-slate-200 dark:border-white/10 p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div className="flex items-center space-x-3">
                 <Switch
                   id="advanced-mode"
@@ -1177,14 +1177,14 @@ export const RouteBuilder: React.FC = () => {
 
             {/*  TABLA DND */}
             <CardContent className="p-0">
-              <div className="relative w-full overflow-hidden bg-slate-50/50 dark:bg-transparent">
+              <div className="relative w-full overflow-hidden bg-muted/50">
                 <DndContext
                   sensors={sensors}
                   collisionDetection={closestCenter}
                   onDragEnd={handleDragEnd}
                 >
                   <Table className="w-full caption-bottom text-sm">
-                    <TableHeader className="bg-slate-200/50 dark:bg-slate-900/80">
+                    <TableHeader className="bg-muted/80">
                       <TableRow className="border-b border-slate-300 dark:border-white/10">
                         <TableHead className="w-12 pl-4"></TableHead>
                         <TableHead
@@ -1298,7 +1298,7 @@ export const RouteBuilder: React.FC = () => {
             </CardContent>
 
             {/* BOTONERAS DE ACCIÓN Y SUBMIT */}
-            <div className="flex flex-col md:flex-row justify-between items-center bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-white/10 shadow-xl gap-4">
+            <div className="flex flex-col md:flex-row justify-between items-center bg-card p-5 rounded-2xl border border-border shadow-xl gap-4">
               <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
                 <Button
                   type="button"
@@ -1336,13 +1336,13 @@ export const RouteBuilder: React.FC = () => {
                       <MapPin className="h-4 w-4 mr-2" /> Insertar Caseta
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="w-[95vw] sm:max-w-md p-0 flex flex-col max-h-[90vh] bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 shadow-2xl rounded-2xl overflow-hidden">
-                    <DialogHeader className="p-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0">
+                  <DialogContent className="w-[95vw] sm:max-w-md p-0 flex flex-col max-h-[90vh] bg-card/95 backdrop-blur-xl border border-border shadow-2xl rounded-2xl overflow-hidden">
+                    <DialogHeader className="p-6 bg-card border-b border-border shrink-0">
                       <DialogTitle className="text-xl font-black uppercase tracking-tighter text-brand-navy dark:text-white heading-crisp">
                         Catálogo de Peajes
                       </DialogTitle>
                     </DialogHeader>
-                    <div className="p-6 bg-slate-50/50 dark:bg-transparent flex-1 overflow-hidden flex flex-col">
+                    <div className="p-6 bg-muted/50 flex-1 overflow-hidden flex flex-col">
                       <div className="relative mb-4">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                         <Input
@@ -1367,7 +1367,7 @@ export const RouteBuilder: React.FC = () => {
                             .map((t) => (
                               <div
                                 key={t.id}
-                                className="p-4 border border-slate-200 dark:border-white/10 rounded-xl flex justify-between items-center hover:border-brand-navy dark:hover:border-white/30 hover:shadow-md cursor-pointer group transition-all bg-white dark:bg-slate-800/50"
+                                className="p-4 border border-slate-200 dark:border-white/10 rounded-xl flex justify-between items-center hover:border-brand-navy dark:hover:border-white/30 hover:shadow-md cursor-pointer group transition-all bg-card"
                                 onClick={() => {
                                   setSegments([
                                     ...segments,
@@ -1480,7 +1480,7 @@ export const RouteBuilder: React.FC = () => {
       </Form>
 
       <Card variant="default" className="shadow-2xl border-none">
-        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-900/50 py-6 rounded-t-2xl gap-4">
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 dark:border-white/10 bg-muted/50 py-6 rounded-t-2xl gap-4">
           <CardTitle className="text-xl font-black uppercase tracking-tighter text-brand-navy dark:text-white heading-crisp flex items-center gap-3">
             <RouteIcon className="h-6 w-6 text-brand-red" /> Directorio de Rutas
           </CardTitle>
@@ -1491,7 +1491,7 @@ export const RouteBuilder: React.FC = () => {
             onValueChange={(v) => setFiltroTipo(v as any)}
             className="w-full sm:w-[300px]"
           >
-            <TabsList className="grid w-full grid-cols-3 bg-slate-200/50 dark:bg-slate-800">
+            <TabsList className="grid w-full grid-cols-3 bg-muted">
               <TabsTrigger
                 value="todos"
                 className="text-xs font-bold uppercase"
@@ -1513,7 +1513,7 @@ export const RouteBuilder: React.FC = () => {
             </TabsList>
           </Tabs>
         </CardHeader>
-        <CardContent className="pt-6 p-0 bg-white dark:bg-slate-950">
+        <CardContent className="pt-6 p-0 bg-card">
           <EnhancedDataTable
             data={rutasFiltradas}
             columns={historyColumns}
@@ -1525,8 +1525,8 @@ export const RouteBuilder: React.FC = () => {
 
       {/*  MODAL ELIMINAR RUTA */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent className="w-[95vw] sm:max-w-2xl p-0 flex flex-col max-h-[90vh] bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 shadow-2xl rounded-2xl transition-all duration-300 overflow-hidden">
-          <AlertDialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0">
+        <AlertDialogContent className="w-[95vw] sm:max-w-2xl p-0 flex flex-col max-h-[90vh] bg-card/95 backdrop-blur-xl border border-border shadow-2xl rounded-2xl transition-all duration-300 overflow-hidden">
+          <AlertDialogHeader className="p-6 sm:p-8 bg-card border-b border-border shrink-0">
             <div className="flex items-center gap-4 sm:gap-5">
               <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center shadow-inner shrink-0">
                 <AlertTriangle className="h-7 w-7 sm:h-8 sm:w-8 text-rose-600 dark:text-rose-400" />
@@ -1578,7 +1578,7 @@ export const RouteBuilder: React.FC = () => {
             </AlertDialogDescription>
           </div>
 
-          <AlertDialogFooter className="p-6 sm:p-8 bg-slate-50/50 dark:bg-black/20 border-t border-slate-200 dark:border-white/10 shrink-0">
+          <AlertDialogFooter className="p-6 sm:p-8 bg-muted/50 border-t border-slate-200 dark:border-white/10 shrink-0">
             <div className="flex flex-col-reverse sm:flex-row sm:flex-wrap justify-end items-stretch sm:items-center gap-3 w-full">
               <AlertDialogCancel
                 variant="outline"
@@ -1602,8 +1602,8 @@ export const RouteBuilder: React.FC = () => {
 
       {/*  MODAL DETALLE DE RUTA (BITÁCORA) */}
       <Dialog open={detailModalOpen} onOpenChange={setDetailModalOpen}>
-        <DialogContent className="w-[95vw] sm:max-w-3xl p-0 overflow-hidden bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 shadow-2xl rounded-2xl flex flex-col max-h-[90vh]">
-          <DialogHeader className="px-6 sm:px-8 py-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 z-10">
+        <DialogContent className="w-[95vw] sm:max-w-3xl p-0 overflow-hidden bg-card/95 backdrop-blur-xl border border-border shadow-2xl rounded-2xl flex flex-col max-h-[90vh]">
+          <DialogHeader className="px-6 sm:px-8 py-6 bg-card border-b border-border shrink-0 z-10">
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
               <DialogTitle className="flex flex-col gap-2">
                 <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
@@ -1648,7 +1648,7 @@ export const RouteBuilder: React.FC = () => {
             </div>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 px-6 sm:px-8 py-8 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
+          <ScrollArea className="flex-1 px-6 sm:px-8 py-8 custom-scrollbar bg-muted/50">
             {selectedRouteDetail && (
               <div className="relative">
                 {/* Timeline Line */}

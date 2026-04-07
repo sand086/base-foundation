@@ -68,7 +68,7 @@ export function SettlementReceiptModal({
         </DialogHeader>
 
         {/* Receipt Content - Estilo "Ticket" */}
-        <div className="bg-white dark:bg-slate-900 border-2 border-dashed border-slate-200 dark:border-white/10 rounded-2xl p-6 sm:p-8 space-y-6 shadow-inner relative overflow-hidden">
+        <div className="bg-white dark:bg-slate-900 border-2 border-dashed border-border rounded-2xl p-6 sm:p-8 space-y-6 shadow-inner relative overflow-hidden">
           <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
             <Receipt className="h-32 w-32 rotate-12" />
           </div>
@@ -82,7 +82,7 @@ export function SettlementReceiptModal({
                 className="h-5 dark:invert"
               />
             </div>
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/80">
               Sistema de Gestión de Transporte
             </p>
             <Badge className="mt-4 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20 px-4 py-1 rounded-full font-black text-[10px] tracking-widest">
@@ -95,7 +95,7 @@ export function SettlementReceiptModal({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-sm bg-slate-50 dark:bg-black/20 p-5 rounded-2xl border border-slate-100 dark:border-white/5">
             <div className="space-y-4">
               <div className="flex flex-col gap-1">
-                <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                <span className="text-[9px] font-black text-muted-foreground/80 uppercase tracking-widest">
                   Folio Viaje
                 </span>
                 <span className="font-mono font-bold text-brand-navy dark:text-blue-400 text-base">
@@ -103,19 +103,19 @@ export function SettlementReceiptModal({
                 </span>
               </div>
               <div className="flex flex-col gap-1">
-                <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                <span className="text-[9px] font-black text-muted-foreground/80 uppercase tracking-widest">
                   Operador
                 </span>
-                <div className="flex items-center gap-2 font-bold text-slate-700 dark:text-slate-200">
+                <div className="flex items-center gap-2 font-bold text-foreground">
                   <User className="h-3.5 w-3.5 text-slate-400" />
                   {settlement.operador_nombre}
                 </div>
               </div>
               <div className="flex flex-col gap-1">
-                <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                <span className="text-[9px] font-black text-muted-foreground/80 uppercase tracking-widest">
                   Unidad Asignada
                 </span>
-                <div className="flex items-center gap-2 font-mono font-bold text-slate-700 dark:text-slate-200">
+                <div className="flex items-center gap-2 font-mono font-bold text-foreground">
                   <Truck className="h-3.5 w-3.5 text-slate-400" />
                   ECO-{settlement.unidad_numero}
                 </div>
@@ -124,28 +124,28 @@ export function SettlementReceiptModal({
 
             <div className="space-y-4">
               <div className="flex flex-col gap-1">
-                <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                <span className="text-[9px] font-black text-muted-foreground/80 uppercase tracking-widest">
                   Ruta Operativa
                 </span>
-                <div className="flex items-center gap-2 font-bold text-slate-700 dark:text-slate-200 truncate">
+                <div className="flex items-center gap-2 font-bold text-foreground truncate">
                   <MapPin className="h-3.5 w-3.5 text-slate-400" />
                   {settlement.ruta}
                 </div>
               </div>
               <div className="flex flex-col gap-1">
-                <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                <span className="text-[9px] font-black text-muted-foreground/80 uppercase tracking-widest">
                   Fecha de Viaje
                 </span>
-                <div className="flex items-center gap-2 font-bold text-slate-700 dark:text-slate-200">
+                <div className="flex items-center gap-2 font-bold text-foreground">
                   <Calendar className="h-3.5 w-3.5 text-slate-400" />
                   {settlement.fecha_viaje}
                 </div>
               </div>
               <div className="flex flex-col gap-1">
-                <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                <span className="text-[9px] font-black text-muted-foreground/80 uppercase tracking-widest">
                   Distancia Recorrida
                 </span>
-                <div className="font-bold text-slate-700 dark:text-slate-200 ml-5">
+                <div className="font-bold text-foreground ml-5">
                   {(settlement.kms_recorridos || 0).toLocaleString()} km
                 </div>
               </div>
@@ -166,7 +166,7 @@ export function SettlementReceiptModal({
                   className="flex justify-between text-sm items-center group"
                 >
                   <div className="flex flex-col">
-                    <span className="font-bold text-slate-700 dark:text-slate-300 uppercase text-xs">
+                    <span className="font-bold text-foreground uppercase text-xs">
                       {concepto.descripcion}
                     </span>
                     {concepto.referencia && (
@@ -181,7 +181,7 @@ export function SettlementReceiptModal({
                 </div>
               ))}
               <div className="flex justify-between font-black pt-4 border-t border-slate-100 dark:border-white/5 mt-4">
-                <span className="text-slate-500 uppercase text-[10px] tracking-widest">
+                <span className="text-muted-foreground uppercase text-[10px] tracking-widest">
                   SUBTOTAL INGRESOS
                 </span>
                 <span className="font-mono text-emerald-600 dark:text-emerald-400 text-lg">
@@ -210,7 +210,7 @@ export function SettlementReceiptModal({
                         "font-bold uppercase text-xs",
                         concepto.categoria === "combustible"
                           ? "text-rose-600"
-                          : "text-slate-700 dark:text-slate-300",
+                          : "text-foreground",
                       )}
                     >
                       {concepto.descripcion}
@@ -227,7 +227,7 @@ export function SettlementReceiptModal({
                 </div>
               ))}
               <div className="flex justify-between font-black pt-4 border-t border-slate-100 dark:border-white/5 mt-4">
-                <span className="text-slate-500 uppercase text-[10px] tracking-widest">
+                <span className="text-muted-foreground uppercase text-[10px] tracking-widest">
                   SUBTOTAL DEDUCCIONES
                 </span>
                 <span className="font-mono text-rose-600 dark:text-rose-400 text-lg">
@@ -256,7 +256,7 @@ export function SettlementReceiptModal({
           </div>
 
           {/* Footer del recibo */}
-          <div className="text-center text-[10px] text-slate-400 dark:text-slate-600 pt-8 border-t border-dashed border-slate-200 dark:border-white/10 space-y-2">
+          <div className="text-center text-[10px] text-muted-foreground/60 pt-8 border-t border-dashed border-border space-y-2">
             <p className="font-medium">
               Este documento es un comprobante interno de liquidación. La
               validez legal reside en la factura CFDI correspondiente.
@@ -271,14 +271,14 @@ export function SettlementReceiptModal({
         <div className="flex flex-col sm:flex-row justify-end gap-3 p-2">
           <Button
             variant="outline"
-            className="gap-2 rounded-xl text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/10 font-bold text-xs uppercase tracking-widest h-11"
+            className="gap-2 rounded-xl text-muted-foreground border-border font-bold text-xs uppercase tracking-widest h-11"
           >
             <Printer className="h-4 w-4" />
             Imprimir
           </Button>
           <Button
             variant="outline"
-            className="gap-2 rounded-xl text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/10 font-bold text-xs uppercase tracking-widest h-11"
+            className="gap-2 rounded-xl text-muted-foreground border-border font-bold text-xs uppercase tracking-widest h-11"
           >
             <Download className="h-4 w-4" />
             PDF

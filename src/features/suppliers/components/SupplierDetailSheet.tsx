@@ -37,7 +37,7 @@ export function SupplierDetailSheet({
               <p className="text-xs text-muted-foreground uppercase tracking-wide">
                 Razón Social
               </p>
-              <h2 className="text-lg font-bold text-slate-800">
+              <h2 className="text-lg font-bold text-foreground">
                 {supplier.razon_social}
               </h2>
             </div>
@@ -49,13 +49,13 @@ export function SupplierDetailSheet({
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="p-3 bg-slate-50 border rounded-lg">
+            <div className="p-3 bg-muted/50 border border-border rounded-lg">
               <p className=" text-muted-foreground uppercase font-bold flex items-center gap-1">
                 <Hash className="h-3 w-3" /> RFC
               </p>
               <p className="font-mono text-sm mt-1">{supplier.rfc}</p>
             </div>
-            <div className="p-3 bg-slate-50 border rounded-lg">
+            <div className="p-3 bg-muted/50 border border-border rounded-lg">
               <p className=" text-muted-foreground uppercase font-bold flex items-center gap-1">
                 <CreditCard className="h-3 w-3" /> Días Crédito
               </p>
@@ -66,12 +66,12 @@ export function SupplierDetailSheet({
           </div>
 
           <div>
-            <h3 className="text-xs font-bold text-slate-600 uppercase tracking-widest border-b pb-2 mb-3">
+            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest border-b pb-2 mb-3">
               Contacto
             </h3>
             <div className="space-y-3">
               <div className="flex items-center gap-3 text-sm">
-                <div className="h-8 w-8 rounded bg-blue-50 flex items-center justify-center text-blue-600">
+                <div className="h-8 w-8 rounded bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
                   <Building2 className="h-4 w-4" />
                 </div>
                 <div>
@@ -84,7 +84,7 @@ export function SupplierDetailSheet({
                 </div>
               </div>
               <div className="flex items-center gap-3 text-sm">
-                <div className="h-8 w-8 rounded bg-green-50 flex items-center justify-center text-green-600">
+                <div className="h-8 w-8 rounded bg-green-50 dark:bg-green-950/30 flex items-center justify-center text-green-600 dark:text-green-400">
                   <Phone className="h-4 w-4" />
                 </div>
                 <div>
@@ -95,7 +95,7 @@ export function SupplierDetailSheet({
                 </div>
               </div>
               <div className="flex items-center gap-3 text-sm">
-                <div className="h-8 w-8 rounded bg-amber-50 flex items-center justify-center text-amber-600">
+                <div className="h-8 w-8 rounded bg-amber-50 dark:bg-amber-950/30 flex items-center justify-center text-amber-600 dark:text-amber-400">
                   <Mail className="h-4 w-4" />
                 </div>
                 <div>
@@ -108,7 +108,7 @@ export function SupplierDetailSheet({
                 </div>
               </div>
               <div className="flex items-center gap-3 text-sm">
-                <div className="h-8 w-8 rounded bg-purple-50 flex items-center justify-center text-purple-600">
+                <div className="h-8 w-8 rounded bg-purple-50 dark:bg-purple-950/30 flex items-center justify-center text-purple-600 dark:text-purple-400">
                   <MapPin className="h-4 w-4" />
                 </div>
                 <div>
@@ -122,10 +122,10 @@ export function SupplierDetailSheet({
           </div>
 
           <div>
-            <h3 className="text-xs font-bold text-slate-600 uppercase tracking-widest border-b pb-2 mb-3">
+            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest border-b pb-2 mb-3">
               Datos Bancarios
             </h3>
-            <div className="bg-slate-50 p-4 rounded-lg border space-y-3">
+            <div className="bg-muted/50 p-4 rounded-lg border border-border space-y-3">
               <div>
                 <p className="text-xs text-muted-foreground">Banco</p>
                 <p className="font-medium">{supplier.banco || "—"}</p>

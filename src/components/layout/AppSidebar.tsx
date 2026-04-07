@@ -17,6 +17,7 @@ import {
   PanelLeft,
   Calculator,
   Landmark,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -35,7 +36,6 @@ interface MenuItem {
   children?: { title: string; path: string }[];
 }
 
-// 🚀 RUTAS ACTUALIZADAS PARA HACER MATCH CON APP.TSX
 const menuItems: MenuItem[] = [
   {
     title: "Dashboard",
@@ -135,9 +135,11 @@ const menuItems: MenuItem[] = [
 interface AppSidebarProps {
   collapsed: boolean;
   onToggle: () => void;
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
 }
 
-export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
+export function AppSidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: AppSidebarProps) {
   const location = useLocation();
   const [expandedItems, setExpandedItems] = useState<string[]>([
     "Clientes",
@@ -169,7 +171,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
       "h-5 w-5 shrink-0 transition-all duration-300",
       active
         ? "text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.6)]"
-        : "text-slate-500 dark:text-white/50 group-hover:text-slate-900 dark:group-hover:text-white",
+        : "text-muted-foreground group-hover:text-foreground",
     );
 
     const svgFilters = active
@@ -213,26 +215,43 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
     <aside
       className={cn(
         "fixed left-0 top-0 z-50 h-screen backdrop-blur-2xl transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] flex flex-col overflow-hidden",
-        "bg-white/95 dark:bg-brand-navy/95 border-r border-slate-200 dark:border-white/10 shadow-sm dark:shadow-[20px_0_40px_rgba(0,0,0,0.2)]",
-        collapsed ? "w-16" : "w-64",
+        "bg-card/95 dark:bg-brand-navy/95 border-r border-border shadow-sm dark:shadow-[20px_0_40px_rgba(0,0,0,0.2)]",
+        // Mobile: slide in/out as overlay
+        "md:translate-x-0",
+        mobileOpen ? "translate-x-0 w-64" : "-translate-x-full md:translate-x-0",
+        // Desktop: collapse
+        collapsed ? "md:w-16" : "md:w-64",
       )}
     >
-      <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-slate-100/50 dark:from-white/5 to-transparent pointer-events-none" />
+      <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-muted/50 to-transparent pointer-events-none" />
 
-      <div className="flex h-16 items-center justify-center border-b border-slate-200 dark:border-white/5 relative z-10 shrink-0 bg-slate-50/50 dark:bg-black/10">
+      {/* Logo + Mobile close */}
+      <div className="flex h-16 items-center justify-between border-b border-border relative z-10 shrink-0 bg-muted/30 px-3">
         <AnimatedLogo
-          collapsed={collapsed}
-          className={collapsed ? "h-8 w-8" : "h-10"}
+          collapsed={collapsed && !mobileOpen}
+          className={collapsed && !mobileOpen ? "h-8 w-8" : "h-10"}
         />
+        {/* Mobile close button */}
+        {mobileOpen && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onMobileClose}
+            className="md:hidden h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        )}
       </div>
 
-      <div className="p-3 border-b border-slate-200 dark:border-white/5 shrink-0 bg-white/50 dark:bg-black/5">
+      {/* Collapse toggle - hidden on mobile (uses hamburger in header instead) */}
+      <div className="p-3 border-b border-border shrink-0 bg-card/50 hidden md:block">
         <Button
           variant="ghost"
           onClick={onToggle}
           className={cn(
-            "h-9 text-[11px] font-bold uppercase tracking-widest transition-all w-full glass-card border",
-            "text-slate-500 dark:text-white/50 hover:bg-slate-100 dark:hover:bg-white/10 hover:text-slate-800 dark:hover:text-white border-transparent hover:border-slate-200 dark:hover:border-white/10",
+            "h-9 text-[11px] font-bold uppercase tracking-widest transition-all w-full border",
+            "text-muted-foreground hover:bg-muted hover:text-foreground border-transparent hover:border-border",
             collapsed ? "justify-center px-0" : "justify-start px-3",
           )}
         >
@@ -250,41 +269,42 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
         <nav className="p-3 space-y-1 relative z-10">
           {menuItems.map((item) => {
             const active = isActive(item.path, item.children);
+            const showLabels = !collapsed || mobileOpen;
             return (
               <div key={item.title} className="mb-1">
                 {item.children ? (
                   <>
                     <button
-                      onClick={() => !collapsed && toggleExpand(item.title)}
+                      onClick={() => showLabels && toggleExpand(item.title)}
                       className={cn(
                         "flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-[12px] font-medium transition-all duration-300 group outline-none",
                         active
                           ? "bg-brand-red text-white shadow-[0_4px_15px_rgba(190,8,17,0.4)]"
-                          : "text-slate-600 dark:text-white/60 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white",
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground",
                       )}
                     >
                       <div className="flex items-center gap-3">
                         <RenderIcon item={item} active={active} />
-                        {!collapsed && (
+                        {showLabels && (
                           <span className="tracking-wide">{item.title}</span>
                         )}
                       </div>
 
-                      {!collapsed && (
+                      {showLabels && (
                         <ChevronDown
                           className={cn(
                             "h-3.5 w-3.5 transition-transform duration-300",
                             expandedItems.includes(item.title)
-                              ? "rotate-180 text-slate-900 dark:text-white"
-                              : "text-slate-400 dark:text-white/40",
+                              ? "rotate-180 text-foreground"
+                              : "text-muted-foreground",
                             active && "text-white",
                           )}
                         />
                       )}
                     </button>
 
-                    {!collapsed && expandedItems.includes(item.title) && (
-                      <div className="mt-1 mb-2 ml-5 border-l border-slate-200 dark:border-white/10 pl-3 py-1 space-y-1 animate-in slide-in-from-top-2 fade-in duration-300">
+                    {showLabels && expandedItems.includes(item.title) && (
+                      <div className="mt-1 mb-2 ml-5 border-l border-border pl-3 py-1 space-y-1 animate-in slide-in-from-top-2 fade-in duration-300">
                         {item.children.map((child) => (
                           <NavLink
                             key={child.path}
@@ -294,7 +314,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
                                 "block rounded-lg px-3 py-2 text-[11px] transition-all duration-300 relative overflow-hidden",
                                 isChildActive
                                   ? "text-brand-red font-black uppercase tracking-widest bg-brand-red/5 dark:bg-brand-red/10 border border-brand-red/10 dark:border-brand-red/20 shadow-inner"
-                                  : "text-slate-500 dark:text-white/40 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 font-medium",
+                                  : "text-muted-foreground hover:text-foreground hover:bg-muted font-medium",
                               )
                             }
                           >
@@ -312,14 +332,14 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
                         "flex items-center gap-3 rounded-xl px-3 py-2.5 text-[12px] font-medium transition-all duration-300 group",
                         isItemActive
                           ? "bg-brand-red text-white shadow-[0_4px_15px_rgba(190,8,17,0.4)]"
-                          : "text-slate-600 dark:text-white/60 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white",
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground",
                       )
                     }
                   >
                     {({ isActive: isItemActive }) => (
                       <>
                         <RenderIcon item={item} active={isItemActive} />
-                        {!collapsed && (
+                        {showLabels && (
                           <span className="tracking-wide">{item.title}</span>
                         )}
                       </>

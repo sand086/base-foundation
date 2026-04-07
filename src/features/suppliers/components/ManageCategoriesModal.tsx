@@ -91,12 +91,12 @@ export function ManageCategoriesModal({
               ) : (
                 <>
                   <div className="flex flex-col">
-                    <span className="font-medium text-sm text-slate-800">
+                    <span className="font-medium text-sm text-foreground">
                       {cat.nombre}
                     </span>
                     <Badge
                       variant="outline"
-                      className="w-fit text-[9px] mt-1 bg-white"
+                      className="w-fit text-[9px] mt-1 bg-card"
                     >
                       {cat.tipo.toUpperCase()}
                     </Badge>

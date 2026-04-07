@@ -49,7 +49,7 @@ const FormLabelBrand = ({
 }) => (
   <Label
     className={cn(
-      "text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mb-1.5 block",
+      "text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mb-1.5 block",
       className,
     )}
   >
@@ -222,9 +222,9 @@ export function EditFuelModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* CAPA 1 (Cascarón Tahoe) */}
-      <DialogContent className="p-0 border-none sm:max-w-[650px] bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <DialogContent className="p-0 border-none sm:max-w-[650px] bg-card/90 dark:bg-card/95 backdrop-blur-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-300">
         {/* CAPA 2 (Header Tahoe - Icon Plate) */}
-        <DialogHeader className="p-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 flex flex-row items-center gap-5 space-y-0">
+        <DialogHeader className="p-6 bg-card dark:bg-card border-b border-border flex flex-row items-center gap-5 space-y-0">
           <div className="w-14 h-14 rounded-2xl bg-brand-green/10 text-brand-green flex items-center justify-center shadow-inner shrink-0">
             <Edit size={28} />
           </div>
@@ -240,7 +240,7 @@ export function EditFuelModal({
 
         <form onSubmit={handleSubmit}>
           {/* CAPA 3 (Cuerpo/Formulario Hundido) */}
-          <div className="p-6 space-y-6 bg-slate-50/50 dark:bg-transparent max-h-[65vh] overflow-y-auto custom-scrollbar">
+          <div className="p-6 space-y-6 bg-muted/30 dark:bg-transparent max-h-[65vh] overflow-y-auto custom-scrollbar">
             {/* Fila: Fecha y Tipo */}
             <div className="grid grid-cols-2 gap-6">
               <div className="space-y-1.5">
@@ -262,7 +262,7 @@ export function EditFuelModal({
                     setFormData((p) => (p ? { ...p, tipo_combustible: v } : p))
                   }
                 >
-                  <SelectTrigger className="h-11 bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 font-bold">
+                  <SelectTrigger className="h-11 bg-card border-border font-bold">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -282,7 +282,7 @@ export function EditFuelModal({
                 {selectedUnit && (
                   <p className="text-[9px] font-black uppercase text-slate-400 text-right mt-1">
                     Capacidad Tank:{" "}
-                    <span className="text-slate-900 dark:text-slate-200">
+                    <span className="text-foreground">
                       {tankCapacity}L
                     </span>
                   </p>
@@ -300,7 +300,7 @@ export function EditFuelModal({
                     setFormData((p) => (p ? { ...p, unit_id: v } : p))
                   }
                 >
-                  <SelectTrigger className="h-11 bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 font-mono font-bold">
+                  <SelectTrigger className="h-11 bg-card border-border font-mono font-bold">
                     <SelectValue placeholder="Seleccionar..." />
                   </SelectTrigger>
                   <SelectContent>
@@ -325,7 +325,7 @@ export function EditFuelModal({
                     setFormData((p) => (p ? { ...p, operator_id: v } : p))
                   }
                 >
-                  <SelectTrigger className="h-11 bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 font-black uppercase text-[11px]">
+                  <SelectTrigger className="h-11 bg-card border-border font-black uppercase text-[11px]">
                     <SelectValue placeholder="Asignar..." />
                   </SelectTrigger>
                   <SelectContent>
@@ -439,7 +439,7 @@ export function EditFuelModal({
             </div>
 
             {/* Gestión de Evidencia */}
-            <div className="p-5 bg-white dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-white/5 shadow-inner">
+            <div className="p-5 bg-card rounded-2xl border border-border shadow-inner">
               <FormLabelBrand className="mb-4 flex items-center gap-2">
                 <Camera size={14} className="text-brand-green" /> Digitalización
                 de Asset / Ticket
@@ -459,7 +459,7 @@ export function EditFuelModal({
           </div>
 
           {/* CAPA 4 (Footer / Control Bar Crystal) */}
-          <div className="p-4 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-t border-slate-200 dark:border-white/10 flex justify-end gap-3 sticky bottom-0">
+          <div className="p-4 bg-card/80 dark:bg-card/80 backdrop-blur-md border-t border-border flex justify-end gap-3 sticky bottom-0">
             <Button
               type="button"
               variant="outline"

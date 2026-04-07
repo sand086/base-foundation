@@ -15,10 +15,8 @@ interface ImageUploadProps {
   disabled?: boolean;
 }
 
-//  HELPER AGREGADO: Asegura que la imagen siempre encuentre el servidor backend
 const getFullImageUrl = (path?: string) => {
   if (!path) return undefined;
-  // Si ya es un blob local (vista previa) o una URL completa, la dejamos intacta
   if (
     path.startsWith("blob:") ||
     path.startsWith("http") ||
@@ -26,11 +24,8 @@ const getFullImageUrl = (path?: string) => {
   ) {
     return path;
   }
-
-  // Tomamos la URL del backend desde tus variables de entorno
   const apiBase = import.meta.env.VITE_API_BASE_URL || "/api";
-  const serverBase = apiBase.replace(/\/api$/, ""); // Le quitamos el /api del final
-
+  const serverBase = apiBase.replace(/\/api$/, "");
   return `${serverBase}${path}`;
 };
 
@@ -70,10 +65,9 @@ export function ImageUpload({
       return;
     }
 
-    // NUEVA LÓGICA RÁPIDA (Sin Base64)
     const objectUrl = URL.createObjectURL(file);
     setPreview(objectUrl);
-    onChange(file); // Pasamos el archivo físico
+    onChange(file);
     toast.success("Imagen lista para subir");
   };
 
@@ -120,19 +114,19 @@ export function ImageUpload({
         onDragLeave={handleDragLeave}
         onClick={() => !disabled && inputRef.current?.click()}
       >
-        <Avatar className="h-28 w-28 border-4 border-white shadow-xl">
+        <Avatar className="h-28 w-28 border-4 border-card shadow-xl">
           <AvatarImage
-            src={getFullImageUrl(preview?.trim()) || AvatarDefault} //  HELPER APLICADO AQUÍ
+            src={getFullImageUrl(preview?.trim()) || AvatarDefault}
             alt="Profile Preview"
             className="object-cover"
           />
-          <AvatarFallback className="text-2xl bg-slate-100 text-slate-600 font-bold uppercase">
+          <AvatarFallback className="text-2xl bg-muted text-muted-foreground font-bold uppercase">
             {fallback}
           </AvatarFallback>
         </Avatar>
 
         {!disabled && (
-          <div className="absolute -bottom-1 -right-1 bg-primary text-white h-9 w-9 rounded-full shadow-lg flex items-center justify-center border-2 border-white hover:scale-110 transition-transform">
+          <div className="absolute -bottom-1 -right-1 bg-primary text-primary-foreground h-9 w-9 rounded-full shadow-lg flex items-center justify-center border-2 border-card hover:scale-110 transition-transform">
             <Camera className="h-5 w-5" />
           </div>
         )}

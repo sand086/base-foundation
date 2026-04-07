@@ -131,9 +131,9 @@ export function MaintenanceTireModal({
         if (!isOpen && !isSubmitting) onOpenChange(false);
       }}
     >
-      <DialogContent className="w-[95vw] sm:max-w-lg flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
+      <DialogContent className="w-[95vw] sm:max-w-lg flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-card/90 dark:bg-card/95 backdrop-blur-xl rounded-2xl">
         {/*  CAPA 2: CABECERA TAHOE (Blanco en Light, Navy oscuro en Dark) */}
-        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
+        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-card dark:bg-card border-b border-border shrink-0 relative overflow-hidden z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center gap-4 sm:gap-5">
             <div
@@ -151,10 +151,10 @@ export function MaintenanceTireModal({
               )}
             </div>
             <div className="flex flex-col gap-1 text-left min-w-0">
-              <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white heading-crisp leading-none">
+              <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-foreground heading-crisp leading-none">
                 Maintenance
               </DialogTitle>
-              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-1 truncate tracking-normal normal-case">
+              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mt-1 truncate tracking-normal normal-case">
                 <span className="font-mono font-bold text-amber-600 dark:text-amber-400 uppercase">
                   {tire.codigo_interno}
                 </span>{" "}
@@ -170,12 +170,12 @@ export function MaintenanceTireModal({
             onSubmit={form.handleSubmit(onFormSubmit)}
             className="flex-1 min-h-0 overflow-hidden flex flex-col"
           >
-            <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-slate-50/50 dark:bg-transparent custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-muted/30 dark:bg-transparent custom-scrollbar">
               <div className="space-y-6">
                 {/* 📍 Resumen Estado Actual */}
-                <div className="p-5 bg-white dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-white/10 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="p-5 bg-card rounded-2xl border border-border shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1 flex items-center gap-1.5">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground mb-1 flex items-center gap-1.5">
                       Estado Actual
                     </p>
                     <p className="text-sm font-black text-brand-navy dark:text-white uppercase tracking-tight mt-1">
@@ -183,7 +183,7 @@ export function MaintenanceTireModal({
                     </p>
                   </div>
                   <div>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1 flex items-center gap-1.5">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground mb-1 flex items-center gap-1.5">
                       Ubicación
                     </p>
                     <p className="text-sm font-black text-brand-navy dark:text-white uppercase tracking-tight mt-1 flex items-center gap-1.5">
@@ -218,11 +218,11 @@ export function MaintenanceTireModal({
                           disabled={isSubmitting}
                         >
                           <FormControl>
-                            <SelectTrigger className="h-11 font-black uppercase text-xs shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 text-brand-navy dark:text-slate-100">
+                            <SelectTrigger className="h-11 font-black uppercase text-xs shadow-sm bg-card border-border text-brand-navy dark:text-slate-100">
                               <SelectValue placeholder="Seleccionar acción..." />
                             </SelectTrigger>
                           </FormControl>
-                          <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-slate-200 dark:border-white/10">
+                          <SelectContent className="bg-card/90 dark:bg-card/90 backdrop-blur-xl border-border">
                             <SelectItem
                               value="reparacion"
                               className="font-bold text-xs uppercase text-amber-600 dark:text-amber-500"
@@ -278,7 +278,7 @@ export function MaintenanceTireModal({
                               step="0.01"
                               placeholder="0.00"
                               {...field}
-                              className="h-11 pl-9 font-mono font-bold uppercase bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                              className="h-11 pl-9 font-mono font-bold uppercase bg-card border-border shadow-sm"
                               disabled={isSubmitting}
                             />
                           </div>
@@ -299,7 +299,7 @@ export function MaintenanceTireModal({
                           <Textarea
                             placeholder="Detalles del daño, proveedor, número de factura..."
                             {...field}
-                            className="min-h-[80px] resize-none bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm font-medium text-sm"
+                            className="min-h-[80px] resize-none bg-card border-border shadow-sm font-medium text-sm"
                             disabled={isSubmitting}
                           />
                         </FormControl>
@@ -332,7 +332,7 @@ export function MaintenanceTireModal({
             </div>
 
             {/*  CAPA 4: FOOTER TAHOE (Botón semántico) */}
-            <DialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
+            <DialogFooter className="p-6 sm:p-8 bg-card/80 dark:bg-card/80 backdrop-blur-xl border-t border-border shrink-0 z-10">
               <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
                 <Button
                   type="button"

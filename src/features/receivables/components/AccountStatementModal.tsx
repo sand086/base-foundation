@@ -132,9 +132,9 @@ export function AccountStatementModal({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-card">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+          <DialogTitle className="flex items-center gap-2 text-foreground">
             <Receipt className="h-5 w-5" />
             Estado de Cuenta
           </DialogTitle>
@@ -147,11 +147,11 @@ export function AccountStatementModal({
         <div className="flex items-center gap-4 p-4 bg-muted/50 rounded-lg">
           <div className="flex-1">
             <Label className="text-xs uppercase tracking-wider text-muted-foreground mb-2 block">
-              Filtrar por Client
+              Filtrar por Cliente
             </Label>
             <Select value={selectedClient} onValueChange={setSelectedClient}>
               <SelectTrigger>
-                <SelectValue placeholder="Todos los clients" />
+                <SelectValue placeholder="Todos los clientes" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos los Clientes</SelectItem>
@@ -165,14 +165,14 @@ export function AccountStatementModal({
           </div>
           <div className="text-right">
             <p className="text-xs text-muted-foreground">Fecha de Corte</p>
-            <p className="font-medium">{currentDate}</p>
+            <p className="font-medium text-foreground">{currentDate}</p>
           </div>
         </div>
 
         {/* Statement Content */}
-        <div className="bg-white border-2 border-dashed border-muted rounded-lg p-6 space-y-6">
+        <div className="bg-card border-2 border-dashed border-border rounded-lg p-6 space-y-6">
           {/* Header */}
-          <div className="flex justify-between items-start border-b pb-4">
+          <div className="flex justify-between items-start border-b border-border pb-4">
             <div>
               <h2 className="text-xl font-bold text-primary flex items-center gap-2">
                 <Building2 className="h-5 w-5" />
@@ -182,16 +182,16 @@ export function AccountStatementModal({
                 RFC: {companyBankData.rfc}
               </p>
             </div>
-            <Badge className="bg-primary text-white">ESTADO DE CUENTA</Badge>
+            <Badge className="bg-primary text-primary-foreground">ESTADO DE CUENTA</Badge>
           </div>
 
           {/* Client Info (if filtered) */}
           {selectedClient !== "all" && (
             <div className="p-3 bg-muted/30 rounded-lg">
               <p className="text-xs text-muted-foreground uppercase tracking-wider">
-                Client
+                Cliente
               </p>
-              <p className="font-semibold text-lg">{selectedClient}</p>
+              <p className="font-semibold text-lg text-foreground">{selectedClient}</p>
             </div>
           )}
 
@@ -207,11 +207,11 @@ export function AccountStatementModal({
                 <p>No hay facturas pendientes de cobro</p>
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-2 overflow-x-auto">
                 {/* Table Header */}
-                <div className="grid grid-cols-12 gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider py-2 border-b">
+                <div className="grid grid-cols-12 gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider py-2 border-b border-border min-w-[600px]">
                   <div className="col-span-2">Folio</div>
-                  <div className="col-span-3">Client</div>
+                  <div className="col-span-3">Cliente</div>
                   <div className="col-span-2 text-right">Monto</div>
                   <div className="col-span-2 text-right">Saldo</div>
                   <div className="col-span-2">Vencimiento</div>
@@ -229,17 +229,17 @@ export function AccountStatementModal({
                   return (
                     <div
                       key={invoice.id}
-                      className={`grid grid-cols-12 gap-2 text-sm py-2 border-b border-muted/50 ${
-                        isOverdue ? "bg-red-50" : ""
+                      className={`grid grid-cols-12 gap-2 text-sm py-2 border-b border-border/50 min-w-[600px] ${
+                        isOverdue ? "bg-red-50 dark:bg-red-950/20" : ""
                       }`}
                     >
-                      <div className="col-span-2 font-mono font-medium">
+                      <div className="col-span-2 font-mono font-medium text-foreground">
                         {invoice.folio_interno}
                       </div>
-                      <div className="col-span-3 truncate">
+                      <div className="col-span-3 truncate text-foreground">
                         {invoice.cliente}
                       </div>
-                      <div className="col-span-2 text-right font-mono">
+                      <div className="col-span-2 text-right font-mono text-foreground">
                         {formatCurrency(invoice.monto_total)}
                       </div>
                       <div
@@ -251,14 +251,14 @@ export function AccountStatementModal({
                       >
                         {formatCurrency(invoice.saldo_pendiente)}
                       </div>
-                      <div className="col-span-2 flex flex-col">
+                      <div className="col-span-2 flex flex-col text-foreground">
                         <span>
                           {new Date(
                             invoice.fecha_vencimiento,
                           ).toLocaleDateString("es-MX")}
                         </span>
                         {isOverdue && (
-                          <span className=" text-status-danger font-medium">
+                          <span className="text-status-danger font-medium">
                             +{daysOverdue}d vencido
                           </span>
                         )}
@@ -280,22 +280,22 @@ export function AccountStatementModal({
           <Separator />
 
           {/* Totals */}
-          <div className="grid grid-cols-3 gap-4">
-            <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
-              <div className="flex items-center gap-2 text-sm text-emerald-700 mb-1">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="p-4 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/50 rounded-lg">
+              <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400 mb-1">
                 <CheckCircle2 className="h-4 w-4" />
                 Por Vencer (Corriente)
               </div>
-              <p className="text-xl font-bold text-emerald-800 font-mono">
+              <p className="text-xl font-bold text-emerald-800 dark:text-emerald-300 font-mono">
                 {formatCurrency(totals.corriente)}
               </p>
             </div>
-            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-              <div className="flex items-center gap-2 text-sm text-red-700 mb-1">
+            <div className="p-4 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/50 rounded-lg">
+              <div className="flex items-center gap-2 text-sm text-red-700 dark:text-red-400 mb-1">
                 <AlertCircle className="h-4 w-4" />
                 Vencido
               </div>
-              <p className="text-xl font-bold text-red-800 font-mono">
+              <p className="text-xl font-bold text-red-800 dark:text-red-300 font-mono">
                 {formatCurrency(totals.vencido)}
               </p>
             </div>
@@ -319,24 +319,24 @@ export function AccountStatementModal({
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {companyBankData.cuentas.map((cuenta, idx) => (
-                <div key={idx} className="p-4 bg-slate-50 border rounded-lg">
+                <div key={idx} className="p-4 bg-muted/50 border border-border rounded-lg">
                   <p className="font-semibold text-primary mb-2">
                     {cuenta.banco}
                   </p>
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">CLABE:</span>
-                      <span className="font-mono font-medium">
+                      <span className="font-mono font-medium text-foreground">
                         {cuenta.clabe}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Cuenta:</span>
-                      <span className="font-mono">{cuenta.cuenta}</span>
+                      <span className="font-mono text-foreground">{cuenta.cuenta}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Titular:</span>
-                      <span className="text-xs truncate max-w-[200px]">
+                      <span className="text-xs truncate max-w-[200px] text-foreground">
                         {cuenta.titular}
                       </span>
                     </div>
@@ -347,7 +347,7 @@ export function AccountStatementModal({
           </div>
 
           {/* Footer */}
-          <div className="text-center text-xs text-muted-foreground pt-4 border-t border-dashed">
+          <div className="text-center text-xs text-muted-foreground pt-4 border-t border-dashed border-border">
             <p>Documento generado el {currentDate}</p>
             <p className="mt-1">
               Transportes Rápidos 3T © 2025 - Sistema de Gestión
@@ -356,7 +356,7 @@ export function AccountStatementModal({
         </div>
 
         {/* Actions */}
-        <div className="flex justify-end gap-3 pt-4">
+        <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4">
           <Button variant="outline" className="gap-2" onClick={handlePrint}>
             <Printer className="h-4 w-4" />
             Imprimir

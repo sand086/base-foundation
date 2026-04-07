@@ -178,9 +178,9 @@ export function RegisterPaymentModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[480px]">
+      <DialogContent className="sm:max-w-[480px] bg-card">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-brand-dark">
+          <DialogTitle className="flex items-center gap-2 text-foreground">
             <CreditCard className="h-5 w-5" />
             Registrar Pago
           </DialogTitle>
@@ -188,29 +188,29 @@ export function RegisterPaymentModal({
 
         <div className="space-y-4 pt-4">
           {/* Resumen */}
-          <div className="p-4 bg-slate-50 rounded-lg border">
+          <div className="p-4 bg-muted/50 rounded-lg border border-border">
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <p className="text-muted-foreground text-xs">Factura</p>
-                <p className="font-medium">
+                <p className="font-medium text-foreground">
                   {invoice.folio_interno || invoiceId}
                 </p>
               </div>
               <div>
                 <p className="text-muted-foreground text-xs">Proveedor</p>
-                <p className="font-medium truncate" title={supplierName}>
+                <p className="font-medium truncate text-foreground" title={supplierName}>
                   {supplierName}
                 </p>
               </div>
               <div>
                 <p className="text-muted-foreground text-xs">Monto Total</p>
-                <p className="font-medium">
+                <p className="font-medium text-foreground">
                   ${montoTotal.toLocaleString("es-MX")}
                 </p>
               </div>
               <div>
                 <p className="text-muted-foreground text-xs">Saldo Pendiente</p>
-                <p className="font-bold text-amber-700">
+                <p className="font-bold text-amber-700 dark:text-amber-400">
                   ${saldoPendiente.toLocaleString("es-MX")}
                 </p>
               </div>
@@ -256,7 +256,7 @@ export function RegisterPaymentModal({
                 onClick={() =>
                   setFormData((p) => ({ ...p, monto: saldoPendiente }))
                 }
-                className="text-brand-navy hover:underline"
+                className="text-primary hover:underline"
               >
                 Pagar saldo completo
               </button>
@@ -281,7 +281,7 @@ export function RegisterPaymentModal({
               <SelectTrigger className="h-10">
                 <SelectValue placeholder="Seleccionar cuenta" />
               </SelectTrigger>
-              <SelectContent className="bg-card rounded-xl border-slate-200 shadow-xl">
+              <SelectContent>
                 {bankAccounts.map((acc) => (
                   <SelectItem
                     key={acc.id}
@@ -292,10 +292,10 @@ export function RegisterPaymentModal({
                       <span className="text-lg leading-none">
                         {acc.banco_logo || "🏦"}
                       </span>
-                      <span className="font-bold text-slate-700">
+                      <span className="font-bold text-foreground">
                         {acc.alias}
                       </span>
-                      <span className="text-[10px] text-slate-600 font-mono mt-0.5 ml-1">
+                      <span className="text-[10px] text-muted-foreground font-mono mt-0.5 ml-1">
                         ••{acc.numero_cuenta.slice(-4)}
                       </span>
                     </div>
@@ -323,20 +323,20 @@ export function RegisterPaymentModal({
           {/* Preview saldo */}
           {formData.monto > 0 && (
             <div
-              className={`p-3 rounded-lg border ${willBeFullyPaid ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"}`}
+              className={`p-3 rounded-lg border ${willBeFullyPaid ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/50" : "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/50"}`}
             >
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">
                   Saldo después del pago:
                 </span>
                 <span
-                  className={`font-bold ${willBeFullyPaid ? "text-emerald-700" : "text-amber-700"}`}
+                  className={`font-bold ${willBeFullyPaid ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"}`}
                 >
                   ${remainingAfterPayment.toLocaleString("es-MX")}
                 </span>
               </div>
               <p
-                className={`text-xs mt-1 ${willBeFullyPaid ? "text-emerald-600" : "text-amber-600"}`}
+                className={`text-xs mt-1 ${willBeFullyPaid ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}
               >
                 {willBeFullyPaid
                   ? "✓ La factura quedará completamente pagada"
@@ -347,14 +347,14 @@ export function RegisterPaymentModal({
 
           {/* Error */}
           {error && (
-            <div className="flex items-center gap-2 text-status-danger text-sm p-2 bg-red-50 rounded">
+            <div className="flex items-center gap-2 text-status-danger text-sm p-2 bg-red-50 dark:bg-red-950/20 rounded border border-red-200 dark:border-red-800/50">
               <AlertCircle className="h-4 w-4" />
               {error}
             </div>
           )}
         </div>
 
-        <DialogFooter className="pt-4 border-t">
+        <DialogFooter className="pt-4 border-t border-border">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>

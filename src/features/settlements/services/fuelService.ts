@@ -1,57 +1,33 @@
-import axiosClient from "@/api/axiosClient";
+import { FleetFuelService } from "@/api/generated";
 
 export const fuelService = {
-  // Obtener historial real
   getAll: async () => {
-    const { data } = await axiosClient.get("/fuel/fuel-logs");
+    const data = await FleetFuelService.getFuelLogsApiFleetFuelLogsGet();
     return data;
   },
 
-  // Crear registro con Imagen (FormData)
   create: async (formData: any) => {
-    const dataToSend = new FormData();
-
-    // Mapeamos el objeto plano a FormData de forma SEGURA
-    Object.keys(formData).forEach((key) => {
-      const value = formData[key];
-
-      // Manejo de la imagen
-      if (key === "evidencia" && value) {
-        dataToSend.append("file", value);
-      }
-      // Solo enviamos campos que tengan un valor real (evita mandar "null" o "")
-      else if (value !== null && value !== undefined && value !== "") {
-        dataToSend.append(key, value);
-      }
-    });
-
-    const { data } = await axiosClient.post("/fuel/fuel-logs", dataToSend, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
+    // The generated service handles multipart/form-data
+    const data = await FleetFuelService.createFuelLogApiFleetFuelLogsPost(formData);
     return data;
   },
 
-  update: async (id: number | string, data: any) => {
-    const { data: response } = await axiosClient.put(
-      `/fuel/fuel-logs/${id}`,
-      data,
-    );
-    return response;
+  update: async (id: number | string, payload: any) => {
+    const data = await FleetFuelService.updateFuelLogApiFleetFuelLogsLogIdPut(Number(id), payload);
+    return data;
   },
 
   uploadDocument: async (logId: number, docType: string, file: File) => {
-    const formData = new FormData();
-    formData.append("file", file);
-    const { data } = await axiosClient.post(
-      `/fuel/fuel-logs/${logId}/documents/${docType}`,
-      formData,
-      { headers: { "Content-Type": "multipart/form-data" } },
+    const data = await FleetFuelService.uploadFuelDocumentApiFleetFuelLogsLogIdDocumentsDocTypePost(
+      Number(logId),
+      docType,
+      { file },
     );
     return data;
   },
 
   delete: async (id: string | number) => {
-    const { data } = await axiosClient.delete(`/fuel/fuel-logs/${id}`);
+    const data = await FleetFuelService.deleteFuelLogApiFleetFuelLogsLogIdDelete(Number(id));
     return data;
   },
 };

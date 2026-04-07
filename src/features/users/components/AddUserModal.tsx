@@ -60,7 +60,6 @@ export function AddUserModal({
 }: AddUserModalProps) {
   const { roles } = useRoles();
 
-  // 2. CONFIGURACIÓN DE REACT HOOK FORM (BEST PRACTICE)
   const form = useForm<UserFormData>({
     resolver: zodResolver(userSchema),
     defaultValues: {
@@ -88,33 +87,32 @@ export function AddUserModal({
         onOpenChange(v);
       }}
     >
-      <DialogContent className="sm:max-w-[800px] p-0 overflow-hidden glass-panel border-none shadow-2xl animate-modal-show">
-        {/* HEADER: Navy Premium con Text Shadow para legibilidad */}
-        <DialogHeader className="px-8 py-6 bg-brand-navy/95 backdrop-blur-md shrink-0 relative overflow-hidden border-b border-white/10">
+      <DialogContent className="w-[95vw] sm:max-w-[800px] max-h-[90vh] p-0 overflow-hidden glass-panel border-none shadow-2xl animate-modal-show">
+        {/* HEADER */}
+        <DialogHeader className="px-5 sm:px-8 py-5 sm:py-6 bg-brand-navy/95 backdrop-blur-md shrink-0 relative overflow-hidden border-b border-white/10">
           <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent pointer-events-none" />
-
           <div className="relative z-10 flex items-center gap-4">
             <div className="icon-plate p-2.5 rounded-xl">
               <UserPlus className="h-5 w-5 text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.4)]" />
             </div>
             <div className="flex flex-col text-left">
-              <DialogTitle className="text-2xl font-black heading-crisp text-white text-shadow-premium uppercase tracking-tighter">
+              <DialogTitle className="text-xl sm:text-2xl font-black heading-crisp text-white text-shadow-premium uppercase tracking-tighter">
                 Nuevo Usuario
               </DialogTitle>
-              <span className="text-[10px] font-bold text-brand-secondary uppercase tracking-[0.3em] mt-1">
+              <span className="text-[10px] font-bold text-white/50 uppercase tracking-[0.3em] mt-1">
                 Gestión de Acceso al Sistema
               </span>
             </div>
           </div>
         </DialogHeader>
 
-        {/* FORM BODY: Envuelto en el nuevo componente Form */}
+        {/* FORM BODY */}
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit(handleFormSubmit)}
-            className="p-8 space-y-5 bg-white/40 backdrop-blur-sm"
+            className="p-5 sm:p-8 space-y-5 bg-card/40 dark:bg-card/20 backdrop-blur-sm overflow-y-auto max-h-[calc(90vh-10rem)]"
           >
-            <div className="grid grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
               <FormField
                 control={form.control}
                 name="nombre"
@@ -162,7 +160,7 @@ export function AddUserModal({
                     <Input
                       type="email"
                       placeholder="usuario@rapidos3t.com"
-                      className="h-11 glass-card font-bold text-brand-navy"
+                      className="h-11 glass-card font-bold text-foreground"
                       {...field}
                     />
                   </FormControl>
@@ -171,7 +169,7 @@ export function AddUserModal({
               )}
             />
 
-            <div className="grid grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
               <FormField
                 control={form.control}
                 name="telefono"
@@ -209,7 +207,7 @@ export function AddUserModal({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
               <FormField
                 control={form.control}
                 name="rol"
@@ -221,11 +219,11 @@ export function AddUserModal({
                       defaultValue={field.value}
                     >
                       <FormControl>
-                        <SelectTrigger className="h-11 glass-card font-bold text-slate-700 shadow-sm">
+                        <SelectTrigger className="h-11 glass-card font-bold text-foreground shadow-sm">
                           <SelectValue placeholder="Seleccionar..." />
                         </SelectTrigger>
                       </FormControl>
-                      <SelectContent className="glass-panel border-white/20">
+                      <SelectContent className="glass-panel border-border">
                         {roles.map((rol) => (
                           <SelectItem
                             key={rol.id}
@@ -242,7 +240,6 @@ export function AddUserModal({
                 )}
               />
 
-              {/* AQUÍ ESTÁ EL PASSWORD INPUT DE EDIT REUTILIZADO */}
               <FormField
                 control={form.control}
                 name="password"
@@ -262,13 +259,13 @@ export function AddUserModal({
               />
             </div>
 
-            {/* FOOTER: Barra estilo Safari */}
-            <div className="flex justify-end gap-4 pt-6 border-t border-white/20">
+            {/* FOOTER */}
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 sm:gap-4 pt-6 border-t border-border">
               <Button
                 type="button"
                 variant="ghost"
                 onClick={() => onOpenChange(false)}
-                className="h-11 px-6 text-[11px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 hover:bg-transparent"
+                className="h-11 px-6 text-[11px] font-black uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-transparent"
               >
                 Cancelar
               </Button>

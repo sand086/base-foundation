@@ -93,9 +93,9 @@ export function PaymentModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[520px]">
+      <DialogContent className="sm:max-w-[520px] bg-card">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-brand-dark font-black">
+          <DialogTitle className="flex items-center gap-2 text-foreground font-black">
             <CreditCard className="h-5 w-5 text-brand-green" />
             Registrar Pago a Proveedor
           </DialogTitle>
@@ -145,7 +145,7 @@ export function PaymentModal({
                 Monto a Pagar
               </Label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                   $
                 </span>
                 <Input
@@ -205,11 +205,11 @@ export function PaymentModal({
 
             {/* Saldo Preview */}
             {selectedAccount && (
-              <div className="p-3 bg-slate-50 rounded-xl border border-dashed flex justify-between items-center">
-                <span className="text-[10px] uppercase font-bold text-slate-600">
+              <div className="p-3 bg-muted/50 rounded-xl border border-dashed border-border flex justify-between items-center">
+                <span className="text-[10px] uppercase font-bold text-muted-foreground">
                   Saldo Disponible:
                 </span>
-                <span className="font-mono font-bold text-brand-navy">
+                <span className="font-mono font-bold text-foreground">
                   ${selectedAccount.saldo.toLocaleString()}{" "}
                   {selectedAccount.moneda}
                 </span>
@@ -232,7 +232,7 @@ export function PaymentModal({
           </div>
         </div>
 
-        <DialogFooter className="pt-6 border-t gap-2">
+        <DialogFooter className="pt-6 border-t border-border gap-2">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>

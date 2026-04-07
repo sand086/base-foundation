@@ -78,7 +78,7 @@ export interface Supplier {
   invoices?: any[]; // Aquí puedes importar PayableInvoice si ya lo tienes definido
 
   // AuditMixin
-  record_status: RecordStatus;
+  record_status?: RecordStatus;
   created_at?: string;
   updated_at?: string;
   created_by_id?: number | null;

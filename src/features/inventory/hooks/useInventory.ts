@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import axiosClient from "@/api/axiosClient";
-import { InventoryItem } from "../types";
+import { MaintenanceService } from "@/api/generated";
+import { InventoryItem } from "@/features/inventory/types";
 
 export const useInventory = (skip = 0, limit = 100) => {
   const {
@@ -11,11 +11,8 @@ export const useInventory = (skip = 0, limit = 100) => {
   } = useQuery({
     queryKey: ["inventory", skip, limit],
     queryFn: async () => {
-      // 🚀 Esta ruta coincide con tu backend: @router.get("/inventory")
-      const { data } = await axiosClient.get<InventoryItem[]>(
-        `/inventory?skip=${skip}&limit=${limit}`,
-      );
-      return data;
+      const data = await MaintenanceService.readInventoryApiMaintenanceInventoryGet(skip, limit);
+      return data as InventoryItem[];
     },
     staleTime: 1000 * 60 * 5,
   });

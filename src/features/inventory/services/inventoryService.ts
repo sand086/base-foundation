@@ -1,4 +1,4 @@
-import axiosClient from "@/api/axiosClient";
+import { MaintenanceService } from "@/api/generated";
 import {
   InventoryItem,
   InventoryItemCreate,
@@ -6,31 +6,22 @@ import {
 } from "../types";
 
 export const inventoryService = {
-  // Obtener todo el inventario (hace match con GET /inventory)
   getInventory: async (skip = 0, limit = 100): Promise<InventoryItem[]> => {
-    const { data } = await axiosClient.get(
-      `/inventory?skip=${skip}&limit=${limit}`,
-    );
-    return data;
+    const data = await MaintenanceService.readInventoryApiMaintenanceInventoryGet(skip, limit);
+    return data as InventoryItem[];
   },
 
-  // Crear un nuevo artículo (hace match con POST /inventory)
   createItem: async (item: InventoryItemCreate): Promise<InventoryItem> => {
-    const { data } = await axiosClient.post("/inventory", item);
-    return data;
+    const data = await MaintenanceService.createInventoryItemApiMaintenanceInventoryPost(item as any);
+    return data as InventoryItem;
   },
 
-  // Actualizar un artículo (hace match con PUT /inventory/{item_id})
-  updateItem: async (
-    id: number,
-    item: InventoryItemUpdate,
-  ): Promise<InventoryItem> => {
-    const { data } = await axiosClient.put(`/inventory/${id}`, item);
-    return data;
+  updateItem: async (id: number, item: InventoryItemUpdate): Promise<InventoryItem> => {
+    const data = await MaintenanceService.updateInventoryItemApiMaintenanceInventoryItemIdPut(Number(id), item as any);
+    return data as InventoryItem;
   },
 
-  // Eliminar un artículo (hace match con DELETE /inventory/{item_id})
   deleteItem: async (id: number): Promise<void> => {
-    await axiosClient.delete(`/inventory/${id}`);
+    await MaintenanceService.deleteInventoryItemApiMaintenanceInventoryItemIdDelete(Number(id));
   },
 };

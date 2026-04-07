@@ -251,9 +251,9 @@ export default function TripSettlementModal({
   if (isLoadingData) {
     return (
       <Dialog open={open} onOpenChange={handleClose}>
-        <DialogContent className="sm:max-w-md flex flex-col items-center justify-center p-12 bg-white/90 backdrop-blur-xl border-none shadow-2xl">
+        <DialogContent className="sm:max-w-md flex flex-col items-center justify-center p-12 bg-card/90 dark:bg-card/90 backdrop-blur-xl border-none shadow-2xl">
           <Loader2 className="h-10 w-10 animate-spin text-emerald-500 mb-4" />
-          <p className="text-xs font-black uppercase tracking-widest text-slate-500">
+          <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">
             Calculando Conciliación y Penalizaciones...
           </p>
         </DialogContent>
@@ -263,7 +263,7 @@ export default function TripSettlementModal({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-6xl p-0 overflow-hidden bg-slate-50 rounded-2xl border-none shadow-2xl">
+      <DialogContent className="max-w-6xl p-0 overflow-hidden bg-background dark:bg-background rounded-2xl border-none shadow-2xl">
         <div className="bg-brand-navy p-6 flex justify-between items-center text-white">
           <div>
             <DialogTitle className="text-2xl font-black flex items-center gap-2">
@@ -296,11 +296,11 @@ export default function TripSettlementModal({
           <div className="lg:col-span-4 space-y-6">
             {/* TARJETA DE RENDIMIENTO Y KILOMETRAJE */}
             <div className="space-y-4">
-              <h3 className="text-[11px] font-black text-slate-500 uppercase tracking-[0.2em] flex items-center gap-2">
+              <h3 className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em] flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 text-blue-500" /> Rendimiento /
                 Odómetro
               </h3>
-              <Card className="border-slate-200 shadow-sm">
+              <Card className="border-border dark:border-border shadow-sm">
                 <CardContent className="p-5 space-y-5">
                   <div className="grid grid-cols-2 gap-4 text-xs">
                     <div className="space-y-1.5">
@@ -310,7 +310,7 @@ export default function TripSettlementModal({
                       <Input
                         value={activeLegs[0]?.odometro_inicial || 0}
                         readOnly
-                        className="bg-slate-50 font-mono font-bold text-slate-600 h-10 border-slate-200"
+                        className="bg-muted font-mono font-bold text-muted-foreground h-10 border-border"
                       />
                     </div>
                     <div className="space-y-1.5">
@@ -341,7 +341,7 @@ export default function TripSettlementModal({
                   <div
                     className={`p-4 rounded-xl text-center border-2 ${rendimientoReal < 2.2 ? "bg-rose-50 border-rose-200" : "bg-emerald-50 border-emerald-200"}`}
                   >
-                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground mb-1">
                       Rendimiento Real
                     </p>
                     <p
@@ -349,7 +349,7 @@ export default function TripSettlementModal({
                     >
                       {rendimientoReal.toFixed(2)}
                     </p>
-                    <p className="text-[9px] font-bold text-slate-400 uppercase mt-1 tracking-widest">
+                    <p className="text-[9px] font-bold text-muted-foreground uppercase mt-1 tracking-widest">
                       KM / Litro
                     </p>
                   </div>
@@ -359,13 +359,13 @@ export default function TripSettlementModal({
 
             {/* 🚀 TARJETA DE CONCILIACIÓN DE DIÉSEL */}
             <div className="space-y-4">
-              <h3 className="text-[11px] font-black text-slate-500 uppercase tracking-[0.2em] flex items-center gap-2">
+              <h3 className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em] flex items-center gap-2">
                 <Fuel className="h-4 w-4 text-amber-500" /> Conciliación Diésel
               </h3>
               <Card className="border-slate-200 shadow-sm overflow-hidden">
                 <CardContent className="p-0">
-                  <div className="p-5 space-y-4 bg-white">
-                    <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                  <div className="p-5 space-y-4 bg-card dark:bg-card">
+                    <div className="flex justify-between items-center border-b border-border pb-2">
                       <span className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
                         <Droplet className="h-3.5 w-3.5 text-blue-400" />{" "}
                         Consumo Esperado
@@ -374,7 +374,7 @@ export default function TripSettlementModal({
                         {consumoEsperado.toFixed(1)} L
                       </span>
                     </div>
-                    <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                    <div className="flex justify-between items-center border-b border-border pb-2">
                       <span className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
                         <Droplet className="h-3.5 w-3.5 text-amber-500" />{" "}
                         Cargado (Vales)
@@ -423,14 +423,14 @@ export default function TripSettlementModal({
               COLUMNA DERECHA: CALCULADORA FINANCIERA
           ========================================= */}
           <div className="lg:col-span-8 space-y-4">
-            <h3 className="text-[11px] font-black text-slate-500 uppercase tracking-[0.2em] flex items-center gap-2">
+            <h3 className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em] flex items-center gap-2">
               <Calculator className="h-4 w-4 text-emerald-500" /> Balance
               Financiero
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white p-6 sm:p-8 rounded-2xl border border-slate-200 shadow-sm h-full">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-card p-6 sm:p-8 rounded-2xl border border-border shadow-sm h-full">
               {/* PERCEPCIONES (INGRESOS) */}
               <div className="space-y-5">
-                <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                <div className="flex justify-between items-center border-b border-border pb-2">
                   <p className="text-[11px] font-black text-emerald-600 uppercase tracking-widest">
                     Percepciones
                   </p>
@@ -511,7 +511,7 @@ export default function TripSettlementModal({
 
               {/* DEDUCCIONES */}
               <div className="space-y-5">
-                <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                <div className="flex justify-between items-center border-b border-border pb-2">
                   <p className="text-[11px] font-black text-rose-600 uppercase tracking-widest">
                     Deducciones
                   </p>
@@ -527,15 +527,15 @@ export default function TripSettlementModal({
 
                 {/* Aclaración Visual de Regla de Oro */}
                 {sumAnticipos > 0 && (
-                  <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl mb-4">
-                    <div className="flex justify-between items-center text-[10px] font-bold text-slate-500">
+                  <div className="p-3.5 bg-muted/50 border border-border rounded-xl mb-4">
+                    <div className="flex justify-between items-center text-[10px] font-bold text-muted-foreground">
                       <div className="flex items-center gap-1.5">
                         <Wallet className="h-3.5 w-3.5 text-slate-400" />
                         <span className="uppercase tracking-widest">
                           Anticipos Efectivo (Sin Casetas):
                         </span>
                       </div>
-                      <span className="text-slate-700 font-mono font-black text-sm">
+                      <span className="text-foreground font-mono font-black text-sm">
                         -$
                         {sumAnticipos.toLocaleString("es-MX", {
                           minimumFractionDigits: 2,
@@ -647,7 +647,7 @@ export default function TripSettlementModal({
         </div>
 
         {/* FOOTER */}
-        <DialogFooter className="bg-slate-100 p-5 px-8 border-t flex justify-end gap-4 rounded-b-2xl">
+        <DialogFooter className="bg-muted p-5 px-8 border-t border-border flex justify-end gap-4 rounded-b-2xl">
           <Button
             variant="ghost"
             onClick={handleClose}

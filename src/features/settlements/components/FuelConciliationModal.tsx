@@ -83,13 +83,13 @@ export function ConciliarViajeModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px] bg-slate-50 border-0 shadow-2xl rounded-2xl">
-        <DialogHeader className="bg-white p-6 border-b border-slate-200">
-          <DialogTitle className="text-xl font-black text-brand-navy flex items-center gap-2">
+      <DialogContent className="sm:max-w-[700px] bg-background dark:bg-background border-0 shadow-2xl rounded-2xl">
+        <DialogHeader className="bg-card p-6 border-b border-border">
+          <DialogTitle className="text-xl font-black text-foreground flex items-center gap-2">
             <Activity className="text-blue-600" />
             Conciliación de Combustible - Viaje #{trip.id}
           </DialogTitle>
-          <p className="text-sm font-bold text-slate-500">
+          <p className="text-sm font-bold text-muted-foreground">
             {trip.origin} ➔ {trip.destination}
           </p>
         </DialogHeader>
@@ -97,17 +97,17 @@ export function ConciliarViajeModal({
         <div className="p-6 grid grid-cols-2 gap-8">
           {/* LECTURAS MANUALES (ECM) */}
           <div className="space-y-4">
-            <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 border-b pb-2">
+            <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground border-b border-border pb-2">
               Lectura Digital (ECM)
             </h3>
 
             <div className="space-y-2">
-              <Label className="text-xs font-bold text-slate-600">
+              <Label className="text-xs font-bold text-muted-foreground">
                 Odómetro Final (Km)
               </Label>
               <Input
                 type="number"
-                className="font-mono h-11 bg-white border-slate-300"
+                className="font-mono h-11 bg-card border-border"
                 placeholder="Ej. 150400"
                 value={lecturaECM.odometroFinal}
                 onChange={(e) =>
@@ -123,12 +123,12 @@ export function ConciliarViajeModal({
             </div>
 
             <div className="space-y-2">
-              <Label className="text-xs font-bold text-slate-600">
+              <Label className="text-xs font-bold text-muted-foreground">
                 Litros Consumidos (Según Máquina)
               </Label>
               <Input
                 type="number"
-                className="font-mono h-11 bg-white border-slate-300"
+                className="font-mono h-11 bg-card border-border"
                 placeholder="Ej. 400"
                 value={lecturaECM.litrosECM}
                 onChange={(e) =>
@@ -140,13 +140,13 @@ export function ConciliarViajeModal({
 
           {/* RESULTADOS Y COMPARACIÓN */}
           <div className="space-y-4">
-            <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 border-b pb-2">
+            <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground border-b border-border pb-2">
               Auditoría Física vs Digital
             </h3>
 
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+            <div className="bg-card p-4 rounded-xl border border-border shadow-sm space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-[10px] font-bold uppercase text-slate-500">
+                <span className="text-[10px] font-bold uppercase text-muted-foreground">
                   Km Recorridos
                 </span>
                 <span className="font-mono font-black">
@@ -154,7 +154,7 @@ export function ConciliarViajeModal({
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-[10px] font-bold uppercase text-slate-500">
+                <span className="text-[10px] font-bold uppercase text-muted-foreground">
                   Litros Cargados (Vales)
                 </span>
                 <span className="font-mono font-black text-blue-600">
@@ -162,7 +162,7 @@ export function ConciliarViajeModal({
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-[10px] font-bold uppercase text-slate-500">
+                <span className="text-[10px] font-bold uppercase text-muted-foreground">
                   Rendimiento Real
                 </span>
                 <span className="font-mono font-black">
@@ -170,7 +170,7 @@ export function ConciliarViajeModal({
                 </span>
               </div>
 
-              <div className="pt-3 mt-3 border-t border-dashed border-slate-200">
+              <div className="pt-3 mt-3 border-t border-dashed border-border">
                 <div
                   className={cn(
                     "p-3 rounded-lg flex items-center justify-between",
@@ -210,7 +210,7 @@ export function ConciliarViajeModal({
           </div>
         </div>
 
-        <DialogFooter className="p-4 bg-slate-100 border-t border-slate-200">
+        <DialogFooter className="p-4 bg-muted border-t border-border">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>

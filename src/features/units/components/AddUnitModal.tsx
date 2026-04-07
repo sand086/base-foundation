@@ -156,7 +156,7 @@ const getStatusBadge = (dateValue?: Date | null) => {
     return (
       <Badge
         variant="outline"
-        className="text-slate-400 dark:text-slate-500 font-black text-[9px] tracking-widest shadow-sm bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+        className="text-muted-foreground/80 font-black text-[9px] tracking-widest shadow-sm bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
       >
         PENDIENTE
       </Badge>
@@ -471,9 +471,9 @@ export function AddUnidadModal({
       }}
     >
       {/*  CAPA 1: CASCARÓN */}
-      <DialogContent className="w-[95vw] sm:max-w-3xl flex flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
+      <DialogContent className="w-[95vw] sm:max-w-3xl flex flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-card/90 dark:bg-card/95 backdrop-blur-xl rounded-2xl">
         {/*  CAPA 2: HEADER TAHOE (Blanco en Light, Navy en Dark) */}
-        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
+        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-card dark:bg-card border-b border-border shrink-0 relative overflow-hidden z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center gap-4 sm:gap-5">
             <div
@@ -494,12 +494,12 @@ export function AddUnidadModal({
               />
             </div>
             <div className="flex flex-col gap-1 text-left">
-              <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white heading-crisp leading-none">
+              <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-foreground heading-crisp leading-none">
                 {isEditMode
                   ? `Editar ECO-${form.getValues("numero_economico")}`
                   : "Registrar Nuevo Activo"}
               </DialogTitle>
-              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-1">
+              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mt-1">
                 Gestión del activo físico y expediente documental.
               </p>
             </div>
@@ -546,7 +546,7 @@ export function AddUnidadModal({
               </div>
 
               {/* SCROLL AREA */}
-              <div className="flex-1 overflow-y-auto px-6 pb-6 sm:px-8 sm:pb-8 bg-slate-50/50 dark:bg-transparent custom-scrollbar">
+              <div className="flex-1 overflow-y-auto px-6 pb-6 sm:px-8 sm:pb-8 bg-muted/30 dark:bg-transparent custom-scrollbar">
                 {/* TAB GENERAL */}
                 <TabsContent
                   value="general"
@@ -580,11 +580,11 @@ export function AddUnidadModal({
                               onValueChange={field.onChange}
                             >
                               <FormControl>
-                                <SelectTrigger className="h-11 glass-card font-black uppercase text-xs shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 text-brand-navy dark:text-slate-100">
+                                <SelectTrigger className="h-11 glass-card font-black uppercase text-xs shadow-sm bg-card border-border text-brand-navy dark:text-slate-100">
                                   <SelectValue placeholder="Seleccione..." />
                                 </SelectTrigger>
                               </FormControl>
-                              <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-slate-200 dark:border-white/10">
+                              <SelectContent className="bg-card/90 dark:bg-card/90 backdrop-blur-xl border-border">
                                 {NATURALEZA_OPTIONS.map((opt) => (
                                   <SelectItem
                                     key={opt.value}
@@ -602,7 +602,7 @@ export function AddUnidadModal({
                       />
 
                       <div className="space-y-2">
-                        <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+                        <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">
                           Configuración de Ejes
                         </Label>
                         <div className="h-11 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-800 px-4 flex items-center shadow-inner">
@@ -610,7 +610,7 @@ export function AddUnidadModal({
                             {getLayoutDescription(currentCategoriaFisica)}
                           </span>
                         </div>
-                        <p className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                        <p className="text-[9px] font-bold text-muted-foreground/80 uppercase tracking-widest">
                           Asignación automática del sistema.
                         </p>
                       </div>
@@ -631,7 +631,7 @@ export function AddUnidadModal({
                             <Input
                               {...field}
                               placeholder="Ej: TR-001"
-                              className="h-11 font-black uppercase bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                              className="h-11 font-black uppercase bg-card border-border shadow-sm"
                             />
                           </FormControl>
                           <FormMessage />
@@ -654,7 +654,7 @@ export function AddUnidadModal({
                             <Input
                               {...field}
                               placeholder="Ej: 123-ABC"
-                              className="h-11 font-mono uppercase font-bold bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                              className="h-11 font-mono uppercase font-bold bg-card border-border shadow-sm"
                             />
                           </FormControl>
                           <FormMessage />
@@ -676,7 +676,7 @@ export function AddUnidadModal({
                                 {...field}
                                 list="marcas-list"
                                 placeholder="Seleccione o escriba..."
-                                className="h-11 font-bold uppercase bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                                className="h-11 font-bold uppercase bg-card border-border shadow-sm"
                               />
                               <datalist id="marcas-list">
                                 {MARCAS_SUGERIDAS.map((marca) => (
@@ -700,7 +700,7 @@ export function AddUnidadModal({
                             <Input
                               {...field}
                               placeholder="Ej: Cascadia"
-                              className="h-11 font-bold uppercase bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                              className="h-11 font-bold uppercase bg-card border-border shadow-sm"
                             />
                           </FormControl>
                           <FormMessage />
@@ -721,11 +721,11 @@ export function AddUnidadModal({
                             onValueChange={field.onChange}
                           >
                             <FormControl>
-                              <SelectTrigger className="h-11 font-bold bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm w-full sm:w-1/2">
+                              <SelectTrigger className="h-11 font-bold bg-card border-border shadow-sm w-full sm:w-1/2">
                                 <SelectValue placeholder="Seleccione año" />
                               </SelectTrigger>
                             </FormControl>
-                            <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl max-h-[40vh] border-slate-200 dark:border-white/10">
+                            <SelectContent className="bg-card/90 dark:bg-card/90 backdrop-blur-xl max-h-[40vh] border-border">
                               {yearOptions.map((y) => (
                                 <SelectItem
                                   key={y}
@@ -744,9 +744,9 @@ export function AddUnidadModal({
                   </div>
 
                   {/* CONTROL DE ESTATUS */}
-                  <div className="p-5 border border-slate-200 dark:border-white/10 rounded-2xl bg-white dark:bg-slate-900 shadow-sm space-y-5">
+                  <div className="p-5 border border-border rounded-2xl bg-card shadow-sm space-y-5">
                     <h3 className="font-black text-sm flex items-center gap-2 text-brand-navy dark:text-slate-200 uppercase tracking-tight">
-                      <Settings className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                      <Settings className="h-4 w-4 text-muted-foreground" />
                       Control Operativo
                     </h3>
 
@@ -768,7 +768,7 @@ export function AddUnidadModal({
                                   <SelectValue />
                                 </SelectTrigger>
                               </FormControl>
-                              <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-slate-200 dark:border-white/10">
+                              <SelectContent className="bg-card/90 dark:bg-card/90 backdrop-blur-xl border-border">
                                 <SelectItem
                                   value="disponible"
                                   className="font-bold text-xs uppercase text-emerald-600 dark:text-emerald-400"
@@ -864,7 +864,7 @@ export function AddUnidadModal({
                             <Input
                               {...field}
                               placeholder="17 caracteres alfanuméricos"
-                              className="h-11 font-mono uppercase font-bold tracking-widest bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                              className="h-11 font-mono uppercase font-bold tracking-widest bg-card border-border shadow-sm"
                             />
                           </FormControl>
                           <FormMessage />
@@ -885,7 +885,7 @@ export function AddUnidadModal({
                               <FormControl>
                                 <Input
                                   {...field}
-                                  className="h-11 font-mono uppercase bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                                  className="h-11 font-mono uppercase bg-card border-border shadow-sm"
                                 />
                               </FormControl>
                               <FormMessage />
@@ -904,7 +904,7 @@ export function AddUnidadModal({
                               <FormControl>
                                 <Input
                                   {...field}
-                                  className="h-11 font-bold uppercase bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                                  className="h-11 font-bold uppercase bg-card border-border shadow-sm"
                                 />
                               </FormControl>
                               <FormMessage />
@@ -928,7 +928,7 @@ export function AddUnidadModal({
                               step="0.1"
                               {...field}
                               placeholder="0.0"
-                              className="h-11 font-mono font-bold bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                              className="h-11 font-mono font-bold bg-card border-border shadow-sm"
                             />
                           </FormControl>
                           <FormMessage />
@@ -953,7 +953,7 @@ export function AddUnidadModal({
                                 <SelectValue placeholder="Seleccione..." />
                               </SelectTrigger>
                             </FormControl>
-                            <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-slate-200 dark:border-white/10">
+                            <SelectContent className="bg-card/90 dark:bg-card/90 backdrop-blur-xl border-border">
                               <SelectItem
                                 value="General"
                                 className="font-bold text-xs uppercase"
@@ -1027,7 +1027,7 @@ export function AddUnidadModal({
                         control={form.control}
                         name={field.key}
                         render={({ field: formField }) => (
-                          <FormItem className="flex flex-col sm:flex-row sm:items-end gap-4 p-4 border border-slate-200 dark:border-white/10 rounded-xl bg-white dark:bg-slate-900 shadow-sm transition-colors hover:border-slate-300 dark:hover:border-white/20">
+                          <FormItem className="flex flex-col sm:flex-row sm:items-end gap-4 p-4 border border-border rounded-xl bg-card shadow-sm transition-colors hover:border-slate-300 dark:hover:border-white/20">
                             <div className="flex-1 space-y-2 w-full">
                               <FormLabel variant="brand">
                                 {field.label}
@@ -1095,7 +1095,7 @@ export function AddUnidadModal({
                       </div>
                     </div>
 
-                    <div className="flex flex-col sm:flex-row sm:items-end gap-4 p-5 border border-slate-200 dark:border-white/10 rounded-xl bg-white dark:bg-slate-900 shadow-sm">
+                    <div className="flex flex-col sm:flex-row sm:items-end gap-4 p-5 border border-border rounded-xl bg-card shadow-sm">
                       <FormField
                         control={form.control}
                         name="permiso_sct_folio"
@@ -1118,14 +1118,14 @@ export function AddUnidadModal({
                       <div className="w-full sm:w-[140px] flex justify-start sm:justify-center pb-1 shrink-0">
                         <Badge
                           variant="outline"
-                          className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 shadow-sm border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                          className="text-[9px] font-black uppercase tracking-widest text-muted-foreground shadow-sm border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
                         >
                           PERMANENTE
                         </Badge>
                       </div>
                     </div>
 
-                    <div className="flex flex-col sm:flex-row sm:items-end gap-4 p-5 border border-slate-200 dark:border-white/10 rounded-xl bg-white dark:bg-slate-900 shadow-sm">
+                    <div className="flex flex-col sm:flex-row sm:items-end gap-4 p-5 border border-border rounded-xl bg-card shadow-sm">
                       <FormField
                         control={form.control}
                         name="tarjeta_circulacion_folio"
@@ -1148,7 +1148,7 @@ export function AddUnidadModal({
                       <div className="w-full sm:w-[140px] flex justify-start sm:justify-center pb-1 shrink-0">
                         <Badge
                           variant="outline"
-                          className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 shadow-sm border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                          className="text-[9px] font-black uppercase tracking-widest text-muted-foreground shadow-sm border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
                         >
                           INFO
                         </Badge>
@@ -1160,7 +1160,7 @@ export function AddUnidadModal({
             </Tabs>
 
             {/*  CAPA 4: FOOTER TAHOE */}
-            <DialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
+            <DialogFooter className="p-6 sm:p-8 bg-card/80 dark:bg-card/80 backdrop-blur-xl border-t border-border shrink-0 z-10">
               <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
                 <Button
                   type="button"

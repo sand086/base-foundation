@@ -1,17 +1,4 @@
-import axiosClient from "@/api/axiosClient";
-import { Tire, TireHistoryEvent } from "@/features/tires/types";
-
-export interface AssignTirePayload {
-  unit_id: number | null;
-  posicion: number | null;
-  notas?: string;
-}
-
-export interface MaintenanceTirePayload {
-  tipo: string;
-  costo: number;
-  descripcion: string;
-}
+import { Tire } from "@/features/tires/types";
 
 // --- HELPERS DE CÁLCULO ---
 
@@ -20,7 +7,7 @@ export const getTireLifePercentage = (tire: Tire): number => {
   const percentage = Math.round(
     (tire.profundidad_actual / tire.profundidad_original) * 100,
   );
-  return Math.max(0, Math.min(100, percentage)); // Asegurar rango 0-100
+  return Math.max(0, Math.min(100, percentage));
 };
 
 export const getTireSemaphoreStatus = (tire: Tire) => {
@@ -82,72 +69,13 @@ export const getEstadoBadge = (estado: string) => {
 export const TIRE_POSITIONS = [
   { id: 1, label: "Posición 1 (Direccional Izq)", eje: 1, lado: "izquierda" },
   { id: 2, label: "Posición 2 (Direccional Der)", eje: 1, lado: "derecha" },
-  {
-    id: 3,
-    label: "Posición 3 (Tracción 1 Izq Ext)",
-    eje: 2,
-    lado: "izquierda",
-  },
-  {
-    id: 4,
-    label: "Posición 4 (Tracción 1 Izq Int)",
-    eje: 2,
-    lado: "izquierda",
-  },
+  { id: 3, label: "Posición 3 (Tracción 1 Izq Ext)", eje: 2, lado: "izquierda" },
+  { id: 4, label: "Posición 4 (Tracción 1 Izq Int)", eje: 2, lado: "izquierda" },
   { id: 5, label: "Posición 5 (Tracción 1 Der Int)", eje: 2, lado: "derecha" },
   { id: 6, label: "Posición 6 (Tracción 1 Der Ext)", eje: 2, lado: "derecha" },
-  {
-    id: 7,
-    label: "Posición 7 (Tracción 2 Izq Ext)",
-    eje: 3,
-    lado: "izquierda",
-  },
-  {
-    id: 8,
-    label: "Posición 8 (Tracción 2 Izq Int)",
-    eje: 3,
-    lado: "izquierda",
-  },
+  { id: 7, label: "Posición 7 (Tracción 2 Izq Ext)", eje: 3, lado: "izquierda" },
+  { id: 8, label: "Posición 8 (Tracción 2 Izq Int)", eje: 3, lado: "izquierda" },
   { id: 9, label: "Posición 9 (Tracción 2 Der Int)", eje: 3, lado: "derecha" },
-  {
-    id: 10,
-    label: "Posición 10 (Tracción 2 Der Ext)",
-    eje: 3,
-    lado: "derecha",
-  },
+  { id: 10, label: "Posición 10 (Tracción 2 Der Ext)", eje: 3, lado: "derecha" },
   { id: 0, label: "Repuesto", eje: 0, lado: "repuesto" },
 ];
-
-// --- SERVICIO API ---
-
-export const tireService = {
-  getAll: async () => {
-    const { data } = await axiosClient.get<Tire[]>("/tires");
-    return data;
-  },
-  getById: async (id: number) => {
-    const { data } = await axiosClient.get<Tire>(`/tires/${id}`);
-    return data;
-  },
-  create: async (payload: any) => {
-    const { data } = await axiosClient.post<Tire>("/tires", payload);
-    return data;
-  },
-  update: async (id: number, payload: any) => {
-    const { data } = await axiosClient.put<Tire>(`/tires/${id}`, payload);
-    return data;
-  },
-  assign: async (id: number, payload: AssignTirePayload): Promise<void> => {
-    await axiosClient.post(`/tires/${id}/assign`, payload);
-  },
-  maintenance: async (
-    id: number,
-    payload: MaintenanceTirePayload,
-  ): Promise<void> => {
-    // Enviamos el payload directamente al backend de Python
-    await axiosClient.post(`/tires/${id}/maintenance`, payload);
-  },
-  delete: async (id: number) => {
-    await axiosClient.delete(`/tires/${id}`);
-  },
-};
