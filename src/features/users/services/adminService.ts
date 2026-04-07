@@ -5,19 +5,19 @@ import { SystemConfig } from "@/features/settings/types";
 export const adminService = {
   // --- USUARIOS ---
   getUsers: async () => {
-    const { data } = await axiosClient.get<User[]>("/users");
+    const { data } = await axiosClient.get<User[]>("/api/auth");
     return data;
   },
   createUser: async (userData: any) => {
-    const { data } = await axiosClient.post<User>("/users", userData);
+    const { data } = await axiosClient.post<User>("/api/auth", userData);
     return data;
   },
   updateUser: async (id: number, userData: any) => {
-    const { data } = await axiosClient.put<User>(`/users/${id}`, userData);
+    const { data } = await axiosClient.put<User>(`/api/auth/${id}`, userData);
     return data;
   },
   toggleUserStatus: async (id: number) => {
-    const { data } = await axiosClient.patch(`/api/users/${id}/status`);
+    const { data } = await axiosClient.patch(`/api/auth/${id}/status`);
     return data;
   },
 

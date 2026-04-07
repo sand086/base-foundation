@@ -16,34 +16,34 @@ export interface UserData {
 
 export const userService = {
   getAll: async () => {
-    const { data } = await axiosClient.get("/api/users");
+    const { data } = await axiosClient.get("/api/auth");
     return data;
   },
 
   create: async (user: UserData) => {
-    const { data } = await axiosClient.post("/api/users", user);
+    const { data } = await axiosClient.post("/api/auth", user);
     return data;
   },
 
   // Aseguramos que devuelva el objeto actualizado
   update: async (id: string, user: Partial<UserData>) => {
-    const { data } = await axiosClient.put(`/api/users/${id}`, user);
+    const { data } = await axiosClient.put(`/api/auth/${id}`, user);
     return data; // Debe retornar { success: true, user: {...} }
   },
 
   toggleStatus: async (id: string) => {
-    const { data } = await axiosClient.patch(`/api/users/${id}/status`);
+    const { data } = await axiosClient.patch(`/api/auth/${id}/status`);
     return data;
   },
 
   resetPassword: async (id: string, newPassword: string) => {
-    const { data } = await axiosClient.post(`/users/${id}/reset-password`, {
+    const { data } = await axiosClient.post(`/api/auth/${id}/reset-password`, {
       new_password: newPassword,
     });
     return data;
   },
   delete: async (id: string) => {
-    const { data } = await axiosClient.delete(`api/users/${id}`);
+    const { data } = await axiosClient.delete(`api/auth/${id}`);
     return data;
   },
 
@@ -51,7 +51,7 @@ export const userService = {
     const formData = new FormData();
     formData.append("file", file);
     const { data } = await axiosClient.post(
-      `/users/${userId}/avatar`,
+      `/api/auth/${userId}/avatar`,
       formData,
       {
         headers: { "Content-Type": "multipart/form-data" },

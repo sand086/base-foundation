@@ -289,7 +289,7 @@ const Profile: React.FC = () => {
     setIsLoading(true);
     try {
       const { data } = await axiosClient.post(
-        `/users/${fullProfile.id}/avatar`,
+        `/api/auth/${fullProfile.id}/avatar`,
         formData,
         { headers: { "Content-Type": "multipart/form-data" } },
       );
@@ -316,7 +316,7 @@ const Profile: React.FC = () => {
   const fetchProfile = async () => {
     setIsFetchingProfile(true);
     try {
-      const { data } = await axiosClient.get<FullProfile>("/users/me");
+      const { data } = await axiosClient.get<FullProfile>("/api/auth/me");
       setFullProfile(data);
       profileForm.reset({
         nombre: data.nombre || "",
@@ -352,7 +352,7 @@ const Profile: React.FC = () => {
         telefono: data.telefono,
         puesto: data.puesto,
       };
-      await axiosClient.put(`/api/users/${fullProfile.id}`, payload);
+      await axiosClient.put(`/api/auth/${fullProfile.id}`, payload);
 
       // 1. Actualizamos el estado local
       setFullProfile((prev) => (prev ? { ...prev, ...payload } : prev));
@@ -373,7 +373,7 @@ const Profile: React.FC = () => {
     if (!fullProfile) return;
     setIsLoading(true);
     try {
-      await axiosClient.post(`/users/${fullProfile.id}/reset-password`, {
+      await axiosClient.post(`/api/auth/${fullProfile.id}/reset-password`, {
         new_password: data.newPassword,
       });
       toast.success("Contraseña actualizada con éxito");
@@ -429,7 +429,7 @@ const Profile: React.FC = () => {
       const payload = {
         preferencias: { theme, email_notifications: emailNotifications },
       };
-      await axiosClient.put(`/api/users/${fullProfile.id}`, payload);
+      await axiosClient.put(`/api/auth/${fullProfile.id}`, payload);
       setFullProfile((prev) => (prev ? { ...prev, ...payload } : prev));
       toast.success("Preferencias guardadas");
     } catch (error) {

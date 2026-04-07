@@ -144,7 +144,7 @@ async function fetchMeUser(): Promise<MeUser | null> {
   if (!API_BASE || !token) return null;
 
   try {
-    const res = await fetch(`${API_BASE}/users/me`, {
+    const res = await fetch(`${API_BASE}/api/auth/me`, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -193,7 +193,7 @@ const RolesPermissions: React.FC = () => {
     deleteSystemModule: (moduleId: string) => Promise<boolean>;
   };
 
-  //   usuario desde localStorage o /users/me
+  //   usuario desde localStorage o /auth/me
   const [meUser, setMeUser] = useState<MeUser | null>(null);
   const [meLoading, setMeLoading] = useState(true);
 
