@@ -40,6 +40,7 @@ import NotFound from "./pages/NotFound";
 import Manuals from "./pages/Manuals";
 import TwoFactorAuth from "./pages/TwoFactorAuth";
 import TrafficControl from "./pages/TrafficControl";
+import Verify2FA from "@/features/users/components/Verify2FA";
 
 // Wizard de Despacho
 import { DispatchWizard } from "@/features/trips/components/DispatchWizard";
@@ -55,17 +56,26 @@ const App = () => (
         <BrowserRouter>
           <AuthProvider>
             <Routes>
-              {/* Rutas Públicas */}
+              {/* ============================== */}
+              {/* RUTAS PÚBLICAS Y DE VERIFICACIÓN */}
+              {/* ============================== */}
               <Route path="/login" element={<Login />} />
-              <Route path="/verify-2fa" element={<TwoFactorAuth />} />
-              <Route path="/2fa-setup" element={<TwoFactorAuth />} />
+              <Route path="/verify-2fa" element={<Verify2FA />} />
 
-              {/* Rutas Protegidas */}
+              {/* Nota: 2fa-setup debería estar protegida porque necesitas estar logueado para configurarlo */}
+
+              {/* ============================== */}
+              {/* RUTAS PROTEGIDAS (Requieren Login) */}
+              {/* ============================== */}
               <Route element={<ProtectedRoute />}>
+                {/* Opcional: Si tienes pantallas que están protegidas pero NO llevan el Layout (ej. un asistente de bienvenida), irían aquí */}
+                <Route path="/2fa-setup" element={<TwoFactorAuth />} />
+
+                {/* Rutas protegidas CON el Layout (Navbar, Sidebar) */}
                 <Route path="/" element={<AppLayout />}>
                   <Route index element={<Dashboard />} />
 
-                  {/*  URLs 100% EN INGLÉS */}
+                  {/* URLs 100% EN INGLÉS */}
                   <Route path="monitoring" element={<MonitoringCenter />} />
                   <Route path="traffic-control" element={<TrafficControl />} />
 
@@ -118,7 +128,9 @@ const App = () => (
                 </Route>
               </Route>
 
-              {/* Catch-all */}
+              {/* ============================== */}
+              {/* Catch-all (404) */}
+              {/* ============================== */}
               <Route path="*" element={<NotFound />} />
             </Routes>
           </AuthProvider>

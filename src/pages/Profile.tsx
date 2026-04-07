@@ -445,7 +445,7 @@ const Profile: React.FC = () => {
       const { data } = await axiosClient.get<{
         secret: string;
         qr_code: string;
-      }>("/2fa/setup");
+      }>("/api/auth/2fa/setup");
       setTwoFASecret(data.secret);
       setTwoFAQRUrl(data.qr_code);
       setTwoFAStep("qr");
@@ -460,7 +460,7 @@ const Profile: React.FC = () => {
     if (!fullProfile) return;
     setIsLoading(true);
     try {
-      await axiosClient.post("/api/2fa/enable", {
+      await axiosClient.post("/api/auth/2fa/enable", {
         code: verificationCode,
         user_id: fullProfile.id,
       });
