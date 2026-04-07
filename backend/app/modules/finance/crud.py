@@ -1,11 +1,14 @@
-# --- Fuente: crud_finance.py ---
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
 from fastapi import HTTPException
-
+from datetime import datetime, timedelta
 from app.models import models
 from . import schemas
+
+# =====================================================================
+# PROVIDERS & CATEGORIES
+# =====================================================================
 
 
 def get_providers(db: Session, skip: int = 0, limit: int = 100):
@@ -35,25 +38,70 @@ def get_indirect_categories(db: Session):
     return db.query(models.IndirectExpenseCategory).all()
 
 
+# =====================================================================
+# TREASURY & BANKS (Cuentas y Tesorería)
+# =====================================================================
+
+
 def get_bank_accounts(db: Session):
-
-    return db.query(models.BankAccount).all()
-
-
-def get_bank_accounts(db: Session):
+    """Obtiene solo las cuentas bancarias activas (Oculta las archivadas)"""
     return (
         db.query(models.BankAccount)
-        .filter(models.BankAccount.record_status == "A")
+        .filter(models.BankAccount.estatus == "activo")
         .all()
     )
 
 
 def create_bank_account(db: Session, account: schemas.BankAccountCreate, user_id: int):
+    """Crea una nueva cuenta bancaria."""
     db_account = models.BankAccount(**account.model_dump(), created_by_id=user_id)
     db.add(db_account)
     db.commit()
     db.refresh(db_account)
     return db_account
+
+
+def update_bank_account(db: Session, account_id: int, account_data: dict, user_id: int):
+    """
+    Actualiza parcialmente los datos de una cuenta bancaria.
+    Si trae 'saldo' (por ajuste manual de administrador), también lo afectará.
+    """
+    account = (
+        db.query(models.BankAccount).filter(models.BankAccount.id == account_id).first()
+    )
+
+    if not account:
+        return None
+
+    for key, value in account_data.items():
+        if hasattr(account, key) and value is not None:
+            setattr(account, key, value)
+
+    db.commit()
+    db.refresh(account)
+    return account
+
+
+def delete_bank_account(db: Session, account_id: int):
+    """
+    Realiza un SOFT DELETE (Archivado) de la cuenta bancaria.
+    No se elimina de la base de datos para no romper reportes históricos.
+    """
+    account = (
+        db.query(models.BankAccount).filter(models.BankAccount.id == account_id).first()
+    )
+
+    if not account:
+        return False
+
+    # 🎯 MAGIA: SOFT DELETE (No usamos db.delete(account))
+    account.estatus = "inactivo"
+
+    # Si tienes habilitado AuditMixin en tu modelo, descomenta la siguiente línea:
+    # account.record_status = "I"
+
+    db.commit()
+    return True
 
 
 def get_bank_movements(db: Session):
@@ -62,7 +110,49 @@ def get_bank_movements(db: Session):
     )
 
 
-from datetime import datetime, timedelta
+def create_bank_movement(
+    db: Session, movement_data: schemas.BankMovementCreate, current_user_id: int
+):
+    """
+    Registra un movimiento bancario y actualiza el saldo de la cuenta en una transacción atómica.
+    Evita race-conditions usando bloqueo de fila (with_for_update).
+    """
+    # 1. Bloquear la fila de la cuenta bancaria temporalmente en la BD
+    account = (
+        db.query(models.BankAccount)
+        .filter(models.BankAccount.id == movement_data.bank_account_id)
+        .with_for_update()
+        .first()
+    )
+
+    if not account:
+        raise HTTPException(status_code=404, detail="Cuenta bancaria no encontrada.")
+
+    # 2. Lógica matemática de saldos
+    if movement_data.tipo == "ingreso":
+        account.saldo += movement_data.monto
+    elif movement_data.tipo == "egreso":
+        account.saldo -= movement_data.monto
+
+    # 3. Registrar el movimiento en el historial
+    nuevo_movimiento = models.BankMovement(
+        bank_account_id=account.id,
+        tipo=movement_data.tipo,
+        monto=movement_data.monto,
+        concepto=movement_data.concepto,
+        referencia=movement_data.referencia,
+        created_by_id=current_user_id,
+    )
+
+    db.add(nuevo_movimiento)
+    db.flush()
+
+    return nuevo_movimiento
+
+
+# =====================================================================
+# INVOICES (Facturación y CXP)
+# =====================================================================
 
 
 def process_bulk_payables(db: Session, payload_data: list[dict]):
@@ -166,48 +256,3 @@ def process_bulk_payables(db: Session, payload_data: list[dict]):
     return {
         "message": f"Se procesaron con éxito {facturas_creadas} facturas y se crearon {proveedores_creados} proveedores nuevos."
     }
-
-
-def create_bank_movement(
-    db: Session, movement_data: schemas.BankMovementCreate, current_user_id: int
-):
-    """
-    Registra un movimiento bancario y actualiza el saldo de la cuenta en una transacción atómica.
-    Evita race-conditions usando bloqueo de fila (with_for_update).
-    """
-    # 1. Bloquear la fila de la cuenta bancaria temporalmente en la BD
-    account = (
-        db.query(models.BankAccount)
-        .filter(models.BankAccount.id == movement_data.bank_account_id)
-        .with_for_update()
-        .first()
-    )
-
-    if not account:
-        raise HTTPException(status_code=404, detail="Cuenta bancaria no encontrada.")
-
-    # 2. Lógica matemática de saldos
-    if movement_data.tipo == "ingreso":
-        account.saldo += movement_data.monto
-    elif movement_data.tipo == "egreso":
-        # (Opcional) Descomentar si quieres impedir sobregiros estrictos:
-        # if account.saldo < movement_data.monto:
-        #     raise HTTPException(status_code=400, detail="Saldo insuficiente en la cuenta.")
-        account.saldo -= movement_data.monto
-
-    # 3. Registrar el movimiento en el historial
-    nuevo_movimiento = models.BankMovement(
-        bank_account_id=account.id,
-        tipo=movement_data.tipo,
-        monto=movement_data.monto,
-        concepto=movement_data.concepto,
-        referencia=movement_data.referencia,
-        created_by_id=current_user_id,
-    )
-
-    db.add(nuevo_movimiento)
-    # Se debe hacer un commit en la capa superior (router) si es parte de un proceso más grande,
-    # o hacer db.flush() si necesitamos el ID inmediatamente.
-    db.flush()
-
-    return nuevo_movimiento
