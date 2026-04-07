@@ -128,7 +128,7 @@ export function TripDetailsModal({
     if (!localTrip?.id) return;
     try {
       // 1. Buscamos el viaje actualizado directo en la base de datos
-      const res = await axiosClient.get(`/trips/${localTrip.id}`);
+      const res = await axiosClient.get(`/api/logistics/trips/${localTrip.id}`);
       setLocalTrip(res.data);
       // 2. Avisamos al padre (el tablero) que actualice lo suyo en el fondo
       await refreshTrips();
@@ -246,7 +246,7 @@ export function TripDetailsModal({
         );
       }
 
-      await axiosClient.post(`/trips/${localTrip?.id}/undo-leg`);
+      await axiosClient.post(`/api/logistics/trips/${localTrip?.id}/undo-leg`);
 
       toast.success(
         isFirstLeg ? "Viaje retornado a Planeador." : "Fase revertida.",
@@ -410,9 +410,12 @@ export function TripDetailsModal({
     setIsGeneratingNom(true);
     const toastId = toast.loading("Generando Bitácora NOM-087...");
     try {
-      const res = await axiosClient.get(`/trips/${localTrip.id}/nom-087`, {
-        responseType: "blob",
-      });
+      const res = await axiosClient.get(
+        `/api/logistics/trips/${localTrip.id}/nom-087`,
+        {
+          responseType: "blob",
+        },
+      );
       const fileURL = window.URL.createObjectURL(
         new Blob([res.data], { type: "application/pdf" }),
       );

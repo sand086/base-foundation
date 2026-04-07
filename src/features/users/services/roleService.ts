@@ -3,19 +3,19 @@ import { RoleData, ModuleData } from "@/features/users/types";
 
 export const roleService = {
   getAll: async () => {
-    const { data } = await axiosClient.get("/api/users/roles");
+    const { data } = await axiosClient.get("/api/auth/roles");
     return data;
   },
   create: async (role: Omit<RoleData, "id">) => {
-    const { data } = await axiosClient.post("/api/users/roles", role);
+    const { data } = await axiosClient.post("/api/auth/roles", role);
     return data;
   },
   update: async (id: number, role: Partial<RoleData>) => {
-    const { data } = await axiosClient.put(`/api/users/roles/${id}`, role);
+    const { data } = await axiosClient.put(`/api/auth/roles/${id}`, role);
     return data;
   },
   delete: async (id: number) => {
-    const { data } = await axiosClient.delete(`api/users/roles/${id}`);
+    const { data } = await axiosClient.delete(`api/auth/roles/${id}`);
     return data;
   },
   getModules: async () => {
@@ -27,7 +27,7 @@ export const roleService = {
     return data;
   },
   getPermissions: async (id: number) => {
-    const { data } = await axiosClient.get(`/users/roles/${id}/permisos`);
+    const { data } = await axiosClient.get(`/auth/roles/${id}/permisos`);
     return data;
   },
   updateModule: async (id: string, modulo: ModuleData) => {

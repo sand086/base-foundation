@@ -197,11 +197,13 @@ export function EditFuelModal({
     try {
       await fuelService.update(String(carga.id), {
         ...formData,
+        unit_id: Number(formData.unit_id),
+        operator_id: Number(formData.operator_id),
         fecha_hora: formData.fecha_hora.toISOString(),
         capacidad_tanque_snapshot: tankCapacity,
         excede_tanque: exceedsTank,
         total,
-      });
+      } as any);
 
       toast.success("Sincronización Exitosa", {
         description: "Los datos han sido validados y guardados.",
@@ -282,9 +284,7 @@ export function EditFuelModal({
                 {selectedUnit && (
                   <p className="text-[9px] font-black uppercase text-slate-400 text-right mt-1">
                     Capacidad Tank:{" "}
-                    <span className="text-foreground">
-                      {tankCapacity}L
-                    </span>
+                    <span className="text-foreground">{tankCapacity}L</span>
                   </p>
                 )}
               </div>
@@ -442,7 +442,7 @@ export function EditFuelModal({
             <div className="p-5 bg-card rounded-2xl border border-border shadow-inner">
               <FormLabelBrand className="mb-4 flex items-center gap-2">
                 <Camera size={14} className="text-brand-green" /> Digitalización
-                de Asset / Ticket
+                de Recurso / Ticket
               </FormLabelBrand>
               <DocumentUploadManager
                 entityId={String(carga.id)}

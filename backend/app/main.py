@@ -1,7 +1,9 @@
 from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+import os
 
-#  1. Importación de Routers de Dominios (Módulos)
+# 1. Importación de Routers de Dominios (Módulos)
 from app.modules.auth.router import router as auth_router
 from app.modules.catalogs.router import router as catalogs_router
 from app.modules.clients.router import router as clients_router
@@ -13,11 +15,20 @@ from app.modules.suppliers.router import router as suppliers_router
 from app.modules.maintenance.router import router as maintenance_router
 from app.modules.monitoring.router import router as monitoring_router
 
-#  2. Importación de Routers de Integraciones Externas
-# Nota: Asegúrate de haber creado un router.py en app/integrations/sat que unifique billing y catalogs_sat
+# 2. Importación de Routers de Integraciones Externas
 from app.integrations.sat.router import router as sat_router
 
 app = FastAPI(title="TMS Backend FSD")
+
+# =========================================================================
+# CONFIGURACIÓN DE ARCHIVOS ESTÁTICOS (Avatares, Evidencias, PDFs)
+# =========================================================================
+# Aseguramos que la carpeta exista
+os.makedirs("app/uploads", exist_ok=True)
+
+# Montamos la carpeta para que responda en la URL /api/static/...
+app.mount("/api/static", StaticFiles(directory="app/uploads"), name="static")
+
 api_router = APIRouter(prefix="/api")
 
 # Configuración de CORS
@@ -29,7 +40,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-#  3. Registro de Rutas en el api_router (quitamos el .app)
 # Seguridad y Usuarios (Users ahora es parte de Auth)
 api_router.include_router(auth_router, prefix="/auth")
 
@@ -53,10 +63,9 @@ api_router.include_router(monitoring_router, prefix="/monitoring")
 # Integraciones Externas
 api_router.include_router(sat_router, prefix="/sat")
 
-#  ¡MUY IMPORTANTE! Registrar el api_router en la app principal
 app.include_router(api_router)
 
 
 @app.get("/")
 async def root():
-    return {"message": "TMS API Modular (FSD) is running"}
+    return {"message": "TMS API Asicom (FSD) is running ..."}

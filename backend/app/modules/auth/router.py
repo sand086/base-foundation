@@ -10,7 +10,7 @@ from fastapi import (
 )
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
-from jose import JWTError, jwt
+from jose import JWTError, jwt, ExpiredSignatureError
 
 from app.db.database import get_db
 from app.models import models
@@ -49,8 +49,13 @@ async def get_current_user(
 
         user_id = int(token_sub)
 
-    except (JWTError, ValueError):
-        raise HTTPException(status_code=401, detail="No se pudo validar el token")
+    except ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expirado")
+    except Exception as e:
+        raise HTTPException(
+            status_code=401,
+            detail=f"Causa real: {str(e)} | Token: {str(token)[:20]}...",
+        )
 
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:

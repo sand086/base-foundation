@@ -5,7 +5,7 @@ export const authService = {
   // 1. Inicio de sesión primario
   login: async (credentials: LoginRequest): Promise<LoginResponse> => {
     const { data } = await axiosClient.post<LoginResponse>(
-      "/auth/login",
+      "/api/auth/login",
       credentials,
     );
     return data;

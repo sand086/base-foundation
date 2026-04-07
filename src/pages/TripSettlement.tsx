@@ -635,7 +635,7 @@ export default function TripSettlement() {
               >
                 <ShieldAlert className="h-5 w-5 !text-rose-600" />
                 <AlertTitle className="font-black uppercase tracking-widest text-[11px] ml-2 text-rose-700">
-                  Auditoría Operativa Pendiente
+                  Conciliacion Pendiente
                 </AlertTitle>
                 <AlertDescription className="text-xs font-bold mt-1 ml-2 leading-relaxed">
                   El sistema detecta {previewData.legs_sin_ticket.length}{" "}

@@ -436,7 +436,7 @@ export default function MonitoringCenter() {
   const handlePrintPDF = async (trip: any) => {
     try {
       const response = await axiosClient.get(
-        `/trips/${trip.id}/carta-porte-ciega`,
+        `/api/logistics/trips/${trip.id}/carta-porte-ciega`,
         { responseType: "blob" },
       );
       const fileURL = window.URL.createObjectURL(

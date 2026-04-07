@@ -166,7 +166,7 @@ export default function FuelConciliation() {
   const fetchValesCombustible = async (legIdToFetch: string) => {
     setIsFetchingVales(true);
     try {
-      const response = await axiosClient.get("/api/fuel/fuel-logs");
+      const response = await axiosClient.get("/api/fleet/fuel-logs");
 
       const valesDiesel = response.data.filter((log: any) => {
         return (
@@ -366,13 +366,16 @@ export default function FuelConciliation() {
       const est = auditResult?.estatus || "CONCILIADO";
       const isRobo = auditResult?.esRoboSospechado || false;
 
-      await axiosClient.post(`/trips/${selectedTripId}/timeline`, {
-        status: isRobo ? "incidencia" : "info",
-        location: "Conciliación de Combustible",
-        comments: `Auditoría Fase. Km ECM: ${kmECM}. Litros ECM: ${ltECM}. Vales: ${vales}. Rend Real: ${rReal.toFixed(2)} km/L. Ver: ${est}.`,
-        odometro: Number(formData.odometroFinal),
-        combustible_litros: vales,
-      });
+      await axiosClient.post(
+        `/api/logistics/trips/${selectedTripId}/timeline`,
+        {
+          status: isRobo ? "incidencia" : "info",
+          location: "Conciliación de Combustible",
+          comments: `Auditoría Fase. Km ECM: ${kmECM}. Litros ECM: ${ltECM}. Vales: ${vales}. Rend Real: ${rReal.toFixed(2)} km/L. Ver: ${est}.`,
+          odometro: Number(formData.odometroFinal),
+          combustible_litros: vales,
+        },
+      );
 
       toast.success(
         isEditing ? "Auditoría Actualizada" : "Auditoría Registrada",
@@ -559,7 +562,7 @@ export default function FuelConciliation() {
     <div className="p-4 md:p-8 space-y-6 bg-[#F8FAFC] dark:bg-brand-navy min-h-screen animate-in fade-in duration-700">
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
         <PageHeader
-          title="Auditoría Operativa"
+          title="Conciliacion Operativa"
           description="Conciliación de combustible físico (Vales) vs Computadora (ECM)."
           className="mb-0"
         />
