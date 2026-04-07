@@ -197,11 +197,13 @@ export function EditFuelModal({
     try {
       await fuelService.update(String(carga.id), {
         ...formData,
+        unit_id: Number(formData.unit_id),
+        operator_id: Number(formData.operator_id),
         fecha_hora: formData.fecha_hora.toISOString(),
         capacidad_tanque_snapshot: tankCapacity,
         excede_tanque: exceedsTank,
         total,
-      });
+      } as any);
 
       toast.success("Sincronización Exitosa", {
         description: "Los datos han sido validados y guardados.",
