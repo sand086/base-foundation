@@ -1,4 +1,3 @@
-
 # --- Fuente: schemas_finance.py ---
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from typing import Optional
@@ -70,3 +69,14 @@ class BankMovementResponse(BaseModel):
     fecha_conciliacion: Optional[date]
     model_config = ConfigDict(from_attributes=True)
 
+
+class BankMovementCreate(BaseModel):
+    bank_account_id: int
+    tipo: str = Field(
+        ..., pattern="^(ingreso|egreso)$", description="Debe ser 'ingreso' o 'egreso'"
+    )
+    monto: float = Field(
+        ..., gt=0, description="El monto debe ser estrictamente mayor a 0"
+    )
+    concepto: str = Field(..., min_length=3, max_length=255)
+    referencia: Optional[str] = None
