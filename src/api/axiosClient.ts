@@ -1,7 +1,10 @@
 import axios from "axios";
 
 // Base URL desde variables de entorno
-const baseURL = import.meta.env.VITE_API_BASE_URL || "/api";
+let envBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+
+envBase = envBase.replace(/\/$/, "");
+const baseURL = `${envBase}/api`;
 
 const axiosClient = axios.create({
   baseURL,

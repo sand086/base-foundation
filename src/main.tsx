@@ -6,8 +6,11 @@ import "./App.css";
 import { OpenAPI } from "./api/generated";
 
 // 2. Lees la URL desde tu archivo .env
-OpenAPI.BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
+OpenAPI.BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
+// AGREGAR ESTO TEMPORALMENTE:
+console.log("👉 VITE ENV:", import.meta.env.VITE_API_BASE_URL);
+console.log("👉 OpenAPI.BASE:", OpenAPI.BASE);
 // 3. Configuras el token
 OpenAPI.TOKEN = async () => {
   return localStorage.getItem("token") || "";
