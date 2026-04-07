@@ -100,7 +100,7 @@ export function BankAccountsTab({
           {bankAccounts.map((account) => (
             <Card
               key={account.id}
-              className="shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-2xl overflow-hidden relative group border-slate-200 dark:border-white/10"
+              className="shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-2xl overflow-hidden relative border-slate-200 dark:border-white/10"
             >
               {/* Indicador visual de tipo de cuenta */}
               <div
@@ -112,21 +112,21 @@ export function BankAccountsTab({
                 )}
               />
 
-              {/* 🎯 MENÚ DE ACCIONES (VER, EDITAR, ELIMINAR/ARCHIVAR) */}
-              <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+              {/* 🎯 MENÚ DE ACCIONES (CORREGIDO: Siempre visible y con z-20) */}
+              <div className="absolute top-3 right-3 z-20">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 text-slate-400 bg-white/80 dark:bg-slate-800/80 shadow-sm border border-slate-100 dark:border-white/5 rounded-lg hover:text-brand-navy dark:hover:text-white"
+                      className="h-8 w-8 text-slate-500 bg-white dark:bg-slate-800 shadow-sm border border-slate-200 dark:border-white/10 rounded-lg hover:text-brand-navy hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                     >
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent
                     align="end"
-                    className="glass-panel border-border min-w-[160px] z-50 rounded-xl dark:bg-slate-900/95"
+                    className="glass-panel border-border min-w-[160px] z-50 rounded-xl dark:bg-slate-900/95 shadow-xl"
                   >
                     <DropdownMenuItem
                       onClick={() => onView(account)}
@@ -163,7 +163,7 @@ export function BankAccountsTab({
                     {account.banco_logo || "🏦"}
                   </div>
                   <div>
-                    <h4 className="font-black text-slate-800 dark:text-white uppercase tracking-tight text-sm pr-8">
+                    <h4 className="font-black text-slate-800 dark:text-white uppercase tracking-tight text-sm pr-10 truncate">
                       {account.alias}
                     </h4>
                     <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">

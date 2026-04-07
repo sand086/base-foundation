@@ -11,12 +11,12 @@ from app.db.database import get_db
 from app.models import models
 from app.modules.auth.router import get_current_active_user
 
-#  IMPORTACIONES LOCALES (FSD)
+# IMPORTACIONES LOCALES (FSD)
 from . import schemas, crud
 
 logger = logging.getLogger(__name__)
 
-#  ÚNICA INSTANCIA DEL ROUTER
+# ÚNICA INSTANCIA DEL ROUTER
 router = APIRouter(tags=["Finance"])
 
 
@@ -75,6 +75,39 @@ def create_bank_account(
     return crud.create_bank_account(db, account, current_user.id)
 
 
+# 🎯 NUEVO: RUTA PARA EDITAR (PATCH)
+@router.patch("/bank-accounts/{account_id}", response_model=schemas.BankAccountResponse)
+def update_bank_account(
+    account_id: int,
+    account_data: dict = Body(
+        ...
+    ),  # Recibe los datos parciales (incluido saldo_inicial si fue forzado)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """Edita la cuenta bancaria. Permite ajuste de saldo si se autorizó en el front."""
+    updated_account = crud.update_bank_account(
+        db, account_id, account_data, current_user.id
+    )
+    if not updated_account:
+        raise HTTPException(status_code=404, detail="Cuenta bancaria no encontrada")
+    return updated_account
+
+
+# 🎯 NUEVO: RUTA PARA ELIMINAR/ARCHIVAR (DELETE)
+@router.delete("/bank-accounts/{account_id}")
+def delete_bank_account(
+    account_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """Aplica un Soft Delete a la cuenta para proteger la integridad contable."""
+    success = crud.delete_bank_account(db, account_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Cuenta bancaria no encontrada")
+    return {"message": "Cuenta archivada exitosamente"}
+
+
 @router.get("/movements", response_model=List[schemas.BankMovementResponse])
 def read_movements(db: Session = Depends(get_db)):
     return crud.get_bank_movements(db)
@@ -85,118 +118,22 @@ def read_movements(db: Session = Depends(get_db)):
 # =====================================================================
 
 
-class BulkInvoicePayload(BaseModel):
-    data: List[Dict[str, Any]]
-
-
 @router.post("/invoices/bulk-upload")
 def bulk_upload_invoices(
-    payload: BulkInvoicePayload,
+    payload: BulkUploadPayload,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_active_user),
 ):
-    config_credito = (
-        db.query(models.SystemConfig)
-        .filter(models.SystemConfig.key == "dias_credito_default")
-        .first()
-    )
-    dias_credito_default = (
-        int(config_credito.value)
-        if config_credito and config_credito.value.isdigit()
-        else 15
-    )
-
-    facturas_creadas = 0
-    proveedores_creados = 0
-
-    for row in payload.data:
-        uuid_val = str(row.get("uuid", "")).strip().upper()
-        rfc_prov = str(row.get("rfc_emisor", "")).strip().upper()
-        nombre_prov = (
-            str(row.get("nombre_emisor", "")).strip() or "PROVEEDOR DESCONOCIDO"
+    """
+    Endpoint para procesar la carga masiva de facturas del SAT (CXP).
+    """
+    try:
+        resultado = crud.process_bulk_payables(db=db, payload_data=payload.data)
+        return resultado
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error procesando facturas: {str(e)}"
         )
-        folio = str(row.get("folio", "")).strip()
-        concepto = str(row.get("concepto", "")).strip() or "Importación SAT"
-        moneda = str(row.get("moneda", "MXN")).strip().upper()
-
-        dias_csv = str(row.get("dias_credito", "")).strip()
-        dias_credito_final = (
-            int(dias_csv) if dias_csv.isdigit() else dias_credito_default
-        )
-
-        if not rfc_prov or len(rfc_prov) < 10:
-            continue
-
-        if uuid_val:
-            existe_factura = (
-                db.query(models.PayableInvoice)
-                .filter(models.PayableInvoice.uuid == uuid_val)
-                .first()
-            )
-            if existe_factura:
-                continue
-
-        # 🧠 INTELIGENCIA: Buscar o Crear Proveedor
-        proveedor = (
-            db.query(models.Supplier).filter(models.Supplier.rfc == rfc_prov).first()
-        )
-        if not proveedor:
-            proveedor = models.Supplier(
-                razon_social=nombre_prov,
-                rfc=rfc_prov,
-                dias_credito=dias_credito_final,
-                estatus="activo",
-                created_by_id=current_user.id,
-            )
-            db.add(proveedor)
-            db.flush()
-            proveedores_creados += 1
-
-        def safe_float(val):
-            try:
-                return float(str(val).replace(",", "").replace("$", "").strip())
-            except (ValueError, TypeError):
-                return 0.0
-
-        subtotal = safe_float(row.get("subtotal"))
-        iva = safe_float(row.get("iva"))
-        retenciones = safe_float(row.get("retenciones"))
-        total = safe_float(row.get("total"))
-
-        fecha_str = str(row.get("fecha_emision", "")).strip()
-        try:
-            fecha_emision = datetime.strptime(fecha_str[:10], "%Y-%m-%d").date()
-        except ValueError:
-            fecha_emision = date.today()
-
-        fecha_vencimiento = fecha_emision + timedelta(days=proveedor.dias_credito)
-
-        nueva_factura = models.PayableInvoice(
-            supplier_id=proveedor.id,
-            supplier_razon_social=proveedor.razon_social,
-            uuid=uuid_val if uuid_val else None,
-            folio_interno=folio,
-            subtotal=subtotal,
-            iva=iva,
-            retenciones=retenciones,
-            monto_total=total,
-            saldo_pendiente=total,
-            moneda=moneda,
-            fecha_emision=fecha_emision,
-            fecha_vencimiento=fecha_vencimiento,
-            concepto=concepto[:200],
-            clasificacion="gasto_indirecto_variable",
-            estatus="pendiente",
-            created_by_id=current_user.id,
-        )
-        db.add(nueva_factura)
-        facturas_creadas += 1
-
-    db.commit()
-    return {
-        "status": "success",
-        "message": f"Se procesaron {facturas_creadas} facturas y se crearon {proveedores_creados} proveedores nuevos.",
-    }
 
 
 # =====================================================================
@@ -368,7 +305,7 @@ async def upload_payment_xml(
             uuid_factura = doc.get("IdDocumento").upper()
             monto_pagado = float(doc.get("ImpPagado", "0.00"))
 
-            #  SOLUCIÓN AL BUG: Cambié uuid_val a uuid_factura
+            # SOLUCIÓN AL BUG: Cambié uuid_val a uuid_factura
             factura = (
                 db.query(models.ReceivableInvoice)
                 .filter(models.ReceivableInvoice.uuid == uuid_factura)
@@ -405,17 +342,3 @@ async def upload_payment_xml(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=f"Error al leer XML: {str(e)}")
-
-
-@router.post("/invoices/bulk-upload")
-def bulk_upload_invoices(payload: BulkUploadPayload, db: Session = Depends(get_db)):
-    """
-    Endpoint para procesar la carga masiva de facturas del SAT (CXP).
-    """
-    try:
-        resultado = crud.process_bulk_payables(db=db, payload_data=payload.data)
-        return resultado
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error procesando facturas: {str(e)}"
-        )
