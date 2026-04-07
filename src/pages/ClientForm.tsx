@@ -776,7 +776,7 @@ export default function ClientsNew() {
   }
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto p-4 md:p-8 animate-page-enter">
+    <div className="space-y-6 max-w-6xl mx-auto py-4 md:py-8 px-0 animate-page-enter">
       {/*  HEADER TAHOE */}
       <div className="flex items-center gap-4 mb-8">
         <Button
