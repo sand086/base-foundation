@@ -1,4 +1,5 @@
-// src/features/llantas/types.ts
+// src/features/tires/types.ts
+import type { TireResponse } from "@/api/generated";
 
 export type TireHistoryEventType =
   | "compra"
@@ -24,25 +25,10 @@ export interface TireHistoryEvent {
   responsable?: string;
 }
 
-export interface Tire {
-  id: number;
-  codigo_interno: string;
-  marca: string;
-  modelo: string;
-  medida: string;
-  dot: string;
+export interface Tire extends TireResponse {
+  /** Alias local — el backend envía `unit_id` */
   unidad_actual_id?: number | null;
   unidad_actual_economico?: string | null;
-  posicion?: number | null;
-  estado: "nuevo" | "usado" | "renovado" | "desecho";
-  estado_fisico: "buena" | "regular" | "mala";
-  profundidad_actual: number;
-  profundidad_original: number;
-  km_recorridos: number;
-  fecha_compra?: string;
-  precio_compra?: number;
-  costo_acumulado?: number;
-  proveedor?: string;
   historial?: TireHistoryEvent[];
 }
 

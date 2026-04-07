@@ -36,9 +36,11 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 import { TruckChassisSVG } from "@/features/units/components/TruckChassisSVG";
 import { toast } from "@/hooks/use-toast";
-import { unitService, UnitDetail } from "@/features/units/services/unitService";
-import { UnitDocument } from "@/features/units/types";
+import { FleetUnitsService, FleetTiresService } from "@/api/generated";
+import { Unit, UnitDocument } from "@/features/units/types";
 import { UnitTire } from "@/features/tires/types";
+
+type UnitDetail = Unit & { documents: UnitDocument[]; tires: UnitTire[]; };
 import { DocumentUploadManager } from "@/components/common/DocumentUploadManager";
 
 // MODALES / SHEETS DE LLANTAS
@@ -48,9 +50,9 @@ import { TireHistorySheet } from "@/features/tires/components/TireHistorySheet";
 import { CreateTireModal } from "@/features/tires/components/CreateTireModal";
 import { MountTireModal } from "@/features/tires/components/MountTireModal"; // Añade esta importación
 import {
-  tireService,
+  getTireSemaphoreStatus,
   TIRE_POSITIONS,
-} from "@/features/tires/services/tireService"; //  Importamos TIRE_POSITIONS para la tabla
+} from "@/features/tires/utils/tireUtils";
 
 /**
  * Helper para badges de fecha
@@ -187,7 +189,7 @@ export default function FlotaUnitDetail() {
     if (!id) return;
     setIsLoading(true);
     try {
-      const apiData: any = await unitService.getById(id as string);
+      const apiData: any = await FleetUnitsService.readUnitApiFleetUnitsTermGet(id as string);
 
       const constructedDocuments = [
         {
@@ -285,7 +287,7 @@ export default function FlotaUnitDetail() {
   const handleEditTireSubmit = async (data: any) => {
     if (!selectedTire) return false;
     try {
-      await tireService.update(selectedTire.id, data);
+      await FleetTiresService.updateTireApiFleetTiresTireIdPut(Number(selectedTire.id), data);
       toast({ title: "Éxito", description: "Llanta editada correctamente." });
       await loadUnit();
       return true;
@@ -308,9 +310,9 @@ export default function FlotaUnitDetail() {
     notas: string,
   ) => {
     try {
-      await tireService.assign(Number(tireId), {
+      await FleetTiresService.assignTireApiFleetTiresTireIdAssignPost(Number(tireId), {
         unit_id: unidadId ? Number(unidadId) : null,
-        posicion: posicion, // Pasamos el número directamente
+        posicion: posicion,
         notas: notas,
       });
 
@@ -338,8 +340,8 @@ export default function FlotaUnitDetail() {
     descripcion: string,
   ) => {
     try {
-      await tireService.maintenance(Number(tireId), {
-        tipo: tipo,
+      await FleetTiresService.maintenanceTireApiFleetTiresTireIdMaintenancePost(Number(tireId), {
+        tipo: tipo as any,
         costo: costo,
         descripcion: descripcion,
       });
@@ -426,7 +428,7 @@ export default function FlotaUnitDetail() {
           : null,
       };
 
-      await unitService.update(unit.id, payload);
+      await FleetUnitsService.updateUnitApiFleetUnitsUnitIdPut(String(unit.id), payload as any);
 
       toast({
         title: "Cambios guardados",

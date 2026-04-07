@@ -121,21 +121,21 @@ const normalizeStr = (str?: string | null) =>
     .replace(/[\u0300-\u036f]/g, "") || "";
 
 const shellClass =
-  "overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/90 shadow-2xl shadow-slate-200/50 backdrop-blur-xl dark:border-white/10 dark:bg-brand-navy/95 dark:shadow-black/30";
+  "overflow-hidden rounded-[28px] border border-border bg-card/90 shadow-2xl shadow-slate-200/50 dark:shadow-black/30 backdrop-blur-xl";
 
 const headerClass =
-  "border-b border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900";
+  "border-b border-border bg-card";
 
-const bodyClass = "bg-slate-50/50 dark:bg-transparent";
+const bodyClass = "bg-muted/30 dark:bg-transparent";
 
 const footerClass =
-  "sticky bottom-0 border-t border-slate-200 dark:border-white/10 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl";
+  "sticky bottom-0 border-t border-border bg-card/80 backdrop-blur-xl";
 
 const sunkPanelClass =
-  "rounded-[20px] border border-slate-200/70 bg-slate-50/80 p-4 shadow-inner shadow-slate-200/50 dark:border-white/10 dark:bg-slate-950/35 dark:shadow-black/30";
+  "rounded-[20px] border border-border bg-muted/50 p-4 shadow-inner dark:shadow-black/30";
 
 const sectionCardClass =
-  "rounded-[20px] border border-slate-200/70 bg-white/75 p-4 shadow-xl shadow-slate-200/40 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/55 dark:shadow-black/20";
+  "rounded-[20px] border border-border bg-card/75 p-4 shadow-xl backdrop-blur-xl dark:shadow-black/20";
 
 function TahoeIconPlate({
   children,
@@ -197,7 +197,7 @@ function SearchableSelect({
           role="combobox"
           aria-expanded={open}
           className={cn(
-            "h-10 w-full justify-between rounded-xl border-slate-200/80 bg-white/90 px-4 font-semibold text-slate-800 shadow-sm backdrop-blur-xl hover:bg-white",
+            "h-10 w-full justify-between rounded-xl border-border bg-card/90 px-4 font-semibold text-foreground shadow-sm backdrop-blur-xl hover:bg-card",
             className,
           )}
         >
@@ -212,7 +212,7 @@ function SearchableSelect({
         </Button>
       </PopoverTrigger>
 
-      <PopoverContent className="w-[380px] p-0" align="start" sideOffset={8}>
+      <PopoverContent className="w-[min(380px,calc(100vw-2rem))] p-0" align="start" sideOffset={8}>
         <Command>
           <CommandInput placeholder="Escribe para buscar..." />
           <CommandList className="max-h-[280px]">
@@ -491,7 +491,7 @@ export const DispatchWizard = ({
     [arrClients, data.clienteId],
   );
   const availableSubClientes = useMemo(
-    () => (selectedClient?.sub_clients || []) as SubClient[],
+    () => (selectedClient?.sub_clients || []) as unknown as SubClient[],
     [selectedClient],
   );
   const selectedSubClient = useMemo(
@@ -756,7 +756,7 @@ export const DispatchWizard = ({
               <Truck className="h-6 w-6" />
             </TahoeIconPlate>
             <div>
-              <CardTitle className="text-xl text-slate-900 dark:text-white">
+              <CardTitle className="text-xl text-foreground">
                 {tripId || initialData?.id
                   ? "PLANEAR / EDITAR Dispatch"
                   : "Dispatch WIZARD"}
@@ -1188,7 +1188,7 @@ export const DispatchWizard = ({
 
             <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 animate-in slide-in-from-top-4 fade-in duration-300">
               <div className={sectionCardClass}>
-                <h4 className="text-sm font-black uppercase tracking-tighter text-slate-900 mb-4 flex items-center gap-2 border-b pb-2">
+                <h4 className="text-sm font-black uppercase tracking-tighter text-foreground mb-4 flex items-center gap-2 border-b pb-2">
                   <User className="h-5 w-5 text-brand-red" /> Ejecutor
                 </h4>
                 <div className="space-y-3">
@@ -1218,7 +1218,7 @@ export const DispatchWizard = ({
               </div>
 
               <div className={sectionCardClass}>
-                <h4 className="text-sm font-black uppercase tracking-tighter text-slate-900 mb-4 flex items-center gap-2 border-b pb-2">
+                <h4 className="text-sm font-black uppercase tracking-tighter text-foreground mb-4 flex items-center gap-2 border-b pb-2">
                   <LinkIcon className="h-5 w-5 text-blue-600" /> Arrastre
                 </h4>
                 <div className="space-y-3">
@@ -1302,44 +1302,44 @@ export const DispatchWizard = ({
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
               {/* Tarjeta de Ruta */}
               <Card
-                className={cn(shellClass, "border-blue-200/50 bg-blue-50/20")}
+                className={cn(shellClass, "border-blue-200/50 dark:border-blue-800/30 bg-blue-50/20 dark:bg-blue-950/10")}
               >
                 <CardHeader className={cn(headerClass, "pb-3 pt-4")}>
                   <div className="flex items-center gap-3">
                     <TahoeIconPlate tone="blue" className="h-10 w-10">
                       <MapPin className="h-5 w-5" />
                     </TahoeIconPlate>
-                    <CardTitle className="text-sm text-blue-900 font-black uppercase tracking-widest">
+                    <CardTitle className="text-sm text-blue-900 dark:text-blue-300 font-black uppercase tracking-widest">
                       Datos de la Ruta
                     </CardTitle>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-3 pt-4 text-sm">
-                  <div className="flex justify-between border-b border-slate-200/50 pb-2">
-                    <span className="font-bold text-slate-500">Cliente:</span>
-                    <span className="font-black text-slate-800 text-right">
+                <CardContent className="space-y-3 pt-4 text-sm text-foreground">
+                  <div className="flex justify-between border-b border-border pb-2">
+                    <span className="font-bold text-muted-foreground">Cliente:</span>
+                    <span className="font-black text-foreground text-right">
                       {selectedClient?.razon_social || "N/A"}
                     </span>
                   </div>
-                  <div className="flex justify-between border-b border-slate-200/50 pb-2">
-                    <span className="font-bold text-slate-500">Destino:</span>
-                    <span className="font-black text-slate-800 text-right">
+                  <div className="flex justify-between border-b border-border pb-2">
+                    <span className="font-bold text-muted-foreground">Destino:</span>
+                    <span className="font-black text-foreground text-right">
                       {selectedSubClient?.ciudad || "N/A"}
                     </span>
                   </div>
-                  <div className="flex justify-between border-b border-slate-200/50 pb-2">
-                    <span className="font-bold text-slate-500">
+                  <div className="flex justify-between border-b border-border pb-2">
+                    <span className="font-bold text-muted-foreground">
                       Ruta Asignada:
                     </span>
-                    <span className="font-black text-blue-700 text-right">
+                    <span className="font-black text-blue-700 dark:text-blue-400 text-right">
                       {data.routeNombre || "N/A"}
                     </span>
                   </div>
                   <div className="flex justify-between pb-1">
-                    <span className="font-bold text-slate-500">
+                    <span className="font-bold text-muted-foreground">
                       Fecha Salida:
                     </span>
-                    <span className="font-black text-slate-800 text-right">
+                    <span className="font-black text-foreground text-right">
                       {data.fecha_programada
                         ? format(data.fecha_programada, "dd 'de' MMMM, yyyy", {
                             locale: es,
@@ -1354,7 +1354,7 @@ export const DispatchWizard = ({
               <Card
                 className={cn(
                   shellClass,
-                  "border-emerald-200/50 bg-emerald-50/20",
+                  "border-emerald-200/50 dark:border-emerald-800/30 bg-emerald-50/20 dark:bg-emerald-950/10",
                 )}
               >
                 <CardHeader className={cn(headerClass, "pb-3 pt-4")}>
@@ -1362,40 +1362,40 @@ export const DispatchWizard = ({
                     <TahoeIconPlate tone="green" className="h-10 w-10">
                       <ClipboardList className="h-5 w-5" />
                     </TahoeIconPlate>
-                    <CardTitle className="text-sm text-emerald-900 font-black uppercase tracking-widest">
+                    <CardTitle className="text-sm text-emerald-900 dark:text-emerald-300 font-black uppercase tracking-widest">
                       Asignación y Mercancía
                     </CardTitle>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-3 pt-4 text-sm">
-                  <div className="flex justify-between border-b border-slate-200/50 pb-2">
-                    <span className="font-bold text-slate-500">Operador:</span>
-                    <span className="font-black text-emerald-800 text-right">
+                <CardContent className="space-y-3 pt-4 text-sm text-foreground">
+                  <div className="flex justify-between border-b border-border pb-2">
+                    <span className="font-bold text-muted-foreground">Operador:</span>
+                    <span className="font-black text-emerald-800 dark:text-emerald-300 text-right">
                       {availableOperators.find((o) => o.value === data.driverId)
                         ?.label || "N/A"}
                     </span>
                   </div>
-                  <div className="flex justify-between border-b border-slate-200/50 pb-2">
-                    <span className="font-bold text-slate-500">Unidad:</span>
-                    <span className="font-black text-emerald-800 text-right">
+                  <div className="flex justify-between border-b border-border pb-2">
+                    <span className="font-bold text-muted-foreground">Unidad:</span>
+                    <span className="font-black text-emerald-800 dark:text-emerald-300 text-right">
                       {availableTractos
                         .find((t) => t.value === data.unitId)
                         ?.label?.split(" ")[0] || "N/A"}
                     </span>
                   </div>
-                  <div className="flex justify-between border-b border-slate-200/50 pb-2">
-                    <span className="font-bold text-slate-500">
+                  <div className="flex justify-between border-b border-border pb-2">
+                    <span className="font-bold text-muted-foreground">
                       Contenedor 1:
                     </span>
-                    <span className="font-mono font-black text-slate-800 text-right">
+                    <span className="font-mono font-black text-foreground text-right">
                       {data.contenedor_1 || "N/A"}
                     </span>
                   </div>
                   <div className="flex flex-col gap-1 pb-1">
-                    <span className="font-bold text-slate-500">
+                    <span className="font-bold text-muted-foreground">
                       Mercancía SAT:
                     </span>
-                    <span className="font-semibold text-slate-700 text-xs line-clamp-2 leading-tight">
+                    <span className="font-semibold text-foreground/80 text-xs line-clamp-2 leading-tight">
                       {data.descripcion_mercancia || "N/A"}
                     </span>
                   </div>
@@ -1413,16 +1413,16 @@ export const DispatchWizard = ({
                     <ShieldCheck className="h-6 w-6 text-indigo-600" />
                   </TahoeIconPlate>
                   <div>
-                    <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">
+                    <h3 className="text-sm font-black text-foreground uppercase tracking-tight">
                       Opciones de Emisión (SAT)
                     </h3>
-                    <p className="text-xs font-medium text-slate-500 mt-1">
+                    <p className="text-xs font-medium text-muted-foreground mt-1">
                       Configura cómo se generará la Carta Porte al despachar.
                     </p>
                   </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex-1 md:flex-none">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 bg-card p-3 rounded-2xl border border-border shadow-sm flex-1 md:flex-none">
                   <div className="flex items-center gap-3">
                     <Switch
                       checked={data.generarCartaPorte}
@@ -1431,7 +1431,7 @@ export const DispatchWizard = ({
                       }
                     />
                     <Label
-                      className="text-xs font-black text-slate-800 cursor-pointer"
+                      className="text-xs font-black text-foreground cursor-pointer"
                       onClick={() =>
                         setData((p) => ({
                           ...p,

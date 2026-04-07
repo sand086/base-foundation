@@ -47,7 +47,7 @@ import {
   getTireLifePercentage,
   getTireSemaphoreStatus,
   getEstadoBadge,
-} from "@/features/tires/services/tireService";
+} from "@/features/tires/utils/tireUtils";
 import { useTires } from "@/features/tires/hooks/useTires";
 import { Tire } from "@/features/tires/types";
 

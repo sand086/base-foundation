@@ -504,7 +504,7 @@ export const TollBoothCatalog = () => {
       </div>
 
       {/*  TOOLBAR TAHOE */}
-      <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-white/40 dark:bg-slate-900/40 p-4 rounded-2xl border border-white/20 dark:border-white/10 shadow-sm backdrop-blur-md">
+      <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-card/40 p-4 rounded-2xl border border-white/20 dark:border-white/10 shadow-sm backdrop-blur-md">
         <div className="flex items-center gap-3 w-full md:max-w-md">
           <div className="relative flex-1">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -512,7 +512,7 @@ export const TollBoothCatalog = () => {
               placeholder="Buscar peaje, tramo o carretera..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 h-11 border-slate-200 dark:border-white/10 shadow-sm focus:ring-brand-red/20 bg-white dark:bg-slate-900"
+              className="pl-10 h-11 border-slate-200 dark:border-white/10 shadow-sm focus:ring-brand-red/20 bg-card"
             />
           </div>
           <Button
@@ -551,10 +551,10 @@ export const TollBoothCatalog = () => {
       </div>
 
       {/*  TABLA LIQUID GLASS */}
-      <div className="relative w-full overflow-hidden rounded-2xl border border-slate-200/50 dark:border-white/10 bg-white/30 dark:bg-slate-950/30 backdrop-blur-sm shadow-xl liquid-glass-table">
+      <div className="relative w-full overflow-hidden rounded-2xl border border-slate-200/50 dark:border-white/10 bg-card/30 backdrop-blur-sm shadow-xl liquid-glass-table">
         <div className="overflow-auto max-h-[60vh] custom-scrollbar">
           <Table className="w-full caption-bottom text-sm">
-            <TableHeader className="sticky top-0 z-20 backdrop-blur-xl bg-slate-50/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-white/10">
+            <TableHeader className="sticky top-0 z-20 backdrop-blur-xl bg-muted/80 border-b border-slate-200 dark:border-white/10">
               <TableRow className="hover:bg-transparent border-none">
                 <TableHead className="w-14 pl-6">
                   <Checkbox
@@ -680,14 +680,14 @@ export const TollBoothCatalog = () => {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50"
+                            className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200 dark:border-white/10 bg-card/50"
                           >
                             <MoreHorizontal className="h-4 w-4 text-slate-500 dark:text-slate-400" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent
                           align="end"
-                          className="glass-panel border-slate-200 dark:border-white/10 min-w-[160px] z-50 dark:bg-slate-900/90"
+                          className="glass-panel border-border min-w-[160px] z-50 dark:bg-slate-900/90"
                         >
                           <DropdownMenuItem
                             className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
@@ -716,8 +716,8 @@ export const TollBoothCatalog = () => {
 
       {/*  DIALOG CREAR / EDITAR (FORMULARIO CON ZOD + RHF) */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="w-[95vw] sm:max-w-2xl p-0 flex flex-col max-h-[90vh] bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 shadow-2xl rounded-2xl transition-all duration-300 overflow-hidden">
-          <DialogHeader className="p-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 z-10">
+        <DialogContent className="w-[95vw] sm:max-w-2xl p-0 flex flex-col max-h-[90vh] bg-card/95 backdrop-blur-xl border border-border shadow-2xl rounded-2xl transition-all duration-300 overflow-hidden">
+          <DialogHeader className="p-6 bg-card border-b border-border shrink-0 z-10">
             <DialogTitle className="flex items-center gap-3 text-slate-800 dark:text-white text-xl font-black">
               <div
                 className={cn(
@@ -754,7 +754,7 @@ export const TollBoothCatalog = () => {
               onSubmit={form.handleSubmit(onSubmit)}
               className="flex-1 overflow-y-auto flex flex-col custom-scrollbar"
             >
-              <div className="flex-1 p-6 bg-slate-50/50 dark:bg-transparent space-y-8">
+              <div className="flex-1 p-6 bg-muted/50 space-y-8">
                 {/* SECCIÓN 1: DATOS BÁSICOS */}
                 <div className="grid grid-cols-2 gap-6">
                   <FormField
@@ -769,7 +769,7 @@ export const TollBoothCatalog = () => {
                           <Input
                             {...field}
                             placeholder="Ej: Caseta San Marcos"
-                            className="h-11 bg-white dark:bg-slate-800/50 border-slate-200 dark:border-white/10 font-bold text-slate-800 dark:text-slate-100"
+                            className="h-11 bg-card border-slate-200 dark:border-white/10 font-bold text-slate-800 dark:text-slate-100"
                           />
                         </FormControl>
                         <FormMessage />
@@ -787,7 +787,7 @@ export const TollBoothCatalog = () => {
                           <Input
                             {...field}
                             placeholder="Ej: Mex 150D"
-                            className="h-11 font-mono uppercase font-bold tracking-widest bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-100"
+                            className="h-11 font-mono uppercase font-bold tracking-widest bg-muted border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-100"
                           />
                         </FormControl>
                         <FormMessage />
@@ -805,7 +805,7 @@ export const TollBoothCatalog = () => {
                           <Input
                             {...field}
                             placeholder="Ej: Puebla"
-                            className="h-11 font-bold bg-white dark:bg-slate-800/50 border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100"
+                            className="h-11 font-bold bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100"
                           />
                         </FormControl>
                         <FormMessage />
@@ -827,11 +827,11 @@ export const TollBoothCatalog = () => {
                           value={field.value}
                         >
                           <FormControl>
-                            <SelectTrigger className="h-11 bg-white dark:bg-slate-800/50 border-slate-200 dark:border-white/10 font-bold w-full sm:w-1/2 text-slate-800 dark:text-slate-100">
+                            <SelectTrigger className="h-11 bg-card border-slate-200 dark:border-white/10 font-bold w-full sm:w-1/2 text-slate-800 dark:text-slate-100">
                               <SelectValue placeholder="Seleccionar..." />
                             </SelectTrigger>
                           </FormControl>
-                          <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-slate-200 dark:border-white/10">
+                          <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
                             <SelectItem value="tag" className="font-bold">
                               Cobro Electrónico (TAG)
                             </SelectItem>
@@ -863,7 +863,7 @@ export const TollBoothCatalog = () => {
                       control={form.control}
                       name="costo_5_ejes_sencillo"
                       render={({ field }) => (
-                        <FormItem className="p-5 bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-white/10 rounded-xl transition-colors hover:border-blue-300 dark:hover:border-blue-500/50">
+                        <FormItem className="p-5 bg-card/40 border border-slate-200 dark:border-white/10 rounded-xl transition-colors hover:border-blue-300 dark:hover:border-blue-500/50">
                           <Label className="text-[9px] font-black text-slate-500 dark:text-slate-400 tracking-[0.2em] uppercase flex items-center gap-2">
                             <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />{" "}
                             Tarifa 5 ejes (Sencillo)
@@ -895,7 +895,7 @@ export const TollBoothCatalog = () => {
                       control={form.control}
                       name="costo_9_ejes_full"
                       render={({ field }) => (
-                        <FormItem className="p-5 bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-white/10 rounded-xl transition-colors hover:border-emerald-300 dark:hover:border-emerald-500/50">
+                        <FormItem className="p-5 bg-card/40 border border-slate-200 dark:border-white/10 rounded-xl transition-colors hover:border-emerald-300 dark:hover:border-emerald-500/50">
                           <Label className="text-[9px] font-black text-slate-500 dark:text-slate-400 tracking-[0.2em] uppercase flex items-center gap-2">
                             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />{" "}
                             Tarifa 9 Ejes (Full)
@@ -926,8 +926,8 @@ export const TollBoothCatalog = () => {
                 </div>
 
                 {/* SECCIÓN 3: AVANZADO SCT */}
-                <div className="mt-4 bg-white/60 dark:bg-slate-800/30 border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden transition-all duration-300">
-                  <div className="flex items-center justify-between p-4 bg-slate-100/80 dark:bg-slate-900/50">
+                <div className="mt-4 bg-card/60 border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden transition-all duration-300">
+                  <div className="flex items-center justify-between p-4 bg-muted/80">
                     <div className="flex items-center gap-2">
                       <Route className="h-4 w-4 text-brand-red dark:text-brand-red/80" />
                       <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300">
@@ -983,7 +983,7 @@ export const TollBoothCatalog = () => {
                         )}
                       />
 
-                      <div className="col-span-2 mt-2 bg-slate-100/50 dark:bg-slate-900/50 p-3 rounded-xl flex items-center justify-between border border-dashed border-slate-300 dark:border-white/20">
+                      <div className="col-span-2 mt-2 bg-muted/50 p-3 rounded-xl flex items-center justify-between border border-dashed border-slate-300 dark:border-white/20">
                         <span className="font-mono text-[10px] font-bold text-slate-500 dark:text-slate-400 tracking-widest">
                           IDENTIFICADOR GENERADO:
                         </span>
@@ -1004,7 +1004,7 @@ export const TollBoothCatalog = () => {
               </div>
 
               {/* FOOTER DEL FORMULARIO */}
-              <DialogFooter className="p-6 sm:p-8 bg-slate-50/50 dark:bg-black/20 border-t border-slate-200 dark:border-white/10 shrink-0">
+              <DialogFooter className="p-6 sm:p-8 bg-muted/50 border-t border-slate-200 dark:border-white/10 shrink-0">
                 <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
                   <Button
                     type="button"
@@ -1038,8 +1038,8 @@ export const TollBoothCatalog = () => {
 
       {/*  ALERT DIALOG - SINGLE DELETE */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent className="w-[95vw] sm:max-w-2xl p-0 flex flex-col max-h-[90vh] bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 shadow-2xl rounded-2xl transition-all duration-300 overflow-hidden">
-          <AlertDialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0">
+        <AlertDialogContent className="w-[95vw] sm:max-w-2xl p-0 flex flex-col max-h-[90vh] bg-card/95 backdrop-blur-xl border border-border shadow-2xl rounded-2xl transition-all duration-300 overflow-hidden">
+          <AlertDialogHeader className="p-6 sm:p-8 bg-card border-b border-border shrink-0">
             <div className="flex items-center gap-4 sm:gap-5">
               <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center shadow-inner shrink-0">
                 <AlertTriangle className="h-7 w-7 sm:h-8 sm:w-8 text-rose-600 dark:text-rose-400" />
@@ -1117,7 +1117,7 @@ export const TollBoothCatalog = () => {
             </AlertDialogDescription>
           </div>
 
-          <AlertDialogFooter className="p-6 sm:p-8 bg-slate-50/50 dark:bg-black/20 border-t border-slate-200 dark:border-white/10 shrink-0">
+          <AlertDialogFooter className="p-6 sm:p-8 bg-muted/50 border-t border-slate-200 dark:border-white/10 shrink-0">
             <div className="flex flex-col-reverse sm:flex-row sm:flex-wrap justify-end items-stretch sm:items-center gap-3 w-full">
               <AlertDialogCancel
                 variant="outline"
@@ -1178,8 +1178,8 @@ export const TollBoothCatalog = () => {
         open={bulkDeleteDialogOpen}
         onOpenChange={setBulkDeleteDialogOpen}
       >
-        <AlertDialogContent className="w-[95vw] sm:max-w-2xl p-0 flex flex-col max-h-[90vh] bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 shadow-2xl rounded-2xl transition-all duration-300 overflow-hidden">
-          <AlertDialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0">
+        <AlertDialogContent className="w-[95vw] sm:max-w-2xl p-0 flex flex-col max-h-[90vh] bg-card/95 backdrop-blur-xl border border-border shadow-2xl rounded-2xl transition-all duration-300 overflow-hidden">
+          <AlertDialogHeader className="p-6 sm:p-8 bg-card border-b border-border shrink-0">
             <div className="flex items-center gap-4 sm:gap-5">
               <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center shadow-inner shrink-0">
                 <AlertTriangle className="h-7 w-7 sm:h-8 sm:w-8 text-rose-600 dark:text-rose-400" />
@@ -1253,7 +1253,7 @@ export const TollBoothCatalog = () => {
             </AlertDialogDescription>
           </div>
 
-          <AlertDialogFooter className="p-6 sm:p-8 bg-slate-50/50 dark:bg-black/20 border-t border-slate-200 dark:border-white/10 shrink-0">
+          <AlertDialogFooter className="p-6 sm:p-8 bg-muted/50 border-t border-slate-200 dark:border-white/10 shrink-0">
             <div className="flex flex-col-reverse sm:flex-row sm:flex-wrap justify-end items-stretch sm:items-center gap-3 w-full">
               <AlertDialogCancel
                 variant="outline"

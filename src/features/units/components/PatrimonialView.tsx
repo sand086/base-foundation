@@ -348,7 +348,7 @@ export function PatrimonialView() {
             <span className="font-bold text-slate-800 dark:text-slate-200">
               {row.marca}
             </span>
-            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+            <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
               {row.modelo}
             </span>
           </div>
@@ -382,7 +382,7 @@ export function PatrimonialView() {
         type: "date",
         sortable: true,
         render: (value) => (
-          <span className="font-mono text-xs font-medium text-slate-500 dark:text-slate-400">
+          <span className="font-mono text-xs font-medium text-muted-foreground">
             {value}
           </span>
         ),
@@ -419,7 +419,7 @@ export function PatrimonialView() {
                   size="icon"
                   className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl shadow-sm border border-slate-200/50 dark:border-white/10 bg-white dark:bg-slate-900/50"
                 >
-                  <MoreHorizontal className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                  <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent
@@ -474,7 +474,7 @@ export function PatrimonialView() {
             <Truck className="h-6 w-6 text-brand-navy dark:text-slate-300" />
           </div>
           <div className="flex flex-col justify-center">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/80 mb-1">
               Total Activos
             </p>
             <p className="text-3xl font-black text-brand-navy dark:text-white leading-none tracking-tighter">
@@ -491,7 +491,7 @@ export function PatrimonialView() {
             <Package className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
           </div>
           <div className="flex flex-col justify-center">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/80 mb-1">
               Operativos
             </p>
             <p className="text-3xl font-black text-emerald-600 dark:text-emerald-400 leading-none tracking-tighter">
@@ -508,7 +508,7 @@ export function PatrimonialView() {
             <TrendingDown className="h-6 w-6 text-rose-600 dark:text-rose-400" />
           </div>
           <div className="flex flex-col justify-center">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/80 mb-1">
               Bajas Históricas
             </p>
             <p className="text-3xl font-black text-rose-600 dark:text-rose-400 leading-none tracking-tighter">
@@ -525,7 +525,7 @@ export function PatrimonialView() {
             <DollarSign className="h-6 w-6 text-blue-600 dark:text-blue-400" />
           </div>
           <div className="flex flex-col justify-center">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/80 mb-1">
               Valor Patrimonial
             </p>
             <p className="text-xl font-black font-mono text-blue-600 dark:text-blue-400 leading-none tracking-tighter mt-1">
@@ -537,20 +537,20 @@ export function PatrimonialView() {
 
       {/*  Resumen Agrupado */}
       <Card variant="default" className="border-none shadow-xl overflow-hidden">
-        <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-white/10 p-6">
+        <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-border p-6">
           <CardTitle className="text-xl font-black uppercase tracking-tighter text-brand-navy dark:text-white heading-crisp">
             Inventario Total por Tipo
           </CardTitle>
-          <CardDescription className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-1">
+          <CardDescription className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mt-1">
             Resumen de activos operativos agrupados por categoría
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-6 bg-slate-50/30 dark:bg-transparent">
+        <CardContent className="p-6 bg-muted/20 dark:bg-transparent">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {Object.entries(resumenAgrupado).map(([tipo, data]) => (
               <div
                 key={tipo}
-                className="p-5 border border-slate-200 dark:border-white/10 rounded-2xl bg-white dark:bg-slate-900 shadow-sm hover:shadow-md transition-shadow"
+                className="p-5 border border-border rounded-2xl bg-card shadow-sm hover:shadow-md transition-shadow"
               >
                 <div className="flex items-center gap-4 mb-4 pb-4 border-b border-slate-100 dark:border-white/5">
                   <div className="p-3 bg-brand-navy/5 dark:bg-slate-800 rounded-xl text-brand-navy dark:text-slate-300">
@@ -571,7 +571,7 @@ export function PatrimonialView() {
                       key={modelo}
                       className="flex items-center justify-between"
                     >
-                      <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-tight">
+                      <span className="text-xs font-bold text-muted-foreground uppercase tracking-tight">
                         {modelo}
                       </span>
                       <Badge
@@ -594,17 +594,17 @@ export function PatrimonialView() {
         variant="default"
         className="border-none shadow-2xl overflow-hidden"
       >
-        <CardHeader className="flex flex-row items-center justify-between border-b border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-900/50 py-6 px-6">
+        <CardHeader className="flex flex-row items-center justify-between border-b border-border bg-muted/50 dark:bg-muted/20 py-6 px-6">
           <div>
             <CardTitle className="text-xl font-black uppercase tracking-tighter text-brand-navy dark:text-white heading-crisp">
               Detalle de Activos Patrimoniales
             </CardTitle>
-            <CardDescription className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-1">
+            <CardDescription className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mt-1">
               Listado completo de vehículos, remolques y equipos del patrimonio
             </CardDescription>
           </div>
         </CardHeader>
-        <CardContent className="p-0 bg-white dark:bg-slate-950">
+        <CardContent className="p-0 bg-card dark:bg-background">
           <EnhancedDataTable
             data={activos}
             columns={columns}
@@ -616,7 +616,7 @@ export function PatrimonialView() {
 
       {/*  MODAL DE BAJA (ZOD + RHF + TAHOE UI) */}
       <Dialog open={isBajaModalOpen} onOpenChange={setIsBajaModalOpen}>
-        <DialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
+        <DialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-card/90 dark:bg-card/95 backdrop-blur-xl rounded-2xl">
           <DialogHeader className="p-6 sm:p-8 bg-brand-navy/95 dark:bg-slate-900 backdrop-blur-md shrink-0 border-b border-white/10 relative overflow-hidden z-10">
             <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
             <div className="relative z-10 flex items-center gap-4 sm:gap-5">
@@ -637,25 +637,25 @@ export function PatrimonialView() {
           <Form {...form}>
             <form
               onSubmit={form.handleSubmit(onSubmitBaja)}
-              className="flex-1 overflow-y-auto flex flex-col custom-scrollbar bg-slate-50/50 dark:bg-transparent"
+              className="flex-1 overflow-y-auto flex flex-col custom-scrollbar bg-muted/30 dark:bg-transparent"
             >
               <div className="flex-1 p-6 sm:p-8 space-y-6">
                 {/* INFO DEL ACTIVO (Solo lectura) */}
-                <div className="p-5 bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-white/10 rounded-2xl shadow-sm flex items-center justify-between">
+                <div className="p-5 bg-card border border-border rounded-2xl shadow-sm flex items-center justify-between">
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/80 mb-1">
                       Activo Seleccionado
                     </p>
                     <p className="text-lg font-black text-brand-navy dark:text-white uppercase tracking-tight">
                       ECO-{activoToBaja?.numero_economico}
                     </p>
-                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mt-1">
+                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mt-1">
                       {activoToBaja?.marca} {activoToBaja?.modelo} (
                       {activoToBaja?.year})
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/80 mb-1">
                       VIN Identificador
                     </p>
                     <p className="font-mono font-bold text-slate-700 dark:text-slate-300 text-sm bg-slate-100 dark:bg-slate-900 px-3 py-1 rounded-lg border border-slate-200 dark:border-white/5">
@@ -678,11 +678,11 @@ export function PatrimonialView() {
                           defaultValue={field.value}
                         >
                           <FormControl>
-                            <SelectTrigger className="h-11 font-black uppercase text-xs bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm text-slate-800 dark:text-slate-200">
+                            <SelectTrigger className="h-11 font-black uppercase text-xs bg-card border-border shadow-sm text-slate-800 dark:text-slate-200">
                               <SelectValue placeholder="Seleccionar motivo..." />
                             </SelectTrigger>
                           </FormControl>
-                          <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-slate-200 dark:border-white/10">
+                          <SelectContent className="bg-card/90 dark:bg-card/90 backdrop-blur-xl border-border">
                             <SelectItem
                               value="venta"
                               className="font-bold text-xs uppercase text-blue-600 dark:text-blue-400"
@@ -720,7 +720,7 @@ export function PatrimonialView() {
                           <Input
                             type="date"
                             {...field}
-                            className="h-11 font-mono font-bold bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                            className="h-11 font-mono font-bold bg-card border-border shadow-sm"
                           />
                         </FormControl>
                         <FormMessage />
@@ -740,7 +740,7 @@ export function PatrimonialView() {
                           <Textarea
                             placeholder="Detalles sobre el siniestro, venta o desincorporación..."
                             {...field}
-                            className="min-h-[100px] resize-none bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 font-medium text-sm shadow-sm"
+                            className="min-h-[100px] resize-none bg-card border-border font-medium text-sm shadow-sm"
                           />
                         </FormControl>
                         <FormMessage />
@@ -751,7 +751,7 @@ export function PatrimonialView() {
               </div>
 
               {/* FOOTER */}
-              <DialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0">
+              <DialogFooter className="p-6 sm:p-8 bg-card/80 dark:bg-card/80 backdrop-blur-xl border-t border-border shrink-0">
                 <div className="flex flex-col-reverse sm:flex-row sm:flex-wrap justify-end items-stretch sm:items-center gap-3 w-full">
                   <Button
                     type="button"

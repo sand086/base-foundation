@@ -8,7 +8,7 @@ import {
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 //  Importación actualizada al nuevo servicio
-import { getTopClientsChartData } from "@/features/dashboard/services/dashboardService";
+import { getTopClientsChartData } from "@/features/dashboard/utils/dashboardUtils";
 import { ClientServiceCount } from "@/features/dashboard/types";
 interface TopClientsChartProps {
   clients: ClientServiceCount[];

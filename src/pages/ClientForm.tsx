@@ -622,7 +622,7 @@ export default function ClientsNew() {
         return (
           <Badge
             variant="outline"
-            className="text-[9px] uppercase tracking-widest font-black bg-emerald-500/10 text-emerald-600 border-emerald-200"
+            className="text-[9px] uppercase tracking-widest font-black bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/30"
           >
             Nacional
           </Badge>
@@ -631,7 +631,7 @@ export default function ClientsNew() {
         return (
           <Badge
             variant="outline"
-            className="text-[9px] uppercase tracking-widest font-black bg-blue-500/10 text-blue-600 border-blue-200"
+            className="text-[9px] uppercase tracking-widest font-black bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-500/30"
           >
             Importación
           </Badge>
@@ -640,7 +640,7 @@ export default function ClientsNew() {
         return (
           <Badge
             variant="outline"
-            className="text-[9px] uppercase tracking-widest font-black bg-amber-500/10 text-amber-600 border-amber-200"
+            className="text-[9px] uppercase tracking-widest font-black bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-500/30"
           >
             Exportación
           </Badge>
@@ -768,7 +768,7 @@ export default function ClientsNew() {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] space-y-4">
         <Loader2 className="h-10 w-10 animate-spin text-brand-red" />
-        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">
           Cargando datos del cliente...
         </p>
       </div>
@@ -785,26 +785,26 @@ export default function ClientsNew() {
           onClick={() => navigate("/clients")}
           className="glass-card shadow-sm h-10 w-10"
         >
-          <ArrowLeft className="h-5 w-5 text-slate-600" />
+          <ArrowLeft className="h-5 w-5 text-muted-foreground" />
         </Button>
         <div>
           <h1 className="text-3xl font-black uppercase tracking-tighter text-brand-navy drop-shadow-sm heading-crisp flex items-center gap-3">
             <Users className="h-7 w-7 text-brand-red" />
             {isEditMode ? "Editar Cliente" : "Alta de Cliente"}
           </h1>
-          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400 mt-1">
+          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground mt-1">
             Asistente de registro comercial - Paso {step} de 3
           </p>
         </div>
       </div>
 
       {/*  STEP INDICATOR TAHOE */}
-      <div className="flex items-center gap-4 bg-white/40 backdrop-blur-md p-4 rounded-2xl border border-white/20 shadow-sm">
+      <div className="flex items-center gap-4 bg-card/40 backdrop-blur-md p-4 rounded-2xl border border-white/20 shadow-sm">
         <div
           className={`flex items-center gap-3 ${step >= 1 ? "text-brand-navy" : "text-slate-400"}`}
         >
           <div
-            className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs shadow-sm ${step >= 1 ? "bg-brand-navy text-white shadow-brand-navy/30" : "bg-white/50 border border-slate-200"}`}
+            className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs shadow-sm ${step >= 1 ? "bg-brand-navy text-white shadow-brand-navy/30" : "bg-muted border border-border"}`}
           >
             {step > 1 ? <Check className="h-4 w-4" /> : "1"}
           </div>
@@ -812,12 +812,12 @@ export default function ClientsNew() {
             Datos Fiscales
           </span>
         </div>
-        <div className="flex-1 h-[2px] bg-gradient-to-r from-brand-navy/20 to-slate-200/50 rounded-full" />
+        <div className="flex-1 h-[2px] bg-gradient-to-r from-brand-navy/20 to-border rounded-full" />
         <div
           className={`flex items-center gap-3 ${step >= 2 ? "text-brand-navy" : "text-slate-400"}`}
         >
           <div
-            className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs shadow-sm ${step >= 2 ? "bg-brand-navy text-white shadow-brand-navy/30" : "bg-white/50 border border-slate-200"}`}
+            className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs shadow-sm ${step >= 2 ? "bg-brand-navy text-white shadow-brand-navy/30" : "bg-muted border border-border"}`}
           >
             {step > 2 ? <Check className="h-4 w-4" /> : "2"}
           </div>
@@ -825,12 +825,12 @@ export default function ClientsNew() {
             Destinos
           </span>
         </div>
-        <div className="flex-1 h-[2px] bg-gradient-to-r from-brand-navy/20 to-slate-200/50 rounded-full" />
+        <div className="flex-1 h-[2px] bg-gradient-to-r from-brand-navy/20 to-border rounded-full" />
         <div
           className={`flex items-center gap-3 ${step >= 3 ? "text-brand-navy" : "text-slate-400"}`}
         >
           <div
-            className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs shadow-sm ${step >= 3 ? "bg-brand-navy text-white shadow-brand-navy/30" : "bg-white/50 border border-slate-200"}`}
+            className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs shadow-sm ${step >= 3 ? "bg-brand-navy text-white shadow-brand-navy/30" : "bg-muted border border-border"}`}
           >
             3
           </div>
@@ -1023,22 +1023,22 @@ export default function ClientsNew() {
                   onChange={(e) =>
                     setFiscalData({ ...fiscalData, email: e.target.value })
                   }
-                  className="h-11 font-bold text-brand-navy glass-card"
+                  className="h-11 font-bold text-primary glass-card"
                 />
               </div>
             </div>
 
             {/* Documentos Obligatorios */}
-            <div className="space-y-4 pt-6 border-t border-slate-200/50">
+            <div className="space-y-4 pt-6 border-t border-border/50">
               <h4 className="text-[12px] font-black uppercase tracking-widest text-brand-navy flex items-center gap-2">
                 <FileCheck className="h-4 w-4 text-emerald-500" />
                 Documentación del Cliente
               </h4>
 
               {!isEditMode ? (
-                <div className="p-8 border border-dashed border-slate-300 rounded-2xl bg-white/40 text-center flex flex-col items-center justify-center gap-2 shadow-sm">
+                <div className="p-8 border border-dashed border-border rounded-2xl bg-muted/40 text-center flex flex-col items-center justify-center gap-2 shadow-sm">
                   <AlertTriangle className="h-6 w-6 text-amber-500" />
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
                     Guarda el cliente primero para habilitar la carga de
                     documentos físicos.
                   </p>
@@ -1101,7 +1101,7 @@ export default function ClientsNew() {
             </div>
 
             {/* Documentación Adicional */}
-            <div className="space-y-4 pt-6 border-t border-slate-200/50">
+            <div className="space-y-4 pt-6 border-t border-border/50">
               <div className="flex items-center justify-between">
                 <h4 className="text-[12px] font-black uppercase tracking-widest text-brand-navy flex items-center gap-2">
                   <Paperclip className="h-4 w-4 text-blue-500" />
@@ -1116,7 +1116,7 @@ export default function ClientsNew() {
               </div>
 
               {!isEditMode ? (
-                <div className="p-6 border border-dashed border-slate-300 rounded-2xl bg-white/40 text-center shadow-sm">
+                <div className="p-6 border border-dashed border-border rounded-2xl bg-muted/40 text-center shadow-sm">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                     El repositorio se activa después del primer guardado.
                   </p>
@@ -1137,15 +1137,15 @@ export default function ClientsNew() {
                   />
                   <Card
                     variant="flat"
-                    className="bg-blue-50/50 border-blue-100"
+                    className="bg-blue-50/50 dark:bg-blue-950/20 border-blue-100 dark:border-blue-800/30"
                   >
                     <CardContent className="p-4 flex gap-3">
                       <AlertTriangle className="h-5 w-5 text-blue-500 shrink-0" />
                       <div className="space-y-1">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-blue-800">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-blue-800 dark:text-blue-300">
                           Soporte Multiformato
                         </p>
-                        <p className="text-xs font-medium text-blue-600/80 leading-relaxed">
+                        <p className="text-xs font-medium text-blue-600/80 dark:text-blue-400/80 leading-relaxed">
                           Puedes subir contratos, anexos o catálogos en PDF,
                           Imágenes o Excel.
                         </p>
@@ -1156,7 +1156,7 @@ export default function ClientsNew() {
               )}
             </div>
 
-            <div className="flex justify-end pt-6 border-t border-slate-200/50 mt-8">
+            <div className="flex justify-end pt-6 border-t border-border/50 mt-8">
               <Button
                 onClick={() => setStep(2)}
                 disabled={!canProceed}
@@ -1199,14 +1199,14 @@ export default function ClientsNew() {
 
           <CardContent className="pt-6">
             {subClientes.length === 0 ? (
-              <div className="text-center py-16 border border-dashed border-slate-300 rounded-2xl bg-white/40 shadow-sm flex flex-col items-center">
-                <div className="h-16 w-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
-                  <MapPin className="h-8 w-8 text-slate-400" />
+              <div className="text-center py-16 border border-dashed border-border rounded-2xl bg-muted/40 shadow-sm flex flex-col items-center">
+                <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center mb-4">
+                  <MapPin className="h-8 w-8 text-muted-foreground" />
                 </div>
-                <h3 className="font-black text-slate-700 text-lg uppercase tracking-tight">
+                <h3 className="font-black text-foreground text-lg uppercase tracking-tight">
                   Cero Destinos Configurados
                 </h3>
-                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1 mb-6">
+                <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mt-1 mb-6">
                   Debes agregar al menos una ubicación para continuar.
                 </p>
                 <Button
@@ -1234,10 +1234,10 @@ export default function ClientsNew() {
                       "glass-card rounded-2xl overflow-hidden border transition-all",
                       editingIndex === idx
                         ? "border-brand-navy shadow-md"
-                        : "border-slate-200/60",
+                        : "border-border/60",
                     )}
                   >
-                    <AccordionTrigger className="px-6 py-4 hover:bg-slate-50/50 hover:no-underline [&[data-state=open]]:bg-slate-50/80 transition-colors">
+                    <AccordionTrigger className="px-6 py-4 hover:bg-muted/50 hover:no-underline [[&[data-state=open]]:bg-slate-50/80[data-state=open]]:bg-muted/80 transition-colors">
                       <div className="flex items-center gap-4 flex-1 text-left">
                         <div className="w-10 h-10 rounded-xl bg-brand-navy/5 border border-brand-navy/10 flex items-center justify-center text-brand-navy font-black">
                           {idx + 1}
@@ -1245,12 +1245,12 @@ export default function ClientsNew() {
                         <div className="flex-1">
                           <p className="font-black text-brand-navy text-sm uppercase tracking-tight">
                             {sub.nombre || (
-                              <span className="text-slate-400">
+                              <span className="text-muted-foreground">
                                 NOMBRE DEL DESTINO PENDIENTE
                               </span>
                             )}
                           </p>
-                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5">
                             {sub.ciudad && sub.estado
                               ? `${sub.ciudad}, ${sub.estado}`
                               : "UBICACIÓN SIN DEFINIR"}
@@ -1262,7 +1262,7 @@ export default function ClientsNew() {
                     </AccordionTrigger>
 
                     <AccordionContent className="px-6 pb-6">
-                      <div className="space-y-6 pt-6 border-t border-slate-200/50">
+                      <div className="space-y-6 pt-6 border-t border-border/50">
                         <div className="grid grid-cols-2 gap-6">
                           <div className="space-y-1.5">
                             <Label variant="brand" required>
@@ -1380,13 +1380,13 @@ export default function ClientsNew() {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-4 gap-6 pt-4 border-t border-slate-100">
+                        <div className="grid grid-cols-4 gap-6 pt-4 border-t border-border">
                           <div className="space-y-1.5">
                             <Label
                               variant="brand"
                               className="flex items-center gap-1.5"
                             >
-                              <Users className="h-3 w-3 text-slate-400" />{" "}
+                              <Users className="h-3 w-3 text-muted-foreground" />{" "}
                               Contacto
                             </Label>
                             <Input
@@ -1407,7 +1407,7 @@ export default function ClientsNew() {
                               variant="brand"
                               className="flex items-center gap-1.5"
                             >
-                              <Phone className="h-3 w-3 text-slate-400" />{" "}
+                              <Phone className="h-3 w-3 text-muted-foreground" />{" "}
                               Teléfono
                             </Label>
                             <Input
@@ -1428,7 +1428,7 @@ export default function ClientsNew() {
                               variant="brand"
                               className="flex items-center gap-1.5"
                             >
-                              <Clock className="h-3 w-3 text-slate-400" />{" "}
+                              <Clock className="h-3 w-3 text-muted-foreground" />{" "}
                               Horario Recepción
                             </Label>
                             <Input
@@ -1449,7 +1449,7 @@ export default function ClientsNew() {
                               variant="brand"
                               className="flex items-center gap-1.5"
                             >
-                              <Calendar className="h-3 w-3 text-slate-400" />{" "}
+                              <Calendar className="h-3 w-3 text-muted-foreground" />{" "}
                               Horario Cita
                             </Label>
                             <Input
@@ -1470,7 +1470,7 @@ export default function ClientsNew() {
                         <div className="flex justify-end pt-4">
                           <Button
                             variant="ghost"
-                            className="text-[10px] font-black uppercase tracking-widest text-rose-500 hover:bg-rose-50 hover:text-rose-600 h-9"
+                            className="text-[10px] font-black uppercase tracking-widest text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:text-rose-600 h-9"
                             onClick={() => removeSubCliente(idx)}
                           >
                             <Trash2 className="h-3 w-3 mr-2" /> Eliminar Destino
@@ -1483,7 +1483,7 @@ export default function ClientsNew() {
               </Accordion>
             )}
 
-            <div className="flex items-center justify-between pt-8 border-t border-slate-200/50 mt-8">
+            <div className="flex items-center justify-between pt-8 border-t border-border/50 mt-8">
               <Button
                 variant="outline"
                 className="h-11 glass-card px-8 text-[11px] font-black uppercase tracking-widest text-slate-500"
@@ -1509,7 +1509,7 @@ export default function ClientsNew() {
           {/* CONFIGURACIÓN GLOBAL */}
           <Card
             variant="glass"
-            className="bg-gradient-to-br from-slate-50 to-white border-2 border-dashed border-slate-200 shadow-sm"
+            className="bg-gradient-to-br from-muted to-card border-2 border-dashed border-border shadow-sm"
           >
             <CardContent className="pt-6">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
@@ -1519,7 +1519,7 @@ export default function ClientsNew() {
                   </Label>
                   <Input
                     type="number"
-                    className="h-11 bg-white font-mono font-bold"
+                    className="h-11 bg-card font-mono font-bold"
                     value={globalIVA}
                     onChange={(e) => setGlobalIVA(Number(e.target.value))}
                   />
@@ -1530,7 +1530,7 @@ export default function ClientsNew() {
                   </Label>
                   <Input
                     type="number"
-                    className="h-11 bg-white font-mono font-bold"
+                    className="h-11 bg-card font-mono font-bold"
                     value={globalRetencion}
                     onChange={(e) => setGlobalRetencion(Number(e.target.value))}
                   />
@@ -1548,7 +1548,7 @@ export default function ClientsNew() {
                       }))
                     }
                   >
-                    <SelectTrigger className="h-11 bg-white font-bold">
+                    <SelectTrigger className="h-11 bg-card font-bold">
                       <SelectValue placeholder="Seleccionar..." />
                     </SelectTrigger>
                     <SelectContent className="glass-panel">
@@ -1588,7 +1588,7 @@ export default function ClientsNew() {
             <Card
               key={sub.id}
               variant="glass"
-              className="overflow-hidden border border-slate-200/60"
+              className="overflow-hidden border border-border/60"
             >
               <CardHeader className="py-4 bg-brand-navy/5 border-b border-white/20 flex flex-row items-center justify-between">
                 <CardTitle className="text-sm font-black uppercase tracking-tight flex items-center gap-2 text-brand-navy">
@@ -1596,7 +1596,7 @@ export default function ClientsNew() {
                   {sub.nombre || "DESTINO SIN NOMBRE"}
                 </CardTitle>
                 <div className="flex items-center gap-3">
-                  <Label className="text-[10px] uppercase font-black tracking-widest text-slate-500">
+                  <Label className="text-[10px] uppercase font-black tracking-widest text-muted-foreground">
                     Crédito Excepción:
                   </Label>
                   <Select
@@ -1605,7 +1605,7 @@ export default function ClientsNew() {
                       updateSubCliente(idx, "diasCredito", parseInt(v))
                     }
                   >
-                    <SelectTrigger className="h-8 w-32 bg-white font-bold text-xs shadow-sm">
+                    <SelectTrigger className="h-8 w-32 bg-card font-bold text-xs shadow-sm">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="glass-panel">
@@ -1623,7 +1623,7 @@ export default function ClientsNew() {
                 </div>
               </CardHeader>
 
-              <CardContent className="pt-6 space-y-4 bg-white/40">
+              <CardContent className="pt-6 space-y-4 bg-muted/40">
                 {sub.tarifas.length === 0 ? (
                   <p className="text-center text-[10px] font-bold uppercase tracking-widest text-slate-400 py-4">
                     No hay rutas asignadas a este destino
@@ -1634,7 +1634,7 @@ export default function ClientsNew() {
                     return (
                       <div
                         key={tarifa.id}
-                        className="relative grid grid-cols-1 md:grid-cols-12 gap-4 items-stretch border border-slate-200/80 p-4 rounded-2xl bg-white/80 backdrop-blur-sm shadow-sm hover:shadow-md transition-all group"
+                        className="relative grid grid-cols-1 md:grid-cols-12 gap-4 items-stretch border border-slate-200/80 p-4 rounded-2xl bg-card/80 backdrop-blur-sm shadow-sm hover:shadow-md transition-all group"
                       >
                         {/* 1. TIPO DE CONFIGURACIÓN */}
                         <div className="col-span-2 flex flex-col justify-center space-y-1.5">
@@ -1683,7 +1683,7 @@ export default function ClientsNew() {
                               setIsRoutePickerOpen(true);
                             }}
                           >
-                            <Route className="h-4 w-4 mr-2 shrink-0 text-slate-400" />
+                            <Route className="h-4 w-4 mr-2 shrink-0 text-muted-foreground" />
                             <span className="truncate">
                               {tarifa.nombreRuta || "VINCULAR RUTA..."}
                             </span>
@@ -1691,7 +1691,7 @@ export default function ClientsNew() {
                         </div>
 
                         {/* 3. DESGLOSE INTERNO */}
-                        <div className="col-span-3 flex flex-col justify-center px-4 border-l border-r border-slate-100 bg-slate-50/50 rounded-xl space-y-1.5">
+                        <div className="col-span-3 flex flex-col justify-center px-4 border-l border-r border-slate-100 bg-muted/50 rounded-xl space-y-1.5">
                           <div className="flex justify-between items-center">
                             <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">
                               Casetas (Ref):
@@ -1732,7 +1732,7 @@ export default function ClientsNew() {
                               3. Flete a Cobrar
                             </Label>
                             <div className="relative">
-                              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                               <Input
                                 type="number"
                                 value={tarifa.tarifaBase || ""}
@@ -1744,7 +1744,7 @@ export default function ClientsNew() {
                                     Number(e.target.value),
                                   )
                                 }
-                                className="h-10 pl-8 text-sm font-black border-slate-200 bg-white focus-visible:ring-brand-navy shadow-sm"
+                                className="h-10 pl-8 text-sm font-black border-border bg-card focus-visible:ring-brand-navy shadow-sm"
                               />
                             </div>
                           </div>
@@ -1765,7 +1765,7 @@ export default function ClientsNew() {
                                     Number(e.target.value),
                                   )
                                 }
-                                className="h-10 pl-8 text-sm font-black border-emerald-200 bg-emerald-50 focus-visible:ring-emerald-500 shadow-sm text-emerald-700"
+                                className="h-10 pl-8 text-sm font-black border-emerald-200 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-950/20 focus-visible:ring-emerald-500 shadow-sm text-emerald-700 dark:text-emerald-300"
                                 placeholder="Pago Chofer"
                               />
                             </div>
@@ -1788,7 +1788,7 @@ export default function ClientsNew() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-10 w-10 shrink-0 text-slate-300 hover:text-white hover:bg-destructive rounded-xl shadow-sm bg-white border border-slate-200"
+                            className="h-10 w-10 shrink-0 text-slate-300 hover:text-white hover:bg-destructive rounded-xl shadow-sm bg-card border border-border"
                             onClick={() => removeTarifa(idx, tIdx)}
                           >
                             <Trash2 className="h-4 w-4" />
@@ -1802,7 +1802,7 @@ export default function ClientsNew() {
                 <Button
                   variant="ghost"
                   size="lg"
-                  className="w-full border-dashed border-2 border-slate-200 h-12 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-brand-navy hover:border-brand-navy/30 hover:bg-brand-navy/5 rounded-xl transition-all"
+                  className="w-full border-dashed border-2 border-border h-12 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-brand-navy hover:border-brand-navy/30 hover:bg-brand-navy/5 rounded-xl transition-all"
                   onClick={() => addTarifa(idx)}
                 >
                   <PlusCircle className="h-4 w-4 mr-2" /> Añadir ruta comercial
@@ -1822,7 +1822,7 @@ export default function ClientsNew() {
                     SCT
                   </DialogTitle>
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       placeholder="Buscar por origen o destino..."
                       value={searchQuery}
@@ -1896,7 +1896,7 @@ export default function ClientsNew() {
                                       </span>
                                     )}
                                     <span className="text-slate-300">•</span>
-                                    <span className="font-mono text-slate-500">
+                                    <span className="font-mono text-muted-foreground">
                                       {r.distancia_total_km} KM
                                     </span>
                                   </div>
@@ -1969,7 +1969,7 @@ export default function ClientsNew() {
           </Dialog>
 
           {/*  FOOTER FINAL */}
-          <div className="flex items-center justify-between pt-8 border-t border-slate-200 mt-12 mb-12">
+          <div className="flex items-center justify-between pt-8 border-t border-border mt-12 mb-12">
             <Button
               variant="outline"
               className="h-12 glass-card px-8 text-[11px] font-black uppercase tracking-widest text-slate-500"

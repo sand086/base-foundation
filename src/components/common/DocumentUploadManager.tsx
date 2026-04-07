@@ -14,10 +14,8 @@ import {
   FileArchive,
   File as FileIcon,
 } from "lucide-react";
-import { unitService } from "@/features/units/services/unitService";
+import { FleetUnitsService, FleetOperatorsService, FleetFuelService } from "@/api/generated";
 import { clientService } from "@/features/clients/services/clientService";
-import { operatorService } from "@/features/operators/services/operatorService";
-import { fuelService } from "@/features/settlements/services/fuelService"; //   IMPORTANTE
 import { toast } from "sonner";
 import {
   Dialog,
@@ -188,16 +186,16 @@ export function DocumentUploadManager({
     setIsUploading(true);
 
     try {
-      let result: { url: string } | undefined;
+      let result: any;
 
       if (entityType === "unit") {
-        result = await unitService.uploadDocument(activeId, docType, file);
+        result = await FleetUnitsService.uploadUnitDocumentApiFleetUnitsUnitTermDocumentsDocTypePost(String(activeId), docType, { file });
       } else if (entityType === "client") {
         result = await clientService.uploadDocument(activeId, docType, file);
       } else if (entityType === "operator") {
-        result = await operatorService.uploadDocument(activeId, docType, file);
+        result = await FleetOperatorsService.uploadOperatorDocumentApiFleetOperatorsOperatorIdDocumentsDocTypePost(Number(activeId), docType, { file });
       } else if (entityType === "fuel") {
-        result = await fuelService.uploadDocument(activeId, docType, file);
+        result = await FleetFuelService.uploadFuelDocumentApiFleetFuelLogsLogIdDocumentsDocTypePost(Number(activeId), docType, { file });
       }
 
       if (result?.url) {

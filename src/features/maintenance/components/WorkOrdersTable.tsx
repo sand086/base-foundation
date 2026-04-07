@@ -38,7 +38,7 @@ import {
 
 // --- IMPORTS REALES ---
 import { useMaintenance } from "@/features/maintenance/hooks/useMaintenance";
-import { WorkOrder } from "@/features/maintenance/services/maintenanceService";
+import { WorkOrder } from "@/features/maintenance/types";
 import { WorkOrderModal } from "./WorkOrderModal";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { operatorService } from "@/features/operators/services/operatorService";
+import { FleetOperatorsService } from "@/api/generated";
+import { ApiError } from "@/api/generated/core/ApiError";
 import { Operator } from "../types";
-
 import { toast } from "sonner";
 
 export const useOperators = () => {
@@ -11,8 +11,8 @@ export const useOperators = () => {
   const fetchOperators = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await operatorService.getAll();
-      setOperadores(data);
+      const data = await FleetOperatorsService.readOperatorsApiFleetOperatorsGet();
+      setOperadores(data as Operator[]);
     } catch (error) {
       console.error(error);
       toast.error("Error al cargar operadores");
@@ -25,36 +25,35 @@ export const useOperators = () => {
     fetchOperators();
   }, [fetchOperators]);
 
-  // CORRECCIÓN: Usamos Omit<Operador, "id"> para crear, ya que no tenemos ID aún
-  const createOperator = async (operador: Omit<Operator, "id">) => {
+  const createOperator = async (operador: any) => {
     try {
-      await operatorService.create(operador);
+      await FleetOperatorsService.createOperatorApiFleetOperatorsPost(operador);
       toast.success("Operador registrado exitosamente");
       fetchOperators();
       return true;
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || "Error al crear operador");
+    } catch (error) {
+      const msg = error instanceof ApiError ? error.body?.detail : "Error al crear operador";
+      toast.error(msg || "Error al crear operador");
       return false;
     }
   };
 
-  // CORRECCIÓN: id es number
-  const updateOperator = async (id: number, operador: Partial<Operator>) => {
+  const updateOperator = async (id: number, operador: any) => {
     try {
-      await operatorService.update(id, operador);
+      await FleetOperatorsService.updateOperatorApiFleetOperatorsOperatorIdPut(Number(id), operador);
       toast.success("Operador actualizado");
       fetchOperators();
       return true;
-    } catch (error: any) {
-      toast.error("Error al actualizar operador");
+    } catch (error) {
+      const msg = error instanceof ApiError ? error.body?.detail : "Error al actualizar operador";
+      toast.error(msg || "Error al actualizar operador");
       return false;
     }
   };
 
-  // CORRECCIÓN: id es number
   const deleteOperator = async (id: number) => {
     try {
-      await operatorService.delete(id);
+      await FleetOperatorsService.deleteOperatorApiFleetOperatorsOperatorIdDelete(Number(id));
       toast.success("Operador dado de baja");
       fetchOperators();
       return true;

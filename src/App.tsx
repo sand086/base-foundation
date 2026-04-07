@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import { AuthProvider } from "./context/AuthContext";
+import { ThemeProvider } from "./context/ThemeProvider";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { AppLayout } from "./components/layout/AppLayout";
 
@@ -36,6 +37,7 @@ import BulkUploads from "./pages/BulkUploads";
 import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
+import Manuals from "./pages/Manuals";
 import TwoFactorAuth from "./pages/TwoFactorAuth";
 import TrafficControl from "./pages/TrafficControl";
 
@@ -45,6 +47,7 @@ import { DispatchWizard } from "@/features/trips/components/DispatchWizard";
 const queryClient = new QueryClient();
 
 const App = () => (
+  <ThemeProvider>
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
@@ -108,6 +111,7 @@ const App = () => (
                 <Route path="bulk-uploads" element={<BulkUploads />} />
                 <Route path="profile" element={<Profile />} />
                 <Route path="settings" element={<Settings />} />
+                <Route path="manuals" element={<Manuals />} />
               </Route>
             </Route>
 
@@ -118,6 +122,7 @@ const App = () => (
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
+  </ThemeProvider>
 );
 
 export default App;

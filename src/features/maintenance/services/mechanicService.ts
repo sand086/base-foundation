@@ -1,74 +1,48 @@
-import axiosClient from "@/api/axiosClient";
+import { MaintenanceService } from "@/api/generated";
 import { Mechanic, MechanicDocument } from "../types";
 
 export const mechanicService = {
-  // Obtener todos los mecánicos
   getAll: async () => {
-    // CORRECCIÓN: Agregado el prefijo /maintenance
-    const { data } = await axiosClient.get<Mechanic[]>(
-      "/maintenance/mechanics",
-    );
-    return data;
+    const data = await MaintenanceService.readMechanicsApiMaintenanceMechanicsGet();
+    return data as Mechanic[];
   },
 
-  // Obtener un mecánico por ID (necesario para recargar datos específicos)
   getById: async (id: number) => {
-    const { data } = await axiosClient.get<Mechanic>(
-      `/maintenance/mechanics/${id}`,
-    );
-    return data;
+    // No single-get endpoint; fetch all and find
+    const all = await MaintenanceService.readMechanicsApiMaintenanceMechanicsGet();
+    return (all as Mechanic[]).find((m) => m.id === id) || null;
   },
 
-  // Crear mecánico
   create: async (mechanic: Partial<Mechanic>) => {
-    const { data } = await axiosClient.post<Mechanic>(
-      "/maintenance/mechanics",
-      mechanic,
-    );
-    return data;
+    const data = await MaintenanceService.createMechanicApiMaintenanceMechanicsPost(mechanic as any);
+    return data as Mechanic;
   },
 
-  // Actualizar mecánico
   update: async (id: number, mechanic: Partial<Mechanic>) => {
-    const { data } = await axiosClient.put<Mechanic>(
-      `/maintenance/mechanics/${id}`,
-      mechanic,
-    );
-    return data;
+    const data = await MaintenanceService.updateMechanicApiMaintenanceMechanicsMechanicIdPut(Number(id), mechanic as any);
+    return data as Mechanic;
   },
 
-  // Eliminar mecánico (Soft delete o físico según backend)
   delete: async (id: number) => {
-    await axiosClient.delete(`/maintenance/mechanics/${id}`);
+    await MaintenanceService.deleteMechanicDocumentApiMaintenanceMechanicsDocumentsDocumentIdDelete(Number(id));
   },
 
   // --- DOCUMENTOS (Expediente) ---
-
-  // Obtener documentos de un mecánico
-  // NOTA: Asegúrate de que este endpoint exista en tu backend o usa getById si los documentos vienen anidados
   getDocuments: async (id: number) => {
-    const { data } = await axiosClient.get<MechanicDocument[]>(
-      `/maintenance/mechanics/${id}/documents`,
-    );
-    return data;
+    const data = await MaintenanceService.getMechanicDocumentsApiMaintenanceMechanicsMechanicIdDocumentsGet(Number(id));
+    return data as MechanicDocument[];
   },
 
-  // Subir documento al expediente
   uploadDocument: async (id: number, docType: string, file: File) => {
-    const formData = new FormData();
-    formData.append("file", file);
-    const { data } = await axiosClient.post(
-      `/maintenance/mechanics/${id}/documents/${docType}`,
-      formData,
-      {
-        headers: { "Content-Type": "multipart/form-data" },
-      },
+    const data = await MaintenanceService.uploadMechanicDocumentApiMaintenanceMechanicsMechanicIdDocumentsDocTypePost(
+      Number(id),
+      docType,
+      { file },
     );
     return data;
   },
 
-  // Eliminar documento
   deleteDocument: async (docId: number) => {
-    await axiosClient.delete(`/maintenance/mechanics/documents/${docId}`);
+    await MaintenanceService.deleteMechanicDocumentApiMaintenanceMechanicsDocumentsDocumentIdDelete(Number(docId));
   },
 };

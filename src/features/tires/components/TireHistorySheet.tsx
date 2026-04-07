@@ -35,7 +35,7 @@ import {
   getTireLifePercentage,
   getTireSemaphoreStatus,
   getEstadoBadge,
-} from "@/features/tires/services/tireService";
+} from "@/features/tires/utils/tireUtils";
 import { Tire, TireHistoryEvent } from "@/features/tires/types";
 
 interface TireHistorySheetProps {
@@ -75,7 +75,7 @@ const getEventIcon = (tipo: string) => {
     case "edicion":
       return <Pencil className="h-4 w-4 text-blue-500 dark:text-blue-400" />;
     default:
-      return <Pencil className="h-4 w-4 text-slate-400 dark:text-slate-500" />;
+      return <Pencil className="h-4 w-4 text-muted-foreground/80" />;
   }
 };
 
@@ -160,9 +160,9 @@ export function TireHistorySheet({
           <div className="space-y-8 pb-12">
             {/* KPI Cards Grid */}
             <div className="grid grid-cols-2 gap-4">
-              <Card className="glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm">
+              <Card className="glass-card bg-card border-border shadow-sm">
                 <CardContent className="p-4">
-                  <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">
+                  <div className="flex items-center gap-2 text-[10px] font-black text-muted-foreground/80 uppercase tracking-widest mb-1">
                     <Truck className="h-3.5 w-3.5 text-blue-500" /> Ubicación
                   </div>
                   <p className="font-black text-sm text-brand-navy dark:text-white uppercase tracking-tight">
@@ -173,9 +173,9 @@ export function TireHistorySheet({
                 </CardContent>
               </Card>
 
-              <Card className="glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm">
+              <Card className="glass-card bg-card border-border shadow-sm">
                 <CardContent className="p-4">
-                  <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">
+                  <div className="flex items-center gap-2 text-[10px] font-black text-muted-foreground/80 uppercase tracking-widest mb-1">
                     <DollarSign className="h-3.5 w-3.5 text-emerald-500" />{" "}
                     Inversión
                   </div>
@@ -185,9 +185,9 @@ export function TireHistorySheet({
                 </CardContent>
               </Card>
 
-              <Card className="glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm">
+              <Card className="glass-card bg-card border-border shadow-sm">
                 <CardContent className="p-4">
-                  <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">
+                  <div className="flex items-center gap-2 text-[10px] font-black text-muted-foreground/80 uppercase tracking-widest mb-1">
                     <Gauge className="h-3.5 w-3.5 text-amber-500" /> Recorrido
                   </div>
                   <p className="font-black text-sm text-brand-navy dark:text-white uppercase tracking-tight">
@@ -196,9 +196,9 @@ export function TireHistorySheet({
                 </CardContent>
               </Card>
 
-              <Card className="glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm">
+              <Card className="glass-card bg-card border-border shadow-sm">
                 <CardContent className="p-4">
-                  <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">
+                  <div className="flex items-center gap-2 text-[10px] font-black text-muted-foreground/80 uppercase tracking-widest mb-1">
                     <RefreshCw className="h-3.5 w-3.5 text-purple-500" />{" "}
                     Identificador DOT
                   </div>
@@ -210,9 +210,9 @@ export function TireHistorySheet({
             </div>
 
             {/* Health / Tread Progress */}
-            <div className="p-5 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/50 shadow-sm space-y-4">
+            <div className="p-5 rounded-2xl border border-border bg-white dark:bg-slate-900/50 shadow-sm space-y-4">
               <div className="flex items-center justify-between">
-                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-2">
                   <Gauge className="h-4 w-4 text-brand-navy dark:text-slate-300" />{" "}
                   Semáforo de Vida Útil
                 </h4>
@@ -235,13 +235,13 @@ export function TireHistorySheet({
 
               <div className="space-y-3">
                 <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
-                  <span className="text-slate-400 dark:text-slate-500">
+                  <span className="text-muted-foreground/80">
                     Desgaste Actual:{" "}
                     <span className="font-mono text-xs text-brand-navy dark:text-white">
                       {tire.profundidad_actual}mm
                     </span>
                   </span>
-                  <span className="text-slate-400 dark:text-slate-500">
+                  <span className="text-muted-foreground/80">
                     Original:{" "}
                     <span className="font-mono text-xs">
                       {tire.profundidad_original}mm
@@ -268,7 +268,7 @@ export function TireHistorySheet({
             {/* Purchases / Proveedor */}
             <div className="grid grid-cols-2 gap-6 p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/30 border border-slate-200/50 dark:border-white/5">
               <div>
-                <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                <span className="text-[9px] font-black text-muted-foreground/80 uppercase tracking-widest">
                   Fecha Compra
                 </span>
                 <p className="font-mono font-bold text-sm text-brand-navy dark:text-slate-200 mt-1">
@@ -280,7 +280,7 @@ export function TireHistorySheet({
                 </p>
               </div>
               <div>
-                <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                <span className="text-[9px] font-black text-muted-foreground/80 uppercase tracking-widest">
                   Precio Unitario
                 </span>
                 <p className="font-mono font-bold text-sm text-emerald-600 dark:text-emerald-400 mt-1">
@@ -288,7 +288,7 @@ export function TireHistorySheet({
                 </p>
               </div>
               <div className="col-span-2">
-                <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                <span className="text-[9px] font-black text-muted-foreground/80 uppercase tracking-widest">
                   Proveedor
                 </span>
                 <p className="font-bold text-sm text-brand-navy dark:text-slate-200 uppercase mt-1">
@@ -297,7 +297,7 @@ export function TireHistorySheet({
               </div>
             </div>
 
-            <Separator className="bg-slate-200 dark:bg-white/10" />
+            <Separator className="bg-border" />
 
             {/*  TIMELINE SECTION */}
             <div className="space-y-6">
@@ -307,7 +307,7 @@ export function TireHistorySheet({
 
               <div className="relative space-y-0 pl-2">
                 {/* Línea vertical de fondo */}
-                <div className="absolute left-[19px] top-2 bottom-0 w-px bg-slate-200 dark:bg-white/10" />
+                <div className="absolute left-[19px] top-2 bottom-0 w-px bg-border" />
 
                 {sortedHistory.length === 0 ? (
                   <div className="pl-12 py-8 text-xs font-bold text-slate-400 uppercase tracking-widest italic text-center">
@@ -360,7 +360,7 @@ export function TireHistorySheet({
                               </div>
                             )}
                             {event.km !== undefined && event.km !== null && (
-                              <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md border border-slate-200 dark:border-white/10">
+                              <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md border border-border">
                                 <Gauge className="h-3 w-3" />{" "}
                                 {event.km.toLocaleString()} km
                               </div>
@@ -373,7 +373,7 @@ export function TireHistorySheet({
                             ) : null}
                           </div>
 
-                          <div className="flex items-center gap-1.5 text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest pt-2">
+                          <div className="flex items-center gap-1.5 text-[9px] font-bold text-muted-foreground/80 uppercase tracking-widest pt-2">
                             <User className="h-3 w-3" />
                             Responsable:{" "}
                             <span className="text-brand-navy dark:text-slate-300">

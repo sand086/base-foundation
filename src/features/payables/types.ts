@@ -11,7 +11,7 @@ export type FinancialClassification =
 export interface IndirectCategory {
   id: number;
   nombre: string;
-  tipo: "fijo" | "variable";
+  tipo: "fijo" | "variable" | string;
   estatus?: "activo" | "inactivo" | string;
 }
 

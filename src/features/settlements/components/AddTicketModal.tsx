@@ -114,7 +114,7 @@ function SearchableSelect({
           role="combobox"
           disabled={disabled}
           className={cn(
-            "h-11 w-full justify-between rounded-2xl px-3 text-left shadow-sm border-white/60 bg-white/85 backdrop-blur-xl hover:bg-white text-slate-800",
+            "h-11 w-full justify-between rounded-2xl px-3 text-left shadow-sm border-border bg-card/85 backdrop-blur-xl hover:bg-white text-foreground",
             disabled && "opacity-50 cursor-not-allowed bg-slate-100",
           )}
         >
@@ -126,7 +126,7 @@ function SearchableSelect({
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="z-[9999] w-[var(--radix-popover-trigger-width)] p-0 rounded-2xl shadow-2xl border border-slate-200/80 bg-white/95"
+        className="z-[9999] w-[var(--radix-popover-trigger-width)] p-0 rounded-2xl shadow-2xl border border-border bg-card/95 dark:bg-card/95"
       >
         <Command shouldFilter={false}>
           <CommandInput
@@ -137,7 +137,7 @@ function SearchableSelect({
           />
           <CommandList className="max-h-[260px] overflow-y-auto">
             {filteredItems.length === 0 ? (
-              <CommandEmpty className="p-4 text-sm text-slate-500">
+              <CommandEmpty className="p-4 text-sm text-muted-foreground">
                 Sin coincidencias.
               </CommandEmpty>
             ) : (
@@ -308,17 +308,17 @@ export function AddTicketModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[1000px] max-h-[95vh] flex flex-col p-0 gap-0 border-0 rounded-[28px] shadow-2xl overflow-hidden bg-slate-50">
-        <DialogHeader className="shrink-0 border-b bg-white p-6 shadow-sm">
+      <DialogContent className="sm:max-w-[1000px] max-h-[95vh] flex flex-col p-0 gap-0 border-0 rounded-[28px] shadow-2xl overflow-hidden bg-background dark:bg-background">
+        <DialogHeader className="shrink-0 border-b border-border bg-card p-6 shadow-sm">
           <DialogTitle className="flex items-start gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-red/10 text-brand-red">
               <Fuel className="h-6 w-6" />
             </div>
             <div>
-              <h2 className="text-xl font-black uppercase text-slate-900">
+              <h2 className="text-xl font-black uppercase text-foreground">
                 Registro Multi-Ticket de Combustible
               </h2>
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-muted-foreground">
                 Vincule el viaje y agregue todos los vales que el operador
                 presente.
               </p>
@@ -332,17 +332,17 @@ export function AddTicketModal({
         >
           <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
             {/* 1. SECCIÓN VINCULACIÓN */}
-            <section className="bg-white p-6 rounded-[24px] border border-slate-200 shadow-sm space-y-6">
-              <div className="flex items-center gap-2 border-b pb-3 border-slate-100">
+            <section className="bg-card p-6 rounded-[24px] border border-border shadow-sm space-y-6">
+              <div className="flex items-center gap-2 border-b pb-3 border-border">
                 <MapPin className="h-4 w-4 text-brand-navy" />
-                <h3 className="text-xs font-black uppercase tracking-widest text-slate-700">
+                <h3 className="text-xs font-black uppercase tracking-widest text-foreground">
                   1. Datos del Viaje y Unidad
                 </h3>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="space-y-2 md:col-span-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
                     Buscador de Viaje / Fase
                   </Label>
                   <SearchableSelect
@@ -357,7 +357,7 @@ export function AddTicketModal({
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
                     Odómetro Final (KM)
                   </Label>
                   <Input
@@ -377,7 +377,7 @@ export function AddTicketModal({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Fuel className="h-4 w-4 text-brand-red" />
-                  <h3 className="text-xs font-black uppercase tracking-widest text-slate-700">
+                  <h3 className="text-xs font-black uppercase tracking-widest text-foreground">
                     2. Carga de Vales (Tickets)
                   </h3>
                 </div>
@@ -396,7 +396,7 @@ export function AddTicketModal({
                 {tickets.map((ticket, index) => (
                   <div
                     key={ticket.id}
-                    className="relative group bg-white p-5 rounded-[24px] border border-slate-200 shadow-sm animate-in fade-in slide-in-from-left-2"
+                    className="relative group bg-card p-5 rounded-[24px] border border-border shadow-sm animate-in fade-in slide-in-from-left-2"
                   >
                     {tickets.length > 1 && (
                       <Button
@@ -412,7 +412,7 @@ export function AddTicketModal({
 
                     <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-4 items-end">
                       <div className="space-y-1.5 lg:col-span-2">
-                        <Label className="text-[9px] font-black uppercase text-slate-400">
+                        <Label className="text-[9px] font-black uppercase text-muted-foreground/80">
                           Estación / Gasolinera
                         </Label>
                         <Input
@@ -429,7 +429,7 @@ export function AddTicketModal({
                       </div>
 
                       <div className="space-y-1.5">
-                        <Label className="text-[9px] font-black uppercase text-slate-400">
+                        <Label className="text-[9px] font-black uppercase text-muted-foreground/80">
                           Litros
                         </Label>
                         <Input
@@ -448,7 +448,7 @@ export function AddTicketModal({
                       </div>
 
                       <div className="space-y-1.5">
-                        <Label className="text-[9px] font-black uppercase text-slate-400">
+                        <Label className="text-[9px] font-black uppercase text-muted-foreground/80">
                           Precio
                         </Label>
                         <Input
@@ -467,7 +467,7 @@ export function AddTicketModal({
                       </div>
 
                       <div className="space-y-1.5">
-                        <Label className="text-[9px] font-black uppercase text-slate-400">
+                        <Label className="text-[9px] font-black uppercase text-muted-foreground/80">
                           Fecha/Hora
                         </Label>
                         <Input
@@ -485,7 +485,7 @@ export function AddTicketModal({
                       </div>
 
                       <div className="space-y-1.5">
-                        <Label className="text-[9px] font-black uppercase text-slate-400">
+                        <Label className="text-[9px] font-black uppercase text-muted-foreground/80">
                           Evidencia
                         </Label>
                         <div className="relative h-10 border-2 border-dashed border-slate-200 rounded-lg hover:border-brand-navy hover:bg-slate-50 transition-colors flex items-center justify-center overflow-hidden">
@@ -526,7 +526,7 @@ export function AddTicketModal({
               <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
                 Inversión Total de Carga
               </span>
-              <span className="text-3xl font-black font-mono text-slate-900 tracking-tighter">
+              <span className="text-3xl font-black font-mono text-foreground tracking-tighter">
                 $
                 {totalGeneral.toLocaleString("es-MX", {
                   minimumFractionDigits: 2,

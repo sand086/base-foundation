@@ -198,9 +198,9 @@ export function CreateTireModal({
       }}
     >
       {/*  CAPA 1: CASCARÓN */}
-      <DialogContent className="w-[95vw] sm:max-w-2xl flex flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
+      <DialogContent className="w-[95vw] sm:max-w-2xl flex flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-card/90 dark:bg-card/95 backdrop-blur-xl rounded-2xl">
         {/*  CAPA 2: CABECERA (Blanca en Light, Navy oscuro en Dark) */}
-        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
+        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-card dark:bg-card border-b border-border shrink-0 relative overflow-hidden z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center gap-4 sm:gap-5">
             <div
@@ -218,10 +218,10 @@ export function CreateTireModal({
               )}
             </div>
             <div className="flex flex-col gap-1 text-left">
-              <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white heading-crisp leading-none">
+              <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-foreground heading-crisp leading-none">
                 {isEditing ? "Editar Llanta" : "Alta de Nueva Llanta"}
               </DialogTitle>
-              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-1 tracking-normal normal-case">
+              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mt-1 tracking-normal normal-case">
                 {isEditing
                   ? "Modifica los datos generales del neumático."
                   : "Registra un neumático nuevo en el inventario (Stock)."}
@@ -236,11 +236,11 @@ export function CreateTireModal({
             onSubmit={form.handleSubmit(onFormSubmit)}
             className="flex-1 min-h-0 overflow-hidden flex flex-col"
           >
-            <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-slate-50/50 dark:bg-transparent custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-muted/30 dark:bg-transparent custom-scrollbar">
               <div className="space-y-8">
                 {/* 🏷️ SECCIÓN 1: Identificación */}
                 <div className="space-y-6">
-                  <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-2">
+                  <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground/80 flex items-center gap-2 border-b border-border pb-2">
                     <Barcode className="h-3.5 w-3.5 text-blue-500" />
                     Identificación del Neumático
                   </h3>
@@ -260,7 +260,7 @@ export function CreateTireModal({
                               disabled={isEditing}
                               placeholder="Ej: LL-001"
                               className={cn(
-                                "h-11 font-mono font-bold uppercase shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10",
+                                "h-11 font-mono font-bold uppercase shadow-sm bg-card border-border",
                                 isEditing &&
                                   "bg-slate-100 dark:bg-slate-800 text-slate-500 cursor-not-allowed",
                               )}
@@ -284,7 +284,7 @@ export function CreateTireModal({
                               {...field}
                               maxLength={4}
                               placeholder="Ej: 4223"
-                              className="h-11 font-mono font-bold uppercase glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                              className="h-11 font-mono font-bold uppercase glass-card bg-card border-border shadow-sm"
                             />
                           </FormControl>
                           <FormMessage />
@@ -306,11 +306,11 @@ export function CreateTireModal({
                             value={field.value}
                           >
                             <FormControl>
-                              <SelectTrigger className="h-11 font-black uppercase text-xs glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm text-brand-navy dark:text-slate-100">
+                              <SelectTrigger className="h-11 font-black uppercase text-xs glass-card bg-card border-border shadow-sm text-brand-navy dark:text-slate-100">
                                 <SelectValue placeholder="Seleccionar marca" />
                               </SelectTrigger>
                             </FormControl>
-                            <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-slate-200 dark:border-white/10">
+                            <SelectContent className="bg-card/90 dark:bg-card/90 backdrop-blur-xl border-border">
                               {MARCAS_COMUNES.map((m) => (
                                 <SelectItem
                                   key={m}
@@ -337,7 +337,7 @@ export function CreateTireModal({
                             <Input
                               {...field}
                               placeholder="Ej: X Multi Z"
-                              className="h-11 font-bold uppercase glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                              className="h-11 font-bold uppercase glass-card bg-card border-border shadow-sm"
                             />
                           </FormControl>
                           <FormMessage />
@@ -349,7 +349,7 @@ export function CreateTireModal({
 
                 {/* ⚙️ SECCIÓN 2: Especificaciones Técnicas */}
                 <div className="space-y-6 pt-2">
-                  <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-2">
+                  <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground/80 flex items-center gap-2 border-b border-border pb-2">
                     <Settings className="h-3.5 w-3.5 text-amber-500" />
                     Especificaciones Técnicas
                   </h3>
@@ -367,7 +367,7 @@ export function CreateTireModal({
                             <Input
                               {...field}
                               placeholder="Ej: 295/80R22.5"
-                              className="h-11 font-mono font-bold uppercase glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                              className="h-11 font-mono font-bold uppercase glass-card bg-card border-border shadow-sm"
                             />
                           </FormControl>
                           <FormMessage />
@@ -389,7 +389,7 @@ export function CreateTireModal({
                               step="0.1"
                               {...field}
                               placeholder="Ej: 18.5"
-                              className="h-11 font-mono font-bold glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                              className="h-11 font-mono font-bold glass-card bg-card border-border shadow-sm"
                             />
                           </FormControl>
                           <FormMessage />
@@ -401,7 +401,7 @@ export function CreateTireModal({
 
                 {/* 💰 SECCIÓN 3: Adquisición */}
                 <div className="space-y-6 pt-2">
-                  <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-2">
+                  <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground/80 flex items-center gap-2 border-b border-border pb-2">
                     <DollarSign className="h-3.5 w-3.5 text-emerald-500" />
                     Datos de Adquisición
                   </h3>
@@ -425,7 +425,7 @@ export function CreateTireModal({
                                 step="0.01"
                                 {...field}
                                 placeholder="0.00"
-                                className="h-11 pl-7 font-mono font-bold glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                                className="h-11 pl-7 font-mono font-bold glass-card bg-card border-border shadow-sm"
                               />
                             </div>
                           </FormControl>
@@ -444,7 +444,7 @@ export function CreateTireModal({
                             <Input
                               {...field}
                               placeholder="Nombre de la llantera..."
-                              className="h-11 font-bold uppercase glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                              className="h-11 font-bold uppercase glass-card bg-card border-border shadow-sm"
                             />
                           </FormControl>
                           <FormMessage />
@@ -480,7 +480,7 @@ export function CreateTireModal({
             </div>
 
             {/*  CAPA 4: FOOTER TAHOE (Con nueva regla de color) */}
-            <DialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
+            <DialogFooter className="p-6 sm:p-8 bg-card/80 dark:bg-card/80 backdrop-blur-xl border-t border-border shrink-0 z-10">
               <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
                 <Button
                   type="button"

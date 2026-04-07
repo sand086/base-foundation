@@ -102,13 +102,13 @@ export function ImportXMLPaymentModal({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl border border-slate-200 dark:border-white/10 shadow-2xl rounded-2xl overflow-hidden p-0">
-        <DialogHeader className="p-6 bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-white/5">
-          <DialogTitle className="flex items-center gap-2 text-xl font-black text-brand-navy dark:text-white uppercase tracking-tighter">
-            <FileCode2 className="h-6 w-6 text-emerald-600" /> Cargar XML de
+      <DialogContent className="sm:max-w-md bg-card/95 backdrop-blur-xl border border-border shadow-2xl rounded-2xl overflow-hidden p-0">
+        <DialogHeader className="p-6 bg-muted/50 border-b border-border">
+          <DialogTitle className="flex items-center gap-2 text-xl font-black text-foreground uppercase tracking-tighter">
+            <FileCode2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400" /> Cargar XML de
             Pago
           </DialogTitle>
-          <DialogDescription className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+          <DialogDescription className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
             Automatización de Cobranza (Complemento REP)
           </DialogDescription>
         </DialogHeader>
@@ -120,7 +120,7 @@ export function ImportXMLPaymentModal({
                 "border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-300 cursor-pointer group",
                 isDragging
                   ? "border-emerald-500 bg-emerald-50/50 dark:bg-emerald-900/10"
-                  : "border-slate-300 dark:border-white/10 hover:border-brand-navy dark:hover:border-blue-500 hover:bg-slate-50 dark:hover:bg-slate-800",
+                  : "border-border hover:border-primary hover:bg-muted/50",
               )}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
@@ -137,13 +137,13 @@ export function ImportXMLPaymentModal({
                 htmlFor="xml-upload"
                 className="cursor-pointer flex flex-col items-center"
               >
-                <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-inner">
-                  <Upload className="h-8 w-8 text-slate-400 group-hover:text-emerald-500 transition-colors" />
+                <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-inner">
+                  <Upload className="h-8 w-8 text-muted-foreground group-hover:text-emerald-500 transition-colors" />
                 </div>
-                <h3 className="font-black text-slate-700 dark:text-slate-200 uppercase tracking-widest text-sm">
+                <h3 className="font-black text-foreground uppercase tracking-widest text-sm">
                   Arrastra tu XML aquí
                 </h3>
-                <p className="text-xs text-slate-400 mt-2 font-medium">
+                <p className="text-xs text-muted-foreground mt-2 font-medium">
                   o haz clic para explorar en tu equipo
                 </p>
               </label>
@@ -154,7 +154,7 @@ export function ImportXMLPaymentModal({
               <h3 className="font-black text-emerald-800 dark:text-emerald-400 uppercase tracking-widest text-sm w-full truncate px-4">
                 {file.name}
               </h3>
-              <p className="text-xs text-emerald-600/80 font-bold mt-1 mb-6">
+              <p className="text-xs text-emerald-600/80 dark:text-emerald-500/80 font-bold mt-1 mb-6">
                 {(file.size / 1024).toFixed(2)} KB • Archivo Listo
               </p>
 
@@ -184,8 +184,8 @@ export function ImportXMLPaymentModal({
             </div>
           )}
 
-          <div className="mt-6 bg-blue-50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-800/50 flex gap-3">
-            <AlertTriangle className="h-5 w-5 text-blue-500 shrink-0" />
+          <div className="mt-6 bg-blue-50 dark:bg-blue-950/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800/50 flex gap-3">
+            <AlertTriangle className="h-5 w-5 text-blue-500 dark:text-blue-400 shrink-0" />
             <p className="text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wide leading-relaxed">
               El sistema leerá el UUID del XML, buscará la factura en CxC y
               registrará el cobro liquidando el saldo pendiente automáticamente.

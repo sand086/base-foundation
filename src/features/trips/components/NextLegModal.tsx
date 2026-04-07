@@ -536,9 +536,9 @@ export function NextLegModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={cn(
-          "sm:max-w-[1000px] p-0 overflow-hidden border-none shadow-2xl",
+          "w-[95vw] sm:max-w-[1000px] p-0 overflow-hidden border-none shadow-2xl",
           "animate-in fade-in slide-in-from-bottom-2 duration-300",
-          "bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl",
+          "bg-card/90 backdrop-blur-xl",
         )}
       >
         <DialogHeader
@@ -712,7 +712,7 @@ export function NextLegModal({
               "bg-white/40 dark:bg-transparent backdrop-blur-sm",
             )}
           >
-            <div className="grid grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8">
               <div className="space-y-3">
                 <Label className="text-[11px] font-black uppercase text-slate-600 dark:text-slate-400 tracking-widest ml-1">
                   Fase Operativa
@@ -1273,22 +1273,22 @@ export function NextLegModal({
 
         <DialogFooter
           className={cn(
-            "p-6 px-10 flex justify-between items-center",
-            "bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl",
-            "border-t border-slate-200/50 dark:border-white/10",
+            "p-4 sm:p-6 md:px-10 flex flex-col-reverse sm:flex-row sm:justify-between sm:items-center gap-4",
+            "bg-card/80 backdrop-blur-xl",
+            "border-t border-border",
           )}
         >
-          <div className="flex items-center gap-3 px-2">
+          <div className="flex items-center gap-3 px-2 hidden sm:flex">
             <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">
               {legUiConfig.helperText}
             </span>
           </div>
-          <div className="flex gap-4">
+          <div className="flex flex-col-reverse sm:flex-row gap-3 w-full sm:w-auto">
             <Button
               variant="ghost"
               onClick={() => onOpenChange(false)}
-              className="font-bold uppercase text-[11px] tracking-widest text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-transparent haptic-press"
+              className="font-bold uppercase text-[11px] tracking-widest text-muted-foreground hover:text-foreground hover:bg-transparent haptic-press w-full sm:w-auto"
             >
               Cancelar
             </Button>
@@ -1296,7 +1296,7 @@ export function NextLegModal({
               onClick={handleIniciarTramo}
               disabled={loading}
               className={cn(
-                "px-12 h-12 font-black uppercase text-[11px] tracking-[0.2em] shadow-2xl haptic-press",
+                "px-8 sm:px-12 h-12 font-black uppercase text-[11px] tracking-[0.2em] shadow-2xl haptic-press w-full sm:w-auto",
                 "bg-brand-red hover:bg-brand-red/90 text-white",
                 "shadow-brand-red/30",
                 "disabled:opacity-50 disabled:cursor-not-allowed",

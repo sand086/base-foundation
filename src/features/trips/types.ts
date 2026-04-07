@@ -1,6 +1,5 @@
-import { Unit } from "@/features/units/types";
-import { Operator } from "@/features/operators/types";
-import { Client, SubClient } from "@/features/clients/types";
+import type { TripResponse, TripLegResponse } from "@/api/generated";
+import { SubClient } from "@/features/clients/types";
 
 // ==========================================
 // ENUMS & LITERAL TYPES
@@ -25,7 +24,7 @@ export type TripLegType = "carga_muelle" | "ruta_carretera" | "entrega_vacio";
 export interface TripTimelineEvent {
   id: number;
   trip_leg_id: number;
-  time: string; // ISO DateTime
+  time: string;
   event: string;
   event_type: string;
   location?: string;
@@ -49,98 +48,26 @@ export interface TripTimelineEventCreatePayload {
 }
 
 // ==========================================
-// TRIP LEGS (Tramos del viaje)
+// TRIP LEGS
 // ==========================================
 
-export interface TripLeg {
-  id: number;
-  trip_id: number;
-  leg_type: TripLegType;
-  status: TripStatus;
-
-  // Relaciones
-  unit_id?: number | null;
-  operator_id?: number | null;
-  unit?: Unit;
-  operator?: Operator;
+export interface TripLeg extends TripLegResponse {
   trip?: Trip;
-
-  // Finanzas del Tramo
-  anticipo_casetas: number;
-  anticipo_viaticos: number;
-  anticipo_combustible: number;
-  otros_anticipos: number;
-  saldo_operador: number;
-
-  // Control Operativo
-  odometro_inicial: number;
-  odometro_final?: number | null;
-  rendimiento_real?: number | null;
-  nivel_tanque_inicial: number;
-
-  // Tiempos y Ubicación
-  start_date?: string | null;
-  actual_arrival?: string | null;
-  last_location?: string | null;
-  last_update?: string | null;
-
-  timeline_events?: TripTimelineEvent[];
+  saldo_operador?: number;
 }
 
 // ==========================================
-// MAIN TRIP (Viaje Maestro)
+// MAIN TRIP — extends generated TripResponse
 // ==========================================
 
-export interface Trip {
-  id: number;
-  public_id?: string;
-  uuid_fiscal?: string;
-
-  // Relaciones Comerciales
-  client_id: number;
-  sub_client_id: number;
-  tariff_id?: number | null;
-  client?: Client;
+export interface Trip extends TripResponse {
   sub_client?: SubClient;
-
-  // Activos Asignados
-  remolque_1_id?: number | null;
-  dolly_id?: number | null;
-  remolque_2_id?: number | null;
-  remolque_1?: Unit;
-  dolly?: Unit;
-  remolque_2?: Unit;
-
-  // Ruta y Estatus
-  origin: string;
-  destination: string;
-  route_name?: string;
-  status: TripStatus;
-
-  // Datos de Carga
   descripcion_mercancia: string;
   peso_toneladas: number;
   es_material_peligroso: boolean;
   clase_imo?: string | null;
-
-  // Datos Fiscales (SAT)
-  sat_clave_producto?: string;
-  sat_clave_unidad?: string;
-  mercancia_clave_stcc?: string;
-
-  // Tiempos
-  start_date: string;
-  closed_at?: string | null;
-  fecha_programada?: string | null;
-
-  // Resumen Financiero
-  tarifa_base: number;
   costo_casetas: number;
-
-  // Operación Detallada
   legs?: TripLeg[];
-
-  // Conciliación de Combustible
   fuel_reconciled?: boolean;
   fuel_reconciliation_data?: {
     litros_vales: number;
@@ -151,7 +78,7 @@ export interface Trip {
 }
 
 // ==========================================
-// PAYLOADS (Para creación y actualización)
+// PAYLOADS
 // ==========================================
 
 export interface TripLegCreatePayload {
@@ -184,12 +111,12 @@ export interface TripCreatePayload {
 }
 
 // ==========================================
-// UTILIDADES (Lites / Vistas rápidas)
+// UTILIDADES
 // ==========================================
 
 export interface TripLite {
   id: number;
-  folio: string; // public_id o formato interno
+  folio: string;
   origin: string;
   destination: string;
 }
@@ -198,9 +125,6 @@ export interface TripLite {
 // TRACKING & MONITORING TYPES
 // ==========================================
 
-/**
- * Datos enviados desde el modal de actualización de estatus
- */
 export interface StatusUpdateData {
   status: string;
   location: string;
@@ -216,18 +140,12 @@ export interface StatusUpdateData {
   fase_operativa: string;
 }
 
-/**
- * Para el caché de ubicaciones recientes en LocalStorage
- */
 export interface CachedLocation {
   address: string;
   lat: string;
   lng: string;
 }
 
-/**
- * Estructura de las opciones visuales en el Select de estatus
- */
 export interface StatusOption {
   value: string;
   label: string;

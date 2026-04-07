@@ -1,5 +1,4 @@
-// src/services/billingService.ts
-import axiosClient from "@/api/axiosClient";
+import { DefaultService } from "@/api/generated";
 
 export interface BillingResponse {
   status: string;
@@ -12,26 +11,21 @@ export interface BillingResponse {
 }
 
 export const billingService = {
-  // Fase 1: Bypass Aduanal ($1 peso)
   stampNominal: async (viajeId: number): Promise<BillingResponse> => {
-    const response = await axiosClient.post("/billing/stamp/nominal", {
+    const response = await DefaultService.generarCartaPorteNominalApiSatStampNominalPost({
       viaje_id: viajeId,
       is_nominal: true,
-    });
-    return response.data;
+    } as any);
+    return response as BillingResponse;
   },
 
-  // Fase 3: Factura Final (Sustitución 04)
-  stampFinal: async (
-    viajeId: number,
-    uuidRelacionado: string,
-  ): Promise<BillingResponse> => {
-    const response = await axiosClient.post("/billing/stamp/final", {
+  stampFinal: async (viajeId: number, uuidRelacionado: string): Promise<BillingResponse> => {
+    const response = await DefaultService.generarFacturaFinalApiSatStampFinalPost({
       viaje_id: viajeId,
       is_nominal: false,
       tipo_relacion: "04",
       uuid_relacionado: uuidRelacionado,
-    });
-    return response.data;
+    } as any);
+    return response as BillingResponse;
   },
 };

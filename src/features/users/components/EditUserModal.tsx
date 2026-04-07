@@ -160,19 +160,19 @@ export function EditUserModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] p-0 overflow-hidden glass-panel border-none shadow-2xl animate-modal-show">
+      <DialogContent className="w-[95vw] sm:max-w-[600px] max-h-[90vh] p-0 overflow-hidden glass-panel border-none shadow-2xl animate-modal-show">
         {/* HEADER NAVY TAHOE */}
-        <DialogHeader className="px-8 py-6 bg-brand-navy/95 backdrop-blur-md shrink-0 relative overflow-hidden border-b border-white/10">
+        <DialogHeader className="px-5 sm:px-8 py-5 sm:py-6 bg-brand-navy/95 backdrop-blur-md shrink-0 relative overflow-hidden border-b border-white/10">
           <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center gap-4">
             <div className="icon-plate p-2.5 rounded-xl">
               <Edit className="h-5 w-5 text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.4)]" />
             </div>
             <div className="flex flex-col text-left">
-              <DialogTitle className="text-2xl font-black heading-crisp text-white text-shadow-premium uppercase tracking-tighter">
+              <DialogTitle className="text-xl sm:text-2xl font-black heading-crisp text-white text-shadow-premium uppercase tracking-tighter">
                 Editar Usuario
               </DialogTitle>
-              <span className="text-[10px] font-bold text-brand-secondary uppercase tracking-[0.3em] mt-1">
+              <span className="text-[10px] font-bold text-white/50 uppercase tracking-[0.3em] mt-1">
                 Panel de Control de Perfil
               </span>
             </div>
@@ -182,42 +182,42 @@ export function EditUserModal({
         {/* IMPORTANTE: El onSubmit usa handleSubmit de react-hook-form */}
         <form
           onSubmit={handleSubmit(handleFormSubmit)}
-          className="bg-white/40 backdrop-blur-sm"
+          className="bg-card/40 dark:bg-card/20 backdrop-blur-sm"
         >
           <Tabs
             value={activeTab}
             onValueChange={setActiveTab}
             className="w-full"
           >
-            <div className="px-8 pt-6">
-              <TabsList className="grid w-full grid-cols-3 bg-slate-900/5 p-1 rounded-xl border border-slate-200/50 backdrop-blur-md">
+            <div className="px-5 sm:px-8 pt-5 sm:pt-6">
+              <TabsList className="grid w-full grid-cols-3 bg-muted/50 p-1 rounded-xl border border-border backdrop-blur-md">
                 <TabsTrigger
                   value="general"
-                  className="gap-2 font-bold text-[10px] uppercase tracking-wider data-[state=active]:bg-white data-[state=active]:text-brand-navy"
+                  className="gap-2 font-bold text-[10px] uppercase tracking-wider data-[state=active]:bg-card data-[state=active]:text-foreground"
                 >
                   <User className="h-3.5 w-3.5" /> General
                 </TabsTrigger>
                 <TabsTrigger
                   value="seguridad"
-                  className="gap-2 font-bold text-[10px] uppercase tracking-wider data-[state=active]:bg-white data-[state=active]:text-brand-navy"
+                  className="gap-2 font-bold text-[10px] uppercase tracking-wider data-[state=active]:bg-card data-[state=active]:text-foreground"
                 >
                   <Lock className="h-3.5 w-3.5" /> Seguridad
                 </TabsTrigger>
                 <TabsTrigger
                   value="imagen"
-                  className="gap-2 font-bold text-[10px] uppercase tracking-wider data-[state=active]:bg-white data-[state=active]:text-brand-navy"
+                  className="gap-2 font-bold text-[10px] uppercase tracking-wider data-[state=active]:bg-card data-[state=active]:text-foreground"
                 >
                   <ImageIcon className="h-3.5 w-3.5" /> Imagen
                 </TabsTrigger>
               </TabsList>
             </div>
 
-            <div className="px-8 py-6 min-h-[400px] max-h-[60vh] overflow-y-auto custom-scrollbar">
+            <div className="px-5 sm:px-8 py-5 sm:py-6 min-h-[400px] max-h-[60vh] overflow-y-auto custom-scrollbar">
               <TabsContent
                 value="general"
                 className="space-y-6 m-0 animate-in fade-in slide-in-from-left-2"
               >
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                   <div className="space-y-1.5">
                     <Label variant="brand" required>
                       Nombre
@@ -273,7 +273,7 @@ export function EditUserModal({
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                   <div className="space-y-1.5">
                     <Label variant="brand">Teléfono</Label>
                     <Input
@@ -292,7 +292,7 @@ export function EditUserModal({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                   <div className="space-y-1.5">
                     <Label variant="brand" required>
                       Rol
@@ -357,7 +357,7 @@ export function EditUserModal({
                   <Label variant="brand" className="text-brand-red">
                     Nueva Contraseña
                   </Label>
-                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">
+                  <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-tight">
                     * Vacío para mantener actual
                   </p>
                   <PasswordInput
@@ -372,12 +372,12 @@ export function EditUserModal({
                   )}
                 </div>
 
-                <div className="flex items-center justify-between p-5 rounded-2xl glass-card border-slate-200">
+                <div className="flex items-center justify-between p-5 rounded-2xl glass-card border-border">
                   <div className="space-y-1">
-                    <Label className="text-sm font-black text-brand-navy">
+                    <Label className="text-sm font-black text-foreground">
                       Autenticación 2FA
                     </Label>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase">
+                    <p className="text-[10px] text-muted-foreground font-bold uppercase">
                       Seguridad de doble factor
                     </p>
                   </div>
@@ -454,12 +454,12 @@ export function EditUserModal({
               </TabsContent>
             </div>
 
-            <div className="px-8 py-6 border-t border-white/20 bg-white/60 backdrop-blur-xl flex justify-end gap-4">
+            <div className="px-5 sm:px-8 py-5 sm:py-6 border-t border-border bg-card/60 backdrop-blur-xl flex flex-col-reverse sm:flex-row justify-end gap-3 sm:gap-4">
               <Button
                 type="button"
                 variant="ghost"
                 onClick={() => onOpenChange(false)}
-                className="h-11 font-black uppercase text-[11px] tracking-widest text-slate-400"
+                className="h-11 font-black uppercase text-[11px] tracking-widest text-muted-foreground"
               >
                 Cancelar
               </Button>

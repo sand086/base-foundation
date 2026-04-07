@@ -9,7 +9,7 @@ import {
   Info,
   Lock,
 } from "lucide-react";
-import axiosClient from "@/api/axiosClient";
+import { MonitoringNotificationsService } from "@/api/generated";
 import { useAuth } from "@/hooks/useAuth";
 
 // 1. Definición de eventos de seguridad y tracking
@@ -146,13 +146,12 @@ export const useSecurityNotifications = () => {
     // 2. PERSISTENCIA EN BACKEND
     try {
       if (user?.id) {
-        await axiosClient.post("/notifications/", {
+        await MonitoringNotificationsService.createNotificationApiMonitoringPost({
           user_id: user.id,
           title: title,
           message: message,
           event_type: event,
           reference_id: details.tripId ? String(details.tripId) : null,
-          // 🚀 Usamos metadata_info para evitar el conflicto con SQLAlchemy
           metadata_info: {
             is_external: details.isExternal || false,
             location: details.location,
@@ -160,7 +159,7 @@ export const useSecurityNotifications = () => {
             client_name: details.clientName,
             comments: details.comments,
           },
-        });
+        } as any);
       }
     } catch (error) {
       console.error("Error al guardar notificación en base de datos:", error);

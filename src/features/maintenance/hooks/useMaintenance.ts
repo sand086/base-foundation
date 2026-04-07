@@ -1,32 +1,44 @@
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
-import {
-  maintenanceService,
-  InventoryItem,
-  WorkOrder,
-  CreateInventoryPayload,
-  CreateWorkOrderPayload,
-} from "@/features/maintenance/services/maintenanceService";
+import { MaintenanceService } from "@/api/generated";
+import { InventoryItem } from "@/features/inventory/types";
+import { WorkOrder } from "@/features/maintenance/types";
+
+interface CreateInventoryPayload {
+  sku: string;
+  descripcion: string;
+  categoria: string;
+  stock_actual: number;
+  stock_minimo: number;
+  ubicacion: string;
+  precio_unitario: number;
+}
+
+interface CreateWorkOrderPayload {
+  unit_id: number;
+  mechanic_id?: number;
+  descripcion_problema: string;
+  parts: { inventory_item_id: number; cantidad: number }[];
+}
 
 export const useMaintenance = () => {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
-  const [mechanics, setMechanics] = useState<any[]>([]); // Tipar según tu interfaz Mechanic
+  const [mechanics, setMechanics] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Cargar datos iniciales
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
       const [invData, woData, mechData] = await Promise.all([
-        maintenanceService.getInventory(),
-        maintenanceService.getWorkOrders(),
-        maintenanceService.getMechanics(),
+        MaintenanceService.readInventoryApiMaintenanceInventoryGet(),
+        MaintenanceService.readWorkOrdersApiMaintenanceWorkOrdersGet(),
+        MaintenanceService.readMechanicsApiMaintenanceMechanicsGet(),
       ]);
-      setInventory(invData);
-      setWorkOrders(woData);
-      setMechanics(mechData);
+      setInventory(invData as InventoryItem[]);
+      setWorkOrders(woData as WorkOrder[]);
+      setMechanics(mechData as any[]);
     } catch (err) {
       console.error("Error fetching maintenance data", err);
       setError("Error al cargar datos de mantenimiento");
@@ -42,12 +54,10 @@ export const useMaintenance = () => {
     fetchData();
   }, [fetchData]);
 
-  // --- ACCIONES DE INVENTARIO ---
-
   const createItem = async (item: CreateInventoryPayload) => {
     try {
-      const newItem = await maintenanceService.createInventoryItem(item);
-      setInventory((prev) => [newItem, ...prev]);
+      const newItem = await MaintenanceService.createInventoryItemApiMaintenanceInventoryPost(item as any);
+      setInventory((prev) => [newItem as InventoryItem, ...prev]);
       return true;
     } catch (err) {
       toast.error("Error al crear", {
@@ -59,14 +69,8 @@ export const useMaintenance = () => {
 
   const updateItem = async (id: number, item: any) => {
     try {
-      const updatedItem = await maintenanceService.updateInventoryItem(
-        id,
-        item,
-      );
-
-      // Actualizamos el estado local reemplazando el item viejo por el nuevo
-      setInventory((prev) => prev.map((i) => (i.id === id ? updatedItem : i)));
-
+      const updatedItem = await MaintenanceService.updateInventoryItemApiMaintenanceInventoryItemIdPut(Number(id), item);
+      setInventory((prev) => prev.map((i) => (i.id === id ? updatedItem as InventoryItem : i)));
       toast.success("Refacción actualizada", {
         description: `${updatedItem.sku} - ${updatedItem.descripcion}`,
       });
@@ -82,7 +86,7 @@ export const useMaintenance = () => {
 
   const deleteItem = async (id: number) => {
     try {
-      await maintenanceService.deleteInventoryItem(id);
+      await MaintenanceService.deleteInventoryItemApiMaintenanceInventoryItemIdDelete(Number(id));
       setInventory((prev) => prev.filter((item) => item.id !== id));
       toast.success("Eliminado", {
         description: "Refacción eliminada correctamente.",
@@ -92,19 +96,12 @@ export const useMaintenance = () => {
     }
   };
 
-  // --- ACCIONES DE ÓRDENES DE TRABAJO ---
-
   const createWorkOrder = async (order: CreateWorkOrderPayload) => {
     try {
-      const newOrder = await maintenanceService.createWorkOrder(order);
-
-      // 1. Agregamos la orden a la tabla
-      setWorkOrders((prev) => [newOrder, ...prev]);
-
-      // 2.  MAGIA: Recargamos el inventario inmediatamente para que se vea la resta
-      const updatedInventory = await maintenanceService.getInventory();
-      setInventory(updatedInventory);
-
+      const newOrder = await MaintenanceService.createWorkOrderApiMaintenanceWorkOrdersPost(order as any);
+      setWorkOrders((prev) => [newOrder as WorkOrder, ...prev]);
+      const updatedInventory = await MaintenanceService.readInventoryApiMaintenanceInventoryGet();
+      setInventory(updatedInventory as InventoryItem[]);
       toast.success("Orden Creada", {
         description: `Folio: ${newOrder.folio}`,
       });
@@ -119,25 +116,16 @@ export const useMaintenance = () => {
 
   const updateOrderStatus = async (id: number, status: string) => {
     try {
-      const updatedOrder = await maintenanceService.updateWorkOrderStatus(
-        id,
-        status,
+      const updatedOrder = await MaintenanceService.updateOrderStatusApiMaintenanceWorkOrdersOrderIdStatusPatch(
+        Number(id),
+        { status } as any,
       );
-
-      // Actualizamos la orden en la tabla
-      setWorkOrders((prev) =>
-        prev.map((o) => (o.id === id ? updatedOrder : o)),
-      );
-
-      // Si se cancela, las piezas regresan, así que recargamos el inventario
+      setWorkOrders((prev) => prev.map((o) => (o.id === id ? updatedOrder as WorkOrder : o)));
       if (status === "cancelada") {
-        const updatedInventory = await maintenanceService.getInventory();
-        setInventory(updatedInventory);
+        const updatedInventory = await MaintenanceService.readInventoryApiMaintenanceInventoryGet();
+        setInventory(updatedInventory as InventoryItem[]);
       }
-
-      toast.success(
-        `Orden ${status === "cerrada" ? "Finalizada" : "Cancelada"}`,
-      );
+      toast.success(`Orden ${status === "cerrada" ? "Finalizada" : "Cancelada"}`);
       return true;
     } catch (error) {
       toast.error("Error al actualizar la orden");

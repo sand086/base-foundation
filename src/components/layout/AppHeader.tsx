@@ -12,6 +12,8 @@ import {
   Info,
   Sun,
   Moon,
+  HelpCircle,
+  PanelLeft,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -28,6 +30,7 @@ import {
 
 import { useSystemConfig } from "@/features/settings/hooks/useSystemConfig";
 import { useAuth } from "@/hooks/useAuth";
+import { useTheme } from "@/context/ThemeProvider";
 import { openGlobalSearch } from "@/components/common/GlobalSearch";
 import axiosClient from "@/api/axiosClient";
 import { cn } from "@/lib/utils";
@@ -44,41 +47,15 @@ const getFullImageUrl = (path?: string) => {
   return `${apiBase.replace(/\/api$/, "")}${path}`;
 };
 
-export function AppHeader() {
+export function AppHeader({ onMobileMenuToggle }: { onMobileMenuToggle?: () => void }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { resolvedTheme, setTheme } = useTheme();
 
   const [notifications, setNotifications] = useState<any[]>([]);
 
-  // 🌙 ESTADO Y LÓGICA DEL DARK MODE
-  const [theme, setTheme] = useState<"light" | "dark">("light");
-
-  useEffect(() => {
-    // Revisa si ya hay un tema guardado o si el sistema de la PC está en oscuro
-    const isDark =
-      localStorage.theme === "dark" ||
-      (!("theme" in localStorage) &&
-        window.matchMedia("(prefers-color-scheme: dark)").matches);
-
-    if (isDark) {
-      document.documentElement.classList.add("dark");
-      setTheme("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-      setTheme("light");
-    }
-  }, []);
-
   const toggleTheme = () => {
-    if (theme === "light") {
-      document.documentElement.classList.add("dark");
-      localStorage.theme = "dark";
-      setTheme("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-      localStorage.theme = "light";
-      setTheme("light");
-    }
+    setTheme(resolvedTheme === "light" ? "dark" : "light");
   };
 
   const fetchNotifications = async () => {
@@ -127,9 +104,20 @@ export function AppHeader() {
     user?.role?.nombre || user?.rol || user?.puesto || "Usuario";
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-slate-200/80 dark:border-white/10 bg-white/90 dark:bg-brand-navy/80 backdrop-blur-2xl px-4 md:px-6 shadow-sm transition-all">
-      {/* IZQUIERDA: Búsqueda Spotlight */}
-      <div className="flex items-center flex-1">
+    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-border bg-card/90 dark:bg-brand-navy/80 backdrop-blur-2xl px-3 md:px-6 shadow-sm transition-all">
+      {/* IZQUIERDA: Hamburger (mobile) + Búsqueda Spotlight */}
+      <div className="flex items-center flex-1 gap-2">
+        {/* Mobile menu toggle */}
+        {onMobileMenuToggle && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onMobileMenuToggle}
+            className="md:hidden h-9 w-9 rounded-xl text-muted-foreground hover:text-foreground"
+          >
+            <PanelLeft className="h-5 w-5" />
+          </Button>
+        )}
         <button
           onClick={() => openGlobalSearch()}
           className={cn(
@@ -151,6 +139,17 @@ export function AppHeader() {
 
       {/* DERECHA: Interacciones */}
       <div className="flex items-center gap-3">
+        {/* ❓ BOTÓN DE AYUDA / MANUALES */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => navigate("/manuals")}
+          className="relative h-10 w-10 rounded-xl bg-transparent border border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10 hover:shadow-sm transition-all duration-300"
+          title="Documentación y Manuales"
+        >
+          <HelpCircle className="h-4 w-4 text-slate-600 dark:text-white/70" />
+        </Button>
+
         {/* 🌙 BOTÓN DE DARK MODE / LIGHT MODE */}
         <Button
           variant="ghost"
@@ -158,7 +157,7 @@ export function AppHeader() {
           onClick={toggleTheme}
           className="relative h-10 w-10 rounded-xl bg-transparent border border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10 hover:shadow-sm transition-all duration-300"
         >
-          {theme === "light" ? (
+          {resolvedTheme === "light" ? (
             <Moon className="h-4 w-4 text-slate-600 dark:text-white/70 transition-all" />
           ) : (
             <Sun className="h-4 w-4 text-slate-600 dark:text-white/70 transition-all" />

@@ -1,5 +1,5 @@
 // src/features/maintenance/types.ts
-
+import type { WorkOrderResponse } from "@/api/generated";
 import { InventoryItem } from "@/features/inventory/types";
 
 // ==========================================
@@ -15,7 +15,7 @@ export type WorkOrderStatus =
 export type MaintenanceType = "patio" | "ruta";
 
 // ==========================================
-// MECÁNICOS (Model: Mechanic)
+// MECÁNICOS
 // ==========================================
 
 export interface Mechanic {
@@ -38,7 +38,7 @@ export interface Mechanic {
 }
 
 // ==========================================
-// DOCUMENTOS DE MECÁNICOS (Model: MechanicDocument)
+// DOCUMENTOS DE MECÁNICOS
 // ==========================================
 
 export interface MechanicDocument {
@@ -50,15 +50,13 @@ export interface MechanicDocument {
   fecha_vencimiento?: string | null;
   file_size?: number | null;
   subido_en?: string | null;
-
-  // Auditoría
   record_status?: string;
   created_at?: string;
   updated_at?: string;
 }
 
 // ==========================================
-// PARTES/REFACCIONES EN LA ORDEN (Model: WorkOrderPart)
+// PARTES/REFACCIONES EN LA ORDEN
 // ==========================================
 
 export interface WorkOrderPart {
@@ -67,44 +65,22 @@ export interface WorkOrderPart {
   inventory_item_id: number;
   cantidad: number;
   costo_unitario_snapshot: number;
-
   item_sku?: string | null;
   item_descripcion?: string | null;
-
-  // Relación cargada (Si tu backend lo anida)
   item?: InventoryItem;
 }
 
 // ==========================================
-// ORDEN DE TRABAJO (Model: WorkOrder)
+// ORDEN DE TRABAJO — extends generated
 // ==========================================
 
-export interface WorkOrder {
-  id: number;
-  folio: string;
-  unit_id: number;
-  mechanic_id?: number | null;
+export interface WorkOrder extends WorkOrderResponse {
   trip_id?: number | null;
-
-  tipo_mantenimiento: MaintenanceType;
-  descripcion_problema: string;
-  status: WorkOrderStatus;
-
-  fecha_apertura?: string | null;
-  fecha_cierre?: string | null;
-
-  unit_numero?: string | null;
-  mechanic_nombre?: string | null;
-
+  tipo_mantenimiento?: MaintenanceType;
   unit?: {
     numero_economico: string;
     placas?: string;
     marca?: string;
   };
   mechanic?: Partial<Mechanic>;
-  parts?: WorkOrderPart[];
-
-  // Auditoría
-  created_at?: string;
-  updated_at?: string;
 }

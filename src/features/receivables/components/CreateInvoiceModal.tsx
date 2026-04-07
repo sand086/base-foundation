@@ -179,10 +179,10 @@ export function CreateInvoiceModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px] max-h-[95vh] flex flex-col p-0 overflow-hidden bg-white dark:bg-slate-950 border-none shadow-2xl">
-        <DialogHeader className="p-6 bg-slate-50 dark:bg-slate-900/50 border-b">
-          <DialogTitle className="flex items-center gap-2 text-brand-navy dark:text-white text-xl font-black uppercase tracking-tighter">
-            <FileText className="h-6 w-6 text-blue-600" />
+      <DialogContent className="sm:max-w-[700px] max-h-[95vh] flex flex-col p-0 overflow-hidden bg-card border-border shadow-2xl">
+        <DialogHeader className="p-6 bg-muted/50 border-b border-border">
+          <DialogTitle className="flex items-center gap-2 text-foreground text-xl font-black uppercase tracking-tighter">
+            <FileText className="h-6 w-6 text-blue-600 dark:text-blue-400" />
             {importedServices
               ? "Facturar Servicios Seleccionados"
               : "Nueva Factura Manual"}
@@ -193,7 +193,7 @@ export function CreateInvoiceModal({
           {/* SECCIÓN CLIENTE */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+              <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
                 Cliente Receptor *
               </Label>
               <Select
@@ -222,13 +222,13 @@ export function CreateInvoiceModal({
               </Select>
             </div>
             <div className="space-y-2">
-              <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+              <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
                 RFC Fiscal
               </Label>
               <Input
                 value={selectedClient?.rfc || ""}
                 disabled
-                className="h-11 bg-slate-50 dark:bg-slate-900 font-mono font-bold uppercase"
+                className="h-11 bg-muted font-mono font-bold uppercase"
               />
             </div>
           </div>
@@ -236,7 +236,7 @@ export function CreateInvoiceModal({
           {/* PARÁMETROS FACTURA */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
             <div className="space-y-2">
-              <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+              <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
                 Fecha Emisión
               </Label>
               <Input
@@ -247,7 +247,7 @@ export function CreateInvoiceModal({
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+              <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
                 Plazo Crédito
               </Label>
               <Select
@@ -271,7 +271,7 @@ export function CreateInvoiceModal({
               </Select>
             </div>
             <div className="space-y-2">
-              <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+              <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
                 Moneda
               </Label>
               <Select
@@ -293,7 +293,7 @@ export function CreateInvoiceModal({
             </div>
           </div>
 
-          <div className="p-4 bg-blue-50 dark:bg-blue-900/10 rounded-xl border border-blue-100 dark:border-blue-800/30 flex items-center justify-between shadow-sm">
+          <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-xl border border-blue-100 dark:border-blue-800/30 flex items-center justify-between shadow-sm">
             <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">
               Vencimiento Proyectado:
             </span>
@@ -304,8 +304,8 @@ export function CreateInvoiceModal({
 
           {/* LISTA DE CONCEPTOS */}
           <div className="space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-white/5 pb-2">
-              <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+            <div className="flex items-center justify-between border-b border-border pb-2">
+              <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
                 Detalle de Conceptos
               </h3>
               <Button
@@ -323,7 +323,7 @@ export function CreateInvoiceModal({
               {conceptos.map((concepto) => (
                 <div
                   key={concepto.id}
-                  className="grid grid-cols-12 gap-3 items-start p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-white/5 group hover:border-blue-300 dark:hover:border-blue-700 transition-all shadow-sm"
+                  className="grid grid-cols-12 gap-3 items-start p-3 bg-card rounded-xl border border-border group hover:border-blue-300 dark:hover:border-blue-700 transition-all shadow-sm"
                 >
                   <div className="col-span-12 md:col-span-6 space-y-1.5">
                     <Input
@@ -367,7 +367,7 @@ export function CreateInvoiceModal({
                       className="h-9 text-xs font-mono font-bold"
                     />
                   </div>
-                  <div className="col-span-3 md:col-span-1 flex items-center h-9 font-mono font-black text-xs text-blue-600">
+                  <div className="col-span-3 md:col-span-1 flex items-center h-9 font-mono font-black text-xs text-blue-600 dark:text-blue-400">
                     ${concepto.importe.toLocaleString("es-MX")}
                   </div>
                   <div className="col-span-1 flex justify-end">
@@ -377,7 +377,7 @@ export function CreateInvoiceModal({
                       size="icon"
                       onClick={() => removeConcepto(concepto.id)}
                       disabled={conceptos.length === 1}
-                      className="h-8 w-8 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
+                      className="h-8 w-8 text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -389,8 +389,8 @@ export function CreateInvoiceModal({
         </div>
 
         {/* FOOTER Y TOTAL */}
-        <div className="p-6 bg-slate-50 dark:bg-slate-900 border-t space-y-4">
-          <div className="flex items-center justify-between bg-brand-navy rounded-2xl p-5 text-white shadow-xl ring-4 ring-white dark:ring-slate-950">
+        <div className="p-6 bg-muted/50 border-t border-border space-y-4">
+          <div className="flex items-center justify-between bg-brand-navy rounded-2xl p-5 text-white shadow-xl ring-4 ring-background">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-white/10 rounded-lg">
                 <DollarSign className="h-6 w-6 text-emerald-400" />

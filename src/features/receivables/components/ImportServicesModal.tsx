@@ -76,9 +76,9 @@ export function ImportServicesModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px] max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[700px] max-h-[85vh] overflow-y-auto bg-card">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-brand-dark">
+          <DialogTitle className="flex items-center gap-2 text-foreground">
             <FileInput className="h-5 w-5" />
             Importar Servicios Finalizados
           </DialogTitle>
@@ -98,76 +98,78 @@ export function ImportServicesModal({
 
           {/* Services Table */}
           {filteredServices.length === 0 ? (
-            <div className="p-8 text-center bg-muted/30 rounded-lg border border-dashed">
+            <div className="p-8 text-center bg-muted/30 rounded-lg border border-dashed border-border">
               <Truck className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
               <p className="text-muted-foreground">
                 No hay servicios finalizados sin facturar
               </p>
             </div>
           ) : (
-            <DataTable>
-              <DataTableHeader>
-                <DataTableRow>
-                  <DataTableHead className="w-12">
-                    <Checkbox
-                      checked={
-                        selectedIds.size === filteredServices.length &&
-                        filteredServices.length > 0
-                      }
-                      onCheckedChange={handleSelectAll}
-                    />
-                  </DataTableHead>
-                  <DataTableHead>ID Servicio</DataTableHead>
-                  <DataTableHead>Client</DataTableHead>
-                  <DataTableHead>Ruta</DataTableHead>
-                  <DataTableHead>Entrega</DataTableHead>
-                  <DataTableHead className="text-right">Monto</DataTableHead>
-                </DataTableRow>
-              </DataTableHeader>
-              <DataTableBody>
-                {filteredServices.map((service) => (
-                  <DataTableRow
-                    key={service.id}
-                    className={
-                      selectedIds.has(service.id) ? "bg-brand-navy/5" : ""
-                    }
-                  >
-                    <DataTableCell>
+            <div className="overflow-x-auto">
+              <DataTable>
+                <DataTableHeader>
+                  <DataTableRow>
+                    <DataTableHead className="w-12">
                       <Checkbox
-                        checked={selectedIds.has(service.id)}
-                        onCheckedChange={() => handleToggle(service.id)}
+                        checked={
+                          selectedIds.size === filteredServices.length &&
+                          filteredServices.length > 0
+                        }
+                        onCheckedChange={handleSelectAll}
                       />
-                    </DataTableCell>
-                    <DataTableCell className="font-mono text-xs font-medium">
-                      {service.id}
-                    </DataTableCell>
-                    <DataTableCell className="font-medium">
-                      {service.cliente}
-                    </DataTableCell>
-                    <DataTableCell className="text-sm">
-                      {service.ruta}
-                    </DataTableCell>
-                    <DataTableCell className="text-sm text-muted-foreground">
-                      {service.fechaEntrega}
-                    </DataTableCell>
-                    <DataTableCell className="text-right font-medium">
-                      ${service.monto.toLocaleString("es-MX")}
-                    </DataTableCell>
+                    </DataTableHead>
+                    <DataTableHead>ID Servicio</DataTableHead>
+                    <DataTableHead>Cliente</DataTableHead>
+                    <DataTableHead>Ruta</DataTableHead>
+                    <DataTableHead>Entrega</DataTableHead>
+                    <DataTableHead className="text-right">Monto</DataTableHead>
                   </DataTableRow>
-                ))}
-              </DataTableBody>
-            </DataTable>
+                </DataTableHeader>
+                <DataTableBody>
+                  {filteredServices.map((service) => (
+                    <DataTableRow
+                      key={service.id}
+                      className={
+                        selectedIds.has(service.id) ? "bg-primary/5" : ""
+                      }
+                    >
+                      <DataTableCell>
+                        <Checkbox
+                          checked={selectedIds.has(service.id)}
+                          onCheckedChange={() => handleToggle(service.id)}
+                        />
+                      </DataTableCell>
+                      <DataTableCell className="font-mono text-xs font-medium">
+                        {service.id}
+                      </DataTableCell>
+                      <DataTableCell className="font-medium">
+                        {service.cliente}
+                      </DataTableCell>
+                      <DataTableCell className="text-sm">
+                        {service.ruta}
+                      </DataTableCell>
+                      <DataTableCell className="text-sm text-muted-foreground">
+                        {service.fechaEntrega}
+                      </DataTableCell>
+                      <DataTableCell className="text-right font-medium">
+                        ${service.monto.toLocaleString("es-MX")}
+                      </DataTableCell>
+                    </DataTableRow>
+                  ))}
+                </DataTableBody>
+              </DataTable>
+            </div>
           )}
 
           {/* Summary */}
           {selectedIds.size > 0 && (
-            <div className="p-4 bg-brand-navy/5 rounded-lg border border-brand-navy/20">
+            <div className="p-4 bg-primary/5 rounded-lg border border-primary/20">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">
                     Servicios seleccionados
                   </p>
-                  <p className="font-semibold text-brand-dark">
+                  <p className="font-semibold text-foreground">
                     {selectedIds.size} servicio(s)
                   </p>
                 </div>
@@ -184,7 +186,7 @@ export function ImportServicesModal({
           )}
         </div>
 
-        <DialogFooter className="border-t pt-4">
+        <DialogFooter className="border-t border-border pt-4">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>

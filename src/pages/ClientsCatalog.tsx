@@ -48,7 +48,9 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useNavigate } from "react-router-dom";
 import { useClients } from "@/features/clients/hooks/useClients";
-import { Client } from "@/features/clients/types";
+import type { ClientResponse } from "@/api/generated";
+
+type Client = ClientResponse & { estatus?: string };
 import { cn } from "@/lib/utils";
 
 // --- CONFIGURACIÓN DE ESTADOS ---

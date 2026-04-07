@@ -62,10 +62,6 @@ import { cn, checkIsFullTrip } from "@/lib/utils";
 // Extendemos TripLeg localmente
 interface ExtendedTripLeg extends Omit<TripLeg, "status"> {
   status: TripStatus | "liquidado" | string;
-  total_anticipos?: number;
-  monto_neto_pagado?: number;
-  monto_sueldo?: number;
-  monto_maniobras?: number;
 }
 
 interface TripDetailsModalProps {
@@ -473,9 +469,9 @@ export function TripDetailsModal({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-6xl w-[95vw] h-[90vh] bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 flex flex-col p-0 overflow-hidden rounded-2xl shadow-2xl">
+        <DialogContent className="max-w-6xl w-[95vw] h-[90vh] bg-card/90 backdrop-blur-xl border border-border flex flex-col p-0 overflow-hidden rounded-2xl shadow-2xl">
           {/* HEADER PRINCIPAL */}
-          <DialogHeader className="p-6 pb-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
+          <DialogHeader className="p-4 sm:p-6 pb-4 sm:pb-6 bg-card border-b border-border shrink-0 relative overflow-hidden z-10">
             <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
 
             <div className="relative z-10 flex flex-col md:flex-row justify-between md:items-start gap-6 pr-10">
@@ -652,30 +648,30 @@ export function TripDetailsModal({
           </DialogHeader>
 
           {/* CUERPO TABS */}
-          <div className="flex flex-1 overflow-hidden w-full bg-slate-50/50 dark:bg-transparent">
+          <div className="flex flex-1 overflow-hidden w-full bg-muted/30 dark:bg-transparent">
             <div className="w-full flex flex-col bg-transparent">
               <Tabs
                 value={activeTab}
                 onValueChange={setActiveTab}
                 className="flex flex-col h-full"
               >
-                <div className="px-6 pt-5 border-b border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-950/50 backdrop-blur-md">
-                  <TabsList className="grid grid-cols-3 bg-slate-200/50 dark:bg-slate-800/80 h-12 p-1 rounded-xl shadow-sm border border-slate-300/50 dark:border-white/5">
+                <div className="px-4 sm:px-6 pt-5 border-b border-border bg-card/50 backdrop-blur-md overflow-x-auto">
+                  <TabsList className="grid grid-cols-3 bg-muted/50 h-12 p-1 rounded-xl shadow-sm border border-border">
                     <TabsTrigger
                       value="fases"
-                      className="text-[10px] font-black uppercase tracking-widest rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-brand-navy dark:data-[state=active]:text-white data-[state=active]:shadow-sm h-full px-2 transition-all"
+                      className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest rounded-lg data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm h-full px-2 transition-all"
                     >
                       Fases Operativas
                     </TabsTrigger>
                     <TabsTrigger
                       value="finanzas"
-                      className="text-[10px] font-black uppercase tracking-widest rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-brand-navy dark:data-[state=active]:text-white data-[state=active]:shadow-sm h-full px-2 transition-all"
+                      className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest rounded-lg data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm h-full px-2 transition-all"
                     >
                       Finanzas
                     </TabsTrigger>
                     <TabsTrigger
                       value="bitacora"
-                      className="text-[10px] font-black uppercase tracking-widest rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-brand-navy dark:data-[state=active]:text-white data-[state=active]:shadow-sm h-full px-2 transition-all"
+                      className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest rounded-lg data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm h-full px-2 transition-all"
                     >
                       Bitácora Eventos
                     </TabsTrigger>

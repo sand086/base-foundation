@@ -1,4 +1,4 @@
-import { PurchaseOrder } from "@/features/payables/types";
+import { PurchaseOrder } from "@/features/purchases/types";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 

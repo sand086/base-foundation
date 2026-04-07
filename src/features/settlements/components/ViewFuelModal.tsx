@@ -83,9 +83,9 @@ export function ViewFuelModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* CAPA 1: CASCARÓN TAHOE (Glassmorphism Pesado) */}
-      <DialogContent className="p-0 overflow-hidden sm:max-w-[700px] border-none bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl shadow-2xl animate-in fade-in zoom-in-95 slide-in-from-bottom-4 duration-300">
+      <DialogContent className="p-0 overflow-hidden sm:max-w-[700px] border-none bg-card/90 dark:bg-card/95 backdrop-blur-xl shadow-2xl animate-in fade-in zoom-in-95 slide-in-from-bottom-4 duration-300">
         {/* CAPA 2: HEADER TAHOE (Contraste Puro) */}
-        <DialogHeader className="relative p-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 flex flex-row items-center gap-5 space-y-0">
+        <DialogHeader className="relative p-6 bg-card dark:bg-card border-b border-border flex flex-row items-center gap-5 space-y-0">
           {/* ICON PLATE SEMÁNTICO */}
           <div
             className={cn(
@@ -103,10 +103,10 @@ export function ViewFuelModal({
           </div>
 
           <div className="flex flex-col gap-0.5">
-            <DialogTitle className="text-2xl font-black uppercase tracking-tighter heading-crisp text-slate-900 dark:text-white">
+            <DialogTitle className="text-2xl font-black uppercase tracking-tighter heading-crisp text-foreground">
               Detalle de Carga
             </DialogTitle>
-            <DialogDescription className="font-mono text-[11px] uppercase tracking-widest text-slate-500">
+            <DialogDescription className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
               Transaction Log ID:{" "}
               <span className="text-slate-900 dark:text-slate-300">
                 #{carga.id}
@@ -116,7 +116,7 @@ export function ViewFuelModal({
         </DialogHeader>
 
         {/* CAPA 3: CUERPO (Hundido Industrial) */}
-        <div className="p-6 space-y-6 bg-slate-50/50 dark:bg-transparent max-h-[70vh] overflow-y-auto">
+        <div className="p-6 space-y-6 bg-muted/30 dark:bg-transparent max-h-[70vh] overflow-y-auto">
           {/* ALERTA DE EXCESO (Status Crítico) */}
           {excede && (
             <div className="flex items-center gap-4 p-4 bg-rose-500/10 border border-rose-500/20 rounded-xl animate-pulse">
@@ -138,27 +138,27 @@ export function ViewFuelModal({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-4">
               {/* Unidad Info */}
-              <div className="p-4 bg-white dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm">
+              <div className="p-4 bg-card rounded-2xl border border-border shadow-sm">
                 <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2 block">
                   Identificación de Unidad
                 </label>
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-slate-600 dark:text-slate-400">
+                  <div className="p-2 bg-muted rounded-lg text-slate-600 dark:text-muted-foreground/80">
                     <Truck size={18} />
                   </div>
-                  <span className="text-lg font-black uppercase tracking-tight text-slate-900 dark:text-white">
+                  <span className="text-lg font-black uppercase tracking-tight text-foreground">
                     {carga.unidadNumero || "N/A"}
                   </span>
                 </div>
               </div>
 
               {/* Operador Info */}
-              <div className="p-4 bg-white dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm">
+              <div className="p-4 bg-card rounded-2xl border border-border shadow-sm">
                 <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2 block">
                   Operador Asignado
                 </label>
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-slate-600 dark:text-slate-400">
+                  <div className="p-2 bg-muted rounded-lg text-slate-600 dark:text-muted-foreground/80">
                     <User size={18} />
                   </div>
                   <span className="text-md font-bold uppercase truncate text-slate-800 dark:text-slate-200">
@@ -179,11 +179,11 @@ export function ViewFuelModal({
                     {Number(carga.litros || 0).toFixed(1)}
                   </span>
                 </div>
-                <div className="p-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-white/10 flex flex-col justify-between">
-                  <span className="text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">
+                <div className="p-4 bg-white dark:bg-slate-800 rounded-2xl border border-border flex flex-col justify-between">
+                  <span className="text-[9px] font-black uppercase tracking-[0.1em] text-muted-foreground/80">
                     Precio / L
                   </span>
-                  <span className="text-xl font-mono font-bold text-slate-900 dark:text-white">
+                  <span className="text-xl font-mono font-bold text-foreground">
                     $
                     {Number(
                       carga.precio_por_litro || carga.precioPorLitro || 0,
@@ -207,7 +207,7 @@ export function ViewFuelModal({
             </div>
           </div>
 
-          <Separator className="bg-slate-200 dark:bg-white/5" />
+          <Separator className="bg-border" />
 
           {/* EVIDENCIA SECTION (Industrial Viewport) */}
           <div className="space-y-3">
@@ -229,7 +229,7 @@ export function ViewFuelModal({
               )}
             </div>
 
-            <div className="relative group border-2 border-dashed border-slate-200 dark:border-white/10 rounded-[2rem] overflow-hidden bg-slate-100 dark:bg-slate-950/50 flex items-center justify-center min-h-[350px] transition-all hover:border-slate-300 dark:hover:border-white/20">
+            <div className="relative group border-2 border-dashed border-border rounded-[2rem] overflow-hidden bg-slate-100 dark:bg-slate-950/50 flex items-center justify-center min-h-[350px] transition-all hover:border-slate-300 dark:hover:border-white/20">
               {isImage && !imgError && (
                 <img
                   src={fullUrl!}
@@ -244,7 +244,7 @@ export function ViewFuelModal({
                   <div className="w-16 h-16 bg-rose-500/10 rounded-full flex items-center justify-center text-rose-500 mb-4">
                     <AlertCircle size={32} />
                   </div>
-                  <p className="text-sm font-black uppercase tracking-tight text-slate-900 dark:text-white">
+                  <p className="text-sm font-black uppercase tracking-tight text-foreground">
                     Fallo de Previsualización
                   </p>
                   <p className="text-xs text-slate-500 mt-1 max-w-[200px]">
@@ -289,7 +289,7 @@ export function ViewFuelModal({
         </div>
 
         {/* CAPA 4: FOOTER (Control Bar Crystal) */}
-        <div className="p-4 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-t border-slate-200 dark:border-white/10 flex items-center justify-between">
+        <div className="p-4 bg-card/80 dark:bg-card/80 backdrop-blur-md border-t border-border flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Calendar size={14} className="text-slate-400" />
             <span className="font-mono text-[11px] font-bold text-slate-500 uppercase">

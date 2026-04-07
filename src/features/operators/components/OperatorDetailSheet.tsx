@@ -41,8 +41,7 @@ import {
 } from "lucide-react";
 import { DocumentUploadManager } from "@/components/common/DocumentUploadManager";
 
-// IMPORTANTE: interfaz real del servicio (ID numérico, etc.)
-import { operatorService } from "@/features/operators/services/operatorService";
+import { FleetOperatorsService } from "@/api/generated";
 import { Operator } from "../types";
 
 import { format, differenceInYears, isValid } from "date-fns";
@@ -292,10 +291,10 @@ export function OperatorDetailSheet({
     }
 
     try {
-      const result = await operatorService.uploadDocument(
-        operator.id,
+      const result = await FleetOperatorsService.uploadOperatorDocumentApiFleetOperatorsOperatorIdDocumentsDocTypePost(
+        Number(operator.id),
         uploadingDocId,
-        file,
+        { file },
       );
 
       setDocuments((prev) =>

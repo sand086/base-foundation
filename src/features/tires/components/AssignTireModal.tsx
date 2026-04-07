@@ -204,19 +204,19 @@ export function AssignTireModal({
       }}
     >
       {/*  CAPA 1: CASCARÓN */}
-      <DialogContent className="w-[95vw] sm:max-w-lg flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
+      <DialogContent className="w-[95vw] sm:max-w-lg flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-card/90 dark:bg-card/95 backdrop-blur-xl rounded-2xl">
         {/*  CAPA 2: CABECERA (Blanca en Light, Navy oscuro en Dark) */}
-        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
+        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-card dark:bg-card border-b border-border shrink-0 relative overflow-hidden z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center gap-4 sm:gap-5">
             <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shadow-inner shrink-0 icon-plate border border-blue-200 dark:border-blue-500/20">
               <ArrowRightLeft className="h-7 w-7 sm:h-8 sm:w-8 text-blue-600 dark:text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.4)]" />
             </div>
             <div className="flex flex-col gap-1 text-left min-w-0">
-              <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white heading-crisp leading-none">
+              <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-foreground heading-crisp leading-none">
                 Asignar / Rotar
               </DialogTitle>
-              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-1 truncate tracking-normal normal-case">
+              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mt-1 truncate tracking-normal normal-case">
                 <span className="font-mono font-bold text-blue-600 dark:text-blue-400 uppercase">
                   {tire.codigo_interno}
                 </span>{" "}
@@ -232,12 +232,12 @@ export function AssignTireModal({
             onSubmit={form.handleSubmit(onSubmit)}
             className="flex-1 overflow-hidden flex flex-col"
           >
-            <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-slate-50/50 dark:bg-transparent custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-muted/30 dark:bg-transparent custom-scrollbar">
               <div className="space-y-6">
                 {/* 📍 Ubicación Actual */}
-                <div className="p-5 bg-white dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-white/10 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="p-5 bg-card rounded-2xl border border-border shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1 flex items-center gap-1.5">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground mb-1 flex items-center gap-1.5">
                       <MapPin className="h-3.5 w-3.5" /> Ubicación Actual
                     </p>
                     <p className="text-sm font-black text-brand-navy dark:text-white uppercase tracking-tight flex items-center gap-2">
@@ -280,7 +280,7 @@ export function AssignTireModal({
                         disabled={loadingUnits || isSubmitting}
                       >
                         <FormControl>
-                          <SelectTrigger className="h-11 font-black uppercase text-xs shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 text-brand-navy dark:text-slate-100">
+                          <SelectTrigger className="h-11 font-black uppercase text-xs shadow-sm bg-card border-border text-brand-navy dark:text-slate-100">
                             <SelectValue
                               placeholder={
                                 loadingUnits
@@ -290,14 +290,14 @@ export function AssignTireModal({
                             />
                           </SelectTrigger>
                         </FormControl>
-                        <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-slate-200 dark:border-white/10 max-h-[40vh]">
+                        <SelectContent className="bg-card/90 dark:bg-card/90 backdrop-blur-xl border-border max-h-[40vh]">
                           <SelectItem
                             value="almacen"
                             className="font-bold text-xs uppercase text-amber-600 dark:text-amber-500"
                           >
                             📦 Desmontar / Enviar a Almacén
                           </SelectItem>
-                          <div className="h-px bg-slate-200 dark:bg-white/10 my-1 mx-2" />
+                          <div className="h-px bg-border my-1 mx-2" />
                           {unidadesList.map((u) => (
                             <SelectItem
                               key={u.id}
@@ -305,7 +305,7 @@ export function AssignTireModal({
                               className="font-bold text-xs uppercase"
                             >
                               ECO-{u.numero_economico}
-                              <span className="text-slate-400 dark:text-slate-500 ml-2 text-[10px] font-medium tracking-widest normal-case">
+                              <span className="text-muted-foreground/80 ml-2 text-[10px] font-medium tracking-widest normal-case">
                                 {u.marca} {u.placas ? `(${u.placas})` : ""}
                               </span>
                             </SelectItem>
@@ -343,11 +343,11 @@ export function AssignTireModal({
                             disabled={isSubmitting}
                           >
                             <FormControl>
-                              <SelectTrigger className="h-11 font-bold text-xs bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm text-brand-navy dark:text-slate-100">
+                              <SelectTrigger className="h-11 font-bold text-xs bg-card border-border shadow-sm text-brand-navy dark:text-slate-100">
                                 <SelectValue placeholder="Seleccionar posición (1 al 10)..." />
                               </SelectTrigger>
                             </FormControl>
-                            <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-slate-200 dark:border-white/10">
+                            <SelectContent className="bg-card/90 dark:bg-card/90 backdrop-blur-xl border-border">
                               {availablePositions.map((pos) => (
                                 <SelectItem
                                   key={pos.id}
@@ -379,7 +379,7 @@ export function AssignTireModal({
                         <Textarea
                           {...field}
                           placeholder="Razón del cambio, condición física detectada, etc."
-                          className="min-h-[80px] resize-none bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm font-medium text-sm"
+                          className="min-h-[80px] resize-none bg-card border-border shadow-sm font-medium text-sm"
                           disabled={isSubmitting}
                         />
                       </FormControl>
@@ -391,7 +391,7 @@ export function AssignTireModal({
             </div>
 
             {/*  CAPA 4: FOOTER TAHOE */}
-            <DialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
+            <DialogFooter className="p-6 sm:p-8 bg-card/80 dark:bg-card/80 backdrop-blur-xl border-t border-border shrink-0 z-10">
               <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
                 <Button
                   type="button"

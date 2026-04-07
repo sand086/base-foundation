@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { PayableInvoice } from "@/types/api.types";
+import { PayableInvoice } from "@/features/payables/types";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));

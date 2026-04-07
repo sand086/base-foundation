@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-// Asegúrate de importar AxiosError si usas axios, o usa 'any' controladamente
-import { AxiosError } from "axios";
-import { unitService } from "@/features/units/services/unitService";
+import { FleetUnitsService } from "@/api/generated";
+import { ApiError } from "@/api/generated/core/ApiError";
 import { Unit } from "@/features/units/types";
 import { toast } from "sonner";
 
@@ -10,12 +9,11 @@ export const useUnits = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
 
-  // Función de carga de datos
   const fetchUnits = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await unitService.getAll();
-      setUnidades(data);
+      const data = await FleetUnitsService.readUnitsApiFleetUnitsGet();
+      setUnidades(data as Unit[]);
     } catch (error) {
       console.error(error);
       toast.error("Error al cargar la flota");
@@ -24,93 +22,74 @@ export const useUnits = () => {
     }
   }, []);
 
-  // Carga inicial
   useEffect(() => {
     fetchUnits();
   }, [fetchUnits]);
 
-  // --- CRUD OPERATIONS ---
-
-  const createUnit = async (unidad: Omit<Unit, "id">) => {
+  const createUnit = async (unidad: any) => {
     try {
-      await unitService.create(unidad);
+      await FleetUnitsService.createUnitApiFleetUnitsPost(unidad);
       toast.success("Unidad creada exitosamente");
-      // Esperamos a que se refresque la lista antes de devolver true
       await fetchUnits();
       return true;
-    } catch (error: any) {
-      const err = error as AxiosError<{ detail: string }>;
-      const message = err.response?.data?.detail || "Error al crear unidad";
-      toast.error(message);
+    } catch (error) {
+      const msg = error instanceof ApiError ? error.body?.detail : "Error al crear unidad";
+      toast.error(msg || "Error al crear unidad");
       return false;
     }
   };
 
-  // NOTA: Cambiado 'id: string' a 'id: number'
-  const updateUnit = async (id: number, unidad: Partial<Unit>) => {
+  const updateUnit = async (id: number, unidad: any) => {
     try {
-      await unitService.update(id, unidad);
+      await FleetUnitsService.updateUnitApiFleetUnitsUnitIdPut(String(id), unidad);
       toast.success("Unidad actualizada");
       await fetchUnits();
       return true;
-    } catch (error: any) {
-      const err = error as AxiosError<{ detail: string }>;
-      const message =
-        err.response?.data?.detail || "Error al actualizar unidad";
-      toast.error(message);
+    } catch (error) {
+      const msg = error instanceof ApiError ? error.body?.detail : "Error al actualizar unidad";
+      toast.error(msg || "Error al actualizar unidad");
       return false;
     }
   };
 
-  // NOTA: Cambiado 'id: string' a 'id: number'
   const deleteUnit = async (id: number) => {
     try {
-      await unitService.delete(id);
+      await FleetUnitsService.deleteUnitApiFleetUnitsUnitIdDelete(String(id));
       toast.success("Unidad eliminada");
       await fetchUnits();
       return true;
-    } catch (error: any) {
-      const err = error as AxiosError<{ detail: string }>;
-      const message = err.response?.data?.detail || "Error al eliminar unidad";
-      toast.error(message);
+    } catch (error) {
+      const msg = error instanceof ApiError ? error.body?.detail : "Error al eliminar unidad";
+      toast.error(msg || "Error al eliminar unidad");
       return false;
     }
   };
 
   const updateLoadStatus = async (id: number, isLoaded: boolean) => {
     try {
-      // Actualización optimista: cambiamos el estado local antes de la respuesta del servidor
       setUnidades((prev) =>
         prev.map((u) => (u.id === id ? { ...u, is_loaded: isLoaded } : u)),
       );
-
-      await unitService.updateLoadStatus(id, isLoaded);
+      await FleetUnitsService.updateUnitLoadStatusApiFleetUnitsUnitIdLoadStatusPatch(Number(id), isLoaded);
       return true;
     } catch (error) {
       toast.error("Error al actualizar estado en el servidor");
-      fetchUnits(); // Revertimos en caso de error
+      fetchUnits();
       return false;
     }
   };
 
-  // --- CARGA MASIVA ---
-
   const importBulkUnits = async (file: File) => {
     setIsUploading(true);
     try {
-      const response = await unitService.importBulk(file);
-
-      // Ajuste para manejar diferentes formatos de respuesta del backend
-      const count = response.records || 0;
+      const response = await FleetUnitsService.uploadUnitsBulkApiFleetUnitsBulkUploadPost({ file });
+      const count = (response as any)?.records || 0;
       toast.success(`Carga exitosa: ${count} unidades procesadas`);
-
       await fetchUnits();
       return true;
-    } catch (error: any) {
-      const err = error as AxiosError<{ detail: string }>;
-      const message =
-        err.response?.data?.detail || "Error al procesar el archivo";
-      toast.error(message);
+    } catch (error) {
+      const msg = error instanceof ApiError ? error.body?.detail : "Error al procesar el archivo";
+      toast.error(msg || "Error al procesar el archivo");
       return false;
     } finally {
       setIsUploading(false);

@@ -21,7 +21,7 @@ import {
   Loader2,
 } from "lucide-react";
 
-import { PurchaseOrder } from "@/features/payables/types";
+import { PurchaseOrder } from "@/features/purchases/types";
 
 // ==========================================
 // 1. MODAL: RECIBIR ORDEN (Logística/Almacén)

@@ -295,7 +295,7 @@ export function TruckChassisSVG({
                 </TooltipTrigger>
                 <TooltipContent
                   side="right"
-                  className="bg-slate-900 border-slate-700 text-white p-3 shadow-2xl backdrop-blur-md"
+                  className="bg-popover border-border text-white p-3 shadow-2xl backdrop-blur-md"
                 >
                   <div className="space-y-1">
                     <p className="font-black text-blue-400">
