@@ -93,7 +93,8 @@ export function RegisterPaymentModal({
       <DialogContent className="sm:max-w-[450px] bg-card/95 backdrop-blur-xl border border-border shadow-2xl rounded-2xl overflow-hidden p-0">
         <DialogHeader className="p-6 bg-muted/50 border-b border-border">
           <DialogTitle className="flex items-center gap-2 text-xl font-black text-foreground uppercase tracking-tighter">
-            <CreditCard className="h-6 w-6 text-emerald-600 dark:text-emerald-400" /> Registrar Cobro
+            <CreditCard className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />{" "}
+            Registrar Cobro
           </DialogTitle>
           <DialogDescription className="text-xs font-bold text-muted-foreground uppercase tracking-widest mt-1">
             {invoice.folio_interno} • {invoice.cliente}
@@ -121,7 +122,10 @@ export function RegisterPaymentModal({
 
           {/* MONTO A COBRAR */}
           <div className="space-y-1.5">
-            <Label variant="brand" className="text-emerald-600 dark:text-emerald-400">
+            <Label
+              variant="brand"
+              className="text-emerald-600 dark:text-emerald-400"
+            >
               Monto Recibido (Abono) *
             </Label>
             <div className="relative">
@@ -175,7 +179,7 @@ export function RegisterPaymentModal({
               >
                 {isPartialPayment
                   ? "⚠️ Quedará como Pago Parcial"
-                  : "✅ La factura quedará Pagada"}
+                  : " La factura quedará Pagada"}
               </p>
             </div>
           )}

@@ -17,25 +17,25 @@ export const adminService = {
     return data;
   },
   toggleUserStatus: async (id: number) => {
-    const { data } = await axiosClient.patch(`/users/${id}/status`);
+    const { data } = await axiosClient.patch(`/api/users/${id}/status`);
     return data;
   },
 
   // --- 2FA & PERFIL ---
   setup2FA: async () => {
     // El backend debe devolver el secret y la url del QR
-    const { data } = await axiosClient.post("/auth/2fa/setup");
+    const { data } = await axiosClient.post("/api/auth/2fa/setup");
     return data;
   },
   confirm2FA: async (code: string, secret: string) => {
-    const { data } = await axiosClient.post("/auth/2fa/confirm", {
+    const { data } = await axiosClient.post("/api/auth/2fa/confirm", {
       code,
       secret,
     });
     return data;
   },
   disable2FA: async (password: string) => {
-    await axiosClient.post("/auth/2fa/disable", { password });
+    await axiosClient.post("/api/auth/2fa/disable", { password });
   },
 
   // --- CONFIGURACIÓN ---
@@ -46,7 +46,7 @@ export const adminService = {
     return data;
   },
   updateConfig: async (key: string, value: string) => {
-    await axiosClient.put(`/catalogs/system-config/${key}`, { value });
+    await axiosClient.put(`/api/catalogs/system-config/${key}`, { value });
   },
   updateBulkSystemConfig: async (payload: { key: string; value: string }[]) => {
     //  Apuntamos a la nueva ruta única

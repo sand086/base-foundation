@@ -10,7 +10,9 @@ export function useSettlementConcepts() {
   const fetchConcepts = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await axiosClient.get("/catalogs/settlement-concepts");
+      const { data } = await axiosClient.get(
+        "/api/catalogs/settlement-concepts",
+      );
       setConcepts(data);
     } catch (error) {
       toast.error("Error al cargar conceptos de pago");
@@ -21,7 +23,7 @@ export function useSettlementConcepts() {
 
   const saveConcepts = async (payload: SettlementConcept[]) => {
     try {
-      await axiosClient.post("/catalogs/settlement-concepts/bulk", payload);
+      await axiosClient.post("/api/catalogs/settlement-concepts/bulk", payload);
       await fetchConcepts();
       return true;
     } catch (error) {

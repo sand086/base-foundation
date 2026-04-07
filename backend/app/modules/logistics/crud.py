@@ -330,7 +330,7 @@ def add_timeline_event(
         if (active_leg and active_leg.leg_type == "entrega_vacio") or is_last_leg:
             trip.status = "entregado"
 
-            # 🚀 LIBERAR UNIDADES AUTOMÁTICAMENTE PARA QUE NO QUEDEN "EN TRÁNSITO"
+            #  LIBERAR UNIDADES AUTOMÁTICAMENTE PARA QUE NO QUEDEN "EN TRÁNSITO"
             unit_ids_to_free = [
                 active_leg.unit_id if active_leg else None,
                 trip.remolque_1_id,

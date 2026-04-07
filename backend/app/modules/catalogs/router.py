@@ -54,8 +54,6 @@ from typing import List
 import json
 from app.modules.auth.router import get_current_active_user
 
-router = APIRouter()
-
 # =========================================================
 # CONSTANTES
 # =========================================================
@@ -515,8 +513,6 @@ from app.models import models
 from pydantic import BaseModel
 from typing import List
 from app.modules.auth.router import get_current_user
-
-router = APIRouter()
 
 
 # Esquemas rápidos

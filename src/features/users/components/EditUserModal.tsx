@@ -117,7 +117,7 @@ export function EditUserModal({
 
   useEffect(() => {
     if (Object.keys(errors).length > 0) {
-      console.log("⚠️ Errores de Validación:", errors);
+      console.log(" Errores de Validación:", errors);
     }
   }, [errors]);
 

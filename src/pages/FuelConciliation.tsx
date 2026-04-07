@@ -120,7 +120,7 @@ export default function FuelConciliation() {
   const [legToView, setLegToView] = useState<any | null>(null);
   const [isEditing, setIsEditing] = useState(false);
 
-  // 🚀 HISTÓRICO DE AUDITORÍAS: Filtramos los tramos que ya tienen un odómetro final capturado
+  //  HISTÓRICO DE AUDITORÍAS: Filtramos los tramos que ya tienen un odómetro final capturado
   const auditedLegs = useMemo(() => {
     return trips
       .flatMap((t) => t.legs?.map((l) => ({ ...l, trip: t })) || [])
@@ -162,11 +162,11 @@ export default function FuelConciliation() {
     };
   }, [activeTrip, activeLeg]);
 
-  // 🚀 OBTENER VALES DEL TRAMO DESDE LA BD
+  //  OBTENER VALES DEL TRAMO DESDE LA BD
   const fetchValesCombustible = async (legIdToFetch: string) => {
     setIsFetchingVales(true);
     try {
-      const response = await axiosClient.get("/fuel/fuel-logs");
+      const response = await axiosClient.get("/api/fuel/fuel-logs");
 
       const valesDiesel = response.data.filter((log: any) => {
         return (
@@ -228,7 +228,7 @@ export default function FuelConciliation() {
     await fetchValesCombustible(legId);
   };
 
-  // 🚀 CARGAR PARA EDITAR CON EXTRACCIÓN (Regex)
+  //  CARGAR PARA EDITAR CON EXTRACCIÓN (Regex)
   const handleEditAudit = async (leg: any) => {
     setSelectedTripId(String(leg.trip_id));
     setSelectedLegId(String(leg.id));
@@ -267,7 +267,7 @@ export default function FuelConciliation() {
     handleReset();
   };
 
-  // 🚀 ELIMINAR / REVERTIR AUDITORÍA
+  //  ELIMINAR / REVERTIR AUDITORÍA
   const handleResetAudit = async () => {
     if (!legToReset) return;
     const toastId = toast.loading("Revirtiendo auditoría...");
@@ -289,7 +289,7 @@ export default function FuelConciliation() {
     }
   };
 
-  // 🚀 LA MATEMÁTICA EXACTA DE GUSTAVO (Blindada contra División por Cero en Patios)
+  //  LA MATEMÁTICA EXACTA DE GUSTAVO (Blindada contra División por Cero en Patios)
   const auditResult = useMemo(() => {
     const litrosVales = Number(formData.litrosVales) || 0;
     const kmECM = Number(formData.kilometrosECM) || 0;
@@ -344,7 +344,7 @@ export default function FuelConciliation() {
     });
   };
 
-  // 🚀 GUARDAR AUDITORÍA Y VOLVER A LA TABLA
+  //  GUARDAR AUDITORÍA Y VOLVER A LA TABLA
   const handleAuthorizeAndClose = async () => {
     if (!activeTrip || !selectedLegId) return;
 
@@ -394,7 +394,7 @@ export default function FuelConciliation() {
     }
   };
 
-  // 🚀 EXTRACCIÓN DE DATOS PARA EL MODAL DE VISTA (Regex Avanzado)
+  //  EXTRACCIÓN DE DATOS PARA EL MODAL DE VISTA (Regex Avanzado)
   const parsedAuditDetails = useMemo(() => {
     if (!legToView) return null;
     const auditEvent = legToView.timeline_events?.find(
@@ -669,7 +669,7 @@ export default function FuelConciliation() {
           </CardContent>
         </Card>
 
-        {/* 🚀 INFO DEL VIAJE (VIAJE EN CAPTURA) - Diseño Compacto y Elegante */}
+        {/*  INFO DEL VIAJE (VIAJE EN CAPTURA) - Diseño Compacto y Elegante */}
         {tripData && (
           <div className="bg-slate-900 dark:bg-black rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 text-white shadow-xl animate-in slide-in-from-top-2">
             <div className="flex items-center gap-4 w-full md:w-auto">
@@ -942,7 +942,7 @@ export default function FuelConciliation() {
         )}
       </div>
 
-      {/* 🚀 MODAL VER DETALLES ENRIQUECIDO */}
+      {/*  MODAL VER DETALLES ENRIQUECIDO */}
       <Dialog
         open={!!legToView}
         onOpenChange={(open) => !open && setLegToView(null)}

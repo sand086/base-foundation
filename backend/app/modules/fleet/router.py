@@ -28,12 +28,12 @@ from app.models.models import User, Unit, BulkUploadHistory, UnitDocumentHistory
 from app.modules.auth.router import get_current_user
 from app.integrations.storage.storage import StorageService
 
-# 🚀 IMPORTACIÓN LOCAL (FSD): Solo busca en la misma carpeta "fleet"
+#  IMPORTACIÓN LOCAL (FSD): Solo busca en la misma carpeta "fleet"
 from . import schemas, crud
 
 logger = logging.getLogger(__name__)
 
-# 🚀 ÚNICA INSTANCIA DEL ROUTER
+#  ÚNICA INSTANCIA DEL ROUTER
 router = APIRouter()
 
 UPLOAD_DIR = "app/uploads/bulk_unidades"

@@ -48,80 +48,83 @@ const queryClient = new QueryClient();
 
 const App = () => (
   <ThemeProvider>
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AuthProvider>
-          <Routes>
-            {/* Rutas Públicas */}
-            <Route path="/login" element={<Login />} />
-            <Route path="/verify-2fa" element={<TwoFactorAuth />} />
-            <Route path="/2fa-setup" element={<TwoFactorAuth />} />
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <AuthProvider>
+            <Routes>
+              {/* Rutas Públicas */}
+              <Route path="/login" element={<Login />} />
+              <Route path="/verify-2fa" element={<TwoFactorAuth />} />
+              <Route path="/2fa-setup" element={<TwoFactorAuth />} />
 
-            {/* Rutas Protegidas */}
-            <Route element={<ProtectedRoute />}>
-              <Route path="/" element={<AppLayout />}>
-                <Route index element={<Dashboard />} />
+              {/* Rutas Protegidas */}
+              <Route element={<ProtectedRoute />}>
+                <Route path="/" element={<AppLayout />}>
+                  <Route index element={<Dashboard />} />
 
-                {/* 🚀 URLs 100% EN INGLÉS */}
-                <Route path="monitoring" element={<MonitoringCenter />} />
-                <Route path="traffic-control" element={<TrafficControl />} />
+                  {/*  URLs 100% EN INGLÉS */}
+                  <Route path="monitoring" element={<MonitoringCenter />} />
+                  <Route path="traffic-control" element={<TrafficControl />} />
 
-                <Route path="fleet" element={<FleetUnits />} />
-                <Route path="fleet/unit/:id" element={<FleetUnitDetail />} />
-                <Route path="fleet/operators" element={<FleetOperators />} />
-                <Route path="fleet/tires" element={<FleetTires />} />
-                <Route path="fleet/maintenance" element={<Maintenance />} />
-                <Route path="fleet/mechanics" element={<Mechanics />} />
+                  <Route path="fleet" element={<FleetUnits />} />
+                  <Route path="fleet/unit/:id" element={<FleetUnitDetail />} />
+                  <Route path="fleet/operators" element={<FleetOperators />} />
+                  <Route path="fleet/tires" element={<FleetTires />} />
+                  <Route path="fleet/maintenance" element={<Maintenance />} />
+                  <Route path="fleet/mechanics" element={<Mechanics />} />
 
-                <Route path="fuel" element={<FuelLoads />} />
-                <Route path="fuel/loads" element={<FuelLoads />} />
-                <Route
-                  path="fuel/conciliation"
-                  element={<FuelConciliation />}
-                />
+                  <Route path="fuel" element={<FuelLoads />} />
+                  <Route path="fuel/loads" element={<FuelLoads />} />
+                  <Route
+                    path="fuel/conciliation"
+                    element={<FuelConciliation />}
+                  />
 
-                <Route path="clients" element={<ClientsCatalog />} />
-                <Route path="clients/new" element={<ClientForm />} />
-                <Route path="clients/:clientId" element={<ClientForm />} />
+                  <Route path="clients" element={<ClientsCatalog />} />
+                  <Route path="clients/new" element={<ClientForm />} />
+                  <Route path="clients/:clientId" element={<ClientForm />} />
 
-                <Route path="settlements" element={<TripSettlement />} />
-                <Route path="receivables" element={<Receivables />} />
-                <Route path="payables" element={<Payables />} />
-                <Route path="purchases" element={<Purchases />} />
-                <Route path="rates" element={<RateManagement />} />
+                  <Route path="settlements" element={<TripSettlement />} />
+                  <Route path="receivables" element={<Receivables />} />
+                  <Route path="payables" element={<Payables />} />
+                  <Route path="purchases" element={<Purchases />} />
+                  <Route path="rates" element={<RateManagement />} />
 
-                <Route path="dispatch" element={<Dispatch />} />
-                <Route path="dispatch/new" element={<DispatchWizard />} />
+                  <Route path="dispatch" element={<Dispatch />} />
+                  <Route path="dispatch/new" element={<DispatchWizard />} />
 
-                <Route path="users" element={<Users />} />
-                <Route
-                  path="roles-permissions"
-                  element={<RolesPermissions />}
-                />
+                  <Route path="users" element={<Users />} />
+                  <Route
+                    path="roles-permissions"
+                    element={<RolesPermissions />}
+                  />
 
-                <Route path="treasury" element={<Treasury />} />
-                <Route
-                  path="finance-dashboard"
-                  element={<FinanceDashboard />}
-                />
-                <Route path="notifications" element={<NotificationsConfig />} />
-                <Route path="bulk-uploads" element={<BulkUploads />} />
-                <Route path="profile" element={<Profile />} />
-                <Route path="settings" element={<Settings />} />
-                <Route path="manuals" element={<Manuals />} />
+                  <Route path="treasury" element={<Treasury />} />
+                  <Route
+                    path="finance-dashboard"
+                    element={<FinanceDashboard />}
+                  />
+                  <Route
+                    path="notifications"
+                    element={<NotificationsConfig />}
+                  />
+                  <Route path="bulk-uploads" element={<BulkUploads />} />
+                  <Route path="profile" element={<Profile />} />
+                  <Route path="settings" element={<Settings />} />
+                  <Route path="manuals" element={<Manuals />} />
+                </Route>
               </Route>
-            </Route>
 
-            {/* Catch-all */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </AuthProvider>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
+              {/* Catch-all */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </AuthProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
   </ThemeProvider>
 );
 

@@ -115,8 +115,8 @@ export default function Treasury() {
     setIsLoading(true);
     try {
       const [accRes, movRes] = await Promise.all([
-        axiosClient.get<BankAccount[]>("/finance/bank-accounts"),
-        axiosClient.get<BankMovement[]>("/finance/movements"),
+        axiosClient.get<BankAccount[]>("/api/finance/bank-accounts"),
+        axiosClient.get<BankMovement[]>("/api/finance/movements"),
       ]);
       setAccounts(accRes.data || []);
       setMovimientos(movRes.data || []);
@@ -180,7 +180,7 @@ export default function Treasury() {
 
   const handleAddAccount = async () => {
     try {
-      await axiosClient.post("/finance/bank-accounts", {
+      await axiosClient.post("/api/finance/bank-accounts", {
         banco: formData.banco,
         banco_logo: bankLogos[formData.banco] || "🏦",
         numero_cuenta: formData.numero_cuenta,
@@ -217,12 +217,15 @@ export default function Treasury() {
 
     try {
       // Usamos PATCH para actualizar solo ese campo en el backend
-      await axiosClient.patch(`/finance/movements/${movementId}/conciliation`, {
-        conciliado: newConciliado,
-        fecha_conciliacion: newConciliado
-          ? new Date().toISOString().split("T")[0]
-          : null,
-      });
+      await axiosClient.patch(
+        `/api/finance/movements/${movementId}/conciliation`,
+        {
+          conciliado: newConciliado,
+          fecha_conciliacion: newConciliado
+            ? new Date().toISOString().split("T")[0]
+            : null,
+        },
+      );
 
       setMovimientos(
         movimientos.map((m) =>
@@ -257,7 +260,7 @@ export default function Treasury() {
     }
 
     try {
-      await axiosClient.delete(`/finance/movements/${movementToDelete.id}`);
+      await axiosClient.delete(`api/finance/movements/${movementToDelete.id}`);
 
       setMovimientos(movimientos.filter((m) => m.id !== movementToDelete.id));
       toast.success("Movimiento eliminado", {
@@ -615,7 +618,7 @@ export default function Treasury() {
           <AlertDialogHeader>
             <AlertDialogTitle className="font-black flex items-center gap-2 text-slate-800">
               {movementToDelete?.conciliado && deleteStep === 1
-                ? "⚠️ Movimiento Conciliado"
+                ? " Movimiento Conciliado"
                 : "¿Eliminar movimiento del libro?"}
             </AlertDialogTitle>
             <AlertDialogDescription className="text-slate-600 text-sm mt-2">
@@ -627,8 +630,8 @@ export default function Treasury() {
                 </div>
               ) : deleteStep === 2 ? (
                 <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 font-bold">
-                  ⚠️ CONFIRMACIÓN FINAL: Esta acción no se puede deshacer y
-                  borrará el rastro en el libro mayor.
+                  CONFIRMACIÓN FINAL: Esta acción no se puede deshacer y borrará
+                  el rastro en el libro mayor.
                 </div>
               ) : (
                 <>

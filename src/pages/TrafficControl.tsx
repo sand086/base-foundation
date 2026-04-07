@@ -184,7 +184,7 @@ export default function TrafficControl() {
 
     setIsDeletingEvent(true);
     try {
-      await axiosClient.delete(`/trips/timeline/${eventToDelete}`);
+      await axiosClient.delete(`api/trips/timeline/${eventToDelete}`);
       toast.success("Evento eliminado de la bitácora");
 
       // Recargar datos
@@ -252,7 +252,7 @@ export default function TrafficControl() {
 
       if (eventToEdit) {
         //  MODO EDICIÓN
-        await axiosClient.put(`/trips/timeline/${eventToEdit.id}`, {
+        await axiosClient.put(`/api/trips/timeline/${eventToEdit.id}`, {
           location: data.location,
           comments: data.comments,
           lat: data.lat,

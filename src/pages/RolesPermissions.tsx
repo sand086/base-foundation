@@ -943,7 +943,7 @@ const RolesPermissions: React.FC = () => {
 
             <div className="bg-destructive/10 border border-destructive/20 p-3 rounded-md mt-4">
               <p className="text-sm font-medium text-destructive">
-                ⚠️ ATENCIÓN: Esta función es irreversible y afectará el
+                ATENCIÓN: Esta función es irreversible y afectará el
                 funcionamiento de todos los usuarios que tengan asignado este
                 perfil.
               </p>

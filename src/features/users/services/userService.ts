@@ -16,23 +16,23 @@ export interface UserData {
 
 export const userService = {
   getAll: async () => {
-    const { data } = await axiosClient.get("/users");
+    const { data } = await axiosClient.get("/api/users");
     return data;
   },
 
   create: async (user: UserData) => {
-    const { data } = await axiosClient.post("/users", user);
+    const { data } = await axiosClient.post("/api/users", user);
     return data;
   },
 
   // Aseguramos que devuelva el objeto actualizado
   update: async (id: string, user: Partial<UserData>) => {
-    const { data } = await axiosClient.put(`/users/${id}`, user);
+    const { data } = await axiosClient.put(`/api/users/${id}`, user);
     return data; // Debe retornar { success: true, user: {...} }
   },
 
   toggleStatus: async (id: string) => {
-    const { data } = await axiosClient.patch(`/users/${id}/status`);
+    const { data } = await axiosClient.patch(`/api/users/${id}/status`);
     return data;
   },
 
@@ -43,7 +43,7 @@ export const userService = {
     return data;
   },
   delete: async (id: string) => {
-    const { data } = await axiosClient.delete(`/users/${id}`);
+    const { data } = await axiosClient.delete(`api/users/${id}`);
     return data;
   },
 

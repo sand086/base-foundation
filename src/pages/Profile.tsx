@@ -352,7 +352,7 @@ const Profile: React.FC = () => {
         telefono: data.telefono,
         puesto: data.puesto,
       };
-      await axiosClient.put(`/users/${fullProfile.id}`, payload);
+      await axiosClient.put(`/api/users/${fullProfile.id}`, payload);
 
       // 1. Actualizamos el estado local
       setFullProfile((prev) => (prev ? { ...prev, ...payload } : prev));
@@ -429,7 +429,7 @@ const Profile: React.FC = () => {
       const payload = {
         preferencias: { theme, email_notifications: emailNotifications },
       };
-      await axiosClient.put(`/users/${fullProfile.id}`, payload);
+      await axiosClient.put(`/api/users/${fullProfile.id}`, payload);
       setFullProfile((prev) => (prev ? { ...prev, ...payload } : prev));
       toast.success("Preferencias guardadas");
     } catch (error) {
@@ -460,7 +460,7 @@ const Profile: React.FC = () => {
     if (!fullProfile) return;
     setIsLoading(true);
     try {
-      await axiosClient.post("/2fa/enable", {
+      await axiosClient.post("/api/2fa/enable", {
         code: verificationCode,
         user_id: fullProfile.id,
       });

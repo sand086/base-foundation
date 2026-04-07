@@ -11,12 +11,12 @@ from app.db.database import get_db
 from app.models import models
 from app.modules.auth.router import get_current_active_user
 
-# 🚀 IMPORTACIONES LOCALES (FSD)
+#  IMPORTACIONES LOCALES (FSD)
 from . import schemas, crud
 
 logger = logging.getLogger(__name__)
 
-# 🚀 ÚNICA INSTANCIA DEL ROUTER
+#  ÚNICA INSTANCIA DEL ROUTER
 router = APIRouter(tags=["Finance"])
 
 
@@ -333,7 +333,7 @@ async def upload_payment_xml(
             uuid_factura = doc.get("IdDocumento").upper()
             monto_pagado = float(doc.get("ImpPagado", "0.00"))
 
-            # 🚀 SOLUCIÓN AL BUG: Cambié uuid_val a uuid_factura
+            #  SOLUCIÓN AL BUG: Cambié uuid_val a uuid_factura
             factura = (
                 db.query(models.ReceivableInvoice)
                 .filter(models.ReceivableInvoice.uuid == uuid_factura)

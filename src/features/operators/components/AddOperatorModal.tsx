@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// 🚀 NUEVOS IMPORTS FSD
+//  NUEVOS IMPORTS FSD
 import { Operator } from "@/features/operators/types";
 import { useUnits } from "@/features/units/hooks/useUnits";
 

@@ -10,7 +10,7 @@ export function useLicenseTypes() {
   const fetchLicenseTypes = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await axiosClient.get("/catalogs/license-types");
+      const { data } = await axiosClient.get("/api/catalogs/license-types");
       setLicenseTypes(data);
     } catch (error) {
       toast.error("Error al cargar tipos de licencia");
@@ -21,7 +21,7 @@ export function useLicenseTypes() {
 
   const saveLicenseTypes = async (payload: LicenseType[]) => {
     try {
-      await axiosClient.post("/catalogs/license-types/bulk", payload);
+      await axiosClient.post("/api/catalogs/license-types/bulk", payload);
       await fetchLicenseTypes();
       return true;
     } catch (error) {

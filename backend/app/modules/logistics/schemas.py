@@ -542,7 +542,7 @@ class BatchSettlementPreviewResponse(BaseModel):
     legs_sin_ticket: List[int] = []
 
 
-# 🚀 NUEVO: EL PAYLOAD ROBUSTO PARA GUARDAR EL DESGLOSE DE NÓMINA EN LOTE
+#  NUEVO: EL PAYLOAD ROBUSTO PARA GUARDAR EL DESGLOSE DE NÓMINA EN LOTE
 class BatchSettlementPayload(BaseModel):
     leg_ids: List[int]
     monto_sueldo: float = 0.0

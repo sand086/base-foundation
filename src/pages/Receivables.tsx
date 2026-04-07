@@ -14,7 +14,7 @@ import {
   CheckCircle2,
   Sheet as SheetIcon,
   Loader2,
-  FileCode2, // 🚀 IMPORTADO PARA EL BOTÓN DE XML
+  FileCode2, //  IMPORTADO PARA EL BOTÓN DE XML
   Upload,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -80,7 +80,7 @@ export default function Receivables() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isAccountStatementOpen, setIsAccountStatementOpen] = useState(false);
-  const [isImportXMLOpen, setIsImportXMLOpen] = useState(false); // 🚀 NUEVO ESTADO PARA EL MODAL XML
+  const [isImportXMLOpen, setIsImportXMLOpen] = useState(false); //  NUEVO ESTADO PARA EL MODAL XML
 
   // Selected state
   const [selectedInvoice, setSelectedInvoice] =
@@ -95,7 +95,7 @@ export default function Receivables() {
   const fetchInvoices = async () => {
     try {
       setLoading(true);
-      const response = await axiosClient.get("/receivables");
+      const response = await axiosClient.get("/api/receivables");
 
       // Mapear los datos del backend al formato que espera la tabla
       const formattedData = response.data.map((inv: any) => ({
@@ -214,7 +214,7 @@ export default function Receivables() {
     payment: RegisterPaymentPayload,
   ) => {
     try {
-      await axiosClient.post(`/receivables/${invoiceId}/payments`, {
+      await axiosClient.post(`/api/receivables/${invoiceId}/payments`, {
         monto: payment.monto,
         metodo_pago: payment.metodo_pago, // 👈 Asegúrate que sea snake_case como en el payload
         referencia: payment.referencia || "",
@@ -233,7 +233,7 @@ export default function Receivables() {
   const handleDeleteInvoice = async () => {
     if (!invoiceToDelete) return;
     try {
-      await axiosClient.delete(`/receivables/${invoiceToDelete.id}`);
+      await axiosClient.delete(`api/receivables/${invoiceToDelete.id}`);
       setInvoices(invoices.filter((inv) => inv.id !== invoiceToDelete.id));
       toast.success("Factura eliminada correctamente");
     } catch (error) {
@@ -430,7 +430,7 @@ export default function Receivables() {
         description="Gestión de cartera, antigüedad de saldos y cobranza a clientes."
       >
         <div className="flex flex-wrap items-center gap-3">
-          {/* 🚀 NUEVO BOTÓN: IMPORTAR PAGO XML (DESTACADO EN ESMERALDA) */}
+          {/*  NUEVO BOTÓN: IMPORTAR PAGO XML (DESTACADO EN ESMERALDA) */}
           <Button
             variant="outline"
             className="border-emerald-500 bg-emerald-50/50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 font-black tracking-wide shadow-sm haptic-press transition-all"
@@ -591,7 +591,7 @@ export default function Receivables() {
         invoices={invoices}
       />
 
-      {/* 🚀 NUEVO MODAL: IMPORTAR PAGO XML */}
+      {/*  NUEVO MODAL: IMPORTAR PAGO XML */}
       <ImportXMLPaymentModal
         open={isImportXMLOpen}
         onOpenChange={setIsImportXMLOpen}
@@ -612,7 +612,7 @@ export default function Receivables() {
               {invoiceToDelete &&
               invoiceToDelete.saldo_pendiente < invoiceToDelete.monto_total ? (
                 <span className="text-red-600 font-bold bg-red-50 p-3 rounded-lg block mt-2 border border-red-200">
-                  ⚠️ Error: Esta factura ya tiene abonos/pagos registrados. Por
+                  Error: Esta factura ya tiene abonos/pagos registrados. Por
                   auditoría fiscal, no es posible eliminarla. Cancele los pagos
                   primero.
                 </span>

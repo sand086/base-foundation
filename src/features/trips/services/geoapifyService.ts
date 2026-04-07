@@ -9,7 +9,7 @@ export const geoapifyService = {
    */
   autocomplete: async (text: string) => {
     if (!API_KEY) {
-      console.warn("⚠️ Falta VITE_GEOAPIFY_API_KEY en tu archivo .env");
+      console.warn(" Falta VITE_GEOAPIFY_API_KEY en tu archivo .env");
       return [];
     }
 

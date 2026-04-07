@@ -10,7 +10,7 @@ export interface ReceivableInvoice {
   cliente_rfc?: string;
   dias_credito: number;
 
-  // 🚀 AÑADIDO: El objeto relacional que manda el backend de Python
+  //  AÑADIDO: El objeto relacional que manda el backend de Python
   client?: {
     id?: number;
     razon_social?: string;

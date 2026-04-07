@@ -235,7 +235,7 @@ export default function TripSettlement() {
         getSettlementPreview(selectedLegIds)
           .then((data: any) => {
             setPreviewData(data);
-            // 🚀 MAGIA PURA: El backend ya auditó usando el ECM y nos da el monto a cobrar en rojo. Cero cálculos en el frontend.
+            //  MAGIA PURA: El backend ya auditó usando el ECM y nos da el monto a cobrar en rojo. Cero cálculos en el frontend.
             setCombustibleFaltante(data?.deduccion_combustible || 0);
             setSueldoRutaPactado(data?.sueldo_operador_pactado || 0);
           })
@@ -627,7 +627,7 @@ export default function TripSettlement() {
         {/* COLUMNA DERECHA: CONFIGURACIÓN FINANCIERA */}
         {selectedLegIds.length > 0 && liquidacion && (
           <div className="xl:col-span-5 space-y-6 animate-in fade-in slide-in-from-right-8 duration-500">
-            {/* 🚀 CANDADO ROJO: VIAJE NO AUDITADO */}
+            {/*  CANDADO ROJO: VIAJE NO AUDITADO */}
             {liquidacion.hasRoadMove && isAuditPending && (
               <Alert
                 variant="destructive"
@@ -768,7 +768,7 @@ export default function TripSettlement() {
                         </div>
                       )}
 
-                      {/* 🚀 EL DATO QUE VIENE DIRECTO DE LA AUDITORÍA DE BACKEND */}
+                      {/*  EL DATO QUE VIENE DIRECTO DE LA AUDITORÍA DE BACKEND */}
                       {liquidacion.combustibleFaltante > 0 && (
                         <div className="flex justify-between items-center text-sm bg-rose-50/80 border border-rose-200 px-2 py-1 rounded">
                           <span className="text-rose-800 text-xs font-bold uppercase tracking-widest flex items-center gap-1.5">

@@ -39,7 +39,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-// 🚀 IMPORTS CORREGIDOS A LA ARQUITECTURA FSD
+//  IMPORTS CORREGIDOS A LA ARQUITECTURA FSD
 import {
   getOrderTypeColor,
   getStatusInfo,
@@ -66,7 +66,7 @@ export default function Purchases() {
   );
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-  // 🚀 KPIs CORREGIDOS (Usando las propiedades en inglés de PurchaseOrder)
+  //  KPIs CORREGIDOS (Usando las propiedades en inglés de PurchaseOrder)
   const kpis = useMemo(
     () => ({
       borradores: orders.filter((o) => o.status === "borrador").length,
@@ -115,7 +115,7 @@ export default function Purchases() {
     toast.success(`Orden ${order.folio} aprobada`);
   };
 
-  // 🚀 SOLUCIÓN DE TIPOS (string | number)
+  //  SOLUCIÓN DE TIPOS (string | number)
   const handleReceive = (
     orderId: string | number,
     completo: boolean,
@@ -142,7 +142,7 @@ export default function Purchases() {
       ),
     );
     toast.success("Redirigiendo a Cuentas por Pagar...");
-    navigate("/payables"); // 🚀 Redirige a la nueva ruta en inglés
+    navigate("/payables"); //  Redirige a la nueva ruta en inglés
   };
 
   const handleDelete = () => {
@@ -182,8 +182,8 @@ export default function Purchases() {
           </Badge>
         ),
       },
-      { key: "supplier_name", header: "Proveedor" }, // 🚀 Corregido de proveedorNombre
-      { key: "requester", header: "Solicitante" }, // 🚀 Corregido de solicitante
+      { key: "supplier_name", header: "Proveedor" }, //  Corregido de proveedorNombre
+      { key: "requester", header: "Solicitante" }, //  Corregido de solicitante
       {
         key: "total",
         header: "Monto",
@@ -195,7 +195,7 @@ export default function Purchases() {
         ),
       },
       {
-        key: "status", // 🚀 Corregido de estatus
+        key: "status", //  Corregido de estatus
         header: "Estatus",
         type: "status",
         statusOptions: [

@@ -201,7 +201,7 @@ export function UpdateStatusModal({
     return () => clearTimeout(timeoutId);
   }, [searchLocationQuery]);
 
-  // 🚀 MÁQUINA DE ESTADOS DINÁMICA POR FASE OPERATIVA
+  //  MÁQUINA DE ESTADOS DINÁMICA POR FASE OPERATIVA
   const statusOptions = useMemo(() => {
     const baseOptions = [
       {
@@ -231,7 +231,7 @@ export function UpdateStatusModal({
       },
       {
         value: "accidente",
-        label: "💥 Accidente / Siniestro Mayor",
+        label: " Accidente / Siniestro Mayor",
         color: "bg-red-800",
       },
     ];
@@ -347,7 +347,7 @@ export function UpdateStatusModal({
             location: formData.location,
             comments: formData.comments,
             clientName: trip?.client?.razon_social || "Cliente",
-            isExternal: true, // 🚀 Esto le dice al backend: "Manda el correo"
+            isExternal: true, //  Esto le dice al backend: "Manda el correo"
           },
         });
         toast.success("Tracking enviado al cliente.");
@@ -565,7 +565,7 @@ export function UpdateStatusModal({
                     >
                       <Command shouldFilter={false}>
                         <div className="relative border-b border-slate-100 dark:border-white/10 bg-slate-50/80 dark:bg-slate-800">
-                          {/* 🚀 FIX 1: Lupa doble eliminada y onKeyDown agregado */}
+                          {/*  FIX 1: Lupa doble eliminada y onKeyDown agregado */}
                           <CommandInput
                             placeholder="Escribe, pega el GPS y presiona ENTER para agregar..."
                             value={searchLocationQuery}
@@ -594,10 +594,10 @@ export function UpdateStatusModal({
                         </div>
 
                         <CommandList className="max-h-[30vh] sm:max-h-[300px] custom-scrollbar">
-                          {/* 🚀 FIX 2: Silenciamos el mensaje por defecto */}
+                          {/*  FIX 2: Silenciamos el mensaje por defecto */}
                           <CommandEmpty className="hidden" />
 
-                          {/* 🚀 FIX 3: Botón SIEMPRE visible si hay texto escrito */}
+                          {/*  FIX 3: Botón SIEMPRE visible si hay texto escrito */}
                           {searchLocationQuery.trim() !== "" && (
                             <div className="p-2 border-b border-slate-100 dark:border-white/10 bg-blue-50/50 dark:bg-blue-900/10">
                               <Button
@@ -797,7 +797,7 @@ export function UpdateStatusModal({
                 </div>
               </div>
 
-              {/* 🚀 CAMPO OBLIGATORIO PARA CIERRE DE VACÍO */}
+              {/*  CAMPO OBLIGATORIO PARA CIERRE DE VACÍO */}
               {(formData.status === "entregado" ||
                 formData.status === "retorno_vacio") &&
                 activeLeg?.leg_type === "entrega_vacio" && (
