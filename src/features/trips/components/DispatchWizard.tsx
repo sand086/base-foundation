@@ -633,7 +633,10 @@ export const DispatchWizard = ({
       let resultTripId = tripId;
 
       if (resultTripId) {
-        await axiosClient.put(`/api/trips/${resultTripId}/dispatch`, payload);
+        await axiosClient.put(
+          `/api/logistics/trips/${resultTripId}/dispatch`,
+          payload,
+        );
       } else {
         const result = await createTrip(payload as TripCreatePayload);
         if (result && result.id) {

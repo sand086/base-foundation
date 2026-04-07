@@ -149,24 +149,31 @@ const FuelLoads = () => {
     try {
       // 1. Recorremos el arreglo de tickets que mandó el Modal
       for (const ticket of ticketsArray) {
-        // 2. Construimos el objeto EXACTO que el Backend de Python está esperando
-        const payload = {
-          unit_id: data.unit_id,
-          operator_id: data.operator_id,
-          trip_id: data.trip_id !== "none" ? data.trip_id : null,
-          trip_leg_id: data.trip_leg_id ? data.trip_leg_id : null,
-          odometro: data.odometro || 0,
+        const formData = new FormData();
 
-          // 3. Extraemos los datos individuales de ESTE ticket específico
-          fecha_hora: ticket.fecha_hora, // <-- ¡AQUÍ ESTÁ EL CAMPO QUE FALTABA!
-          estacion: ticket.estacion || "No especificada",
-          litros_diesel: ticket.litros_diesel || 0,
-          precio_diesel: ticket.precio_diesel || 0,
-          evidencia: ticket.evidencia,
-        };
+        formData.append("unit_id", String(data.unit_id));
+        formData.append("operator_id", String(data.operator_id));
+        formData.append("odometro", String(data.odometro || 0));
+        formData.append("fecha_hora", String(ticket.fecha_hora));
+        formData.append("estacion", ticket.estacion || "No especificada");
+        formData.append("litros_diesel", String(ticket.litros_diesel || 0));
+        formData.append("precio_diesel", String(ticket.precio_diesel || 0));
 
-        // 4. Se lo mandamos a tu servicio (que ya lo convertirá bien a FormData)
-        await fuelService.create(payload);
+        // Los campos opcionales solo se agregan si existen
+        if (data.trip_id && data.trip_id !== "none") {
+          formData.append("trip_id", String(data.trip_id));
+        }
+        if (data.trip_leg_id) {
+          formData.append("trip_leg_id", String(data.trip_leg_id));
+        }
+
+        // IMPORTANTE: El endpoint de FastAPI espera el archivo en un campo llamado "file"
+        if (ticket.evidencia) {
+          formData.append("file", ticket.evidencia);
+        }
+
+        // 4. Se lo mandamos a tu servicio
+        await fuelService.create(formData);
       }
 
       // Si todo sale bien, cerramos el modal y recargamos la tabla
@@ -279,7 +286,7 @@ const FuelLoads = () => {
       },
       {
         key: "unidad_numero",
-        header: "Asset ID",
+        header: "ID",
         render: (v) => {
           // El string 'v' ya viene formateado correctamente desde nuestra función loadData
           return (
@@ -370,7 +377,6 @@ const FuelLoads = () => {
                 className="cursor-pointer font-bold uppercase text-[10px] py-2.5 px-3 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
               >
                 <Eye className="h-3.5 w-3.5 mr-2 text-blue-500" /> Consultar
-                Asset
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => setCargaToEdit(row)}
@@ -474,16 +480,8 @@ const FuelLoads = () => {
             icon: BarChart3,
             color: "text-blue-500",
             bg: "bg-blue-500/10",
+            dark: false,
             metric: "Flota Promedio",
-          },
-          {
-            label: "Certificación Auditoría",
-            val: "Nivel A1",
-            icon: ShieldCheck,
-            color: "text-slate-200",
-            bg: "bg-white/10",
-            dark: true,
-            metric: "Status Operativo",
           },
         ].map((kpi, i) => (
           <Card

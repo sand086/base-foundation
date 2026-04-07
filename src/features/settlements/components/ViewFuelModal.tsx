@@ -280,7 +280,7 @@ export function ViewFuelModal({
                 <div className="flex flex-col items-center justify-center opacity-30">
                   <ImageOff size={48} strokeWidth={1} />
                   <p className="text-[10px] font-black uppercase tracking-[0.3em] mt-4">
-                    No Asset Found
+                    Recurso no encontrado.
                   </p>
                 </div>
               )}

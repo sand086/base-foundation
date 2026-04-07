@@ -476,7 +476,7 @@ export function NextLegModal({
       //  AQUÍ APLICAMOS LA CORRECCIÓN:
       // Enviamos TODO al TripPadre (Datos Fiscales + Configuración de Arrastre)
       // para asegurar que el backend persista los remolques.
-      await axiosClient.put(`/api/trips/${tripPadre.id}`, {
+      await axiosClient.put(`/api/logistics/trips/${tripPadre.id}`, {
         ...tripFiscalData,
         numero_contenedor: tripFiscalData.contenedor_1,
         booking: tripFiscalData.referencia,

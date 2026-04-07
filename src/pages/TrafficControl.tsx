@@ -184,13 +184,13 @@ export default function TrafficControl() {
 
     setIsDeletingEvent(true);
     try {
-      await axiosClient.delete(`api/trips/timeline/${eventToDelete}`);
+      await axiosClient.delete(`api/logistics/trips/timeline/${eventToDelete}`);
       toast.success("Evento eliminado de la bitácora");
 
       // Recargar datos
       await fetchTrips();
       const { data: updatedTrip } = await axiosClient.get(
-        `/trips/${selectedTrip?.id}`,
+        `/api/logistics/trips/${selectedTrip?.id}`,
       );
       setSelectedTrip(updatedTrip);
 
@@ -211,7 +211,9 @@ export default function TrafficControl() {
   const refreshCurrentTrip = async () => {
     await fetchTrips();
     if (selectedTrip) {
-      const { data } = await axiosClient.get(`/trips/${selectedTrip.id}`);
+      const { data } = await axiosClient.get(
+        `/api/logistics/trips/${selectedTrip.id}`,
+      );
       setSelectedTrip(data);
     }
   };
@@ -252,18 +254,21 @@ export default function TrafficControl() {
 
       if (eventToEdit) {
         //  MODO EDICIÓN
-        await axiosClient.put(`/api/trips/timeline/${eventToEdit.id}`, {
-          location: data.location,
-          comments: data.comments,
-          lat: data.lat,
-          lng: data.lng,
-          status: data.status,
-        });
+        await axiosClient.put(
+          `/api/logistics/trips/timeline/${eventToEdit.id}`,
+          {
+            location: data.location,
+            comments: data.comments,
+            lat: data.lat,
+            lng: data.lng,
+            status: data.status,
+          },
+        );
         toast.success("Registro corregido con éxito");
       } else {
         //  MODO CREACIÓN
         await axiosClient.post(
-          `/trips/${selectedTrip.id}/timeline`,
+          `/api/logistics/trips/${selectedTrip.id}/timeline`,
           payloadLimpio,
         );
         toast.success("Bitácora actualizada");

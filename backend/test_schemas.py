@@ -88,7 +88,7 @@ def verificar_schemas():
         sys.exit(1)
 
     print("\n" + "=" * 60)
-    print("🚨 RESULTADOS FINALES 🚨")
+    print(" RESULTADOS FINALES ")
     print("=" * 60)
 
     if errores:

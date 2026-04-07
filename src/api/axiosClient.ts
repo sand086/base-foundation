@@ -15,8 +15,8 @@ const axiosClient = axios.create({
 axiosClient.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("access_token");
-    if (token && config.headers) {
-      config.headers.Authorization = `Bearer ${token}`;
+    if (token && token !== "null" && token !== "undefined" && config.headers) {
+      config.headers.set("Authorization", `Bearer ${token}`);
     }
     return config;
   },
@@ -57,7 +57,10 @@ axiosClient.interceptors.response.use(
           localStorage.setItem("access_token", newAccessToken);
 
           // Actualizamos la cabecera de la petición original y la reintentamos
-          originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+          originalRequest.headers.set(
+            "Authorization",
+            `Bearer ${newAccessToken}`,
+          );
           return axiosClient(originalRequest);
         } catch (refreshError) {
           // Si el refresh falla, significa que el token de 7 días también expiró
