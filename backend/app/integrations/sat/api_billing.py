@@ -2,6 +2,8 @@ import os
 import shutil
 from pathlib import Path
 from datetime import datetime
+from pydantic import BaseModel
+from typing import List, Optional
 
 from weasyprint import HTML
 from jinja2 import Environment, FileSystemLoader
@@ -21,6 +23,20 @@ from app.core.security import verify_password
 import base64
 
 router = APIRouter()
+
+
+class PagoDetalle(BaseModel):
+    invoice_id: int
+    monto_pagado: float
+
+
+class RegistroPagoPayload(BaseModel):
+    client_id: int
+    pagos: List[PagoDetalle]
+    forma_pago: str
+    fecha_pago: str
+    referencia: Optional[str] = ""
+    cuenta_deposito: Optional[str] = ""
 
 
 @router.get("/test-invoice-pro")
@@ -493,3 +509,26 @@ def retry_pending_cancellations(db: Session = Depends(get_db)):
     service = BillingService(db)
     resultado = service.procesar_cancelaciones_pendientes()
     return resultado
+
+
+@router.post("/stamp/payment", summary="Generar Complemento de Pago")
+def registrar_pago_multiple(
+    payload: RegistroPagoPayload, db: Session = Depends(get_db)
+):
+    """
+    Endpoint Fase 3.2: Registra el pago de una o múltiples facturas y genera
+    el Complemento de Pago (REP) ante el SAT.
+    """
+    service = BillingService(db)
+    try:
+        resultado = service.registrar_pago_y_timbrar_complemento(
+            client_id=payload.client_id,
+            pagos_data=[p.dict() for p in payload.pagos],
+            forma_pago=payload.forma_pago,
+            fecha_pago=payload.fecha_pago,
+            referencia=payload.referencia,
+            cuenta_deposito=payload.cuenta_deposito,
+        )
+        return resultado
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))

@@ -6,11 +6,18 @@ export interface ReceivableInvoice {
   id: number;
   folio_interno?: string;
   client_id: number;
+
+  // 👉 CAMPOS FISCALES INYECTADOS PARA EL SPRINT 3
+  viaje_id?: number | null;
+  uuid?: string | null;
+  uuid_relacionado?: string | null;
+  status_sat?: string;
+
   cliente?: string;
   cliente_rfc?: string;
   dias_credito: number;
 
-  //  AÑADIDO: El objeto relacional que manda el backend de Python
+  // AÑADIDO: El objeto relacional que manda el backend de Python
   client?: {
     id?: number;
     razon_social?: string;
