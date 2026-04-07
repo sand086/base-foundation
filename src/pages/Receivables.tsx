@@ -214,7 +214,7 @@ export default function Receivables() {
     payment: RegisterPaymentPayload,
   ) => {
     try {
-      await axiosClient.post(`/receivables/${invoiceId}/payments`, {
+      await axiosClient.post(`/api/receivables/${invoiceId}/payments`, {
         monto: payment.monto,
         metodo_pago: payment.metodo_pago, // 👈 Asegúrate que sea snake_case como en el payload
         referencia: payment.referencia || "",
