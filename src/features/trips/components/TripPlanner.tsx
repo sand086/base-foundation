@@ -765,9 +765,7 @@ export const TripPlanner = () => {
             selectedTripPadre.public_id || String(selectedTripPadre.id)
           }
           activeLeg={selectedLegToUpdate || undefined}
-          onSubmit={async (data) => {
-            await handleActualizarEstatus(data); // Ejecutamos la función pero no "retornamos" su valor
-          }}
+          onSubmit={handleSaveStatusEvent}
         />
       )}
 
