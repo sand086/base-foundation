@@ -70,6 +70,7 @@ interface ConceptoExtra {
   descripcion: string;
   monto: number;
   tipo: "ingreso" | "deduccion";
+  categoria: string;
 }
 
 export default function TripSettlement() {
@@ -370,14 +371,17 @@ export default function TripSettlement() {
     const amount = parseFloat(newConceptoAmount);
     if (isNaN(amount) || amount <= 0)
       return toast.error("Ingresa un monto válido");
+
     const newConcepto: ConceptoExtra = {
       id: `CE-${Date.now()}`,
       tipo: newConceptoType,
+      categoria: newConceptoType === "ingreso" ? "bono" : "cargo",
       descripcion:
         newConceptoDesc.trim() ||
         (newConceptoType === "ingreso" ? "Bono Extra" : "Descuento Extra"),
       monto: amount,
     };
+
     setConceptosExtra([...conceptosExtra, newConcepto]);
     setShowAddConceptoDialog(false);
     setNewConceptoDesc("");
@@ -396,7 +400,11 @@ export default function TripSettlement() {
         monto_maniobras: liquidacion.deduccionesManuales,
         monto_penalizaciones: liquidacion.combustibleFaltante,
         neto_a_pagar: liquidacion.neto_a_pagar,
-        conceptos_extra: conceptosExtra,
+        // 👇 PARCHE DE SEGURIDAD AQUÍ 👇
+        conceptos_extra: conceptosExtra.map((c) => ({
+          ...c,
+          categoria: c.categoria || (c.tipo === "ingreso" ? "bono" : "cargo"),
+        })),
       };
 
       await axiosClient.post("/api/logistics/trips/legs/settle-batch", payload);
