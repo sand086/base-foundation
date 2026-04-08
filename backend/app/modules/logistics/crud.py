@@ -149,7 +149,12 @@ def update_trip_status(
 
     #  PROTECCIÓN DE FASE 2: Misma lógica, mantener vivo el viaje padre
     if status == models.TripStatus.ENTREGADO:
-        if active_leg and active_leg.leg_type == "entrega_vacio":
+        is_last_leg = False
+        if trip.legs:
+            is_last_leg = active_leg.id == trip.legs[-1].id
+
+        # Si es entrega de vacío O es la última fase del viaje, cerramos el viaje padre.
+        if (active_leg and active_leg.leg_type == "entrega_vacio") or is_last_leg:
             trip.status = status
         else:
             trip.status = models.TripStatus.EN_TRANSITO
@@ -474,7 +479,25 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
 
     conceptos = []
 
-    #  Lógica si es CARRETERA (La Matemática de Gustavo)
+    # 1. JALAR SUELDO FIJO PACTADO COMO INGRESO (Lo pidió Gustavo: "jalar salario")
+    sueldo_fijo = float(
+        trip.sueldo_operador
+        if trip.sueldo_operador
+        else (trip.tariff.sueldo_operador if trip.tariff else 0.0)
+    )
+    if sueldo_fijo > 0:
+        conceptos.append(
+            schemas.ConceptoPago(
+                id=str(uuid.uuid4())[:8],
+                tipo="ingreso",
+                categoria="tarifa",
+                descripcion="Sueldo Base Pactado",
+                monto=sueldo_fijo,
+                esAutomatico=True,
+            )
+        )
+
+    # 2. LÓGICA SI ES CARRETERA (La matemática segura)
     if is_ruta:
         vales_diesel = [f for f in fuel_logs if f.tipo_combustible == "diesel"]
         consumo_real_litros = sum(f.litros for f in vales_diesel)
@@ -484,28 +507,25 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
                 vales_diesel
             )
 
-        RENDIMIENTO_ESPERADO = float(
-            getattr(leg.unit, "rendimiento_ecm_esperado", 3.2) if leg.unit else 3.2
-        )
-        consumo_esperado = (
-            kms_recorridos / RENDIMIENTO_ESPERADO if kms_recorridos > 0 else 0
-        )
+        # Solo cobramos faltante SI LA CONCILIACIÓN YA SUCEDIÓ Y CONFIRMÓ EXCESO
+        for vale in vales_diesel:
+            # Buscamos si el vale ya fue conciliado (Nuevos campos del modelo)
+            is_conciliated = getattr(vale, "is_conciliated", False)
+            diferencia_vale = getattr(vale, "diferencia_litros", 0.0)
 
-        # REGLA 3: Algoritmo de Auditoría y Penalización (5%)
-        TOLERANCIA_PCT = 0.05
-        diferencia_litros = consumo_real_litros - consumo_esperado
+            # Si se concilió y la diferencia es positiva (quemó de más)
+            if is_conciliated and diferencia_vale > 0:
+                costo_exceso = diferencia_vale * precio_promedio_litro
+                deduccion_combustible += costo_exceso
+                litros_a_cobrar += diferencia_vale
 
-        if diferencia_litros > (consumo_esperado * TOLERANCIA_PCT):
-            litros_a_cobrar = diferencia_litros
-            deduccion_combustible = litros_a_cobrar * precio_promedio_litro
-
-            # REGLA 4: DEDUCCIÓN INAMOVIBLE
+        if deduccion_combustible > 0:
             conceptos.append(
                 schemas.ConceptoPago(
                     id=str(uuid.uuid4())[:8],
                     tipo="deduccion",
                     categoria="combustible",
-                    descripcion=f"Vale Exceso Diésel ({litros_a_cobrar:.1f} L extra)",
+                    descripcion=f"Exceso Diésel Conciliado ({litros_a_cobrar:.1f} L)",
                     monto=deduccion_combustible,
                     esAutomatico=True,
                 )
@@ -746,6 +766,7 @@ def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload)
 
         leg.saldo_operador = payload.neto_a_pagar / num_legs
         leg.monto_neto_pagado = payload.neto_a_pagar / num_legs
+        leg.desglose_conceptos = conceptos_json
         leg.actual_arrival = datetime.utcnow()
 
         event = models.TripTimelineEvent(
@@ -900,16 +921,37 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
                 total_real_liters += f.litros
                 total_fuel_cost += f.litros * f.precio_por_litro
 
+    # Calculamos el precio promedio para valorizar las deducciones
     precio_promedio = (
         (total_fuel_cost / total_real_liters) if total_real_liters > 0 else 24.50
     )
 
-    diferencia_litros = total_real_liters - total_consumo_esperado
-
+    # =========================================================================
+    # LÓGICA CORREGIDA: DEDUCCIÓN SEGURA (Adiós a los cobros fantasma)
+    # =========================================================================
+    diferencia_litros_total = 0.0
     deduccion_combustible = 0.0
-    if diferencia_litros > (total_consumo_esperado * 0.05):
-        deduccion_combustible = diferencia_litros * precio_promedio
 
+    for leg in legs:
+        vales = [
+            f
+            for f in leg.fuel_logs
+            if f.record_status == "A" and f.tipo_combustible == "diesel"
+        ]
+        for vale in vales:
+            # Extraemos los datos usando getattr por seguridad (por si en algún momento la BD no los tiene)
+            is_conciliated = getattr(vale, "is_conciliated", False)
+            diferencia = getattr(vale, "diferencia_litros", 0.0)
+
+            # SOLO sumamos la diferencia si el vale ya fue conciliado y el operador consumió de más
+            if is_conciliated and diferencia > 0:
+                diferencia_litros_total += diferencia
+
+    if diferencia_litros_total > 0:
+        deduccion_combustible = diferencia_litros_total * precio_promedio
+    # =========================================================================
+
+    # JALAR SUELDO FIJO
     sueldo_operador_pactado = 0.0
     if legs and legs[0].trip:
         trip_padre = legs[0].trip
@@ -926,7 +968,7 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
         "total_kms": round(total_kms_reales, 2),
         "consumo_esperado": round(total_consumo_esperado, 2),
         "consumo_real": round(total_real_liters, 2),
-        "diferencia_litros": round(diferencia_litros, 2),
+        "diferencia_litros": round(diferencia_litros_total, 2),
         "precio_promedio": round(precio_promedio, 2),
         "deduccion_combustible": round(deduccion_combustible, 2),
         "sueldo_operador_pactado": sueldo_operador_pactado,

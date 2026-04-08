@@ -295,6 +295,7 @@ class Client(AuditMixin, Base):
     tarifas_autorizadas = relationship(
         "RateTemplate", back_populates="client", cascade="all, delete-orphan"
     )
+    receivable_invoices = relationship("ReceivableInvoice", back_populates="client")
 
 
 class SubClient(AuditMixin, Base):
@@ -668,6 +669,7 @@ class Trip(AuditMixin, Base):
         cascade="all, delete-orphan",
         order_by="TripLeg.id",
     )
+    work_orders = relationship("WorkOrder", back_populates="trip")
 
 
 class TripLeg(AuditMixin, Base):
@@ -698,6 +700,7 @@ class TripLeg(AuditMixin, Base):
     monto_maniobras = Column(Float, default=0.0)
     monto_penalizaciones = Column(Float, default=0.0)
     monto_neto_pagado = Column(Float, default=0.0)
+    desglose_conceptos = Column(JSONB, default=list, server_default="[]")
 
     odometro_inicial = Column(Integer, nullable=True, default=0)
     odometro_final = Column(Integer, nullable=True)
@@ -934,7 +937,7 @@ class WorkOrder(AuditMixin, Base):
 
     unit = relationship("Unit", back_populates="work_orders")
     mechanic = relationship("Mechanic", back_populates="work_orders")
-    trip = relationship("Trip")  #  Relación con el viaje
+    trip = relationship("Trip", back_populates="work_orders")
     parts = relationship(
         "WorkOrderPart", back_populates="work_order", cascade="all, delete-orphan"
     )
@@ -1118,16 +1121,19 @@ class InvoicePayment(AuditMixin, Base):
     invoice_id = Column(
         Integer, ForeignKey("payable_invoices.id", ondelete="CASCADE"), nullable=False
     )
+    bank_account_id = Column(
+        Integer, ForeignKey("bank_accounts.id", ondelete="SET NULL"), nullable=True
+    )
 
     fecha_pago = Column(Date, default=date.today)
     monto = Column(Float, nullable=False)
     metodo_pago = Column(String(50))
     referencia = Column(String(100))
     cuenta_retiro = Column(String(50))
-
     complemento_uuid = Column(String(36))
 
     invoice = relationship("PayableInvoice", back_populates="payments")
+    bank_account = relationship("BankAccount")
 
 
 class AuditLog(Base):
@@ -1298,7 +1304,6 @@ class FuelLog(AuditMixin, Base):
     operator_id = Column(
         Integer, ForeignKey("operators.id", ondelete="RESTRICT"), nullable=False
     )
-
     trip_leg_id = Column(
         Integer, ForeignKey("trip_legs.id", ondelete="SET NULL"), nullable=True
     )
@@ -1309,14 +1314,26 @@ class FuelLog(AuditMixin, Base):
     estacion = Column(String(200), nullable=False)
     tipo_combustible = Column(String(20), nullable=False)
 
-    litros = Column(Float, default=0.0, nullable=False)
+    litros = Column(Float, default=0.0, nullable=False)  # Los litros del vale
     precio_por_litro = Column(Float, default=0.0, nullable=False)
     total = Column(Float, default=0.0, nullable=False)
-    odometro = Column(Integer, nullable=False)
+    odometro = Column(Integer, nullable=False)  # Odómetro inicial
 
     evidencia_url = Column(String(500), nullable=True)
     excede_tanque = Column(Boolean, default=False)
     capacidad_tanque_snapshot = Column(Float, nullable=True)
+
+    # ---  CAMPOS PARA CONCILIACIÓN ---
+    is_conciliated = Column(Boolean, default=False, server_default="false")
+    km_sm = Column(Float, nullable=True)  # Manual: Kilómetros recorridos según SM
+    litros_sm = Column(Float, nullable=True)  # Manual: Litros quemados según SM
+    rendimiento_sm = Column(Float, nullable=True)  # Auto: km_sm / litros_sm
+    diferencia_litros = Column(Float, nullable=True)  # Auto: litros_sm - litros (vale)
+    rendimiento_real = Column(Float, nullable=True)  # Auto: km_sm / litros (vale)
+    odometro_final = Column(
+        Integer, nullable=True
+    )  # Manual: Para usarlo en el siguiente viaje
+    # -----------------------------------------------------------
 
     unit = relationship("Unit", back_populates="fuel_logs")
     operator = relationship("Operator")
@@ -1399,6 +1416,7 @@ class ReceivableInvoice(AuditMixin, Base):
         back_populates="invoice",
         cascade="all, delete-orphan",
     )
+    client = relationship("Client", back_populates="receivable_invoices")
 
 
 class ReceivableInvoicePayment(AuditMixin, Base):
@@ -1410,14 +1428,19 @@ class ReceivableInvoicePayment(AuditMixin, Base):
         ForeignKey("receivable_invoices.id", ondelete="CASCADE"),
         nullable=False,
     )
+    bank_account_id = Column(
+        Integer, ForeignKey("bank_accounts.id", ondelete="SET NULL"), nullable=True
+    )
 
     fecha_pago = Column(Date, default=date.today)
     monto = Column(Float, nullable=False)
     metodo_pago = Column(String(50))
     referencia = Column(String(100))
     cuenta_deposito = Column(String(50))
+    complemento_uuid = Column(String(36), nullable=True)
 
     invoice = relationship("ReceivableInvoice", back_populates="payments")
+    bank_account = relationship("BankAccount")
 
 
 class AlertConfig(AuditMixin, Base):

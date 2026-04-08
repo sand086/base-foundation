@@ -40,6 +40,7 @@ const DialogContent = React.forwardRef<
     <DialogOverlay />
     <DialogPrimitive.Content
       ref={ref}
+      onInteractOutside={(e) => e.preventDefault()}
       className={cn(
         // POSICIONAMIENTO Y SCROLL (LA MAGIA): Flex column con altura máxima
         "fixed left-[50%] top-[50%] z-50 flex flex-col w-full translate-x-[-50%] translate-y-[-50%]",

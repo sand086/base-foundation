@@ -55,7 +55,7 @@ export function BankAccountsTab({
 }: BankAccountsTabProps) {
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {/* 🎯 TOOLBAR SUPERIOR */}
+      {/*  TOOLBAR SUPERIOR */}
       <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-card/40 p-4 rounded-2xl border border-white/20 dark:border-white/10 shadow-sm backdrop-blur-md">
         <h3 className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-2">
           <Wallet className="h-4 w-4 text-brand-navy dark:text-slate-300" />
@@ -85,7 +85,7 @@ export function BankAccountsTab({
         </div>
       </div>
 
-      {/* 🎯 GRID DE TARJETAS BANCARIAS */}
+      {/*  GRID DE TARJETAS BANCARIAS */}
       {isAccountsLoading ? (
         <div className="flex justify-center p-12 bg-card/40 rounded-2xl border border-border backdrop-blur-sm">
           <Loader2 className="h-8 w-8 animate-spin text-brand-navy/50" />
@@ -112,7 +112,7 @@ export function BankAccountsTab({
                 )}
               />
 
-              {/* 🎯 MENÚ DE ACCIONES (CORREGIDO: Siempre visible y con z-20) */}
+              {/*  MENÚ DE ACCIONES (CORREGIDO: Siempre visible y con z-20) */}
               <div className="absolute top-3 right-3 z-20">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -149,7 +149,7 @@ export function BankAccountsTab({
                 </DropdownMenu>
               </div>
 
-              {/* 🎯 CONTENIDO DE LA TARJETA */}
+              {/*  CONTENIDO DE LA TARJETA */}
               <CardContent className="p-6 flex flex-col justify-between h-full pt-7">
                 <div className="flex items-center gap-4 mb-5">
                   <div className="text-3xl bg-slate-50 dark:bg-slate-800 p-2.5 rounded-xl border border-slate-100 dark:border-white/5 shadow-inner">

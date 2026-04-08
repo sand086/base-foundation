@@ -1,5 +1,3 @@
-// src/features/cxp/InvoiceDetailSheet.tsx
-
 import {
   Sheet,
   SheetContent,
@@ -25,16 +23,19 @@ import {
   Building2,
   Receipt,
   CreditCard,
+  Banknote,
+  FileCode2,
+  Plus,
 } from "lucide-react";
-import type { PayableInvoice } from "@/features/payables/types";
+import { useEffect } from "react";
+import type { ReceivableInvoice } from "@/features/receivables/types";
 import { getInvoiceStatusInfo } from "@/lib/utils";
-
-type AnyInvoice = PayableInvoice & Record<string, any>;
 
 interface InvoiceDetailSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  invoice: PayableInvoice | null;
+  invoice: ReceivableInvoice | null;
+  onPayClick?: (invoice: ReceivableInvoice) => void;
 }
 
 const toNumber = (v: any): number => {
@@ -49,69 +50,72 @@ export function InvoiceDetailSheet({
   open,
   onOpenChange,
   invoice,
+  onPayClick,
 }: InvoiceDetailSheetProps) {
+  useEffect(() => {
+    if (invoice && open) {
+      const invTS = invoice as any;
+      console.log("🔥 FACTURA DE CLIENTE ABIERTA:", invTS);
+    }
+  }, [invoice, open]);
+
   if (!invoice) return null;
 
-  const inv = invoice as AnyInvoice;
-  const statusInfo = getInvoiceStatusInfo(invoice);
+  // VACUNA TYPESCRIPT
+  const inv = invoice as any;
+  const statusInfo = getInvoiceStatusInfo(inv);
 
-  // ===========
-  // Normalización (snake_case preferido, fallback camelCase)
-  // ===========
   const id = safeStr(inv.id);
+  const folioInterno = safeStr(inv.folio_interno) || `ID-${id}`;
+  const uuid = safeStr(inv.uuid) || "NO TIMBRADO";
 
-  const proveedor =
-    safeStr(inv.supplier_razon_social) ||
-    safeStr(inv.proveedor) ||
-    safeStr(inv.supplier_name) ||
-    "—";
+  const entidadNombre =
+    safeStr(inv.client?.razon_social) || "Público en General";
+
+  const entidadRfc = safeStr(inv.client?.rfc) || "RFC NO DISPONIBLE";
 
   const concepto = safeStr(inv.concepto) || "Sin descripción";
-  const uuid = safeStr(inv.uuid) || "—";
-
   const fechaEmision =
     safeStr(inv.fecha_emision) || safeStr(inv.fechaEmision) || "—";
   const fechaVencimiento =
     safeStr(inv.fecha_vencimiento) || safeStr(inv.fechaVencimiento) || "—";
-
   const montoTotal = toNumber(inv.monto_total ?? inv.montoTotal);
   const saldoPendiente = toNumber(inv.saldo_pendiente ?? inv.saldoPendiente);
-
   const moneda = safeStr(inv.moneda) || "MXN";
-
   const pdfUrl = safeStr(inv.pdf_url ?? inv.pdfUrl);
   const xmlUrl = safeStr(inv.xml_url ?? inv.xmlUrl);
 
-  // Payments: DB = payments[], legacy = pagos[]
   const payments: Array<any> = Array.isArray(inv.payments)
     ? inv.payments
     : Array.isArray(inv.pagos)
       ? inv.pagos
       : [];
 
-  // Orden de compra (si lo traes)
-  const ordenFolio =
-    safeStr(inv.orden_compra_folio) || safeStr(inv.ordenCompraFolio);
-
-  // ===========
-  // Handlers (descarga simple / abre link si tienes URL real)
-  // Si pdfUrl/xmlUrl son sólo nombres, aquí NO hacemos nada más.
-  // ===========
   const handleDownload = (urlOrName: string) => {
-    // Si ya guardas URL absoluta/relativa, abre en pestaña
-    if (/^https?:\/\//i.test(urlOrName) || urlOrName.startsWith("/")) {
+    if (urlOrName.startsWith("http")) {
       window.open(urlOrName, "_blank", "noopener,noreferrer");
-      return;
+    } else if (urlOrName.startsWith("/")) {
+      const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
+      const finalUrl = baseUrl ? `${baseUrl}${urlOrName}` : urlOrName;
+      window.open(finalUrl, "_blank", "noopener,noreferrer");
     }
-    // Si sólo es nombre, puedes conectar aquí tu endpoint real
-    // toast.info("Archivo registrado, falta endpoint de descarga");
   };
+
+  const fC = (n: any) =>
+    Number(n || 0).toLocaleString("es-MX", {
+      style: "currency",
+      currency: "MXN",
+    });
+  const fD = (d: any) => (d ? new Date(d).toLocaleDateString("es-MX") : "—");
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-[540px] overflow-y-auto">
-        <SheetHeader className="pb-4 border-b">
-          <SheetTitle className="flex items-center gap-2">
+      <SheetContent
+        className="w-full sm:max-w-[560px] overflow-y-auto"
+        onInteractOutside={(e) => e.preventDefault()}
+      >
+        <SheetHeader className="pb-4 border-b flex flex-row items-center justify-between">
+          <SheetTitle className="flex items-center gap-2 mt-2">
             <Receipt className="h-5 w-5 text-brand-navy" />
             Detalle de Factura
           </SheetTitle>
@@ -122,78 +126,71 @@ export function InvoiceDetailSheet({
           <div className="flex items-start justify-between">
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide">
-                ID Factura
+                Folio Fiscal / Interno
               </p>
               <p className="font-mono font-bold text-lg text-foreground">
-                {id}
+                {folioInterno}
               </p>
-              {ordenFolio ? (
-                <p className="text-[11px] text-muted-foreground mt-1">
-                  Origen: <span className="font-mono">{ordenFolio}</span>
-                </p>
-              ) : null}
             </div>
-            <StatusBadge status={statusInfo.status}>
-              {statusInfo.label}
-            </StatusBadge>
+            <div className="flex flex-col items-end gap-2">
+              <StatusBadge status={statusInfo.status}>
+                {statusInfo.label}
+              </StatusBadge>
+            </div>
           </div>
 
-          {/* Proveedor */}
+          {/* Cliente */}
           <div className="p-4 bg-muted/30 rounded-lg border">
             <div className="flex items-center gap-2 mb-2">
               <Building2 className="h-4 w-4 text-muted-foreground" />
               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Proveedor
+                Datos del Cliente
               </span>
             </div>
-            <p className="font-semibold text-foreground">{proveedor}</p>
+            <p className="font-semibold text-foreground text-base">
+              {entidadNombre}
+            </p>
+            <p className="font-mono text-xs text-slate-500 mt-1 uppercase">
+              {entidadRfc}
+            </p>
           </div>
 
-          {/* Concepto */}
-          <div>
-            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
-              Concepto
-            </p>
-            <p className="text-sm text-slate-700">{concepto}</p>
-          </div>
-
-          {/* UUID */}
-          <div>
-            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
-              Folio Fiscal (UUID)
-            </p>
-            <p className="font-mono text-xs bg-muted p-2 rounded break-all">
-              {uuid}
-            </p>
+          {/* Concepto & UUID */}
+          <div className="grid gap-4">
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
+                Concepto
+              </p>
+              <p className="text-sm text-slate-700">{concepto}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
+                Folio Fiscal SAT (UUID)
+              </p>
+              <p className="font-mono text-xs bg-muted p-2 rounded break-all border border-border/50 text-slate-600">
+                {uuid}
+              </p>
+            </div>
           </div>
 
           {/* Fechas */}
           <div className="grid grid-cols-2 gap-4">
             <div className="p-3 bg-muted/50 rounded border border-border">
               <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
-                <Calendar className="h-3 w-3" />
-                Fecha Emisión
+                <Calendar className="h-3 w-3" /> Emisión
               </div>
-              <p className="font-medium">{fechaEmision}</p>
+              <p className="font-medium">{fD(fechaEmision)}</p>
             </div>
-
             <div
-              className={`p-3 rounded border ${
-                statusInfo.status === "danger"
-                  ? "bg-red-50 border-red-200"
-                  : "bg-slate-50"
-              }`}
+              className={`p-3 rounded border ${statusInfo.status === "danger" ? "bg-red-50 border-red-200" : "bg-slate-50 border-border"}`}
             >
               <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
-                <Calendar className="h-3 w-3" />
-                Fecha Vencimiento
+                <Calendar className="h-3 w-3" /> Vencimiento
               </div>
               <p
-                className={`font-medium ${
-                  statusInfo.status === "danger" ? "text-status-danger" : ""
-                }`}
+                className={`font-medium ${statusInfo.status === "danger" ? "text-status-danger" : ""}`}
               >
-                {fechaVencimiento}
+                {fD(fechaVencimiento)}
               </p>
             </div>
           </div>
@@ -202,122 +199,169 @@ export function InvoiceDetailSheet({
           <div className="grid grid-cols-2 gap-4">
             <div className="p-4 bg-muted rounded-lg">
               <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
-                <DollarSign className="h-3 w-3" />
-                Monto Total
+                <DollarSign className="h-3 w-3" /> Monto Total
               </div>
               <p className="text-xl font-bold text-foreground">
-                ${montoTotal.toLocaleString("es-MX")}{" "}
-                <span className="text-xs">{moneda}</span>
+                {fC(montoTotal)}
               </p>
             </div>
-
             <div
-              className={`p-4 rounded-lg ${
-                saldoPendiente > 0 ? "bg-amber-50" : "bg-emerald-50"
-              }`}
+              className={`p-4 rounded-lg ${saldoPendiente > 0 ? "bg-amber-50 border border-amber-100" : "bg-emerald-50 border border-emerald-100"}`}
             >
               <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
-                <CreditCard className="h-3 w-3" />
-                Saldo Pendiente
+                <CreditCard className="h-3 w-3" /> Saldo Pendiente
               </div>
               <p
-                className={`text-xl font-bold ${
-                  saldoPendiente > 0 ? "text-amber-700" : "text-emerald-700"
-                }`}
+                className={`text-xl font-bold ${saldoPendiente > 0 ? "text-amber-700" : "text-emerald-700"}`}
               >
-                ${saldoPendiente.toLocaleString("es-MX")}{" "}
-                <span className="text-xs">{moneda}</span>
+                {fC(saldoPendiente)}
               </p>
             </div>
           </div>
 
           <Separator />
 
-          {/* Historial de pagos */}
+          {/* HISTORIAL DE PAGOS */}
           <div>
-            <h3 className="text-sm font-semibold text-brand-dark mb-3 flex items-center gap-2">
-              <Receipt className="h-4 w-4" />
-              Historial de Pagos ({payments.length})
-            </h3>
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-sm font-semibold text-brand-dark flex items-center gap-2">
+                <Receipt className="h-4 w-4" /> Historial de Cobros (
+                {payments.length})
+              </h3>
+              {saldoPendiente > 0 && onPayClick && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onPayClick(invoice)}
+                  className="h-7 text-[9px] font-black uppercase tracking-tighter"
+                >
+                  <Plus className="w-3 h-3 mr-1" /> Registrar Abono
+                </Button>
+              )}
+            </div>
 
             {payments.length === 0 ? (
-              <div className="p-4 text-center bg-muted/30 rounded-lg border border-dashed">
+              <div className="p-4 text-center bg-muted/30 rounded-lg border border-dashed mt-3">
                 <p className="text-sm text-muted-foreground">
-                  No hay pagos registrados
+                  No hay cobros registrados
                 </p>
               </div>
             ) : (
-              <DataTable>
-                <DataTableHeader>
-                  <DataTableRow>
-                    <DataTableHead>Fecha</DataTableHead>
-                    <DataTableHead className="text-right">Monto</DataTableHead>
-                    <DataTableHead>Cuenta</DataTableHead>
-                    <DataTableHead>Referencia</DataTableHead>
-                  </DataTableRow>
-                </DataTableHeader>
-                <DataTableBody>
-                  {payments.map((p) => {
-                    const fecha = safeStr(p.fecha_pago ?? p.fecha);
-                    const monto = toNumber(p.monto);
-                    const cuenta = safeStr(
-                      p.cuenta_retiro_nombre ??
-                        p.cuentaRetiro ??
-                        p.cuenta_retiro ??
-                        "",
-                    );
-                    const referencia = safeStr(p.referencia ?? "");
+              <div className="mt-3 border rounded-xl overflow-hidden">
+                <DataTable>
+                  <DataTableHeader>
+                    <DataTableRow className="bg-slate-50">
+                      <DataTableHead className="text-[10px] font-black uppercase">
+                        Fecha
+                      </DataTableHead>
+                      <DataTableHead className="text-right text-[10px] font-black uppercase">
+                        Monto
+                      </DataTableHead>
+                      <DataTableHead className="text-xs text-muted-foreground">
+                        Ref.
+                      </DataTableHead>
+                      <DataTableHead className="text-center text-[10px] font-black uppercase">
+                        Comprobante (REP)
+                      </DataTableHead>
+                    </DataTableRow>
+                  </DataTableHeader>
+                  <DataTableBody>
+                    {payments.map((p: any) => {
+                      const fecha = safeStr(p.fecha_pago ?? p.fecha);
+                      const monto = toNumber(p.monto);
+                      const referencia = safeStr(p.referencia ?? "—");
+                      const complementoUuid = safeStr(
+                        p.complemento_uuid ?? p.complementoUuid,
+                      );
 
-                    return (
-                      <DataTableRow key={safeStr(p.id)}>
-                        <DataTableCell className="text-sm">
-                          {fecha || "—"}
-                        </DataTableCell>
-                        <DataTableCell className="text-right font-medium text-emerald-700">
-                          ${monto.toLocaleString("es-MX")}
-                        </DataTableCell>
-                        <DataTableCell className="text-xs text-muted-foreground">
-                          {cuenta || "—"}
-                        </DataTableCell>
-                        <DataTableCell className="font-mono text-xs">
-                          {referencia || "—"}
-                        </DataTableCell>
-                      </DataTableRow>
-                    );
-                  })}
-                </DataTableBody>
-              </DataTable>
+                      return (
+                        <DataTableRow key={safeStr(p.id)}>
+                          <DataTableCell className="text-xs font-medium">
+                            {fD(fecha)}
+                          </DataTableCell>
+                          <DataTableCell className="text-right font-bold text-emerald-600">
+                            {fC(monto)}
+                          </DataTableCell>
+                          <DataTableCell className="text-xs text-muted-foreground">
+                            {referencia}
+                          </DataTableCell>
+
+                          <DataTableCell className="text-center">
+                            {complementoUuid ? (
+                              <div className="flex flex-col gap-1 items-center">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  title="Descargar PDF"
+                                  className="h-6 text-[9px] text-rose-600 border-rose-200 hover:bg-rose-50 w-full flex justify-center gap-1"
+                                  onClick={() =>
+                                    handleDownload(
+                                      `/api/sat/invoice/${complementoUuid}/pdf`,
+                                    )
+                                  }
+                                >
+                                  <FileText className="h-3 w-3" /> PDF
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  title="Descargar XML"
+                                  className="h-6 text-[9px] text-blue-600 border-blue-200 hover:bg-blue-50 w-full flex justify-center gap-1"
+                                  onClick={() =>
+                                    handleDownload(
+                                      `/api/sat/invoice/${complementoUuid}/xml`,
+                                    )
+                                  }
+                                >
+                                  <FileCode2 className="h-3 w-3" /> XML
+                                </Button>
+                              </div>
+                            ) : (
+                              <span className="text-[10px] text-slate-400 bg-slate-100 px-2 py-1 rounded">
+                                No timbrado
+                              </span>
+                            )}
+                          </DataTableCell>
+                        </DataTableRow>
+                      );
+                    })}
+                  </DataTableBody>
+                </DataTable>
+              </div>
             )}
           </div>
 
-          {/* Adjuntos */}
-          <div>
-            <h3 className="text-sm font-semibold text-brand-dark mb-3 flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              Archivos Adjuntos
+          <Separator />
+
+          {/* ARCHIVOS FACTURA ORIGINAL */}
+          <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl mt-4">
+            <h3 className="text-sm font-semibold text-brand-dark mb-1 flex items-center gap-2">
+              <FileText className="h-4 w-4" /> Factura de Origen
             </h3>
+            <p className="text-[10px] text-muted-foreground mb-3 leading-tight">
+              Descarga la factura que originó la deuda.
+            </p>
 
             <div className="flex gap-2">
               <Button
                 variant="outline"
                 size="sm"
-                className="gap-2"
+                className="gap-2 bg-white"
                 disabled={!pdfUrl}
                 onClick={() => pdfUrl && handleDownload(pdfUrl)}
               >
-                <Download className="h-3 w-3" />
-                {pdfUrl || "PDF no disponible"}
+                <Download className="h-3 w-3 text-rose-500" />{" "}
+                {pdfUrl ? "PDF Factura" : "Sin PDF"}
               </Button>
-
               <Button
                 variant="outline"
                 size="sm"
-                className="gap-2"
+                className="gap-2 bg-white"
                 disabled={!xmlUrl}
                 onClick={() => xmlUrl && handleDownload(xmlUrl)}
               >
-                <Download className="h-3 w-3" />
-                {xmlUrl || "XML no disponible"}
+                <Download className="h-3 w-3 text-blue-500" />{" "}
+                {xmlUrl ? "XML Factura" : "Sin XML"}
               </Button>
             </div>
           </div>

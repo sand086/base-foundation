@@ -5,17 +5,20 @@ import {
   User,
   MapPin,
   DollarSign,
-  Receipt,
   ArrowDownCircle,
   ArrowUpCircle,
   Loader2,
   CheckCircle,
-  Printer,
   Clock,
   History,
   CheckSquare,
   Truck,
   ShieldAlert,
+  Eye,
+  Undo,
+  Trash2,
+  Receipt,
+  AlertTriangle,
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,15 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -42,12 +37,34 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 import { cn } from "@/lib/utils";
 import { useTrips } from "@/features/trips/hooks/useTrips";
 import { useClients } from "@/features/clients/hooks/useClients";
 import { useOperators } from "@/features/operators/hooks/useOperators";
 import { useSystemConfig } from "@/features/settings/hooks/useSystemConfig";
+import axiosClient from "@/api/axiosClient";
+
+// Importamos el nuevo componente desmenuzado
+import { OperatorSettlementDetailModal } from "@/features/receivables/components/OperatorSettlementDetailModal";
 
 interface ConceptoExtra {
   id: string;
@@ -57,22 +74,21 @@ interface ConceptoExtra {
 }
 
 export default function TripSettlement() {
-  const { trips = [], liquidarLote, getSettlementPreview } = useTrips() as any;
+  const {
+    trips = [],
+    liquidarLote,
+    getSettlementPreview,
+    refresh,
+  } = useTrips() as any;
   const { clients = [] } = useClients();
   const { operadores = [], operators = [] } = useOperators() as any;
 
-  // PARÁMETROS GLOBALES
   const { value: empresaNombre } = useSystemConfig("empresa_nombre");
   const { value: empresaRFC } = useSystemConfig("empresa_rfc");
   const { value: empresaDireccion } = useSystemConfig("empresa_direccion");
   const { value: empresaTelefono } = useSystemConfig("empresa_telefono");
   const { value: empresaLogo } = useSystemConfig("empresa_logo");
 
-  const safeOperators = operadores.length > 0 ? operadores : operators;
-
-  // ==========================================
-  // ESTADOS DE SELECCIÓN Y FILTROS
-  // ==========================================
   const [activeTab, setActiveTab] = useState<"pendientes" | "historico">(
     "pendientes",
   );
@@ -80,21 +96,21 @@ export default function TripSettlement() {
   const [globalSearch, setGlobalSearch] = useState("");
   const [selectedOperatorId, setSelectedOperatorId] = useState<string>("");
   const [selectedLegIds, setSelectedLegIds] = useState<string[]>([]);
+  const [hiddenHistoryIds, setHiddenHistoryIds] = useState<string[]>([]);
 
-  // ==========================================
-  // ESTADOS DE CÁLCULO & PREVIEW API
-  // ==========================================
   const [sueldoRutaPactado, setSueldoRutaPactado] = useState<number>(0);
   const [combustibleFaltante, setCombustibleFaltante] = useState<number>(0);
   const [previewData, setPreviewData] = useState<any>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
 
-  // ==========================================
-  // ESTADOS DE UI & MODALES
-  // ==========================================
   const [conceptosExtra, setConceptosExtra] = useState<ConceptoExtra[]>([]);
   const [showAddConceptoDialog, setShowAddConceptoDialog] = useState(false);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [actionModal, setActionModal] = useState<{
+    type: "reopen" | "hide";
+    leg: any;
+  } | null>(null);
+
   const [newConceptoType, setNewConceptoType] = useState<
     "ingreso" | "deduccion"
   >("ingreso");
@@ -102,9 +118,6 @@ export default function TripSettlement() {
   const [newConceptoAmount, setNewConceptoAmount] = useState("");
   const [isAnimating, setIsAnimating] = useState(false);
 
-  // ==========================================
-  // DERIVACIONES Y LISTAS
-  // ==========================================
   const allLegs = useMemo(() => {
     const legs: any[] = [];
     if (!Array.isArray(trips)) return legs;
@@ -132,9 +145,15 @@ export default function TripSettlement() {
       ),
     [allLegs],
   );
+
   const historyLegs = useMemo(
-    () => allLegs.filter((l) => String(l.status).toLowerCase() === "liquidado"),
-    [allLegs],
+    () =>
+      allLegs.filter(
+        (l) =>
+          String(l.status).toLowerCase() === "liquidado" &&
+          !hiddenHistoryIds.includes(String(l.id)),
+      ),
+    [allLegs, hiddenHistoryIds],
   );
 
   const operatorsWithPending = useMemo(() => {
@@ -158,11 +177,36 @@ export default function TripSettlement() {
 
   const isAuditPending = previewData?.legs_sin_ticket?.length > 0;
 
-  // ==========================================
-  // CÁLCULOS FINANCIEROS
-  // ==========================================
   const liquidacion = useMemo(() => {
     if (selectedLegsData.length === 0) return null;
+
+    if (activeTab === "historico") {
+      const leg = selectedLegsData[0];
+      const esRuta = leg.leg_type === "ruta_carretera";
+      const isFullConfig = !!(leg.trip?.dolly_id || leg.trip?.remolque_2_id);
+      const pagoBase = esRuta
+        ? leg.monto_sueldo || 0
+        : leg.monto_sueldo || (isFullConfig ? 300 : 200);
+
+      return {
+        hasRoadMove: esRuta,
+        pagoBaseBruto: pagoBase,
+        bonosAdicionales: leg.monto_bonos || 0,
+        total_ingresos: pagoBase + (leg.monto_bonos || 0),
+        deduccionViaticos: leg.anticipo_viaticos || 0,
+        otrosAnticipos:
+          (leg.otros_anticipos || 0) + (leg.anticipo_combustible || 0),
+        deduccionesManuales: leg.monto_maniobras || 0,
+        combustibleFaltante: leg.monto_penalizaciones || 0,
+        total_deducciones:
+          (leg.anticipo_viaticos || 0) +
+          (leg.otros_anticipos || 0) +
+          (leg.anticipo_combustible || 0) +
+          (leg.monto_penalizaciones || 0) +
+          (leg.monto_maniobras || 0),
+        neto_a_pagar: leg.monto_neto_pagado || 0,
+      };
+    }
 
     let pagoBaseBruto = 0;
     let deduccionViaticos = 0;
@@ -173,12 +217,10 @@ export default function TripSettlement() {
       if (leg.leg_type === "ruta_carretera") {
         hasRoadMove = true;
       } else {
-        const isFull = Boolean(leg.trip?.dolly_id || leg.trip?.remolque_2_id);
+        const isFull = !!(leg.trip?.dolly_id || leg.trip?.remolque_2_id);
         const bonoFijo = isFull ? 300 : 200;
         pagoBaseBruto += bonoFijo;
       }
-
-      // Casetas no se cobran, solo viáticos y otros
       deduccionViaticos += leg.anticipo_viaticos || 0;
       otrosAnticipos +=
         (leg.otros_anticipos || 0) + (leg.anticipo_combustible || 0);
@@ -194,7 +236,6 @@ export default function TripSettlement() {
     const deduccionesManuales = conceptosExtra
       .filter((c) => c.tipo === "deduccion")
       .reduce((s, c) => s + c.monto, 0);
-
     const total_ingresos = pagoBaseBruto + bonosAdicionales;
     const total_deducciones =
       deduccionViaticos +
@@ -219,23 +260,21 @@ export default function TripSettlement() {
     sueldoRutaPactado,
     conceptosExtra,
     combustibleFaltante,
+    activeTab,
   ]);
 
-  // ==========================================
-  // EFECTO: SOLICITAR PRE-LIQUIDACIÓN AL BACKEND
-  // ==========================================
   useEffect(() => {
+    if (activeTab === "historico") return;
+
     if (selectedLegIds.length > 0 && getSettlementPreview) {
       const hasRoadTrip = selectedLegsData.some(
         (l) => l.leg_type === "ruta_carretera",
       );
-
       if (hasRoadTrip) {
         setIsLoadingPreview(true);
         getSettlementPreview(selectedLegIds)
           .then((data: any) => {
             setPreviewData(data);
-            //  MAGIA PURA: El backend ya auditó usando el ECM y nos da el monto a cobrar en rojo. Cero cálculos en el frontend.
             setCombustibleFaltante(data?.deduccion_combustible || 0);
             setSueldoRutaPactado(data?.sueldo_operador_pactado || 0);
           })
@@ -253,11 +292,8 @@ export default function TripSettlement() {
       setPreviewData(null);
       setCombustibleFaltante(0);
     }
-  }, [selectedLegIds, selectedLegsData]);
+  }, [selectedLegIds, selectedLegsData, activeTab]);
 
-  // ==========================================
-  // HANDLERS
-  // ==========================================
   const formatCurrencyLocal = (amount: number) =>
     new Intl.NumberFormat("es-MX", {
       style: "currency",
@@ -298,12 +334,25 @@ export default function TripSettlement() {
     setIsAnimating(true);
     try {
       if (!liquidacion) return;
-      if (liquidarLote) {
-        await liquidarLote(selectedLegIds, liquidacion.neto_a_pagar);
-      }
+
+      const payload = {
+        leg_ids: selectedLegIds.map(Number),
+        monto_sueldo: liquidacion.pagoBaseBruto,
+        monto_bonos: liquidacion.bonosAdicionales,
+        monto_maniobras: liquidacion.deduccionesManuales,
+        monto_penalizaciones: liquidacion.combustibleFaltante,
+        neto_a_pagar: liquidacion.neto_a_pagar,
+        // 👇 AHORA SÍ MANDAMOS EL DESGLOSE AL BACKEND 👇
+        conceptos_extra: conceptosExtra,
+      };
+
+      await axiosClient.post("/api/trips/legs/settle-batch", payload);
+
       toast.success("Liquidación Emitida Exitosamente", {
-        description: `Se registró el pago de ${formatCurrencyLocal(liquidacion.neto_a_pagar)}.`,
+        description: `Se registró el pago de ${formatCurrencyLocal(liquidacion.neto_a_pagar)} con su desglose.`,
       });
+
+      if (refresh) refresh();
       setShowReceiptModal(true);
     } catch (error) {
       toast.error("Error al guardar la liquidación en el servidor.");
@@ -312,30 +361,33 @@ export default function TripSettlement() {
     }
   };
 
-  const applyFilters = (list: any[]) =>
-    list.filter((l) => {
-      if (filterOperator !== "ALL" && String(l.operator_id) !== filterOperator)
-        return false;
-      if (globalSearch) {
-        const term = globalSearch.toLowerCase();
-        const folio = (l.trip?.public_id || `TRP-${l.trip_id}`).toLowerCase();
-        const route = `${l.trip?.origin} ${l.trip?.destination}`.toLowerCase();
-        if (!folio.includes(term) && !route.includes(term)) return false;
+  const handleViewReceipt = (leg: any) => {
+    setSelectedLegIds([String(leg.id)]);
+    setShowReceiptModal(true);
+  };
+
+  const handleConfirmAction = async () => {
+    if (!actionModal) return;
+
+    if (actionModal.type === "hide") {
+      setHiddenHistoryIds([...hiddenHistoryIds, String(actionModal.leg.id)]);
+      toast.success("Viaje ocultado del histórico localmente.");
+    } else if (actionModal.type === "reopen") {
+      try {
+        await axiosClient.post(`/api/trips/legs/${actionModal.leg.id}/reopen`);
+        toast.success("Liquidación anulada y reabierta.", {
+          description:
+            "La CxC ha sido cancelada y el viaje regresó a 'Por Liquidar'.",
+        });
+        if (refresh) refresh();
+      } catch (error) {
+        toast.error("Error al reabrir la liquidación.");
       }
-      return true;
-    });
+    }
+    setActionModal(null);
+  };
 
-  const filteredPending = useMemo(
-    () => applyFilters(pendingLegs),
-    [pendingLegs, filterOperator, globalSearch],
-  );
-  const filteredHistory = useMemo(
-    () => applyFilters(historyLegs),
-    [historyLegs, filterOperator, globalSearch],
-  );
-  const currentList =
-    activeTab === "pendientes" ? filteredPending : filteredHistory;
-
+  const currentList = activeTab === "pendientes" ? pendingLegs : historyLegs;
   const legTypeLabels: Record<string, string> = {
     carga_muelle: "Muelle / Patio",
     ruta_carretera: "Ruta Carretera",
@@ -358,56 +410,57 @@ export default function TripSettlement() {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-        {/* COLUMNA IZQUIERDA: SELECCIÓN Y VIAJES */}
         <div
           className={cn(
             "transition-all duration-500",
-            selectedLegIds.length > 0 ? "xl:col-span-7" : "xl:col-span-12",
+            selectedLegIds.length > 0 && activeTab === "pendientes"
+              ? "xl:col-span-7"
+              : "xl:col-span-12",
           )}
         >
-          <Card className="border-slate-200 shadow-sm mb-6">
-            <CardHeader className="bg-slate-50 border-b border-slate-100 pb-4">
-              <CardTitle className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2">
-                <User className="h-4 w-4 text-blue-600" /> 1. Seleccionar
-                Operador a Liquidar
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <Select
-                value={selectedOperatorId}
-                onValueChange={(val) => {
-                  setSelectedOperatorId(val);
-                  setSelectedLegIds([]);
-                  setConceptosExtra([]);
-                  setCombustibleFaltante(0);
-                  setSueldoRutaPactado(0);
-                  setFilterOperator(val);
-                }}
-              >
-                <SelectTrigger className="h-12 text-base font-medium bg-white">
-                  <SelectValue placeholder="Busca al operador con viajes pendientes..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {operatorsWithPending.map((op: any) => (
-                    <SelectItem
-                      key={op.id}
-                      value={String(op.id)}
-                      className="font-medium py-3"
-                    >
-                      {op.name}
-                    </SelectItem>
-                  ))}
-                  {operatorsWithPending.length === 0 && (
-                    <div className="p-4 text-center text-sm text-slate-500">
-                      No hay operadores con viajes pendientes de pago.
-                    </div>
-                  )}
-                </SelectContent>
-              </Select>
-            </CardContent>
-          </Card>
+          {activeTab === "pendientes" && (
+            <Card className="border-slate-200 shadow-sm mb-6">
+              <CardHeader className="bg-slate-50 border-b border-slate-100 pb-4">
+                <CardTitle className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2">
+                  <User className="h-4 w-4 text-blue-600" /> 1. Seleccionar
+                  Operador a Liquidar
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <Select
+                  value={selectedOperatorId}
+                  onValueChange={(val) => {
+                    setSelectedOperatorId(val);
+                    setSelectedLegIds([]);
+                    setConceptosExtra([]);
+                    setCombustibleFaltante(0);
+                    setSueldoRutaPactado(0);
+                  }}
+                >
+                  <SelectTrigger className="h-12 text-base font-medium bg-white">
+                    <SelectValue placeholder="Busca al operador con viajes pendientes..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {operatorsWithPending.map((op: any) => (
+                      <SelectItem
+                        key={op.id}
+                        value={String(op.id)}
+                        className="font-medium py-3"
+                      >
+                        {op.name}
+                      </SelectItem>
+                    ))}
+                    {operatorsWithPending.length === 0 && (
+                      <div className="p-4 text-center text-sm text-slate-500">
+                        No hay operadores con viajes pendientes de pago.
+                      </div>
+                    )}
+                  </SelectContent>
+                </Select>
+              </CardContent>
+            </Card>
+          )}
 
-          {/* TABLAS Y TABS */}
           <Tabs
             value={activeTab}
             onValueChange={(v) => {
@@ -480,13 +533,18 @@ export default function TripSettlement() {
                       <th scope="col" className="px-6 py-3 text-right">
                         Estatus / Base
                       </th>
+                      {activeTab === "historico" && (
+                        <th scope="col" className="px-6 py-3 text-center">
+                          Acciones
+                        </th>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
                     {currentList.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={5}
+                          colSpan={activeTab === "historico" ? 6 : 5}
                           className="px-6 py-16 text-center bg-white"
                         >
                           <div className="flex flex-col items-center justify-center text-slate-600">
@@ -496,11 +554,6 @@ export default function TripSettlement() {
                                 ? "Sin movimientos pendientes"
                                 : "Historial vacío"}
                             </p>
-                            <p className="text-xs">
-                              {activeTab === "pendientes"
-                                ? "Selecciona un operador arriba o revisa el estado de los viajes."
-                                : "No hay liquidaciones cerradas."}
-                            </p>
                           </div>
                         </td>
                       </tr>
@@ -509,8 +562,8 @@ export default function TripSettlement() {
                         const isSelected = selectedLegIds.includes(
                           String(leg.id),
                         );
-                        const isFull = Boolean(
-                          leg.trip?.dolly_id || leg.trip?.remolque_2_id,
+                        const isFull = !!(
+                          leg.trip?.dolly_id || leg.trip?.remolque_2_id
                         );
 
                         return (
@@ -585,7 +638,7 @@ export default function TripSettlement() {
                             <td className="px-6 py-3 text-right">
                               {activeTab === "pendientes" ? (
                                 <div className="flex flex-col items-end">
-                                  <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-200 border-0 text-[10px] uppercase tracking-wider mb-1">
+                                  <Badge className="bg-amber-100 text-amber-700 border-0 text-[10px] uppercase tracking-wider mb-1">
                                     Pendiente
                                   </Badge>
                                   <div className="text-[10px] text-brand-navy font-bold bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
@@ -613,6 +666,46 @@ export default function TripSettlement() {
                                 </div>
                               )}
                             </td>
+                            {activeTab === "historico" && (
+                              <td
+                                className="px-6 py-3 text-center"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <div className="flex items-center justify-center gap-2">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-blue-600 hover:bg-blue-50"
+                                    onClick={() => handleViewReceipt(leg)}
+                                    title="Ver Recibo"
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-amber-600 hover:bg-amber-50"
+                                    onClick={() =>
+                                      setActionModal({ type: "reopen", leg })
+                                    }
+                                    title="Anular y Reabrir (Opción A)"
+                                  >
+                                    <Undo className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-rose-600 hover:bg-rose-50"
+                                    onClick={() =>
+                                      setActionModal({ type: "hide", leg })
+                                    }
+                                    title="Ocultar de la lista (Opción B)"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </td>
+                            )}
                           </tr>
                         );
                       })
@@ -624,244 +717,368 @@ export default function TripSettlement() {
           </Tabs>
         </div>
 
-        {/* COLUMNA DERECHA: CONFIGURACIÓN FINANCIERA */}
-        {selectedLegIds.length > 0 && liquidacion && (
-          <div className="xl:col-span-5 space-y-6 animate-in fade-in slide-in-from-right-8 duration-500">
-            {/*  CANDADO ROJO: VIAJE NO AUDITADO */}
-            {liquidacion.hasRoadMove && isAuditPending && (
-              <Alert
-                variant="destructive"
-                className="bg-rose-50 border-rose-300 text-rose-900 shadow-md animate-in zoom-in"
-              >
-                <ShieldAlert className="h-5 w-5 !text-rose-600" />
-                <AlertTitle className="font-black uppercase tracking-widest text-[11px] ml-2 text-rose-700">
-                  Conciliacion Pendiente
-                </AlertTitle>
-                <AlertDescription className="text-xs font-bold mt-1 ml-2 leading-relaxed">
-                  El sistema detecta {previewData.legs_sin_ticket.length}{" "}
-                  tramo(s) de carretera en esta selección que{" "}
-                  <span className="underline">no han sido conciliados</span> en
-                  el módulo de Combustible.
-                  <br />
-                  <br />
-                  No puedes liquidar hasta que Finanzas dictamine el
-                  rendimiento.
-                </AlertDescription>
-              </Alert>
-            )}
-
-            <Card
-              className={cn(
-                "border-slate-200 shadow-xl overflow-hidden border-t-4",
-                liquidacion.hasRoadMove
-                  ? "border-t-brand-navy"
-                  : "border-t-emerald-500",
+        {selectedLegIds.length > 0 &&
+          liquidacion &&
+          activeTab === "pendientes" && (
+            <div className="xl:col-span-5 space-y-6 animate-in fade-in slide-in-from-right-8 duration-500">
+              {liquidacion.hasRoadMove && isAuditPending && (
+                <Alert
+                  variant="destructive"
+                  className="bg-rose-50 border-rose-300 text-rose-900 shadow-md"
+                >
+                  <ShieldAlert className="h-5 w-5 !text-rose-600" />
+                  <AlertTitle className="font-black uppercase tracking-widest text-[11px] ml-2 text-rose-700">
+                    Conciliacion Pendiente
+                  </AlertTitle>
+                  <AlertDescription className="text-xs font-bold mt-1 ml-2 leading-relaxed">
+                    El sistema detecta {previewData.legs_sin_ticket.length}{" "}
+                    tramo(s) de carretera que{" "}
+                    <span className="underline">no han sido conciliados</span>{" "}
+                    en Diésel.
+                    <br />
+                    <br />
+                    No puedes liquidar hasta que Finanzas dictamine el
+                    rendimiento.
+                  </AlertDescription>
+                </Alert>
               )}
-            >
-              <CardHeader className="bg-slate-50 border-b pb-4">
-                <CardTitle className="text-sm font-bold text-slate-800 uppercase flex items-center gap-2">
-                  <Receipt className="h-4 w-4" /> Recibo de Liquidación
-                </CardTitle>
-              </CardHeader>
 
-              <CardContent className="p-0">
-                <div className="p-6 space-y-6">
-                  {/* SUELDO FIJO CARRETERA */}
-                  {liquidacion.hasRoadMove && (
-                    <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex items-center justify-between">
-                      <div>
-                        <Label className="text-blue-800 font-bold text-[10px] uppercase tracking-widest">
-                          Sueldo Pactado (Ruta)
-                        </Label>
-                        <p className="text-blue-600/70 text-xs">
-                          Pago fijo por el tramo carretero.
-                        </p>
+              <Card
+                className={cn(
+                  "border-slate-200 shadow-xl overflow-hidden border-t-4",
+                  liquidacion.hasRoadMove
+                    ? "border-t-brand-navy"
+                    : "border-t-emerald-500",
+                )}
+              >
+                <CardHeader className="bg-slate-50 border-b pb-4">
+                  <CardTitle className="text-sm font-bold text-slate-800 uppercase flex items-center gap-2">
+                    <Receipt className="h-4 w-4" /> Configurar Recibo de Pago
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="p-6 space-y-6">
+                    {liquidacion.hasRoadMove && (
+                      <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex items-center justify-between">
+                        <div>
+                          <Label className="text-blue-800 font-bold text-[10px] uppercase tracking-widest">
+                            Sueldo Pactado (Ruta)
+                          </Label>
+                        </div>
+                        <div className="relative w-32">
+                          <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-blue-400" />
+                          <Input
+                            type="number"
+                            value={sueldoRutaPactado || ""}
+                            onChange={(e) =>
+                              setSueldoRutaPactado(Number(e.target.value))
+                            }
+                            className="pl-8 font-bold text-right font-mono"
+                            placeholder="0.00"
+                          />
+                        </div>
                       </div>
-                      <div className="relative w-32">
-                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-blue-400" />
-                        <Input
-                          type="number"
-                          value={sueldoRutaPactado || ""}
-                          onChange={(e) =>
-                            setSueldoRutaPactado(Number(e.target.value))
-                          }
-                          className="pl-8 font-bold text-right font-mono"
-                          placeholder="0.00"
-                        />
-                      </div>
-                    </div>
-                  )}
+                    )}
 
-                  {/* Desglose */}
-                  <div className="space-y-4">
-                    {/* Ingresos */}
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center text-xs font-bold text-slate-600 uppercase tracking-widest border-b pb-1">
-                        <span>Ingresos / Abonos</span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-5 text-emerald-600 font-black text-[9px] hover:bg-emerald-50"
-                          onClick={() => {
-                            setNewConceptoType("ingreso");
-                            setShowAddConceptoDialog(true);
-                          }}
-                        >
-                          + BONO EXTRA
-                        </Button>
-                      </div>
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="text-slate-600">
-                          Sueldo Base (Ruta/Maniobras)
-                        </span>
-                        <span className="font-mono font-bold text-emerald-600">
-                          +{formatCurrencyLocal(liquidacion.pagoBaseBruto)}
-                        </span>
-                      </div>
-                      {conceptosExtra
-                        .filter((c) => c.tipo === "ingreso")
-                        .map((c) => (
-                          <div
-                            key={c.id}
-                            className="flex justify-between items-center text-sm bg-emerald-50/50 px-2 py-1 rounded"
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center text-xs font-bold text-slate-600 uppercase tracking-widest border-b pb-1">
+                          <span>Ingresos / Abonos</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-5 text-emerald-600 font-black text-[9px]"
+                            onClick={() => {
+                              setNewConceptoType("ingreso");
+                              setShowAddConceptoDialog(true);
+                            }}
                           >
-                            <span className="text-emerald-700 text-xs font-medium">
-                              {c.descripcion}
-                            </span>
-                            <span className="font-mono font-bold text-emerald-600">
-                              +{formatCurrencyLocal(c.monto)}
-                            </span>
-                          </div>
-                        ))}
-                    </div>
-
-                    {/* Deducciones */}
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center text-xs font-bold text-slate-600 uppercase tracking-widest border-b pb-1">
-                        <span>Cargos / Descuentos</span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-5 text-rose-600 font-black text-[9px] hover:bg-rose-50"
-                          onClick={() => {
-                            setNewConceptoType("deduccion");
-                            setShowAddConceptoDialog(true);
-                          }}
-                        >
-                          + AGREGAR CARGO
-                        </Button>
-                      </div>
-
-                      {(liquidacion.deduccionViaticos > 0 ||
-                        liquidacion.otrosAnticipos > 0) && (
+                            + BONO EXTRA
+                          </Button>
+                        </div>
                         <div className="flex justify-between items-center text-sm">
                           <span className="text-slate-600">
-                            Anticipos Operativos
+                            Sueldo Base (Ruta/Maniobras)
                           </span>
-                          <span className="font-mono font-bold text-rose-600">
-                            -
-                            {formatCurrencyLocal(
-                              liquidacion.deduccionViaticos +
-                                liquidacion.otrosAnticipos,
-                            )}
+                          <span className="font-mono font-bold text-emerald-600">
+                            +{formatCurrencyLocal(liquidacion.pagoBaseBruto)}
                           </span>
                         </div>
-                      )}
+                        {conceptosExtra
+                          .filter((c) => c.tipo === "ingreso")
+                          .map((c) => (
+                            <div
+                              key={c.id}
+                              className="flex justify-between items-center text-sm bg-emerald-50/50 px-2 py-1 rounded"
+                            >
+                              <span className="text-emerald-700 text-xs font-medium">
+                                {c.descripcion}
+                              </span>
+                              <span className="font-mono font-bold text-emerald-600">
+                                +{formatCurrencyLocal(c.monto)}
+                              </span>
+                            </div>
+                          ))}
+                      </div>
 
-                      {/*  EL DATO QUE VIENE DIRECTO DE LA AUDITORÍA DE BACKEND */}
-                      {liquidacion.combustibleFaltante > 0 && (
-                        <div className="flex justify-between items-center text-sm bg-rose-50/80 border border-rose-200 px-2 py-1 rounded">
-                          <span className="text-rose-800 text-xs font-bold uppercase tracking-widest flex items-center gap-1.5">
-                            <ShieldAlert className="h-3 w-3 text-rose-600" />
-                            Deducción Faltante Diésel
-                          </span>
-                          <span className="font-mono font-black text-rose-600">
-                            -
-                            {formatCurrencyLocal(
-                              liquidacion.combustibleFaltante,
-                            )}
-                          </span>
-                        </div>
-                      )}
-
-                      {conceptosExtra
-                        .filter((c) => c.tipo === "deduccion")
-                        .map((c) => (
-                          <div
-                            key={c.id}
-                            className="flex justify-between items-center text-sm bg-rose-50/50 px-2 py-1 rounded"
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center text-xs font-bold text-slate-600 uppercase tracking-widest border-b pb-1">
+                          <span>Cargos / Descuentos</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-5 text-rose-600 font-black text-[9px]"
+                            onClick={() => {
+                              setNewConceptoType("deduccion");
+                              setShowAddConceptoDialog(true);
+                            }}
                           >
-                            <span className="text-rose-700 text-xs font-medium">
-                              {c.descripcion}
+                            + AGREGAR CARGO
+                          </Button>
+                        </div>
+                        {(liquidacion.deduccionViaticos > 0 ||
+                          liquidacion.otrosAnticipos > 0) && (
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="text-slate-600">
+                              Anticipos Operativos
                             </span>
                             <span className="font-mono font-bold text-rose-600">
-                              -{formatCurrencyLocal(c.monto)}
+                              -
+                              {formatCurrencyLocal(
+                                liquidacion.deduccionViaticos +
+                                  liquidacion.otrosAnticipos,
+                              )}
                             </span>
                           </div>
-                        ))}
+                        )}
+                        {liquidacion.combustibleFaltante > 0 && (
+                          <div className="flex justify-between items-center text-sm bg-rose-50/80 border border-rose-200 px-2 py-1 rounded">
+                            <span className="text-rose-800 text-xs font-bold uppercase tracking-widest flex items-center gap-1.5">
+                              <ShieldAlert className="h-3 w-3 text-rose-600" />{" "}
+                              Faltante Diésel
+                            </span>
+                            <span className="font-mono font-black text-rose-600">
+                              -
+                              {formatCurrencyLocal(
+                                liquidacion.combustibleFaltante,
+                              )}
+                            </span>
+                          </div>
+                        )}
+                        {conceptosExtra
+                          .filter((c) => c.tipo === "deduccion")
+                          .map((c) => (
+                            <div
+                              key={c.id}
+                              className="flex justify-between items-center text-sm bg-rose-50/50 px-2 py-1 rounded"
+                            >
+                              <span className="text-rose-700 text-xs font-medium">
+                                {c.descripcion}
+                              </span>
+                              <span className="font-mono font-bold text-rose-600">
+                                -{formatCurrencyLocal(c.monto)}
+                              </span>
+                            </div>
+                          ))}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Gran Total */}
-                <div className="bg-slate-900 p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                      Neto a Depositar
-                    </span>
-                    <span className="text-3xl font-black font-mono text-white tracking-tighter">
-                      {formatCurrencyLocal(liquidacion.neto_a_pagar)}
-                    </span>
+                  <div className="bg-slate-900 p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        Neto a Depositar
+                      </span>
+                      <span className="text-3xl font-black font-mono text-white tracking-tighter">
+                        {formatCurrencyLocal(liquidacion.neto_a_pagar)}
+                      </span>
+                    </div>
+                    <Button
+                      className="w-full bg-brand-navy hover:bg-brand-navy/90 text-white font-black h-12 shadow-lg gap-2"
+                      disabled={
+                        isAnimating || isLoadingPreview || isAuditPending
+                      }
+                      onClick={handleLiquidate}
+                    >
+                      {isAnimating || isLoadingPreview ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <CheckSquare className="h-4 w-4" />
+                      )}
+                      REGISTRAR Y EMITIR RECIBO
+                    </Button>
                   </div>
-                  <Button
-                    className="w-full bg-brand-navy hover:bg-brand-navy/90 text-white font-black h-12 shadow-lg gap-2"
-                    disabled={isAnimating || isLoadingPreview || isAuditPending}
-                    onClick={handleLiquidate}
-                  >
-                    {isAnimating || isLoadingPreview ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <CheckSquare className="h-4 w-4" />
-                    )}
-                    REGISTRAR Y EMITIR RECIBO
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
       </div>
 
-      {/* MODAL DE CONCEPTOS MANUALES */}
+      {/* MODAL DE CONFIRMACIÓN (DISEÑO TAHOE) */}
+      <AlertDialog
+        open={!!actionModal}
+        onOpenChange={(open) => !open && setActionModal(null)}
+      >
+        <AlertDialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
+          <AlertDialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
+            <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
+            <div className="relative z-10 flex items-center gap-4 sm:gap-5">
+              <div
+                className={cn(
+                  "w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shadow-inner shrink-0 border",
+                  actionModal?.type === "reopen"
+                    ? "bg-amber-100 dark:bg-amber-900/30 border-amber-200 dark:border-amber-500/20"
+                    : "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700",
+                )}
+              >
+                {actionModal?.type === "reopen" ? (
+                  <AlertTriangle className="h-7 w-7 sm:h-8 sm:w-8 text-amber-600 dark:text-amber-400 drop-shadow-[0_0_8px_rgba(217,119,6,0.4)]" />
+                ) : (
+                  <Trash2 className="h-7 w-7 sm:h-8 sm:w-8 text-slate-600 dark:text-slate-400" />
+                )}
+              </div>
+              <div className="flex flex-col gap-1 text-left">
+                <AlertDialogTitle
+                  className={cn(
+                    "text-2xl font-black uppercase tracking-tighter leading-none",
+                    actionModal?.type === "reopen"
+                      ? "text-amber-600 dark:text-amber-500"
+                      : "text-slate-800 dark:text-white",
+                  )}
+                >
+                  {actionModal?.type === "reopen"
+                    ? "¿Anular y Reabrir Viaje?"
+                    : "¿Ocultar del Histórico?"}
+                </AlertDialogTitle>
+                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-1">
+                  Acción de Tesorería
+                </p>
+              </div>
+            </div>
+          </AlertDialogHeader>
+
+          <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
+            <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block space-y-6">
+              {actionModal?.type === "reopen" ? (
+                <>
+                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Estás a punto de <strong>revertir esta liquidación</strong>.
+                    Esto borrará la liquidación de la cuenta del operador y
+                    cancelará la factura autogenerada.
+                  </p>
+                  <div className="p-5 sm:p-6 bg-amber-50 dark:bg-amber-950/20 border-l-4 border-amber-500 rounded-r-2xl shadow-sm">
+                    <div className="flex items-center gap-2 mb-3">
+                      <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                      <h4 className="text-[10px] sm:text-[11px] font-black text-amber-800 dark:text-amber-400 uppercase tracking-widest">
+                        Acción Irreversible
+                      </h4>
+                    </div>
+                    <p className="text-xs sm:text-sm leading-relaxed text-amber-900 dark:text-amber-200/80">
+                      El viaje regresará a la pestaña de{" "}
+                      <strong>Por Liquidar</strong> para ser editado.{" "}
+                      <b className="font-black underline">
+                        Esta acción no se puede deshacer
+                      </b>
+                      .
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Estás a punto de ocultar este recibo de tu vista local para
+                    mantener tu pantalla limpia.
+                  </p>
+                  <div className="p-5 sm:p-6 bg-slate-100 dark:bg-slate-800/50 border-l-4 border-slate-500 rounded-r-2xl shadow-sm">
+                    <ul className="list-disc pl-5 space-y-2 text-xs sm:text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+                      <li>
+                        El viaje <strong>seguirá existiendo</strong> en el
+                        sistema como liquidado.
+                      </li>
+                      <li>
+                        La cuenta por cobrar en Tesorería{" "}
+                        <strong>no se borrará</strong>.
+                      </li>
+                    </ul>
+                  </div>
+                </>
+              )}
+            </AlertDialogDescription>
+          </div>
+
+          <AlertDialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
+            <div className="flex flex-col-reverse sm:flex-row sm:flex-wrap justify-end items-stretch sm:items-center gap-3 w-full">
+              <AlertDialogCancel
+                variant="outline"
+                size="lg"
+                className="w-full sm:w-auto flex-shrink-0 font-black uppercase tracking-widest text-[10px]"
+                onClick={() => setActionModal(null)}
+              >
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                size="lg"
+                onClick={handleConfirmAction}
+                className={cn(
+                  "w-full sm:w-auto shadow-lg flex-shrink-0 border-none text-white font-black uppercase tracking-widest text-[10px]",
+                  actionModal?.type === "reopen"
+                    ? "bg-amber-600 hover:bg-amber-700 shadow-amber-600/20"
+                    : "bg-slate-800 hover:bg-slate-900",
+                )}
+              >
+                {actionModal?.type === "reopen"
+                  ? "Sí, Reabrir Viaje"
+                  : "Sí, Ocultar"}
+              </AlertDialogAction>
+            </div>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* MODAL DE CONCEPTOS MANUALES (DISEÑO TAHOE) */}
       <Dialog
         open={showAddConceptoDialog}
         onOpenChange={setShowAddConceptoDialog}
       >
-        <DialogContent className="sm:max-w-[400px]">
-          <DialogHeader>
-            <DialogTitle
-              className={cn(
-                "flex items-center gap-2",
-                newConceptoType === "ingreso"
-                  ? "text-emerald-600"
-                  : "text-rose-600",
-              )}
-            >
-              {newConceptoType === "ingreso" ? (
-                <ArrowUpCircle className="h-5 w-5" />
-              ) : (
-                <ArrowDownCircle className="h-5 w-5" />
-              )}
-              Añadir{" "}
-              {newConceptoType === "ingreso"
-                ? "Bono (Ingreso)"
-                : "Cargo (Descuento)"}
+        <DialogContent className="w-[95vw] sm:max-w-xl p-0 flex flex-col max-h-[90vh] bg-white dark:bg-brand-navy border border-slate-200 dark:border-white/10 shadow-2xl rounded-2xl overflow-hidden">
+          <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
+            <DialogTitle className="flex items-center gap-4 sm:gap-5 text-slate-800 dark:text-white text-xl font-black relative z-10 text-left">
+              <div
+                className={cn(
+                  "w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center shadow-inner shrink-0",
+                  newConceptoType === "ingreso"
+                    ? "bg-emerald-100 dark:bg-emerald-900/30"
+                    : "bg-rose-100 dark:bg-rose-900/30",
+                )}
+              >
+                {newConceptoType === "ingreso" ? (
+                  <ArrowUpCircle className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+                ) : (
+                  <ArrowDownCircle className="h-6 w-6 text-rose-600 dark:text-rose-400" />
+                )}
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-xl font-black uppercase tracking-tighter leading-none">
+                  Añadir{" "}
+                  {newConceptoType === "ingreso"
+                    ? "Bono (Ingreso)"
+                    : "Cargo (Descuento)"}
+                </span>
+                <span className="text-[9px] font-black uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400 mt-1">
+                  Afecta directamente al recibo final
+                </span>
+              </div>
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+
+          <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-slate-50/50 dark:bg-transparent custom-scrollbar space-y-6">
             <div className="space-y-2">
-              <Label>Concepto / Motivo</Label>
+              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                Concepto / Motivo
+              </Label>
               <Input
+                className="h-11 font-bold bg-white dark:bg-slate-900"
                 placeholder={
                   newConceptoType === "ingreso"
                     ? "Ej: Bono puntualidad..."
@@ -872,9 +1089,11 @@ export default function TripSettlement() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Monto (MXN) *</Label>
+              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                Monto (MXN) *
+              </Label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-slate-600">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">
                   $
                 </span>
                 <Input
@@ -882,34 +1101,41 @@ export default function TripSettlement() {
                   placeholder="0.00"
                   value={newConceptoAmount}
                   onChange={(e) => setNewConceptoAmount(e.target.value)}
-                  className="pl-8 text-lg font-mono font-bold"
+                  className="h-12 pl-8 text-lg font-mono font-black bg-white dark:bg-slate-900"
                 />
               </div>
             </div>
           </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowAddConceptoDialog(false)}
-            >
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleAddConcepto}
-              className={
-                newConceptoType === "ingreso"
-                  ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-                  : "bg-rose-600 hover:bg-rose-700 text-white"
-              }
-            >
-              Aplicar a Recibo
-            </Button>
+
+          <DialogFooter className="p-6 sm:p-8 bg-slate-50/50 dark:bg-black/20 border-t border-slate-200 dark:border-white/10 shrink-0">
+            <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
+              <Button
+                variant="outline"
+                size="lg"
+                className="w-full sm:w-auto font-black uppercase tracking-widest text-[10px]"
+                onClick={() => setShowAddConceptoDialog(false)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                size="lg"
+                onClick={handleAddConcepto}
+                className={cn(
+                  "w-full sm:w-auto text-white font-black uppercase tracking-widest text-[10px]",
+                  newConceptoType === "ingreso"
+                    ? "bg-emerald-600 hover:bg-emerald-700"
+                    : "bg-rose-600 hover:bg-rose-700",
+                )}
+              >
+                Aplicar a Recibo
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* RECIBO DE IMPRESIÓN OFICIAL */}
-      <Dialog
+      {/* Renderizamos el nuevo componente aislado */}
+      <OperatorSettlementDetailModal
         open={showReceiptModal}
         onOpenChange={(open) => {
           setShowReceiptModal(open);
@@ -922,221 +1148,17 @@ export default function TripSettlement() {
             setPreviewData(null);
           }
         }}
-      >
-        <DialogContent className="max-w-[800px] p-0 overflow-hidden bg-slate-50 sm:rounded-2xl border-slate-200 shadow-2xl print:fixed print:top-0 print:left-0 print:right-0 print:bottom-0 print:w-[100vw] print:h-[100vh] print:max-w-none print:m-0 print:p-8 print:bg-white print:shadow-none print:border-none print:rounded-none print:transform-none print:overflow-hidden print:z-50">
-          <div className="print:hidden">
-            <div className="h-2 w-full bg-brand-navy"></div>
-          </div>
-          <div className="absolute inset-0 z-0 flex items-center justify-center opacity-[0.02] pointer-events-none print:opacity-5 print:overflow-hidden">
-            <Truck className="w-[400px] h-[400px] transform -rotate-12" />
-          </div>
-          <div className="p-6 sm:p-8 relative z-10 flex flex-col h-full print:p-0 print:h-auto">
-            {/* 1. HEADER */}
-            <div className="flex justify-between items-start mb-6 print:mb-8 border-b-2 border-brand-navy pb-4 print:border-black">
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 bg-white border border-slate-200 shadow-sm rounded-xl flex items-center justify-center shrink-0 print:border-transparent print:shadow-none overflow-hidden">
-                  {empresaLogo ? (
-                    <img
-                      src={empresaLogo}
-                      alt="Logo"
-                      className="w-full h-full object-contain p-1"
-                    />
-                  ) : (
-                    <Receipt className="h-8 w-8 text-brand-navy print:text-black" />
-                  )}
-                </div>
-                <div>
-                  <h2 className="text-2xl font-black text-slate-900 uppercase tracking-widest leading-none mb-1">
-                    {empresaNombre || "Nombre de Empresa"}
-                  </h2>
-                  <p className="text-slate-500 text-xs font-mono font-bold print:text-slate-600">
-                    RFC: {empresaRFC || "XAXX010101000"}
-                  </p>
-                  <p className="text-slate-600 text-[10px] max-w-sm mt-0.5 leading-tight print:text-slate-500">
-                    {empresaDireccion} • Tel: {empresaTelefono}
-                  </p>
-                </div>
-              </div>
-              <div className="text-right flex flex-col items-end gap-2">
-                <span className="bg-slate-200/70 text-slate-700 px-4 py-1.5 rounded-lg font-mono font-bold text-sm tracking-wider border border-slate-300/50 shadow-sm print:bg-transparent print:border-slate-400 print:text-black print:shadow-none">
-                  FOLIO: LIQ-{String(Date.now()).slice(-6)}
-                </span>
-                <p className="text-slate-500 text-xs font-mono print:text-slate-600">
-                  {new Date().toLocaleString("es-MX", {
-                    dateStyle: "long",
-                    timeStyle: "short",
-                  })}
-                </p>
-              </div>
-            </div>
-
-            {/* 2. CUERPO PRINCIPAL */}
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-8 mb-6 print:grid-cols-12 print:gap-10">
-              <div className="md:col-span-7 print:col-span-7 space-y-4">
-                <div className="grid grid-cols-2 gap-3 print:gap-6">
-                  <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm print:shadow-none print:border-slate-300">
-                    <span className="text-[12px] uppercase font-bold tracking-widest text-slate-600 mb-1 block print:text-slate-500">
-                      Operador Asignado
-                    </span>
-                    <span className="font-bold text-brand-navy text-sm truncate block print:text-black">
-                      {selectedLegsData[0]?.operator?.name || "N/A"}
-                    </span>
-                  </div>
-                  <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm print:shadow-none print:border-slate-300">
-                    <span className="text-[12px] uppercase font-bold tracking-widest text-slate-600 mb-1 block print:text-slate-500">
-                      Movimientos
-                    </span>
-                    <span className="font-bold text-slate-700 text-sm block print:text-black">
-                      {selectedLegsData.length}{" "}
-                      <span className="font-normal text-slate-600 print:text-slate-500">
-                        tramos
-                      </span>
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="md:col-span-5 print:col-span-5 flex flex-col justify-between">
-                <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm space-y-3 flex-1 mb-4 print:shadow-none print:border-slate-300">
-                  <h4 className="text-[12px] font-black uppercase tracking-widest text-slate-600 border-b border-slate-100 pb-2 mb-3 print:text-slate-600 print:border-slate-300">
-                    Desglose Financiero
-                  </h4>
-                  <div className="space-y-2.5 text-xs font-medium">
-                    <div className="flex justify-between items-center text-slate-700 print:text-black">
-                      <span>Sueldo Base Operativo</span>
-                      <span className="font-mono font-semibold">
-                        {formatCurrencyLocal(liquidacion?.pagoBaseBruto || 0)}
-                      </span>
-                    </div>
-                    {(liquidacion?.bonosAdicionales || 0) > 0 && (
-                      <div className="flex justify-between items-center text-emerald-600 print:text-black">
-                        <span>Bonos Extra</span>
-                        <span className="font-mono font-semibold">
-                          +
-                          {formatCurrencyLocal(
-                            liquidacion?.bonosAdicionales || 0,
-                          )}
-                        </span>
-                      </div>
-                    )}
-                    {(liquidacion?.deduccionViaticos || 0) +
-                      (liquidacion?.otrosAnticipos || 0) >
-                      0 && (
-                      <div className="flex justify-between items-center text-rose-600 print:text-black">
-                        <span>Anticipos / Descuentos</span>
-                        <span className="font-mono font-semibold">
-                          -
-                          {formatCurrencyLocal(
-                            (liquidacion?.deduccionViaticos || 0) +
-                              (liquidacion?.otrosAnticipos || 0),
-                          )}
-                        </span>
-                      </div>
-                    )}
-                    {(liquidacion?.combustibleFaltante || 0) > 0 && (
-                      <div className="flex justify-between items-center text-rose-600 print:text-black font-bold">
-                        <span>Faltante Combustible (Auditoría)</span>
-                        <span className="font-mono font-black">
-                          -
-                          {formatCurrencyLocal(
-                            liquidacion?.combustibleFaltante || 0,
-                          )}
-                        </span>
-                      </div>
-                    )}
-                    {(liquidacion?.deduccionesManuales || 0) > 0 && (
-                      <div className="flex justify-between items-center text-rose-600 print:text-black">
-                        <span>Cargos Varios</span>
-                        <span className="font-mono font-semibold">
-                          -
-                          {formatCurrencyLocal(
-                            liquidacion?.deduccionesManuales || 0,
-                          )}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="relative bg-slate-900 p-4 sm:p-5 rounded-xl shadow-lg flex justify-between items-center overflow-hidden shrink-0 print:bg-white print:border-2 print:border-slate-800 print:shadow-none">
-                  <div className="absolute inset-0 bg-gradient-to-r from-brand-navy to-slate-900 z-0 print:hidden"></div>
-                  <div className="relative z-10">
-                    <span className="block text-[10px] sm:text-[12px] text-slate-400 font-bold uppercase tracking-widest mb-1 print:text-slate-600">
-                      Total a Depositar
-                    </span>
-                    <span className="text-2xl sm:text-3xl font-black font-mono text-white tracking-tight print:text-black">
-                      {formatCurrencyLocal(liquidacion?.neto_a_pagar || 0)}
-                    </span>
-                  </div>
-                  <div className="relative z-10 w-10 h-10 sm:w-12 sm:h-12 bg-white/10 rounded-full flex items-center justify-center backdrop-blur-sm border border-white/10 print:border-none print:bg-transparent">
-                    <DollarSign className="h-5 w-5 sm:h-6 sm:w-6 text-emerald-400 print:text-black" />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* FIRMAS */}
-            <div className="mt-auto pt-4 print:pt-16">
-              <div className="relative flex items-center pb-11 mb-11 print:pb-12 ">
-                <div className="absolute -left-10 w-6 h-6 bg-slate-800/20 rounded-full blur-[2px] print:hidden"></div>
-                <div className="absolute -right-10 w-6 h-6 bg-slate-800/20 rounded-full blur-[2px] print:hidden"></div>
-                <div className="w-full border-t-2 border-dashed border-slate-300 print:border-slate-400"></div>
-              </div>
-              <div className="flex flex-col sm:flex-row justify-between gap-12 sm:gap-24 px-8 md:px-16 mb-8">
-                <div className="flex-1 text-center">
-                  <div className="border-t border-slate-400 pt-2">
-                    <p className="text-[10px] text-brand-navy font-black uppercase tracking-widest print:text-slate-800">
-                      Conformidad
-                    </p>
-                    <p className="text-[12px] font-bold text-slate-600 mt-1 truncate print:text-black">
-                      {selectedLegIds.length > 0
-                        ? selectedLegsData[0]?.operator?.name
-                        : "Firma del Operador"}
-                    </p>
-                    <p className="text-[8px] text-slate-600 font-medium mt-0.5 print:text-slate-500">
-                      Recibe
-                    </p>
-                  </div>
-                </div>
-                <div className="flex-1 text-center">
-                  <div className="border-t border-slate-400 pt-2">
-                    <p className="text-[10px] text-brand-navy font-black uppercase tracking-widest print:text-slate-800">
-                      Autorización
-                    </p>
-                    <p className="text-[12px] font-bold text-slate-600 mt-1 truncate print:text-black">
-                      Depto. Finanzas / Dispatch
-                    </p>
-                    <p className="text-[8px] text-slate-600 font-medium mt-0.5 print:text-slate-500">
-                      Entrega
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <p className="text-[8px] text-slate-600 text-center leading-relaxed px-4 md:px-12 print:text-slate-500 print:max-w-2xl print:mx-auto">
-                Este documento ampara la liquidación de los movimientos
-                descritos. Al firmar, el operador acepta de conformidad los
-                descuentos y pagos realizados, no reservándose acción ni derecho
-                legal en contra de la empresa.
-              </p>
-            </div>
-          </div>
-          <DialogFooter className="p-4 bg-white border-t border-slate-200 flex flex-col-reverse sm:flex-row justify-end gap-3 print:hidden">
-            <Button
-              className="w-full sm:w-auto min-w-[120px] font-bold text-slate-500 hover:text-slate-700 hover:bg-slate-100"
-              variant="ghost"
-              onClick={() => setShowReceiptModal(false)}
-            >
-              Cerrar
-            </Button>
-            <Button
-              className="w-full sm:w-auto min-w-[220px] gap-2 font-bold bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 hover:text-brand-navy shadow-sm transition-all"
-              variant="outline"
-              onClick={() => window.print()}
-            >
-              <Printer className="h-5 w-5 text-slate-600" /> Imprimir Documento
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        selectedLegsData={selectedLegsData}
+        liquidacion={liquidacion}
+        conceptosExtra={conceptosExtra}
+        previewData={previewData}
+        activeTab={activeTab}
+        empresaNombre={empresaNombre}
+        empresaRFC={empresaRFC}
+        empresaDireccion={empresaDireccion}
+        empresaTelefono={empresaTelefono}
+        empresaLogo={empresaLogo}
+      />
     </div>
   );
 }

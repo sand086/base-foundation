@@ -118,7 +118,7 @@ export default function TripSettlementModal({
               }),
             );
 
-            // 🎯 LÓGICA DE NEGOCIO: INYECTAR SUELDO PACTADO AUTOMÁTICAMENTE
+            //  LÓGICA DE NEGOCIO: INYECTAR SUELDO PACTADO AUTOMÁTICAMENTE
             const hasSueldo = conceptosBack.some(
               (c) =>
                 c.descripcion.toLowerCase().includes("sueldo") ||

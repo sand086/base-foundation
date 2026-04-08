@@ -310,6 +310,7 @@ class TripLegBase(ORMBase):
     monto_maniobras: float = 0.0
     monto_penalizaciones: float = 0.0
     monto_neto_pagado: float = 0.0
+    desglose_conceptos: Optional[List[dict]] = Field(default_factory=list)
     odometro_inicial: Optional[int] = 0
     nivel_tanque_inicial: Optional[int] = 0
     odometro_final: Optional[int] = None
@@ -550,6 +551,7 @@ class BatchSettlementPayload(BaseModel):
     monto_maniobras: float = 0.0
     monto_penalizaciones: float = 0.0
     neto_a_pagar: float
+    conceptos_extra: List[ConceptoPago] = Field(default_factory=list)
 
 
 # =========================================================

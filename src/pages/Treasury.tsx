@@ -26,7 +26,7 @@ import { useSystemConfig } from "@/features/settings/hooks/useSystemConfig";
 import { useBankAccounts } from "@/features/treasury/hooks/useBankAccounts";
 import { BankMovement, BankAccount } from "@/features/treasury/types";
 
-// 🎯 IMPORTAMOS NUESTROS COMPONENTES MODULARES
+//  IMPORTAMOS NUESTROS COMPONENTES MODULARES
 import { BankAccountsTab } from "@/features/treasury/components/BankAccountsTab";
 import { TreasuryFlowTab } from "@/features/treasury/components/TreasuryFlowTab";
 import { BankAccountModal } from "@/features/treasury/components/BankAccountModal";

@@ -456,7 +456,7 @@ export function BankAccountModal({
               />
             </div>
 
-            {/* 🎯 EL CAMPO CLABE QUE FALTABA */}
+            {/*  EL CAMPO CLABE QUE FALTABA */}
             <FormField
               control={form.control}
               name="clabe"

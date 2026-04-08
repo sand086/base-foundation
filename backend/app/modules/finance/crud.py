@@ -94,7 +94,7 @@ def delete_bank_account(db: Session, account_id: int):
     if not account:
         return False
 
-    # 🎯 MAGIA: SOFT DELETE (No usamos db.delete(account))
+    #  MAGIA: SOFT DELETE (No usamos db.delete(account))
     account.estatus = "inactivo"
 
     # Si tienes habilitado AuditMixin en tu modelo, descomenta la siguiente línea:
@@ -256,3 +256,86 @@ def process_bulk_payables(db: Session, payload_data: list[dict]):
     return {
         "message": f"Se procesaron con éxito {facturas_creadas} facturas y se crearon {proveedores_creados} proveedores nuevos."
     }
+
+
+# =====================================================================
+# PAGOS A PROVEEDORES Y CAJA CHICA
+# =====================================================================
+
+
+def register_payable_payment(
+    db: Session, invoice_id: int, payment_data: dict, user_id: int
+):
+    """
+    Registra un pago a un proveedor, mata el saldo de la factura (CXP)
+    y genera un EGRESO en la cuenta bancaria seleccionada.
+    """
+    invoice = (
+        db.query(models.PayableInvoice)
+        .filter(models.PayableInvoice.id == invoice_id)
+        .first()
+    )
+    if not invoice:
+        return None
+
+    monto_pago = float(payment_data.get("monto", 0))
+    if monto_pago <= 0 or monto_pago > invoice.saldo_pendiente:
+        raise ValueError("El monto es inválido o supera el saldo pendiente.")
+
+    # 1. Crear el registro del abono
+    nuevo_pago = models.InvoicePayment(
+        invoice_id=invoice.id,
+        bank_account_id=payment_data.get("bank_account_id"),
+        fecha_pago=payment_data.get("fecha_pago", date.today()),
+        monto=monto_pago,
+        metodo_pago=payment_data.get("metodo_pago", "TRANSFERENCIA"),
+        referencia=payment_data.get("referencia", ""),
+        created_by_id=user_id,
+    )
+    db.add(nuevo_pago)
+
+    # 2. Descontar el saldo de la factura
+    invoice.saldo_pendiente -= monto_pago
+    if invoice.saldo_pendiente <= 0.01:
+        invoice.saldo_pendiente = 0.0
+        invoice.estatus = models.InvoiceStatus.PAGADO
+    else:
+        invoice.estatus = models.InvoiceStatus.PAGO_PARCIAL
+
+    # 3. 🚀 MAGIA DE TESORERÍA: Crear el Egreso en el Banco
+    bank_account_id = payment_data.get("bank_account_id")
+    if bank_account_id:
+        mov_schema = schemas.BankMovementCreate(
+            bank_account_id=int(bank_account_id),
+            tipo="egreso",  # ¡Sale dinero de la empresa!
+            monto=monto_pago,
+            concepto=f"Pago Proveedor - Fra. {invoice.folio_interno or invoice.uuid[:8]}",
+            referencia=payment_data.get("referencia", ""),
+        )
+        # Reutilizamos la función que bloquea la fila y resta el saldo de forma segura
+        create_bank_movement(db, mov_schema, user_id)
+
+    db.commit()
+    db.refresh(invoice)
+    return invoice
+
+
+def register_petty_cash_expense(db: Session, expense_data: dict, user_id: int):
+    """
+    Registra un gasto directo (Caja Chica) sin factura de por medio.
+    Extrae el dinero directamente de la cuenta bancaria.
+    """
+    bank_account_id = expense_data.get("bank_account_id")
+    if not bank_account_id:
+        raise ValueError("Se requiere una cuenta bancaria origen para la Caja Chica.")
+
+    mov_schema = schemas.BankMovementCreate(
+        bank_account_id=int(bank_account_id),
+        tipo="egreso",
+        monto=float(expense_data.get("monto", 0)),
+        concepto=f"Caja Chica / Gasto: {expense_data.get('concepto')}",
+        referencia=expense_data.get("referencia", "S/F"),
+    )
+    movimiento = create_bank_movement(db, mov_schema, user_id)
+    db.commit()
+    return movimiento
