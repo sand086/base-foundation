@@ -1,6 +1,5 @@
 import * as React from "react";
 import { useEffect, useMemo, useState } from "react";
-import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,7 +21,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { toast } from "sonner"; //  Importación correcta de toast
+import { toast } from "sonner";
 import {
   Search,
   Loader2,
@@ -53,7 +52,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-//  IMPORTACIONES EXACTAS DE TU DATATABLE
 import {
   DataTable,
   DataTableHeader,
@@ -63,7 +61,6 @@ import {
   DataTableCell,
 } from "@/components/ui/data-table";
 
-// Hooks y Modales
 import { useTrips } from "@/features/trips/hooks/useTrips";
 import axiosClient from "@/api/axiosClient";
 import { TripDetailsModal } from "@/features/trips/components/TripDetailsModal";
@@ -135,24 +132,50 @@ const getOperatorName = (trip: any) => {
 };
 
 const getTripFinancials = (trip: any) => {
-  let diesel = 0;
+  let dieselVales = 0;
+  let dieselConciliacion = 0;
   let viaticos = 0;
   let casetasOp = 0;
   let pagoOperador = 0;
 
+  // 1. Sumar vales si vienen directamente en la raíz del viaje
+  if (trip.fuel_logs && Array.isArray(trip.fuel_logs)) {
+    trip.fuel_logs.forEach((vale: any) => {
+      // Solo sumamos vales activos ("A")
+      if (vale.record_status === "A" || !vale.record_status) {
+        dieselVales += vale.total || vale.litros * vale.precio_por_litro || 0;
+      }
+    });
+  }
+
+  // 2. Sumar datos de cada tramo (incluyendo sus vales internos)
   if (trip.legs && Array.isArray(trip.legs)) {
     trip.legs.forEach((leg: any) => {
-      diesel += leg.anticipo_combustible || 0;
+      // Sumar el anticipo manual de diésel (si existe)
+      dieselVales += leg.anticipo_combustible || 0;
+
+      // Sumar los vales reales vinculados a este tramo específico
+      if (leg.fuel_logs && Array.isArray(leg.fuel_logs)) {
+        leg.fuel_logs.forEach((vale: any) => {
+          if (vale.record_status === "A" || !vale.record_status) {
+            dieselVales +=
+              vale.total || vale.litros * vale.precio_por_litro || 0;
+          }
+        });
+      }
+
+      dieselConciliacion += leg.monto_penalizaciones || 0; // Faltantes de diésel cobrados
       viaticos += leg.anticipo_viaticos || 0;
       casetasOp += leg.anticipo_casetas || 0;
-      pagoOperador += leg.saldo_operador || 0;
+      pagoOperador += leg.monto_neto_pagado || leg.saldo_operador || 0;
     });
   }
 
   return {
     ingresoFlete: trip.tarifa_base || 0,
     cobroCasetasCliente: trip.costo_casetas || 0,
-    diesel,
+    dieselTotal: dieselVales + dieselConciliacion,
+    dieselConciliacion,
     viaticos,
     casetasOp,
     pagoOperador,
@@ -186,12 +209,10 @@ export default function MonitoringCenter() {
   const { trips, loading, addTimelineEvent, fetchTrips, deleteTrip } =
     useTrips();
 
-  // Estados de UI
   const [showFilters, setShowFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(15);
 
-  // Estados de Filtros
   const [filterFolio, setFilterFolio] = useState("");
   const [filterCliente, setFilterCliente] = useState("ALL");
   const [filterOperador, setFilterOperador] = useState("ALL");
@@ -206,7 +227,6 @@ export default function MonitoringCenter() {
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
   const [tripToUpdate, setTripToUpdate] = useState<any | null>(null);
 
-  // Listas Únicas
   const uniqueClients = useMemo(
     () =>
       Array.from(new Set(trips.map(getClientName)))
@@ -236,7 +256,6 @@ export default function MonitoringCenter() {
     [trips],
   );
 
-  // Motor de Filtrado
   const filteredTrips = useMemo(() => {
     return trips.filter((trip: any) => {
       const folioId = String(trip.public_id || trip.id).toLowerCase();
@@ -287,7 +306,6 @@ export default function MonitoringCenter() {
     dateTo,
   ]);
 
-  // Motor de Ordenamiento
   const sortedTrips = useMemo(() => {
     const sortableTrips = [...filteredTrips];
     if (sortConfig !== null) {
@@ -375,10 +393,10 @@ export default function MonitoringCenter() {
       "Fecha_Registro",
       "Ingreso_Flete_Base",
       "Ingreso_Casetas",
-      "Gasto_Diesel",
+      "Gasto_Diesel_Total",
       "Gasto_Viaticos",
       "Gasto_Casetas",
-      "Pago_Operador",
+      "Pago_Liquidacion_Operador",
     ];
     const rows = sortedTrips.map((t: any) => {
       const finanzas = getTripFinancials(t);
@@ -393,7 +411,7 @@ export default function MonitoringCenter() {
         new Date(t.start_date || t.created_at).toLocaleDateString(),
         finanzas.ingresoFlete,
         finanzas.cobroCasetasCliente,
-        finanzas.diesel,
+        finanzas.dieselTotal,
         finanzas.viaticos,
         finanzas.casetasOp,
         finanzas.pagoOperador,
@@ -417,7 +435,7 @@ export default function MonitoringCenter() {
     document.body.removeChild(link);
     toast.success("Exportación exitosa", {
       description: "Se descargó el reporte de servicios en formato CSV.",
-    }); //  Sintaxis Sonner correcta
+    });
   };
 
   const handleDeleteTrip = async (tripId: string | number) => {
@@ -446,7 +464,7 @@ export default function MonitoringCenter() {
     } catch (error) {
       toast.error("Fallo Operativo", {
         description: "No se pudo compilar la Carta Porte.",
-      }); //  Sintaxis Sonner correcta
+      });
     }
   };
 
@@ -461,7 +479,7 @@ export default function MonitoringCenter() {
     if (!legId)
       return toast.error("Excepción", {
         description: "Tramo activo inalcanzable.",
-      }); //  Sintaxis Sonner correcta
+      });
 
     const success = await addTimelineEvent(tripToUpdate.id, legId, {
       status: data.status,
@@ -480,7 +498,6 @@ export default function MonitoringCenter() {
     }
   };
 
-  // KPIs Dinámicos
   const kpis = useMemo(() => {
     let enRuta = 0,
       alertas = 0,
@@ -503,9 +520,8 @@ export default function MonitoringCenter() {
   }, [filteredTrips]);
 
   return (
-    //  CAPA 1: CASCARÓN TAHOE (Altura Completa, Fondo Glassmorphism)
     <div className="flex flex-col h-[calc(100vh-5rem)] p-4 sm:p-6 md:p-8 space-y-6 bg-white/80 dark:bg-brand-navy/95 backdrop-blur-2xl animate-in fade-in duration-700">
-      {/* CAPA 2: HEADER TAHOE (TÍTULO Y BOTONERA) */}
+      {/* CAPA 2: HEADER TAHOE */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 shrink-0 pb-2 border-b border-slate-200/50 dark:border-white/10">
         <div>
           <h1 className="text-3xl font-black uppercase tracking-tighter text-slate-900 dark:text-white flex items-center gap-3">
@@ -539,7 +555,7 @@ export default function MonitoringCenter() {
         </div>
       </div>
 
-      {/* CAPA 3: PANEL DE KPIS (VERDADEROS INDICADORES TAHOE) */}
+      {/* CAPA 3: PANEL DE KPIS */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-6 shrink-0">
         {[
           {
@@ -634,7 +650,7 @@ export default function MonitoringCenter() {
         ))}
       </div>
 
-      {/* FILTROS AVANZADOS (SUNKEN AREA) */}
+      {/* FILTROS AVANZADOS */}
       {showFilters && (
         <div className="shrink-0 bg-slate-50/50 dark:bg-slate-950/40 border border-slate-200/60 dark:border-white/5 rounded-3xl p-6 shadow-inner animate-in slide-in-from-top-2 fade-in">
           <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-5 items-end">
@@ -840,7 +856,7 @@ export default function MonitoringCenter() {
         </div>
       )}
 
-      {/* 4. DATATABLE PRINCIPAL (LIQUID GLASS + HEADER GRIS) */}
+      {/* 4. DATATABLE PRINCIPAL */}
       <div className="flex-1 flex flex-col min-h-0 border border-slate-200 dark:border-white/5 bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl shadow-3xl rounded-[2.5rem] overflow-hidden transition-all ring-1 ring-slate-200/50 dark:ring-white/5">
         <div className="flex-1 overflow-auto relative custom-scrollbar bg-transparent [&>div]:!max-h-none [&>div]:!h-full">
           {loading && (
@@ -853,7 +869,6 @@ export default function MonitoringCenter() {
           )}
 
           <DataTable className="min-w-full text-sm border-collapse">
-            {/* REGLA DE ORO: HEADER GRIS EN LIGHT */}
             <DataTableHeader className="bg-slate-100/90 dark:bg-slate-900/95 sticky top-0 z-20 border-b border-slate-200 dark:border-white/10 backdrop-blur-md shadow-sm">
               <DataTableRow className="hover:bg-transparent border-none">
                 <DataTableHead
@@ -881,13 +896,13 @@ export default function MonitoringCenter() {
                   Flete Base {renderSortIcon("flete")}
                 </DataTableHead>
                 <DataTableHead className="py-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                  Diésel
+                  Diésel (Vales + Faltante)
                 </DataTableHead>
                 <DataTableHead className="py-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                  Vales / Casetas
+                  Casetas / Viát.
                 </DataTableHead>
                 <DataTableHead className="py-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                  Pago Operadores
+                  Pago Operador
                 </DataTableHead>
                 <DataTableHead
                   className="py-4 text-center text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 cursor-pointer select-none whitespace-nowrap group/head"
@@ -971,33 +986,55 @@ export default function MonitoringCenter() {
                       </div>
                     </DataTableCell>
 
+                    {/* Flete */}
                     <DataTableCell className="py-4 align-middle">
                       <p className="text-sm font-black text-brand-navy dark:text-white font-mono tracking-tighter">
                         {formatMoney(finanzas.ingresoFlete)}
                       </p>
                     </DataTableCell>
 
+                    {/* Diésel (Vales + Conciliación Faltante) */}
                     <DataTableCell className="py-4 align-middle">
-                      <div className="flex items-center gap-2 font-semibold text-slate-600 dark:text-slate-300">
-                        <Fuel className="h-4 w-4 text-amber-500" />
-                        <span className="font-mono text-[13px] font-black tracking-tighter">
-                          {formatMoney(finanzas.diesel)}
-                        </span>
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-1.5 font-semibold text-slate-600 dark:text-slate-300">
+                          <Fuel className="h-3.5 w-3.5 text-amber-500" />
+                          <span className="font-mono text-[13px] font-black tracking-tighter">
+                            {formatMoney(finanzas.dieselTotal)}
+                          </span>
+                        </div>
+                        {finanzas.dieselConciliacion > 0 && (
+                          <span className="text-[9px] text-rose-500 font-bold ml-5">
+                            Faltante cobrado:{" "}
+                            {formatMoney(finanzas.dieselConciliacion)}
+                          </span>
+                        )}
                       </div>
                     </DataTableCell>
 
+                    {/* Casetas / Viáticos */}
                     <DataTableCell className="py-4 align-middle">
-                      <div
-                        className="flex items-center gap-2 font-semibold text-slate-600 dark:text-slate-300"
-                        title="Viáticos + Casetas Operador"
-                      >
-                        <Ticket className="h-4 w-4 text-blue-500" />
-                        <span className="font-mono text-[13px] font-black tracking-tighter">
-                          {formatMoney(finanzas.casetasOp + finanzas.viaticos)}
-                        </span>
+                      <div className="flex flex-col gap-0.5">
+                        <div
+                          className="flex items-center gap-1.5 font-semibold text-slate-600 dark:text-slate-300"
+                          title="Casetas Operador"
+                        >
+                          <Ticket className="h-3.5 w-3.5 text-blue-500" />
+                          <span className="font-mono text-[12px] font-black tracking-tighter">
+                            {formatMoney(finanzas.casetasOp)}
+                          </span>
+                        </div>
+                        {finanzas.viaticos > 0 && (
+                          <span
+                            className="text-[9px] text-slate-400 font-bold ml-5"
+                            title="Viáticos"
+                          >
+                            Viát: +{formatMoney(finanzas.viaticos)}
+                          </span>
+                        )}
                       </div>
                     </DataTableCell>
 
+                    {/* Pago Operador */}
                     <DataTableCell className="py-4 align-middle">
                       <div className="flex items-center gap-2 font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 w-fit px-2.5 py-1 rounded-lg border border-emerald-100 dark:border-emerald-500/20">
                         <Coins className="h-4 w-4" />
@@ -1007,7 +1044,7 @@ export default function MonitoringCenter() {
                       </div>
                     </DataTableCell>
 
-                    <DataTableCell className="py-4 text-center align-middle">
+                    <DataTableCell className="text-center py-4 align-middle">
                       {getStatusBadge(trip.status)}
                     </DataTableCell>
 
@@ -1099,7 +1136,7 @@ export default function MonitoringCenter() {
           </DataTable>
         </div>
 
-        {/* 5. FOOTER CRYSTAL (PAGINACIÓN) - FIJADO AL FONDO */}
+        {/* 5. FOOTER CRYSTAL (PAGINACIÓN) */}
         <div className="flex flex-wrap items-center justify-between gap-4 px-8 py-5 border-t border-slate-200/50 dark:border-white/10 bg-white/80 dark:bg-black/40 backdrop-blur-md shrink-0 sticky bottom-0 z-10">
           <div className="flex items-center gap-4">
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
