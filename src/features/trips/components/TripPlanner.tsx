@@ -334,7 +334,7 @@ export const TripPlanner = () => {
 
   // Redirección directa al Wizard inyectando el ID y la data
   const handleAssignInWizard = (trip: Trip) => {
-    navigate(`/Dispatch/nuevo?tripId=${trip.id}`, { state: { trip } });
+    navigate(`/dispatch/new?tripId=${trip.id}`, { state: { trip } });
   };
 
   if (loading)
