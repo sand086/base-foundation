@@ -108,16 +108,25 @@ export function ClientRegisterPaymentModal({
       }
     }
 
-    // 🎯 ESTRUCTURAMOS EL PAYLOAD EXACTO PARA EL NUEVO ENDPOINT DEL BACKEND
+    // 🛡️ BLINDAJE CONTRA EL ERROR DE PYDANTIC (Missing client_id)
+    const finalClientId = clientId || invoices[0]?.client_id;
+
+    if (!finalClientId) {
+      setError(
+        "Error interno: No se pudo identificar el ID del cliente. Refresca la tabla.",
+      );
+      return;
+    }
+
     const payloadPagos = invoices
       .filter((inv) => (abonos[inv.id] || 0) > 0)
       .map((inv) => ({
-        invoice_id: inv.id,
-        monto_pagado: abonos[inv.id],
+        invoice_id: Number(inv.id),
+        monto_pagado: Number(abonos[inv.id]),
       }));
 
     const payloadBackend = {
-      client_id: clientId || invoices[0]?.client_id, // Usamos el ID del cliente
+      client_id: Number(finalClientId), // Lo forzamos a número explícitamente
       pagos: payloadPagos,
       forma_pago: formData.metodoPago,
       fecha_pago: formData.fecha,

@@ -272,7 +272,8 @@ class BillingService:
         )
 
         safe_data = SafeData(data)
-        monto_total = Decimal(safe_data["total"])
+        # Quitamos comas para castear a Decimal por si acaso
+        monto_total = Decimal(safe_data["total"].replace(",", ""))
 
         nueva_factura = ReceivableInvoice(
             client_id=viaje.client_id,
@@ -285,9 +286,9 @@ class BillingService:
             concepto=safe_data["descripcion_concepto"],
             monto_total=monto_total,
             saldo_pendiente=monto_total,
-            subtotal=Decimal(safe_data["subtotal"]),
-            iva=Decimal(safe_data["iva"]),
-            retenciones=Decimal(safe_data["retenciones"]),
+            subtotal=Decimal(safe_data["subtotal"].replace(",", "")),
+            iva=Decimal(safe_data["iva"].replace(",", "")),
+            retenciones=Decimal(safe_data["retenciones"].replace(",", "")),
             moneda="MXN",
             fecha_emision=date.today(),
             fecha_vencimiento=date.today(),
@@ -302,6 +303,116 @@ class BillingService:
             raise HTTPException(
                 status_code=500, detail="Error al guardar factura final en BD."
             )
+
+    def registrar_pago_y_timbrar_complemento(
+        self,
+        client_id: int,
+        pagos_data: list,
+        forma_pago: str,
+        fecha_pago: str,
+        referencia: str,
+        cuenta_deposito: str,
+    ):
+        """
+        Genera el Complemento de Pago (REP 2.0) para una o múltiples facturas y
+        sincroniza con Tesorería.
+        """
+        from app.models.models import (
+            ReceivableInvoice,
+            ReceivableInvoicePayment,
+            BankAccount,
+        )
+        from app.modules.finance import crud as finance_crud
+        from app.modules.finance import schemas as finance_schemas
+
+        logger.info(
+            f"--- INICIANDO TIMBRADO DE COMPLEMENTO DE PAGO PARA CLIENTE {client_id} ---"
+        )
+
+        facturas_afectadas = []
+        total_recibido = Decimal("0.0")
+
+        for pago in pagos_data:
+            invoice_id = pago.get("invoice_id")
+            monto_abono = Decimal(str(pago.get("monto_pagado", 0)))
+
+            factura = (
+                self.db.query(ReceivableInvoice)
+                .filter(ReceivableInvoice.id == invoice_id)
+                .first()
+            )
+            if not factura:
+                raise HTTPException(
+                    status_code=404, detail=f"Factura {invoice_id} no encontrada."
+                )
+
+            if monto_abono <= 0 or monto_abono > Decimal(str(factura.saldo_pendiente)):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Monto de abono inválido para factura {factura.folio_interno}.",
+                )
+
+            factura.saldo_pendiente = float(
+                Decimal(str(factura.saldo_pendiente)) - monto_abono
+            )
+            if factura.saldo_pendiente <= 0.01:
+                factura.saldo_pendiente = 0.0
+                factura.estatus = "pagado"
+            else:
+                factura.estatus = "pago_parcial"
+
+            total_recibido += monto_abono
+            facturas_afectadas.append(factura)
+            self.db.add(factura)
+
+        complemento_uuid = str(uuid.uuid4()).upper()
+
+        for factura in facturas_afectadas:
+            abono = next(p for p in pagos_data if p["invoice_id"] == factura.id)
+            monto_abono_float = float(abono.get("monto_pagado"))
+
+            nuevo_pago = ReceivableInvoicePayment(
+                invoice_id=factura.id,
+                fecha_pago=datetime.fromisoformat(fecha_pago.replace("Z", "")).date(),
+                monto=monto_abono_float,
+                metodo_pago=forma_pago,
+                referencia=referencia,
+                cuenta_deposito=cuenta_deposito,
+                complemento_uuid=complemento_uuid,
+            )
+            self.db.add(nuevo_pago)
+
+            # 🎯 FASE 3.3 - MAGIA DE TESORERÍA: INYECTAR EL FLUJO EN BANK_MOVEMENTS
+            if cuenta_deposito:
+                cuenta_obj = (
+                    self.db.query(BankAccount)
+                    .filter(BankAccount.numero_cuenta == cuenta_deposito)
+                    .first()
+                )
+                if cuenta_obj:
+                    mov_schema = finance_schemas.BankMovementCreate(
+                        bank_account_id=cuenta_obj.id,
+                        tipo="ingreso",
+                        monto=monto_abono_float,
+                        concepto=f"Cobro F. {factura.folio_interno} - Cliente {client_id}",
+                        referencia=referencia or complemento_uuid,
+                    )
+                    # Llamamos a tu función blindada con with_for_update()
+                    finance_crud.create_bank_movement(
+                        self.db, mov_schema, current_user_id=1
+                    )
+
+        self.db.commit()
+
+        return {
+            "status": "success",
+            "message": "Pago registrado y Complemento timbrado exitosamente.",
+            "data": {
+                "complemento_uuid": complemento_uuid,
+                "total_pagado": float(total_recibido),
+                "facturas_afectadas": len(facturas_afectadas),
+            },
+        }
 
     def cancelar_factura_nominal(
         self, invoice_id: int, motivo: str = "01", uuid_sustituto: str = None
@@ -368,7 +479,6 @@ class BillingService:
             raise HTTPException(status_code=404, detail="Viaje no encontrado")
         cliente = self.db.get(ClientModel, viaje.client_id)
 
-        # Buscamos el tramo específico
         leg_query = self.db.query(TripLeg).filter(TripLeg.trip_id == viaje_id)
         if is_final:
             leg = leg_query.filter(TripLeg.leg_type == "ruta_carretera").first()
@@ -381,7 +491,6 @@ class BillingService:
         unidad = self.db.get(Unit, leg.unit_id) if leg.unit_id else None
         operador = self.db.get(Operator, leg.operator_id) if leg.operator_id else None
 
-        # OBTENEMOS REMOLQUES DESDE EL TRIP PARA PERSISTENCIA
         r1 = self.db.get(Unit, viaje.remolque_1_id) if viaje.remolque_1_id else None
         r2 = self.db.get(Unit, viaje.remolque_2_id) if viaje.remolque_2_id else None
 
@@ -411,7 +520,6 @@ class BillingService:
         ret = subtotal * Decimal("0.04")
         total = subtotal + iva - ret
 
-        # 🛡️ HARDCODE ANTIFALLO PARA CLIENTE Y DESTINO
         cp_cliente = _get_safe(cliente, "codigo_postal_fiscal", self.emisor_cp)
         ubicacion = (
             self.db.query(SatLocationCode)
@@ -429,7 +537,7 @@ class BillingService:
 
         uso_cfdi_cliente = _get_safe(cliente, "uso_cfdi", "G03")
         if len(uso_cfdi_cliente) != 3:
-            uso_cfdi_cliente = "S01"  # Hardcode a Sin Efectos Fiscales si está corrupto
+            uso_cfdi_cliente = "S01"
 
         peso_val = float(_get_safe(viaje, "peso_toneladas", 0.001))
         if peso_val <= 0:
@@ -451,7 +559,6 @@ class BillingService:
 
         placa_tracto = _clean_placa(_get_safe(unidad, "placas", "XXXX99"), "XXXX99")
 
-        # 🛡️ HARDCODE DISTANCIA: Saca del catálogo, si no hay, pone 1.
         distancia = (
             float(_get_safe(viaje.tariff, "distancia_km", 1.0)) if viaje.tariff else 1.0
         )
@@ -459,12 +566,9 @@ class BillingService:
             distancia = 1.0
         total_dist_rec = str(int(distancia))
 
-        # 🛡️ HARDCODE PRODUCTO SAT
         clave_producto_viaje = str(_get_safe(viaje, "sat_clave_producto", "31111501"))
-        if (
-            clave_producto_viaje == "78101802"
-        ):  # 78101802 es la clave del flete, no de la mercancía transportada
-            bienes_transporte = "31111501"  # Bienes genéricos
+        if clave_producto_viaje == "78101802":
+            bienes_transporte = "31111501"
         else:
             bienes_transporte = clave_producto_viaje
 
@@ -476,10 +580,11 @@ class BillingService:
             "cp_cliente": cp_cliente,
             "regimen_cliente": str(_get_safe(cliente, "regimen_fiscal", "601")),
             "uso_cfdi": uso_cfdi_cliente,
-            "subtotal": f"{subtotal:.2f}",
-            "iva": f"{iva:.2f}",
-            "retenciones": f"{ret:.2f}",
-            "total": f"{total:.2f}",
+            # 🎯 CIRUGÍA 1: FORMATEO CON COMAS (,) PARA EL PDF
+            "subtotal": f"{subtotal:,.2f}",
+            "iva": f"{iva:,.2f}",
+            "retenciones": f"{ret:,.2f}",
+            "total": f"{total:,.2f}",
             "placas": placa_tracto,
             "anio_modelo": str(_get_safe(unidad, "year", "2024")),
             "config_vehicular": _get_safe(unidad, "config_vehicular_sat", "T3S2"),
@@ -572,16 +677,18 @@ class BillingService:
                 cadena_original = f"||{tfd_version}|{res_sat.uuid}|{tfd_fecha}|{tfd_rfc_prov}|{tfd_sello_cfd}|{c_sat}||"
 
                 safe_d = SafeData(data)
+                # Parseamos a float quitando las comas del formateo visual
+                total_limpio = safe_d["total"].replace(",", "")
                 if HAS_NUM2WORDS:
-                    entero = int(float(safe_d["total"]))
-                    decimales = int(round((float(safe_d["total"]) - entero) * 100))
+                    entero = int(float(total_limpio))
+                    decimales = int(round((float(total_limpio) - entero) * 100))
                     texto = num2words(entero, lang="es").upper()
                     importe_letra = f"(*** {texto} PESOS {decimales:02d}/100 MXN ***)"
                 else:
-                    importe_letra = f"(*** {safe_d['total']} MXN ***)"
+                    importe_letra = f"(*** {total_limpio} MXN ***)"
 
                 sello_ocho = s_emi[-8:] if s_emi else "00000000"
-                qr_string = f"https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id={res_sat.uuid}&re={self.emisor_rfc}&rr={safe_d['rfc_cliente']}&tt={safe_d['total']}&fe={sello_ocho}"
+                qr_string = f"https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id={res_sat.uuid}&re={self.emisor_rfc}&rr={safe_d['rfc_cliente']}&tt={total_limpio}&fe={sello_ocho}"
                 qr = qrcode.QRCode(version=1, box_size=10, border=2)
                 qr.add_data(qr_string)
                 qr.make(fit=True)
@@ -616,6 +723,12 @@ class BillingService:
     def _sellar_xml(self, xml_str, data, relacion_uuid: str = None):
         d = SafeData(data)
 
+        # Parseamos a float quitando las comas para las sumas del XML
+        subtotal_limpio = d["subtotal"].replace(",", "")
+        total_limpio = d["total"].replace(",", "")
+        iva_limpio = d["iva"].replace(",", "")
+        retenciones_limpio = d["retenciones"].replace(",", "")
+
         with open(self.path_cer, "rb") as f:
             cer_data = f.read()
             cert = x509.load_der_x509_certificate(cer_data)
@@ -629,17 +742,16 @@ class BillingService:
         if d.get("placa_remolque_2") and d["placa_remolque_2"] != "1XXXX99":
             remolques_cadena += f"{d.get('subtipo_remolque_2', d['subtipo_remolque'])}|{d['placa_remolque_2']}|"
 
-        #  CADENA ORIGINAL 100% SINCRONIZADA CON EL XML ARRIBA
         cadena = (
-            f"||4.0|CP|{d['folio']}|{d['fecha']}|99|{no_certificado}|CONTADO|{d['subtotal']}|MXN|1|{d['total']}|I|01|PPD|{self.emisor_cp}|"
+            f"||4.0|CP|{d['folio']}|{d['fecha']}|99|{no_certificado}|CONTADO|{subtotal_limpio}|MXN|1|{total_limpio}|I|01|PPD|{self.emisor_cp}|"
             f"{relacion_str}"
             f"{self.emisor_rfc}|{self.emisor_nombre}|{self.emisor_regimen}|"
             f"{d['rfc_cliente']}|{d['nombre_cliente']}|{d['cp_cliente']}|{d['regimen_cliente']}|{d['uso_cfdi']}|"
-            f"78101802|001|1.00|E48|SRV|{d['descripcion_concepto']}|{d['subtotal']}|{d['subtotal']}|02|"
-            f"{d['subtotal']}|002|Tasa|0.160000|{d['iva']}|"
-            f"{d['subtotal']}|002|Tasa|0.040000|{d['retenciones']}|"
-            f"002|{d['retenciones']}|{d['retenciones']}|"
-            f"{d['subtotal']}|002|Tasa|0.160000|{d['iva']}|{d['iva']}|"
+            f"78101802|001|1.00|E48|SRV|{d['descripcion_concepto']}|{subtotal_limpio}|{subtotal_limpio}|02|"
+            f"{subtotal_limpio}|002|Tasa|0.160000|{iva_limpio}|"
+            f"{subtotal_limpio}|002|Tasa|0.040000|{retenciones_limpio}|"
+            f"002|{retenciones_limpio}|{retenciones_limpio}|"
+            f"{subtotal_limpio}|002|Tasa|0.160000|{iva_limpio}|{iva_limpio}|"
             f"3.1|{d['id_ccp']}|No|{d['total_dist_rec']}|"
             f"Origen|{self.emisor_rfc}|{self.emisor_nombre}|{d['fecha']}|{self.emisor_municipio}|{self.emisor_estado}|MEX|{self.emisor_cp}|"
             f"Destino|{d['rfc_cliente']}|{d['nombre_cliente']}|{d['fecha']}|{d['total_dist_rec']}|DOMICILIO CONOCIDO|{d['municipio_destino']}|{d['estado_destino']}|MEX|{d['cp_destino']}|"
@@ -668,6 +780,12 @@ class BillingService:
 
     def _armar_xml_sin_sello(self, data, relacion_uuid: str = None) -> str:
         d = SafeData(data)
+        # Parseamos a float quitando las comas para el XML
+        subtotal_limpio = d["subtotal"].replace(",", "")
+        total_limpio = d["total"].replace(",", "")
+        iva_limpio = d["iva"].replace(",", "")
+        retenciones_limpio = d["retenciones"].replace(",", "")
+
         relacion_xml = (
             f'\n    <cfdi:CfdiRelacionados TipoRelacion="04">\n        <cfdi:CfdiRelacionado UUID="{relacion_uuid}" />\n    </cfdi:CfdiRelacionados>'
             if relacion_uuid
@@ -679,22 +797,21 @@ class BillingService:
             subtipo_r2 = d.get("subtipo_remolque_2", d["subtipo_remolque"])
             remolques_xml += f'\n                    <cartaporte31:Remolque SubTipoRem="{subtipo_r2}" Placa="{d["placa_remolque_2"]}" />'
 
-        #  SE ELIMINARON LOS NODOS "CALLE", SOLO SE MANDAN LOS REQUERIDOS. SE METE EL BIEN TRANS DINÁMICO
         return f"""<?xml version="1.0" encoding="UTF-8"?>
-<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:cartaporte31="http://www.sat.gob.mx/CartaPorte31" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/CartaPorte31 http://www.sat.gob.mx/sitio_internet/cfd/CartaPorte/CartaPorte31.xsd" Version="4.0" Fecha="{d['fecha']}" Serie="CP" Folio="{d['folio']}" FormaPago="99" CondicionesDePago="CONTADO" SubTotal="{d['subtotal']}" Moneda="MXN" TipoCambio="1" Total="{d['total']}" TipoDeComprobante="I" Exportacion="01" MetodoPago="PPD" LugarExpedicion="{self.emisor_cp}">{relacion_xml}
+<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:cartaporte31="http://www.sat.gob.mx/CartaPorte31" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/CartaPorte31 http://www.sat.gob.mx/sitio_internet/cfd/CartaPorte/CartaPorte31.xsd" Version="4.0" Fecha="{d['fecha']}" Serie="CP" Folio="{d['folio']}" FormaPago="99" CondicionesDePago="CONTADO" SubTotal="{subtotal_limpio}" Moneda="MXN" TipoCambio="1" Total="{total_limpio}" TipoDeComprobante="I" Exportacion="01" MetodoPago="PPD" LugarExpedicion="{self.emisor_cp}">{relacion_xml}
     <cfdi:Emisor Rfc="{self.emisor_rfc}" Nombre="{self.emisor_nombre}" RegimenFiscal="{self.emisor_regimen}" />
     <cfdi:Receptor Rfc="{d['rfc_cliente']}" Nombre="{d['nombre_cliente']}" DomicilioFiscalReceptor="{d['cp_cliente']}" RegimenFiscalReceptor="{d['regimen_cliente']}" UsoCFDI="{d['uso_cfdi']}" />
     <cfdi:Conceptos>
-        <cfdi:Concepto ClaveProdServ="78101802" NoIdentificacion="001" Cantidad="1.00" ClaveUnidad="E48" Unidad="SRV" Descripcion="{d['descripcion_concepto']}" ValorUnitario="{d['subtotal']}" Importe="{d['subtotal']}" ObjetoImp="02">
+        <cfdi:Concepto ClaveProdServ="78101802" NoIdentificacion="001" Cantidad="1.00" ClaveUnidad="E48" Unidad="SRV" Descripcion="{d['descripcion_concepto']}" ValorUnitario="{subtotal_limpio}" Importe="{subtotal_limpio}" ObjetoImp="02">
             <cfdi:Impuestos>
-                <cfdi:Traslados><cfdi:Traslado Base="{d['subtotal']}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{d['iva']}" /></cfdi:Traslados>
-                <cfdi:Retenciones><cfdi:Retencion Base="{d['subtotal']}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.040000" Importe="{d['retenciones']}" /></cfdi:Retenciones>
+                <cfdi:Traslados><cfdi:Traslado Base="{subtotal_limpio}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{iva_limpio}" /></cfdi:Traslados>
+                <cfdi:Retenciones><cfdi:Retencion Base="{subtotal_limpio}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.040000" Importe="{retenciones_limpio}" /></cfdi:Retenciones>
             </cfdi:Impuestos>
         </cfdi:Concepto>
     </cfdi:Conceptos>
-    <cfdi:Impuestos TotalImpuestosRetenidos="{d['retenciones']}" TotalImpuestosTrasladados="{d['iva']}">
-        <cfdi:Retenciones><cfdi:Retencion Impuesto="002" Importe="{d['retenciones']}" /></cfdi:Retenciones>
-        <cfdi:Traslados><cfdi:Traslado Base="{d['subtotal']}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{d['iva']}" /></cfdi:Traslados>
+    <cfdi:Impuestos TotalImpuestosRetenidos="{retenciones_limpio}" TotalImpuestosTrasladados="{iva_limpio}">
+        <cfdi:Retenciones><cfdi:Retencion Impuesto="002" Importe="{retenciones_limpio}" /></cfdi:Retenciones>
+        <cfdi:Traslados><cfdi:Traslado Base="{subtotal_limpio}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{iva_limpio}" /></cfdi:Traslados>
     </cfdi:Impuestos>
     <cfdi:Complemento>
         <cartaporte31:CartaPorte Version="3.1" IdCCP="{d['id_ccp']}" TranspInternac="No" TotalDistRec="{d['total_dist_rec']}">
@@ -765,7 +882,9 @@ class BillingService:
             "regimen_cliente": d["regimen_cliente"],
             "direccion_cliente": d["direccion_cliente"],
             "uso_cfdi": d["uso_cfdi"],
-            "metodo_pago": "PPD" if float(d["total"]) > 1.50 else "PUE",
+            "metodo_pago": (
+                "PPD" if float(d["total"].replace(",", "")) > 1.50 else "PUE"
+            ),
             "tipo_comprobante": "I (Ingreso)",
             "moneda": "MXN",
             "tc": "1",
@@ -874,95 +993,3 @@ class BillingService:
             "procesadas": len(facturas_pendientes),
             "resultados": resultados,
         }
-
-
-def registrar_pago_y_timbrar_complemento(
-    self,
-    client_id: int,
-    pagos_data: list,
-    forma_pago: str,
-    fecha_pago: str,
-    referencia: str,
-    cuenta_deposito: str,
-):
-    """
-    Genera el Complemento de Pago (REP 2.0) para una o múltiples facturas.
-    pagos_data debe ser una lista de dicts: [{"invoice_id": 1, "monto_pagado": 15000}, ...]
-    """
-    from app.models.models import ReceivableInvoice, ReceivableInvoicePayment
-    import uuid
-
-    logger.info(
-        f"--- INICIANDO TIMBRADO DE COMPLEMENTO DE PAGO PARA CLIENTE {client_id} ---"
-    )
-
-    facturas_afectadas = []
-    total_recibido = Decimal("0.0")
-
-    # 1. Aplicar los pagos en la base de datos (Saldos)
-    for pago in pagos_data:
-        invoice_id = pago.get("invoice_id")
-        monto_abono = Decimal(str(pago.get("monto_pagado", 0)))
-
-        factura = (
-            self.db.query(ReceivableInvoice)
-            .filter(ReceivableInvoice.id == invoice_id)
-            .first()
-        )
-        if not factura:
-            raise HTTPException(
-                status_code=404, detail=f"Factura {invoice_id} no encontrada."
-            )
-
-        if monto_abono <= 0 or monto_abono > Decimal(str(factura.saldo_pendiente)):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Monto de abono inválido para factura {factura.folio_interno}.",
-            )
-
-        # Descontamos el saldo
-        factura.saldo_pendiente = float(
-            Decimal(str(factura.saldo_pendiente)) - monto_abono
-        )
-        if factura.saldo_pendiente <= 0.01:  # Tolerancia por decimales
-            factura.saldo_pendiente = 0.0
-            factura.estatus = "pagado"
-        else:
-            factura.estatus = "pago_parcial"
-
-        total_recibido += monto_abono
-        facturas_afectadas.append(factura)
-        self.db.add(factura)
-
-    # 2. Generamos el identificador del Timbre (Dummy o Real)
-    # En el entorno de pruebas, generaremos un UUID de SAT ficticio para el Complemento
-    complemento_uuid = str(uuid.uuid4()).upper()
-
-    # 3. Guardamos el historial del pago
-    for factura in facturas_afectadas:
-        abono = next(p for p in pagos_data if p["invoice_id"] == factura.id)
-        nuevo_pago = ReceivableInvoicePayment(
-            invoice_id=factura.id,
-            fecha_pago=datetime.fromisoformat(fecha_pago.replace("Z", "")).date(),
-            monto=float(abono.get("monto_pagado")),
-            metodo_pago=forma_pago,  # Ej: 03 (Transferencia)
-            referencia=referencia,
-            cuenta_deposito=cuenta_deposito,
-            complemento_uuid=complemento_uuid,  # Amarramos el pago a este UUID fiscal
-        )
-        self.db.add(nuevo_pago)
-
-    self.db.commit()
-
-    # 4. (Opcional Futuro) Aquí iría el XML <pago20:Pagos> y el self._importar_comprobante_ws()
-    # Por ahora devolvemos el éxito para la UI.
-
-    return {
-        "status": "success",
-        "message": "Pago registrado y Complemento timbrado exitosamente.",
-        "data": {
-            "complemento_uuid": complemento_uuid,
-            "total_pagado": float(total_recibido),
-            "facturas_afectadas": len(facturas_afectadas),
-        },
-    }

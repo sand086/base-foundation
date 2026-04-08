@@ -1,4 +1,3 @@
-// src/pages/Receivables.tsx
 import { useState, useMemo, useEffect } from "react";
 import {
   Download,
@@ -14,7 +13,7 @@ import {
   CheckCircle2,
   Sheet as SheetIcon,
   Loader2,
-  FileCode2, //  IMPORTADO PARA EL BOTÓN DE XML
+  FileCode2,
   Upload,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -51,11 +50,11 @@ import axiosClient from "@/api/axiosClient";
 import { ImportServicesModal } from "@/features/receivables/components/ImportServicesModal";
 import { CreateInvoiceModal } from "@/features/receivables/components/CreateInvoiceModal";
 import { InvoiceDetailSheet } from "@/features/receivables/components/InvoiceDetailSheet";
-import { RegisterPaymentModal } from "@/features/treasury/components/RegisterPaymentModal";
+// 🎯 1. CAMBIAMOS LA IMPORTACIÓN AL MODAL MÚLTIPLE
+import { ClientRegisterPaymentModal } from "@/features/treasury/components/ClientRegisterPaymentModal";
 import { AccountStatementModal } from "@/features/receivables/components/AccountStatementModal";
 import { ImportXMLPaymentModal } from "@/features/receivables/components/ImportXMLPaymentModal";
 
-import { RegisterPaymentPayload } from "@/features/payables/types";
 import {
   ReceivableInvoice,
   InvoicePayment,
@@ -67,6 +66,7 @@ import {
 
 import { useBankAccounts } from "@/features/treasury/hooks/useBankAccounts";
 import { receivableService } from "@/features/receivables/services/receivableService";
+import { cn } from "@/lib/utils";
 
 export default function Receivables() {
   const [invoices, setInvoices] = useState<ReceivableInvoice[]>([]);
@@ -81,37 +81,33 @@ export default function Receivables() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isAccountStatementOpen, setIsAccountStatementOpen] = useState(false);
-  const [isImportXMLOpen, setIsImportXMLOpen] = useState(false); //  NUEVO ESTADO PARA EL MODAL XML
+  const [isImportXMLOpen, setIsImportXMLOpen] = useState(false);
 
   // Selected state
   const [selectedInvoice, setSelectedInvoice] =
     useState<ReceivableInvoice | null>(null);
+
+  // 🎯 2. NUEVO ESTADO PARA SOPORTAR MÚLTIPLES FACTURAS
+  const [invoicesToPay, setInvoicesToPay] = useState<ReceivableInvoice[]>([]);
+
   const [importedServices, setImportedServices] = useState<
     FinalizableService[] | undefined
   >();
   const [invoiceToDelete, setInvoiceToDelete] =
     useState<ReceivableInvoice | null>(null);
 
-  //  CONEXIÓN AL BACKEND REAL
   const fetchInvoices = async () => {
     try {
       setLoading(true);
       const data = await receivableService.getInvoices();
 
-      // Mapeamos asegurando que se incluyan todas las propiedades de ReceivableInvoice
       const formattedData: ReceivableInvoice[] = data.map((inv: any) => ({
-        ...inv, // Mantenemos todas las propiedades originales (client_id, fecha_emision, etc.)
-
-        // Sobrescribimos o añadimos campos específicos para la lógica de la tabla
+        ...inv,
         folio: inv.folio_interno || `CXC-${String(inv.id)}`,
         cliente: inv.client?.razon_social || "Cliente Desconocido",
         requiereREP: inv.saldo_pendiente > 0,
-
-        // Mapeo para facilitar el uso en las columnas de la tabla si usas camelCase ahí
         fechaEmision: inv.fecha_emision,
         fechaVencimiento: inv.fecha_vencimiento,
-
-        // Aseguramos que existan arrays para evitar errores de renderizado
         cobros: inv.payments || [],
       }));
 
@@ -128,7 +124,6 @@ export default function Receivables() {
     fetchInvoices();
   }, []);
 
-  //  GUSTAVO UX: EXPORTAR A EXCEL (CSV)
   const handleExportToExcel = () => {
     if (invoices.length === 0) {
       toast.error("No hay datos para exportar");
@@ -150,7 +145,7 @@ export default function Receivables() {
       const diasVencidos = calculateDaysOverdue(inv.fecha_vencimiento);
       return [
         inv.folio_interno,
-        `"${inv.cliente}"`, // Comillas por si el cliente tiene comas
+        `"${inv.cliente}"`,
         inv.fecha_emision,
         inv.fecha_vencimiento,
         inv.monto_total,
@@ -163,7 +158,7 @@ export default function Receivables() {
     const csvContent = [headers.join(","), ...rows].join("\n");
     const blob = new Blob(["\uFEFF" + csvContent], {
       type: "text/csv;charset=utf-8;",
-    }); // \uFEFF es para que Excel lea los acentos (UTF-8)
+    });
     const url = URL.createObjectURL(blob);
 
     const link = document.createElement("a");
@@ -179,7 +174,6 @@ export default function Receivables() {
     toast.success("Archivo Excel generado exitosamente");
   };
 
-  // Cálculo del Reporte de Antigüedad (Aging)
   const agingReport = useMemo(() => {
     const corriente = invoices
       .filter(
@@ -199,7 +193,6 @@ export default function Receivables() {
     return { corriente, vencido1_30, vencido31_60, incobrable };
   }, [invoices]);
 
-  // Handlers para UI
   const handleImportServices = (selectedServices: FinalizableService[]) => {
     setImportedServices(selectedServices);
     setIsImportModalOpen(false);
@@ -212,24 +205,20 @@ export default function Receivables() {
     toast.info("Función de creación manual en desarrollo");
   };
 
-  const handleRegisterPayment = async (
-    invoiceId: number,
-    payment: RegisterPaymentPayload,
-  ) => {
+  // 🎯 3. ACTUALIZAMOS EL HANDLER PARA EL NUEVO ENDPOINT
+  const handleRegisterPayment = async (payload: any) => {
     try {
-      await axiosClient.post(`/api/finance/receivables/${invoiceId}/payments`, {
-        monto: payment.monto,
-        metodo_pago: payment.metodo_pago, // 👈 Asegúrate que sea snake_case como en el payload
-        referencia: payment.referencia || "",
-        bank_account_id: payment.cuenta_retiro, // 👈 Importante enviar la cuenta
-      });
-
-      toast.success("¡Cobro Registrado!");
+      // Usamos el endpoint que creamos en el Sprint 3.2
+      await axiosClient.post(`/api/sat/stamp/payment`, payload);
+      toast.success("¡Cobro Registrado y Complemento Timbrado!");
       setIsPaymentModalOpen(false);
-      setSelectedInvoice(null);
+      setInvoicesToPay([]);
       fetchInvoices();
     } catch (error: any) {
-      toast.error("Error al registrar el cobro");
+      toast.error(
+        error.response?.data?.detail ||
+          "Error al registrar el cobro y timbrar REP",
+      );
     }
   };
 
@@ -247,7 +236,6 @@ export default function Receivables() {
     }
   };
 
-  //  Utilidad de formateo estándar (MXN)
   const formatMoney = (amount: number) => {
     return new Intl.NumberFormat("es-MX", {
       style: "currency",
@@ -381,24 +369,26 @@ export default function Receivables() {
                   setSelectedInvoice(row);
                   setIsDetailSheetOpen(true);
                 }}
-                className="rounded-lg"
+                className="rounded-lg cursor-pointer"
               >
                 <Eye className="h-4 w-4 mr-2 text-slate-600" /> Ver Detalle
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => {
-                  setSelectedInvoice(row);
+                  // 🎯 4. AL HACER CLIC, PASAMOS LA FACTURA COMO UN ARREGLO AL MODAL
+                  setInvoicesToPay([row]);
                   setIsPaymentModalOpen(true);
                 }}
                 disabled={row.saldo_pendiente === 0}
-                className={
+                className={cn(
+                  "cursor-pointer",
                   row.saldo_pendiente > 0
                     ? "text-emerald-700 font-bold rounded-lg"
-                    : "rounded-lg"
-                }
+                    : "rounded-lg",
+                )}
               >
-                <CreditCard className="h-4 w-4 mr-2" /> Registrar Cobro
+                <CreditCard className="h-4 w-4 mr-2" /> Registrar Cobro y REP
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -406,7 +396,7 @@ export default function Receivables() {
                   setInvoiceToDelete(row);
                   setIsDeleteDialogOpen(true);
                 }}
-                className="text-red-600 font-bold rounded-lg"
+                className="text-red-600 font-bold rounded-lg cursor-pointer"
               >
                 <Trash2 className="h-4 w-4 mr-2" /> Eliminar Factura
               </DropdownMenuItem>
@@ -433,7 +423,6 @@ export default function Receivables() {
         description="Gestión de cartera, antigüedad de saldos y cobranza a clientes."
       >
         <div className="flex flex-wrap items-center gap-3">
-          {/*  NUEVO BOTÓN: IMPORTAR PAGO XML (DESTACADO EN ESMERALDA) */}
           <Button
             variant="outline"
             className="border-emerald-500 bg-emerald-50/50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 font-black tracking-wide shadow-sm haptic-press transition-all"
@@ -443,7 +432,6 @@ export default function Receivables() {
             Automático (XML)
           </Button>
 
-          {/* BOTÓN PARA EXPORTAR A EXCEL */}
           <Button
             variant="outline"
             className="border-slate-300 bg-white text-slate-700 hover:bg-slate-50 font-bold haptic-press shadow-sm"
@@ -581,20 +569,23 @@ export default function Receivables() {
         onOpenChange={setIsDetailSheetOpen}
         invoice={selectedInvoice}
       />
-      <RegisterPaymentModal
+
+      {/* 🎯 5. INTEGRAMOS EL NUEVO MODAL DE PAGOS MÚLTIPLES */}
+      <ClientRegisterPaymentModal
         open={isPaymentModalOpen}
         onOpenChange={setIsPaymentModalOpen}
-        invoice={selectedInvoice as any}
-        bankAccounts={bankAccounts}
+        invoices={invoicesToPay}
+        clientName={invoicesToPay[0]?.cliente}
+        clientId={invoicesToPay[0]?.client_id}
         onSubmit={handleRegisterPayment}
       />
+
       <AccountStatementModal
         open={isAccountStatementOpen}
         onClose={() => setIsAccountStatementOpen(false)}
         invoices={invoices}
       />
 
-      {/*  NUEVO MODAL: IMPORTAR PAGO XML */}
       <ImportXMLPaymentModal
         open={isImportXMLOpen}
         onOpenChange={setIsImportXMLOpen}
