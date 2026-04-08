@@ -280,12 +280,36 @@ export default function TripSettlement() {
     );
 
     if (roadLeg) {
-      // 1. Buscamos el sueldo en todos los rincones posibles de tu JSON
+      // 1. Extraemos el sueldo navegando por la estructura real del JSON
+      let sueldoTarifa = 0;
+      const trip = roadLeg.trip;
+
+      if (trip?.client?.sub_clients) {
+        // Buscamos el subcliente que coincida con el sub_client_id del viaje
+        const subClient =
+          trip.client.sub_clients.find(
+            (sc: any) => sc.id === trip.sub_client_id,
+          ) || trip.client.sub_clients[0];
+
+        if (subClient?.tariffs) {
+          // Buscamos la tarifa que coincida con el tariff_id del viaje
+          const tariff =
+            subClient.tariffs.find((t: any) => t.id === trip.tariff_id) ||
+            subClient.tariffs[0];
+
+          if (tariff?.sueldo_operador) {
+            sueldoTarifa = tariff.sueldo_operador; // 👈 ¡Aquí atrapa los 1600.0!
+          }
+        }
+      }
+
+      // 2. Evaluamos el sueldo con la prioridad correcta
       const sueldoLocal =
         roadLeg.monto_sueldo ||
-        roadLeg.trip?.sueldo_operador || // 👈 Aquí jala el de las tarifas (1600.0)
-        roadLeg.trip?.monto_sueldo ||
-        roadLeg.trip?.pago_operador ||
+        sueldoTarifa || // <-- Insertamos el valor extraído de la tarifa
+        trip?.sueldo_operador ||
+        trip?.monto_sueldo ||
+        trip?.pago_operador ||
         0;
 
       if (typeof getSettlementPreview === "function") {
@@ -299,7 +323,7 @@ export default function TripSettlement() {
                 0,
             );
 
-            // 2. Si el API devuelve un sueldo mayor a 0, usamos ese. Si no, usamos el Local.
+            // 3. Si el API devuelve un sueldo mayor a 0, usamos ese. Si no, usamos el Local.
             const sueldoAPI =
               data?.sueldo_operador_pactado || data?.monto_sueldo || 0;
             setSueldoRutaPactado(sueldoAPI > 0 ? sueldoAPI : sueldoLocal);
