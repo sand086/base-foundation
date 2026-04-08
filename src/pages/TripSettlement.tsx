@@ -63,7 +63,6 @@ import { useOperators } from "@/features/operators/hooks/useOperators";
 import { useSystemConfig } from "@/features/settings/hooks/useSystemConfig";
 import axiosClient from "@/api/axiosClient";
 
-// Importamos el nuevo componente desmenuzado
 import { OperatorSettlementDetailModal } from "@/features/receivables/components/OperatorSettlementDetailModal";
 
 interface ConceptoExtra {
@@ -263,68 +262,67 @@ export default function TripSettlement() {
     activeTab,
   ]);
 
+  // =========================================================================
+  // 🚀 LÓGICA CORREGIDA PARA EXTRAER EL SUELDO SIN BUCLES INFINITOS
+  // =========================================================================
   useEffect(() => {
     if (activeTab === "historico") return;
 
-    if (selectedLegIds.length > 0) {
-      // Buscamos si hay algún tramo de ruta carretera en los seleccionados
-      const roadLeg = selectedLegsData.find(
-        (l) => l.leg_type === "ruta_carretera",
-      );
+    if (selectedLegIds.length === 0) {
+      setPreviewData(null);
+      setCombustibleFaltante(0);
+      setSueldoRutaPactado(0);
+      return;
+    }
 
-      if (roadLeg) {
-        // 🚀 1. RESPALDO LOCAL: Leemos el sueldo que ya trae el viaje por defecto (Como lo hiciste en el histórico)
-        const sueldoLocal =
-          roadLeg.monto_sueldo ||
-          roadLeg.trip?.monto_sueldo ||
-          roadLeg.trip?.pago_operador ||
-          0;
+    const roadLeg = selectedLegsData.find(
+      (l) => l.leg_type === "ruta_carretera",
+    );
 
-        if (getSettlementPreview) {
-          setIsLoadingPreview(true);
-          getSettlementPreview(selectedLegIds)
-            .then((data: any) => {
-              setPreviewData(data);
-              // Fallbacks por si el backend usa nombres distintos
-              setCombustibleFaltante(
-                data?.deduccion_combustible ||
-                  data?.penalizacion_combustible ||
-                  0,
-              );
+    if (roadLeg) {
+      // 1. Buscamos el sueldo en todos los rincones posibles de tu JSON
+      const sueldoLocal =
+        roadLeg.monto_sueldo ||
+        roadLeg.trip?.sueldo_operador || // 👈 Aquí jala el de las tarifas (1600.0)
+        roadLeg.trip?.monto_sueldo ||
+        roadLeg.trip?.pago_operador ||
+        0;
 
-              // 🚀 2. LÓGICA INTELIGENTE: Si el API manda el sueldo lo usamos, si no, usamos el Local.
-              setSueldoRutaPactado(
-                data?.sueldo_operador_pactado ||
-                  data?.monto_sueldo ||
-                  sueldoLocal,
-              );
-            })
-            .catch(() => {
-              toast.error(
-                "Error de conexión al verificar telemetría del viaje.",
-              );
-              setPreviewData(null);
-              setCombustibleFaltante(0);
-              setSueldoRutaPactado(sueldoLocal); // Si el API falla, al menos dejamos el sueldo real del viaje
-            })
-            .finally(() => setIsLoadingPreview(false));
-        } else {
-          setSueldoRutaPactado(sueldoLocal);
-        }
+      if (typeof getSettlementPreview === "function") {
+        setIsLoadingPreview(true);
+        getSettlementPreview(selectedLegIds)
+          .then((data: any) => {
+            setPreviewData(data);
+            setCombustibleFaltante(
+              data?.deduccion_combustible ||
+                data?.penalizacion_combustible ||
+                0,
+            );
+
+            // 2. Si el API devuelve un sueldo mayor a 0, usamos ese. Si no, usamos el Local.
+            const sueldoAPI =
+              data?.sueldo_operador_pactado || data?.monto_sueldo || 0;
+            setSueldoRutaPactado(sueldoAPI > 0 ? sueldoAPI : sueldoLocal);
+          })
+          .catch(() => {
+            toast.error("Error de conexión al verificar telemetría del viaje.");
+            setPreviewData(null);
+            setCombustibleFaltante(0);
+            setSueldoRutaPactado(sueldoLocal); // Fallback si falla el API
+          })
+          .finally(() => setIsLoadingPreview(false));
       } else {
-        setPreviewData(null);
-        setCombustibleFaltante(0);
-        setSueldoRutaPactado(0);
+        setSueldoRutaPactado(sueldoLocal);
       }
     } else {
       setPreviewData(null);
       setCombustibleFaltante(0);
       setSueldoRutaPactado(0);
     }
-    // ⚠️ Importante: Quitamos selectedLegsData de las dependencias.
-    // Si no lo quitamos, cada vez que la tabla se refresque te borrará el número que tecleó el usuario manualmente.
+    // 🛑 ROMPEMOS EL BUCLE: No ponemos getSettlementPreview ni selectedLegsData en este arreglo.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedLegIds, activeTab, getSettlementPreview]);
+  }, [selectedLegIds, activeTab]);
+  // =========================================================================
 
   const formatCurrencyLocal = (amount: number) =>
     new Intl.NumberFormat("es-MX", {
@@ -374,7 +372,6 @@ export default function TripSettlement() {
         monto_maniobras: liquidacion.deduccionesManuales,
         monto_penalizaciones: liquidacion.combustibleFaltante,
         neto_a_pagar: liquidacion.neto_a_pagar,
-        // 👇 AHORA SÍ MANDAMOS EL DESGLOSE AL BACKEND 👇
         conceptos_extra: conceptosExtra,
       };
 
