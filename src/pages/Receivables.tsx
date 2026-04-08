@@ -14,7 +14,6 @@ import {
   Sheet as SheetIcon,
   Loader2,
   FileCode2,
-  Upload,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -46,18 +45,15 @@ import {
 
 import axiosClient from "@/api/axiosClient";
 
-// Feature components
 import { ImportServicesModal } from "@/features/receivables/components/ImportServicesModal";
 import { CreateInvoiceModal } from "@/features/receivables/components/CreateInvoiceModal";
 import { InvoiceDetailSheet } from "@/features/receivables/components/InvoiceDetailSheet";
-//  1. CAMBIAMOS LA IMPORTACIÓN AL MODAL MÚLTIPLE
 import { ClientRegisterPaymentModal } from "@/features/treasury/components/ClientRegisterPaymentModal";
 import { AccountStatementModal } from "@/features/receivables/components/AccountStatementModal";
 import { ImportXMLPaymentModal } from "@/features/receivables/components/ImportXMLPaymentModal";
 
 import {
   ReceivableInvoice,
-  InvoicePayment,
   FinalizableService,
   getInvoiceStatusInfo,
   getAgingCategory,
@@ -74,7 +70,6 @@ export default function Receivables() {
   const [loading, setLoading] = useState(true);
   const { bankAccounts = [] } = useBankAccounts();
 
-  // Modal states
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false);
@@ -83,13 +78,9 @@ export default function Receivables() {
   const [isAccountStatementOpen, setIsAccountStatementOpen] = useState(false);
   const [isImportXMLOpen, setIsImportXMLOpen] = useState(false);
 
-  // Selected state
   const [selectedInvoice, setSelectedInvoice] =
     useState<ReceivableInvoice | null>(null);
-
-  //  2. NUEVO ESTADO PARA SOPORTAR MÚLTIPLES FACTURAS
   const [invoicesToPay, setInvoicesToPay] = useState<ReceivableInvoice[]>([]);
-
   const [importedServices, setImportedServices] = useState<
     FinalizableService[] | undefined
   >();
@@ -206,10 +197,8 @@ export default function Receivables() {
     toast.info("Función de creación manual en desarrollo");
   };
 
-  //  3. ACTUALIZAMOS EL HANDLER PARA EL NUEVO ENDPOINT
   const handleRegisterPayment = async (payload: any) => {
     try {
-      // Usamos el endpoint que creamos en el Sprint 3.2
       await axiosClient.post(`/api/sat/stamp/payment`, payload);
       toast.success("¡Cobro Registrado y Complemento Timbrado!");
       setIsPaymentModalOpen(false);
@@ -374,23 +363,24 @@ export default function Receivables() {
               >
                 <Eye className="h-4 w-4 mr-2 text-slate-600" /> Ver Detalle
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => {
-                  //  4. AL HACER CLIC, PASAMOS LA FACTURA COMO UN ARREGLO AL MODAL
-                  setInvoicesToPay([row]);
-                  setIsPaymentModalOpen(true);
-                }}
-                disabled={row.saldo_pendiente === 0}
-                className={cn(
-                  "cursor-pointer",
-                  row.saldo_pendiente > 0
-                    ? "text-emerald-700 font-bold rounded-lg"
-                    : "rounded-lg",
-                )}
-              >
-                <CreditCard className="h-4 w-4 mr-2" /> Registrar Cobro y REP
-              </DropdownMenuItem>
+
+              {/* 🚀 OCULTAMOS ESTA OPCIÓN SI YA ESTÁ PAGADA COMPLETAMENTE */}
+              {row.saldo_pendiente > 0 && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setInvoicesToPay([row]);
+                      setIsPaymentModalOpen(true);
+                    }}
+                    className="text-emerald-700 font-bold rounded-lg cursor-pointer"
+                  >
+                    <CreditCard className="h-4 w-4 mr-2" /> Registrar Cobro y
+                    REP
+                  </DropdownMenuItem>
+                </>
+              )}
+
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => {
@@ -478,7 +468,6 @@ export default function Receivables() {
         </div>
       </PageHeader>
 
-      {/* DASHBOARD DE ANTIGÜEDAD DE SALDOS */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card className="border-l-4 border-l-emerald-500 shadow-sm hover:shadow-md transition-shadow">
           <CardContent className="p-5">
@@ -536,7 +525,6 @@ export default function Receivables() {
         </Card>
       </div>
 
-      {/* TABLA PRINCIPAL */}
       <Card className="shadow-lg border-slate-200 overflow-hidden rounded-2xl">
         <CardContent className="p-0">
           <EnhancedDataTable
@@ -547,9 +535,6 @@ export default function Receivables() {
         </CardContent>
       </Card>
 
-      {/* =======================================================
-          MODALES DE CUENTAS POR COBRAR
-      ======================================================= */}
       <ImportServicesModal
         open={isImportModalOpen}
         onOpenChange={setIsImportModalOpen}
@@ -571,7 +556,6 @@ export default function Receivables() {
         invoice={selectedInvoice}
       />
 
-      {/*  5. INTEGRAMOS EL NUEVO MODAL DE PAGOS MÚLTIPLES */}
       <ClientRegisterPaymentModal
         open={isPaymentModalOpen}
         onOpenChange={setIsPaymentModalOpen}
@@ -580,20 +564,17 @@ export default function Receivables() {
         clientId={invoicesToPay[0]?.client_id || invoicesToPay[0]?.client?.id}
         onSubmit={handleRegisterPayment}
       />
-
       <AccountStatementModal
         open={isAccountStatementOpen}
         onClose={() => setIsAccountStatementOpen(false)}
         invoices={invoices}
       />
-
       <ImportXMLPaymentModal
         open={isImportXMLOpen}
         onOpenChange={setIsImportXMLOpen}
         onSuccess={fetchInvoices}
       />
 
-      {/* DIÁLOGO DE ELIMINACIÓN */}
       <AlertDialog
         open={isDeleteDialogOpen}
         onOpenChange={setIsDeleteDialogOpen}

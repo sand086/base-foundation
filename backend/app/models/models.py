@@ -700,6 +700,7 @@ class TripLeg(AuditMixin, Base):
     monto_maniobras = Column(Float, default=0.0)
     monto_penalizaciones = Column(Float, default=0.0)
     monto_neto_pagado = Column(Float, default=0.0)
+    desglose_conceptos = Column(JSONB, default=list, server_default="[]")
 
     odometro_inicial = Column(Integer, nullable=True, default=0)
     odometro_final = Column(Integer, nullable=True)

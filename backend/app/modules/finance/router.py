@@ -153,9 +153,7 @@ def get_receivable_invoices(
         db.query(models.ReceivableInvoice)
         .options(
             joinedload(models.ReceivableInvoice.client),
-            joinedload(
-                models.ReceivableInvoice.payments
-            ),  # 🚀 Cargamos los pagos asociados
+            joinedload(models.ReceivableInvoice.payments),
         )
         .filter(
             models.ReceivableInvoice.record_status == models.RecordStatus.ACTIVO.value
@@ -178,9 +176,9 @@ def get_receivable_invoices(
                     "fecha_pago": p.fecha_pago.isoformat() if p.fecha_pago else None,
                     "monto": p.monto,
                     "metodo_pago": p.metodo_pago,
-                    "referencia": p.referencia,
+                    "referencia": p.referencia or "S/R",
                     "cuenta_deposito": p.cuenta_deposito,
-                    "complemento_uuid": p.complemento_uuid,  # 🚀 Clave para poder descargar el PDF/XML
+                    "complemento_uuid": p.complemento_uuid,
                 }
             )
 
@@ -188,8 +186,8 @@ def get_receivable_invoices(
             {
                 "id": inv.id,
                 "uuid": inv.uuid,
-                "folio_interno": inv.folio_interno,
-                "concepto": inv.concepto,  # 🚀 Faltaba esto
+                "folio_interno": inv.folio_interno or "S/F",
+                "concepto": inv.concepto or "Servicio de Flete",
                 "monto_total": inv.monto_total,
                 "saldo_pendiente": inv.saldo_pendiente,
                 "fecha_emision": (
@@ -200,20 +198,21 @@ def get_receivable_invoices(
                 ),
                 "estatus": inv.estatus,
                 "moneda": inv.moneda,
-                "pdf_url": inv.pdf_url,  # 🚀 Faltaba esto
-                "xml_url": inv.xml_url,  # 🚀 Faltaba esto
-                "payments": pagos_list,  # 🚀 Faltaba esto
+                "pdf_url": inv.pdf_url,
+                "xml_url": inv.xml_url,
+                "payments": pagos_list,  # 🚀 Enviamos la lista de abonos
                 "client": (
                     {
                         "id": inv.client.id,
                         "razon_social": inv.client.razon_social,
-                        "rfc": inv.client.rfc,  # 🚀 Faltaba esto
+                        "rfc": inv.client.rfc,  # 🚀 Enviamos el RFC
                     }
                     if inv.client
                     else None
                 ),
             }
         )
+
     return response
 
 

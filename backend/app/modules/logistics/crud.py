@@ -766,6 +766,7 @@ def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload)
 
         leg.saldo_operador = payload.neto_a_pagar / num_legs
         leg.monto_neto_pagado = payload.neto_a_pagar / num_legs
+        leg.desglose_conceptos = conceptos_json
         leg.actual_arrival = datetime.utcnow()
 
         event = models.TripTimelineEvent(
