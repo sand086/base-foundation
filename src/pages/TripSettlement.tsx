@@ -266,33 +266,65 @@ export default function TripSettlement() {
   useEffect(() => {
     if (activeTab === "historico") return;
 
-    if (selectedLegIds.length > 0 && getSettlementPreview) {
-      const hasRoadTrip = selectedLegsData.some(
+    if (selectedLegIds.length > 0) {
+      // Buscamos si hay algún tramo de ruta carretera en los seleccionados
+      const roadLeg = selectedLegsData.find(
         (l) => l.leg_type === "ruta_carretera",
       );
-      if (hasRoadTrip) {
-        setIsLoadingPreview(true);
-        getSettlementPreview(selectedLegIds)
-          .then((data: any) => {
-            setPreviewData(data);
-            setCombustibleFaltante(data?.deduccion_combustible || 0);
-            setSueldoRutaPactado(data?.sueldo_operador_pactado || 0);
-          })
-          .catch(() => {
-            toast.error("Error de conexión al verificar telemetría del viaje.");
-            setPreviewData(null);
-            setCombustibleFaltante(0);
-          })
-          .finally(() => setIsLoadingPreview(false));
+
+      if (roadLeg) {
+        // 🚀 1. RESPALDO LOCAL: Leemos el sueldo que ya trae el viaje por defecto (Como lo hiciste en el histórico)
+        const sueldoLocal =
+          roadLeg.monto_sueldo ||
+          roadLeg.trip?.monto_sueldo ||
+          roadLeg.trip?.pago_operador ||
+          0;
+
+        if (getSettlementPreview) {
+          setIsLoadingPreview(true);
+          getSettlementPreview(selectedLegIds)
+            .then((data: any) => {
+              setPreviewData(data);
+              // Fallbacks por si el backend usa nombres distintos
+              setCombustibleFaltante(
+                data?.deduccion_combustible ||
+                  data?.penalizacion_combustible ||
+                  0,
+              );
+
+              // 🚀 2. LÓGICA INTELIGENTE: Si el API manda el sueldo lo usamos, si no, usamos el Local.
+              setSueldoRutaPactado(
+                data?.sueldo_operador_pactado ||
+                  data?.monto_sueldo ||
+                  sueldoLocal,
+              );
+            })
+            .catch(() => {
+              toast.error(
+                "Error de conexión al verificar telemetría del viaje.",
+              );
+              setPreviewData(null);
+              setCombustibleFaltante(0);
+              setSueldoRutaPactado(sueldoLocal); // Si el API falla, al menos dejamos el sueldo real del viaje
+            })
+            .finally(() => setIsLoadingPreview(false));
+        } else {
+          setSueldoRutaPactado(sueldoLocal);
+        }
       } else {
         setPreviewData(null);
         setCombustibleFaltante(0);
+        setSueldoRutaPactado(0);
       }
     } else {
       setPreviewData(null);
       setCombustibleFaltante(0);
+      setSueldoRutaPactado(0);
     }
-  }, [selectedLegIds, selectedLegsData, activeTab]);
+    // ⚠️ Importante: Quitamos selectedLegsData de las dependencias.
+    // Si no lo quitamos, cada vez que la tabla se refresque te borrará el número que tecleó el usuario manualmente.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLegIds, activeTab, getSettlementPreview]);
 
   const formatCurrencyLocal = (amount: number) =>
     new Intl.NumberFormat("es-MX", {
