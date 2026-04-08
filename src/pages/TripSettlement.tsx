@@ -399,7 +399,7 @@ export default function TripSettlement() {
         conceptos_extra: conceptosExtra,
       };
 
-      await axiosClient.post("/api/trips/legs/settle-batch", payload);
+      await axiosClient.post("/api/logistics/trips/legs/settle-batch", payload);
 
       toast.success("Liquidación Emitida Exitosamente", {
         description: `Se registró el pago de ${formatCurrencyLocal(liquidacion.neto_a_pagar)} con su desglose.`,
