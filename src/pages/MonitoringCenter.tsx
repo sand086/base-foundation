@@ -131,7 +131,6 @@ const getOperatorName = (trip: any) => {
     : "Sin Operador";
 };
 
-// 👇 AQUÍ ESTÁ LA MAGIA FINANCIERA CORREGIDA 👇
 const getTripFinancials = (trip: any) => {
   let dieselVales = 0;
   let dieselConciliacion = 0;
@@ -139,13 +138,35 @@ const getTripFinancials = (trip: any) => {
   let casetasOp = 0;
   let pagoOperador = 0;
 
+  // 1. Sumar vales si vienen directamente en la raíz del viaje
+  if (trip.fuel_logs && Array.isArray(trip.fuel_logs)) {
+    trip.fuel_logs.forEach((vale: any) => {
+      // Solo sumamos vales activos ("A")
+      if (vale.record_status === "A" || !vale.record_status) {
+        dieselVales += vale.total || vale.litros * vale.precio_por_litro || 0;
+      }
+    });
+  }
+
+  // 2. Sumar datos de cada tramo (incluyendo sus vales internos)
   if (trip.legs && Array.isArray(trip.legs)) {
     trip.legs.forEach((leg: any) => {
+      // Sumar el anticipo manual de diésel (si existe)
       dieselVales += leg.anticipo_combustible || 0;
+
+      // Sumar los vales reales vinculados a este tramo específico
+      if (leg.fuel_logs && Array.isArray(leg.fuel_logs)) {
+        leg.fuel_logs.forEach((vale: any) => {
+          if (vale.record_status === "A" || !vale.record_status) {
+            dieselVales +=
+              vale.total || vale.litros * vale.precio_por_litro || 0;
+          }
+        });
+      }
+
       dieselConciliacion += leg.monto_penalizaciones || 0; // Faltantes de diésel cobrados
       viaticos += leg.anticipo_viaticos || 0;
       casetasOp += leg.anticipo_casetas || 0;
-      // Usamos monto_neto_pagado que es donde el backend guarda la liquidación real
       pagoOperador += leg.monto_neto_pagado || leg.saldo_operador || 0;
     });
   }
