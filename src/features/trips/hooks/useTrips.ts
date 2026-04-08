@@ -33,12 +33,17 @@ export const useTrips = () => {
 
   const createTrip = async (tripData: TripCreatePayload) => {
     try {
-      const data = await LogisticsService.createTripApiLogisticsTripsPost(tripData as any);
+      const data = await LogisticsService.createTripApiLogisticsTripsPost(
+        tripData as any,
+      );
       toast({ title: "Éxito", description: "Viaje despachado correctamente" });
       await fetchTrips();
       return data;
     } catch (error) {
-      const msg = error instanceof ApiError ? error.body?.detail : "Error al crear Dispatch";
+      const msg =
+        error instanceof ApiError
+          ? error.body?.detail
+          : "Error al crear Dispatch";
       toast({
         title: "Error",
         description: msg || "Error al crear Dispatch",
@@ -48,12 +53,16 @@ export const useTrips = () => {
     }
   };
 
-  const createNextLeg = async (tripId: string | number, legData: TripLegCreatePayload) => {
+  const createNextLeg = async (
+    tripId: string | number,
+    legData: TripLegCreatePayload,
+  ) => {
     try {
-      const data = await LogisticsService.createNextLegEndpointApiLogisticsTripsTripIdNextLegPost(
-        Number(tripId),
-        legData as any,
-      );
+      const data =
+        await LogisticsService.createNextLegEndpointApiLogisticsTripsTripIdNextLegPost(
+          Number(tripId),
+          legData as any,
+        );
       toast({
         title: "Relevo Exitoso",
         description: "La fase ha sido asignada a la nueva unidad y operador.",
@@ -61,7 +70,10 @@ export const useTrips = () => {
       await fetchTrips();
       return data;
     } catch (error) {
-      const msg = error instanceof ApiError ? error.body?.detail : "No se pudo realizar el desenganche.";
+      const msg =
+        error instanceof ApiError
+          ? error.body?.detail
+          : "No se pudo realizar el desenganche.";
       toast({
         title: "Error",
         description: msg || "No se pudo realizar el desenganche.",
@@ -71,9 +83,17 @@ export const useTrips = () => {
     }
   };
 
-  const updateTripStatus = async (id: string | number, status: string, location?: string) => {
+  const updateTripStatus = async (
+    id: string | number,
+    status: string,
+    location?: string,
+  ) => {
     try {
-      await LogisticsService.updateStatusApiLogisticsTripsTripIdStatusPatch(Number(id), status, location);
+      await LogisticsService.updateStatusApiLogisticsTripsTripIdStatusPatch(
+        Number(id),
+        status,
+        location,
+      );
       toast({
         title: "Estatus Actualizado",
         description: `Viaje movido a ${status.replace("_", " ").toUpperCase()}`,
@@ -90,8 +110,14 @@ export const useTrips = () => {
 
   const editTrip = async (id: string | number, tripData: Partial<Trip>) => {
     try {
-      await LogisticsService.updateTripEndpointApiLogisticsTripsTripIdPut(Number(id), tripData as any);
-      toast({ title: "Éxito", description: "Datos actualizados correctamente" });
+      await LogisticsService.updateTripEndpointApiLogisticsTripsTripIdPut(
+        Number(id),
+        tripData as any,
+      );
+      toast({
+        title: "Éxito",
+        description: "Datos actualizados correctamente",
+      });
       await fetchTrips();
       return true;
     } catch (error) {
@@ -106,8 +132,13 @@ export const useTrips = () => {
 
   const deleteTrip = async (id: string | number) => {
     try {
-      await LogisticsService.deleteTripEndpointApiLogisticsTripsTripIdDelete(String(id));
-      toast({ title: "Viaje Eliminado", description: "El registro ha sido borrado del sistema." });
+      await LogisticsService.deleteTripEndpointApiLogisticsTripsTripIdDelete(
+        String(id),
+      );
+      toast({
+        title: "Viaje Eliminado",
+        description: "El registro ha sido borrado del sistema.",
+      });
       await fetchTrips();
     } catch (error) {
       toast({
@@ -115,6 +146,34 @@ export const useTrips = () => {
         description: "No se pudo eliminar el viaje.",
         variant: "destructive",
       });
+    }
+  };
+
+  // 👈 NUEVA FUNCIÓN PARA "DESHACER MOVIMIENTO" CON REFRESCO AUTOMÁTICO
+  const undoTripLeg = async (tripId: string | number) => {
+    try {
+      const data =
+        await LogisticsService.undoTripLegEndpointApiLogisticsTripsTripIdUndoLegPost(
+          Number(tripId),
+        );
+      toast({
+        title: "Movimiento Deshecho",
+        description:
+          "Se regresó el viaje a la fase anterior y se liberaron los equipos.",
+      });
+      await fetchTrips();
+      return data;
+    } catch (error) {
+      const msg =
+        error instanceof ApiError
+          ? error.body?.detail
+          : "Error al deshacer la fase.";
+      toast({
+        title: "Error",
+        description: msg || "Error al deshacer la fase.",
+        variant: "destructive",
+      });
+      return null;
     }
   };
 
@@ -141,14 +200,21 @@ export const useTrips = () => {
           : "info",
       } as any;
 
-      await LogisticsService.createTimelineEventApiLogisticsTripsTripIdTimelinePost(Number(tripId), payload);
+      await LogisticsService.createTimelineEventApiLogisticsTripsTripIdTimelinePost(
+        Number(tripId),
+        payload,
+      );
 
       if (!silent) {
         toast({
-          title: data.status === "entregado" ? "Viaje Finalizado" : "Bitácora actualizada",
-          description: data.status === "entregado"
-            ? "Equipos liberados correctamente."
-            : "El evento se guardó correctamente.",
+          title:
+            data.status === "entregado"
+              ? "Viaje Finalizado"
+              : "Bitácora actualizada",
+          description:
+            data.status === "entregado"
+              ? "Equipos liberados correctamente."
+              : "El evento se guardó correctamente.",
         });
       }
 
@@ -168,7 +234,9 @@ export const useTrips = () => {
 
   const getTripSettlement = async (legId: string | number) => {
     try {
-      return await LogisticsService.getTripSettlementApiLogisticsTripsLegTripLegIdSettlementGet(Number(legId));
+      return await LogisticsService.getTripSettlementApiLogisticsTripsLegTripLegIdSettlementGet(
+        Number(legId),
+      );
     } catch (error) {
       toast({
         title: "Error",
@@ -181,7 +249,10 @@ export const useTrips = () => {
 
   const closeTripSettlement = async (legId: string | number, payload: any) => {
     try {
-      await LogisticsService.closeTripSettlementApiLogisticsTripsLegTripLegIdCloseSettlementPost(Number(legId), payload);
+      await LogisticsService.closeTripSettlementApiLogisticsTripsLegTripLegIdCloseSettlementPost(
+        Number(legId),
+        payload,
+      );
       toast({
         title: "Tramo Liquidado",
         description: "Ciclo de fase cerrado y registrado en finanzas.",
@@ -204,10 +275,13 @@ export const useTrips = () => {
 
   const liquidarLote = async (legIds: string[], neto_a_pagar: number) => {
     try {
-      const response = await LogisticsService.settleTripLegsBatchApiLogisticsTripsLegsSettleBatchPost({
-        leg_ids: legIds.map(Number),
-        neto_a_pagar,
-      });
+      const response =
+        await LogisticsService.settleTripLegsBatchApiLogisticsTripsLegsSettleBatchPost(
+          {
+            leg_ids: legIds.map(Number),
+            neto_a_pagar,
+          },
+        );
       await fetchTrips();
       return response;
     } catch (error) {
@@ -218,9 +292,11 @@ export const useTrips = () => {
 
   const getSettlementPreview = async (legIds: string[]) => {
     try {
-      return await LogisticsService.previewBatchSettlementEndpointApiLogisticsTripsLegsSettlementPreviewPost({
-        leg_ids: legIds.map(Number),
-      });
+      return await LogisticsService.previewBatchSettlementEndpointApiLogisticsTripsLegsSettlementPreviewPost(
+        {
+          leg_ids: legIds.map(Number),
+        },
+      );
     } catch (error) {
       console.error("Error al obtener la pre-liquidación:", error);
       throw error;

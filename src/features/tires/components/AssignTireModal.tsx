@@ -317,7 +317,7 @@ export function AssignTireModal({
                   )}
                 />
 
-                {/* 🎯 Selector de Posición Numérica */}
+                {/*  Selector de Posición Numérica */}
                 {currentUnit && currentUnit !== "almacen" && (
                   <div className="animate-in fade-in slide-in-from-top-2">
                     <FormField

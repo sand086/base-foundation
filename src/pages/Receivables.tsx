@@ -50,7 +50,7 @@ import axiosClient from "@/api/axiosClient";
 import { ImportServicesModal } from "@/features/receivables/components/ImportServicesModal";
 import { CreateInvoiceModal } from "@/features/receivables/components/CreateInvoiceModal";
 import { InvoiceDetailSheet } from "@/features/receivables/components/InvoiceDetailSheet";
-// 🎯 1. CAMBIAMOS LA IMPORTACIÓN AL MODAL MÚLTIPLE
+//  1. CAMBIAMOS LA IMPORTACIÓN AL MODAL MÚLTIPLE
 import { ClientRegisterPaymentModal } from "@/features/treasury/components/ClientRegisterPaymentModal";
 import { AccountStatementModal } from "@/features/receivables/components/AccountStatementModal";
 import { ImportXMLPaymentModal } from "@/features/receivables/components/ImportXMLPaymentModal";
@@ -87,7 +87,7 @@ export default function Receivables() {
   const [selectedInvoice, setSelectedInvoice] =
     useState<ReceivableInvoice | null>(null);
 
-  // 🎯 2. NUEVO ESTADO PARA SOPORTAR MÚLTIPLES FACTURAS
+  //  2. NUEVO ESTADO PARA SOPORTAR MÚLTIPLES FACTURAS
   const [invoicesToPay, setInvoicesToPay] = useState<ReceivableInvoice[]>([]);
 
   const [importedServices, setImportedServices] = useState<
@@ -103,6 +103,7 @@ export default function Receivables() {
 
       const formattedData: ReceivableInvoice[] = data.map((inv: any) => ({
         ...inv,
+        client_id: inv.client_id || inv.cliente_id || inv.client?.id,
         folio: inv.folio_interno || `CXC-${String(inv.id)}`,
         cliente: inv.client?.razon_social || "Cliente Desconocido",
         requiereREP: inv.saldo_pendiente > 0,
@@ -205,7 +206,7 @@ export default function Receivables() {
     toast.info("Función de creación manual en desarrollo");
   };
 
-  // 🎯 3. ACTUALIZAMOS EL HANDLER PARA EL NUEVO ENDPOINT
+  //  3. ACTUALIZAMOS EL HANDLER PARA EL NUEVO ENDPOINT
   const handleRegisterPayment = async (payload: any) => {
     try {
       // Usamos el endpoint que creamos en el Sprint 3.2
@@ -376,7 +377,7 @@ export default function Receivables() {
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => {
-                  // 🎯 4. AL HACER CLIC, PASAMOS LA FACTURA COMO UN ARREGLO AL MODAL
+                  //  4. AL HACER CLIC, PASAMOS LA FACTURA COMO UN ARREGLO AL MODAL
                   setInvoicesToPay([row]);
                   setIsPaymentModalOpen(true);
                 }}
@@ -570,13 +571,13 @@ export default function Receivables() {
         invoice={selectedInvoice}
       />
 
-      {/* 🎯 5. INTEGRAMOS EL NUEVO MODAL DE PAGOS MÚLTIPLES */}
+      {/*  5. INTEGRAMOS EL NUEVO MODAL DE PAGOS MÚLTIPLES */}
       <ClientRegisterPaymentModal
         open={isPaymentModalOpen}
         onOpenChange={setIsPaymentModalOpen}
         invoices={invoicesToPay}
         clientName={invoicesToPay[0]?.cliente}
-        clientId={invoicesToPay[0]?.client_id}
+        clientId={invoicesToPay[0]?.client_id || invoicesToPay[0]?.client?.id}
         onSubmit={handleRegisterPayment}
       />
 

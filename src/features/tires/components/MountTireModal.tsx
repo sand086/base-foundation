@@ -90,7 +90,8 @@ export function MountTireModal({
   const fetchAvailableTires = async () => {
     setLoadingTires(true);
     try {
-      const allTires = await FleetTiresService.readTiresApiFleetTiresGet() as any[];
+      const allTires =
+        (await FleetTiresService.readTiresApiFleetTiresGet()) as any[];
       // Filtramos solo las que NO tienen unidad asignada (están en almacén)
       const inStock = allTires.filter(
         (t) => !t.unidad_actual_id && t.estado !== "desecho",
@@ -109,10 +110,13 @@ export function MountTireModal({
   const onFormSubmit = async (data: MountTireFormData) => {
     setIsSubmitting(true);
     try {
-      await FleetTiresService.assignTireApiFleetTiresTireIdAssignPost(Number(data.selectedTireId), {
-        unit_id: unitId,
-        posicion: Number(data.selectedPosition),
-      });
+      await FleetTiresService.assignTireApiFleetTiresTireIdAssignPost(
+        Number(data.selectedTireId),
+        {
+          unit_id: unitId,
+          posicion: Number(data.selectedPosition),
+        },
+      );
 
       toast.success("Llanta montada correctamente en la unidad.");
       onSuccess(); // Recarga la unidad en la vista principal
@@ -223,7 +227,7 @@ export function MountTireModal({
                   />
                 </div>
 
-                {/* 🎯 SECCIÓN 2: Posicionamiento */}
+                {/*  SECCIÓN 2: Posicionamiento */}
                 <div className="space-y-6 pt-2">
                   <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground/80 flex items-center gap-2 border-b border-border pb-2">
                     <Truck className="h-3.5 w-3.5 text-emerald-500" />

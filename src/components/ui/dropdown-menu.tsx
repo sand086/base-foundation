@@ -100,7 +100,7 @@ const DropdownMenuItem = React.forwardRef<
       "relative flex cursor-pointer select-none items-center rounded-lg px-3 py-2 text-[12px] font-medium outline-none transition-all duration-200",
       // 🌓 TEXT COLORS
       "text-slate-700 dark:text-white/80",
-      // 🎯 SELECTION: BRAND RED
+      //  SELECTION: BRAND RED
       "focus:bg-brand-red focus:text-white focus:shadow-[0_4px_12px_rgba(190,8,17,0.3)] focus:scale-[1.02]",
       "data-[disabled]:pointer-events-none data-[disabled]:opacity-30",
       inset && "pl-9",

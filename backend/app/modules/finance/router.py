@@ -4,7 +4,7 @@ from typing import List, Dict, Any
 
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Body, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from lxml import etree
 
 from app.db.database import get_db
@@ -75,7 +75,7 @@ def create_bank_account(
     return crud.create_bank_account(db, account, current_user.id)
 
 
-# 🎯 NUEVO: RUTA PARA EDITAR (PATCH)
+#  NUEVO: RUTA PARA EDITAR (PATCH)
 @router.patch("/bank-accounts/{account_id}", response_model=schemas.BankAccountResponse)
 def update_bank_account(
     account_id: int,
@@ -94,7 +94,7 @@ def update_bank_account(
     return updated_account
 
 
-# 🎯 NUEVO: RUTA PARA ELIMINAR/ARCHIVAR (DELETE)
+#  NUEVO: RUTA PARA ELIMINAR/ARCHIVAR (DELETE)
 @router.delete("/bank-accounts/{account_id}")
 def delete_bank_account(
     account_id: int,
@@ -151,6 +151,12 @@ def get_receivable_invoices(
     """
     invoices = (
         db.query(models.ReceivableInvoice)
+        .options(
+            joinedload(models.ReceivableInvoice.client),
+            joinedload(
+                models.ReceivableInvoice.payments
+            ),  # 🚀 Cargamos los pagos asociados
+        )
         .filter(
             models.ReceivableInvoice.record_status == models.RecordStatus.ACTIVO.value
         )
@@ -161,12 +167,29 @@ def get_receivable_invoices(
     )
 
     response = []
+
     for inv in invoices:
+        # Empaquetamos el historial de pagos para esta factura
+        pagos_list = []
+        for p in inv.payments:
+            pagos_list.append(
+                {
+                    "id": p.id,
+                    "fecha_pago": p.fecha_pago.isoformat() if p.fecha_pago else None,
+                    "monto": p.monto,
+                    "metodo_pago": p.metodo_pago,
+                    "referencia": p.referencia,
+                    "cuenta_deposito": p.cuenta_deposito,
+                    "complemento_uuid": p.complemento_uuid,  # 🚀 Clave para poder descargar el PDF/XML
+                }
+            )
+
         response.append(
             {
                 "id": inv.id,
                 "uuid": inv.uuid,
                 "folio_interno": inv.folio_interno,
+                "concepto": inv.concepto,  # 🚀 Faltaba esto
                 "monto_total": inv.monto_total,
                 "saldo_pendiente": inv.saldo_pendiente,
                 "fecha_emision": (
@@ -177,8 +200,15 @@ def get_receivable_invoices(
                 ),
                 "estatus": inv.estatus,
                 "moneda": inv.moneda,
+                "pdf_url": inv.pdf_url,  # 🚀 Faltaba esto
+                "xml_url": inv.xml_url,  # 🚀 Faltaba esto
+                "payments": pagos_list,  # 🚀 Faltaba esto
                 "client": (
-                    {"id": inv.client.id, "razon_social": inv.client.razon_social}
+                    {
+                        "id": inv.client.id,
+                        "razon_social": inv.client.razon_social,
+                        "rfc": inv.client.rfc,  # 🚀 Faltaba esto
+                    }
                     if inv.client
                     else None
                 ),
@@ -342,3 +372,51 @@ async def upload_payment_xml(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=f"Error al leer XML: {str(e)}")
+
+
+# =====================================================================
+# PAGOS A PROVEEDORES Y CAJA CHICA (Endpoints)
+# =====================================================================
+
+
+@router.post("/payables/{invoice_id}/payments")
+def register_provider_payment(
+    invoice_id: int,
+    payment: dict = Body(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """Aplica un pago a una factura de proveedor (CXP) y descuenta del banco."""
+    try:
+        invoice = crud.register_payable_payment(
+            db, invoice_id, payment, current_user.id
+        )
+        if not invoice:
+            raise HTTPException(
+                status_code=404, detail="Factura de proveedor no encontrada"
+            )
+
+        return {
+            "message": "Pago a proveedor registrado exitosamente. Se descontó del banco.",
+            "nuevo_saldo_factura": invoice.saldo_pendiente,
+            "estatus": invoice.estatus,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/petty-cash")
+def register_petty_cash(
+    expense: dict = Body(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """Registra un gasto de Caja Chica (Sin XML) afectando directo la Tesorería."""
+    try:
+        movimiento = crud.register_petty_cash_expense(db, expense, current_user.id)
+        return {
+            "message": "Gasto de Caja Chica registrado exitosamente.",
+            "movimiento_id": movimiento.id,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))

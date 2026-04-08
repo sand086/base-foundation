@@ -23,7 +23,7 @@ export function useBankAccounts() {
     staleTime: 1000 * 60 * 10,
   });
 
-  const API_PATH = "/api/finance/bank-accounts";
+  const API_PATH = "/finance/bank-accounts";
 
   const createMutation = useMutation({
     mutationFn: async (newAccount: Partial<BankAccount>) => {
