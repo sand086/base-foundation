@@ -68,6 +68,7 @@ interface UpdateStatusModalProps {
   activeLeg?: TripLeg;
   // FIX CRÍTICO 1: Permitir que onSubmit sea asíncrono (Promise) para esperar al backend
   onSubmit: (data: StatusUpdateData) => Promise<void> | void;
+  onSubmit: (data: StatusUpdateData) => void | Promise<void> | Promise<string | number>;
   eventToEdit?: TripTimelineEvent | null; // Prop para el modo edición
 }
 
