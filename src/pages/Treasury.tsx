@@ -30,7 +30,6 @@ import { BankMovement, BankAccount } from "@/features/treasury/types";
 import { BankAccountsTab } from "@/features/treasury/components/BankAccountsTab";
 import { TreasuryFlowTab } from "@/features/treasury/components/TreasuryFlowTab";
 import { BankAccountModal } from "@/features/treasury/components/BankAccountModal";
-import { BankAccountDetailModal } from "@/features/treasury/components/BankAccountDetailModal";
 import { MovementDetailModal } from "@/features/treasury/components/MovementDetailModal";
 
 export default function Treasury() {
@@ -280,11 +279,7 @@ export default function Treasury() {
         onOpenChange={setIsAccountModalOpen}
         account={selectedAccount}
       />
-      <BankAccountDetailModal
-        open={isAccountDetailOpen}
-        onOpenChange={setIsAccountDetailOpen}
-        account={selectedAccount}
-      />
+
       <MovementDetailModal
         open={isDetailModalOpen}
         onOpenChange={setIsDetailModalOpen}

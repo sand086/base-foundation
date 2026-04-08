@@ -129,13 +129,6 @@ export function BankAccountsTab({
                     className="glass-panel border-border min-w-[160px] z-50 rounded-xl dark:bg-slate-900/95 shadow-xl"
                   >
                     <DropdownMenuItem
-                      onClick={() => onView(account)}
-                      className="gap-2 font-bold text-xs uppercase cursor-pointer rounded-lg dark:text-slate-200"
-                    >
-                      <Eye className="h-4 w-4 text-slate-500" /> Ver Detalles
-                    </DropdownMenuItem>
-
-                    <DropdownMenuItem
                       onClick={() => onEdit(account)}
                       className="gap-2 font-bold text-xs uppercase cursor-pointer rounded-lg dark:text-slate-200"
                     >

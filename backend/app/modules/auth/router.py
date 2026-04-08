@@ -11,12 +11,15 @@ from fastapi import (
 )
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 from jose import JWTError, jwt, ExpiredSignatureError
+from app.core.security import verify_password
 
 from app.db.database import get_db
 from app.models import models
 from app.core import security
 from app.core.config import settings
+from typing import List, Optional
 
 from . import schemas
 
@@ -604,3 +607,23 @@ async def request_emergency_code(
     # email_service.send_2fa_emergency(user.email, code)
 
     return {"message": "Código enviado", "expires_in": 300}
+
+
+class VerifyPasswordRequest(BaseModel):
+    password: str
+
+
+@router.post("/verify-password")
+def verify_user_password(
+    request: VerifyPasswordRequest,
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """
+    Verifica la contraseña del usuario en sesión para operaciones .
+    """
+    if not verify_password(request.password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La contraseña de autorización es incorrecta.",
+        )
+    return {"status": "success", "message": "Identidad confirmada."}
