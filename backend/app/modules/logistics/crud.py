@@ -754,7 +754,7 @@ def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload)
 
     trips_to_check = set()
     num_legs = len(legs)
-
+    conceptos_json = [c.model_dump() for c in payload.conceptos_extra] if payload.conceptos_extra else []
     for leg in legs:
         leg.status = "liquidado"
 
