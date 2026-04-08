@@ -504,6 +504,7 @@ export default function ClientsNew() {
               nombreRuta: t.nombre_ruta,
               tipoUnidad: t.tipo_unidad,
               tarifaBase: Number(t.tarifa_base || 0),
+              sueldoOperador: Number(t.sueldo_operador || 0),
               costoCasetas: Number(t.costo_casetas || 0),
               distancia_km: Number(t.distancia_km || 0),
               iva_porcentaje: Number(t.iva_porcentaje ?? 16),

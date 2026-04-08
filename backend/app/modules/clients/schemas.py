@@ -31,6 +31,7 @@ class TariffBase(ORMBase):
     nombre_ruta: str = Field(..., max_length=200)
     tipo_unidad: UnitType
     tarifa_base: float
+    sueldo_operador: float = 0.0
     costo_casetas: float = 0.0
     moneda: Currency = Currency.MXN
     vigencia: date
@@ -53,6 +54,7 @@ class TariffUpdate(ORMBase):
     tipo_unidad: Optional[UnitType] = None
     tarifa_base: Optional[float] = None
     costo_casetas: Optional[float] = None
+    sueldo_operador: Optional[float] = None
     moneda: Optional[Currency] = None
     vigencia: Optional[date] = None
     estatus: Optional[TariffStatus] = None

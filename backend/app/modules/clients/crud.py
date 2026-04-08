@@ -1,4 +1,3 @@
-
 # --- Fuente: crud_clients.py ---
 from sqlalchemy.orm import Session, joinedload, contains_eager
 from sqlalchemy import and_
@@ -243,7 +242,7 @@ def update_client(db: Session, client_id: int, client_data: schemas.ClientUpdate
                         if tv is not None:
                             setattr(db_tariff, tk, tv)
 
-                # CREATE nueva tarifa
+                # CREATE nueva tarifa en un subcliente existente
                 else:
                     new_t_data = tariff_in.model_dump(
                         exclude={
@@ -256,7 +255,6 @@ def update_client(db: Session, client_id: int, client_data: schemas.ClientUpdate
                         }
                     )
                     new_tariff = models.Tariff(**new_t_data)
-                    # record_status default A, pero lo dejamos explícito por claridad
                     new_tariff.record_status = RecordStatus.ACTIVO
                     db_sub.tariffs.append(new_tariff)
 
@@ -265,7 +263,7 @@ def update_client(db: Session, client_id: int, client_data: schemas.ClientUpdate
                 if t_id not in incoming_tariff_ids:
                     t_obj.record_status = RecordStatus.ELIMINADO
 
-        # CREATE nuevo subclient
+        # CREATE nuevo subclient (Y sus tarifas)
         else:
             new_sub_data = sub_in.model_dump(
                 exclude={
@@ -302,7 +300,6 @@ def update_client(db: Session, client_id: int, client_data: schemas.ClientUpdate
     for s_id, s_obj in existing_subs.items():
         if s_id not in incoming_sub_ids:
             s_obj.record_status = RecordStatus.ELIMINADO
-            # Soft-cascade: eliminar también sus tarifas (para que no queden visibles si consultas directo)
             for t in s_obj.tariffs or []:
                 if t.record_status != RecordStatus.ELIMINADO:
                     t.record_status = RecordStatus.ELIMINADO
@@ -344,4 +341,3 @@ def delete_client(db: Session, client_id: int):
 
     db.commit()
     return True
-
