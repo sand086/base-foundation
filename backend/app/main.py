@@ -1,7 +1,17 @@
+import os
+import logging
+
+# 👉 ESTO QUITA LAS ADVERTENCIAS DE WINDOWS (GIO/GLib)
+os.environ["GIO_USE_VFS"] = "local"
+os.environ["G_MESSAGES_DEBUG"] = ""
+
+# Opcional: Silenciar logs de librerías ruidosas en la terminal
+logging.getLogger("pisa").setLevel(logging.ERROR)
+logging.getLogger("weasyprint").setLevel(logging.ERROR)
+
 from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-import os
 
 # 1. importacion de Routers de Dominios (Módulos)
 from app.modules.auth.router import router as auth_router

@@ -285,6 +285,10 @@ class Client(AuditMixin, Base):
     dias_credito = Column(Integer, default=0)
     contrato_url = Column(String(500))
 
+    constancia_fiscal_url = Column(String(500), nullable=True)
+    acta_constitutiva_url = Column(String(500), nullable=True)
+    comprobante_domicilio_url = Column(String(500), nullable=True)
+
     sub_clients = relationship(
         "SubClient", back_populates="client", cascade="all, delete-orphan"
     )

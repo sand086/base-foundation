@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.models import models
 from app.models.models import RecordStatus
 from . import schemas
+from fastapi import HTTPException, status
 
 
 def get_clients(db: Session, skip: int = 0, limit: int = 100):
@@ -53,74 +54,83 @@ def get_client(db: Session, client_id: int):
 
 def create_client(db: Session, client: schemas.ClientCreate):
     """Crea cliente + subclientes + tarifas con mapeo completo."""
+    try:
 
-    # 1. Crear el objeto principal Client
-    db_client = models.Client(
-        public_id=client.public_id,
-        razon_social=client.razon_social,
-        rfc=client.rfc,
-        regimen_fiscal=client.regimen_fiscal,
-        uso_cfdi=client.uso_cfdi,
-        contacto_principal=client.contacto_principal,
-        telefono=client.telefono,
-        email=client.email,
-        direccion_fiscal=client.direccion_fiscal,
-        codigo_postal_fiscal=client.codigo_postal_fiscal,
-        estatus=client.estatus,
-        dias_credito=client.dias_credito,
-        contrato_url=client.contrato_url,
-        constancia_fiscal_url=getattr(client, "constancia_fiscal_url", None),
-        acta_constitutiva_url=getattr(client, "acta_constitutiva_url", None),
-        comprobante_domicilio_url=getattr(client, "comprobante_domicilio_url", None),
-    )
-    db.add(db_client)
-    db.flush()  # Para obtener el db_client.id
-
-    # 2. Procesar Subclientes
-    for sub in client.sub_clients:
-        db_sub = models.SubClient(
-            client_id=db_client.id,
-            nombre=sub.nombre,
-            alias=sub.alias,
-            direccion=sub.direccion,
-            ciudad=sub.ciudad,
-            estado=sub.estado,
-            codigo_postal=sub.codigo_postal,
-            tipo_operacion=sub.tipo_operacion,  # Sin acento
-            contacto=sub.contacto,
-            telefono=sub.telefono,
-            horario_recepcion=sub.horario_recepcion,
-            horario_cita=getattr(sub, "horario_cita", None),
-            dias_credito=sub.dias_credito,
-            requiere_contrato=sub.requiere_contrato,
-            convenio_especial=sub.convenio_especial,
-            contrato_url=sub.contrato_url if hasattr(sub, "contrato_url") else None,
+        # 1. Crear el objeto principal Client
+        db_client = models.Client(
+            public_id=client.public_id,
+            razon_social=client.razon_social,
+            rfc=client.rfc,
+            regimen_fiscal=client.regimen_fiscal,
+            uso_cfdi=client.uso_cfdi,
+            contacto_principal=client.contacto_principal,
+            telefono=client.telefono,
+            email=client.email,
+            direccion_fiscal=client.direccion_fiscal,
+            codigo_postal_fiscal=client.codigo_postal_fiscal,
+            estatus=client.estatus,
+            dias_credito=client.dias_credito,
+            contrato_url=client.contrato_url,
+            constancia_fiscal_url=getattr(client, "constancia_fiscal_url", None),
+            acta_constitutiva_url=getattr(client, "acta_constitutiva_url", None),
+            comprobante_domicilio_url=getattr(
+                client, "comprobante_domicilio_url", None
+            ),
         )
-        db.add(db_sub)
-        db.flush()
+        db.add(db_client)
+        db.flush()  # Para obtener el db_client.id
 
-        # 3. Procesar Tarifas del Subcliente
-        for tariff in sub.tariffs:
-            db_tariff = models.Tariff(
-                sub_client_id=db_sub.id,
-                rate_template_id=tariff.rate_template_id,
-                nombre_ruta=tariff.nombre_ruta,
-                tipo_unidad=tariff.tipo_unidad,
-                tarifa_base=tariff.tarifa_base,
-                sueldo_operador=tariff.sueldo_operador,
-                costo_casetas=tariff.costo_casetas,
-                iva_porcentaje=tariff.iva_porcentaje,
-                retencion_porcentaje=tariff.retencion_porcentaje,
-                distancia_km=tariff.distancia_km,
-                moneda=tariff.moneda,
-                vigencia=tariff.vigencia,
-                estatus=tariff.estatus,
+        # 2. Procesar Subclientes
+        for sub in client.sub_clients:
+            db_sub = models.SubClient(
+                client_id=db_client.id,
+                nombre=sub.nombre,
+                alias=sub.alias,
+                direccion=sub.direccion,
+                ciudad=sub.ciudad,
+                estado=sub.estado,
+                codigo_postal=sub.codigo_postal,
+                tipo_operacion=sub.tipo_operacion,  # Sin acento
+                contacto=sub.contacto,
+                telefono=sub.telefono,
+                horario_recepcion=sub.horario_recepcion,
+                horario_cita=getattr(sub, "horario_cita", None),
+                dias_credito=sub.dias_credito,
+                requiere_contrato=sub.requiere_contrato,
+                convenio_especial=sub.convenio_especial,
+                contrato_url=sub.contrato_url if hasattr(sub, "contrato_url") else None,
             )
-            db.add(db_tariff)
+            db.add(db_sub)
+            db.flush()
 
-    db.commit()
-    db.refresh(db_client)
-    return db_client
+            # 3. Procesar Tarifas del Subcliente
+            for tariff in sub.tariffs:
+                db_tariff = models.Tariff(
+                    sub_client_id=db_sub.id,
+                    rate_template_id=tariff.rate_template_id,
+                    nombre_ruta=tariff.nombre_ruta,
+                    tipo_unidad=tariff.tipo_unidad,
+                    tarifa_base=tariff.tarifa_base,
+                    sueldo_operador=tariff.sueldo_operador,
+                    costo_casetas=tariff.costo_casetas,
+                    iva_porcentaje=tariff.iva_porcentaje,
+                    retencion_porcentaje=tariff.retencion_porcentaje,
+                    distancia_km=tariff.distancia_km,
+                    moneda=tariff.moneda,
+                    vigencia=tariff.vigencia,
+                    estatus=tariff.estatus,
+                )
+                db.add(db_tariff)
+
+        db.commit()
+        db.refresh(db_client)
+        return db_client
+    except Exception as e:
+        db.rollback()
+        print(
+            f"❌ ERROR REAL EN CREATE_CLIENT: {str(e)}"
+        )  # Esto saldrá en tu terminal negra
+        raise HTTPException(status_code=400, detail=f"Error de base de datos: {str(e)}")
 
 
 def update_client(db: Session, client_id: int, client_data: schemas.ClientUpdate):

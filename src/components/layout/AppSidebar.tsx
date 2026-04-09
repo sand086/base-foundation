@@ -139,7 +139,12 @@ interface AppSidebarProps {
   onMobileClose?: () => void;
 }
 
-export function AppSidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: AppSidebarProps) {
+export function AppSidebar({
+  collapsed,
+  onToggle,
+  mobileOpen,
+  onMobileClose,
+}: AppSidebarProps) {
   const location = useLocation();
   const [expandedItems, setExpandedItems] = useState<string[]>([
     "Clientes",
@@ -156,6 +161,7 @@ export function AppSidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: A
   const isActive = (path?: string, children?: { path: string }[]) => {
     if (path && location.pathname === path) return true;
     if (children)
+      // Esto hace que el botón "Flota" se prenda correctamente si estás en cualquier hijo
       return children.some((child) => location.pathname.startsWith(child.path));
     return false;
   };
@@ -218,7 +224,9 @@ export function AppSidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: A
         "bg-card/95 dark:bg-brand-navy/95 border-r border-border shadow-sm dark:shadow-[20px_0_40px_rgba(0,0,0,0.2)]",
         // Mobile: slide in/out as overlay
         "md:translate-x-0",
-        mobileOpen ? "translate-x-0 w-64" : "-translate-x-full md:translate-x-0",
+        mobileOpen
+          ? "translate-x-0 w-64"
+          : "-translate-x-full md:translate-x-0",
         // Desktop: collapse
         collapsed ? "md:w-16" : "md:w-64",
       )}
@@ -309,6 +317,10 @@ export function AppSidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: A
                           <NavLink
                             key={child.path}
                             to={child.path}
+                            end={
+                              child.path === "/fleet" ||
+                              child.path === "/clients"
+                            }
                             className={({ isActive: isChildActive }) =>
                               cn(
                                 "block rounded-lg px-3 py-2 text-[11px] transition-all duration-300 relative overflow-hidden",
