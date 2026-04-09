@@ -232,6 +232,7 @@ export function OperatorDetailSheet({
     reset();
     setIsEditing(false);
     setTempFotoUrl(null);
+    setLocalPreview(null);
   };
 
   // 👉 4. GUARDAR FORMULARIO + URL DE LA FOTO
@@ -251,14 +252,13 @@ export function OperatorDetailSheet({
     };
 
     onSave?.(updatedOperator);
-
     toast({
       title: "Cambios guardados",
       description: `El expediente de ${data.name} ha sido actualizado.`,
     });
-
     setIsEditing(false);
     setTempFotoUrl(null);
+    setLocalPreview(null);
   };
 
   // 👉 5. SUBIDA DE LA FOTO (Input File)
@@ -266,25 +266,29 @@ export function OperatorDetailSheet({
     const file = e.target.files?.[0];
     if (!file || !operator) return;
 
+    // 👉 MAGIA DE UX: Preview inmediato desde la memoria local
+    setLocalPreview(URL.createObjectURL(file));
+
     try {
       toast({ title: "Subiendo imagen...", description: "Espera un momento." });
 
       const result =
         await FleetOperatorsService.uploadOperatorDocumentApiFleetOperatorsOperatorIdDocumentsDocTypePost(
           Number(operator.id),
-          "foto", // El backend mapeará este docType a foto_url
+          "foto",
           { file },
         );
 
       if (result.url) {
-        setTempFotoUrl(result.url); // Guardamos la URL en el estado temporal
+        setTempFotoUrl(result.url);
         toast({
           title: "Foto cargada",
-          description: "Presiona el botón Guardar para aplicar los cambios.",
+          description: "Presiona Guardar para confirmar.",
         });
       }
     } catch (error) {
       toast({ title: "Error al subir foto", variant: "destructive" });
+      setLocalPreview(null); // Si falla, quitamos el preview
     } finally {
       e.target.value = "";
     }
@@ -378,7 +382,7 @@ export function OperatorDetailSheet({
               </div>
               <div className="flex flex-col gap-1 text-left">
                 <span className="text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white heading-crisp leading-none">
-                  Expediente de {operator.name}
+                  Expediente de Operador
                 </span>
                 <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-1 tracking-normal normal-case">
                   Control documental.
@@ -443,9 +447,10 @@ export function OperatorDetailSheet({
                   <Avatar className="h-28 w-28 border border-slate-200 dark:border-white/10">
                     <AvatarImage
                       src={
-                        tempFotoUrl
+                        localPreview ||
+                        (tempFotoUrl
                           ? getFullImageUrl(tempFotoUrl)
-                          : getFullImageUrl(operator.foto_url)
+                          : getFullImageUrl(operator.foto_url))
                       }
                       className="object-cover"
                     />
