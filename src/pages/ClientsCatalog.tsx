@@ -485,7 +485,7 @@ export default function ClientsCatalog() {
                       client={client}
                       isExpanded={expandedClients.has(client.id)}
                       onToggle={() => toggleClientExpanded(client.id)}
-                      onEdit={() => navigate(`/clients/${client.id}`)}
+                      onEdit={() => navigate(`/clients/edit/${client.id}`)}
                       onDelete={() => {
                         setClientToDelete(client);
                         setDeleteDialogOpen(true);

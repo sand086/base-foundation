@@ -1214,6 +1214,7 @@ class RateTemplate(AuditMixin, Base):
     client_id = Column(
         Integer, ForeignKey("clients.id", ondelete="RESTRICT"), nullable=True
     )
+
     origen = Column(String(150), nullable=False)
     destino = Column(String(150), nullable=False)
     tipo_unidad = Column(pg_enum(TollUnitType, "tollunittype"), nullable=False)

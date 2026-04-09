@@ -254,7 +254,7 @@ const calcularTotalesTarifa = (tarifa: TarifaAutorizada) => {
  * Componente
  * ========================= */
 
-export default function ClientsNew() {
+export default function ClientForm() {
   const navigate = useNavigate();
   const { clientId } = useParams();
   const isEditMode = !!clientId;
