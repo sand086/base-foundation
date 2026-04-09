@@ -8,6 +8,10 @@ import React, {
 import { User } from "@/features/users/types";
 import { authService } from "@/features/users/services/authService";
 
+// 👉 1. IMPORTAR EL OBJETO OpenAPI GENERADO
+// Asegúrate de que la ruta apunte a donde está tu carpeta 'generated'
+import { OpenAPI } from "@/api/generated/core/OpenAPI";
+
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
@@ -15,7 +19,6 @@ interface AuthContextType {
   logout: () => void;
   isLoading: boolean;
   verifyOtp: (tempToken: string, code: string) => Promise<void>;
-  //  AGREGAMOS LA DEFINICIÓN AQUÍ
   updateUser: (newData: Partial<User>) => void;
 }
 
@@ -29,20 +32,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     const storedUser = authService.getCurrentUser();
-    if (storedUser && authService.isAuthenticated()) {
+    // Recuperamos el token de acceso
+    const token = localStorage.getItem("access_token");
+
+    if (storedUser && authService.isAuthenticated() && token) {
       setUser(storedUser);
+
+      // 👉 2. INYECTAR EL TOKEN AL RECARGAR LA PÁGINA (F5)
+      OpenAPI.TOKEN = token;
+
+      // OPCIONAL: Si tu API necesita saber la URL base globalmente, la defines aquí.
+      // Si ya la configuraste en otro lado o en tu generador, puedes ignorar esta línea.
+      // OpenAPI.BASE = "http://localhost:8080";
     }
     setIsLoading(false);
   }, []);
 
-  //  IMPLEMENTACIÓN DE UPDATE USER
   const updateUser = (newData: Partial<User>) => {
     setUser((prevUser) => {
       if (!prevUser) return null;
 
       const updatedUser = { ...prevUser, ...newData };
-
-      // Es vital actualizar localStorage para que el cambio persista al recargar (F5)
       localStorage.setItem("user_data", JSON.stringify(updatedUser));
 
       return updatedUser;
@@ -54,11 +64,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     localStorage.setItem("refresh_token", refreshToken);
     localStorage.setItem("user_data", JSON.stringify(userData));
     setUser(userData);
+
+    // 👉 3. INYECTAR EL TOKEN AL INICIAR SESIÓN EXITOSAMENTE
+    OpenAPI.TOKEN = token;
   };
 
   const logout = () => {
     authService.logout();
     setUser(null);
+
+    // 👉 4. LIMPIAR EL TOKEN AL CERRAR SESIÓN POR SEGURIDAD
+    OpenAPI.TOKEN = undefined;
+
     window.location.href = "/login";
   };
 
@@ -85,7 +102,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         logout,
         isLoading,
         verifyOtp,
-        //  PASAMOS LA FUNCIÓN AL PROVIDER
         updateUser,
       }}
     >
