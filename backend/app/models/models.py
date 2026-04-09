@@ -323,7 +323,8 @@ class SubClient(AuditMixin, Base):
 
     contacto = Column(String(100))
     telefono = Column(String(20))
-    horario_recepcion = Column(String(50))
+    horario_cita = Column(String(50), nullable=True)
+    horario_recepcion = Column(String(50), nullable=True)
     estatus = Column(String(20), default="activo")
     dias_credito = Column(Integer)
     requiere_contrato = Column(Boolean, default=False)
