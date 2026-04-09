@@ -722,8 +722,10 @@ export default function ClientsNew() {
         })),
       };
 
-      if (isEditMode && clientId) {
-        await clientService.updateClient(parseInt(clientId), payload);
+      const parsedClientId = parseInt(clientId as string, 10);
+
+      if (isEditMode && clientId && !isNaN(parsedClientId)) {
+        await clientService.updateClient(parsedClientId, payload);
         toast.success("Cliente y Convenio guardados correctamente");
       } else {
         await clientService.createClient(payload);
@@ -1370,10 +1372,10 @@ export default function ClientsNew() {
                                 <SelectItem value="nacional">
                                   Nacional
                                 </SelectItem>
-                                <SelectItem value="importacion">
+                                <SelectItem value="importación">
                                   Importación
                                 </SelectItem>
-                                <SelectItem value="exportacion">
+                                <SelectItem value="exportación">
                                   Exportación
                                 </SelectItem>
                               </SelectContent>

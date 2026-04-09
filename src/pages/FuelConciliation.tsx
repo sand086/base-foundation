@@ -954,8 +954,8 @@ export default function FuelConciliation() {
           <div className="bg-slate-100 dark:bg-slate-800 p-6 border-b border-slate-200 dark:border-white/10 flex items-start justify-between">
             <div>
               <DialogTitle className="text-lg font-black uppercase tracking-widest flex items-center gap-2 text-slate-800 dark:text-white">
-                <ShieldCheck className="h-5 w-5 text-blue-500" /> Dictamen de
-                Auditoría
+                <ShieldCheck className="h-5 w-5 text-blue-500" /> Detalles de
+                Conciliación
               </DialogTitle>
               <DialogDescription className="text-slate-500 dark:text-slate-400 mt-1 text-xs font-bold">
                 Folio: {legToView?.trip?.public_id || legToView?.trip_id} •
