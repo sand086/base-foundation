@@ -9,8 +9,10 @@ import { User } from "@/features/users/types";
 import { authService } from "@/features/users/services/authService";
 
 // 👉 1. IMPORTAR EL OBJETO OpenAPI GENERADO
-// Asegúrate de que la ruta apunte a donde está tu carpeta 'generated'
 import { OpenAPI } from "@/api/generated/core/OpenAPI";
+
+// Configuración global de la base de la API
+OpenAPI.BASE = import.meta.env.VITE_API_BASE_URL || "";
 
 interface AuthContextType {
   user: User | null;
@@ -20,6 +22,8 @@ interface AuthContextType {
   isLoading: boolean;
   verifyOtp: (tempToken: string, code: string) => Promise<void>;
   updateUser: (newData: Partial<User>) => void;
+  // 👉 Nueva función para obtener la URL correcta de archivos (PDFs/Imágenes)
+  getFileUrl: (path: string | null | undefined) => string;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(
@@ -30,20 +34,39 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // 👉 2. LÓGICA PARA CONSTRUIR URLS DE ARCHIVOS BASADO EN EL ENV
+  const getFileUrl = (path: string | null | undefined): string => {
+    if (!path) return "";
+
+    // Si ya es una URL completa (http...), no hacemos nada
+    if (
+      path.startsWith("http") ||
+      path.startsWith("data:") ||
+      path.startsWith("blob:")
+    ) {
+      return path;
+    }
+
+    // Usamos VITE_BACKEND_URL (que debe ser https://3tapp.online sin el /api)
+    // Si no existe, usamos el origen actual del navegador como fallback
+    const backendUrl =
+      import.meta.env.VITE_BACKEND_URL || window.location.origin;
+
+    // Nos aseguramos de que el path empiece con una sola barra
+    const cleanPath = path.startsWith("/") ? path : `/${path}`;
+
+    return `${backendUrl}${cleanPath}`;
+  };
+
   useEffect(() => {
     const storedUser = authService.getCurrentUser();
-    // Recuperamos el token de acceso
     const token = localStorage.getItem("access_token");
 
     if (storedUser && authService.isAuthenticated() && token) {
       setUser(storedUser);
 
-      // 👉 2. INYECTAR EL TOKEN AL RECARGAR LA PÁGINA (F5)
+      // 👉 INYECTAR EL TOKEN AL RECARGAR LA PÁGINA (F5)
       OpenAPI.TOKEN = token;
-
-      // OPCIONAL: Si tu API necesita saber la URL base globalmente, la defines aquí.
-      // Si ya la configuraste en otro lado o en tu generador, puedes ignorar esta línea.
-      // OpenAPI.BASE = "http://localhost:8080";
     }
     setIsLoading(false);
   }, []);
@@ -65,7 +88,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     localStorage.setItem("user_data", JSON.stringify(userData));
     setUser(userData);
 
-    // 👉 3. INYECTAR EL TOKEN AL INICIAR SESIÓN EXITOSAMENTE
+    // 👉 INYECTAR EL TOKEN AL INICIAR SESIÓN EXITOSAMENTE
     OpenAPI.TOKEN = token;
   };
 
@@ -73,7 +96,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     authService.logout();
     setUser(null);
 
-    // 👉 4. LIMPIAR EL TOKEN AL CERRAR SESIÓN POR SEGURIDAD
+    // 👉 LIMPIAR EL TOKEN AL CERRAR SESIÓN
     OpenAPI.TOKEN = undefined;
 
     window.location.href = "/login";
@@ -103,6 +126,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         isLoading,
         verifyOtp,
         updateUser,
+        getFileUrl, // 👉 Exportamos la función
       }}
     >
       {children}
