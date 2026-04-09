@@ -95,7 +95,10 @@ const App = () => (
 
                   <Route path="clients" element={<ClientsCatalog />} />
                   <Route path="clients/new" element={<ClientForm />} />
-                  <Route path="clients/:clientId" element={<ClientForm />} />
+                  <Route
+                    path="clients/edit/:clientId"
+                    element={<ClientForm />}
+                  />
 
                   <Route path="settlements" element={<TripSettlement />} />
                   <Route path="receivables" element={<Receivables />} />
