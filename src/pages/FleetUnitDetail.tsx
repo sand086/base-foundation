@@ -40,7 +40,7 @@ import { FleetUnitsService, FleetTiresService } from "@/api/generated";
 import { Unit, UnitDocument } from "@/features/units/types";
 import { UnitTire } from "@/features/tires/types";
 
-type UnitDetail = Unit & { documents: UnitDocument[]; tires: UnitTire[]; };
+type UnitDetail = Unit & { documents: UnitDocument[]; tires: UnitTire[] };
 import { DocumentUploadManager } from "@/components/common/DocumentUploadManager";
 
 // MODALES / SHEETS DE LLANTAS
@@ -189,7 +189,9 @@ export default function FlotaUnitDetail() {
     if (!id) return;
     setIsLoading(true);
     try {
-      const apiData: any = await FleetUnitsService.readUnitApiFleetUnitsTermGet(id as string);
+      const apiData: any = await FleetUnitsService.readUnitApiFleetUnitsTermGet(
+        id as string,
+      );
 
       const constructedDocuments = [
         {
@@ -287,7 +289,10 @@ export default function FlotaUnitDetail() {
   const handleEditTireSubmit = async (data: any) => {
     if (!selectedTire) return false;
     try {
-      await FleetTiresService.updateTireApiFleetTiresTireIdPut(Number(selectedTire.id), data);
+      await FleetTiresService.updateTireApiFleetTiresTireIdPut(
+        Number(selectedTire.id),
+        data,
+      );
       toast({ title: "Éxito", description: "Llanta editada correctamente." });
       await loadUnit();
       return true;
@@ -310,11 +315,14 @@ export default function FlotaUnitDetail() {
     notas: string,
   ) => {
     try {
-      await FleetTiresService.assignTireApiFleetTiresTireIdAssignPost(Number(tireId), {
-        unit_id: unidadId ? Number(unidadId) : null,
-        posicion: posicion,
-        notas: notas,
-      });
+      await FleetTiresService.assignTireApiFleetTiresTireIdAssignPost(
+        Number(tireId),
+        {
+          unit_id: unidadId ? Number(unidadId) : null,
+          posicion: posicion,
+          notas: notas,
+        },
+      );
 
       toast({
         title: "Éxito",
@@ -340,11 +348,14 @@ export default function FlotaUnitDetail() {
     descripcion: string,
   ) => {
     try {
-      await FleetTiresService.maintenanceTireApiFleetTiresTireIdMaintenancePost(Number(tireId), {
-        tipo: tipo as any,
-        costo: costo,
-        descripcion: descripcion,
-      });
+      await FleetTiresService.maintenanceTireApiFleetTiresTireIdMaintenancePost(
+        Number(tireId),
+        {
+          tipo: tipo as any,
+          costo: costo,
+          descripcion: descripcion,
+        },
+      );
       toast({
         title: "Éxito",
         description: `Maintenance (${tipo}) registrado.`,
@@ -428,7 +439,10 @@ export default function FlotaUnitDetail() {
           : null,
       };
 
-      await FleetUnitsService.updateUnitApiFleetUnitsUnitIdPut(String(unit.id), payload as any);
+      await FleetUnitsService.updateUnitApiFleetUnitsUnitIdPut(
+        String(unit.id),
+        payload as any,
+      );
 
       toast({
         title: "Cambios guardados",
@@ -498,7 +512,7 @@ export default function FlotaUnitDetail() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={() => navigate("/flota")}>
+          <Button variant="ghost" size="sm" onClick={() => navigate("/fleet")}>
             <ChevronLeft className="h-4 w-4 mr-1" /> Volver
           </Button>
           <Separator orientation="vertical" className="h-8" />
