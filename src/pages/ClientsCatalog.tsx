@@ -351,7 +351,7 @@ export default function ClientsCatalog() {
         <Button
           variant="default"
           size="lg"
-          onClick={() => navigate("/clients/nuevo")}
+          onClick={() => navigate("/clients/new")}
           className="haptic-press shadow-lg shadow-brand-red/20 w-full sm:w-auto"
         >
           <Plus className="h-4 w-4 mr-2" /> Nuevo Cliente

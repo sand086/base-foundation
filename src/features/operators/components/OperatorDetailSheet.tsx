@@ -369,7 +369,7 @@ export function OperatorDetailSheet({
               </div>
               <div className="flex flex-col gap-1 text-left">
                 <span className="text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white heading-crisp leading-none">
-                  Expediente
+                  Expediente de {operator.name}
                 </span>
                 <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-1 tracking-normal normal-case">
                   Control documental.
@@ -542,10 +542,6 @@ export function OperatorDetailSheet({
 
             {/* License Card */}
             <div className="relative overflow-hidden rounded-2xl p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-sm transition-all hover:shadow-md">
-              <div className="absolute top-0 right-0 p-4 opacity-10 dark:opacity-5 pointer-events-none">
-                <CreditCard className="h-24 w-24 text-blue-600 dark:text-blue-400" />
-              </div>
-
               <div className="flex items-start justify-between mb-6 relative z-10">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1 flex items-center gap-1.5">
