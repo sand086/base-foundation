@@ -166,6 +166,23 @@ export function OperatorDetailSheet({
   const [uploadingDocId, setUploadingDocId] = useState<string | null>(null);
 
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
+  const [tempAvatarUrl, setTempAvatarUrl] = useState<string | null>(null);
+
+  // Función para limpiar la URL (la misma que usamos antes)
+  const getFullImageUrl = (path?: string | null) => {
+    if (!path) return undefined;
+    if (
+      path.startsWith("http") ||
+      path.startsWith("data:") ||
+      path.startsWith("blob:")
+    )
+      return path;
+    const baseUrl = (
+      import.meta.env.VITE_BACKEND_URL || window.location.origin
+    ).replace(/\/api$/, "");
+    const cleanPath = path.startsWith("/") ? path : `/${path}`;
+    return `${baseUrl}${cleanPath.startsWith("/api") ? cleanPath : `/api${cleanPath}`}`;
+  };
 
   //  REACT HOOK FORM
   const form = useForm<EditOperatorData>({
@@ -264,6 +281,7 @@ export function OperatorDetailSheet({
       medical_check_expiry: format(data.medical_check_expiry, "yyyy-MM-dd"),
       emergency_contact: data.emergency_contact,
       emergency_phone: data.emergency_phone,
+      foto_url: tempAvatarUrl || operator.foto_url,
     };
 
     onSave?.(updatedOperator);
@@ -274,6 +292,7 @@ export function OperatorDetailSheet({
     });
 
     setIsEditing(false);
+    setTempAvatarUrl(null);
   };
 
   // --- File Handlers ---
@@ -291,11 +310,12 @@ export function OperatorDetailSheet({
     }
 
     try {
-      const result = await FleetOperatorsService.uploadOperatorDocumentApiFleetOperatorsOperatorIdDocumentsDocTypePost(
-        Number(operator.id),
-        uploadingDocId,
-        { file },
-      );
+      const result =
+        await FleetOperatorsService.uploadOperatorDocumentApiFleetOperatorsOperatorIdDocumentsDocTypePost(
+          Number(operator.id),
+          uploadingDocId,
+          { file },
+        );
 
       setDocuments((prev) =>
         prev.map((doc) =>
@@ -324,6 +344,31 @@ export function OperatorDetailSheet({
     } finally {
       setUploadingDocId(null);
       e.target.value = "";
+    }
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !operator) return;
+
+    try {
+      toast({ title: "Subiendo imagen..." });
+      const result =
+        await FleetOperatorsService.uploadOperatorDocumentApiFleetOperatorsOperatorIdDocumentsDocTypePost(
+          Number(operator.id),
+          "avatar", // Usamos "avatar" como tipo de documento
+          { file },
+        );
+
+      if (result.url) {
+        setTempAvatarUrl(result.url); // Guardamos la URL temporalmente
+        toast({
+          title: "Foto cargada",
+          description: "Dale a Guardar para confirmar los cambios.",
+        });
+      }
+    } catch (error) {
+      toast({ title: "Error al subir foto", variant: "destructive" });
     }
   };
 
@@ -401,29 +446,38 @@ export function OperatorDetailSheet({
                     variant="outline"
                     size="icon"
                     onClick={handleCancelEditing}
-                    className="h-10 w-10 haptic-press rounded-xl text-slate-500"
-                    title="Cancelar"
+                    className="h-10 w-10 rounded-xl"
                   >
                     <X className="h-5 w-5" />
                   </Button>
                   <Button
                     size="icon"
                     onClick={form.handleSubmit(onFormSubmit)}
-                    className="h-10 w-10 bg-emerald-600 hover:bg-emerald-700 text-white haptic-press border-none rounded-xl shadow-emerald-500/20"
-                    title="Guardar Cambios"
+                    className="h-10 w-10 bg-emerald-600 text-white rounded-xl"
                   >
                     <Save className="h-5 w-5" />
                   </Button>
                 </>
               ) : (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleStartEditing}
-                  className="gap-1.5 h-10 px-4 rounded-xl font-black text-[10px] uppercase tracking-widest bg-white dark:bg-slate-800 border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-slate-700 shadow-sm haptic-press"
-                >
-                  <Pencil className="h-4 w-4" /> Editar Datos
-                </Button>
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleStartEditing}
+                    className="h-10 rounded-xl font-black text-[10px] uppercase"
+                  >
+                    <Pencil className="h-4 w-4 mr-2" /> Editar
+                  </Button>
+                  {/* 👉 BOTÓN DE CERRAR AGREGADO */}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => onOpenChange(false)}
+                    className="h-10 w-10 rounded-xl text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="h-6 w-6" />
+                  </Button>
+                </>
               )}
             </div>
           </div>
@@ -440,12 +494,26 @@ export function OperatorDetailSheet({
                 >
                   <Avatar className="h-28 w-28 border border-slate-200 dark:border-white/10">
                     <AvatarImage
-                      src={`https://api.dicebear.com/7.x/initials/svg?seed=${operator.name}`}
+                      src={
+                        tempAvatarUrl
+                          ? getFullImageUrl(tempAvatarUrl)
+                          : getFullImageUrl(operator.foto_url)
+                      }
+                      className="object-cover"
                     />
-                    <AvatarFallback className="text-3xl font-black bg-slate-100 dark:bg-slate-800 text-brand-navy dark:text-white uppercase tracking-tighter">
+                    <AvatarFallback className="text-3xl font-black bg-slate-100 dark:bg-slate-800">
                       {(operator.name || "OP").slice(0, 2)}
                     </AvatarFallback>
                   </Avatar>
+
+                  {/* El input oculto debe llamar a la función de upload */}
+                  <input
+                    type="file"
+                    ref={avatarInputRef}
+                    className="hidden"
+                    accept="image/*"
+                    onChange={handleAvatarUpload} // 👉 CONECTADO AQUÍ
+                  />
 
                   {isEditing && (
                     <button
