@@ -185,6 +185,11 @@ const opcionesDiasCredito = [
     color: "bg-emerald-100 text-emerald-700 border-emerald-200",
   },
   {
+    value: 8,
+    label: "8 días",
+    color: "bg-purple-100 text-purple-700 border-purple-200",
+  },
+  {
     value: 15,
     label: "15 días",
     color: "bg-blue-100 text-blue-700 border-blue-200",
@@ -193,6 +198,16 @@ const opcionesDiasCredito = [
     value: 30,
     label: "30 días",
     color: "bg-amber-100 text-amber-700 border-amber-200",
+  },
+  {
+    value: 45,
+    label: "45 días",
+    color: "bg-pink-100 text-pink-700 border-pink-200",
+  },
+  {
+    value: 60,
+    label: "60 días",
+    color: "bg-red-100 text-red-700 border-red-200",
   },
 ];
 
@@ -305,6 +320,7 @@ export default function ClientForm() {
   const dynamicOpcionesDiasCredito = useMemo(() => {
     const base = [
       { value: 0, label: "Contado" },
+      { value: 8, label: "8 días" },
       { value: 15, label: "15 días" },
       { value: 30, label: "30 días" },
       { value: 45, label: "45 días" },
