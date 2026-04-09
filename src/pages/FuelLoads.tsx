@@ -556,7 +556,7 @@ const FuelLoads = () => {
                 {(statsAuditoria.litros / 7).toFixed(1)} L/día
               </span>
               <Badge className="bg-indigo-600 text-white border-none px-3 text-[9px] shadow-sm">
-                Auditoría Activa
+                Registro de detalles Activa
               </Badge>
             </AlertDescription>
           </Alert>

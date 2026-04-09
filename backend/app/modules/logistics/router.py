@@ -1099,4 +1099,4 @@ def reset_audit_endpoint(leg_id: int, db: Session = Depends(get_db)):
     leg = crud.reset_leg_audit(db, leg_id)
     if not leg:
         raise HTTPException(status_code=404, detail="Tramo no encontrado")
-    return {"message": "Auditoría revertida exitosamente"}
+    return {"message": "Registro de detalles revertida exitosamente"}

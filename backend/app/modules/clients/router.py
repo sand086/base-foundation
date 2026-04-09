@@ -216,7 +216,7 @@ async def delete_client_document(
         )
 
     try:
-        # 2. Guardar en Auditoría antes de borrar
+        # 2. Guardar en Registro de detalles antes de borrar
         audit_entry = AuditLog(
             user_id=current_user.id,
             accion=f"Eliminó versión v{doc.version} del documento: {doc.filename}",

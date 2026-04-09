@@ -10,7 +10,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Fuel, Activity, AlertTriangle, CheckCircle2 } from "lucide-react";
+import {
+  Fuel,
+  Activity,
+  AlertTriangle,
+  CheckCircle2,
+  Truck,
+  User,
+  Container,
+  Package,
+} from "lucide-react";
 import { FuelLoad } from "../types";
 import { Trip } from "@/features/trips/types";
 import { cn } from "@/lib/utils";
@@ -94,18 +103,81 @@ export function ConciliarViajeModal({
 
   if (!trip) return null;
 
+  // Referencias rápidas extraídas del objeto trip (JSON)
+  const unit = trip?.legs?.[0]?.unit;
+  const operator = trip?.legs?.[0]?.operator;
+  const trailer = trip?.remolque_1;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[750px] bg-background dark:bg-background border-0 shadow-2xl rounded-2xl">
+      <DialogContent className="sm:max-w-[800px] bg-background dark:bg-background border-0 shadow-2xl rounded-2xl overflow-hidden p-0">
+        {/* HEADER CON TÍTULO Y RUTA */}
         <DialogHeader className="bg-card p-6 border-b border-border">
-          <DialogTitle className="text-xl font-black text-foreground flex items-center gap-2">
-            <Activity className="text-blue-600" />
-            Conciliación Físico vs SM - Viaje #{trip.public_id || trip.id}
-          </DialogTitle>
-          <p className="text-sm font-bold text-muted-foreground uppercase tracking-widest mt-1">
-            {trip.origin} ➔ {trip.destination}
-          </p>
+          <div className="flex justify-between items-start">
+            <div>
+              <DialogTitle className="text-xl font-black text-foreground flex items-center gap-2">
+                <Activity className="text-blue-600" />
+                Conciliación Físico vs SM - Viaje #{trip.public_id || trip.id}
+              </DialogTitle>
+              <p className="text-sm font-bold text-muted-foreground uppercase tracking-widest mt-1">
+                {trip.origin} ➔ {trip.destination}
+              </p>
+            </div>
+            <div className="bg-blue-100 dark:bg-blue-900/30 px-3 py-1 rounded-full border border-blue-200 dark:border-blue-800">
+              <span className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-tighter">
+                Status: {trip.status}
+              </span>
+            </div>
+          </div>
         </DialogHeader>
+
+        {/* NUEVA SECCIÓN: RESUMEN DE OPERACIÓN (DATOS DEL JSON) */}
+        <div className="px-6 py-4 bg-slate-50 dark:bg-slate-900/50 border-b border-border grid grid-cols-4 gap-4">
+          <div className="flex flex-col">
+            <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">
+              Operador
+            </span>
+            <div className="flex items-center gap-2 mt-1">
+              <User className="h-3.5 w-3.5 text-slate-400" />
+              <span className="text-xs font-bold truncate text-slate-700 dark:text-slate-300">
+                {operator?.name || "Sin asignar"}
+              </span>
+            </div>
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">
+              Unidad / Eco
+            </span>
+            <div className="flex items-center gap-2 mt-1">
+              <Truck className="h-3.5 w-3.5 text-slate-400" />
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                {unit?.numero_economico || "N/A"} ({unit?.placas || "---"})
+              </span>
+            </div>
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">
+              Remolque
+            </span>
+            <div className="flex items-center gap-2 mt-1">
+              <Container className="h-3.5 w-3.5 text-slate-400" />
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                {trailer?.numero_economico || "S/R"}
+              </span>
+            </div>
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">
+              Carga / Peso
+            </span>
+            <div className="flex items-center gap-2 mt-1">
+              <Package className="h-3.5 w-3.5 text-slate-400" />
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                {trip.peso_toneladas} Tons
+              </span>
+            </div>
+          </div>
+        </div>
 
         <div className="p-6 grid grid-cols-2 gap-8">
           {/* LECTURAS MANUALES (SM) */}
@@ -155,28 +227,43 @@ export function ConciliarViajeModal({
             </div>
 
             <div className="space-y-2 pt-2 border-t border-border">
-              <Label className="text-xs font-black text-blue-600 uppercase tracking-widest">
+              <Label className="text-xs font-black text-blue-600 uppercase tracking-widest flex justify-between">
                 Odómetro Final
+                <span className="text-[9px] text-muted-foreground italic">
+                  Inicial: {odometroInicial}
+                </span>
               </Label>
               <Input
                 type="number"
-                className="font-mono h-11 bg-blue-50/50 border-blue-200 text-blue-900 shadow-inner"
+                className={cn(
+                  "font-mono h-11 shadow-inner",
+                  odoFinal > 0 && odoFinal <= odometroInicial
+                    ? "bg-rose-50 border-rose-300 text-rose-900"
+                    : "bg-blue-50/50 border-blue-200 text-blue-900",
+                )}
                 placeholder="Ej. 256000"
                 value={lecturaSM.odometroFinal}
                 onChange={(e) =>
                   setLecturaSM((p) => ({ ...p, odometroFinal: e.target.value }))
                 }
               />
-              <p className="text-[9px] text-slate-500 font-medium uppercase tracking-widest ml-1">
-                Servirá como lectura inicial del próximo viaje.
-              </p>
+              {odoFinal > 0 && odoFinal <= odometroInicial ? (
+                <p className="text-[9px] text-rose-600 font-bold uppercase tracking-tighter flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3" /> Error: El odómetro debe
+                  ser mayor al inicial.
+                </p>
+              ) : (
+                <p className="text-[9px] text-slate-500 font-medium uppercase tracking-widest ml-1">
+                  Servirá como lectura inicial del próximo viaje.
+                </p>
+              )}
             </div>
           </div>
 
           {/* RESULTADOS Y COMPARACIÓN */}
           <div className="space-y-5">
             <h3 className="text-xs font-black uppercase tracking-[0.15em] text-muted-foreground border-b border-border pb-2">
-              Auditoría y Rendimiento Real
+              Registro de detalles y Rendimiento Real
             </h3>
 
             <div className="bg-card p-5 rounded-xl border border-border shadow-sm space-y-4">
@@ -206,7 +293,7 @@ export function ConciliarViajeModal({
                 </div>
                 <div
                   className={cn(
-                    "p-4 rounded-xl flex items-center justify-between shadow-inner",
+                    "p-4 rounded-xl flex items-center justify-between shadow-inner transition-colors",
                     hayFaltante
                       ? "bg-rose-50 border border-rose-200"
                       : "bg-emerald-50 border border-emerald-200",
@@ -247,6 +334,32 @@ export function ConciliarViajeModal({
                 )}
               </div>
             </div>
+
+            {/* ALERTAS DE BLOQUEO DE ACTIVOS (SI APLICAN) */}
+            {(unit?.status === "bloqueado" ||
+              trailer?.status === "bloqueado") && (
+              <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 mb-1">
+                  <AlertTriangle className="h-4 w-4" />
+                  <span className="text-[10px] font-black uppercase">
+                    Alertas de Activos
+                  </span>
+                </div>
+                <ul className="text-[9px] text-amber-600 dark:text-amber-500 font-medium list-disc ml-4 uppercase">
+                  {unit?.status === "bloqueado" && (
+                    <li>
+                      Tractor {unit.numero_economico}: {unit.razon_bloqueo}
+                    </li>
+                  )}
+                  {trailer?.status === "bloqueado" && (
+                    <li>
+                      Remolque {trailer.numero_economico}:{" "}
+                      {trailer.razon_bloqueo}
+                    </li>
+                  )}
+                </ul>
+              </div>
+            )}
           </div>
         </div>
 
@@ -261,6 +374,7 @@ export function ConciliarViajeModal({
           <Button
             className="bg-brand-navy text-white font-black uppercase tracking-widest text-xs h-11 px-8 shadow-xl hover:bg-slate-800"
             onClick={handleSubmit}
+            disabled={odoFinal > 0 && odoFinal <= odometroInicial}
           >
             Registrar y Volver al Historial
           </Button>

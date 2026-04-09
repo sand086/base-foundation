@@ -210,7 +210,7 @@ export default function Treasury() {
     <div className="p-4 md:p-8 space-y-8 animate-page-enter pb-20">
       <PageHeader
         title="Gestión de Tesorería"
-        description="Auditoría financiera, flujo de efectivo y administración de cuentas bancarias."
+        description="Registro de detalles financiera, flujo de efectivo y administración de cuentas bancarias."
         icon={<Landmark className="h-8 w-8" />}
       />
 
@@ -302,7 +302,7 @@ export default function Treasury() {
                   Desactivar Cuenta Bancaria
                 </AlertDialogTitle>
                 <p className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mt-1">
-                  Soft Delete • Auditoría Intacta
+                  Soft Delete • Registro de detalles Intacta
                 </p>
               </div>
             </div>

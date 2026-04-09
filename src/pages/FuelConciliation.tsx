@@ -237,7 +237,7 @@ export default function FuelConciliation() {
     const auditEvent = leg.timeline_events?.find(
       (e: any) =>
         e.location === "Conciliación de Combustible" ||
-        e.comments?.includes("Auditoría Fase"),
+        e.comments?.includes("Registro de detalles Fase"),
     );
 
     let kmEcmVal = "";
@@ -274,7 +274,7 @@ export default function FuelConciliation() {
 
     try {
       await axiosClient.post(`/legs/${legToReset}/reset-audit`);
-      toast.success("Auditoría Revertida", {
+      toast.success("Registro de detalles Revertida", {
         id: toastId,
         description: "El tramo ha vuelto a estatus pendiente.",
       });
@@ -371,14 +371,16 @@ export default function FuelConciliation() {
         {
           status: isRobo ? "incidencia" : "info",
           location: "Conciliación de Combustible",
-          comments: `Auditoría Fase. Km ECM: ${kmECM}. Litros ECM: ${ltECM}. Vales: ${vales}. Rend Real: ${rReal.toFixed(2)} km/L. Ver: ${est}.`,
+          comments: `Detalles Fase. Km ECM: ${kmECM}. Litros ECM: ${ltECM}. Vales: ${vales}. Rend Real: ${rReal.toFixed(2)} km/L. Ver: ${est}.`,
           odometro: Number(formData.odometroFinal),
           combustible_litros: vales,
         },
       );
 
       toast.success(
-        isEditing ? "Auditoría Actualizada" : "Auditoría Registrada",
+        isEditing
+          ? "Registro de detalles Actualizada"
+          : "Registro de detalles Registrada",
         {
           description:
             "Se aplicará automáticamente en la Liquidación del chofer.",
@@ -403,7 +405,7 @@ export default function FuelConciliation() {
     const auditEvent = legToView.timeline_events?.find(
       (e: any) =>
         e.location === "Conciliación de Combustible" ||
-        e.comments?.includes("Auditoría Fase"),
+        e.comments?.includes("Registro de detalles Fase"),
     );
     const text = auditEvent?.comments || "";
 
@@ -431,7 +433,7 @@ export default function FuelConciliation() {
     () => [
       {
         key: "last_update",
-        header: "Fecha Auditoría",
+        header: "Fecha Registro de detalles",
         render: (v) => (
           <span className="text-xs font-mono text-slate-500">
             {new Date(String(v)).toLocaleDateString("es-MX")}
@@ -545,7 +547,8 @@ export default function FuelConciliation() {
                       className="text-rose-600 dark:text-rose-400 focus:bg-rose-50 dark:focus:bg-rose-500/10 font-bold uppercase text-[10px] py-2.5 px-3 rounded-lg cursor-pointer"
                       onClick={() => setLegToReset(String(row.id))}
                     >
-                      <Trash2 className="h-3.5 w-3.5 mr-2" /> Eliminar Auditoría
+                      <Trash2 className="h-3.5 w-3.5 mr-2" /> Eliminar Registro
+                      de detalles de detalles
                     </DropdownMenuItem>
                   </>
                 )}
@@ -936,7 +939,9 @@ export default function FuelConciliation() {
                     ) : (
                       <Save className="h-4 w-4 mr-2" />
                     )}
-                    {isEditing ? "Guardar Cambios" : "Guardar Auditoría"}
+                    {isEditing
+                      ? "Guardar Cambios"
+                      : "Guardar Registro de detalles"}
                   </Button>
                 </div>
               </CardContent>
@@ -944,27 +949,35 @@ export default function FuelConciliation() {
           </div>
         )}
       </div>
-
-      {/*  MODAL VER DETALLES ENRIQUECIDO */}
+      {/* ============================================================================ */}
+      {/* MODAL: VISTA ENRIQUECIDA DE DETALLES DE AUDITORÍA */}
+      {/* ============================================================================ */}
       <Dialog
         open={!!legToView}
         onOpenChange={(open) => !open && setLegToView(null)}
       >
         <DialogContent className="sm:max-w-xl rounded-3xl p-0 overflow-hidden border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 shadow-2xl">
+          {/* CABECERA: FOLIO Y FECHA */}
           <div className="bg-slate-100 dark:bg-slate-800 p-6 border-b border-slate-200 dark:border-white/10 flex items-start justify-between">
             <div>
               <DialogTitle className="text-lg font-black uppercase tracking-widest flex items-center gap-2 text-slate-800 dark:text-white">
-                <ShieldCheck className="h-5 w-5 text-blue-500" /> Detalles de
-                Conciliación
+                <ShieldCheck className="h-5 w-5 text-blue-500" />
+                Detalles de Conciliación
               </DialogTitle>
               <DialogDescription className="text-slate-500 dark:text-slate-400 mt-1 text-xs font-bold">
-                Folio: {legToView?.trip?.public_id || legToView?.trip_id} •
-                Fase: {legToView?.leg_type?.replace("_", " ").toUpperCase()}
+                Folio:{" "}
+                <span className="text-blue-600 dark:text-blue-400">
+                  {legToView?.trip?.public_id || legToView?.trip_id}
+                </span>{" "}
+                • Fase:{" "}
+                <span className="uppercase">
+                  {legToView?.leg_type?.replace("_", " ")}
+                </span>
               </DialogDescription>
             </div>
-            <div className="text-right">
+            <div className="text-right mt-6">
               <span className="block text-[9px] uppercase font-black tracking-widest text-slate-400">
-                Fecha Cierre
+                Fecha de Cierre
               </span>
               <span className="font-mono text-xs font-bold text-slate-600 dark:text-slate-300">
                 {parsedAuditDetails?.fechaAudit}
@@ -972,106 +985,147 @@ export default function FuelConciliation() {
             </div>
           </div>
 
-          <div className="p-6">
-            <div className="flex items-center gap-3 mb-6 bg-white dark:bg-slate-950 p-3 rounded-xl border border-slate-100 dark:border-white/5">
-              <div className="h-10 w-10 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center">
-                <User className="h-5 w-5 text-slate-400" />
+          <div className="p-6 space-y-6">
+            {/* SECCIÓN OPERADOR */}
+            <div className="flex items-center justify-between bg-slate-50 dark:bg-white/5 p-4 rounded-2xl border border-slate-100 dark:border-white/5">
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 rounded-full bg-white dark:bg-slate-800 flex items-center justify-center shadow-sm border border-slate-200 dark:border-white/10">
+                  <User className="h-6 w-6 text-slate-400" />
+                </div>
+                <div>
+                  <p className="text-[9px] uppercase font-black tracking-widest text-slate-400">
+                    Operador Auditado
+                  </p>
+                  <p className="text-sm font-black text-slate-800 dark:text-white uppercase">
+                    {legToView?.operator?.name || "N/A"}
+                  </p>
+                </div>
               </div>
-              <div>
+              <div className="text-right">
                 <p className="text-[9px] uppercase font-black tracking-widest text-slate-400">
-                  Operador Auditado
+                  Unidad
                 </p>
-                <p className="text-sm font-bold text-slate-700 dark:text-white">
-                  {legToView?.operator?.name || "N/A"}
-                </p>
+                <Badge variant="secondary" className="font-mono font-bold">
+                  {legToView?.unit?.numero_economico || "S/N"}
+                </Badge>
               </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-3 mb-6">
-              <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-white/5 text-center">
-                <p className="text-[9px] uppercase font-bold text-slate-400 mb-1">
-                  KMs ECM
-                </p>
-                <p className="font-mono font-black text-slate-700 dark:text-white text-lg">
-                  {parsedAuditDetails?.km}
-                </p>
-              </div>
-              <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-white/5 text-center">
-                <p className="text-[9px] uppercase font-bold text-slate-400 mb-1">
-                  Litros ECM
-                </p>
-                <p className="font-mono font-black text-slate-700 dark:text-white text-lg">
-                  {parsedAuditDetails?.ltEcm}
-                </p>
-              </div>
-              <div className="bg-amber-50 dark:bg-amber-900/10 p-3 rounded-xl border border-amber-100 dark:border-amber-900/30 text-center">
-                <p className="text-[9px] uppercase font-bold text-amber-600 dark:text-amber-500 mb-1">
-                  Litros Bomba
-                </p>
-                <p className="font-mono font-black text-amber-700 dark:text-amber-400 text-lg">
-                  {parsedAuditDetails?.vales}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex gap-3 mb-6">
-              <div className="flex-1 bg-blue-50 dark:bg-blue-900/10 p-3 rounded-xl border border-blue-100 dark:border-blue-900/30">
-                <p className="text-[9px] uppercase font-bold text-blue-600 dark:text-blue-400 mb-1">
-                  Rendimiento Real
-                </p>
-                <p className="font-mono font-black text-blue-700 dark:text-blue-300 text-2xl">
-                  {parsedAuditDetails?.rend}{" "}
-                  <span className="text-xs text-blue-500/50">km/L</span>
-                </p>
-              </div>
-              <div
-                className={cn(
-                  "flex-1 p-3 rounded-xl border text-center flex flex-col justify-center",
-                  parsedAuditDetails?.veredicto === "COBRO_OPERADOR"
-                    ? "bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-900/10 dark:border-rose-900/30 dark:text-rose-400"
-                    : "bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-900/10 dark:border-emerald-900/30 dark:text-emerald-400",
-                )}
-              >
-                <p className="text-[9px] uppercase font-black tracking-widest mb-1">
-                  Estatus Final
-                </p>
-                <p className="font-black text-sm uppercase">
-                  {parsedAuditDetails?.veredicto?.replace("_", " ")}
-                </p>
-              </div>
-            </div>
-
-            <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-white/5">
-              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-1.5">
-                <FileText className="h-3 w-3" /> Nota de Resolución de Finanzas
-              </p>
-              <p className="text-xs font-medium text-slate-600 dark:text-slate-300 leading-relaxed border-l-2 border-brand-navy pl-3">
-                {parsedAuditDetails?.textOriginal}
-              </p>
-            </div>
-
-            <div className="mt-4 pt-4 border-t border-slate-100 dark:border-white/5 text-center">
-              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">
-                Odómetro Final del Vehículo:{" "}
-                <span className="font-mono text-blue-500">
-                  {legToView?.odometro_final?.toLocaleString()} km
-                </span>
-              </p>
             </div>
           </div>
 
+          <div className="p-6 space-y-6">
+            {/* MÉTRICAS PRINCIPALES: KMs y Litros */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-slate-50 dark:bg-white/5 p-3 rounded-xl border border-slate-100 dark:border-white/5 text-center shadow-sm">
+                <p className="text-[9px] uppercase font-bold text-slate-400 mb-1 tracking-tighter">
+                  KMs ECM
+                </p>
+                <p className="font-mono font-black text-slate-800 dark:text-white text-lg">
+                  {Number(parsedAuditDetails?.km || 0).toLocaleString()}
+                </p>
+              </div>
+
+              <div className="bg-slate-50 dark:bg-white/5 p-3 rounded-xl border border-slate-100 dark:border-white/5 text-center shadow-sm">
+                <p className="text-[9px] uppercase font-bold text-slate-400 mb-1 tracking-tighter">
+                  Litros ECM
+                </p>
+                <p className="font-mono font-black text-slate-800 dark:text-white text-lg">
+                  {Number(parsedAuditDetails?.ltEcm || 0).toFixed(1)}
+                </p>
+              </div>
+
+              <div className="bg-amber-50 dark:bg-amber-900/10 p-3 rounded-xl border border-amber-100 dark:border-amber-900/30 text-center shadow-sm">
+                <p className="text-[9px] uppercase font-bold text-amber-600 dark:text-amber-500 mb-1 tracking-tighter">
+                  Litros Vales
+                </p>
+                <p className="font-mono font-black text-amber-700 dark:text-amber-400 text-lg">
+                  {Number(parsedAuditDetails?.vales || 0).toFixed(1)}
+                </p>
+              </div>
+            </div>
+
+            {/* RENDIMIENTO Y VEREDICTO */}
+            <div className="flex gap-3">
+              {/* Rendimiento Real */}
+              <div className="flex-1 bg-blue-50 dark:bg-blue-900/20 p-4 rounded-2xl border border-blue-100 dark:border-blue-900/30 flex flex-col justify-center">
+                <p className="text-[9px] uppercase font-black text-blue-600 dark:text-blue-400 mb-1 tracking-widest">
+                  Rendimiento Real
+                </p>
+                <p className="font-mono font-black text-blue-700 dark:text-blue-300 text-3xl flex items-baseline gap-1">
+                  {parsedAuditDetails?.rend || "0.00"}
+                  <span className="text-xs font-bold uppercase opacity-60">
+                    km/L
+                  </span>
+                </p>
+              </div>
+
+              {/* Estatus Final con Lógica Dinámica */}
+              <div
+                className={cn(
+                  "flex-1 p-4 rounded-2xl border flex flex-col justify-center items-center text-center shadow-sm transition-colors",
+                  parsedAuditDetails?.veredicto === "COBRO_OPERADOR"
+                    ? "bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-900/20 dark:border-rose-900/30 dark:text-rose-400"
+                    : "bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-900/20 dark:border-emerald-900/30 dark:text-emerald-400",
+                )}
+              >
+                {parsedAuditDetails?.veredicto === "COBRO_OPERADOR" ? (
+                  <ShieldAlert className="h-6 w-6 mb-1 text-rose-500" />
+                ) : (
+                  <CheckCircle className="h-6 w-6 mb-1 text-emerald-500" />
+                )}
+                <p className="text-[9px] uppercase font-black tracking-widest mb-0.5 opacity-80">
+                  Estatus Final
+                </p>
+                <p className="font-black text-sm uppercase leading-tight tracking-tight">
+                  {parsedAuditDetails?.veredicto?.replace(/_/g, " ") ||
+                    "PENDIENTE"}
+                </p>
+              </div>
+            </div>
+
+            {/* RESUMEN TÉCNICO (LOG) */}
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-800 relative overflow-hidden group">
+              <div className="absolute top-0 left-0 w-1 h-full bg-blue-500/50 group-hover:bg-blue-500 transition-colors" />
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-3 flex items-center gap-2">
+                <FileText className="h-3 w-3 text-blue-400" />
+                Detalles de ruta.
+              </p>
+              <div className=" p-3 rounded-lg">
+                <p className="text-[11px] font-mono font-medium  leading-relaxed italic">
+                  {parsedAuditDetails?.textOriginal ||
+                    "No hay registros adicionales para este tramo."}
+                </p>
+              </div>
+            </div>
+
+            {/* FOOTER: ODÓMETRO FINAL */}
+            <div className="pt-2 text-center border-t border-slate-100 dark:border-white/5">
+              <div className="inline-flex flex-col items-center py-2 px-6 rounded-full bg-slate-50 dark:bg-white/5">
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5 mb-1">
+                  <Gauge className="h-3.5 w-3.5" /> Lectura de Odómetro al
+                  Cierre
+                </p>
+                <p className="font-mono text-xl font-black text-slate-800 dark:text-blue-400">
+                  {Number(legToView?.odometro_final || 0).toLocaleString()}
+                  <span className="text-[10px] ml-1 text-slate-400 uppercase font-bold">
+                    km
+                  </span>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* BOTÓN DE CIERRE */}
           <DialogFooter className="p-4 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-white/10">
             <Button
               onClick={() => setLegToView(null)}
               variant="outline"
-              className="w-full font-bold text-xs uppercase tracking-widest bg-white dark:bg-slate-800"
+              className="w-full font-black text-xs uppercase tracking-widest h-12 rounded-xl bg-white dark:bg-slate-800 shadow-sm hover:bg-slate-100 dark:hover:bg-slate-700 transition-all"
             >
               Cerrar Detalles
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
       {/* Modal Confirmación de Eliminación */}
       <AlertDialog
         open={!!legToReset}
@@ -1083,7 +1137,7 @@ export default function FuelConciliation() {
               <Trash2 size={32} />
             </div>
             <AlertDialogTitle className="text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">
-              Revertir Auditoría
+              Revertir Registro de detalles
             </AlertDialogTitle>
             <AlertDialogDescription className="font-medium text-slate-500 dark:text-slate-400">
               ¿Estás seguro de que deseas eliminar esta conciliación? Los
