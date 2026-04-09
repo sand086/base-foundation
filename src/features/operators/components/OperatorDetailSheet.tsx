@@ -163,6 +163,7 @@ export function OperatorDetailSheet({
 
   // 👉 2. ESTADO PARA LA FOTO
   const [tempFotoUrl, setTempFotoUrl] = useState<string | null>(null);
+  const [localPreview, setLocalPreview] = useState<string | null>(null);
 
   // 👉 3. FUNCIÓN PARA LIMPIAR URL (Evita doble /api)
   const getFullImageUrl = (path?: string | null) => {
@@ -173,11 +174,19 @@ export function OperatorDetailSheet({
       path.startsWith("blob:")
     )
       return path;
+
     const baseUrl = (
       import.meta.env.VITE_BACKEND_URL || window.location.origin
     ).replace(/\/api$/, "");
-    const cleanPath = path.startsWith("/") ? path : `/${path}`;
-    return `${baseUrl}${cleanPath.startsWith("/api") ? cleanPath : `/api${cleanPath}`}`;
+
+    // Limpiamos el path por si el backend mandó "/api/static" o "/static"
+    let cleanPath = path.startsWith("/") ? path : `/${path}`;
+    if (cleanPath.startsWith("/api/")) {
+      cleanPath = cleanPath.replace("/api/", "/");
+    }
+
+    // Ahora forzosamente le inyectamos /api
+    return `${baseUrl}/api${cleanPath}`;
   };
 
   const form = useForm<EditOperatorData>({
