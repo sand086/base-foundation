@@ -32,7 +32,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 
-// Importación de tus componentes corregidos
+// importacion de tus componentes corregidos
 import {
   InputOTP,
   InputOTPGroup,

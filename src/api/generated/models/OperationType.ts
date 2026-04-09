@@ -3,7 +3,7 @@
 /* tslint:disable */
 /* eslint-disable */
 export enum OperationType {
-    IMPORTACI_N = 'importación',
-    EXPORTACI_N = 'exportación',
-    NACIONAL = 'nacional',
+  IMPORTACI_N = "importacion",
+  EXPORTACI_N = "exportacion",
+  NACIONAL = "nacional",
 }

@@ -114,8 +114,8 @@ class TariffStatus(str, PyEnum):
 
 
 class OperationType(str, PyEnum):
-    IMPORTACION = "importación"
-    EXPORTACION = "exportación"
+    IMPORTACION = "importacion"
+    EXPORTACION = "exportacion"
     NACIONAL = "nacional"
 
 

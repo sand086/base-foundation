@@ -15,7 +15,7 @@ from app.db.database import get_db
 from app.models import models
 from app.models.models import SystemConfig
 
-#  IMPORTACIÓN LOCAL (FSD): Solo busca en la misma carpeta "logistics"
+#  importacion LOCAL (FSD): Solo busca en la misma carpeta "logistics"
 from . import schemas, crud
 
 # Autenticación

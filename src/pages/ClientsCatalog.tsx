@@ -77,7 +77,7 @@ const getOperationBadge = (tipo: string) => {
           Nacional
         </Badge>
       );
-    case "importación":
+    case "importacion":
       return (
         <Badge
           variant="outline"
@@ -89,7 +89,7 @@ const getOperationBadge = (tipo: string) => {
           Import
         </Badge>
       );
-    case "exportación":
+    case "exportacion":
       return (
         <Badge
           variant="outline"

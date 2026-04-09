@@ -48,7 +48,7 @@ import { AssignTireModal } from "@/features/tires/components/AssignTireModal";
 import { MaintenanceTireModal } from "@/features/tires/components/MaintenanceTireModal";
 import { TireHistorySheet } from "@/features/tires/components/TireHistorySheet";
 import { CreateTireModal } from "@/features/tires/components/CreateTireModal";
-import { MountTireModal } from "@/features/tires/components/MountTireModal"; // Añade esta importación
+import { MountTireModal } from "@/features/tires/components/MountTireModal"; // Añade esta importacion
 import {
   getTireSemaphoreStatus,
   TIRE_POSITIONS,

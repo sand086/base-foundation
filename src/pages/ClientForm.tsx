@@ -628,22 +628,22 @@ export default function ClientForm() {
             Nacional
           </Badge>
         );
-      case "importación":
+      case "importacion":
         return (
           <Badge
             variant="outline"
             className="text-[9px] uppercase tracking-widest font-black bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-500/30"
           >
-            Importación
+            importacion
           </Badge>
         );
-      case "exportación":
+      case "exportacion":
         return (
           <Badge
             variant="outline"
             className="text-[9px] uppercase tracking-widest font-black bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-500/30"
           >
-            Exportación
+            exportacion
           </Badge>
         );
       default:
@@ -1372,11 +1372,11 @@ export default function ClientForm() {
                                 <SelectItem value="nacional">
                                   Nacional
                                 </SelectItem>
-                                <SelectItem value="importación">
-                                  Importación
+                                <SelectItem value="importacion">
+                                  importacion
                                 </SelectItem>
-                                <SelectItem value="exportación">
-                                  Exportación
+                                <SelectItem value="exportacion">
+                                  exportacion
                                 </SelectItem>
                               </SelectContent>
                             </Select>
