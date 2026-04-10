@@ -192,7 +192,11 @@ const RolesPermissions: React.FC = () => {
     setRoles: React.Dispatch<React.SetStateAction<Role[]>>;
     modules: Module[];
     isLoading: boolean;
-    createRole: (nombre: string, descripcion?: string) => Promise<boolean>;
+    createRole: (
+      nombre: string,
+      descripcion?: string,
+      permisos?: unknown,
+    ) => Promise<boolean>;
     deleteRole: (roleId: number) => Promise<boolean>;
     updateRole: (
       roleId: number,
@@ -453,16 +457,31 @@ const RolesPermissions: React.FC = () => {
   };
 
   const handleSavePermisos = async (): Promise<void> => {
-    if (!selectedRoleId) return;
+    // Solo abortar si NO hay un ID seleccionado Y TAMPOCO estamos creando uno nuevo
+    if (!selectedRoleId && !isCreatingRole) return;
+
     setIsSaving(true);
     try {
-      const success = await updateRole(selectedRoleId, {
-        nombre: newRoleName,
-        descripcion: newRoleDescription,
-        permisos: draftPermisos, // 👉 Mandamos el JSON limpio en inglés
-      });
+      let success = false;
+
+      if (isCreatingRole) {
+        // 1. Lógica para CREAR un nuevo rol
+        success = await createRole(
+          newRoleName,
+          newRoleDescription,
+          draftPermisos,
+        );
+      } else {
+        // 2. Lógica para ACTUALIZAR un rol existente
+        success = await updateRole(selectedRoleId!, {
+          nombre: newRoleName,
+          descripcion: newRoleDescription,
+          permisos: draftPermisos,
+        });
+      }
+
+      // 3. Si todo salió bien, cerramos el modal
       if (success) {
-        toast.success("Permisos actualizados");
         setShowRoleEditor(false);
       }
     } finally {

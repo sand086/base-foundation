@@ -44,10 +44,15 @@ export const useRoles = () => {
   };
 
   // Crear un nuevo rol
-  const createRole = async (nombre: string, descripcion: string) => {
+  const createRole = async (
+    nombre: string,
+    descripcion: string,
+    permisos: any = {},
+  ) => {
     try {
       const name_key = nombre.toLowerCase().replace(/\s+/g, "_");
-      await roleService.create({ name_key, nombre, descripcion, permisos: {} });
+      // Pasamos la variable 'permisos' en lugar del objeto vacío quemado
+      await roleService.create({ name_key, nombre, descripcion, permisos });
       toast.success("Rol creado exitosamente");
       fetchData();
       return true;
