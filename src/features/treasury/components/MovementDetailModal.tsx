@@ -104,7 +104,9 @@ export function MovementDetailModal({
               <span
                 className={cn(
                   "text-5xl font-mono font-black tracking-tighter",
-                  isIngreso ? "text-emerald-600 dark:text-emerald-400" : "text-brand-red",
+                  isIngreso
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-brand-red",
                 )}
               >
                 {isIngreso ? "+" : "-"}$
@@ -137,9 +139,7 @@ export function MovementDetailModal({
                     Afectación
                   </span>
                 </div>
-                <p className="font-bold text-foreground">
-                  {movement.fecha}
-                </p>
+                <p className="font-bold text-foreground">{movement.fecha}</p>
               </Card>
 
               <Card variant="glass" className="p-4 bg-card/30 border-border">
@@ -235,7 +235,7 @@ export function MovementDetailModal({
             </div>
           </div>
 
-          {/* Footer Auditoría */}
+          {/* Footer Registro de detallesde detalles */}
           <div className="flex justify-between items-center px-2 pt-2 border-t border-border opacity-80">
             <div className="flex items-center gap-2">
               <User className="h-3 w-3 text-muted-foreground" />

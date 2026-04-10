@@ -1,9 +1,19 @@
+import os
+import logging
+
+# 👉 ESTO QUITA LAS ADVERTENCIAS DE WINDOWS (GIO/GLib)
+os.environ["GIO_USE_VFS"] = "local"
+os.environ["G_MESSAGES_DEBUG"] = ""
+
+# Opcional: Silenciar logs de librerías ruidosas en la terminal
+logging.getLogger("pisa").setLevel(logging.ERROR)
+logging.getLogger("weasyprint").setLevel(logging.ERROR)
+
 from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-import os
 
-# 1. Importación de Routers de Dominios (Módulos)
+# 1. importacion de Routers de Dominios (Módulos)
 from app.modules.auth.router import router as auth_router
 from app.modules.catalogs.router import router as catalogs_router
 from app.modules.clients.router import router as clients_router
@@ -15,7 +25,7 @@ from app.modules.suppliers.router import router as suppliers_router
 from app.modules.maintenance.router import router as maintenance_router
 from app.modules.monitoring.router import router as monitoring_router
 
-# 2. Importación de Routers de Integraciones Externas
+# 2. importacion de Routers de Integraciones Externas
 from app.integrations.sat.router import router as sat_router
 
 app = FastAPI(title="TMS Backend FSD")

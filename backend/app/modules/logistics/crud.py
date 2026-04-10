@@ -754,7 +754,11 @@ def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload)
 
     trips_to_check = set()
     num_legs = len(legs)
-    conceptos_json = [c.model_dump() for c in payload.conceptos_extra] if payload.conceptos_extra else []
+    conceptos_json = (
+        [c.model_dump() for c in payload.conceptos_extra]
+        if payload.conceptos_extra
+        else []
+    )
     for leg in legs:
         leg.status = "liquidado"
 
@@ -772,7 +776,7 @@ def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload)
         event = models.TripTimelineEvent(
             trip_leg_id=leg.id,
             time=datetime.utcnow(),
-            event=f"Tramo Liquidado en Lote. Saldo acreditado: ${(payload.neto_a_pagar/num_legs):,.2f} (Desc. Auditoría: ${(payload.monto_penalizaciones/num_legs):,.2f})",
+            event=f"Tramo Liquidado en Lote. Saldo acreditado: ${(payload.neto_a_pagar/num_legs):,.2f} (Desc. Registro de detalles: ${(payload.monto_penalizaciones/num_legs):,.2f})",
             event_type="success",
         )
         db.add(event)
@@ -1069,7 +1073,7 @@ def reset_leg_audit(db: Session, leg_id: int):
     event = models.TripTimelineEvent(
         trip_leg_id=leg.id,
         time=datetime.utcnow(),
-        event="Auditoría de combustible revertida por el usuario. Fase pendiente de conciliación.",
+        event="Registro de detalles de combustible revertida por el usuario. Fase pendiente de conciliación.",
         event_type="info",
     )
     db.add(event)

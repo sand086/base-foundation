@@ -70,8 +70,28 @@ const DEFAULT_ACCEPT = ".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.csv,.txt";
 
 const getFullUrl = (path: string) => {
   if (!path) return "";
-  if (path.startsWith("http")) return path;
-  return `${BACKEND_URL}${path.startsWith("/") ? "" : "/"}${path}`;
+  if (
+    path.startsWith("http") ||
+    path.startsWith("data:") ||
+    path.startsWith("blob:")
+  ) {
+    return path;
+  }
+
+  const baseUrl = (
+    import.meta.env.VITE_BACKEND_URL || window.location.origin
+  ).replace(/\/api$/, "");
+
+  // 2. Limpiamos el path que viene de la DB (ej: /static/operators/...)
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+
+  // 3. Forzamos el prefijo /api si el path no lo tiene
+  // Esto asegura que la ruta sea /api/static/...
+  const finalPath = cleanPath.startsWith("/api")
+    ? cleanPath
+    : `/api${cleanPath}`;
+
+  return `${baseUrl}${finalPath}`;
 };
 
 const formatDate = (dateStr: string) =>

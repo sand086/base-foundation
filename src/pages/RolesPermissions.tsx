@@ -480,7 +480,7 @@ const RolesPermissions: React.FC = () => {
       <PageHeader
         title="Roles y Permisos"
         description="Define permisos por acción para cada módulo (lectura, edición,
-                eliminación, exportación)."
+                eliminación, exportacion)."
         icon={<Shield className="h-8 w-8 text-brand-red" />}
       >
         {/* Los botones "Ver Actividad", "Crear Permiso" y "Nuevo Rol" van AQUÍ */}

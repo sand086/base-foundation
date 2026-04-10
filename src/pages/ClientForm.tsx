@@ -185,6 +185,11 @@ const opcionesDiasCredito = [
     color: "bg-emerald-100 text-emerald-700 border-emerald-200",
   },
   {
+    value: 8,
+    label: "8 días",
+    color: "bg-purple-100 text-purple-700 border-purple-200",
+  },
+  {
     value: 15,
     label: "15 días",
     color: "bg-blue-100 text-blue-700 border-blue-200",
@@ -193,6 +198,16 @@ const opcionesDiasCredito = [
     value: 30,
     label: "30 días",
     color: "bg-amber-100 text-amber-700 border-amber-200",
+  },
+  {
+    value: 45,
+    label: "45 días",
+    color: "bg-pink-100 text-pink-700 border-pink-200",
+  },
+  {
+    value: 60,
+    label: "60 días",
+    color: "bg-red-100 text-red-700 border-red-200",
   },
 ];
 
@@ -254,7 +269,7 @@ const calcularTotalesTarifa = (tarifa: TarifaAutorizada) => {
  * Componente
  * ========================= */
 
-export default function ClientsNew() {
+export default function ClientForm() {
   const navigate = useNavigate();
   const { clientId } = useParams();
   const isEditMode = !!clientId;
@@ -305,6 +320,7 @@ export default function ClientsNew() {
   const dynamicOpcionesDiasCredito = useMemo(() => {
     const base = [
       { value: 0, label: "Contado" },
+      { value: 8, label: "8 días" },
       { value: 15, label: "15 días" },
       { value: 30, label: "30 días" },
       { value: 45, label: "45 días" },
@@ -628,22 +644,22 @@ export default function ClientsNew() {
             Nacional
           </Badge>
         );
-      case "importación":
+      case "importacion":
         return (
           <Badge
             variant="outline"
             className="text-[9px] uppercase tracking-widest font-black bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-500/30"
           >
-            Importación
+            importacion
           </Badge>
         );
-      case "exportación":
+      case "exportacion":
         return (
           <Badge
             variant="outline"
             className="text-[9px] uppercase tracking-widest font-black bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-500/30"
           >
-            Exportación
+            exportacion
           </Badge>
         );
       default:
@@ -722,8 +738,10 @@ export default function ClientsNew() {
         })),
       };
 
-      if (isEditMode && clientId) {
-        await clientService.updateClient(parseInt(clientId), payload);
+      const parsedClientId = parseInt(clientId as string, 10);
+
+      if (isEditMode && clientId && !isNaN(parsedClientId)) {
+        await clientService.updateClient(parsedClientId, payload);
         toast.success("Cliente y Convenio guardados correctamente");
       } else {
         await clientService.createClient(payload);
@@ -1371,10 +1389,10 @@ export default function ClientsNew() {
                                   Nacional
                                 </SelectItem>
                                 <SelectItem value="importacion">
-                                  Importación
+                                  importacion
                                 </SelectItem>
                                 <SelectItem value="exportacion">
-                                  Exportación
+                                  exportacion
                                 </SelectItem>
                               </SelectContent>
                             </Select>

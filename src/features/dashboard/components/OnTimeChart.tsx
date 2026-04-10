@@ -7,7 +7,7 @@ import {
   Tooltip,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-//  Cambiamos la importación a la nueva ubicación del servicio
+//  Cambiamos la importacion a la nueva ubicación del servicio
 import { getOnTimeVsLateData } from "@/features/dashboard/utils/dashboardUtils";
 import { ServiceStats } from "@/features/dashboard/types";
 

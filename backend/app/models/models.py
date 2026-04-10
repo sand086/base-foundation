@@ -114,8 +114,8 @@ class TariffStatus(str, PyEnum):
 
 
 class OperationType(str, PyEnum):
-    IMPORTACION = "importación"
-    EXPORTACION = "exportación"
+    IMPORTACION = "importacion"
+    EXPORTACION = "exportacion"
     NACIONAL = "nacional"
 
 
@@ -285,6 +285,10 @@ class Client(AuditMixin, Base):
     dias_credito = Column(Integer, default=0)
     contrato_url = Column(String(500))
 
+    constancia_fiscal_url = Column(String(500), nullable=True)
+    acta_constitutiva_url = Column(String(500), nullable=True)
+    comprobante_domicilio_url = Column(String(500), nullable=True)
+
     sub_clients = relationship(
         "SubClient", back_populates="client", cascade="all, delete-orphan"
     )
@@ -319,7 +323,8 @@ class SubClient(AuditMixin, Base):
 
     contacto = Column(String(100))
     telefono = Column(String(20))
-    horario_recepcion = Column(String(50))
+    horario_cita = Column(String(50), nullable=True)
+    horario_recepcion = Column(String(50), nullable=True)
     estatus = Column(String(20), default="activo")
     dias_credito = Column(Integer)
     requiere_contrato = Column(Boolean, default=False)
@@ -1214,6 +1219,7 @@ class RateTemplate(AuditMixin, Base):
     client_id = Column(
         Integer, ForeignKey("clients.id", ondelete="RESTRICT"), nullable=True
     )
+
     origen = Column(String(150), nullable=False)
     destino = Column(String(150), nullable=False)
     tipo_unidad = Column(pg_enum(TollUnitType, "tollunittype"), nullable=False)

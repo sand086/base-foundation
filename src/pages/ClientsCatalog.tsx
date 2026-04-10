@@ -77,7 +77,7 @@ const getOperationBadge = (tipo: string) => {
           Nacional
         </Badge>
       );
-    case "importación":
+    case "importacion":
       return (
         <Badge
           variant="outline"
@@ -89,7 +89,7 @@ const getOperationBadge = (tipo: string) => {
           Import
         </Badge>
       );
-    case "exportación":
+    case "exportacion":
       return (
         <Badge
           variant="outline"
@@ -351,7 +351,7 @@ export default function ClientsCatalog() {
         <Button
           variant="default"
           size="lg"
-          onClick={() => navigate("/clients/nuevo")}
+          onClick={() => navigate("/clients/new")}
           className="haptic-press shadow-lg shadow-brand-red/20 w-full sm:w-auto"
         >
           <Plus className="h-4 w-4 mr-2" /> Nuevo Cliente
@@ -485,7 +485,7 @@ export default function ClientsCatalog() {
                       client={client}
                       isExpanded={expandedClients.has(client.id)}
                       onToggle={() => toggleClientExpanded(client.id)}
-                      onEdit={() => navigate(`/clients/${client.id}`)}
+                      onEdit={() => navigate(`/clients/edit/${client.id}`)}
                       onDelete={() => {
                         setClientToDelete(client);
                         setDeleteDialogOpen(true);

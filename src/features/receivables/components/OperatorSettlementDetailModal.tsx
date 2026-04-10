@@ -287,7 +287,7 @@ export function OperatorSettlementDetailModal({
                   {(liquidacion?.combustibleFaltante || 0) > 0 && (
                     <div className="flex justify-between items-start text-rose-600 dark:text-rose-400 print:text-black font-bold">
                       <div className="flex flex-col">
-                        <span>Faltante Diésel (Auditoría)</span>
+                        <span>Faltante Diésel (Registro de detalles)</span>
                       </div>
                       <span className="font-mono font-black mt-0.5">
                         -

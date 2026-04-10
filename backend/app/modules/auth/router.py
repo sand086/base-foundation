@@ -111,7 +111,7 @@ def login(
     access_token = security.create_access_token(subject=str(user.id))
     refresh_token = security.create_refresh_token(subject=str(user.id))
 
-    # 5. Persistencia y Auditoría
+    # 5. Persistencia y Registro de detalles
     user.last_login = datetime.utcnow()
     user.refresh_token = refresh_token  # 💾 Guardamos en BD para validación
     db.commit()
@@ -172,7 +172,7 @@ def refresh_token(
         # 3. Generar nuevo Access Token
         new_access_token = security.create_access_token(subject=user.id)
 
-        # 4. Auditoría silenciosa
+        # 4. Registro de detalles silenciosa
         cliente_ip = request.client.host if request.client else "Desconocida"
         log_audit(
             db=db,
@@ -259,7 +259,7 @@ def logout(
     current_user.refresh_token = None
     db.commit()
 
-    # 2. Registrar en Auditoría
+    # 2. Registrar en Registro de detalles
     cliente_ip = request.client.host if request.client else "Desconocida"
     log_audit(
         db=db,

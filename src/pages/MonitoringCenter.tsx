@@ -433,7 +433,7 @@ export default function MonitoringCenter() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    toast.success("Exportación exitosa", {
+    toast.success("exportacion exitosa", {
       description: "Se descargó el reporte de servicios en formato CSV.",
     });
   };

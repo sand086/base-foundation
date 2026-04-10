@@ -28,7 +28,7 @@ from app.models.models import User, Unit, BulkUploadHistory, UnitDocumentHistory
 from app.modules.auth.router import get_current_user
 from app.integrations.storage.storage import StorageService
 
-#  IMPORTACIÓN LOCAL (FSD): Solo busca en la misma carpeta "fleet"
+#  importacion LOCAL (FSD): Solo busca en la misma carpeta "fleet"
 from . import schemas, crud
 
 logger = logging.getLogger(__name__)

@@ -305,13 +305,13 @@ export function AppHeader({
 
             <div className="p-2 bg-white dark:bg-brand-navy">
               <DropdownMenuItem
-                onClick={() => navigate("/perfil")}
+                onClick={() => navigate("/profile")}
                 className="text-[12px] font-bold uppercase tracking-wider text-slate-600 dark:text-white/70 cursor-pointer py-3 px-3 rounded-xl hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
               >
                 <UserIcon className="h-4 w-4 mr-3 opacity-70" /> Mi Expediente
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => navigate("/configuracion")}
+                onClick={() => navigate("/settings")}
                 className="text-[12px] font-bold uppercase tracking-wider text-slate-600 dark:text-white/70 cursor-pointer py-3 px-3 rounded-xl hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
               >
                 <Settings className="h-4 w-4 mr-3 opacity-70" /> Preferencias

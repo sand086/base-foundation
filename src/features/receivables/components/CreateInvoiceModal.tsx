@@ -71,7 +71,7 @@ export function CreateInvoiceModal({
     [clients, clienteId],
   );
 
-  // 3. Efecto para manejar la importación de servicios desde el dashboard
+  // 3. Efecto para manejar la importacion de servicios desde el dashboard
   useEffect(() => {
     if (open) {
       if (importedServices && importedServices.length > 0) {

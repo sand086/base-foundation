@@ -9832,7 +9832,7 @@
       },
       "OperationType": {
         "type": "string",
-        "enum": ["importación", "exportación", "nacional"],
+        "enum": ["importacion", "exportacion", "nacional"],
         "title": "OperationType"
       },
       "OperatorCreate": {

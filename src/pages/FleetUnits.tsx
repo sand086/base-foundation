@@ -366,9 +366,7 @@ export default function FleetUnits() {
               className="glass-panel border-white/20 min-w-[180px] z-50 dark:bg-slate-900/90"
             >
               <DropdownMenuItem
-                onClick={() =>
-                  navigate(`/flota/unidad/${row.numero_economico}`)
-                }
+                onClick={() => navigate(`/fleet/unit/${row.numero_economico}`)}
                 className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
               >
                 <Eye className="h-4 w-4 text-brand-navy dark:text-slate-400" />{" "}

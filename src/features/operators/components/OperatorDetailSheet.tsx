@@ -12,11 +12,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import {
@@ -30,7 +25,6 @@ import {
   AlertTriangle,
   XCircle,
   CreditCard,
-  Calendar as CalendarIcon,
   User,
   Truck,
   Pencil,
@@ -47,7 +41,6 @@ import { Operator } from "../types";
 import { format, differenceInYears, isValid } from "date-fns";
 import { es } from "date-fns/locale";
 
-// Form Components (Tahoe UI)
 import {
   Form,
   FormControl,
@@ -56,23 +49,22 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { DatePicker } from "@/components/ui/date-picker"; //  Importado para reemplazar inputs nativos
+import { DatePicker } from "@/components/ui/date-picker";
 
-interface OperatorDetailSheetProps {
-  operator: Operator | null;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSave?: (operator: Operator) => void;
+// 👉 1. EXTENDEMOS EL TIPO LOCALMENTE
+// Esto soluciona el error ts(2339) para que reconozca los campos de DB
+interface ExtendedOperator extends Operator {
+  foto_url?: string | null;
+  licencia_url?: string | null;
+  ine_url?: string | null;
+  apto_medico_url?: string | null;
 }
 
-interface DocumentItem {
-  id: string;
-  name: string;
-  type: "pdf" | "image";
-  status: "vigente" | "por_vencer" | "faltante" | "vencido";
-  expiryDate?: string;
-  fileName?: string;
-  fileUrl?: string;
+interface OperatorDetailSheetProps {
+  operator: ExtendedOperator | null; // Usamos el tipo extendido
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSave?: (operator: ExtendedOperator) => void; // Usamos el tipo extendido
 }
 
 // --- ESQUEMA ZOD (EDICIÓN EN LÍNEA) ---
@@ -117,6 +109,8 @@ const getStatusColor = (status?: string) => {
       return "ring-sky-500 shadow-[0_0_20px_rgba(14,165,233,0.4)]";
     case "incapacidad":
       return "ring-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.4)]";
+    case "en_ruta":
+      return "ring-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.4)]";
     default:
       return "ring-muted shadow-[0_0_20px_rgba(148,163,184,0.4)]";
   }
@@ -134,6 +128,8 @@ const getStatusLabel = (status?: string) => {
       return "Vacaciones";
     case "incapacidad":
       return "Incapacidad";
+    case "en_ruta":
+      return "En Ruta";
     default:
       return status.charAt(0).toUpperCase() + status.slice(1);
   }
@@ -165,9 +161,34 @@ export function OperatorDetailSheet({
   const [isEditing, setIsEditing] = useState(false);
   const [uploadingDocId, setUploadingDocId] = useState<string | null>(null);
 
-  const [documents, setDocuments] = useState<DocumentItem[]>([]);
+  // 👉 2. ESTADO PARA LA FOTO
+  const [tempFotoUrl, setTempFotoUrl] = useState<string | null>(null);
+  const [localPreview, setLocalPreview] = useState<string | null>(null);
 
-  //  REACT HOOK FORM
+  // 👉 3. FUNCIÓN PARA LIMPIAR URL (Evita doble /api)
+  const getFullImageUrl = (path?: string | null) => {
+    if (!path) return undefined;
+    if (
+      path.startsWith("http") ||
+      path.startsWith("data:") ||
+      path.startsWith("blob:")
+    )
+      return path;
+
+    const baseUrl = (
+      import.meta.env.VITE_BACKEND_URL || window.location.origin
+    ).replace(/\/api$/, "");
+
+    // Limpiamos el path por si el backend mandó "/api/static" o "/static"
+    let cleanPath = path.startsWith("/") ? path : `/${path}`;
+    if (cleanPath.startsWith("/api/")) {
+      cleanPath = cleanPath.replace("/api/", "/");
+    }
+
+    // Ahora forzosamente le inyectamos /api
+    return `${baseUrl}/api${cleanPath}`;
+  };
+
   const form = useForm<EditOperatorData>({
     resolver: zodResolver(editOperatorSchema),
     defaultValues: {
@@ -187,7 +208,7 @@ export function OperatorDetailSheet({
     if (operator && open) {
       const parseDateSafe = (dateStr?: string) => {
         if (!dateStr) return new Date();
-        const d = new Date(`${dateStr}T12:00:00`); // Evita problemas de zona horaria
+        const d = new Date(`${dateStr}T12:00:00`);
         return isValid(d) ? d : new Date();
       };
 
@@ -201,61 +222,24 @@ export function OperatorDetailSheet({
         emergency_phone: operator.emergency_phone || "",
       });
 
-      setDocuments([
-        {
-          id: "lic",
-          name: "Licencia Federal",
-          type: "pdf",
-          status:
-            getExpiryStatus(operator.license_expiry) === "danger"
-              ? "vencido"
-              : getExpiryStatus(operator.license_expiry) === "warning"
-                ? "por_vencer"
-                : "vigente",
-          expiryDate: operator.license_expiry,
-          fileName: "licencia_federal.pdf",
-        },
-        {
-          id: "ine",
-          name: "INE / Identificación",
-          type: "image",
-          status: "vigente",
-          fileName: "ine_frente.jpg",
-        },
-        {
-          id: "med",
-          name: "Apto Médico",
-          type: "pdf",
-          status:
-            getExpiryStatus(operator.medical_check_expiry) === "danger"
-              ? "vencido"
-              : getExpiryStatus(operator.medical_check_expiry) === "warning"
-                ? "por_vencer"
-                : "vigente",
-          expiryDate: operator.medical_check_expiry,
-        },
-        {
-          id: "dom",
-          name: "Comprobante Domicilio",
-          type: "pdf",
-          status: "faltante",
-        },
-      ]);
-
       setIsEditing(false);
+      setTempFotoUrl(null); // Reseteamos la foto temporal al abrir
     }
   }, [operator, open, reset]);
 
   const handleStartEditing = () => setIsEditing(true);
   const handleCancelEditing = () => {
-    reset(); // Revierte a los valores originales cargados en el useEffect
+    reset();
     setIsEditing(false);
+    setTempFotoUrl(null);
+    setLocalPreview(null);
   };
 
+  // 👉 4. GUARDAR FORMULARIO + URL DE LA FOTO
   const onFormSubmit = (data: EditOperatorData) => {
     if (!operator) return;
 
-    const updatedOperator: Operator = {
+    const updatedOperator: ExtendedOperator = {
       ...operator,
       name: data.name,
       phone: data.phone,
@@ -264,19 +248,53 @@ export function OperatorDetailSheet({
       medical_check_expiry: format(data.medical_check_expiry, "yyyy-MM-dd"),
       emergency_contact: data.emergency_contact,
       emergency_phone: data.emergency_phone,
+      foto_url: tempFotoUrl || operator.foto_url, // Mandamos la nueva foto si hay
     };
 
     onSave?.(updatedOperator);
-
     toast({
       title: "Cambios guardados",
       description: `El expediente de ${data.name} ha sido actualizado.`,
     });
-
     setIsEditing(false);
+    setTempFotoUrl(null);
+    setLocalPreview(null);
   };
 
-  // --- File Handlers ---
+  // 👉 5. SUBIDA DE LA FOTO (Input File)
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !operator) return;
+
+    // 👉 MAGIA DE UX: Preview inmediato desde la memoria local
+    setLocalPreview(URL.createObjectURL(file));
+
+    try {
+      toast({ title: "Subiendo imagen...", description: "Espera un momento." });
+
+      const result =
+        await FleetOperatorsService.uploadOperatorDocumentApiFleetOperatorsOperatorIdDocumentsDocTypePost(
+          Number(operator.id),
+          "foto",
+          { file },
+        );
+
+      if (result.url) {
+        setTempFotoUrl(result.url);
+        toast({
+          title: "Foto cargada",
+          description: "Presiona Guardar para confirmar.",
+        });
+      }
+    } catch (error) {
+      toast({ title: "Error al subir foto", variant: "destructive" });
+      setLocalPreview(null); // Si falla, quitamos el preview
+    } finally {
+      e.target.value = "";
+    }
+  };
+
+  // --- Manejo general de Documentos Viejos (Mantenemos tu lógica para compatibilidad) ---
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !uploadingDocId || !operator) return;
@@ -291,36 +309,15 @@ export function OperatorDetailSheet({
     }
 
     try {
-      const result = await FleetOperatorsService.uploadOperatorDocumentApiFleetOperatorsOperatorIdDocumentsDocTypePost(
-        Number(operator.id),
-        uploadingDocId,
-        { file },
-      );
-
-      setDocuments((prev) =>
-        prev.map((doc) =>
-          doc.id === uploadingDocId
-            ? {
-                ...doc,
-                fileName: file.name,
-                status: "vigente",
-                fileUrl: result.url,
-                type: file.type.includes("image") ? "image" : "pdf",
-              }
-            : doc,
-        ),
-      );
-
-      toast({
-        title: "Éxito",
-        description: "Documento guardado en el expediente del servidor.",
-      });
+      const result =
+        await FleetOperatorsService.uploadOperatorDocumentApiFleetOperatorsOperatorIdDocumentsDocTypePost(
+          Number(operator.id),
+          uploadingDocId,
+          { file },
+        );
+      toast({ title: "Éxito", description: "Documento guardado." });
     } catch (error) {
-      toast({
-        title: "Error de carga",
-        variant: "destructive",
-        description: "No se pudo subir el archivo al servidor.",
-      });
+      toast({ title: "Error de carga", variant: "destructive" });
     } finally {
       setUploadingDocId(null);
       e.target.value = "";
@@ -346,9 +343,8 @@ export function OperatorDetailSheet({
         onOpenChange(isOpen);
       }}
     >
-      {/*  CAPA 1: CASCARÓN DEL SHEET (Fondo azul/blanco translúcido) */}
       <SheetContent className="w-full sm:max-w-xl bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl border-l border-slate-200/80 dark:border-white/10 p-0 flex flex-col shadow-2xl transition-all duration-300">
-        {/* Hidden Inputs */}
+        {/* INPUT DE FOTO Y ARCHIVOS GENÉRICOS */}
         <input
           type="file"
           ref={fileInputRef}
@@ -360,9 +356,9 @@ export function OperatorDetailSheet({
           ref={avatarInputRef}
           className="hidden"
           accept="image/*"
+          onChange={handleAvatarUpload}
         />
 
-        {/*  CAPA 2: HEADER TAHOE (Blanco puro / Navy puro, z-10) */}
         <SheetHeader className="p-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 z-10 relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex flex-row items-center justify-between">
@@ -386,14 +382,15 @@ export function OperatorDetailSheet({
               </div>
               <div className="flex flex-col gap-1 text-left">
                 <span className="text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white heading-crisp leading-none">
-                  Expediente Operativo
+                  Expediente de Operador
                 </span>
                 <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-1 tracking-normal normal-case">
-                  Visualización y control documental.
+                  Control documental.
                 </span>
               </div>
             </SheetTitle>
 
+            {/* 👉 6. BOTONES DE ACCIÓN + CERRAR */}
             <div className="flex items-center gap-2">
               {isEditing ? (
                 <>
@@ -416,23 +413,32 @@ export function OperatorDetailSheet({
                   </Button>
                 </>
               ) : (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleStartEditing}
-                  className="gap-1.5 h-10 px-4 rounded-xl font-black text-[10px] uppercase tracking-widest bg-white dark:bg-slate-800 border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-slate-700 shadow-sm haptic-press"
-                >
-                  <Pencil className="h-4 w-4" /> Editar Datos
-                </Button>
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleStartEditing}
+                    className="gap-1.5 h-10 px-4 rounded-xl font-black text-[10px] uppercase tracking-widest bg-white dark:bg-slate-800 border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-slate-700 shadow-sm haptic-press"
+                  >
+                    <Pencil className="h-4 w-4" /> Editar
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => onOpenChange(false)}
+                    className="h-10 w-10 rounded-xl text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="h-6 w-6" />
+                  </Button>
+                </>
               )}
             </div>
           </div>
         </SheetHeader>
 
-        {/*  CAPA 3: CUERPO Y FORMULARIO (Fondo slate-50 para resaltar tarjetas) */}
         <Form {...form}>
           <form className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/50 dark:bg-transparent custom-scrollbar">
-            {/*  Hero / Avatar Section */}
+            {/* 👉 7. SECCIÓN DE AVATAR */}
             <div className="flex flex-col items-center text-center pb-6 border-b border-slate-200 dark:border-white/10">
               <div className="relative group mt-2">
                 <div
@@ -440,13 +446,20 @@ export function OperatorDetailSheet({
                 >
                   <Avatar className="h-28 w-28 border border-slate-200 dark:border-white/10">
                     <AvatarImage
-                      src={`https://api.dicebear.com/7.x/initials/svg?seed=${operator.name}`}
+                      src={
+                        localPreview ||
+                        (tempFotoUrl
+                          ? getFullImageUrl(tempFotoUrl)
+                          : getFullImageUrl(operator.foto_url))
+                      }
+                      className="object-cover"
                     />
                     <AvatarFallback className="text-3xl font-black bg-slate-100 dark:bg-slate-800 text-brand-navy dark:text-white uppercase tracking-tighter">
                       {(operator.name || "OP").slice(0, 2)}
                     </AvatarFallback>
                   </Avatar>
 
+                  {/* Icono Cámara */}
                   {isEditing && (
                     <button
                       onClick={() => avatarInputRef.current?.click()}
@@ -472,6 +485,7 @@ export function OperatorDetailSheet({
                 </div>
               </div>
 
+              {/* ... (El resto del formulario se mantiene igual) ... */}
               <div className="mt-6 w-full max-w-sm space-y-3">
                 {isEditing ? (
                   <div className="space-y-4 bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-white/10">
@@ -540,12 +554,8 @@ export function OperatorDetailSheet({
               )}
             </div>
 
-            {/*  License Card */}
+            {/* License Card */}
             <div className="relative overflow-hidden rounded-2xl p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-sm transition-all hover:shadow-md">
-              <div className="absolute top-0 right-0 p-4 opacity-10 dark:opacity-5 pointer-events-none">
-                <CreditCard className="h-24 w-24 text-blue-600 dark:text-blue-400" />
-              </div>
-
               <div className="flex items-start justify-between mb-6 relative z-10">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1 flex items-center gap-1.5">
@@ -645,7 +655,7 @@ export function OperatorDetailSheet({
               )}
             </div>
 
-            {/*  Medical Check Card */}
+            {/* Medical Check Card */}
             <div
               className={cn(
                 "rounded-2xl p-6 transition-all shadow-sm relative overflow-hidden",
@@ -740,7 +750,7 @@ export function OperatorDetailSheet({
               </div>
             </div>
 
-            {/*  Document Management */}
+            {/* Document Management */}
             <div className="rounded-2xl p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-sm">
               <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 flex items-center gap-2 mb-6 border-b border-slate-100 dark:border-white/5 pb-3">
                 <FileText className="h-4 w-4 text-blue-500" />
@@ -748,18 +758,16 @@ export function OperatorDetailSheet({
               </h3>
 
               <div className="grid grid-cols-1 gap-4">
-                {/* Usamos el componente DocumentUploadManager que asumo ya está estandarizado */}
                 <DocumentUploadManager
                   entityId={operator.id}
                   entityType="operator"
                   docType="licencia"
                   docLabel="Licencia Federal"
                   currentUrl={operator.licencia_url}
-                  onUploadSuccess={(url) => {
-                    toast({ title: "Licencia Federal actualizada" });
-                  }}
+                  onUploadSuccess={(url) =>
+                    toast({ title: "Licencia Federal actualizada" })
+                  }
                 />
-
                 <DocumentUploadManager
                   entityId={operator.id}
                   entityType="operator"
@@ -768,7 +776,6 @@ export function OperatorDetailSheet({
                   currentUrl={operator.ine_url}
                   onUploadSuccess={(url) => toast({ title: "INE Actualizada" })}
                 />
-
                 <DocumentUploadManager
                   entityId={operator.id}
                   entityType="operator"
@@ -782,11 +789,11 @@ export function OperatorDetailSheet({
               </div>
             </div>
 
-            {/*  Contact Info */}
+            {/* Contact Info */}
             <div className="rounded-2xl p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-sm">
               <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 flex items-center gap-2 mb-6 border-b border-slate-100 dark:border-white/5 pb-3">
-                <Phone className="h-4 w-4 text-emerald-500" />
-                Contacto Adicional
+                <Phone className="h-4 w-4 text-emerald-500" /> Contacto
+                Adicional
               </h3>
 
               <div className="space-y-4">
@@ -816,7 +823,6 @@ export function OperatorDetailSheet({
                             </FormItem>
                           )}
                         />
-
                         <FormField
                           control={form.control}
                           name="emergency_phone"
@@ -843,7 +849,7 @@ export function OperatorDetailSheet({
                             "Sin contacto registrado"}
                         </p>
                         <p className="font-mono text-sm font-bold text-slate-600 dark:text-slate-400 mt-1 flex items-center gap-2">
-                          <Phone className="h-3 w-3" />
+                          <Phone className="h-3 w-3" />{" "}
                           {operator.emergency_phone || "N/A"}
                         </p>
                       </div>
