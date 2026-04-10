@@ -492,10 +492,17 @@ const RolesPermissions: React.FC = () => {
 
   const handleDeleteRole = async (): Promise<void> => {
     if (!roleToDelete) return;
-    await deleteRole(roleToDelete);
-    setShowDeleteDialog(false);
-    setRoleToDelete(null);
-    toast.success("Rol eliminado exitosamente");
+
+    // Llamamos a la API. Si falla, el interceptor muestra el Toast con el mensaje de FastAPI.
+    const success = await deleteRole(roleToDelete);
+
+    // Solo si success es true, cerramos el modal y limpiamos el estado
+    if (success) {
+      setShowDeleteDialog(false);
+      setRoleToDelete(null);
+      // El toast de éxito puede quedarse aquí o en el hook
+      toast.success("Rol eliminado exitosamente");
+    }
   };
 
   const promptDeleteRole = (roleId: number, e: React.MouseEvent): void => {

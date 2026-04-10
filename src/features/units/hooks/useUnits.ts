@@ -16,7 +16,7 @@ export const useUnits = () => {
       setUnidades(data as Unit[]);
     } catch (error) {
       console.error(error);
-      toast.error("Error al cargar la flota");
+      console.error("Error al cargar la flota");
     } finally {
       setIsLoading(false);
     }
@@ -33,21 +33,30 @@ export const useUnits = () => {
       await fetchUnits();
       return true;
     } catch (error) {
-      const msg = error instanceof ApiError ? error.body?.detail : "Error al crear unidad";
-      toast.error(msg || "Error al crear unidad");
+      const msg =
+        error instanceof ApiError
+          ? error.body?.detail
+          : "Error al crear unidad";
+      console.error(msg || "Error al crear unidad");
       return false;
     }
   };
 
   const updateUnit = async (id: number, unidad: any) => {
     try {
-      await FleetUnitsService.updateUnitApiFleetUnitsUnitIdPut(String(id), unidad);
+      await FleetUnitsService.updateUnitApiFleetUnitsUnitIdPut(
+        String(id),
+        unidad,
+      );
       toast.success("Unidad actualizada");
       await fetchUnits();
       return true;
     } catch (error) {
-      const msg = error instanceof ApiError ? error.body?.detail : "Error al actualizar unidad";
-      toast.error(msg || "Error al actualizar unidad");
+      const msg =
+        error instanceof ApiError
+          ? error.body?.detail
+          : "Error al actualizar unidad";
+      console.error(msg || "Error al actualizar unidad");
       return false;
     }
   };
@@ -59,8 +68,11 @@ export const useUnits = () => {
       await fetchUnits();
       return true;
     } catch (error) {
-      const msg = error instanceof ApiError ? error.body?.detail : "Error al eliminar unidad";
-      toast.error(msg || "Error al eliminar unidad");
+      const msg =
+        error instanceof ApiError
+          ? error.body?.detail
+          : "Error al eliminar unidad";
+      console.error(msg || "Error al eliminar unidad");
       return false;
     }
   };
@@ -70,10 +82,13 @@ export const useUnits = () => {
       setUnidades((prev) =>
         prev.map((u) => (u.id === id ? { ...u, is_loaded: isLoaded } : u)),
       );
-      await FleetUnitsService.updateUnitLoadStatusApiFleetUnitsUnitIdLoadStatusPatch(Number(id), isLoaded);
+      await FleetUnitsService.updateUnitLoadStatusApiFleetUnitsUnitIdLoadStatusPatch(
+        Number(id),
+        isLoaded,
+      );
       return true;
     } catch (error) {
-      toast.error("Error al actualizar estado en el servidor");
+      console.error("Error al actualizar estado en el servidor");
       fetchUnits();
       return false;
     }
@@ -82,14 +97,20 @@ export const useUnits = () => {
   const importBulkUnits = async (file: File) => {
     setIsUploading(true);
     try {
-      const response = await FleetUnitsService.uploadUnitsBulkApiFleetUnitsBulkUploadPost({ file });
+      const response =
+        await FleetUnitsService.uploadUnitsBulkApiFleetUnitsBulkUploadPost({
+          file,
+        });
       const count = (response as any)?.records || 0;
       toast.success(`Carga exitosa: ${count} unidades procesadas`);
       await fetchUnits();
       return true;
     } catch (error) {
-      const msg = error instanceof ApiError ? error.body?.detail : "Error al procesar el archivo";
-      toast.error(msg || "Error al procesar el archivo");
+      const msg =
+        error instanceof ApiError
+          ? error.body?.detail
+          : "Error al procesar el archivo";
+      console.error(msg || "Error al procesar el archivo");
       return false;
     } finally {
       setIsUploading(false);

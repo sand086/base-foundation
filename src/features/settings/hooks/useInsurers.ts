@@ -13,7 +13,7 @@ export function useInsurers() {
       const { data } = await axiosClient.get("/api/catalogs/insurers");
       setInsurers(data);
     } catch (error) {
-      toast.error("Error al cargar aseguradoras");
+      console.error("Error al cargar aseguradoras");
     } finally {
       setLoading(false);
     }
@@ -25,7 +25,7 @@ export function useInsurers() {
       await fetchInsurers();
       return true;
     } catch (error) {
-      toast.error("Error al guardar aseguradoras");
+      console.error("Error al guardar aseguradoras");
       return false;
     }
   };

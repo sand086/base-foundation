@@ -19,7 +19,7 @@ export const useClients = () => {
       setClients(data);
     } catch (error) {
       console.error(error);
-      toast.error("Error al cargar clientes");
+      console.error("Error al cargar clientes");
     } finally {
       setIsLoading(false);
     }
@@ -48,7 +48,7 @@ export const useClients = () => {
         message = error.body?.detail || message;
       }
 
-      toast.error(message);
+      console.error(message);
       return false;
     }
   };

@@ -13,7 +13,7 @@ export function useLicenseTypes() {
       const { data } = await axiosClient.get("/api/catalogs/license-types");
       setLicenseTypes(data);
     } catch (error) {
-      toast.error("Error al cargar tipos de licencia");
+      console.error("Error al cargar tipos de licencia");
     } finally {
       setLoading(false);
     }
@@ -25,7 +25,7 @@ export function useLicenseTypes() {
       await fetchLicenseTypes();
       return true;
     } catch (error) {
-      toast.error("Error al guardar licencias");
+      console.error("Error al guardar licencias");
       return false;
     }
   };

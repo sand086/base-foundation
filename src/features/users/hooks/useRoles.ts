@@ -18,8 +18,8 @@ export const useRoles = () => {
       setRoles(rolesRes);
       setModules(modulesRes);
     } catch (error) {
-      toast.error("Error al cargar roles y módulos");
-      console.error(error);
+      // El interceptor de Axios ya mostrará el error en pantalla
+      console.error("Error silencioso en fetchData:", error);
     } finally {
       setIsLoading(false);
     }
@@ -33,11 +33,12 @@ export const useRoles = () => {
   const updateRole = async (id: number, data: Partial<RoleData>) => {
     try {
       await roleService.update(id, data);
+      // Los de éxito SÍ se quedan
       toast.success("Rol actualizado correctamente");
       fetchData();
       return true;
-    } catch (error: any) {
-      toast.error("Error al actualizar el rol");
+    } catch (error) {
+      // Solo retornamos false para que el componente sepa que falló
       return false;
     }
   };
@@ -50,8 +51,7 @@ export const useRoles = () => {
       toast.success("Rol creado exitosamente");
       fetchData();
       return true;
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || "Error al crear rol");
+    } catch (error) {
       return false;
     }
   };
@@ -61,12 +61,8 @@ export const useRoles = () => {
     try {
       await roleService.delete(id);
       toast.success("Rol eliminado");
-      fetchData();
       return true;
-    } catch (error: any) {
-      toast.error(
-        error.response?.data?.detail || "No se puede eliminar un rol en uso",
-      );
+    } catch (error) {
       return false;
     }
   };
@@ -78,8 +74,7 @@ export const useRoles = () => {
       toast.success("Nuevo permiso registrado");
       fetchData();
       return true;
-    } catch (error: any) {
-      toast.error("Error al registrar el módulo");
+    } catch (error) {
       return false;
     }
   };
@@ -88,7 +83,6 @@ export const useRoles = () => {
     try {
       return await roleService.getPermissions(id);
     } catch (error) {
-      console.error("Error al obtener permisos", error);
       return {};
     }
   };
@@ -99,8 +93,7 @@ export const useRoles = () => {
       toast.success("Módulo actualizado");
       fetchData(); // Recarga la lista
       return true;
-    } catch (error: any) {
-      toast.error("Error al actualizar módulo");
+    } catch (error) {
       return false;
     }
   };
@@ -111,8 +104,7 @@ export const useRoles = () => {
       toast.success("Módulo eliminado");
       fetchData(); // Recarga la lista
       return true;
-    } catch (error: any) {
-      toast.error("Error al eliminar módulo");
+    } catch (error) {
       return false;
     }
   };

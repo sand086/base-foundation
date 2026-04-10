@@ -37,7 +37,7 @@ export function useBankAccounts() {
       queryClient.invalidateQueries({ queryKey: ["bank-accounts"] });
       toast.success("Cuenta bancaria creada correctamente");
     },
-    onError: () => toast.error("Error al crear la cuenta"),
+    onError: () => console.error("Error al crear la cuenta"),
   });
 
   const updateMutation = useMutation({
@@ -55,7 +55,7 @@ export function useBankAccounts() {
       queryClient.invalidateQueries({ queryKey: ["bank-accounts"] });
       toast.success("Cuenta actualizada");
     },
-    onError: () => toast.error("No se pudo actualizar la cuenta"),
+    onError: () => console.error("No se pudo actualizar la cuenta"),
   });
 
   const deleteMutation = useMutation({
@@ -71,7 +71,7 @@ export function useBankAccounts() {
         error instanceof ApiError
           ? error.body?.detail
           : error.response?.data?.detail;
-      toast.error(msg || "No se pudo eliminar la cuenta");
+      console.error(msg || "No se pudo eliminar la cuenta");
     },
   });
 

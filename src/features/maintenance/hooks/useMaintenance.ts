@@ -42,7 +42,7 @@ export const useMaintenance = () => {
     } catch (err) {
       console.error("Error fetching maintenance data", err);
       setError("Error al cargar datos de mantenimiento");
-      toast.error("Error de conexión", {
+      console.error("Error de conexión", {
         description: "No se pudo cargar el inventario.",
       });
     } finally {
@@ -56,11 +56,14 @@ export const useMaintenance = () => {
 
   const createItem = async (item: CreateInventoryPayload) => {
     try {
-      const newItem = await MaintenanceService.createInventoryItemApiMaintenanceInventoryPost(item as any);
+      const newItem =
+        await MaintenanceService.createInventoryItemApiMaintenanceInventoryPost(
+          item as any,
+        );
       setInventory((prev) => [newItem as InventoryItem, ...prev]);
       return true;
     } catch (err) {
-      toast.error("Error al crear", {
+      console.error("Error al crear", {
         description: "Verifica que el SKU no exista.",
       });
       return false;
@@ -69,15 +72,21 @@ export const useMaintenance = () => {
 
   const updateItem = async (id: number, item: any) => {
     try {
-      const updatedItem = await MaintenanceService.updateInventoryItemApiMaintenanceInventoryItemIdPut(Number(id), item);
-      setInventory((prev) => prev.map((i) => (i.id === id ? updatedItem as InventoryItem : i)));
+      const updatedItem =
+        await MaintenanceService.updateInventoryItemApiMaintenanceInventoryItemIdPut(
+          Number(id),
+          item,
+        );
+      setInventory((prev) =>
+        prev.map((i) => (i.id === id ? (updatedItem as InventoryItem) : i)),
+      );
       toast.success("Refacción actualizada", {
         description: `${updatedItem.sku} - ${updatedItem.descripcion}`,
       });
       return true;
     } catch (err) {
       console.error(err);
-      toast.error("Error al actualizar", {
+      console.error("Error al actualizar", {
         description: "No se pudieron guardar los cambios.",
       });
       return false;
@@ -86,28 +95,34 @@ export const useMaintenance = () => {
 
   const deleteItem = async (id: number) => {
     try {
-      await MaintenanceService.deleteInventoryItemApiMaintenanceInventoryItemIdDelete(Number(id));
+      await MaintenanceService.deleteInventoryItemApiMaintenanceInventoryItemIdDelete(
+        Number(id),
+      );
       setInventory((prev) => prev.filter((item) => item.id !== id));
       toast.success("Eliminado", {
         description: "Refacción eliminada correctamente.",
       });
     } catch (err) {
-      toast.error("Error", { description: "No se pudo eliminar el item." });
+      console.error("Error", { description: "No se pudo eliminar el item." });
     }
   };
 
   const createWorkOrder = async (order: CreateWorkOrderPayload) => {
     try {
-      const newOrder = await MaintenanceService.createWorkOrderApiMaintenanceWorkOrdersPost(order as any);
+      const newOrder =
+        await MaintenanceService.createWorkOrderApiMaintenanceWorkOrdersPost(
+          order as any,
+        );
       setWorkOrders((prev) => [newOrder as WorkOrder, ...prev]);
-      const updatedInventory = await MaintenanceService.readInventoryApiMaintenanceInventoryGet();
+      const updatedInventory =
+        await MaintenanceService.readInventoryApiMaintenanceInventoryGet();
       setInventory(updatedInventory as InventoryItem[]);
       toast.success("Orden Creada", {
         description: `Folio: ${newOrder.folio}`,
       });
       return true;
     } catch (err) {
-      toast.error("Error", {
+      console.error("Error", {
         description: "No se pudo crear la orden de trabajo.",
       });
       return false;
@@ -116,19 +131,25 @@ export const useMaintenance = () => {
 
   const updateOrderStatus = async (id: number, status: string) => {
     try {
-      const updatedOrder = await MaintenanceService.updateOrderStatusApiMaintenanceWorkOrdersOrderIdStatusPatch(
-        Number(id),
-        { status } as any,
+      const updatedOrder =
+        await MaintenanceService.updateOrderStatusApiMaintenanceWorkOrdersOrderIdStatusPatch(
+          Number(id),
+          { status } as any,
+        );
+      setWorkOrders((prev) =>
+        prev.map((o) => (o.id === id ? (updatedOrder as WorkOrder) : o)),
       );
-      setWorkOrders((prev) => prev.map((o) => (o.id === id ? updatedOrder as WorkOrder : o)));
       if (status === "cancelada") {
-        const updatedInventory = await MaintenanceService.readInventoryApiMaintenanceInventoryGet();
+        const updatedInventory =
+          await MaintenanceService.readInventoryApiMaintenanceInventoryGet();
         setInventory(updatedInventory as InventoryItem[]);
       }
-      toast.success(`Orden ${status === "cerrada" ? "Finalizada" : "Cancelada"}`);
+      toast.success(
+        `Orden ${status === "cerrada" ? "Finalizada" : "Cancelada"}`,
+      );
       return true;
     } catch (error) {
-      toast.error("Error al actualizar la orden");
+      console.error("Error al actualizar la orden");
       return false;
     }
   };

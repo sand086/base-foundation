@@ -74,7 +74,7 @@ export const useSecurityNotifications = () => {
       case "trip_stopped":
         title = "Unidad Detenida";
         message = `El viaje ${details.tripId} de ${details.clientName || "Cliente"} se ha detenido por: ${details.reason || "No especificado"}.`;
-        toast.error(" Alerta: Unidad Detenida", {
+        console.error(" Alerta: Unidad Detenida", {
           description: message,
           icon: React.createElement(Truck, { className: "h-4 w-4" }),
           duration: 6000,
@@ -84,7 +84,7 @@ export const useSecurityNotifications = () => {
       case "trip_incident":
         title = "Incidencia en Ruta";
         message = `Incidencia reportada en viaje ${details.tripId}. Detalles: ${details.comments || details.reason}`;
-        toast.error(" Incidencia Crítica", {
+        console.error(" Incidencia Crítica", {
           description: message,
           icon: React.createElement(AlertTriangle, { className: "h-4 w-4" }),
           duration: 7000,
@@ -130,7 +130,7 @@ export const useSecurityNotifications = () => {
       case "auth_failure":
         title = "Fallo de Autenticación";
         message = `Intento de acceso fallido para ${details.userEmail}.`;
-        toast.error("Acceso denegado", { description: message });
+        console.error("Acceso denegado", { description: message });
         break;
 
       default:
