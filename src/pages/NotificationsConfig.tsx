@@ -84,8 +84,8 @@ const NotificationsConfig = () => {
     const fetchData = async () => {
       try {
         const [configRes, tplRes] = await Promise.all([
-          axiosClient.get("/api/notifications/config"),
-          axiosClient.get("/api/notifications/templates"),
+          axiosClient.get("/api/monitoring/config"),
+          axiosClient.get("/api/monitoring/templates"),
         ]);
 
         setConfigAlertas({
@@ -208,7 +208,7 @@ const NotificationsConfig = () => {
 
   const handleSaveConfig = async () => {
     try {
-      await axiosClient.put("/notifications/config", {
+      await axiosClient.put("/api/monitoring/config", {
         alerta_combustible: configAlertas.alertaCombustible,
         umbral_combustible: configAlertas.umbralCombustible,
         alerta_documento_vencido: configAlertas.alertaDocumentoVencido,
@@ -233,14 +233,11 @@ const NotificationsConfig = () => {
   const handleSavePlantilla = async () => {
     if (selectedPlantilla) {
       try {
-        await axiosClient.put(
-          `/notifications/templates/${selectedPlantilla.id}`,
-          {
-            nombre: selectedPlantilla.nombre,
-            asunto: selectedPlantilla.asunto,
-            cuerpo: selectedPlantilla.cuerpo,
-          },
-        );
+        await axiosClient.put(`/monitoring/templates/${selectedPlantilla.id}`, {
+          nombre: selectedPlantilla.nombre,
+          asunto: selectedPlantilla.asunto,
+          cuerpo: selectedPlantilla.cuerpo,
+        });
 
         setPlantillas((prev) =>
           prev.map((p) =>
@@ -277,13 +274,13 @@ const NotificationsConfig = () => {
             <Bell className="w-4 h-4 mr-2" />
             Historial
           </TabsTrigger>
-          <TabsTrigger
+          {/*           <TabsTrigger
             value="general"
             className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
           >
             <Building2 className="w-4 h-4 mr-2" />
             General
-          </TabsTrigger>
+          </TabsTrigger> */}
           <TabsTrigger
             value="alertas"
             className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"

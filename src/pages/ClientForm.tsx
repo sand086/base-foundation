@@ -7,6 +7,7 @@ import {
   Trash2,
   ArrowLeft,
   Check,
+  XCircle,
   MapPin,
   ArrowRight,
   Building2,
@@ -64,6 +65,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { AsyncValidatedInput } from "@/components/ui/async-validated-input";
 
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -76,6 +78,7 @@ import { DocumentUploadManager } from "@/components/common/DocumentUploadManager
 import { clientService } from "@/features/clients/services/clientService";
 import type { Client, RateTemplate } from "@/features/clients/types";
 import { tollService } from "@/features/clients/services/tollService";
+import { validationService } from "@/api/validationService";
 
 /** =========================
  * Types / Interfaces del Form
@@ -297,6 +300,8 @@ export default function ClientForm() {
 
   const [globalIVA, setGlobalIVA] = useState<number>(16);
   const [globalRetencion, setGlobalRetencion] = useState<number>(4);
+  const [rfcError, setRfcError] = useState<string | null>(null);
+  const [isValidatingRfc, setIsValidatingRfc] = useState(false);
 
   // PRE-LLENADO
   useEffect(() => {
@@ -778,10 +783,44 @@ export default function ClientForm() {
   }, [rutasFiltradas, activePickerIndex, subClientes]);
 
   const canProceed =
-    fiscalData.razonSocial && fiscalData.rfc && validateRFC(fiscalData.rfc);
+    fiscalData.razonSocial &&
+    fiscalData.rfc &&
+    validateRFC(fiscalData.rfc) &&
+    rfcError === null;
   const canProceedStep2 =
     subClientes.length > 0 &&
     subClientes.every((s) => s.nombre && s.direccion && s.ciudad);
+
+  //  FUNCIÓN QUE SE EJECUTA AL QUITAR EL FOCO DEL INPUT (onBlur)
+  const handleRfcBlur = async () => {
+    const currentRfc = fiscalData.rfc;
+
+    // Si está vacío o es muy corto, dejamos que la validación normal haga su trabajo
+    if (!currentRfc || currentRfc.length < 12) {
+      setRfcError(null);
+      return;
+    }
+
+    setIsValidatingRfc(true);
+    setRfcError(null);
+
+    try {
+      // Llamamos al backend para ver si existe
+      // (Asegúrate de tener esta función en tu clientService)
+      const exists = await clientService.checkRfcExists(currentRfc);
+
+      if (exists) {
+        setRfcError("Este RFC ya está registrado en el sistema.");
+        toast.error("RFC Duplicado", {
+          description: "El RFC ingresado ya pertenece a otro cliente.",
+        });
+      }
+    } catch (error) {
+      console.error("Error al validar RFC", error);
+    } finally {
+      setIsValidatingRfc(false);
+    }
+  };
 
   if (loadingData) {
     return (
@@ -894,11 +933,11 @@ export default function ClientForm() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label variant="brand" required>
-                  RFC (12-13 CARACTERES)
-                </Label>
-                <Input
+                <AsyncValidatedInput
+                  label="RFC (12-13 CARACTERES)"
+                  required
                   placeholder="XXX000000XXX"
+                  maxLength={13}
                   value={fiscalData.rfc}
                   onChange={(e) =>
                     setFiscalData({
@@ -906,19 +945,18 @@ export default function ClientForm() {
                       rfc: e.target.value.toUpperCase(),
                     })
                   }
-                  maxLength={13}
-                  className={cn(
-                    "h-11 font-mono font-bold uppercase",
-                    fiscalData.rfc &&
-                      !validateRFC(fiscalData.rfc) &&
-                      "border-destructive bg-destructive/5",
-                  )}
+                  //  AQUI CONECTAMOS EL BACKEND DINÁMICO
+                  validateFn={(val) =>
+                    validationService.checkField(
+                      "clients", // La tabla permitida en Python
+                      "rfc", // La columna
+                      val, // Lo que escribió el usuario
+                      clientId, // Si existe (Edit Mode), ignorará este ID para que no marque duplicado consigo mismo
+                    )
+                  }
+                  validateOnBlurOnly={true} // Revisa cuando el usuario quita el cursor del input
+                  className="font-mono font-bold uppercase h-11 "
                 />
-                {fiscalData.rfc && !validateRFC(fiscalData.rfc) && (
-                  <p className="text-[9px] font-black text-destructive uppercase tracking-widest mt-1">
-                    RFC inválido
-                  </p>
-                )}
               </div>
             </div>
 

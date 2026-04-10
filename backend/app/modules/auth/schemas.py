@@ -5,6 +5,15 @@ from datetime import datetime
 
 
 # Esquema básico de Usuario para respuestas de Auth
+class RoleAuthSchema(BaseModel):
+    id: int
+    name_key: str
+    nombre: str
+    permisos: Optional[Dict[str, Any]] = {}
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class UserAuthSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)  # <-- Sintaxis V2
 
@@ -13,6 +22,7 @@ class UserAuthSchema(BaseModel):
     email: EmailStr
     role_id: Optional[int] = None
     avatar_url: Optional[str] = None
+    role: Optional[RoleAuthSchema] = None
 
 
 # Lo que envía el usuario para loguearse

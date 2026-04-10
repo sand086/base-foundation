@@ -65,7 +65,7 @@ def verificar_schemas():
                             f"⚠️ TOKEN INVÁLIDO para: {ruta} (Revisa que tu token no haya expirado)"
                         )
                     elif response.status_code == 403:
-                        print(f"🔒 PERMISO DENEGADO para: {ruta}")
+                        print(f" PERMISO DENEGADO para: {ruta}")
                     elif response.status_code == 404:
                         print(
                             f"👻 NO ENCONTRADO: {ruta} (Puede que la ruta exacta sea distinta)"
@@ -80,7 +80,7 @@ def verificar_schemas():
     except httpx.ConnectError:
         print("\n💥 ERROR CRÍTICO: No se pudo conectar a http://localhost:8000")
         print(
-            "👉 ASEGÚRATE de tener otra consola abierta corriendo: python -m uvicorn app.main:app --reload"
+            " ASEGÚRATE de tener otra consola abierta corriendo: python -m uvicorn app.main:app --reload"
         )
         sys.exit(1)
     except Exception as e:
@@ -95,7 +95,7 @@ def verificar_schemas():
         for error in errores:
             print(error)
         print(
-            "👉 Tienes desajustes entre tus Models y Schemas. Busca el campo que dice 'missing' o 'Field required' en el detalle."
+            " Tienes desajustes entre tus Models y Schemas. Busca el campo que dice 'missing' o 'Field required' en el detalle."
         )
     else:
         print(
