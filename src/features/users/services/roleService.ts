@@ -15,7 +15,8 @@ export const roleService = {
     return data;
   },
   delete: async (id: number) => {
-    const { data } = await axiosClient.delete(`api/auth/roles/${id}`);
+    // 🔴 Faltaba diagonal al inicio
+    const { data } = await axiosClient.delete(`/api/auth/roles/${id}`);
     return data;
   },
   getModules: async () => {
@@ -27,15 +28,21 @@ export const roleService = {
     return data;
   },
   getPermissions: async (id: number) => {
-    const { data } = await axiosClient.get(`/auth/roles/${id}/permisos`);
+    // 🔴 Faltaba /api al inicio
+    const { data } = await axiosClient.get(`/api/auth/roles/${id}/permisos`);
     return data;
   },
   updateModule: async (id: string, modulo: ModuleData) => {
-    const { data } = await axiosClient.put(`/api/config/modules/${id}`, modulo);
+    // 🟢 CORREGIDO: De /api/config a /api/catalogs
+    const { data } = await axiosClient.put(
+      `/api/catalogs/modules/${id}`,
+      modulo,
+    );
     return data;
   },
   deleteModule: async (id: string) => {
-    const { data } = await axiosClient.delete(`api/config/modules/${id}`);
+    // 🟢 CORREGIDO Y CON DIAGONAL: De api/config a /api/catalogs
+    const { data } = await axiosClient.delete(`/api/catalogs/modules/${id}`);
     return data;
   },
 };
