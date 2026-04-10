@@ -263,6 +263,7 @@ const RolesPermissions: React.FC = () => {
   const [newRoleName, setNewRoleName] = useState("");
   const [newRoleDescription, setNewRoleDescription] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [draftPermisos, setDraftPermisos] = useState<PermisosMap>({});
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [roleToDelete, setRoleToDelete] = useState<number | null>(null);
@@ -321,68 +322,77 @@ const RolesPermissions: React.FC = () => {
         return "bg-gray-100 text-gray-700";
     }
   };
+  const normalizePerms = (raw: any, modules: Module[]): PermisosMap => {
+    const out: PermisosMap = {};
+
+    // Inicializamos todo en falso para que no haya undefined
+    modules.forEach((m) => {
+      out[m.id.toLowerCase()] = { ...EMPTY_PERMISO };
+    });
+
+    if (!raw) return out;
+
+    let permsData = raw;
+    try {
+      if (typeof raw === "string") permsData = JSON.parse(raw);
+    } catch {}
+
+    if (typeof permsData === "object" && permsData !== null) {
+      const isAll = permsData.all === true;
+
+      modules.forEach((m) => {
+        const id = m.id.toLowerCase();
+        // Buscamos el permiso. Manejamos traducciones comunes por si acaso
+        const val =
+          permsData[id] ||
+          permsData["cxc"] ||
+          permsData["cxp"] ||
+          permsData["configuracion"];
+
+        if (isAll) {
+          out[id] = { read: true, update: true, delete: true, export: true };
+        } else if (typeof val === "boolean") {
+          out[id] = { read: val, update: val, delete: val, export: val };
+        } else if (typeof val === "object" && val !== null) {
+          out[id] = {
+            read: !!(val.read || val.ver),
+            update: !!(val.update || val.editar),
+            delete: !!(val.delete || val.eliminar),
+            export: !!(val.export || val.exportar),
+          };
+        }
+      });
+    }
+    return out;
+  };
 
   // 👉 4. TOGGLES REFACTORIZADOS AL INGLÉS
+
   const handleTogglePermiso = (
     moduloId: string,
     field: keyof Permiso,
   ): void => {
-    const idStr = String(moduloId).toLowerCase();
-
-    setRoles((prev) =>
-      prev.map((r) => {
-        if (r.id !== selectedRoleId) return r;
-
-        const safePerms: PermisosMap =
-          typeof r.permisos === "object" &&
-          r.permisos !== null &&
-          !Array.isArray(r.permisos)
-            ? ({ ...(r.permisos as PermisosMap) } as PermisosMap)
-            : {};
-
-        const modPerms = safePerms[idStr] || EMPTY_PERMISO;
-
-        return {
-          ...r,
-          permisos: {
-            ...safePerms,
-            [idStr]: { ...modPerms, [field]: !modPerms[field] },
-          },
-        };
-      }),
-    );
+    const key = moduloId.toLowerCase();
+    setDraftPermisos((prev) => ({
+      ...prev,
+      [key]: { ...prev[key], [field]: !prev[key][field] },
+    }));
   };
 
   const handleToggleAllModulePermisos = (moduloId: string): void => {
-    const idStr = String(moduloId).toLowerCase();
-    const p = getPermiso(idStr);
+    const key = moduloId.toLowerCase();
+    const p = draftPermisos[key] || EMPTY_PERMISO;
     const allEnabled = p.read && p.update && p.delete && p.export;
 
-    setRoles((prev) =>
-      prev.map((r) => {
-        if (r.id !== selectedRoleId) return r;
-
-        const safePerms: PermisosMap =
-          typeof r.permisos === "object" &&
-          r.permisos !== null &&
-          !Array.isArray(r.permisos)
-            ? ({ ...(r.permisos as PermisosMap) } as PermisosMap)
-            : {};
-
-        return {
-          ...r,
-          permisos: {
-            ...safePerms,
-            [idStr]: {
-              read: !allEnabled,
-              update: !allEnabled,
-              delete: !allEnabled,
-              export: !allEnabled,
-            },
-          },
-        };
-      }),
-    );
+    setDraftPermisos((prev) => ({
+      ...prev,
+      [key]: {
+        read: !allEnabled,
+        update: !allEnabled,
+        delete: !allEnabled,
+        export: !allEnabled,
+      },
+    }));
   };
 
   const handleToggleColumnPermiso = (field: keyof Permiso): void => {
@@ -411,25 +421,17 @@ const RolesPermissions: React.FC = () => {
   };
 
   const handleSavePermisos = async (): Promise<void> => {
+    if (!selectedRoleId) return;
     setIsSaving(true);
-
     try {
-      if (isCreatingRole) {
-        const success = await createRole(newRoleName, newRoleDescription);
-        if (success) {
-          toast.success("Rol creado exitosamente");
-          setShowRoleEditor(false);
-        }
-      } else if (currentRole) {
-        const success = await updateRole(currentRole.id, {
-          nombre: newRoleName,
-          descripcion: newRoleDescription,
-          permisos: currentRole.permisos,
-        });
-        if (success) {
-          toast.success("Rol actualizado exitosamente");
-          setShowRoleEditor(false);
-        }
+      const success = await updateRole(selectedRoleId, {
+        nombre: newRoleName,
+        descripcion: newRoleDescription,
+        permisos: draftPermisos, // 👉 Mandamos el JSON limpio en inglés
+      });
+      if (success) {
+        toast.success("Permisos actualizados");
+        setShowRoleEditor(false);
       }
     } finally {
       setIsSaving(false);
@@ -438,13 +440,13 @@ const RolesPermissions: React.FC = () => {
 
   const openRoleEditor = (roleId: number): void => {
     const role = roles.find((r) => r.id === roleId);
-
     setSelectedRoleId(roleId);
     setIsCreatingRole(false);
-
     setNewRoleName(role?.nombre || "");
     setNewRoleDescription(role?.descripcion || "");
 
+    // 👉 AQUÍ CARGAMOS EL BORRADOR LIMPIO
+    setDraftPermisos(normalizePerms(role?.permisos, availableModules));
     setShowRoleEditor(true);
   };
 
@@ -782,7 +784,9 @@ const RolesPermissions: React.FC = () => {
                     <tbody className="divide-y">
                       {/* 👉 5. ITERAMOS LOS MÓDULOS DE LA BD */}
                       {availableModules.map((modulo) => {
-                        const permiso = getPermiso(modulo.id);
+                        const permiso =
+                          draftPermisos[modulo.id.toLowerCase()] ||
+                          EMPTY_PERMISO;
 
                         // Resuelve el icono correcto desde el Map (o fallback a Dashboard)
                         const IconComponent =

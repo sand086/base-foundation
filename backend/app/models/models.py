@@ -1581,3 +1581,13 @@ class InsurerCatalog(AuditMixin, Base):
     nombre = Column(String(100), nullable=False, unique=True)  # Ej: Quálitas, AXA
     telefono_siniestros = Column(String(50), nullable=True)
     activo = Column(Boolean, default=True, server_default="true")
+
+
+class SystemModule(AuditMixin, Base):
+    __tablename__ = "system_modules"
+
+    # Usamos String(50) como ID para que sean palabras en inglés (ej: "fleet", "monitoring")
+    id = Column(String(50), primary_key=True, index=True)
+    nombre = Column(String(100), nullable=False)
+    icono = Column(String(50), default="LayoutDashboard")
+    descripcion = Column(String(200), nullable=True)
