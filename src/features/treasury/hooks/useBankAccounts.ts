@@ -23,7 +23,7 @@ export function useBankAccounts() {
     staleTime: 1000 * 60 * 10,
   });
 
-  const API_PATH = "/finance/bank-accounts";
+  const API_PATH = "/api/finance/bank-accounts";
 
   const createMutation = useMutation({
     mutationFn: async (newAccount: Partial<BankAccount>) => {
@@ -35,7 +35,7 @@ export function useBankAccounts() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["bank-accounts"] });
-      toast.success("Cuenta bancaria creada correctamente");
+      //toast.success("Cuenta bancaria creada correctamente");
     },
     onError: () => console.error("Error al crear la cuenta"),
   });
@@ -60,7 +60,7 @@ export function useBankAccounts() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      await axiosClient.delete(`api${API_PATH}/${id}`);
+      await axiosClient.delete(`${API_PATH}/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["bank-accounts"] });
