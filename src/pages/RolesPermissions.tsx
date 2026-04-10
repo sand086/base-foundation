@@ -335,7 +335,9 @@ const RolesPermissions: React.FC = () => {
     let permsData = raw;
     try {
       if (typeof raw === "string") permsData = JSON.parse(raw);
-    } catch {}
+    } catch {
+      console.error("Error al parsear permisos para normalización:", raw);
+    }
 
     if (typeof permsData === "object" && permsData !== null) {
       const isAll = permsData.all === true;
