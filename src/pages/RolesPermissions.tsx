@@ -323,6 +323,10 @@ const RolesPermissions: React.FC = () => {
     }
   };
   const normalizePerms = (raw: any, modules: Module[]): PermisosMap => {
+    // console.log("=== 🔍 INICIANDO DEBUG DE PERMISOS ===");
+    // console.log("1️⃣ Permisos crudos recibidos del Rol:", raw);
+    // console.log( "2️⃣ Módulos disponibles en la BD:",modules.map((m) => m.id),);
+
     const out: PermisosMap = {};
 
     // Inicializamos todo en falso para que no haya undefined
@@ -330,26 +334,48 @@ const RolesPermissions: React.FC = () => {
       out[m.id.toLowerCase()] = { ...EMPTY_PERMISO };
     });
 
-    if (!raw) return out;
+    if (!raw) {
+      // console.log("❌ No hay permisos, regresando todo en falso.");
+      return out;
+    }
 
     let permsData = raw;
     try {
       if (typeof raw === "string") permsData = JSON.parse(raw);
     } catch {
-      console.error("Error al parsear permisos para normalización:", raw);
+      console.error("❌ Error al parsear permisos:", raw);
     }
+
+    // console.log("3️⃣ Permisos parseados como Objeto:", permsData);
 
     if (typeof permsData === "object" && permsData !== null) {
       const isAll = permsData.all === true;
 
+      // 🛠 MAPA DE TRADUCCIÓN:
+      // Si la BD de módulos sigue teniendo IDs en español, esto los traduce
+      // al vuelo para buscar la llave correcta en el JSON en inglés.
+      const translationMap: Record<string, string> = {
+        monitoreo: "monitoring",
+        flota: "fleet",
+        combustible: "fuel",
+        tarifas: "rates",
+        despacho: "dispatch",
+        cxc: "receivables",
+        cxp: "payables",
+        configuracion: "admin",
+        usuarios: "users",
+        trackingop: "traffic",
+        reportes: "reports",
+      };
+
       modules.forEach((m) => {
         const id = m.id.toLowerCase();
-        // Buscamos el permiso. Manejamos traducciones comunes por si acaso
-        const val =
-          permsData[id] ||
-          permsData["cxc"] ||
-          permsData["cxp"] ||
-          permsData["configuracion"];
+        const englishKey = translationMap[id] || id;
+
+        // Buscamos el permiso usando el ID original o su traducción al inglés
+        const val = permsData[id] || permsData[englishKey];
+
+        // console.log( `   🔸 Evaluando módulo: [${id}] -> Buscando llave en JSON: [${englishKey}] -> Encontró:`,  val,);
 
         if (isAll) {
           out[id] = { read: true, update: true, delete: true, export: true };
@@ -365,6 +391,10 @@ const RolesPermissions: React.FC = () => {
         }
       });
     }
+
+    // console.log("4️⃣ Matriz final generada para las casillas (Draft):", out);
+    // console.log("=========================================");
+
     return out;
   };
 
