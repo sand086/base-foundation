@@ -816,7 +816,11 @@ export function TripDetailsModal({
                                         {/* SI ES ENTREGA DE VACÍO: Mostramos Input + Botón Finalizar */}
                                         {leg.id === activeLeg?.id &&
                                         leg.leg_type === "entrega_vacio" &&
-                                        leg.status !== "entregado" ? (
+                                        ![
+                                          "entregado",
+                                          "liquidado",
+                                          "cerrado",
+                                        ].includes(leg.status) ? (
                                           <div className="mt-2 pt-2 border-t border-slate-100 dark:border-white/5">
                                             <Button
                                               size="sm"
@@ -932,18 +936,31 @@ export function TripDetailsModal({
                                           <DollarSign className="h-3 w-3" />{" "}
                                           Anticipos / Vales
                                         </Label>
-                                        <p
-                                          className={cn(
-                                            "text-sm font-mono font-black",
-                                            (leg.total_anticipos || 0) > 0
-                                              ? "text-amber-600 dark:text-amber-400"
-                                              : "text-slate-700 dark:text-slate-300",
-                                          )}
-                                        >
-                                          {formatCurrency(
-                                            leg.total_anticipos || 0,
-                                          )}
-                                        </p>
+                                        {(() => {
+                                          // Parche visual: Restamos el anticipo de casetas si es la fase de entrega de vacío
+                                          // para evitar mostrar el arrastre incorrecto que viene del backend.
+                                          const displayAnticipos =
+                                            leg.leg_type === "entrega_vacio"
+                                              ? Math.max(
+                                                  0,
+                                                  (leg.total_anticipos || 0) -
+                                                    (leg.anticipo_casetas || 0),
+                                                )
+                                              : leg.total_anticipos || 0;
+
+                                          return (
+                                            <p
+                                              className={cn(
+                                                "text-sm font-mono font-black",
+                                                displayAnticipos > 0
+                                                  ? "text-amber-600 dark:text-amber-400"
+                                                  : "text-slate-700 dark:text-slate-300",
+                                              )}
+                                            >
+                                              {formatCurrency(displayAnticipos)}
+                                            </p>
+                                          );
+                                        })()}
                                       </div>
                                     </div>
                                     {leg.status === "liquidado" && (
