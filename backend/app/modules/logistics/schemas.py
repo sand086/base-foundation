@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Optional, TYPE_CHECKING
+from typing import List, Optional, TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -23,6 +23,22 @@ class ClientLite(BaseModel):
     rfc: str
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class FuelLogLite(ORMBase):
+    id: int
+    fecha_hora: datetime
+    estacion: str
+    tipo_combustible: str
+    litros: float
+    precio_por_litro: float
+    total: float
+    odometro: int
+    is_conciliated: bool = False
+    diferencia_litros: Optional[float] = None
+    rendimiento_real: Optional[float] = None
+    evidencia_url: Optional[str] = None
+    record_status: str
 
 
 # =========================================================
@@ -339,6 +355,7 @@ class TripLegResponse(TripLegBase):
     record_status: RecordStatus
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    fuel_logs: List[FuelLogLite] = Field(default_factory=list)
 
     @computed_field
     @property

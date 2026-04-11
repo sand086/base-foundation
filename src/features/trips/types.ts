@@ -54,6 +54,7 @@ export interface TripTimelineEventCreatePayload {
 export interface TripLeg extends TripLegResponse {
   trip?: Trip;
   saldo_operador?: number;
+  fuel_logs?: any[];
 }
 
 // ==========================================

@@ -137,7 +137,7 @@ export const StandByTrips = () => {
 
                 <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest">
                   <span className="text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded shadow-sm border border-slate-200 dark:border-white/5">
-                    ID: #{trip.public_id || trip.id}
+                    TRP-{trip.public_id || trip.id}
                   </span>
                   {trip.fecha_programada && (
                     <span className="text-blue-600 dark:text-blue-400 flex items-center gap-1.5">

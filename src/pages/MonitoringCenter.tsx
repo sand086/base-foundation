@@ -944,7 +944,7 @@ export default function MonitoringCenter() {
                   >
                     <DataTableCell className="pl-6 py-4 align-middle">
                       <p className="font-mono text-sm font-black text-brand-navy dark:text-white">
-                        {trip.public_id || trip.id}
+                        TRP-{trip.public_id || trip.id}
                       </p>
                       <div className="flex items-center gap-2 mt-1.5">
                         <Truck className="h-3 w-3 text-slate-400 shrink-0" />
