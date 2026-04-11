@@ -104,6 +104,34 @@ export const useMaintenance = () => {
     },
   });
 
+  // NUEVO: Mutación para actualizar orden completa
+  const updateWorkOrderMut = useMutation({
+    mutationFn: ({ id, order }: { id: number; order: any }) =>
+      MaintenanceService.updateWorkOrderApiMaintenanceWorkOrdersOrderIdPut(
+        id,
+        order,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workOrders"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory"] });
+      toast.success("Orden Actualizada");
+    },
+  });
+
+  // NUEVO: Mutación para eliminar orden
+  const deleteWorkOrderMut = useMutation({
+    mutationFn: (id: number) =>
+      MaintenanceService.deleteWorkOrderApiMaintenanceWorkOrdersOrderIdDelete(
+        id,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workOrders"] });
+      toast.success("Orden Eliminada", {
+        description: "La orden de trabajo ha sido borrada.",
+      });
+    },
+  });
+
   const updateOrderStatusMut = useMutation({
     mutationFn: ({ id, status }: { id: number; status: string }) =>
       MaintenanceService.updateOrderStatusApiMaintenanceWorkOrdersOrderIdStatusPatch(
@@ -141,6 +169,7 @@ export const useMaintenance = () => {
       mechanicsQuery.refetch();
     },
 
+    // --- ACCIONES INVENTARIO ---
     createItem: async (item: CreateInventoryPayload) => {
       try {
         await createItemMut.mutateAsync(item);
@@ -173,6 +202,7 @@ export const useMaintenance = () => {
       }
     },
 
+    // --- ACCIONES ÓRDENES DE TRABAJO ---
     createWorkOrder: async (order: CreateWorkOrderPayload) => {
       try {
         await createWorkOrderMut.mutateAsync(order);
@@ -180,6 +210,32 @@ export const useMaintenance = () => {
       } catch (err) {
         toast.error("Error", {
           description: "Verifica stock suficiente para las piezas.",
+        });
+        return false;
+      }
+    },
+
+    // NUEVO: Función expuesta para actualizar
+    updateWorkOrder: async (id: number, order: any) => {
+      try {
+        await updateWorkOrderMut.mutateAsync({ id, order });
+        return true;
+      } catch (err) {
+        toast.error("Fallo al actualizar", {
+          description: "Revisa los datos de la orden.",
+        });
+        return false;
+      }
+    },
+
+    // NUEVO: Función expuesta para eliminar
+    deleteWorkOrder: async (id: number) => {
+      try {
+        await deleteWorkOrderMut.mutateAsync(id);
+        return true;
+      } catch (err) {
+        toast.error("Fallo al eliminar", {
+          description: "No se pudo eliminar la orden de trabajo.",
         });
         return false;
       }

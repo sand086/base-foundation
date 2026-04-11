@@ -11,6 +11,7 @@ import {
   Database,
   DollarSign,
   CheckCircle,
+  PackageX,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -55,41 +56,62 @@ const categories = [
 ];
 
 export const InventoryTable = () => {
-  // 1. Usar Hook Real
+  // 1. Hook de datos
   const { inventory, isLoading, createItem, deleteItem, updateItem } =
     useMaintenance();
 
-  // Modal states
+  // 2. Estados locales
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [itemToEdit, setItemToEdit] = useState<InventoryItem | null>(null);
   const [itemToView, setItemToView] = useState<InventoryItem | null>(null);
-
-  // itemToDelete ahora es number
   const [itemToDelete, setItemToDelete] = useState<number | null>(null);
 
-  // Calcular KPIs con propiedades reales (snake_case)
-  const lowStockCount = inventory.filter(
-    (item) => item.stock_actual < item.stock_minimo,
-  ).length;
-
-  const totalValue = inventory.reduce(
-    (sum, item) => sum + item.stock_actual * item.precio_unitario,
-    0,
-  );
-
+  // 3. Formateador de moneda
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("es-MX", {
       style: "currency",
       currency: "MXN",
-    }).format(amount);
+      minimumFractionDigits: 2,
+    }).format(amount || 0);
   };
 
-  const getCategoryBadge = (categoria: string) => {
-    // Convierte "motor" a "Motor" para el diseño
-    const categoryName = categoria.charAt(0).toUpperCase() + categoria.slice(1);
+  // 4. Cálculos de KPIs Optimizados
+  const kpis = useMemo(() => {
+    const items = inventory || [];
+    let totalValue = 0;
+    let lowStockCount = 0;
+    let outOfStockCount = 0;
 
-    // Mapeo semántico de categorías Tahoe UI
+    items.forEach((item) => {
+      const stock = item.stock_actual || 0;
+      const minStock = item.stock_minimo || 0;
+      const price = item.precio_unitario || 0;
+
+      totalValue += stock * price;
+
+      if (stock === 0) {
+        outOfStockCount += 1;
+      } else if (stock <= minStock) {
+        lowStockCount += 1;
+      }
+    });
+
+    return {
+      totalItems: items.length,
+      totalValue,
+      lowStockCount,
+      outOfStockCount,
+      isHealthy: lowStockCount === 0 && outOfStockCount === 0,
+    };
+  }, [inventory]);
+
+  // 5. Renderizado de Categorías
+  const getCategoryBadge = (categoria: string) => {
+    const categoryName = categoria
+      ? categoria.charAt(0).toUpperCase() + categoria.slice(1)
+      : "General";
+
     const colorClasses: Record<string, string> = {
       Motor:
         "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-500/30",
@@ -118,15 +140,12 @@ export const InventoryTable = () => {
     );
   };
 
-  // Handlers conectados al hook
+  // 6. Manejadores de acciones
   const handleSave = async (itemData: any) => {
     let success = false;
-
     if (itemToEdit) {
-      // MODO EDICIÓN
       success = await updateItem(itemToEdit.id, itemData);
     } else {
-      // MODO CREACIÓN
       success = await createItem(itemData);
     }
 
@@ -157,7 +176,7 @@ export const InventoryTable = () => {
     setIsAddModalOpen(true);
   };
 
-  // Definir Columnas (Usando claves snake_case)
+  // 7. Definición de Columnas
   const columns: ColumnDef<InventoryItem>[] = useMemo(
     () => [
       {
@@ -165,13 +184,16 @@ export const InventoryTable = () => {
         header: "SKU",
         sortable: true,
         render: (value, item) => {
-          const isLowStock = item.stock_actual < item.stock_minimo;
+          const isLowStock = item.stock_actual <= item.stock_minimo;
+          const isOutOfStock = item.stock_actual === 0;
           return (
             <div className="flex items-center gap-2">
-              {isLowStock && (
-                <AlertTriangle className="h-4 w-4 text-rose-500 dark:text-rose-400 animate-pulse" />
-              )}
-              <span className="font-mono font-black text-brand-navy dark:text-white uppercase tracking-tight bg-slate-100 dark:bg-white/5 px-2 py-1 rounded">
+              {isOutOfStock ? (
+                <PackageX className="h-4 w-4 text-rose-600 dark:text-rose-500" />
+              ) : isLowStock ? (
+                <AlertTriangle className="h-4 w-4 text-amber-500 dark:text-amber-400 animate-pulse" />
+              ) : null}
+              <span className="font-mono font-black text-brand-navy dark:text-white uppercase tracking-tight bg-slate-100 dark:bg-white/5 px-2 py-1 rounded border border-slate-200 dark:border-white/5">
                 {value}
               </span>
             </div>
@@ -198,19 +220,23 @@ export const InventoryTable = () => {
         render: (value) => getCategoryBadge(value as string),
       },
       {
-        key: "stock_actual", // snake_case
+        key: "stock_actual",
         header: "Stock Actual",
         type: "number",
         sortable: true,
         render: (value, item) => {
-          const isLowStock = item.stock_actual < item.stock_minimo;
+          const isOutOfStock = item.stock_actual === 0;
+          const isLowStock =
+            item.stock_actual <= item.stock_minimo && !isOutOfStock;
           return (
             <span
               className={cn(
                 "font-mono font-black text-sm text-center block",
-                isLowStock
-                  ? "text-rose-600 dark:text-rose-400"
-                  : "text-emerald-600 dark:text-emerald-400",
+                isOutOfStock
+                  ? "text-rose-600 dark:text-rose-500"
+                  : isLowStock
+                    ? "text-amber-500 dark:text-amber-400"
+                    : "text-emerald-600 dark:text-emerald-400",
               )}
             >
               {value}
@@ -219,7 +245,7 @@ export const InventoryTable = () => {
         },
       },
       {
-        key: "stock_minimo", // snake_case
+        key: "stock_minimo",
         header: "Stock Mínimo",
         type: "number",
         sortable: true,
@@ -250,7 +276,7 @@ export const InventoryTable = () => {
         ),
       },
       {
-        key: "precio_unitario", // snake_case
+        key: "precio_unitario",
         header: "Precio Unit.",
         type: "number",
         sortable: true,
@@ -313,6 +339,7 @@ export const InventoryTable = () => {
     [],
   );
 
+  // Pantalla de Carga
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-[50vh]">
@@ -328,87 +355,135 @@ export const InventoryTable = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-20">
-      {/*  KPI CARDS (Tahoe UI) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card
-          variant="default"
-          className="p-6 flex items-center gap-5 group hover:border-slate-300 dark:hover:border-white/20 transition-all cursor-default"
-        >
-          <div className="p-3.5 bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-white/10 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
-            <Database className="h-6 w-6 text-brand-navy dark:text-slate-300" />
-          </div>
-          <div className="flex flex-col justify-center">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
-              Total SKUs
+      {/* SECCIÓN DE KPIS (4 Tarjetas Ordenadas y Responsivas) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+        {/* KPI 1: Total SKUs */}
+        <Card className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border-slate-200/60 dark:border-white/10 shadow-sm hover:shadow-md transition-all relative overflow-hidden group">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-[10px] uppercase font-black tracking-widest text-slate-500 dark:text-slate-400">
+              Total de SKUs
+            </CardTitle>
+            <Database className="h-4 w-4 text-blue-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-black font-mono tracking-tighter text-brand-navy dark:text-white">
+              {kpis.totalItems}
+            </div>
+            <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase">
+              Artículos registrados
             </p>
-            <p className="text-3xl font-black text-brand-navy dark:text-white leading-none tracking-tighter">
-              {inventory.length}
-            </p>
+          </CardContent>
+          <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity">
+            <Database className="h-24 w-24 text-blue-500" />
           </div>
         </Card>
 
+        {/* KPI 2: Valor del Inventario */}
+        <Card className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border-slate-200/60 dark:border-white/10 shadow-sm hover:shadow-md transition-all relative overflow-hidden group">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-[10px] uppercase font-black tracking-widest text-slate-500 dark:text-slate-400">
+              Valor Inventario
+            </CardTitle>
+            <DollarSign className="h-4 w-4 text-emerald-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl sm:text-3xl font-black font-mono tracking-tighter text-emerald-600 dark:text-emerald-400">
+              {formatCurrency(kpis.totalValue)}
+            </div>
+            <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase">
+              Capital almacenado
+            </p>
+          </CardContent>
+          <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity">
+            <Package className="h-24 w-24 text-emerald-500" />
+          </div>
+        </Card>
+
+        {/* KPI 3: Alertas de Stock (Bajo mínimo) */}
         <Card
-          variant="default"
           className={cn(
-            "p-6 flex items-center gap-5 group transition-all cursor-default relative overflow-hidden",
-            lowStockCount > 0
-              ? "hover:border-rose-300 dark:hover:border-rose-500/50"
-              : "hover:border-emerald-300 dark:hover:border-emerald-500/50",
+            "bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm shadow-sm hover:shadow-md transition-all relative overflow-hidden group",
+            kpis.lowStockCount > 0
+              ? "border-amber-200 dark:border-amber-900/50"
+              : "border-slate-200/60 dark:border-white/10",
           )}
         >
-          <div
-            className={cn(
-              "p-3.5 rounded-2xl border shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out relative z-10",
-              lowStockCount > 0
-                ? "bg-rose-50 dark:bg-rose-950/30 border-rose-100 dark:border-rose-900/50 text-rose-600 dark:text-rose-400"
-                : "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-100 dark:border-emerald-900/50 text-emerald-600 dark:text-emerald-400",
-            )}
-          >
-            {lowStockCount > 0 ? (
-              <AlertTriangle className="h-6 w-6" />
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-[10px] uppercase font-black tracking-widest text-slate-500 dark:text-slate-400">
+              {kpis.isHealthy ? "Stock Saludable" : "Alerta de Stock"}
+            </CardTitle>
+            {kpis.isHealthy ? (
+              <CheckCircle className="h-4 w-4 text-emerald-500" />
             ) : (
-              <CheckCircle className="h-6 w-6" />
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
             )}
-          </div>
-          <div className="flex flex-col justify-center relative z-10">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
-              {lowStockCount > 0 ? "Alertas de Stock" : "Stock Saludable"}
-            </p>
-            <p
+          </CardHeader>
+          <CardContent>
+            <div
               className={cn(
-                "text-3xl font-black leading-none tracking-tighter",
-                lowStockCount > 0
-                  ? "text-rose-600 dark:text-rose-400"
-                  : "text-emerald-600 dark:text-emerald-400",
+                "text-3xl font-black font-mono tracking-tighter",
+                kpis.lowStockCount > 0
+                  ? "text-amber-600 dark:text-amber-500"
+                  : "text-emerald-600 dark:text-emerald-500",
               )}
             >
-              {lowStockCount}
+              {kpis.lowStockCount}
+            </div>
+            <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase">
+              Próximos a agotarse
             </p>
-          </div>
-          {lowStockCount > 0 && (
-            <AlertTriangle className="h-24 w-24 text-rose-500/10 dark:text-rose-500/5 absolute -right-4 -bottom-4 z-0 animate-pulse" />
+          </CardContent>
+          {kpis.lowStockCount > 0 && (
+            <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity">
+              <AlertTriangle className="h-24 w-24 text-amber-500 animate-pulse" />
+            </div>
           )}
         </Card>
 
+        {/* KPI 4: Stock Agotado */}
         <Card
-          variant="default"
-          className="p-6 flex items-center gap-5 group hover:border-emerald-300 dark:hover:border-emerald-500/50 transition-all cursor-default"
+          className={cn(
+            "bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm shadow-sm hover:shadow-md transition-all relative overflow-hidden group",
+            kpis.outOfStockCount > 0
+              ? "border-rose-200 dark:border-rose-900/50 bg-rose-50/30 dark:bg-rose-900/10"
+              : "border-slate-200/60 dark:border-white/10",
+          )}
         >
-          <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl border border-emerald-100 dark:border-emerald-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
-            <Package className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
-          </div>
-          <div className="flex flex-col justify-center">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
-              Valor Inventario
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-[10px] uppercase font-black tracking-widest text-slate-500 dark:text-slate-400">
+              Stock Agotado
+            </CardTitle>
+            <PackageX
+              className={cn(
+                "h-4 w-4",
+                kpis.outOfStockCount > 0 ? "text-rose-500" : "text-slate-400",
+              )}
+            />
+          </CardHeader>
+          <CardContent>
+            <div
+              className={cn(
+                "text-3xl font-black font-mono tracking-tighter",
+                kpis.outOfStockCount > 0
+                  ? "text-rose-600 dark:text-rose-500"
+                  : "text-slate-700 dark:text-slate-300",
+              )}
+            >
+              {kpis.outOfStockCount}
+            </div>
+            <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase">
+              Requieren reabastecimiento
             </p>
-            <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono leading-none tracking-tighter">
-              {formatCurrency(totalValue)}
-            </p>
-          </div>
+          </CardContent>
+          {kpis.outOfStockCount > 0 && (
+            <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity">
+              <PackageX className="h-24 w-24 text-rose-500" />
+            </div>
+          )}
         </Card>
       </div>
 
-      {/*  TABLA PRINCIPAL (Liquid Glass Tahoe) */}
+      {/* TABLA PRINCIPAL (Liquid Glass Tahoe) */}
       <Card
         variant="default"
         className="shadow-2xl border-slate-200/50 dark:border-white/10 overflow-hidden"
@@ -428,7 +503,7 @@ export const InventoryTable = () => {
             Nueva Refacción
           </Button>
         </CardHeader>
-        {/* Inyección CSS para la cabecera de la tabla */}
+
         <CardContent className="p-0 bg-white dark:bg-slate-950 [&_thead]:bg-slate-50/80 dark:[&_thead]:bg-slate-900/80 [&_thead]:backdrop-blur-xl [&_th]:bg-transparent [&_th]:border-b [&_th]:border-slate-200 dark:[&_th]:border-white/10 [&_th]:text-[10px] [&_th]:font-black [&_th]:uppercase [&_th]:tracking-[0.2em] [&_th]:text-slate-500 dark:[&_th]:text-slate-400">
           <EnhancedDataTable
             data={inventory}
@@ -439,7 +514,7 @@ export const InventoryTable = () => {
         </CardContent>
       </Card>
 
-      {/* Modals */}
+      {/* MODALES */}
       <AddInventoryModal
         open={isAddModalOpen}
         onOpenChange={(open) => {
@@ -456,13 +531,12 @@ export const InventoryTable = () => {
         item={itemToView as any}
       />
 
-      {/*  DIÁLOGO DE CONFIRMACIÓN DE ELIMINACIÓN (Estructura 4 Capas Tahoe) */}
+      {/* DIÁLOGO DE CONFIRMACIÓN DE ELIMINACIÓN */}
       <AlertDialog
         open={!!itemToDelete}
         onOpenChange={(open) => !open && setItemToDelete(null)}
       >
         <AlertDialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
-          {/* HEADER TAHOE */}
           <AlertDialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
             <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
             <div className="relative z-10 flex items-center gap-4 sm:gap-5">
@@ -480,7 +554,6 @@ export const InventoryTable = () => {
             </div>
           </AlertDialogHeader>
 
-          {/* BODY */}
           <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
             <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block space-y-6">
               <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -507,7 +580,6 @@ export const InventoryTable = () => {
             </AlertDialogDescription>
           </div>
 
-          {/* FOOTER */}
           <AlertDialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
             <div className="flex flex-col-reverse sm:flex-row sm:flex-wrap justify-end items-stretch sm:items-center gap-3 w-full">
               <AlertDialogCancel

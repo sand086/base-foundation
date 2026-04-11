@@ -12,6 +12,11 @@ import {
   User,
   Truck,
   Package,
+  Trash2,
+  Edit,
+  Receipt,
+  AlertTriangle,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,8 +34,17 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import {
   EnhancedDataTable,
   ColumnDef,
@@ -45,16 +59,26 @@ import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 
 export const WorkOrdersTable = () => {
-  // 1. Usar Hook Real
-  const { workOrders, createWorkOrder, updateOrderStatus } = useMaintenance();
+  // 1. Usar Hook Real (Asegúrate de exponer deleteWorkOrder y updateWorkOrder en tu hook)
+  const {
+    workOrders,
+    createWorkOrder,
+    updateWorkOrder,
+    deleteWorkOrder,
+    updateOrderStatus,
+  } = useMaintenance();
 
+  // Estados de los Modales
   const [isModalOpen, setIsModalOpen] = useState(false);
-
-  // States
   const [orderToView, setOrderToView] = useState<WorkOrder | null>(null);
   const [orderToEdit, setOrderToEdit] = useState<WorkOrder | null>(null);
 
-  // Helpers visuales
+  // Estados para Acciones Críticas
+  const [orderToDelete, setOrderToDelete] = useState<number | null>(null);
+  const [orderToClose, setOrderToClose] = useState<WorkOrder | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // --- HELPERS VISUALES ---
   const getStatusBadge = (status: string) => {
     const baseClass =
       "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 shadow-sm";
@@ -139,11 +163,53 @@ export const WorkOrdersTable = () => {
     }
   };
 
-  // Definir columnas (Mapeo de snake_case a UI)
+  // --- HANDLERS ---
+  const handleSave = async (data: any) => {
+    let success = false;
+    if (orderToEdit) {
+      success = await updateWorkOrder(orderToEdit.id, data);
+    } else {
+      success = await createWorkOrder(data);
+    }
+    if (success) {
+      setIsModalOpen(false);
+      setOrderToEdit(null);
+    }
+    return success;
+  };
+
+  const handleDelete = async () => {
+    if (!orderToDelete) return;
+    setIsProcessing(true);
+    await deleteWorkOrder(orderToDelete);
+    setIsProcessing(false);
+    setOrderToDelete(null);
+  };
+
+  const handleCloseOrder = async () => {
+    if (!orderToClose) return;
+    setIsProcessing(true);
+    await updateOrderStatus(orderToClose.id, "cerrada");
+    setIsProcessing(false);
+    setOrderToClose(null);
+    // Nota: Aquí el backend o tu hook disparará la integración con CxP Proveedores
+  };
+
+  const handleCancelOrder = async (orderId: number) => {
+    if (
+      confirm(
+        "¿Estás seguro de CANCELAR esta orden? Las refacciones regresarán automáticamente al almacén.",
+      )
+    ) {
+      await updateOrderStatus(orderId, "cancelada");
+    }
+  };
+
+  // --- DEFINICIÓN DE COLUMNAS ---
   const columns: ColumnDef<WorkOrder>[] = useMemo(
     () => [
       {
-        key: "status_icon", // Usamos status para el icono
+        key: "status_icon",
         header: "",
         sortable: false,
         width: "w-10",
@@ -164,7 +230,7 @@ export const WorkOrdersTable = () => {
         ),
       },
       {
-        key: "unit_numero", // Viene del backend flatten
+        key: "unit_numero",
         header: "Unidad",
         sortable: true,
         render: (value) => (
@@ -174,7 +240,7 @@ export const WorkOrdersTable = () => {
         ),
       },
       {
-        key: "mechanic_nombre", // Viene del backend flatten
+        key: "mechanic_nombre",
         header: "Mecánico Asignado",
         sortable: true,
         render: (value) => (
@@ -184,7 +250,7 @@ export const WorkOrdersTable = () => {
         ),
       },
       {
-        key: "descripcion_problema", // snake_case
+        key: "descripcion_problema",
         header: "Descripción",
         width: "min-w-[200px]",
         sortable: true,
@@ -198,7 +264,7 @@ export const WorkOrdersTable = () => {
         ),
       },
       {
-        key: "fecha_apertura", // snake_case
+        key: "fecha_apertura",
         header: "Apertura",
         type: "date",
         sortable: true,
@@ -213,7 +279,7 @@ export const WorkOrdersTable = () => {
         ),
       },
       {
-        key: "parts", // Array de partes
+        key: "parts",
         header: "Refacciones",
         sortable: false,
         render: (value: any[]) =>
@@ -239,7 +305,7 @@ export const WorkOrdersTable = () => {
         render: (value) => getStatusBadge(value as string),
       },
       {
-        key: "actions", // ID para acciones
+        key: "actions",
         header: "Acciones",
         sortable: false,
         width: "w-[80px]",
@@ -262,7 +328,7 @@ export const WorkOrdersTable = () => {
                 align="end"
                 className="glass-panel border-white/20 min-w-[160px] z-50 dark:bg-slate-900/90"
               >
-                {/* BOTÓN VER DETALLES */}
+                {/* VER DETALLES */}
                 <DropdownMenuItem
                   className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
                   onClick={() => setOrderToView(order)}
@@ -271,44 +337,50 @@ export const WorkOrdersTable = () => {
                   Ver detalles
                 </DropdownMenuItem>
 
-                {/*  BOTÓN FINALIZAR (Solo si no está cerrada ni cancelada) */}
+                {/* EDITAR */}
+                {order.status !== "cerrada" && order.status !== "cancelada" && (
+                  <DropdownMenuItem
+                    className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
+                    onClick={() => {
+                      setOrderToEdit(order);
+                      setIsModalOpen(true);
+                    }}
+                  >
+                    <Edit className="h-4 w-4 text-brand-green" /> Editar Orden
+                  </DropdownMenuItem>
+                )}
+
+                {/* FINALIZAR / ENVIAR A CXP */}
                 {order.status !== "cerrada" && order.status !== "cancelada" && (
                   <>
                     <DropdownMenuSeparator className="dark:bg-white/10" />
                     <DropdownMenuItem
                       className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer text-emerald-600 focus:text-emerald-700 focus:bg-emerald-50 dark:focus:bg-emerald-900/30"
-                      onClick={async () => {
-                        if (
-                          confirm(
-                            "¿Estás seguro de finalizar esta orden de trabajo?",
-                          )
-                        ) {
-                          await updateOrderStatus(order.id, "cerrada");
-                        }
-                      }}
+                      onClick={() => setOrderToClose(order)}
                     >
-                      <CheckCircle className="h-4 w-4" /> Finalizar Orden
+                      <Receipt className="h-4 w-4" /> Cerrar y Facturar (CxP)
                     </DropdownMenuItem>
                   </>
                 )}
 
-                {/*  BOTÓN CANCELAR (Solo si no está cerrada ni cancelada) */}
+                {/* CANCELAR */}
                 {order.status !== "cerrada" && order.status !== "cancelada" && (
                   <DropdownMenuItem
                     className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer text-rose-600 focus:text-rose-700 focus:bg-rose-50 dark:focus:bg-rose-900/30"
-                    onClick={async () => {
-                      if (
-                        confirm(
-                          "¿Estás seguro de CANCELAR esta orden? Las refacciones regresarán automáticamente al almacén.",
-                        )
-                      ) {
-                        await updateOrderStatus(order.id, "cancelada");
-                      }
-                    }}
+                    onClick={() => handleCancelOrder(order.id)}
                   >
-                    <XCircle className="h-4 w-4" /> Cancelar / Revertir
+                    <XCircle className="h-4 w-4" /> Cancelar
                   </DropdownMenuItem>
                 )}
+
+                {/* ELIMINAR (Solo si está cancelada o es administrador) */}
+                <DropdownMenuSeparator className="dark:bg-white/10" />
+                <DropdownMenuItem
+                  className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer text-rose-600 focus:text-rose-700 focus:bg-rose-50 dark:focus:bg-rose-900/30"
+                  onClick={() => setOrderToDelete(order.id)}
+                >
+                  <Trash2 className="h-4 w-4" /> Eliminar Permanente
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -320,7 +392,7 @@ export const WorkOrdersTable = () => {
 
   return (
     <div className="space-y-6">
-      {/*  TABLA PRINCIPAL (Liquid Glass Tahoe) */}
+      {/* TABLA PRINCIPAL (Liquid Glass Tahoe) */}
       <Card
         variant="default"
         className="shadow-2xl border-slate-200/50 dark:border-white/10 overflow-hidden"
@@ -338,11 +410,9 @@ export const WorkOrdersTable = () => {
             }}
             className="w-full sm:w-auto haptic-press shadow-md shadow-brand-red/20"
           >
-            <Plus className="h-4 w-4 mr-2" />
-            Nueva Orden
+            <Plus className="h-4 w-4 mr-2" /> Nueva Orden
           </Button>
         </CardHeader>
-        {/* Inyección CSS para la cabecera de la tabla */}
         <CardContent className="p-0 bg-white dark:bg-slate-950 [&_thead]:bg-slate-50/80 dark:[&_thead]:bg-slate-900/80 [&_thead]:backdrop-blur-xl [&_th]:bg-transparent [&_th]:border-b [&_th]:border-slate-200 dark:[&_th]:border-white/10 [&_th]:text-[10px] [&_th]:font-black [&_th]:uppercase [&_th]:tracking-[0.2em] [&_th]:text-slate-500 dark:[&_th]:text-slate-400">
           <EnhancedDataTable
             data={workOrders}
@@ -353,23 +423,21 @@ export const WorkOrdersTable = () => {
         </CardContent>
       </Card>
 
-      {/* Work Order Modal (Create/Edit) */}
+      {/* MODAL CREAR/EDITAR (Reutilizado) */}
       <WorkOrderModal
         open={isModalOpen}
         onOpenChange={(open) => {
           setIsModalOpen(open);
           if (!open) setOrderToEdit(null);
         }}
-        // Pasamos la función del hook para crear
-        onCreate={createWorkOrder}
+        orderToEdit={orderToEdit as any}
+        onCreate={handleSave}
       />
 
-      {/*  MODAL DE VISTA (Read Only Detail - Estructura Triple Tahoe) */}
+      {/* MODAL DE VISTA (Read Only Detail) */}
       <Dialog
         open={!!orderToView}
-        onOpenChange={(isOpen) => {
-          if (!isOpen) setOrderToView(null);
-        }}
+        onOpenChange={(isOpen) => !isOpen && setOrderToView(null)}
       >
         <DialogContent className="w-[95vw] sm:max-w-lg flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-slate-50/50 dark:bg-transparent backdrop-blur-xl rounded-2xl">
           <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-brand-navy/95 dark:bg-slate-900 backdrop-blur-md shrink-0 border-b border-white/10 relative overflow-hidden z-10">
@@ -388,7 +456,6 @@ export const WorkOrdersTable = () => {
                   </p>
                 </div>
               </div>
-              {/* Badge de estado en el header */}
               {orderToView && (
                 <div className="hidden sm:block">
                   {getStatusBadge(orderToView.status)}
@@ -400,7 +467,6 @@ export const WorkOrdersTable = () => {
           {orderToView && (
             <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar">
               <div className="space-y-6">
-                {/* Metadatos Superiores */}
                 <div className="flex items-center justify-between bg-white dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-white/10 shadow-sm">
                   <div className="sm:hidden">
                     {getStatusBadge(orderToView.status)}
@@ -411,15 +477,12 @@ export const WorkOrdersTable = () => {
                       {format(
                         new Date(orderToView.fecha_apertura),
                         "dd MMM yyyy",
-                        {
-                          locale: es,
-                        },
+                        { locale: es },
                       ).toUpperCase()}
                     </span>
                   </div>
                 </div>
 
-                {/* Unidad y Mecánico */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="p-4 bg-slate-100 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-white/10 shadow-inner">
                     <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1">
@@ -444,7 +507,6 @@ export const WorkOrdersTable = () => {
                   </div>
                 </div>
 
-                {/* Descripción */}
                 <div className="p-5 bg-white dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-white/10 shadow-sm">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-2">
                     Descripción del Problema
@@ -454,12 +516,11 @@ export const WorkOrdersTable = () => {
                   </p>
                 </div>
 
-                {/* Refacciones */}
                 {orderToView.parts && orderToView.parts.length > 0 && (
                   <div className="p-5 bg-white dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-white/10 shadow-sm space-y-4">
                     <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-navy dark:text-slate-300 flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-2">
-                      <Package className="h-4 w-4 text-blue-500" />
-                      Refacciones Utilizadas ({orderToView.parts.length})
+                      <Package className="h-4 w-4 text-blue-500" /> Refacciones
+                      Utilizadas ({orderToView.parts.length})
                     </p>
                     <div className="space-y-2">
                       {orderToView.parts.map((parte, idx) => (
@@ -486,7 +547,6 @@ export const WorkOrdersTable = () => {
             </div>
           )}
 
-          {/* FOOTER */}
           <DialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0">
             <div className="flex w-full justify-end">
               <Button
@@ -502,6 +562,121 @@ export const WorkOrdersTable = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* --- ALERT DIALOG PARA FINALIZAR Y ENVIAR A CXP --- */}
+      <AlertDialog
+        open={!!orderToClose}
+        onOpenChange={(open) => !open && setOrderToClose(null)}
+      >
+        <AlertDialogContent className="w-[95vw] sm:max-w-md p-0 overflow-hidden border-none shadow-2xl rounded-2xl bg-white dark:bg-brand-navy">
+          <AlertDialogHeader className="p-6 bg-emerald-50 dark:bg-emerald-900/20 border-b border-emerald-100 dark:border-emerald-800/30">
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-full bg-emerald-100 dark:bg-emerald-800/50 flex items-center justify-center shadow-inner border border-emerald-200 dark:border-emerald-700">
+                <Receipt className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div className="text-left">
+                <AlertDialogTitle className="text-xl font-black text-emerald-800 dark:text-emerald-400 uppercase tracking-tighter">
+                  Cerrar Orden
+                </AlertDialogTitle>
+                <AlertDialogDescription className="text-[10px] font-bold uppercase tracking-widest text-emerald-600/70 dark:text-emerald-500 mt-1">
+                  Integración con Cuentas por Pagar
+                </AlertDialogDescription>
+              </div>
+            </div>
+          </AlertDialogHeader>
+          <div className="p-6 space-y-5">
+            <p className="text-sm font-medium text-slate-600 dark:text-slate-300 leading-relaxed">
+              Al finalizar esta orden de trabajo, los costos asociados a
+              refacciones externas y mano de obra de terceros{" "}
+              <b>
+                se enviarán automáticamente al módulo de Cuentas por Pagar
+                (Proveedores)
+              </b>{" "}
+              para su liquidación.
+            </p>
+            <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 text-xs font-bold rounded-lg border border-amber-200 dark:border-amber-800">
+              <AlertTriangle className="h-4 w-4" /> Esta acción cerrará la orden
+              y no se podrá editar.
+            </div>
+          </div>
+          <AlertDialogFooter className="p-6 bg-slate-50/80 dark:bg-slate-950/50 border-t border-slate-100 dark:border-white/5">
+            <AlertDialogCancel
+              disabled={isProcessing}
+              className="font-black uppercase tracking-widest text-[10px]"
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleCloseOrder();
+              }}
+              disabled={isProcessing}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase tracking-widest text-[10px] shadow-md border-none haptic-press"
+            >
+              {isProcessing ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <CheckCircle className="h-4 w-4 mr-2" />
+              )}
+              Confirmar y Enviar a CxP
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* --- ALERT DIALOG PARA ELIMINAR --- */}
+      <AlertDialog
+        open={!!orderToDelete}
+        onOpenChange={(open) => !open && setOrderToDelete(null)}
+      >
+        <AlertDialogContent className="w-[95vw] sm:max-w-md p-0 overflow-hidden border-none shadow-2xl rounded-2xl bg-white dark:bg-brand-navy">
+          <AlertDialogHeader className="p-6 bg-rose-50 dark:bg-rose-900/20 border-b border-rose-100 dark:border-rose-800/30">
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-full bg-rose-100 dark:bg-rose-800/50 flex items-center justify-center shadow-inner border border-rose-200 dark:border-rose-700">
+                <Trash2 className="h-6 w-6 text-rose-600 dark:text-rose-400" />
+              </div>
+              <div className="text-left">
+                <AlertDialogTitle className="text-xl font-black text-rose-800 dark:text-rose-400 uppercase tracking-tighter">
+                  Eliminar Orden
+                </AlertDialogTitle>
+                <AlertDialogDescription className="text-[10px] font-bold uppercase tracking-widest text-rose-600/70 dark:text-rose-500 mt-1">
+                  Acción irreversible
+                </AlertDialogDescription>
+              </div>
+            </div>
+          </AlertDialogHeader>
+          <div className="p-6">
+            <p className="text-sm font-medium text-slate-600 dark:text-slate-300 leading-relaxed">
+              ¿Estás seguro de querer eliminar esta orden de trabajo? Se borrará
+              todo su historial y registro de sistema de forma permanente.
+            </p>
+          </div>
+          <AlertDialogFooter className="p-6 bg-slate-50/80 dark:bg-slate-950/50 border-t border-slate-100 dark:border-white/5">
+            <AlertDialogCancel
+              disabled={isProcessing}
+              className="font-black uppercase tracking-widest text-[10px]"
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleDelete();
+              }}
+              disabled={isProcessing}
+              className="bg-rose-600 hover:bg-rose-700 text-white font-black uppercase tracking-widest text-[10px] shadow-md border-none haptic-press"
+            >
+              {isProcessing ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4 mr-2" />
+              )}
+              Eliminar Permanentemente
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

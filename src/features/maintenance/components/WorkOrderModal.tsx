@@ -9,6 +9,7 @@ import {
   Check,
   Home,
   MapPin,
+  Save,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +38,7 @@ import { useMaintenance } from "@/features/maintenance/hooks/useMaintenance";
 import { useUnits } from "@/features/units/hooks/useUnits";
 import { useTrips } from "@/features/trips/hooks/useTrips";
 import { InventoryItem } from "@/features/inventory/types";
+import { WorkOrder } from "@/features/maintenance/types"; // Importamos el tipo real
 
 interface SelectedPart {
   item: InventoryItem;
@@ -46,24 +48,26 @@ interface SelectedPart {
 interface WorkOrderModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreate: (order: any) => Promise<boolean>; // Función del hook para crear
+  orderToEdit?: WorkOrder | null; // 1. Agregamos la propiedad opcional
+  onCreate: (order: any) => Promise<boolean>;
 }
 
 export const WorkOrderModal = ({
   open,
   onOpenChange,
+  orderToEdit, // 2. La recibimos como prop
   onCreate,
 }: WorkOrderModalProps) => {
   // Cargar datos reales
   const { inventory, mechanics } = useMaintenance();
   const { unidades } = useUnits();
-  const { trips } = useTrips(); //  Traemos los viajes para asociar gastos
+  const { trips } = useTrips();
 
   const [selectedUnit, setSelectedUnit] = useState("");
   const [selectedMechanic, setSelectedMechanic] = useState("");
   const [descripcion, setDescripcion] = useState("");
 
-  //  OBJETIVO 4: Estados para Patio vs Ruta
+  // Estados para Patio vs Ruta
   const [tipoMantenimiento, setTipoMantenimiento] = useState<"patio" | "ruta">(
     "patio",
   );
@@ -74,11 +78,52 @@ export const WorkOrderModal = ({
 
   // Estado para agregar parte
   const [addingPart, setAddingPart] = useState(false);
-  const [selectedSkuId, setSelectedSkuId] = useState(""); // ID del item (string temp)
+  const [selectedSkuId, setSelectedSkuId] = useState("");
   const [partQuantity, setPartQuantity] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  //  Filtrar solo los viajes de la unidad seleccionada que estén activos
+  // 3. EFECTO DE PRE-CARGA (Si estamos en modo Edición)
+  useEffect(() => {
+    if (open && orderToEdit) {
+      setSelectedUnit(
+        orderToEdit.unit_id ? orderToEdit.unit_id.toString() : "",
+      );
+      setSelectedMechanic(
+        orderToEdit.mechanic_id ? orderToEdit.mechanic_id.toString() : "",
+      );
+      setDescripcion(orderToEdit.descripcion_problema || "");
+
+      // Si el backend te devuelve el tipo de mantenimiento, úsalo. Si no, por defecto a patio
+      setTipoMantenimiento(
+        (orderToEdit as any).tipo_mantenimiento === "ruta" ? "ruta" : "patio",
+      );
+      setSelectedTrip(
+        (orderToEdit as any).trip_id
+          ? String((orderToEdit as any).trip_id)
+          : "",
+      );
+
+      // Precargar las partes si existen (cruzándolas con el inventario real)
+      if (orderToEdit.parts && Array.isArray(orderToEdit.parts)) {
+        const preLoadedParts: SelectedPart[] = orderToEdit.parts
+          .map((p: any) => {
+            const inventoryItem = inventory.find(
+              (i) => i.id === p.inventory_item_id,
+            );
+            return inventoryItem
+              ? { item: inventoryItem, cantidad: p.cantidad }
+              : null;
+          })
+          .filter(Boolean) as SelectedPart[];
+        setSelectedParts(preLoadedParts);
+      }
+    } else if (!open) {
+      // Limpiar todo al cerrar
+      handleClose();
+    }
+  }, [open, orderToEdit, inventory]);
+
+  // Filtrar solo los viajes de la unidad seleccionada que estén activos
   const activeTripsForUnit = useMemo(() => {
     if (!selectedUnit || !trips) return [];
     return trips.filter(
@@ -89,9 +134,11 @@ export const WorkOrderModal = ({
     );
   }, [trips, selectedUnit]);
 
-  // Limpiar el viaje si cambian la unidad
+  // Limpiar el viaje si cambian la unidad (Solo si no estamos en modo edición cargando datos iniciales)
   useEffect(() => {
-    setSelectedTrip("");
+    if (!orderToEdit) {
+      setSelectedTrip("");
+    }
   }, [selectedUnit]);
 
   // Filtrar partes disponibles (que no hayan sido seleccionadas ya)
@@ -144,7 +191,6 @@ export const WorkOrderModal = ({
   const handleSubmit = async () => {
     if (!selectedUnit || !descripcion) return;
 
-    // Validación extra para Auxilio en Ruta
     if (tipoMantenimiento === "ruta" && !selectedTrip) {
       toast.error("Dato Faltante", {
         description:
@@ -155,7 +201,6 @@ export const WorkOrderModal = ({
 
     setIsSubmitting(true);
 
-    // Preparar payload para el backend con las nuevas columnas
     const payload = {
       unit_id: parseInt(selectedUnit),
       mechanic_id: selectedMechanic ? parseInt(selectedMechanic) : undefined,
@@ -192,28 +237,36 @@ export const WorkOrderModal = ({
       }}
     >
       <DialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-slate-50/50 dark:bg-transparent backdrop-blur-xl rounded-2xl">
-        {/*  HEADER TAHOE */}
         <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-brand-navy/95 dark:bg-slate-900 backdrop-blur-md shrink-0 border-b border-white/10 relative overflow-hidden z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center gap-4 sm:gap-5">
-            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-blue-500/20 flex items-center justify-center shadow-inner shrink-0 icon-plate">
-              <Wrench className="h-7 w-7 sm:h-8 sm:w-8 text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.4)]" />
+            <div
+              className={cn(
+                "w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shadow-inner shrink-0 icon-plate",
+                orderToEdit
+                  ? "bg-emerald-500/20 text-emerald-400"
+                  : "bg-blue-500/20 text-blue-400",
+              )}
+            >
+              <Wrench className="h-7 w-7 sm:h-8 sm:w-8 drop-shadow-md" />
             </div>
             <div className="flex flex-col gap-1 text-left">
               <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-white text-shadow-premium heading-crisp leading-none">
-                Abrir Orden de Trabajo
+                {orderToEdit
+                  ? "Editar Orden de Trabajo"
+                  : "Abrir Orden de Trabajo"}
               </DialogTitle>
               <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-brand-secondary dark:text-slate-400 mt-1">
-                Generar ticket de servicio y descontar inventario
+                {orderToEdit
+                  ? `Modificando Folio: ${orderToEdit.folio}`
+                  : "Generar ticket de servicio y descontar inventario"}
               </p>
             </div>
           </div>
         </DialogHeader>
 
-        {/*  BODY */}
         <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar">
           <div className="space-y-8">
-            {/* Información Base */}
             <div className="space-y-6">
               <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-2">
                 <Wrench className="h-3.5 w-3.5 text-blue-500" />
@@ -221,7 +274,6 @@ export const WorkOrderModal = ({
               </h3>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Unit Selection */}
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 transition-colors duration-300">
                     Unidad *
@@ -251,7 +303,6 @@ export const WorkOrderModal = ({
                   </Select>
                 </div>
 
-                {/* Mechanic Selection */}
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 transition-colors duration-300">
                     Mecánico Asignado
@@ -282,7 +333,6 @@ export const WorkOrderModal = ({
                 </div>
               </div>
 
-              {/*  OBJETIVO 4: TIPO DE MANTENIMIENTO (PATIO VS RUTA) */}
               <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-white/10 space-y-4">
                 <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
                   Tipo de Gasto (Afectación Financiera) *
@@ -298,8 +348,8 @@ export const WorkOrderModal = ({
                     className={cn(
                       "flex-1 h-12 gap-2 border-2",
                       tipoMantenimiento === "patio"
-                        ? "border-brand-navy bg-blue-50 text-brand-navy"
-                        : "border-slate-200",
+                        ? "border-brand-navy bg-blue-50 text-brand-navy dark:bg-blue-900/30 dark:text-blue-400"
+                        : "border-slate-200 dark:border-slate-700",
                     )}
                   >
                     <Home className="h-4 w-4" /> Maintenance en Patio
@@ -311,18 +361,17 @@ export const WorkOrderModal = ({
                     className={cn(
                       "flex-1 h-12 gap-2 border-2",
                       tipoMantenimiento === "ruta"
-                        ? "border-amber-500 bg-amber-50 text-amber-700"
-                        : "border-slate-200",
+                        ? "border-amber-500 bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                        : "border-slate-200 dark:border-slate-700",
                     )}
                   >
                     <MapPin className="h-4 w-4" /> Auxilio en Ruta (Viaje)
                   </Button>
                 </div>
 
-                {/* Selector de Viaje si es en Ruta */}
                 {tipoMantenimiento === "ruta" && (
                   <div className="space-y-2 mt-4 animate-in fade-in slide-in-from-top-2">
-                    <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-700">
+                    <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-700 dark:text-amber-500">
                       Vincular al Viaje *
                     </Label>
                     <Select
@@ -330,7 +379,7 @@ export const WorkOrderModal = ({
                       onValueChange={setSelectedTrip}
                       disabled={!selectedUnit}
                     >
-                      <SelectTrigger className="h-11 border-amber-200 bg-white">
+                      <SelectTrigger className="h-11 border-amber-200 dark:border-amber-800/50 bg-white dark:bg-slate-900">
                         <SelectValue
                           placeholder={
                             selectedUnit
@@ -358,7 +407,6 @@ export const WorkOrderModal = ({
                 )}
               </div>
 
-              {/* Issue Description */}
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 transition-colors duration-300">
                   Descripción del Problema *
@@ -374,7 +422,6 @@ export const WorkOrderModal = ({
               </div>
             </div>
 
-            {/* Parts Section */}
             <div className="space-y-4 pt-2">
               <div className="flex items-center justify-between border-b border-slate-200 dark:border-white/10 pb-2">
                 <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 flex items-center gap-2">
@@ -395,7 +442,6 @@ export const WorkOrderModal = ({
                 )}
               </div>
 
-              {/* Add Part Form */}
               {addingPart && (
                 <div className="p-4 rounded-xl bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 shadow-inner space-y-4 animate-in fade-in slide-in-from-top-2">
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -495,7 +541,6 @@ export const WorkOrderModal = ({
                 </div>
               )}
 
-              {/* Selected Parts List */}
               {selectedParts.length > 0 ? (
                 <div className="space-y-3">
                   {selectedParts.map((part) => {
@@ -537,7 +582,6 @@ export const WorkOrderModal = ({
                             </span>
                           </p>
                         </div>
-
                         <div className="flex items-center gap-3 self-end sm:self-auto">
                           <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-white/5">
                             <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 pl-2">
@@ -584,8 +628,7 @@ export const WorkOrderModal = ({
                 </div>
               )}
 
-              {/* Deduction Warning */}
-              {selectedParts.length > 0 && (
+              {selectedParts.length > 0 && !orderToEdit && (
                 <div className="p-4 bg-amber-50 dark:bg-amber-950/20 border-l-4 border-amber-500 rounded-r-xl shadow-sm flex items-start gap-3 animate-in fade-in">
                   <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                   <div>
@@ -606,7 +649,6 @@ export const WorkOrderModal = ({
           </div>
         </div>
 
-        {/*  FOOTER TAHOE */}
         <DialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0">
           <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
             <Button
@@ -625,14 +667,21 @@ export const WorkOrderModal = ({
               size="lg"
               disabled={!isValid || isSubmitting}
               onClick={handleSubmit}
-              className="w-full sm:w-auto haptic-press flex-shrink-0 border-none bg-blue-600 hover:bg-blue-700 shadow-blue-500/20 text-white"
+              className={cn(
+                "w-full sm:w-auto haptic-press flex-shrink-0 border-none text-white",
+                orderToEdit
+                  ? "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20"
+                  : "bg-blue-600 hover:bg-blue-700 shadow-blue-500/20",
+              )}
             >
               {isSubmitting ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : orderToEdit ? (
+                <Save className="mr-2 h-4 w-4" />
               ) : (
                 <Check className="mr-2 h-4 w-4" />
               )}
-              Crear Orden de Trabajo
+              {orderToEdit ? "Guardar Cambios" : "Crear Orden de Trabajo"}
             </Button>
           </div>
         </DialogFooter>
