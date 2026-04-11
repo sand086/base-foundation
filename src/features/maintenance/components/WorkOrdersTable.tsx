@@ -56,7 +56,7 @@ import { WorkOrder } from "@/features/maintenance/types";
 import { WorkOrderModal } from "./WorkOrderModal";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 
 export const WorkOrdersTable = () => {
   // 1. Usar Hook Real (Asegúrate de exponer deleteWorkOrder y updateWorkOrder en tu hook)
@@ -295,6 +295,24 @@ export const WorkOrdersTable = () => {
               —
             </span>
           ),
+      },
+      {
+        key: "total_cost",
+        header: "Costo Total",
+        sortable: true,
+        render: (_, order) => {
+          // Calculamos el costo sumando cantidad * snapshot de cada parte
+          const total =
+            order.parts?.reduce(
+              (acc, p) => acc + p.cantidad * p.costo_unitario_snapshot,
+              0,
+            ) || 0;
+          return (
+            <span className="font-mono font-black text-xs text-slate-700 dark:text-slate-300">
+              {formatCurrency(total, "MXN")}
+            </span>
+          );
+        },
       },
       {
         key: "status",

@@ -132,7 +132,7 @@ const menuItems: MenuItem[] = [
     moduleCode: "payables", // <- Se protege con el permiso de payables
   },
   {
-    title: "Cobranza",
+    title: "Cuentas por Cobrar",
     icon: DollarSign,
     iconName: "Cobranza",
     path: "/receivables",

@@ -6,6 +6,17 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+export function formatCurrency(
+  amount: number,
+  currency: string = "MXN",
+  locale: string = "es-MX",
+): string {
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency,
+  }).format(amount);
+}
+
 /**
  * Calcula el estatus visual de una factura basándose en fechas y saldos.
  * Reutilizable para CxP y CxC.

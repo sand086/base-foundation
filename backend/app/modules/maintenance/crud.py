@@ -4,7 +4,7 @@
 import os
 import shutil
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta, date
 from typing import Optional
 
 from fastapi import HTTPException, UploadFile
@@ -499,3 +499,62 @@ def delete_work_order(db: Session, order_id: int):
     order.record_status = models.RecordStatus.ELIMINADO.value
     db.commit()
     return True
+
+
+def update_work_order_status(
+    db: Session, order_id: int, status: models.WorkOrderStatus
+):
+    order = db.query(models.WorkOrder).filter(models.WorkOrder.id == order_id).first()
+    if not order:
+        _not_found("Orden de trabajo")
+
+    if (
+        status == models.WorkOrderStatus.CANCELADA
+        and order.status != models.WorkOrderStatus.CANCELADA
+    ):
+        for part in order.parts:
+            if part.item:
+                part.item.stock_actual += part.cantidad
+
+    order.status = status
+
+    if status == models.WorkOrderStatus.CERRADA:
+        order.fecha_cierre = datetime.now(timezone.utc)
+
+        # --- NUEVA INTEGRACIÓN CON CXP ---
+        # 1. Calcular el monto total de las refacciones usadas
+        total_parts_cost = sum(
+            p.cantidad * p.costo_unitario_snapshot for p in order.parts
+        )
+
+        # 2. Determinar el concepto y clasificación
+        concepto_pago = (
+            f"Orden de Trabajo {order.folio} - Unidad ECO-{order.unit.numero_economico}"
+        )
+        clasificacion_pago = "costo_mantenimiento"
+
+        # 3. Crear la factura por pagar (PayableInvoice)
+        # Nota: Usamos el proveedor de la primera refacción si existe, o el taller si tuvieras ese campo
+        main_supplier_id = None
+        if order.parts and order.parts[0].item:
+            main_supplier_id = order.parts[0].item.proveedor_id
+
+        new_payable = models.PayableInvoice(
+            supplier_id=main_supplier_id,
+            viaje_id=order.trip_id,
+            unit_id=order.unit_id,
+            folio_interno=order.folio,
+            concepto=concepto_pago,
+            monto_total=total_parts_cost,
+            saldo_pendiente=total_parts_cost,
+            moneda=models.Currency.MXN,
+            fecha_emision=date.today(),
+            fecha_vencimiento=date.today() + timedelta(days=15),  # 15 días por defecto
+            clasificacion=clasificacion_pago,
+            estatus=models.InvoiceStatus.PENDIENTE,
+        )
+        db.add(new_payable)
+        # --------------------------------
+
+    db.commit()
+    return get_work_order(db, order_id)
