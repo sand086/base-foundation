@@ -853,6 +853,10 @@ class InventoryItem(AuditMixin, Base):
     stock_minimo = Column(Integer, default=5)
     ubicacion = Column(String(100))
     precio_unitario = Column(Float, default=0.0)
+    proveedor_id = Column(
+        Integer, ForeignKey("suppliers.id", ondelete="SET NULL"), nullable=True
+    )
+    proveedor = relationship("Supplier")
 
     work_order_parts = relationship("WorkOrderPart", back_populates="item")
 

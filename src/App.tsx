@@ -41,6 +41,7 @@ import Manuals from "./pages/Manuals";
 import TwoFactorAuth from "./pages/TwoFactorAuth";
 import TrafficControl from "./pages/TrafficControl";
 import Verify2FA from "@/features/users/components/Verify2FA";
+import SuppliersCatalog from "./pages/SuppliersCatalog";
 
 // Wizard de Despacho
 import { DispatchWizard } from "@/features/trips/components/DispatchWizard";
@@ -142,6 +143,8 @@ const App = () => (
 
                   {/*  MÓDULO: PROVEEDORES (Y COMPRAS) */}
                   <Route element={<ProtectedRoute requiredModule="payables" />}>
+                    <Route path="suppliers" element={<SuppliersCatalog />} />{" "}
+                    {/* <-- NUEVA RUTA */}
                     <Route path="payables" element={<Payables />} />
                     <Route path="purchases" element={<Purchases />} />
                   </Route>

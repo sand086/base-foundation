@@ -264,7 +264,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
       <div className="flex flex-wrap items-center gap-3 p-2 rounded-2xl bg-slate-100/50 dark:bg-slate-950/40 border border-slate-200/60 dark:border-white/5 shadow-inner mb-6">
         {/* Global Search */}
         <div className="relative flex-1 min-w-[250px] max-w-sm group">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-white/40 group-focus-within:text-brand-red transition-colors" />
+          <Search className="absolute z-10 left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 dark:text-white/60 pointer-events-none" />{" "}
           <Input
             placeholder={searchPlaceholder}
             value={globalSearch}

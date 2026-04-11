@@ -300,28 +300,21 @@ export function CreateTireModal({
                           <FormLabel variant="brand" required>
                             Marca
                           </FormLabel>
-                          <Select
-                            onValueChange={field.onChange}
-                            defaultValue={field.value}
-                            value={field.value}
-                          >
-                            <FormControl>
-                              <SelectTrigger className="h-11 font-black uppercase text-xs glass-card bg-card border-border shadow-sm text-brand-navy dark:text-slate-100">
-                                <SelectValue placeholder="Seleccionar marca" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent className="bg-card/90 dark:bg-card/90 backdrop-blur-xl border-border">
-                              {MARCAS_COMUNES.map((m) => (
-                                <SelectItem
-                                  key={m}
-                                  value={m}
-                                  className="font-bold uppercase text-xs"
-                                >
-                                  {m}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <FormControl>
+                            <>
+                              <Input
+                                {...field}
+                                list="marcas-comunes"
+                                placeholder="Ej: Michelin o marca propia..."
+                                className="h-11 font-bold uppercase glass-card bg-card border-border shadow-sm"
+                              />
+                              <datalist id="marcas-comunes">
+                                {MARCAS_COMUNES.map((m) => (
+                                  <option key={m} value={m} />
+                                ))}
+                              </datalist>
+                            </>
+                          </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}

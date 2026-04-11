@@ -15,6 +15,7 @@ import {
   ChevronDown,
   PanelLeftClose,
   PanelLeft,
+  CreditCard,
   Calculator,
   Landmark,
   X,
@@ -119,10 +120,16 @@ const menuItems: MenuItem[] = [
   },
   {
     title: "Proveedores",
-    icon: Briefcase,
-    iconName: "Proveedores",
+    icon: Briefcase, // Elegimos un icono que tenga sentido (Maletín/Empresa)
+    iconName: "Proveedores", // Si tienes un SVG para proveedores
+    path: "/suppliers",
+    moduleCode: "payables", // <- Se protege con el permiso de payables
+  },
+  {
+    title: "Cuentas por Pagar",
+    icon: CreditCard,
     path: "/payables",
-    moduleCode: "payables",
+    moduleCode: "payables", // <- Se protege con el permiso de payables
   },
   {
     title: "Cobranza",

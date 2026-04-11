@@ -46,8 +46,12 @@ def _not_found(entity: str = "Registro"):
 def list_inventory(
     db: Session, skip: int = 0, limit: int = 100, q: Optional[str] = None
 ):
-    query = db.query(models.InventoryItem).filter(
-        models.InventoryItem.record_status != models.RecordStatus.ELIMINADO.value
+    query = (
+        db.query(models.InventoryItem)
+        .options(joinedload(models.InventoryItem.proveedor))  # CARGAMOS EL PROVEEDOR
+        .filter(
+            models.InventoryItem.record_status != models.RecordStatus.ELIMINADO.value
+        )
     )
 
     if q:
@@ -57,9 +61,18 @@ def list_inventory(
             | (models.InventoryItem.descripcion.ilike(like))
         )
 
-    return (
+    items = (
         query.order_by(models.InventoryItem.id.desc()).offset(skip).limit(limit).all()
     )
+
+    # INYECTAR EL NOMBRE PARA EL FRONTEND
+    for item in items:
+        if item.proveedor:
+            item.proveedor_nombre = item.proveedor.razon_social
+        else:
+            item.proveedor_nombre = None
+
+    return items
 
 
 def get_inventory_item(db: Session, item_id: int):

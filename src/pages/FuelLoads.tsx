@@ -137,51 +137,71 @@ const FuelLoads = () => {
   const handleCreateTicket = async (data: any) => {
     const ticketsArray = data.tickets || [];
 
+    // Obtenemos los tramos seleccionados. Si no hay, dejamos un array con un null para que el loop corra 1 vez (Carga de patio general).
+    const legIds =
+      data.trip_leg_ids && data.trip_leg_ids.length > 0
+        ? data.trip_leg_ids
+        : [null];
+    const divisor = legIds.length;
+
     if (ticketsArray.length === 0) {
       toast.error("No hay tickets para guardar");
       return;
     }
 
+    const totalPeticiones = ticketsArray.length * divisor;
     const toastId = toast.loading(
-      `Guardando ${ticketsArray.length} vale(s)...`,
+      `Distribuyendo y guardando ${totalPeticiones} registro(s) en el Ledger...`,
     );
 
     try {
       // 1. Recorremos el arreglo de tickets que mandó el Modal
       for (const ticket of ticketsArray) {
-        const formData = new FormData();
+        // 2. LÓGICA CORE: Dividimos los litros equitativamente entre los viajes/tramos seleccionados
+        const litrosDistribuidos =
+          (Number(ticket.litros_diesel) || 0) / divisor;
 
-        formData.append("unit_id", String(data.unit_id));
-        formData.append("operator_id", String(data.operator_id));
-        formData.append("odometro", String(data.odometro || 0));
-        formData.append("fecha_hora", String(ticket.fecha_hora));
-        formData.append("estacion", ticket.estacion || "No especificada");
-        formData.append("litros_diesel", String(ticket.litros_diesel || 0));
-        formData.append("precio_diesel", String(ticket.precio_diesel || 0));
+        // 3. Iteramos por cada tramo (leg) seleccionado para crear un registro en BD por cada uno
+        for (const legId of legIds) {
+          const formData = new FormData();
 
-        // Los campos opcionales solo se agregan si existen
-        if (data.trip_id && data.trip_id !== "none") {
-          formData.append("trip_id", String(data.trip_id));
+          formData.append("unit_id", String(data.unit_id));
+          formData.append("operator_id", String(data.operator_id));
+          formData.append("odometro", String(data.odometro || 0));
+          formData.append("fecha_hora", String(ticket.fecha_hora));
+          formData.append("estacion", ticket.estacion || "No especificada");
+
+          // Enviamos los litros fraccionados
+          formData.append("litros_diesel", String(litrosDistribuidos));
+          formData.append("precio_diesel", String(ticket.precio_diesel || 0));
+
+          // Campos opcionales de vinculación
+          if (data.trip_id && data.trip_id !== "none") {
+            formData.append("trip_id", String(data.trip_id));
+          }
+
+          if (legId && legId !== "undefined") {
+            formData.append("trip_leg_id", String(legId));
+          }
+
+          if (ticket.evidencia) {
+            formData.append("file", ticket.evidencia);
+          }
+
+          // 4. Se lo mandamos a tu servicio
+          await fuelService.create(formData);
         }
-        if (data.trip_leg_id) {
-          formData.append("trip_leg_id", String(data.trip_leg_id));
-        }
-
-        // IMPORTANTE: El endpoint de FastAPI espera el archivo en un campo llamado "file"
-        if (ticket.evidencia) {
-          formData.append("file", ticket.evidencia);
-        }
-
-        // 4. Se lo mandamos a tu servicio
-        await fuelService.create(formData);
       }
 
       // Si todo sale bien, cerramos el modal y recargamos la tabla
       setIsModalOpen(false);
       await loadData();
-      toast.success(`Éxito: Se registraron ${ticketsArray.length} vales.`, {
-        id: toastId,
-      });
+      toast.success(
+        `Éxito: Vales distribuidos correctamente en ${divisor} fase(s).`,
+        {
+          id: toastId,
+        },
+      );
     } catch (error) {
       console.error("Error al guardar tickets:", error);
       toast.error("Fallo al guardar", {

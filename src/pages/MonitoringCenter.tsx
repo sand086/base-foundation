@@ -896,13 +896,13 @@ export default function MonitoringCenter() {
                   Flete Base {renderSortIcon("flete")}
                 </DataTableHead>
                 <DataTableHead className="py-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                  Diésel (Vales + Faltante)
+                  Diésel
                 </DataTableHead>
                 <DataTableHead className="py-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                  Casetas / Viát.
+                  Casetas
                 </DataTableHead>
                 <DataTableHead className="py-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                  Pago Operador
+                  Pago Operadores
                 </DataTableHead>
                 <DataTableHead
                   className="py-4 text-center text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 cursor-pointer select-none whitespace-nowrap group/head"
@@ -933,6 +933,8 @@ export default function MonitoringCenter() {
               {paginatedTrips.map((trip: any) => {
                 const finanzas = getTripFinancials(trip);
                 const fechaObj = new Date(trip.start_date || trip.created_at);
+                console.log(trip);
+                console.log(finanzas);
 
                 return (
                   <DataTableRow
@@ -1020,17 +1022,9 @@ export default function MonitoringCenter() {
                         >
                           <Ticket className="h-3.5 w-3.5 text-blue-500" />
                           <span className="font-mono text-[12px] font-black tracking-tighter">
-                            {formatMoney(finanzas.casetasOp)}
+                            {formatMoney(finanzas.cobroCasetasCliente)}
                           </span>
                         </div>
-                        {finanzas.viaticos > 0 && (
-                          <span
-                            className="text-[9px] text-slate-400 font-bold ml-5"
-                            title="Viáticos"
-                          >
-                            Viát: +{formatMoney(finanzas.viaticos)}
-                          </span>
-                        )}
                       </div>
                     </DataTableCell>
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { MaintenanceService } from "@/api/generated";
 import { InventoryItem } from "@/features/inventory/types";
@@ -19,152 +19,182 @@ interface CreateWorkOrderPayload {
   mechanic_id?: number;
   descripcion_problema: string;
   parts: { inventory_item_id: number; cantidad: number }[];
+  tipo_mantenimiento?: string;
 }
 
 export const useMaintenance = () => {
-  const [inventory, setInventory] = useState<InventoryItem[]>([]);
-  const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
-  const [mechanics, setMechanics] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
-  const fetchData = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const [invData, woData, mechData] = await Promise.all([
-        MaintenanceService.readInventoryApiMaintenanceInventoryGet(),
-        MaintenanceService.readWorkOrdersApiMaintenanceWorkOrdersGet(),
-        MaintenanceService.readMechanicsApiMaintenanceMechanicsGet(),
-      ]);
-      setInventory(invData as InventoryItem[]);
-      setWorkOrders(woData as WorkOrder[]);
-      setMechanics(mechData as any[]);
-    } catch (err) {
-      console.error("Error fetching maintenance data", err);
-      setError("Error al cargar datos de mantenimiento");
-      console.error("Error de conexión", {
-        description: "No se pudo cargar el inventario.",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  // ===========================
+  // QUERIES (Sincronización en tiempo real)
+  // ===========================
+  const inventoryQuery = useQuery({
+    queryKey: ["inventory"],
+    queryFn: () => MaintenanceService.readInventoryApiMaintenanceInventoryGet(),
+    staleTime: 1000 * 60 * 5,
+  });
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const workOrdersQuery = useQuery({
+    queryKey: ["workOrders"],
+    queryFn: () =>
+      MaintenanceService.readWorkOrdersApiMaintenanceWorkOrdersGet(),
+    staleTime: 1000 * 60 * 5,
+  });
 
-  const createItem = async (item: CreateInventoryPayload) => {
-    try {
-      const newItem =
-        await MaintenanceService.createInventoryItemApiMaintenanceInventoryPost(
-          item as any,
-        );
-      setInventory((prev) => [newItem as InventoryItem, ...prev]);
-      return true;
-    } catch (err) {
-      console.error("Error al crear", {
-        description: "Verifica que el SKU no exista.",
-      });
-      return false;
-    }
-  };
+  const mechanicsQuery = useQuery({
+    queryKey: ["mechanics"],
+    queryFn: () => MaintenanceService.readMechanicsApiMaintenanceMechanicsGet(),
+    staleTime: 1000 * 60 * 5,
+  });
 
-  const updateItem = async (id: number, item: any) => {
-    try {
-      const updatedItem =
-        await MaintenanceService.updateInventoryItemApiMaintenanceInventoryItemIdPut(
-          Number(id),
-          item,
-        );
-      setInventory((prev) =>
-        prev.map((i) => (i.id === id ? (updatedItem as InventoryItem) : i)),
-      );
+  // ===========================
+  // MUTATIONS - INVENTARIO
+  // ===========================
+  const createItemMut = useMutation({
+    mutationFn: (item: CreateInventoryPayload) =>
+      MaintenanceService.createInventoryItemApiMaintenanceInventoryPost(
+        item as any,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["inventory"] });
+    },
+  });
+
+  const updateItemMut = useMutation({
+    mutationFn: ({ id, item }: { id: number; item: any }) =>
+      MaintenanceService.updateInventoryItemApiMaintenanceInventoryItemIdPut(
+        id,
+        item,
+      ),
+    onSuccess: (updatedItem) => {
+      queryClient.invalidateQueries({ queryKey: ["inventory"] });
       toast.success("Refacción actualizada", {
         description: `${updatedItem.sku} - ${updatedItem.descripcion}`,
       });
-      return true;
-    } catch (err) {
-      console.error(err);
-      console.error("Error al actualizar", {
-        description: "No se pudieron guardar los cambios.",
-      });
-      return false;
-    }
-  };
+    },
+  });
 
-  const deleteItem = async (id: number) => {
-    try {
-      await MaintenanceService.deleteInventoryItemApiMaintenanceInventoryItemIdDelete(
-        Number(id),
-      );
-      setInventory((prev) => prev.filter((item) => item.id !== id));
+  const deleteItemMut = useMutation({
+    mutationFn: (id: number) =>
+      MaintenanceService.deleteInventoryItemApiMaintenanceInventoryItemIdDelete(
+        id,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["inventory"] });
       toast.success("Eliminado", {
         description: "Refacción eliminada correctamente.",
       });
-    } catch (err) {
-      console.error("Error", { description: "No se pudo eliminar el item." });
-    }
-  };
+    },
+  });
 
-  const createWorkOrder = async (order: CreateWorkOrderPayload) => {
-    try {
-      const newOrder =
-        await MaintenanceService.createWorkOrderApiMaintenanceWorkOrdersPost(
-          order as any,
-        );
-      setWorkOrders((prev) => [newOrder as WorkOrder, ...prev]);
-      const updatedInventory =
-        await MaintenanceService.readInventoryApiMaintenanceInventoryGet();
-      setInventory(updatedInventory as InventoryItem[]);
+  // ===========================
+  // MUTATIONS - ÓRDENES DE TRABAJO
+  // ===========================
+  const createWorkOrderMut = useMutation({
+    mutationFn: (order: CreateWorkOrderPayload) =>
+      MaintenanceService.createWorkOrderApiMaintenanceWorkOrdersPost(
+        order as any,
+      ),
+    onSuccess: (newOrder) => {
+      queryClient.invalidateQueries({ queryKey: ["workOrders"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory"] }); // Sincroniza stock
       toast.success("Orden Creada", {
         description: `Folio: ${newOrder.folio}`,
       });
-      return true;
-    } catch (err) {
-      console.error("Error", {
-        description: "No se pudo crear la orden de trabajo.",
-      });
-      return false;
-    }
-  };
+    },
+  });
 
-  const updateOrderStatus = async (id: number, status: string) => {
-    try {
-      const updatedOrder =
-        await MaintenanceService.updateOrderStatusApiMaintenanceWorkOrdersOrderIdStatusPatch(
-          Number(id),
-          { status } as any,
-        );
-      setWorkOrders((prev) =>
-        prev.map((o) => (o.id === id ? (updatedOrder as WorkOrder) : o)),
-      );
-      if (status === "cancelada") {
-        const updatedInventory =
-          await MaintenanceService.readInventoryApiMaintenanceInventoryGet();
-        setInventory(updatedInventory as InventoryItem[]);
+  const updateOrderStatusMut = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: string }) =>
+      MaintenanceService.updateOrderStatusApiMaintenanceWorkOrdersOrderIdStatusPatch(
+        id,
+        { status } as any,
+      ),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["workOrders"] });
+      // Si cancela, devuelve piezas al stock y refresca
+      if (variables.status === "cancelada") {
+        queryClient.invalidateQueries({ queryKey: ["inventory"] });
       }
       toast.success(
-        `Orden ${status === "cerrada" ? "Finalizada" : "Cancelada"}`,
+        `Orden ${variables.status === "cerrada" ? "Finalizada" : "Cancelada"} con éxito`,
       );
-      return true;
-    } catch (error) {
-      console.error("Error al actualizar la orden");
-      return false;
-    }
-  };
+    },
+  });
 
   return {
-    inventory,
-    workOrders,
-    mechanics,
-    isLoading,
-    error,
-    refresh: fetchData,
-    createItem,
-    updateItem,
-    deleteItem,
-    createWorkOrder,
-    updateOrderStatus,
+    inventory: (inventoryQuery.data || []) as InventoryItem[],
+    workOrders: (workOrdersQuery.data || []) as WorkOrder[],
+    mechanics: (mechanicsQuery.data || []) as any[],
+    isLoading:
+      inventoryQuery.isLoading ||
+      workOrdersQuery.isLoading ||
+      mechanicsQuery.isLoading,
+    error:
+      inventoryQuery.isError || workOrdersQuery.isError
+        ? "Error al cargar datos"
+        : null,
+
+    refresh: () => {
+      inventoryQuery.refetch();
+      workOrdersQuery.refetch();
+      mechanicsQuery.refetch();
+    },
+
+    createItem: async (item: CreateInventoryPayload) => {
+      try {
+        await createItemMut.mutateAsync(item);
+        return true;
+      } catch (err) {
+        toast.error("Error al crear", {
+          description: "Verifica que el SKU no exista.",
+        });
+        return false;
+      }
+    },
+
+    updateItem: async (id: number, item: any) => {
+      try {
+        await updateItemMut.mutateAsync({ id, item });
+        return true;
+      } catch (err) {
+        toast.error("Error al actualizar", {
+          description: "No se pudieron guardar los cambios.",
+        });
+        return false;
+      }
+    },
+
+    deleteItem: async (id: number) => {
+      try {
+        await deleteItemMut.mutateAsync(id);
+      } catch (err) {
+        toast.error("Error", { description: "No se pudo eliminar el item." });
+      }
+    },
+
+    createWorkOrder: async (order: CreateWorkOrderPayload) => {
+      try {
+        await createWorkOrderMut.mutateAsync(order);
+        return true;
+      } catch (err) {
+        toast.error("Error", {
+          description: "Verifica stock suficiente para las piezas.",
+        });
+        return false;
+      }
+    },
+
+    updateOrderStatus: async (id: number, status: string) => {
+      try {
+        await updateOrderStatusMut.mutateAsync({ id, status });
+        return true;
+      } catch (err) {
+        toast.error("Fallo al actualizar", {
+          description: "No se pudo cambiar el estatus de la orden.",
+        });
+        return false;
+      }
+    },
   };
 };

@@ -230,6 +230,16 @@ export const InventoryTable = () => {
         ),
       },
       {
+        key: "proveedor_nombre",
+        header: "Proveedor",
+        sortable: true,
+        render: (value) => (
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+            {value || "Sin Proveedor"}
+          </span>
+        ),
+      },
+      {
         key: "ubicacion",
         header: "Ubicación",
         sortable: true,
