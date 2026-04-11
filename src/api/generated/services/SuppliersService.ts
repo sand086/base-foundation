@@ -14,112 +14,6 @@ import { OpenAPI } from '../core/OpenAPI';
 import { request as __request } from '../core/request';
 export class SuppliersService {
     /**
-     * Read Suppliers
-     * @param skip
-     * @param limit
-     * @returns SupplierResponse Successful Response
-     * @throws ApiError
-     */
-    public static readSuppliersApiSuppliersGet(
-        skip?: number,
-        limit: number = 100,
-    ): CancelablePromise<Array<SupplierResponse>> {
-        return __request(OpenAPI, {
-            method: 'GET',
-            url: '/api/suppliers',
-            query: {
-                'skip': skip,
-                'limit': limit,
-            },
-            errors: {
-                422: `Validation Error`,
-            },
-        });
-    }
-    /**
-     * Create Supplier
-     * @param requestBody
-     * @returns SupplierResponse Successful Response
-     * @throws ApiError
-     */
-    public static createSupplierApiSuppliersPost(
-        requestBody: SupplierCreate,
-    ): CancelablePromise<SupplierResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/suppliers',
-            body: requestBody,
-            mediaType: 'application/json',
-            errors: {
-                422: `Validation Error`,
-            },
-        });
-    }
-    /**
-     * Read Supplier
-     * @param supplierId
-     * @returns SupplierResponse Successful Response
-     * @throws ApiError
-     */
-    public static readSupplierApiSuppliersSupplierIdGet(
-        supplierId: number,
-    ): CancelablePromise<SupplierResponse> {
-        return __request(OpenAPI, {
-            method: 'GET',
-            url: '/api/suppliers/{supplier_id}',
-            path: {
-                'supplier_id': supplierId,
-            },
-            errors: {
-                422: `Validation Error`,
-            },
-        });
-    }
-    /**
-     * Update Supplier
-     * @param supplierId
-     * @param requestBody
-     * @returns SupplierResponse Successful Response
-     * @throws ApiError
-     */
-    public static updateSupplierApiSuppliersSupplierIdPut(
-        supplierId: number,
-        requestBody: SupplierUpdate,
-    ): CancelablePromise<SupplierResponse> {
-        return __request(OpenAPI, {
-            method: 'PUT',
-            url: '/api/suppliers/{supplier_id}',
-            path: {
-                'supplier_id': supplierId,
-            },
-            body: requestBody,
-            mediaType: 'application/json',
-            errors: {
-                422: `Validation Error`,
-            },
-        });
-    }
-    /**
-     * Delete Supplier
-     * @param supplierId
-     * @returns any Successful Response
-     * @throws ApiError
-     */
-    public static deleteSupplierApiSuppliersSupplierIdDelete(
-        supplierId: number,
-    ): CancelablePromise<any> {
-        return __request(OpenAPI, {
-            method: 'DELETE',
-            url: '/api/suppliers/{supplier_id}',
-            path: {
-                'supplier_id': supplierId,
-            },
-            errors: {
-                422: `Validation Error`,
-            },
-        });
-    }
-    /**
      * Read Invoices
      * @param skip
      * @param limit
@@ -154,6 +48,48 @@ export class SuppliersService {
         return __request(OpenAPI, {
             method: 'POST',
             url: '/api/suppliers/invoices',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Read Suppliers
+     * @param skip
+     * @param limit
+     * @returns SupplierResponse Successful Response
+     * @throws ApiError
+     */
+    public static readSuppliersApiSuppliersGet(
+        skip?: number,
+        limit: number = 100,
+    ): CancelablePromise<Array<SupplierResponse>> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/suppliers',
+            query: {
+                'skip': skip,
+                'limit': limit,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Create Supplier
+     * @param requestBody
+     * @returns SupplierResponse Successful Response
+     * @throws ApiError
+     */
+    public static createSupplierApiSuppliersPost(
+        requestBody: SupplierCreate,
+    ): CancelablePromise<SupplierResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/suppliers',
             body: requestBody,
             mediaType: 'application/json',
             errors: {
@@ -244,6 +180,70 @@ export class SuppliersService {
             },
             body: requestBody,
             mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Read Supplier
+     * @param supplierId
+     * @returns SupplierResponse Successful Response
+     * @throws ApiError
+     */
+    public static readSupplierApiSuppliersSupplierIdGet(
+        supplierId: number,
+    ): CancelablePromise<SupplierResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/suppliers/{supplier_id}',
+            path: {
+                'supplier_id': supplierId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Update Supplier
+     * @param supplierId
+     * @param requestBody
+     * @returns SupplierResponse Successful Response
+     * @throws ApiError
+     */
+    public static updateSupplierApiSuppliersSupplierIdPut(
+        supplierId: number,
+        requestBody: SupplierUpdate,
+    ): CancelablePromise<SupplierResponse> {
+        return __request(OpenAPI, {
+            method: 'PUT',
+            url: '/api/suppliers/{supplier_id}',
+            path: {
+                'supplier_id': supplierId,
+            },
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Delete Supplier
+     * @param supplierId
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static deleteSupplierApiSuppliersSupplierIdDelete(
+        supplierId: number,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'DELETE',
+            url: '/api/suppliers/{supplier_id}',
+            path: {
+                'supplier_id': supplierId,
+            },
             errors: {
                 422: `Validation Error`,
             },

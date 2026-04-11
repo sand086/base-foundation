@@ -29,7 +29,7 @@ import {
   Hash,
   AlertCircle,
   Coins,
-  X, // 🚀 Importamos el icono de la X
+  X, //  Importamos el icono de la X
 } from "lucide-react";
 import { useEffect } from "react";
 import type { ReceivableInvoice } from "@/features/receivables/types";
@@ -99,7 +99,7 @@ export function InvoiceDetailSheet({
   const ordenFolio =
     safeStr(inv.orden_compra_folio) || safeStr(inv.ordenCompraFolio);
 
-  // 🚀 DESCARGA ROBUSTA
+  //  DESCARGA ROBUSTA
   const handleDownload = (urlOrName: string) => {
     if (urlOrName.startsWith("http")) {
       window.open(urlOrName, "_blank", "noopener,noreferrer");
@@ -147,7 +147,7 @@ export function InvoiceDetailSheet({
               {statusInfo.label}
             </StatusBadge>
 
-            {/* 🚀 BOTÓN EXPLÍCITO DE CERRAR */}
+            {/*  BOTÓN EXPLÍCITO DE CERRAR */}
             <Button
               variant="ghost"
               size="icon"

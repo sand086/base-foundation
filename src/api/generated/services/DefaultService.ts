@@ -5,19 +5,363 @@
 import type { Body_download_csd_secure_api_sat_csd_download_post } from '../models/Body_download_csd_secure_api_sat_csd_download_post';
 import type { Body_upload_client_document_api_clients__client_id__documents__doc_type__post } from '../models/Body_upload_client_document_api_clients__client_id__documents__doc_type__post';
 import type { Body_upload_csd_files_api_sat_csd_post } from '../models/Body_upload_csd_files_api_sat_csd_post';
+import type { BrandCreate } from '../models/BrandCreate';
+import type { BrandResponse } from '../models/BrandResponse';
 import type { ClientCreate } from '../models/ClientCreate';
 import type { ClientResponse } from '../models/ClientResponse';
 import type { ClientUpdate } from '../models/ClientUpdate';
+import type { ConfigBulkUpdate } from '../models/ConfigBulkUpdate';
 import type { DashboardData } from '../models/DashboardData';
+import type { InsurerBase } from '../models/InsurerBase';
+import type { InsurerCreate } from '../models/InsurerCreate';
+import type { LicenseTypeBase } from '../models/LicenseTypeBase';
+import type { LicenseTypeCreate } from '../models/LicenseTypeCreate';
+import type { ModuleSchema } from '../models/ModuleSchema';
 import type { ReceivableInvoiceCreate } from '../models/ReceivableInvoiceCreate';
+import type { RegistroPagoPayload } from '../models/RegistroPagoPayload';
+import type { RouteCreate } from '../models/RouteCreate';
 import type { SatProductCreate } from '../models/SatProductCreate';
 import type { SatProductResponse } from '../models/SatProductResponse';
+import type { SettlementConceptBase } from '../models/SettlementConceptBase';
+import type { SettlementConceptCreate } from '../models/SettlementConceptCreate';
+import type { SystemConfigResponse } from '../models/SystemConfigResponse';
+import type { SystemConfigUpdate } from '../models/SystemConfigUpdate';
 import type { TerminalBase } from '../models/TerminalBase';
 import type { TerminalResponse } from '../models/TerminalResponse';
+import type { UnitTypeBase } from '../models/UnitTypeBase';
+import type { UnitTypeCreate } from '../models/UnitTypeCreate';
 import type { CancelablePromise } from '../core/CancelablePromise';
 import { OpenAPI } from '../core/OpenAPI';
 import { request as __request } from '../core/request';
 export class DefaultService {
+    /**
+     * Get Brands
+     * @returns BrandResponse Successful Response
+     * @throws ApiError
+     */
+    public static getBrandsApiCatalogsBrandGet(): CancelablePromise<Array<BrandResponse>> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/catalogs/brand',
+        });
+    }
+    /**
+     * Create Brand
+     * @param requestBody
+     * @returns BrandResponse Successful Response
+     * @throws ApiError
+     */
+    public static createBrandApiCatalogsBrandPost(
+        requestBody: BrandCreate,
+    ): CancelablePromise<BrandResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/catalogs/brand',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Get Unit Types
+     * @returns UnitTypeBase Successful Response
+     * @throws ApiError
+     */
+    public static getUnitTypesApiCatalogsUnitTypesGet(): CancelablePromise<Array<UnitTypeBase>> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/catalogs/unit-types',
+        });
+    }
+    /**
+     * Save Unit Types Bulk
+     * @param requestBody
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static saveUnitTypesBulkApiCatalogsUnitTypesBulkPost(
+        requestBody: Array<UnitTypeCreate>,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/catalogs/unit-types/bulk',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Get System Config
+     * @returns SystemConfigResponse Successful Response
+     * @throws ApiError
+     */
+    public static getSystemConfigApiCatalogsSystemConfigGet(): CancelablePromise<Array<SystemConfigResponse>> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/catalogs/system-config',
+        });
+    }
+    /**
+     * Upsert System Config
+     * @param key
+     * @param requestBody
+     * @returns SystemConfigResponse Successful Response
+     * @throws ApiError
+     */
+    public static upsertSystemConfigApiCatalogsSystemConfigKeyPut(
+        key: string,
+        requestBody: SystemConfigUpdate,
+    ): CancelablePromise<SystemConfigResponse> {
+        return __request(OpenAPI, {
+            method: 'PUT',
+            url: '/api/catalogs/system-config/{key}',
+            path: {
+                'key': key,
+            },
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Update System Config Bulk
+     * @param requestBody
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static updateSystemConfigBulkApiCatalogsSystemConfigBulkPut(
+        requestBody: Array<ConfigBulkUpdate>,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'PUT',
+            url: '/api/catalogs/system-config-bulk',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Get Routes Catalog
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static getRoutesCatalogApiCatalogsRoutesGet(): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/catalogs/routes',
+        });
+    }
+    /**
+     * Create Route Catalog
+     * @param requestBody
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static createRouteCatalogApiCatalogsRoutesPost(
+        requestBody: RouteCreate,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/catalogs/routes',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Delete Route Catalog
+     * @param routeId
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static deleteRouteCatalogApiCatalogsRoutesRouteIdDelete(
+        routeId: number,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'DELETE',
+            url: '/api/catalogs/routes/{route_id}',
+            path: {
+                'route_id': routeId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Get Modules
+     * @returns ModuleSchema Successful Response
+     * @throws ApiError
+     */
+    public static getModulesApiCatalogsModulesGet(): CancelablePromise<Array<ModuleSchema>> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/catalogs/modules',
+        });
+    }
+    /**
+     * Add Module
+     * @param requestBody
+     * @returns ModuleSchema Successful Response
+     * @throws ApiError
+     */
+    public static addModuleApiCatalogsModulesPost(
+        requestBody: ModuleSchema,
+    ): CancelablePromise<Array<ModuleSchema>> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/catalogs/modules',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Update Module
+     * @param moduleId
+     * @param requestBody
+     * @returns ModuleSchema Successful Response
+     * @throws ApiError
+     */
+    public static updateModuleApiCatalogsModulesModuleIdPut(
+        moduleId: string,
+        requestBody: ModuleSchema,
+    ): CancelablePromise<Array<ModuleSchema>> {
+        return __request(OpenAPI, {
+            method: 'PUT',
+            url: '/api/catalogs/modules/{module_id}',
+            path: {
+                'module_id': moduleId,
+            },
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Delete Module
+     * @param moduleId
+     * @returns ModuleSchema Successful Response
+     * @throws ApiError
+     */
+    public static deleteModuleApiCatalogsModulesModuleIdDelete(
+        moduleId: string,
+    ): CancelablePromise<Array<ModuleSchema>> {
+        return __request(OpenAPI, {
+            method: 'DELETE',
+            url: '/api/catalogs/modules/{module_id}',
+            path: {
+                'module_id': moduleId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Get License Types
+     * @returns LicenseTypeBase Successful Response
+     * @throws ApiError
+     */
+    public static getLicenseTypesApiCatalogsLicenseTypesGet(): CancelablePromise<Array<LicenseTypeBase>> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/catalogs/license-types',
+        });
+    }
+    /**
+     * Save License Types Bulk
+     * @param requestBody
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static saveLicenseTypesBulkApiCatalogsLicenseTypesBulkPost(
+        requestBody: Array<LicenseTypeCreate>,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/catalogs/license-types/bulk',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Get Settlement Concepts
+     * @returns SettlementConceptBase Successful Response
+     * @throws ApiError
+     */
+    public static getSettlementConceptsApiCatalogsSettlementConceptsGet(): CancelablePromise<Array<SettlementConceptBase>> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/catalogs/settlement-concepts',
+        });
+    }
+    /**
+     * Save Settlement Concepts Bulk
+     * @param requestBody
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static saveSettlementConceptsBulkApiCatalogsSettlementConceptsBulkPost(
+        requestBody: Array<SettlementConceptCreate>,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/catalogs/settlement-concepts/bulk',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Get Insurers
+     * @returns InsurerBase Successful Response
+     * @throws ApiError
+     */
+    public static getInsurersApiCatalogsInsurersGet(): CancelablePromise<Array<InsurerBase>> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/catalogs/insurers',
+        });
+    }
+    /**
+     * Save Insurers Bulk
+     * @param requestBody
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static saveInsurersBulkApiCatalogsInsurersBulkPost(
+        requestBody: Array<InsurerCreate>,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/catalogs/insurers/bulk',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
     /**
      * Get Terminals
      * @param search
@@ -524,6 +868,27 @@ export class DefaultService {
         return __request(OpenAPI, {
             method: 'POST',
             url: '/api/sat/retry-cancellations',
+        });
+    }
+    /**
+     * Generar Complemento de Pago
+     * Endpoint Fase 3.2: Registra el pago de una o múltiples facturas y genera
+     * el Complemento de Pago (REP) ante el SAT.
+     * @param requestBody
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static registrarPagoMultipleApiSatStampPaymentPost(
+        requestBody: RegistroPagoPayload,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/sat/stamp/payment',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
         });
     }
     /**

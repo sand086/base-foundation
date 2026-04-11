@@ -2,7 +2,7 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-export type BulkInvoicePayload = {
+export type BulkUploadPayload = {
     data: Array<Record<string, any>>;
 };
 

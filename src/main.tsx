@@ -10,7 +10,7 @@ import { OpenAPI } from "./api/generated";
 OpenAPI.BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
 
 // Logs de seguridad para que veas en la consola si detectó bien tu .env
-console.log("🚀 Entorno:", import.meta.env.MODE);
+console.log(" Entorno:", import.meta.env.MODE);
 console.log("🔗 API Base:", OpenAPI.BASE);
 
 // 3. Configuras el token como una función asíncrona

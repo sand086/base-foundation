@@ -339,7 +339,7 @@ const RolesPermissions: React.FC = () => {
     });
 
     if (!raw) {
-      // console.log("❌ No hay permisos, regresando todo en falso.");
+      // console.log("No hay permisos, regresando todo en falso.");
       return out;
     }
 
@@ -347,7 +347,7 @@ const RolesPermissions: React.FC = () => {
     try {
       if (typeof raw === "string") permsData = JSON.parse(raw);
     } catch {
-      console.error("❌ Error al parsear permisos:", raw);
+      console.error("Error al parsear permisos:", raw);
     }
 
     // console.log("3️⃣ Permisos parseados como Objeto:", permsData);

@@ -264,7 +264,7 @@ export default function TripSettlement() {
   ]);
 
   // =========================================================================
-  // 🚀 LÓGICA CORREGIDA PARA EXTRAER EL SUELDO SIN BUCLES INFINITOS
+  //  LÓGICA CORREGIDA PARA EXTRAER EL SUELDO SIN BUCLES INFINITOS
   // =========================================================================
   useEffect(() => {
     if (activeTab === "historico") return;

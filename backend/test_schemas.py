@@ -6,7 +6,7 @@ import sys
 
 def verificar_schemas():
     print("\n" + "=" * 60)
-    print("🚀 INICIANDO AUDITORÍA MASIVA DE SCHEMAS VS MODELS 🚀")
+    print(" INICIANDO AUDITORÍA MASIVA DE SCHEMAS VS MODELS ")
     print("=" * 60 + "\n")
 
     # TOKEN PROPORCIONADO POR EL USUARIO
@@ -56,9 +56,9 @@ def verificar_schemas():
                             error_detail = response.text
 
                         errores.append(
-                            f"❌ Error 500 en {ruta}\n   Detalle Pydantic: {error_detail}\n"
+                            f"Error 500 en {ruta}\n   Detalle Pydantic: {error_detail}\n"
                         )
-                        print(f"❌ FALLÓ: {ruta}")
+                        print(f"FALLÓ: {ruta}")
 
                     elif response.status_code == 401:
                         print(
@@ -71,7 +71,7 @@ def verificar_schemas():
                             f"👻 NO ENCONTRADO: {ruta} (Puede que la ruta exacta sea distinta)"
                         )
                     else:
-                        print(f"✅ OK ({response.status_code}): {ruta}")
+                        print(f" OK ({response.status_code}): {ruta}")
 
                 except httpx.RequestError as exc:
                     print(f"💥 ERROR DE PETICIÓN en {ruta}: {exc}")

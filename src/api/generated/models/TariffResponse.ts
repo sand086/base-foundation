@@ -10,6 +10,7 @@ export type TariffResponse = {
     nombre_ruta: string;
     tipo_unidad: UnitType;
     tarifa_base: number;
+    sueldo_operador?: number;
     costo_casetas?: number;
     moneda?: Currency;
     vigencia: string;

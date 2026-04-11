@@ -128,7 +128,7 @@ def create_client(db: Session, client: schemas.ClientCreate):
     except Exception as e:
         db.rollback()
         print(
-            f"❌ ERROR REAL EN CREATE_CLIENT: {str(e)}"
+            f"ERROR REAL EN CREATE_CLIENT: {str(e)}"
         )  # Esto saldrá en tu terminal negra
         raise HTTPException(status_code=400, detail=f"Error de base de datos: {str(e)}")
 

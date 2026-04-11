@@ -21,6 +21,7 @@ export type TripLegCreate = {
     monto_maniobras?: number;
     monto_penalizaciones?: number;
     monto_neto_pagado?: number;
+    desglose_conceptos?: null;
     odometro_inicial?: (number | null);
     nivel_tanque_inicial?: (number | null);
     odometro_final?: (number | null);

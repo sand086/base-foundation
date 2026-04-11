@@ -302,7 +302,7 @@ def register_payable_payment(
     else:
         invoice.estatus = models.InvoiceStatus.PAGO_PARCIAL
 
-    # 3. 🚀 MAGIA DE TESORERÍA: Crear el Egreso en el Banco
+    # 3.  MAGIA DE TESORERÍA: Crear el Egreso en el Banco
     bank_account_id = payment_data.get("bank_account_id")
     if bank_account_id:
         mov_schema = schemas.BankMovementCreate(

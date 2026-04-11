@@ -2,10 +2,11 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
+import type { BankAccountCreate } from '../models/BankAccountCreate';
 import type { BankAccountResponse } from '../models/BankAccountResponse';
 import type { BankMovementResponse } from '../models/BankMovementResponse';
 import type { Body_upload_payment_xml_api_finance_payments_upload_xml_post } from '../models/Body_upload_payment_xml_api_finance_payments_upload_xml_post';
-import type { BulkInvoicePayload } from '../models/BulkInvoicePayload';
+import type { BulkUploadPayload } from '../models/BulkUploadPayload';
 import type { ProviderCreate } from '../models/ProviderCreate';
 import type { ProviderResponse } from '../models/ProviderResponse';
 import type { CancelablePromise } from '../core/CancelablePromise';
@@ -98,6 +99,72 @@ export class FinanceService {
         });
     }
     /**
+     * Create Bank Account
+     * Crea una nueva cuenta bancaria en Tesorería
+     * @param requestBody
+     * @returns BankAccountResponse Successful Response
+     * @throws ApiError
+     */
+    public static createBankAccountApiFinanceBankAccountsPost(
+        requestBody: BankAccountCreate,
+    ): CancelablePromise<BankAccountResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/finance/bank-accounts',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Update Bank Account
+     * Edita la cuenta bancaria. Permite ajuste de saldo si se autorizó en el front.
+     * @param accountId
+     * @param requestBody
+     * @returns BankAccountResponse Successful Response
+     * @throws ApiError
+     */
+    public static updateBankAccountApiFinanceBankAccountsAccountIdPatch(
+        accountId: number,
+        requestBody: Record<string, any>,
+    ): CancelablePromise<BankAccountResponse> {
+        return __request(OpenAPI, {
+            method: 'PATCH',
+            url: '/api/finance/bank-accounts/{account_id}',
+            path: {
+                'account_id': accountId,
+            },
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Delete Bank Account
+     * Aplica un Soft Delete a la cuenta para proteger la integridad contable.
+     * @param accountId
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static deleteBankAccountApiFinanceBankAccountsAccountIdDelete(
+        accountId: number,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'DELETE',
+            url: '/api/finance/bank-accounts/{account_id}',
+            path: {
+                'account_id': accountId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
      * Read Movements
      * @returns BankMovementResponse Successful Response
      * @throws ApiError
@@ -110,12 +177,13 @@ export class FinanceService {
     }
     /**
      * Bulk Upload Invoices
+     * Endpoint para procesar la carga masiva de facturas del SAT (CXP).
      * @param requestBody
      * @returns any Successful Response
      * @throws ApiError
      */
     public static bulkUploadInvoicesApiFinanceInvoicesBulkUploadPost(
-        requestBody: BulkInvoicePayload,
+        requestBody: BulkUploadPayload,
     ): CancelablePromise<any> {
         return __request(OpenAPI, {
             method: 'POST',
@@ -212,6 +280,51 @@ export class FinanceService {
             url: '/api/finance/payments/upload-xml',
             formData: formData,
             mediaType: 'multipart/form-data',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Register Provider Payment
+     * Aplica un pago a una factura de proveedor (CXP) y descuenta del banco.
+     * @param invoiceId
+     * @param requestBody
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static registerProviderPaymentApiFinancePayablesInvoiceIdPaymentsPost(
+        invoiceId: number,
+        requestBody: Record<string, any>,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/finance/payables/{invoice_id}/payments',
+            path: {
+                'invoice_id': invoiceId,
+            },
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Register Petty Cash
+     * Registra un gasto de Caja Chica (Sin XML) afectando directo la Tesorería.
+     * @param requestBody
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static registerPettyCashApiFinancePettyCashPost(
+        requestBody: Record<string, any>,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/finance/petty-cash',
+            body: requestBody,
+            mediaType: 'application/json',
             errors: {
                 422: `Validation Error`,
             },

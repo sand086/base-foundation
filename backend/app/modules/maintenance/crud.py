@@ -416,30 +416,72 @@ def create_work_order(db: Session, order_in: schemas.WorkOrderCreate):
         raise HTTPException(status_code=500, detail=f"Error al crear orden: {str(e)}")
 
 
-def update_work_order_status(
-    db: Session, order_id: int, status: models.WorkOrderStatus
-):
-    order = db.query(models.WorkOrder).filter(models.WorkOrder.id == order_id).first()
-    if not order:
+def update_work_order(db: Session, order_id: int, order_in: schemas.WorkOrderCreate):
+    # 1. Buscar la orden activa
+    db_order = (
+        db.query(models.WorkOrder)
+        .filter(
+            models.WorkOrder.id == order_id,
+            models.WorkOrder.record_status != models.RecordStatus.ELIMINADO.value,
+        )
+        .first()
+    )
+
+    if not db_order:
         _not_found("Orden de trabajo")
 
-    #  NUEVO: Si la orden se CANCELA, devolvemos las refacciones al inventario
-    if (
-        status == models.WorkOrderStatus.CANCELADA
-        and order.status != models.WorkOrderStatus.CANCELADA
-    ):
-        for part in order.parts:
-            if part.item:
-                part.item.stock_actual += part.cantidad
+    # 2. Actualizar campos generales
+    db_order.unit_id = order_in.unit_id
+    db_order.mechanic_id = order_in.mechanic_id
+    db_order.descripcion_problema = order_in.descripcion_problema
+    db_order.tipo_mantenimiento = order_in.tipo_mantenimiento
+    db_order.trip_id = order_in.trip_id
 
-    order.status = status
+    # 3. Manejo de Refacciones (CERO DELETES)
+    for old_part in db_order.parts:
+        if (
+            getattr(old_part, "record_status", "A")
+            != models.RecordStatus.ELIMINADO.value
+        ):
+            if old_part.item:
+                old_part.item.stock_actual += old_part.cantidad
+            if hasattr(old_part, "record_status"):
+                old_part.record_status = models.RecordStatus.ELIMINADO.value
 
-    #  NUEVO: Registrar la hora exacta de cierre
-    if status == models.WorkOrderStatus.CERRADA:
-        order.fecha_cierre = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc)
+    for part in order_in.parts:
+        item = (
+            db.query(models.InventoryItem)
+            .filter(models.InventoryItem.id == part.inventory_item_id)
+            .first()
+        )
+
+        if not item or item.record_status == models.RecordStatus.ELIMINADO.value:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Refacción ID {part.inventory_item_id} no válida o eliminada",
+            )
+
+        if item.stock_actual < part.cantidad:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Stock insuficiente para {item.sku}. Disponible: {item.stock_actual}",
+            )
+
+        item.stock_actual -= part.cantidad
+
+        new_part = models.WorkOrderPart(
+            work_order_id=db_order.id,
+            inventory_item_id=item.id,
+            cantidad=part.cantidad,
+            costo_unitario_snapshot=item.precio_unitario,
+            created_at=now,
+        )
+        db.add(new_part)
 
     db.commit()
-    return get_work_order(db, order_id)
+    db.refresh(db_order)
+    return get_work_order(db, db_order.id)
 
 
 def delete_work_order(db: Session, order_id: int):

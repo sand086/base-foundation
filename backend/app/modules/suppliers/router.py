@@ -1,4 +1,4 @@
-from typing import List, Optional  # ✅ Correcto: Optional viene de typing
+from typing import List, Optional  #  Correcto: Optional viene de typing
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
