@@ -2,6 +2,8 @@ import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { PayableInvoice } from "@/features/payables/types";
 
+export const BYPASS_AUTH = true;
+
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }

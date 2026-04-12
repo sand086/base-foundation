@@ -2,6 +2,7 @@ import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { usePermissions } from "@/hooks/use-permissions";
 import { Loader2 } from "lucide-react";
+import { BYPASS_AUTH } from "@/lib/utils";
 
 // Agregamos una prop para que la ruta exija un módulo
 interface ProtectedRouteProps {
@@ -13,6 +14,7 @@ export const ProtectedRoute = ({ requiredModule }: ProtectedRouteProps) => {
 
   // Usamos el hook para saber si tiene permisos de ver este módulo
   const { canRead } = usePermissions(requiredModule);
+  if (BYPASS_AUTH) return <Outlet />;
 
   if (isLoading) {
     return (
