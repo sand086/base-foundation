@@ -90,7 +90,7 @@ def get_inventory_item(db: Session, item_id: int):
 
 
 def create_inventory_item(db: Session, item_in: schemas.InventoryItemCreate):
-    # Buscar si ya existe uno activo con ese SKU
+    # 1. Buscar si ya existe uno activo con ese SKU para evitar duplicados
     existe = (
         db.query(models.InventoryItem)
         .filter(
@@ -105,10 +105,43 @@ def create_inventory_item(db: Session, item_in: schemas.InventoryItemCreate):
             status_code=400, detail="El SKU ya existe en un artículo activo."
         )
 
+    # 2. Crear el registro en el inventario
     db_item = models.InventoryItem(**item_in.model_dump())
     db.add(db_item)
+
+    # Usamos flush para obtener el ID de db_item antes del commit definitivo
+    db.flush()
+
+    # 3. INTEGRACIÓN FINANCIERA: Si entra con stock inicial, generar cuenta por pagar
+    if db_item.stock_actual > 0:
+        if not db_item.proveedor_id:
+            # Opcional: podrías lanzar un error si quieres obligar a tener proveedor al meter stock
+            pass
+        else:
+            total_compra = db_item.stock_actual * db_item.precio_unitario
+
+            # Crear la factura por pagar (CXP)
+            new_payable = models.PayableInvoice(
+                supplier_id=db_item.proveedor_id,
+                viaje_id=None,  # Es una compra de almacén, no ligada a un viaje específico
+                unit_id=None,
+                folio_interno=f"INV-{db_item.sku}-{int(time.time())}",
+                concepto=f"Carga inicial de inventario: {db_item.descripcion} ({db_item.stock_actual} pzas)",
+                monto_total=total_compra,
+                saldo_pendiente=total_compra,
+                moneda=models.Currency.MXN,
+                fecha_emision=date.today(),
+                # Se calcula el vencimiento según los días de crédito del proveedor (asumimos 30 si no hay)
+                fecha_vencimiento=date.today() + timedelta(days=30),
+                estatus=models.InvoiceStatus.PENDIENTE,
+                clasificacion="gasto_indirecto_variable",
+            )
+            db.add(new_payable)
+
+    # 4. Confirmar transacciones
     db.commit()
     db.refresh(db_item)
+
     return db_item
 
 

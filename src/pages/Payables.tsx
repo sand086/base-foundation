@@ -437,6 +437,7 @@ export default function Payables() {
                     <DataTableRow className="bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-md">
                       <DataTableHead>ID</DataTableHead>
                       <DataTableHead>Proveedor</DataTableHead>
+                      <DataTableHead>Origen / Ref.</DataTableHead>
                       <DataTableHead>Clas.</DataTableHead>
                       <DataTableHead>Concepto</DataTableHead>
                       <DataTableHead>Vencimiento</DataTableHead>
@@ -475,6 +476,19 @@ export default function Payables() {
                           </DataTableCell>
                           <DataTableCell className="font-bold text-slate-800 dark:text-slate-200">
                             {invoice.supplier_razon_social || "—"}
+                          </DataTableCell>
+                          <DataTableCell>
+                            <div className="flex flex-col">
+                              <span className="text-[10px] font-black uppercase text-slate-400">
+                                {invoice.clasificacion === "costo_mantenimiento"
+                                  ? "Mantenimiento"
+                                  : "Gasto General"}
+                              </span>
+                              <span className="font-bold text-brand-navy dark:text-slate-200 text-xs">
+                                {invoice.folio_interno || "—"}{" "}
+                                {/* Aquí saldrá el OT-2026-XXX */}
+                              </span>
+                            </div>
                           </DataTableCell>
                           <DataTableCell>
                             {clasificacion ? (
