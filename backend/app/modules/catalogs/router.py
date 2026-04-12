@@ -60,7 +60,7 @@ from app.modules.auth.router import get_current_active_user
 
 DEFAULT_MODULES = [
     {"id": "dashboard", "nombre": "Dashboard", "icono": "LayoutDashboard"},
-    {"id": "monitoreo", "nombre": "Centro de Monitoreo", "icono": "Radio"},
+    {"id": "monitoreo", "nombre": "Historico", "icono": "Radio"},
     {"id": "clients", "nombre": "Clientes", "icono": "Users"},
     {"id": "flota", "nombre": "Flota", "icono": "Truck"},
     {"id": "combustible", "nombre": "Combustible", "icono": "Fuel"},

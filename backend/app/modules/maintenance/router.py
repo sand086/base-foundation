@@ -195,3 +195,18 @@ def update_order_status(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Error de integridad al intentar cambiar el estado de la orden.",
         )
+
+
+@router.put("/work-orders/{order_id}", response_model=schemas.WorkOrderResponse)
+def update_work_order(
+    order_id: int, order: schemas.WorkOrderCreate, db: Session = Depends(get_db)
+):
+    updated_order = crud.update_work_order(db=db, order_id=order_id, order_in=order)
+    return updated_order
+
+
+@router.delete("/work-orders/{order_id}")
+def delete_work_order(order_id: int, db: Session = Depends(get_db)):
+    # Llama a tu función que hace el Soft Delete perfecto
+    crud.delete_work_order(db=db, order_id=order_id)
+    return {"message": "Orden de trabajo eliminada correctamente"}

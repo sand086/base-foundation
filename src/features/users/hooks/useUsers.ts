@@ -54,7 +54,6 @@ export const useUsers = () => {
       const data = await AuthenticationService.readUsersApiAuthGet();
       setUsers(data.map(mapUserToDisplay));
     } catch (error) {
-      toast.error("Error al cargar usuarios");
       console.error(error);
     } finally {
       setIsLoading(false);
@@ -74,9 +73,7 @@ export const useUsers = () => {
       return true;
     } catch (error) {
       if (error instanceof ApiError) {
-        toast.error(error.body?.detail || "Error al crear usuario");
-      } else {
-        toast.error("Error al crear usuario");
+        console.error(error.body?.detail);
       }
       return false;
     }
@@ -90,7 +87,7 @@ export const useUsers = () => {
       fetchUsers();
       return true;
     } catch (error) {
-      toast.error("Error al actualizar usuario");
+      console.error("Error al actualizar usuario");
       return false;
     }
   };
@@ -103,7 +100,7 @@ export const useUsers = () => {
       toast.success("Estatus actualizado");
       fetchUsers();
     } catch (error) {
-      toast.error("Error al cambiar estatus");
+      console.error("Error al cambiar estatus");
     }
   };
 
@@ -119,7 +116,7 @@ export const useUsers = () => {
       );
       toast.success("Contraseña actualizada con éxito");
     } catch (error) {
-      toast.error("Error al actualizar contraseña");
+      console.error("Error al actualizar contraseña");
     }
   };
 
@@ -130,7 +127,7 @@ export const useUsers = () => {
       fetchUsers();
       return true;
     } catch (error) {
-      toast.error("Error al eliminar usuario");
+      console.error("Error al eliminar usuario");
       return false;
     }
   };

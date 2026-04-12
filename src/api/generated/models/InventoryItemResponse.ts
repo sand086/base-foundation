@@ -12,7 +12,9 @@ export type InventoryItemResponse = {
     stock_minimo?: number;
     ubicacion?: (string | null);
     precio_unitario?: number;
+    proveedor_id?: (number | null);
     id: number;
+    proveedor_nombre?: (string | null);
     record_status: RecordStatus;
     created_at?: (string | null);
     updated_at?: (string | null);

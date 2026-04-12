@@ -4,7 +4,7 @@
 import os
 import shutil
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta, date
 from typing import Optional
 
 from fastapi import HTTPException, UploadFile
@@ -46,8 +46,12 @@ def _not_found(entity: str = "Registro"):
 def list_inventory(
     db: Session, skip: int = 0, limit: int = 100, q: Optional[str] = None
 ):
-    query = db.query(models.InventoryItem).filter(
-        models.InventoryItem.record_status != models.RecordStatus.ELIMINADO.value
+    query = (
+        db.query(models.InventoryItem)
+        .options(joinedload(models.InventoryItem.proveedor))  # CARGAMOS EL PROVEEDOR
+        .filter(
+            models.InventoryItem.record_status != models.RecordStatus.ELIMINADO.value
+        )
     )
 
     if q:
@@ -57,9 +61,18 @@ def list_inventory(
             | (models.InventoryItem.descripcion.ilike(like))
         )
 
-    return (
+    items = (
         query.order_by(models.InventoryItem.id.desc()).offset(skip).limit(limit).all()
     )
+
+    # INYECTAR EL NOMBRE PARA EL FRONTEND
+    for item in items:
+        if item.proveedor:
+            item.proveedor_nombre = item.proveedor.razon_social
+        else:
+            item.proveedor_nombre = None
+
+    return items
 
 
 def get_inventory_item(db: Session, item_id: int):
@@ -403,30 +416,72 @@ def create_work_order(db: Session, order_in: schemas.WorkOrderCreate):
         raise HTTPException(status_code=500, detail=f"Error al crear orden: {str(e)}")
 
 
-def update_work_order_status(
-    db: Session, order_id: int, status: models.WorkOrderStatus
-):
-    order = db.query(models.WorkOrder).filter(models.WorkOrder.id == order_id).first()
-    if not order:
+def update_work_order(db: Session, order_id: int, order_in: schemas.WorkOrderCreate):
+    # 1. Buscar la orden activa
+    db_order = (
+        db.query(models.WorkOrder)
+        .filter(
+            models.WorkOrder.id == order_id,
+            models.WorkOrder.record_status != models.RecordStatus.ELIMINADO.value,
+        )
+        .first()
+    )
+
+    if not db_order:
         _not_found("Orden de trabajo")
 
-    #  NUEVO: Si la orden se CANCELA, devolvemos las refacciones al inventario
-    if (
-        status == models.WorkOrderStatus.CANCELADA
-        and order.status != models.WorkOrderStatus.CANCELADA
-    ):
-        for part in order.parts:
-            if part.item:
-                part.item.stock_actual += part.cantidad
+    # 2. Actualizar campos generales
+    db_order.unit_id = order_in.unit_id
+    db_order.mechanic_id = order_in.mechanic_id
+    db_order.descripcion_problema = order_in.descripcion_problema
+    db_order.tipo_mantenimiento = order_in.tipo_mantenimiento
+    db_order.trip_id = order_in.trip_id
 
-    order.status = status
+    # 3. Manejo de Refacciones (CERO DELETES)
+    for old_part in db_order.parts:
+        if (
+            getattr(old_part, "record_status", "A")
+            != models.RecordStatus.ELIMINADO.value
+        ):
+            if old_part.item:
+                old_part.item.stock_actual += old_part.cantidad
+            if hasattr(old_part, "record_status"):
+                old_part.record_status = models.RecordStatus.ELIMINADO.value
 
-    #  NUEVO: Registrar la hora exacta de cierre
-    if status == models.WorkOrderStatus.CERRADA:
-        order.fecha_cierre = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc)
+    for part in order_in.parts:
+        item = (
+            db.query(models.InventoryItem)
+            .filter(models.InventoryItem.id == part.inventory_item_id)
+            .first()
+        )
+
+        if not item or item.record_status == models.RecordStatus.ELIMINADO.value:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Refacción ID {part.inventory_item_id} no válida o eliminada",
+            )
+
+        if item.stock_actual < part.cantidad:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Stock insuficiente para {item.sku}. Disponible: {item.stock_actual}",
+            )
+
+        item.stock_actual -= part.cantidad
+
+        new_part = models.WorkOrderPart(
+            work_order_id=db_order.id,
+            inventory_item_id=item.id,
+            cantidad=part.cantidad,
+            costo_unitario_snapshot=item.precio_unitario,
+            created_at=now,
+        )
+        db.add(new_part)
 
     db.commit()
-    return get_work_order(db, order_id)
+    db.refresh(db_order)
+    return get_work_order(db, db_order.id)
 
 
 def delete_work_order(db: Session, order_id: int):
@@ -444,3 +499,62 @@ def delete_work_order(db: Session, order_id: int):
     order.record_status = models.RecordStatus.ELIMINADO.value
     db.commit()
     return True
+
+
+def update_work_order_status(
+    db: Session, order_id: int, status: models.WorkOrderStatus
+):
+    order = db.query(models.WorkOrder).filter(models.WorkOrder.id == order_id).first()
+    if not order:
+        _not_found("Orden de trabajo")
+
+    if (
+        status == models.WorkOrderStatus.CANCELADA
+        and order.status != models.WorkOrderStatus.CANCELADA
+    ):
+        for part in order.parts:
+            if part.item:
+                part.item.stock_actual += part.cantidad
+
+    order.status = status
+
+    if status == models.WorkOrderStatus.CERRADA:
+        order.fecha_cierre = datetime.now(timezone.utc)
+
+        # --- NUEVA INTEGRACIÓN CON CXP ---
+        # 1. Calcular el monto total de las refacciones usadas
+        total_parts_cost = sum(
+            p.cantidad * p.costo_unitario_snapshot for p in order.parts
+        )
+
+        # 2. Determinar el concepto y clasificación
+        concepto_pago = (
+            f"Orden de Trabajo {order.folio} - Unidad ECO-{order.unit.numero_economico}"
+        )
+        clasificacion_pago = "costo_mantenimiento"
+
+        # 3. Crear la factura por pagar (PayableInvoice)
+        # Nota: Usamos el proveedor de la primera refacción si existe, o el taller si tuvieras ese campo
+        main_supplier_id = None
+        if order.parts and order.parts[0].item:
+            main_supplier_id = order.parts[0].item.proveedor_id
+
+        new_payable = models.PayableInvoice(
+            supplier_id=main_supplier_id,
+            viaje_id=order.trip_id,
+            unit_id=order.unit_id,
+            folio_interno=order.folio,
+            concepto=concepto_pago,
+            monto_total=total_parts_cost,
+            saldo_pendiente=total_parts_cost,
+            moneda=models.Currency.MXN,
+            fecha_emision=date.today(),
+            fecha_vencimiento=date.today() + timedelta(days=15),  # 15 días por defecto
+            clasificacion=clasificacion_pago,
+            estatus=models.InvoiceStatus.PENDIENTE,
+        )
+        db.add(new_payable)
+        # --------------------------------
+
+    db.commit()
+    return get_work_order(db, order_id)

@@ -1,7 +1,7 @@
 import os
 import logging
 
-# 👉 ESTO QUITA LAS ADVERTENCIAS DE WINDOWS (GIO/GLib)
+#  ESTO QUITA LAS ADVERTENCIAS DE WINDOWS (GIO/GLib)
 os.environ["GIO_USE_VFS"] = "local"
 os.environ["G_MESSAGES_DEBUG"] = ""
 
@@ -24,6 +24,7 @@ from app.modules.finance.router import router as finance_router
 from app.modules.suppliers.router import router as suppliers_router
 from app.modules.maintenance.router import router as maintenance_router
 from app.modules.monitoring.router import router as monitoring_router
+from app.modules.utils.router import router as utils_router
 
 # 2. importacion de Routers de Integraciones Externas
 from app.integrations.sat.router import router as sat_router
@@ -72,6 +73,7 @@ api_router.include_router(monitoring_router, prefix="/monitoring")
 
 # Integraciones Externas
 api_router.include_router(sat_router, prefix="/sat")
+api_router.include_router(utils_router, prefix="/utils")
 
 app.include_router(api_router)
 

@@ -1,11 +1,19 @@
 import { Navigate, Outlet } from "react-router-dom";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/context/AuthContext";
+import { usePermissions } from "@/hooks/use-permissions";
 import { Loader2 } from "lucide-react";
 
-export const ProtectedRoute = () => {
+// Agregamos una prop para que la ruta exija un módulo
+interface ProtectedRouteProps {
+  requiredModule?: string;
+}
+
+export const ProtectedRoute = ({ requiredModule }: ProtectedRouteProps) => {
   const { isAuthenticated, isLoading } = useAuth();
 
-  // Mientras lee el localStorage (ocurre en milisegundos), mostramos un loader
+  // Usamos el hook para saber si tiene permisos de ver este módulo
+  const { canRead } = usePermissions(requiredModule);
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -14,6 +22,12 @@ export const ProtectedRoute = () => {
     );
   }
 
-  // Si está autenticado, muestra la ruta solicitada (Outlet). Si no, lo manda al login.
-  return isAuthenticated ? <Outlet /> : <Navigate to="/login" replace />;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+
+  // Si se exige un módulo, y NO tiene permisos de lectura, lo mandamos al inicio
+  if (requiredModule && !canRead) {
+    return <Navigate to="/" replace />;
+  }
+
+  return <Outlet />;
 };

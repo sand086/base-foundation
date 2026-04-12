@@ -15,7 +15,7 @@ export function useSettlementConcepts() {
       );
       setConcepts(data);
     } catch (error) {
-      toast.error("Error al cargar conceptos de pago");
+      console.error("Error al cargar conceptos de pago");
     } finally {
       setLoading(false);
     }
@@ -27,7 +27,7 @@ export function useSettlementConcepts() {
       await fetchConcepts();
       return true;
     } catch (error) {
-      toast.error("Error al guardar conceptos");
+      console.error("Error al guardar conceptos");
       return false;
     }
   };

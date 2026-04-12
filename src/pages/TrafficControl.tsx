@@ -91,7 +91,10 @@ export default function TrafficControl() {
         trip.client?.razon_social?.toLowerCase().includes(searchLower) ||
         trip.legs?.[0]?.unit?.numero_economico
           ?.toLowerCase()
-          .includes(searchLower);
+          .includes(searchLower) ||
+        trip.referencia?.toLowerCase().includes(searchLower) ||
+        trip.contenedor_1?.toLowerCase().includes(searchLower) ||
+        trip.contenedor_2?.toLowerCase().includes(searchLower);
 
       return passesFilter && matchesSearch;
     });
@@ -504,6 +507,22 @@ export default function TrafficControl() {
                         <User className="h-3 w-3 mr-1.5 text-slate-400" />
                         {trip.legs?.[0]?.operator?.name?.split(" ")[0] || "N/A"}
                       </div>
+                      {trip.referencia && (
+                        <div className="flex items-center text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest truncate bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded-md border border-blue-100 dark:border-blue-800/30">
+                          REF: {trip.referencia}
+                        </div>
+                      )}
+                      {trip.contenedor_1 && (
+                        <div className="flex items-center text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest truncate bg-amber-50 dark:bg-amber-900/20 px-2 py-1 rounded-md border border-amber-100 dark:border-amber-800/30">
+                          CONT: {trip.contenedor_1}
+                        </div>
+                      )}
+
+                      {trip.contenedor_2 && (
+                        <div className="flex items-center text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest truncate bg-amber-50 dark:bg-amber-900/20 px-2 py-1 rounded-md border border-amber-100 dark:border-amber-800/30">
+                          CONT2: {trip.contenedor_2}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))
@@ -552,6 +571,24 @@ export default function TrafficControl() {
                     <span className="text-slate-700 dark:text-slate-200">
                       {selectedTrip.client?.razon_social || "Ruta Libre"}
                     </span>
+                  </div>
+                  <div className="flex items-center gap-4 mt-1.5">
+                    {selectedTrip.referencia && (
+                      <div className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+                        REF:{" "}
+                        <span className="text-blue-600 dark:text-blue-400">
+                          {selectedTrip.referencia}
+                        </span>
+                      </div>
+                    )}
+                    {selectedTrip.contenedor_1 && (
+                      <div className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+                        CONTENEDOR:{" "}
+                        <span className="text-amber-600 dark:text-amber-400">
+                          {selectedTrip.contenedor_1}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 

@@ -6,7 +6,7 @@ import sys
 
 def verificar_schemas():
     print("\n" + "=" * 60)
-    print("🚀 INICIANDO AUDITORÍA MASIVA DE SCHEMAS VS MODELS 🚀")
+    print(" INICIANDO AUDITORÍA MASIVA DE SCHEMAS VS MODELS ")
     print("=" * 60 + "\n")
 
     # TOKEN PROPORCIONADO POR EL USUARIO
@@ -56,22 +56,22 @@ def verificar_schemas():
                             error_detail = response.text
 
                         errores.append(
-                            f"❌ Error 500 en {ruta}\n   Detalle Pydantic: {error_detail}\n"
+                            f"Error 500 en {ruta}\n   Detalle Pydantic: {error_detail}\n"
                         )
-                        print(f"❌ FALLÓ: {ruta}")
+                        print(f"FALLÓ: {ruta}")
 
                     elif response.status_code == 401:
                         print(
                             f"⚠️ TOKEN INVÁLIDO para: {ruta} (Revisa que tu token no haya expirado)"
                         )
                     elif response.status_code == 403:
-                        print(f"🔒 PERMISO DENEGADO para: {ruta}")
+                        print(f" PERMISO DENEGADO para: {ruta}")
                     elif response.status_code == 404:
                         print(
                             f"👻 NO ENCONTRADO: {ruta} (Puede que la ruta exacta sea distinta)"
                         )
                     else:
-                        print(f"✅ OK ({response.status_code}): {ruta}")
+                        print(f" OK ({response.status_code}): {ruta}")
 
                 except httpx.RequestError as exc:
                     print(f"💥 ERROR DE PETICIÓN en {ruta}: {exc}")
@@ -80,7 +80,7 @@ def verificar_schemas():
     except httpx.ConnectError:
         print("\n💥 ERROR CRÍTICO: No se pudo conectar a http://localhost:8000")
         print(
-            "👉 ASEGÚRATE de tener otra consola abierta corriendo: python -m uvicorn app.main:app --reload"
+            " ASEGÚRATE de tener otra consola abierta corriendo: python -m uvicorn app.main:app --reload"
         )
         sys.exit(1)
     except Exception as e:
@@ -95,7 +95,7 @@ def verificar_schemas():
         for error in errores:
             print(error)
         print(
-            "👉 Tienes desajustes entre tus Models y Schemas. Busca el campo que dice 'missing' o 'Field required' en el detalle."
+            " Tienes desajustes entre tus Models y Schemas. Busca el campo que dice 'missing' o 'Field required' en el detalle."
         )
     else:
         print(

@@ -11,6 +11,7 @@ export type TariffUpdate = {
     tipo_unidad?: (UnitType | null);
     tarifa_base?: (number | null);
     costo_casetas?: (number | null);
+    sueldo_operador?: (number | null);
     moneda?: (Currency | null);
     vigencia?: (string | null);
     estatus?: (TariffStatus | null);

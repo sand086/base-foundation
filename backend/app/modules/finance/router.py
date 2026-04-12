@@ -200,12 +200,12 @@ def get_receivable_invoices(
                 "moneda": inv.moneda,
                 "pdf_url": inv.pdf_url,
                 "xml_url": inv.xml_url,
-                "payments": pagos_list,  # 🚀 Enviamos la lista de abonos
+                "payments": pagos_list,  #  Enviamos la lista de abonos
                 "client": (
                     {
                         "id": inv.client.id,
                         "razon_social": inv.client.razon_social,
-                        "rfc": inv.client.rfc,  # 🚀 Enviamos el RFC
+                        "rfc": inv.client.rfc,  #  Enviamos el RFC
                     }
                     if inv.client
                     else None
@@ -278,7 +278,7 @@ def register_receivable_payment(
     else:
         invoice.estatus = models.InvoiceStatus.PAGO_PARCIAL
 
-    # 🚀 MAGIA DE TESORERÍA: Si el front nos manda la cuenta bancaria elegida, la afectamos.
+    #  MAGIA DE TESORERÍA: Si el front nos manda la cuenta bancaria elegida, la afectamos.
     bank_account_id = payment.get("bank_account_id")
     if bank_account_id:
         movimiento_schema = schemas.BankMovementCreate(

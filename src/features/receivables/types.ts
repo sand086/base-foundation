@@ -7,7 +7,7 @@ export interface ReceivableInvoice {
   folio_interno?: string;
   client_id: number;
 
-  // 👉 CAMPOS FISCALES INYECTADOS PARA EL SPRINT 3
+  //  CAMPOS FISCALES INYECTADOS PARA EL SPRINT 3
   viaje_id?: number | null;
   uuid?: string | null;
   uuid_relacionado?: string | null;

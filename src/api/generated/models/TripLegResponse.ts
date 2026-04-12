@@ -2,6 +2,7 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
+import type { FuelLogLite } from './FuelLogLite';
 import type { OperatorResponse } from './OperatorResponse';
 import type { RecordStatus } from './RecordStatus';
 import type { TripLegType } from './TripLegType';
@@ -22,6 +23,7 @@ export type TripLegResponse = {
     monto_maniobras?: number;
     monto_penalizaciones?: number;
     monto_neto_pagado?: number;
+    desglose_conceptos?: null;
     odometro_inicial?: (number | null);
     nivel_tanque_inicial?: (number | null);
     odometro_final?: (number | null);
@@ -38,6 +40,7 @@ export type TripLegResponse = {
     record_status: RecordStatus;
     created_at?: (string | null);
     updated_at?: (string | null);
+    fuel_logs?: Array<FuelLogLite>;
     readonly total_anticipos: number;
 };
 

@@ -520,6 +520,7 @@ export default function TripSettlementModal({
                         </div>
                         {!c.esAutomatico && (
                           <Button
+                            type="button" // Para evitar submit
                             variant="ghost"
                             size="icon"
                             className="h-10 w-10 text-rose-400 hover:text-rose-600 hover:bg-rose-50 shrink-0"
@@ -627,6 +628,7 @@ export default function TripSettlementModal({
                         </div>
                         {!c.esAutomatico && (
                           <Button
+                            type="button" // Para evitar submit
                             variant="ghost"
                             size="icon"
                             className="h-10 w-10 text-rose-400 hover:text-rose-600 hover:bg-rose-50 shrink-0"

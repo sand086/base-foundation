@@ -23,7 +23,7 @@ export function useBankAccounts() {
     staleTime: 1000 * 60 * 10,
   });
 
-  const API_PATH = "/finance/bank-accounts";
+  const API_PATH = "/api/finance/bank-accounts";
 
   const createMutation = useMutation({
     mutationFn: async (newAccount: Partial<BankAccount>) => {
@@ -35,9 +35,9 @@ export function useBankAccounts() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["bank-accounts"] });
-      toast.success("Cuenta bancaria creada correctamente");
+      //toast.success("Cuenta bancaria creada correctamente");
     },
-    onError: () => toast.error("Error al crear la cuenta"),
+    onError: () => console.error("Error al crear la cuenta"),
   });
 
   const updateMutation = useMutation({
@@ -55,12 +55,12 @@ export function useBankAccounts() {
       queryClient.invalidateQueries({ queryKey: ["bank-accounts"] });
       toast.success("Cuenta actualizada");
     },
-    onError: () => toast.error("No se pudo actualizar la cuenta"),
+    onError: () => console.error("No se pudo actualizar la cuenta"),
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      await axiosClient.delete(`api${API_PATH}/${id}`);
+      await axiosClient.delete(`${API_PATH}/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["bank-accounts"] });
@@ -71,7 +71,7 @@ export function useBankAccounts() {
         error instanceof ApiError
           ? error.body?.detail
           : error.response?.data?.detail;
-      toast.error(msg || "No se pudo eliminar la cuenta");
+      console.error(msg || "No se pudo eliminar la cuenta");
     },
   });
 

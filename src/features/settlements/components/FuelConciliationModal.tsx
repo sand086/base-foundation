@@ -117,7 +117,8 @@ export function ConciliarViajeModal({
             <div>
               <DialogTitle className="text-xl font-black text-foreground flex items-center gap-2">
                 <Activity className="text-blue-600" />
-                Conciliación Físico vs SM - Viaje #{trip.public_id || trip.id}
+                Conciliación Físico vs SM
+                <br></br>TRP-{trip.public_id || trip.id}
               </DialogTitle>
               <p className="text-sm font-bold text-muted-foreground uppercase tracking-widest mt-1">
                 {trip.origin} ➔ {trip.destination}

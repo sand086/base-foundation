@@ -23,19 +23,18 @@ import {
   Building2,
   Receipt,
   CreditCard,
-  Banknote,
-  FileCode2,
-  Plus,
 } from "lucide-react";
 import { useEffect } from "react";
-import type { ReceivableInvoice } from "@/features/receivables/types";
+
+// FIX: Cambiamos a PayableInvoice (Facturas de Proveedores)
+import type { PayableInvoice } from "@/features/payables/types";
 import { getInvoiceStatusInfo } from "@/lib/utils";
 
 interface InvoiceDetailSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  invoice: ReceivableInvoice | null;
-  onPayClick?: (invoice: ReceivableInvoice) => void;
+  invoice: PayableInvoice | null;
+  onPayClick?: (invoice: PayableInvoice) => void;
 }
 
 const toNumber = (v: any): number => {
@@ -46,7 +45,7 @@ const toNumber = (v: any): number => {
 const safeStr = (v: any): string =>
   v === null || v === undefined ? "" : String(v);
 
-export function InvoiceDetailSheet({
+export function InvoicePayablesDetailSheet({
   open,
   onOpenChange,
   invoice,
@@ -54,8 +53,7 @@ export function InvoiceDetailSheet({
 }: InvoiceDetailSheetProps) {
   useEffect(() => {
     if (invoice && open) {
-      const invTS = invoice as any;
-      console.log("🔥 FACTURA DE CLIENTE ABIERTA:", invTS);
+      console.log("🔥 FACTURA DE PROVEEDOR ABIERTA:", invoice);
     }
   }, [invoice, open]);
 
@@ -69,10 +67,13 @@ export function InvoiceDetailSheet({
   const folioInterno = safeStr(inv.folio_interno) || `ID-${id}`;
   const uuid = safeStr(inv.uuid) || "NO TIMBRADO";
 
+  // FIX: Ajustamos las propiedades a Proveedor (Supplier) en lugar de Cliente
   const entidadNombre =
-    safeStr(inv.client?.razon_social) || "Público en General";
+    safeStr(inv.supplier?.razon_social) ||
+    safeStr(inv.supplier_razon_social) ||
+    "Proveedor Desconocido";
 
-  const entidadRfc = safeStr(inv.client?.rfc) || "RFC NO DISPONIBLE";
+  const entidadRfc = safeStr(inv.supplier?.rfc) || "RFC NO DISPONIBLE";
 
   const concepto = safeStr(inv.concepto) || "Sin descripción";
   const fechaEmision =
@@ -117,7 +118,7 @@ export function InvoiceDetailSheet({
         <SheetHeader className="pb-4 border-b flex flex-row items-center justify-between">
           <SheetTitle className="flex items-center gap-2 mt-2">
             <Receipt className="h-5 w-5 text-brand-navy" />
-            Detalle de Factura
+            Detalle de Gasto / CXP
           </SheetTitle>
         </SheetHeader>
 
@@ -126,7 +127,7 @@ export function InvoiceDetailSheet({
           <div className="flex items-start justify-between">
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide">
-                Folio Fiscal / Interno
+                Folio / Interno
               </p>
               <p className="font-mono font-bold text-lg text-foreground">
                 {folioInterno}
@@ -139,12 +140,12 @@ export function InvoiceDetailSheet({
             </div>
           </div>
 
-          {/* Cliente */}
+          {/* Proveedor */}
           <div className="p-4 bg-muted/30 rounded-lg border">
             <div className="flex items-center gap-2 mb-2">
               <Building2 className="h-4 w-4 text-muted-foreground" />
               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Datos del Cliente
+                Datos del Proveedor
               </span>
             </div>
             <p className="font-semibold text-foreground text-base">
@@ -209,7 +210,7 @@ export function InvoiceDetailSheet({
               className={`p-4 rounded-lg ${saldoPendiente > 0 ? "bg-amber-50 border border-amber-100" : "bg-emerald-50 border border-emerald-100"}`}
             >
               <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
-                <CreditCard className="h-3 w-3" /> Saldo Pendiente
+                <CreditCard className="h-3 w-3" /> Saldo a Pagar
               </div>
               <p
                 className={`text-xl font-bold ${saldoPendiente > 0 ? "text-amber-700" : "text-emerald-700"}`}
@@ -225,25 +226,15 @@ export function InvoiceDetailSheet({
           <div>
             <div className="flex justify-between items-center mb-3">
               <h3 className="text-sm font-semibold text-brand-dark flex items-center gap-2">
-                <Receipt className="h-4 w-4" /> Historial de Cobros (
+                <Receipt className="h-4 w-4" /> Historial de Pagos Egresados (
                 {payments.length})
               </h3>
-              {saldoPendiente > 0 && onPayClick && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => onPayClick(invoice)}
-                  className="h-7 text-[9px] font-black uppercase tracking-tighter"
-                >
-                  <Plus className="w-3 h-3 mr-1" /> Registrar Abono
-                </Button>
-              )}
             </div>
 
             {payments.length === 0 ? (
               <div className="p-4 text-center bg-muted/30 rounded-lg border border-dashed mt-3">
                 <p className="text-sm text-muted-foreground">
-                  No hay cobros registrados
+                  No hay pagos registrados
                 </p>
               </div>
             ) : (
@@ -260,9 +251,6 @@ export function InvoiceDetailSheet({
                       <DataTableHead className="text-xs text-muted-foreground">
                         Ref.
                       </DataTableHead>
-                      <DataTableHead className="text-center text-[10px] font-black uppercase">
-                        Comprobante (REP)
-                      </DataTableHead>
                     </DataTableRow>
                   </DataTableHeader>
                   <DataTableBody>
@@ -270,9 +258,6 @@ export function InvoiceDetailSheet({
                       const fecha = safeStr(p.fecha_pago ?? p.fecha);
                       const monto = toNumber(p.monto);
                       const referencia = safeStr(p.referencia ?? "—");
-                      const complementoUuid = safeStr(
-                        p.complemento_uuid ?? p.complementoUuid,
-                      );
 
                       return (
                         <DataTableRow key={safeStr(p.id)}>
@@ -284,43 +269,6 @@ export function InvoiceDetailSheet({
                           </DataTableCell>
                           <DataTableCell className="text-xs text-muted-foreground">
                             {referencia}
-                          </DataTableCell>
-
-                          <DataTableCell className="text-center">
-                            {complementoUuid ? (
-                              <div className="flex flex-col gap-1 items-center">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  title="Descargar PDF"
-                                  className="h-6 text-[9px] text-rose-600 border-rose-200 hover:bg-rose-50 w-full flex justify-center gap-1"
-                                  onClick={() =>
-                                    handleDownload(
-                                      `/api/sat/invoice/${complementoUuid}/pdf`,
-                                    )
-                                  }
-                                >
-                                  <FileText className="h-3 w-3" /> PDF
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  title="Descargar XML"
-                                  className="h-6 text-[9px] text-blue-600 border-blue-200 hover:bg-blue-50 w-full flex justify-center gap-1"
-                                  onClick={() =>
-                                    handleDownload(
-                                      `/api/sat/invoice/${complementoUuid}/xml`,
-                                    )
-                                  }
-                                >
-                                  <FileCode2 className="h-3 w-3" /> XML
-                                </Button>
-                              </div>
-                            ) : (
-                              <span className="text-[10px] text-slate-400 bg-slate-100 px-2 py-1 rounded">
-                                No timbrado
-                              </span>
-                            )}
                           </DataTableCell>
                         </DataTableRow>
                       );
@@ -339,7 +287,7 @@ export function InvoiceDetailSheet({
               <FileText className="h-4 w-4" /> Factura de Origen
             </h3>
             <p className="text-[10px] text-muted-foreground mb-3 leading-tight">
-              Descarga la factura que originó la deuda.
+              Descarga la factura o comprobante.
             </p>
 
             <div className="flex gap-2">

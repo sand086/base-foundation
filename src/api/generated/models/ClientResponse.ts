@@ -23,6 +23,6 @@ export type ClientResponse = {
     created_at?: (string | null);
     updated_at?: (string | null);
     sub_clients?: Array<SubClientResponse>;
-    tarifas_autorizadas: Array<RateTemplateResponse>;
+    tarifas_autorizadas?: Array<RateTemplateResponse>;
 };
 

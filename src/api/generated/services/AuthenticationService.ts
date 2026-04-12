@@ -3,6 +3,7 @@
 /* tslint:disable */
 /* eslint-disable */
 import type { Body_upload_user_avatar_api_auth__user_id__avatar_post } from '../models/Body_upload_user_avatar_api_auth__user_id__avatar_post';
+import type { EmergencyRequest } from '../models/EmergencyRequest';
 import type { LoginRequest } from '../models/LoginRequest';
 import type { LoginResponse } from '../models/LoginResponse';
 import type { PasswordReset } from '../models/PasswordReset';
@@ -16,6 +17,7 @@ import type { TwoFactorVerifyRequest } from '../models/TwoFactorVerifyRequest';
 import type { UserCreate } from '../models/UserCreate';
 import type { UserResponse } from '../models/UserResponse';
 import type { UserUpdate } from '../models/UserUpdate';
+import type { VerifyPasswordRequest } from '../models/VerifyPasswordRequest';
 import type { CancelablePromise } from '../core/CancelablePromise';
 import { OpenAPI } from '../core/OpenAPI';
 import { request as __request } from '../core/request';
@@ -439,6 +441,45 @@ export class AuthenticationService {
             },
             formData: formData,
             mediaType: 'multipart/form-data',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Request Emergency Code
+     * @param requestBody
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static requestEmergencyCodeApiAuthRequestEmergencyCodePost(
+        requestBody: EmergencyRequest,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/auth/request-emergency-code',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Verify User Password
+     * Verifica la contraseña del usuario en sesión para operaciones .
+     * @param requestBody
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static verifyUserPasswordApiAuthVerifyPasswordPost(
+        requestBody: VerifyPasswordRequest,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/auth/verify-password',
+            body: requestBody,
+            mediaType: 'application/json',
             errors: {
                 422: `Validation Error`,
             },

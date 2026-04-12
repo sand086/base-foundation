@@ -364,7 +364,7 @@ export default function Receivables() {
                 <Eye className="h-4 w-4 mr-2 text-slate-600" /> Ver Detalle
               </DropdownMenuItem>
 
-              {/* 🚀 OCULTAMOS ESTA OPCIÓN SI YA ESTÁ PAGADA COMPLETAMENTE */}
+              {/*  OCULTAMOS ESTA OPCIÓN SI YA ESTÁ PAGADA COMPLETAMENTE */}
               {row.saldo_pendiente > 0 && (
                 <>
                   <DropdownMenuSeparator />

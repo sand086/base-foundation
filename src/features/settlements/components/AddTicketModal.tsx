@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -31,27 +31,18 @@ import {
   MapPin,
   ChevronsUpDown,
   Check,
-  Gauge,
-  User,
-  Truck,
-  FileImage,
-  CalendarDays,
   Plus,
   Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 import { FUEL_CONFIG } from "../types";
-import { useClients } from "@/features/clients/hooks/useClients";
 import { useTrips } from "@/features/trips/hooks/useTrips";
-import { useOperators } from "@/features/operators/hooks/useOperators";
-import { useUnits } from "@/features/units/hooks/useUnits";
 
 /** =========================
- * Types
+ * Types & Interfaces
  * ========================= */
 
-// Estructura de cada ticket individual dentro del modal
 interface SubTicket {
   id: string;
   fecha_hora: string;
@@ -64,33 +55,31 @@ interface SubTicket {
 export interface TicketFormData {
   unit_id: string;
   operator_id: string;
-  trip_id: string;
-  trip_leg_id?: string | null;
+  trip_leg_ids: string[]; // <-- CAMBIADO A ARRAY PARA MULTI-VIAJE
   odometro: string | number;
-  tickets: SubTicket[]; //  Actualizado para soportar múltiples
+  tickets: SubTicket[];
 }
 
 interface AddTicketModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (data: any) => void; // Recibe el array de tickets para procesar
+  onSubmit: (data: TicketFormData) => void;
   initialData?: any;
 }
 
 /** =========================
- * Helpers
+ * Multi-Select Component
  * ========================= */
 
-function SearchableSelect({
+function SearchableMultiSelect({
   items,
-  value,
-  onSelect,
+  selectedValues = [],
+  onToggle,
   placeholder,
   disabled = false,
 }: any) {
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const selectedItem = items.find((item: any) => item.value === value);
 
   const filteredItems = useMemo(() => {
     if (!searchQuery.trim()) return items;
@@ -99,9 +88,8 @@ function SearchableSelect({
         .toLowerCase()
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "");
-    const normalizedSearch = normalize(searchQuery);
     return items.filter((item: any) =>
-      normalize(item.label).includes(normalizedSearch),
+      normalize(item.label).includes(normalize(searchQuery)),
     );
   }, [items, searchQuery]);
 
@@ -111,56 +99,69 @@ function SearchableSelect({
         <Button
           type="button"
           variant="outline"
-          role="combobox"
           disabled={disabled}
           className={cn(
-            "h-11 w-full justify-between rounded-2xl px-3 text-left shadow-sm border-border bg-card/85 backdrop-blur-xl hover:bg-white text-foreground",
+            "h-11 w-full justify-between rounded-xl px-3 text-left shadow-sm bg-card/85 text-foreground haptic-press",
             disabled && "opacity-50 cursor-not-allowed bg-slate-100",
+            selectedValues.length > 0 &&
+              "border-brand-navy ring-1 ring-brand-navy/20",
           )}
         >
-          <span className="truncate text-sm font-semibold">
-            {selectedItem ? selectedItem.label : placeholder}
+          <span className="truncate text-[11px] font-bold uppercase tracking-widest">
+            {selectedValues.length > 0
+              ? `${selectedValues.length} tramos vinculados`
+              : placeholder}
           </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-60" />
         </Button>
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="z-[9999] w-[var(--radix-popover-trigger-width)] p-0 rounded-2xl shadow-2xl border border-border bg-card/95 dark:bg-card/95"
+        className="w-[400px] p-0 rounded-2xl shadow-2xl border-border bg-card/95"
       >
         <Command shouldFilter={false}>
           <CommandInput
-            placeholder="Buscar..."
-            className="h-11"
+            placeholder="Buscar unidad o viaje..."
             value={searchQuery}
             onValueChange={setSearchQuery}
+            className="h-12 text-xs"
           />
-          <CommandList className="max-h-[260px] overflow-y-auto">
+          <CommandList className="max-h-[300px] overflow-y-auto custom-scrollbar">
             {filteredItems.length === 0 ? (
-              <CommandEmpty className="p-4 text-sm text-muted-foreground">
-                Sin coincidencias.
+              <CommandEmpty className="p-4 text-xs font-bold text-center">
+                No encontrado.
               </CommandEmpty>
             ) : (
               <CommandGroup>
-                {filteredItems.map((item: any) => (
-                  <CommandItem
-                    key={item.value}
-                    onSelect={() => {
-                      onSelect(item.value);
-                      setOpen(false);
-                      setSearchQuery("");
-                    }}
-                    className="cursor-pointer py-3 text-sm border-b border-slate-100"
-                  >
-                    <Check
-                      className={cn(
-                        "mr-3 h-4 w-4 text-emerald-600",
-                        value === item.value ? "opacity-100" : "opacity-0",
-                      )}
-                    />
-                    <span className="font-semibold">{item.label}</span>
-                  </CommandItem>
-                ))}
+                {filteredItems.map((item: any) => {
+                  const isSelected = selectedValues.includes(item.value);
+                  return (
+                    <CommandItem
+                      key={item.value}
+                      onSelect={() => {
+                        onToggle(item.value);
+                        setSearchQuery("");
+                      }}
+                      className="cursor-pointer py-3 border-b border-slate-100 dark:border-white/5"
+                    >
+                      <div
+                        className={cn(
+                          "mr-3 flex h-5 w-5 items-center justify-center rounded-md border",
+                          isSelected
+                            ? "bg-emerald-500 border-emerald-500 text-white"
+                            : "border-slate-300",
+                        )}
+                      >
+                        {isSelected && (
+                          <Check className="h-3 w-3 stroke-[3px]" />
+                        )}
+                      </div>
+                      <span className="font-bold text-[11px] uppercase tracking-wide">
+                        {item.label}
+                      </span>
+                    </CommandItem>
+                  );
+                })}
               </CommandGroup>
             )}
           </CommandList>
@@ -175,27 +176,26 @@ function toDatetimeLocalValue(date: Date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+/** =========================
+ * Main Modal Component
+ * ========================= */
+
 export function AddTicketModal({
   open,
   onOpenChange,
   onSubmit,
   initialData,
 }: AddTicketModalProps) {
-  const { clients = [] } = useClients();
   const { trips = [] } = useTrips();
-  const { operadores = [] } = useOperators();
-  const { unidades = [] } = useUnits();
 
-  // Estados de vinculación (Padre)
+  // Estados de vinculación
   const [parentData, setParentData] = useState({
     unit_id: "",
     operator_id: "",
-    trip_id: "",
-    trip_leg_id: null as string | null,
+    selected_legs: [] as string[],
     odometro: "" as string | number,
   });
 
-  //  REGLA GUSTAVO: Lista de tickets dinámicos
   const [tickets, setTickets] = useState<SubTicket[]>([
     {
       id: crypto.randomUUID(),
@@ -213,7 +213,6 @@ export function AddTicketModal({
       ...tickets,
       {
         id: crypto.randomUUID(),
-        //  HERENCIA: Jala datos del ticket anterior
         fecha_hora: lastTicket?.fecha_hora || toDatetimeLocalValue(new Date()),
         estacion: lastTicket?.estacion || "",
         litros_diesel: 0,
@@ -246,40 +245,37 @@ export function AddTicketModal({
 
   const searchableTrips = useMemo(() => {
     const list = activeTrips.flatMap((t) => {
-      const clientName = t.client?.razon_social || "Sin Cliente";
       return (t.legs || []).map((leg: any) => ({
-        label: `Folio ${t.public_id || t.id} | Fase: ${leg.leg_type?.replace("_", " ").toUpperCase()} | Eco: ${leg.unit?.numero_economico} | Op: ${leg.operator?.name}`,
-        value: `${t.id}|${leg.id}`,
+        label: `Folio ${t.public_id || t.id} | ${leg.leg_type?.replace("_", " ")} | Eco: ${leg.unit?.numero_economico}`,
+        value: `${t.id}|${leg.id}|${leg.unit_id}|${leg.operator_id}`,
       }));
     });
-    return [
-      { label: "Carga Local / Patio (Sin Viaje)", value: "none|none" },
-      ...list,
-    ];
+    return list;
   }, [activeTrips]);
 
-  const handleTripSelection = (selectedValue: string) => {
-    if (selectedValue === "none|none") {
-      setParentData((prev) => ({
-        ...prev,
-        trip_id: "none",
-        trip_leg_id: null,
-      }));
-      return;
-    }
-    const [tId, lId] = selectedValue.split("|");
-    const tripObj = activeTrips.find((t) => String(t.id) === tId);
-    const legObj = tripObj?.legs?.find((l: any) => String(l.id) === lId);
+  const handleToggleLeg = (selectedValue: string) => {
+    setParentData((prev) => {
+      const isSelected = prev.selected_legs.includes(selectedValue);
+      const newLegs = isSelected
+        ? prev.selected_legs.filter((l) => l !== selectedValue)
+        : [...prev.selected_legs, selectedValue];
 
-    setParentData((prev) => ({
-      ...prev,
-      trip_id: tId,
-      trip_leg_id: lId,
-      unit_id: legObj?.unit_id ? String(legObj.unit_id) : prev.unit_id,
-      operator_id: legObj?.operator_id
-        ? String(legObj.operator_id)
-        : prev.operator_id,
-    }));
+      let newUnit = prev.unit_id;
+      let newOp = prev.operator_id;
+
+      if (newLegs.length > 0) {
+        const [, , uid, oid] = newLegs[0].split("|");
+        newUnit = uid !== "undefined" ? uid : prev.unit_id;
+        newOp = oid !== "undefined" ? oid : prev.operator_id;
+      }
+
+      return {
+        ...prev,
+        selected_legs: newLegs,
+        unit_id: newUnit,
+        operator_id: newOp,
+      };
+    });
   };
 
   const totalGeneral = useMemo(
@@ -290,20 +286,18 @@ export function AddTicketModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!parentData.unit_id) return toast.error("Selecciona una unidad.");
-
-    // Validar que al menos un ticket tenga litros
-    if (tickets.some((t) => t.litros_diesel <= 0)) {
+    if (parentData.selected_legs.length === 0)
+      return toast.error("Selecciona al menos un viaje.");
+    if (tickets.some((t) => t.litros_diesel <= 0))
       return toast.error("Todos los tickets deben tener litros registrados.");
-    }
 
-    // Enviamos los datos al padre (él se encarga de llamar al servicio N veces)
+    const legIds = parentData.selected_legs.map((val) => val.split("|")[1]);
+
     onSubmit({
       ...parentData,
+      trip_leg_ids: legIds,
       tickets,
     });
-
-    onOpenChange(false);
   };
 
   return (
@@ -343,22 +337,18 @@ export function AddTicketModal({
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="space-y-2 md:col-span-2">
                   <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                    Buscador de Viaje / Fase
+                    Vincular a Viajes / Fases
                   </Label>
-                  <SearchableSelect
+                  <SearchableMultiSelect
                     items={searchableTrips}
-                    value={
-                      parentData.trip_id === "none"
-                        ? "none|none"
-                        : `${parentData.trip_id}|${parentData.trip_leg_id || ""}`
-                    }
-                    onSelect={handleTripSelection}
-                    placeholder="Escriba folio, cliente o unidad..."
+                    selectedValues={parentData.selected_legs}
+                    onToggle={handleToggleLeg}
+                    placeholder="Selecciona uno o más movimientos..."
                   />
                 </div>
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                    Odómetro Final (KM)
+                    Odómetro Actual (Opcional)
                   </Label>
                   <Input
                     type="number"
@@ -381,7 +371,6 @@ export function AddTicketModal({
                     2. Carga de Vales (Tickets)
                   </h3>
                 </div>
-                {/*  BOTÓN MÁS: Agrega nuevo bloque de ticket */}
                 <Button
                   type="button"
                   variant="outline"
@@ -520,8 +509,7 @@ export function AddTicketModal({
             </section>
           </div>
 
-          {/* FOOTER FIJO CON TOTAL ACUMULADO */}
-          <div className="shrink-0 flex items-center justify-between border-t bg-slate-100 p-6">
+          <div className="shrink-0 flex items-center justify-between border-t bg-slate-100 dark:bg-slate-900 p-6">
             <div className="flex flex-col">
               <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
                 Inversión Total de Carga
@@ -545,7 +533,7 @@ export function AddTicketModal({
               </Button>
               <Button
                 type="submit"
-                className="h-12 px-10 font-black bg-brand-navy shadow-xl"
+                className="h-12 px-10 font-black bg-brand-navy text-white shadow-xl hover:bg-slate-800"
               >
                 <Upload className="mr-2 h-4 w-4" />
                 Guardar {tickets.length} Vales

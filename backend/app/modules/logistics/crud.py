@@ -4,7 +4,7 @@
 from datetime import datetime
 import uuid
 
-from sqlalchemy.orm import Session, joinedload, contains_eager
+from sqlalchemy.orm import Session, joinedload, selectinload, contains_eager
 from sqlalchemy import func, and_, or_
 from datetime import date, timedelta
 
@@ -15,8 +15,9 @@ from . import schemas
 
 def get_trips(db: Session, skip: int = 0, limit: int = 100):
     """
-    Lista viajes visibles (A e I). Oculta eliminados (E).
-    Ahora carga los tramos (legs) en lugar del unit/operator directo del viaje.
+    FIX: selectinload evita el producto cartesiano y arregla la paginación.
+    Soluciona la duplicidad de casetas en el historial.
+    Añadido: selectinload para traer los vales de combustible (fuel_logs) de cada tramo.
     """
     return (
         db.query(models.Trip)
@@ -26,11 +27,12 @@ def get_trips(db: Session, skip: int = 0, limit: int = 100):
             joinedload(models.Trip.remolque_1),
             joinedload(models.Trip.dolly),
             joinedload(models.Trip.remolque_2),
-            joinedload(models.Trip.legs).joinedload(models.TripLeg.unit),
-            joinedload(models.Trip.legs).joinedload(models.TripLeg.operator),
+            selectinload(models.Trip.legs).joinedload(models.TripLeg.unit),
+            selectinload(models.Trip.legs).joinedload(models.TripLeg.operator),
+            selectinload(models.Trip.legs).selectinload(models.TripLeg.fuel_logs),
         )
         .filter(models.Trip.record_status != RecordStatus.ELIMINADO)
-        .order_by(models.Trip.id.asc())
+        .order_by(models.Trip.id.desc())  # Mejor ordenar por los más recientes
         .offset(skip)
         .limit(limit)
         .all()
@@ -38,9 +40,6 @@ def get_trips(db: Session, skip: int = 0, limit: int = 100):
 
 
 def get_trip(db: Session, trip_id: str):
-    """
-    Obtiene un viaje visible.
-    """
     try:
         tid = int(trip_id)
     except (TypeError, ValueError):
@@ -52,9 +51,10 @@ def get_trip(db: Session, trip_id: str):
             joinedload(models.Trip.client),
             joinedload(models.Trip.tariff),
             joinedload(models.Trip.remolque_1),
-            joinedload(models.Trip.legs).joinedload(models.TripLeg.unit),
-            joinedload(models.Trip.legs).joinedload(models.TripLeg.operator),
-            joinedload(models.Trip.legs).joinedload(models.TripLeg.timeline_events),
+            selectinload(models.Trip.legs).joinedload(models.TripLeg.unit),
+            selectinload(models.Trip.legs).joinedload(models.TripLeg.operator),
+            selectinload(models.Trip.legs).joinedload(models.TripLeg.timeline_events),
+            selectinload(models.Trip.legs).selectinload(models.TripLeg.fuel_logs),
         )
         .filter(
             models.Trip.id == tid,
@@ -423,7 +423,7 @@ def add_timeline_event(
 def get_trip_settlement(db: Session, trip_leg_id: int):
     """
     FASE 4: Liquidación adaptada para Movimientos de Patio y Vacío
-    (Modificado: SIN inyectar Tarifa del Cliente y SIN descontar Casetas)
+    (Modificado: Cálculo dinámico de combustible con 5% de Tolerancia)
     """
     import uuid
     from . import schemas
@@ -444,7 +444,7 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
     is_ruta = leg.leg_type == models.TripLegType.RUTA
     is_full = (trip.dolly_id is not None) or (trip.remolque_2_id is not None)
 
-    #  REGLA 4: DISTANCIA REAL VS ESTIMADA
+    # 1. CÁLCULO DE DISTANCIA REAL VS ESTIMADA
     if (
         leg.odometro_final
         and leg.odometro_inicial
@@ -456,7 +456,7 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
             trip.tariff.distancia_km if trip.tariff and trip.tariff.distancia_km else 0
         )
 
-    #  Filtramos solo los vales activos asignados a este tramo específico
+    # Filtramos solo los vales activos asignados a este tramo específico
     fuel_logs = (
         db.query(models.FuelLog)
         .filter(
@@ -474,17 +474,21 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
     precio_promedio_litro = 24.50
     consumo_esperado = 0.0
     diferencia_litros = 0.0
-    litros_a_cobrar = 0.0
     deduccion_combustible = 0.0
 
     conceptos = []
 
-    # 1. JALAR SUELDO FIJO PACTADO COMO INGRESO (Lo pidió Gustavo: "jalar salario")
-    sueldo_fijo = float(
-        trip.sueldo_operador
-        if trip.sueldo_operador
-        else (trip.tariff.sueldo_operador if trip.tariff else 0.0)
-    )
+    # 2. JALAR SUELDO FIJO PACTADO COMO INGRESO
+    sueldo_fijo = 0.0
+    if trip.sueldo_operador and float(trip.sueldo_operador) > 0:
+        sueldo_fijo = float(trip.sueldo_operador)
+    elif (
+        trip.tariff
+        and trip.tariff.sueldo_operador
+        and float(trip.tariff.sueldo_operador) > 0
+    ):
+        sueldo_fijo = float(trip.tariff.sueldo_operador)
+
     if sueldo_fijo > 0:
         conceptos.append(
             schemas.ConceptoPago(
@@ -497,63 +501,68 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
             )
         )
 
-    # 2. LÓGICA SI ES CARRETERA (La matemática segura)
+    # 3. LÓGICA DE COMBUSTIBLE (CARRETERA) CON TOLERANCIA DEL 5%
     if is_ruta:
         vales_diesel = [f for f in fuel_logs if f.tipo_combustible == "diesel"]
         consumo_real_litros = sum(f.litros for f in vales_diesel)
+
+        # Calculamos consumo esperado usando el rendimiento esperado del motor (ECM)
+        rendimiento_esperado = getattr(leg.unit, "rendimiento_ecm_esperado", 3.2) or 3.2
+        consumo_esperado = (
+            (kms_recorridos / rendimiento_esperado) if kms_recorridos > 0 else 0.0
+        )
 
         if vales_diesel:
             precio_promedio_litro = sum(f.precio_por_litro for f in vales_diesel) / len(
                 vales_diesel
             )
 
-        # Solo cobramos faltante SI LA CONCILIACIÓN YA SUCEDIÓ Y CONFIRMÓ EXCESO
-        for vale in vales_diesel:
-            # Buscamos si el vale ya fue conciliado (Nuevos campos del modelo)
-            is_conciliated = getattr(vale, "is_conciliated", False)
-            diferencia_vale = getattr(vale, "diferencia_litros", 0.0)
+        # Diferencia de litros = Lo que cargó (real) - Lo que debió gastar (esperado)
+        diferencia_cruda = consumo_real_litros - consumo_esperado
+        diferencia_litros = diferencia_cruda if diferencia_cruda > 0 else 0.0
 
-            # Si se concilió y la diferencia es positiva (quemó de más)
-            if is_conciliated and diferencia_vale > 0:
-                costo_exceso = diferencia_vale * precio_promedio_litro
-                deduccion_combustible += costo_exceso
-                litros_a_cobrar += diferencia_vale
+        # REGLA GUSTAVO / UI: Aplicar tolerancia del 5% del consumo esperado
+        tolerancia = consumo_esperado * 0.05
 
-        if deduccion_combustible > 0:
+        # Si el operador se pasa de la tolerancia, cobramos TODO el exceso
+        if diferencia_litros > tolerancia:
+            deduccion_combustible = diferencia_litros * precio_promedio_litro
+
             conceptos.append(
                 schemas.ConceptoPago(
                     id=str(uuid.uuid4())[:8],
                     tipo="deduccion",
                     categoria="combustible",
-                    descripcion=f"Exceso Diésel Conciliado ({litros_a_cobrar:.1f} L)",
+                    descripcion=f"Exceso Diésel Detectado ({diferencia_litros:.1f} L)",
                     monto=deduccion_combustible,
                     esAutomatico=True,
                 )
             )
 
-    #  Lógica si es MOVIMIENTO LOCAL (Patio o Vacío)
+    # 4. LÓGICA DE MOVIMIENTO LOCAL (Patio o Vacío)
     else:
-        # FASE 4: Bonos Fijos por Configuración de maniobra local
-        bono_movimiento = 300.0 if is_full else 200.0
-        tipo_mov_str = (
-            "Mov. Patio"
-            if leg.leg_type == models.TripLegType.CARGA
-            else "Retorno Vacío"
-        )
-        config_str = "FULL" if is_full else "SENCILLO"
-
-        conceptos.append(
-            schemas.ConceptoPago(
-                id=str(uuid.uuid4())[:8],
-                tipo="ingreso",
-                categoria="bono",
-                descripcion=f"Bono {tipo_mov_str} ({config_str})",
-                monto=bono_movimiento,
-                esAutomatico=True,
+        # Si NO hay sueldo fijo en catálogo, aplicamos la regla genérica
+        if sueldo_fijo == 0:
+            bono_movimiento = 300.0 if is_full else 200.0
+            tipo_mov_str = (
+                "Mov. Patio"
+                if leg.leg_type == models.TripLegType.CARGA
+                else "Retorno Vacío"
             )
-        )
+            config_str = "FULL" if is_full else "SENCILLO"
 
-    # DEDUCCIONES (Del Tramo) - SÓLO APLICAN VIÁTICOS Y COMBUSTIBLE EXTRA
+            conceptos.append(
+                schemas.ConceptoPago(
+                    id=str(uuid.uuid4())[:8],
+                    tipo="ingreso",
+                    categoria="bono",
+                    descripcion=f"Bono {tipo_mov_str} ({config_str})",
+                    monto=bono_movimiento,
+                    esAutomatico=True,
+                )
+            )
+
+    # 5. DEDUCCIONES FIJAS (ANTICIPOS DEL TRAMO)
     if leg.anticipo_viaticos > 0:
         conceptos.append(
             schemas.ConceptoPago(

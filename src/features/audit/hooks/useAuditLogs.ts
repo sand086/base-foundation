@@ -15,7 +15,6 @@ export const useAuditLogs = () => {
       setLogs(data);
     } catch (error) {
       console.error("Error al cargar auditoría:", error);
-      toast.error("No se pudo cargar el registro de auditoría");
     } finally {
       setIsLoading(false);
     }

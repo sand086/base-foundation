@@ -339,9 +339,6 @@ def enable_2fa(
     return {"message": "2FA Activado correctamente"}
 
 
-# --- Fuente: api_users.py ---
-
-
 import json
 from typing import List, Dict, Any
 

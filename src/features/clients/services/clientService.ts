@@ -1,6 +1,8 @@
 import { DefaultService } from "@/api/generated";
 import { Client } from "@/types/api.types";
 
+import axiosClient from "@/api/axiosClient";
+
 export const clientService = {
   getClients: async (): Promise<Client[]> => {
     const data = await DefaultService.readClientsApiClientsGet();
@@ -8,7 +10,9 @@ export const clientService = {
   },
 
   getClient: async (id: number): Promise<Client> => {
-    const data = await DefaultService.readClientApiClientsClientIdGet(Number(id));
+    const data = await DefaultService.readClientApiClientsClientIdGet(
+      Number(id),
+    );
     return data as Client;
   },
 
@@ -17,8 +21,14 @@ export const clientService = {
     return data as Client;
   },
 
-  updateClient: async (id: number, client: Partial<Client>): Promise<Client> => {
-    const data = await DefaultService.updateClientApiClientsClientIdPut(Number(id), client as any);
+  updateClient: async (
+    id: number,
+    client: Partial<Client>,
+  ): Promise<Client> => {
+    const data = await DefaultService.updateClientApiClientsClientIdPut(
+      Number(id),
+      client as any,
+    );
     return data as Client;
   },
 
@@ -42,6 +52,17 @@ export const clientService = {
   },
 
   deleteDocument: async (documentId: number) => {
-    return await DefaultService.deleteClientDocumentApiClientsDocumentsDocumentIdDelete(Number(documentId));
+    return await DefaultService.deleteClientDocumentApiClientsDocumentsDocumentIdDelete(
+      Number(documentId),
+    );
+  },
+  checkRfcExists: async (rfc: string): Promise<boolean> => {
+    try {
+      // Asumiendo que tu backend tiene esta ruta. ¡Si no, hay que crearla en FastAPI!
+      const response = await axiosClient.get(`/api/clients/check-rfc/${rfc}`);
+      return response.data.exists;
+    } catch (error) {
+      return false; // Si falla la red, asumimos false para no bloquear la UI por error
+    }
   },
 };

@@ -23,7 +23,7 @@ import { toast } from "sonner";
 import { InventoryItem } from "@/features/inventory/types";
 import { cn } from "@/lib/utils";
 
-// Form Components (Tahoe UI)
+// Form Components
 import {
   Form,
   FormControl,
@@ -32,6 +32,9 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+
+// --- NUEVO: IMPORTAR HOOK DE PROVEEDORES ---
+import { useSuppliers } from "@/features/suppliers/hooks/useSuppliers";
 
 interface AddInventoryModalProps {
   open: boolean;
@@ -50,7 +53,7 @@ const categories = [
 ];
 
 // =====================
-// ESQUEMA ZOD (VALIDACIÓN)
+// ESQUEMA ZOD ACTUALIZADO
 // =====================
 const inventorySchema = z.object({
   sku: z.string().min(2, "El SKU es requerido"),
@@ -60,6 +63,7 @@ const inventorySchema = z.object({
   stock_minimo: z.coerce.number().min(0, "Debe ser mayor o igual a 0"),
   precio_unitario: z.coerce.number().min(0, "El precio no puede ser negativo"),
   ubicacion: z.string().optional(),
+  proveedor_id: z.coerce.number().optional().nullable(), // NUEVO
 });
 
 type InventoryFormData = z.infer<typeof inventorySchema>;
@@ -72,7 +76,9 @@ export function AddInventoryModal({
 }: AddInventoryModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  //  REACT HOOK FORM
+  // --- NUEVO: CARGAR PROVEEDORES ---
+  const { suppliers, isLoadingSuppliers } = useSuppliers();
+
   const form = useForm<InventoryFormData>({
     resolver: zodResolver(inventorySchema),
     defaultValues: {
@@ -83,6 +89,7 @@ export function AddInventoryModal({
       stock_minimo: 0,
       precio_unitario: 0,
       ubicacion: "",
+      proveedor_id: null,
     },
   });
 
@@ -95,11 +102,12 @@ export function AddInventoryModal({
         reset({
           sku: itemToEdit.sku,
           descripcion: itemToEdit.descripcion,
-          categoria: itemToEdit.categoria, // Asumimos que viene en minúscula del backend
+          categoria: itemToEdit.categoria,
           stock_actual: itemToEdit.stock_actual,
           stock_minimo: itemToEdit.stock_minimo,
           ubicacion: itemToEdit.ubicacion || "",
           precio_unitario: itemToEdit.precio_unitario,
+          proveedor_id: (itemToEdit as any).proveedor_id || null, // Mapeo seguro
         });
       } else {
         reset({
@@ -110,30 +118,25 @@ export function AddInventoryModal({
           stock_minimo: 0,
           ubicacion: "",
           precio_unitario: 0,
+          proveedor_id: null,
         });
       }
     }
   }, [itemToEdit, open, reset]);
 
-  // =====================
-  // SUBMIT
-  // =====================
   const onFormSubmit = async (data: InventoryFormData) => {
     setIsSubmitting(true);
-
     try {
       await onSave({
         ...data,
         categoria: data.categoria.toLowerCase(),
       });
-
       toast.success(
         isEditMode ? "Refacción actualizada" : "Refacción agregada",
         {
           description: `${data.sku} - ${data.descripcion}`,
         },
       );
-
       onOpenChange(false);
     } catch (error) {
       console.error(error);
@@ -155,9 +158,7 @@ export function AddInventoryModal({
         if (!isOpen && !isSubmitting) handleClose();
       }}
     >
-      {/*  CAPA 1: CASCARÓN */}
       <DialogContent className="w-[95vw] sm:max-w-2xl flex flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
-        {/*  CAPA 2: CABECERA TAHOE (Blanco en Light, Navy oscuro en Dark) */}
         <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center gap-4 sm:gap-5">
@@ -188,7 +189,6 @@ export function AddInventoryModal({
           </div>
         </DialogHeader>
 
-        {/*  CAPA 3: CUERPO (Fondo slate-50 para resaltar inputs) */}
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit(onFormSubmit)}
@@ -197,7 +197,6 @@ export function AddInventoryModal({
             <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-slate-50/50 dark:bg-transparent custom-scrollbar">
               <div className="space-y-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  {/* SKU */}
                   <FormField
                     control={form.control}
                     name="sku"
@@ -223,7 +222,6 @@ export function AddInventoryModal({
                     )}
                   />
 
-                  {/* Categoría */}
                   <FormField
                     control={form.control}
                     name="categoria"
@@ -259,7 +257,42 @@ export function AddInventoryModal({
                     )}
                   />
 
-                  {/* Descripción */}
+                  {/* --- NUEVO: CAMPO PROVEEDOR --- */}
+                  <FormField
+                    control={form.control}
+                    name="proveedor_id"
+                    render={({ field }) => (
+                      <FormItem className="sm:col-span-2">
+                        <FormLabel variant="brand">
+                          Proveedor Habitual
+                        </FormLabel>
+                        <Select
+                          onValueChange={(val) => field.onChange(Number(val))}
+                          value={field.value ? String(field.value) : undefined}
+                          disabled={isLoadingSuppliers}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="h-11 font-bold text-xs bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm text-slate-700 dark:text-slate-200">
+                              <SelectValue placeholder="Seleccione un proveedor (Opcional)" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-slate-200 dark:border-white/10 max-h-60">
+                            {suppliers.map((sup) => (
+                              <SelectItem
+                                key={sup.id}
+                                value={String(sup.id)}
+                                className="font-bold text-xs uppercase"
+                              >
+                                {sup.razon_social}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
                   <FormField
                     control={form.control}
                     name="descripcion"
@@ -280,7 +313,6 @@ export function AddInventoryModal({
                     )}
                   />
 
-                  {/* Stock Actual */}
                   <FormField
                     control={form.control}
                     name="stock_actual"
@@ -301,7 +333,6 @@ export function AddInventoryModal({
                     )}
                   />
 
-                  {/* Stock Mínimo */}
                   <FormField
                     control={form.control}
                     name="stock_minimo"
@@ -322,14 +353,13 @@ export function AddInventoryModal({
                     )}
                   />
 
-                  {/* Precio Unitario */}
                   <FormField
                     control={form.control}
                     name="precio_unitario"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel variant="brand" required>
-                          Precio Unitario (MXN)
+                          Precio Unitario (SIN IVA)
                         </FormLabel>
                         <FormControl>
                           <div className="relative">
@@ -349,7 +379,6 @@ export function AddInventoryModal({
                     )}
                   />
 
-                  {/* Ubicación */}
                   <FormField
                     control={form.control}
                     name="ubicacion"
@@ -371,7 +400,6 @@ export function AddInventoryModal({
               </div>
             </div>
 
-            {/*  CAPA 4: FOOTER TAHOE (Con nueva regla de color) */}
             <DialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
               <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
                 <Button
@@ -384,8 +412,6 @@ export function AddInventoryModal({
                 >
                   Cancelar
                 </Button>
-
-                {/*  REGLA APLICADA: brand-green para Editar, brand-red para Crear */}
                 <Button
                   type="submit"
                   variant="default"

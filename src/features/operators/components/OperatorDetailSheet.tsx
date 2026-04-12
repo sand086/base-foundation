@@ -51,7 +51,7 @@ import {
 } from "@/components/ui/form";
 import { DatePicker } from "@/components/ui/date-picker";
 
-// 👉 1. EXTENDEMOS EL TIPO LOCALMENTE
+//  1. EXTENDEMOS EL TIPO LOCALMENTE
 // Esto soluciona el error ts(2339) para que reconozca los campos de DB
 interface ExtendedOperator extends Operator {
   foto_url?: string | null;
@@ -161,11 +161,11 @@ export function OperatorDetailSheet({
   const [isEditing, setIsEditing] = useState(false);
   const [uploadingDocId, setUploadingDocId] = useState<string | null>(null);
 
-  // 👉 2. ESTADO PARA LA FOTO
+  //  2. ESTADO PARA LA FOTO
   const [tempFotoUrl, setTempFotoUrl] = useState<string | null>(null);
   const [localPreview, setLocalPreview] = useState<string | null>(null);
 
-  // 👉 3. FUNCIÓN PARA LIMPIAR URL (Evita doble /api)
+  //  3. FUNCIÓN PARA LIMPIAR URL (Evita doble /api)
   const getFullImageUrl = (path?: string | null) => {
     if (!path) return undefined;
     if (
@@ -235,7 +235,7 @@ export function OperatorDetailSheet({
     setLocalPreview(null);
   };
 
-  // 👉 4. GUARDAR FORMULARIO + URL DE LA FOTO
+  //  4. GUARDAR FORMULARIO + URL DE LA FOTO
   const onFormSubmit = (data: EditOperatorData) => {
     if (!operator) return;
 
@@ -261,12 +261,12 @@ export function OperatorDetailSheet({
     setLocalPreview(null);
   };
 
-  // 👉 5. SUBIDA DE LA FOTO (Input File)
+  //  5. SUBIDA DE LA FOTO (Input File)
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !operator) return;
 
-    // 👉 MAGIA DE UX: Preview inmediato desde la memoria local
+    //  MAGIA DE UX: Preview inmediato desde la memoria local
     setLocalPreview(URL.createObjectURL(file));
 
     try {
@@ -390,7 +390,7 @@ export function OperatorDetailSheet({
               </div>
             </SheetTitle>
 
-            {/* 👉 6. BOTONES DE ACCIÓN + CERRAR */}
+            {/*  6. BOTONES DE ACCIÓN + CERRAR */}
             <div className="flex items-center gap-2">
               {isEditing ? (
                 <>
@@ -438,7 +438,7 @@ export function OperatorDetailSheet({
 
         <Form {...form}>
           <form className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/50 dark:bg-transparent custom-scrollbar">
-            {/* 👉 7. SECCIÓN DE AVATAR */}
+            {/*  7. SECCIÓN DE AVATAR */}
             <div className="flex flex-col items-center text-center pb-6 border-b border-slate-200 dark:border-white/10">
               <div className="relative group mt-2">
                 <div

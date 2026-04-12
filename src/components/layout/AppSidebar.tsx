@@ -15,6 +15,7 @@ import {
   ChevronDown,
   PanelLeftClose,
   PanelLeft,
+  CreditCard,
   Calculator,
   Landmark,
   X,
@@ -27,25 +28,35 @@ import type { SidebarIconKey } from "@/assets/img/icons/sidebar";
 import { SidebarSvgIcon } from "@/components/common/SidebarSvgIcon";
 import { AnimatedLogo } from "@/components/common/AnimatedLogo";
 
+//  1. IMPORTAMOS LOS HOOKS DE SEGURIDAD
+import { usePermissions } from "@/hooks/use-permissions";
+import { useAuth } from "@/context/AuthContext";
+
+//  2. AGREGAMOS EL MODULE_CODE A LA INTERFAZ
 interface MenuItem {
   title: string;
   icon?: React.ElementType;
   iconSrc?: string;
   iconName?: SidebarIconKey;
   path?: string;
-  children?: { title: string; path: string }[];
+  moduleCode?: string; // <--- Clave para vincular con la BD
+  children?: { title: string; path: string; moduleCode?: string }[];
 }
 
+//  3. MAPEAMOS LOS CÓDIGOS DE MÓDULO EXACTOS
+// Nota: Si un item NO tiene moduleCode, todos lo podrán ver (ej: Dashboard).
 const menuItems: MenuItem[] = [
   {
     title: "Dashboard",
     icon: LayoutDashboard,
     path: "/",
+    // Sin moduleCode = Público para cualquier logueado
   },
   {
     title: "Clientes",
     icon: Users,
     iconName: "Clientes",
+    moduleCode: "clients",
     children: [
       { title: "Catálogo", path: "/clients" },
       { title: "Nuevo Cliente", path: "/clients/new" },
@@ -56,11 +67,13 @@ const menuItems: MenuItem[] = [
     icon: Calculator,
     iconName: "Tarifas",
     path: "/rates",
+    moduleCode: "rates",
   },
   {
     title: "Flota",
     icon: Truck,
     iconName: "Flota",
+    moduleCode: "fleet",
     children: [
       { title: "Unidades", path: "/fleet" },
       { title: "Operadores", path: "/fleet/operators" },
@@ -74,21 +87,25 @@ const menuItems: MenuItem[] = [
     icon: Radar,
     iconName: "Monitoreo",
     path: "/monitoring",
+    moduleCode: "monitoring",
   },
   {
     title: "Tracking Op",
     icon: Navigation,
     path: "/traffic-control",
+    moduleCode: "traffic",
   },
   {
     title: "Despacho",
     icon: CalendarPlus,
     path: "/dispatch",
+    moduleCode: "dispatch",
   },
   {
     title: "Combustible",
     icon: Fuel,
     iconName: "Combustible",
+    moduleCode: "fuel",
     children: [
       { title: "Cargas", path: "/fuel/loads" },
       { title: "Conciliación", path: "/fuel/conciliation" },
@@ -99,28 +116,39 @@ const menuItems: MenuItem[] = [
     icon: FileCheck,
     iconName: "Liquidacion",
     path: "/settlements",
+    moduleCode: "settlements",
   },
   {
     title: "Proveedores",
-    icon: Briefcase,
-    iconName: "Proveedores",
-    path: "/payables",
+    icon: Briefcase, // Elegimos un icono que tenga sentido (Maletín/Empresa)
+    iconName: "Proveedores", // Si tienes un SVG para proveedores
+    path: "/suppliers",
+    moduleCode: "payables", // <- Se protege con el permiso de payables
   },
   {
-    title: "Cobranza",
+    title: "Cuentas por Pagar",
+    icon: CreditCard,
+    path: "/payables",
+    moduleCode: "payables", // <- Se protege con el permiso de payables
+  },
+  {
+    title: "Cuentas por Cobrar",
     icon: DollarSign,
     iconName: "Cobranza",
     path: "/receivables",
+    moduleCode: "receivables",
   },
   {
     title: "Tesorería",
     icon: Landmark,
     path: "/treasury",
+    moduleCode: "treasury",
   },
   {
     title: "Administración",
     icon: Settings,
     iconName: "Administracion",
+    moduleCode: "admin", // Solo roles de administración verán esto
     children: [
       { title: "Usuarios", path: "/users" },
       { title: "Roles y Permisos", path: "/roles-permissions" },
@@ -146,6 +174,11 @@ export function AppSidebar({
   onMobileClose,
 }: AppSidebarProps) {
   const location = useLocation();
+
+  //  4. INVOCAMOS LOS HOOKS DE SEGURIDAD
+  const { isAdmin } = usePermissions();
+  const { user } = useAuth();
+
   const [expandedItems, setExpandedItems] = useState<string[]>([
     "Clientes",
     "Flota",
@@ -161,10 +194,22 @@ export function AppSidebar({
   const isActive = (path?: string, children?: { path: string }[]) => {
     if (path && location.pathname === path) return true;
     if (children)
-      // Esto hace que el botón "Flota" se prenda correctamente si estás en cualquier hijo
       return children.some((child) => location.pathname.startsWith(child.path));
     return false;
   };
+
+  //  5. LÓGICA DE FILTRADO (MAGIA RBAC)
+  const filteredMenu = menuItems.filter((item) => {
+    // Si es administrador o superadmin, dejamos pasar todo
+    if (isAdmin) return true;
+
+    // Si el ítem no tiene código (es público como el Dashboard), lo dejamos pasar
+    if (!item.moduleCode) return true;
+
+    // Verificamos en el diccionario de permisos del usuario si puede "leer" este módulo
+    const modulePerms = user?.role?.permisos?.[item.moduleCode] || {};
+    return !!modulePerms.read || !!modulePerms.ver || !!modulePerms.leer;
+  });
 
   const RenderIcon = ({
     item,
@@ -222,12 +267,10 @@ export function AppSidebar({
       className={cn(
         "fixed left-0 top-0 z-50 h-screen backdrop-blur-2xl transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] flex flex-col overflow-hidden",
         "bg-card/95 dark:bg-brand-navy/95 border-r border-border shadow-sm dark:shadow-[20px_0_40px_rgba(0,0,0,0.2)]",
-        // Mobile: slide in/out as overlay
         "md:translate-x-0",
         mobileOpen
           ? "translate-x-0 w-64"
           : "-translate-x-full md:translate-x-0",
-        // Desktop: collapse
         collapsed ? "md:w-16" : "md:w-64",
       )}
     >
@@ -252,7 +295,7 @@ export function AppSidebar({
         )}
       </div>
 
-      {/* Collapse toggle - hidden on mobile (uses hamburger in header instead) */}
+      {/* Collapse toggle */}
       <div className="p-3 border-b border-border shrink-0 bg-card/50 hidden md:block">
         <Button
           variant="ghost"
@@ -275,7 +318,8 @@ export function AppSidebar({
 
       <ScrollArea className="flex-1 custom-scrollbar">
         <nav className="p-3 space-y-1 relative z-10">
-          {menuItems.map((item) => {
+          {/*  6. RENDERIZAMOS EL MENÚ FILTRADO */}
+          {filteredMenu.map((item) => {
             const active = isActive(item.path, item.children);
             const showLabels = !collapsed || mobileOpen;
             return (

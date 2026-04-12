@@ -18,6 +18,7 @@ export interface User {
     id: number;
     nombre: string;
     name_key: string;
+    permisos?: Record<string, any>;
   };
   // Propiedad legacy por si algunos componentes aún la usan
   rol?: string;

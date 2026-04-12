@@ -8,7 +8,7 @@ import React, {
 import { User } from "@/features/users/types";
 import { authService } from "@/features/users/services/authService";
 
-// 👉 1. IMPORTAR EL OBJETO OpenAPI GENERADO
+//  1. IMPORTAR EL OBJETO OpenAPI GENERADO
 import { OpenAPI } from "@/api/generated/core/OpenAPI";
 
 // Configuración global de la base de la API
@@ -22,7 +22,7 @@ interface AuthContextType {
   isLoading: boolean;
   verifyOtp: (tempToken: string, code: string) => Promise<void>;
   updateUser: (newData: Partial<User>) => void;
-  // 👉 Nueva función para obtener la URL correcta de archivos (PDFs/Imágenes)
+  //  Nueva función para obtener la URL correcta de archivos (PDFs/Imágenes)
   getFileUrl: (path: string | null | undefined) => string;
 }
 
@@ -34,7 +34,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // 👉 2. LÓGICA PARA CONSTRUIR URLS DE ARCHIVOS BASADO EN EL ENV
+  //  2. LÓGICA PARA CONSTRUIR URLS DE ARCHIVOS BASADO EN EL ENV
   const getFileUrl = (path: string | null | undefined): string => {
     if (!path) return "";
 
@@ -65,7 +65,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (storedUser && authService.isAuthenticated() && token) {
       setUser(storedUser);
 
-      // 👉 INYECTAR EL TOKEN AL RECARGAR LA PÁGINA (F5)
+      //  INYECTAR EL TOKEN AL RECARGAR LA PÁGINA (F5)
       OpenAPI.TOKEN = token;
     }
     setIsLoading(false);
@@ -88,7 +88,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     localStorage.setItem("user_data", JSON.stringify(userData));
     setUser(userData);
 
-    // 👉 INYECTAR EL TOKEN AL INICIAR SESIÓN EXITOSAMENTE
+    //  INYECTAR EL TOKEN AL INICIAR SESIÓN EXITOSAMENTE
     OpenAPI.TOKEN = token;
   };
 
@@ -96,7 +96,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     authService.logout();
     setUser(null);
 
-    // 👉 LIMPIAR EL TOKEN AL CERRAR SESIÓN
+    //  LIMPIAR EL TOKEN AL CERRAR SESIÓN
     OpenAPI.TOKEN = undefined;
 
     window.location.href = "/login";
@@ -126,7 +126,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         isLoading,
         verifyOtp,
         updateUser,
-        getFileUrl, // 👉 Exportamos la función
+        getFileUrl, //  Exportamos la función
       }}
     >
       {children}

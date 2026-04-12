@@ -31,6 +31,7 @@ class InventoryItemBase(ORMBase):
 
     ubicacion: Optional[str] = Field(default=None, max_length=100)
     precio_unitario: float = 0.0
+    proveedor_id: Optional[int] = None
 
 
 class InventoryItemCreate(ORMBase):
@@ -82,6 +83,7 @@ class InventoryItemUpdate(ORMBase):
 
 class InventoryItemResponse(InventoryItemBase):
     id: int
+    proveedor_nombre: Optional[str] = None
 
     # AuditMixin
     record_status: RecordStatus

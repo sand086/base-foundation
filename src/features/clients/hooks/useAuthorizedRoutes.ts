@@ -15,7 +15,7 @@ export const useAuthorizedRoutes = () => {
       );
       setRutas(data);
     } catch (error) {
-      toast.error("Error al cargar el catálogo de rutas");
+      console.error("Error al cargar el catálogo de rutas");
     } finally {
       setIsLoading(false);
     }
@@ -31,7 +31,7 @@ export const useAuthorizedRoutes = () => {
       fetchRutas();
       return true;
     } catch (error) {
-      toast.error("Error al crear la ruta");
+      console.error("Error al crear la ruta");
       return false;
     }
   };
@@ -42,7 +42,7 @@ export const useAuthorizedRoutes = () => {
       fetchRutas();
       return true;
     } catch (error) {
-      toast.error("Error al actualizar la ruta");
+      console.error("Error al actualizar la ruta");
       return false;
     }
   };
@@ -53,7 +53,7 @@ export const useAuthorizedRoutes = () => {
       fetchRutas();
       return true;
     } catch (error) {
-      toast.error("No se pudo eliminar la ruta. Puede estar en uso.");
+      console.error("No se pudo eliminar la ruta. Puede estar en uso.");
       return false;
     }
   };

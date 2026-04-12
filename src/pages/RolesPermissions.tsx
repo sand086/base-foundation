@@ -1,13 +1,7 @@
 // src/pages/RolesPermissions.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/ui/page-header";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +24,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+
+// 👉 1. IMPORTAMOS TODOS LOS ICONOS DEL SIDEBAR
 import {
   Shield,
   Plus,
@@ -54,7 +50,15 @@ import {
   Key,
   Settings,
   AlertTriangle,
+  Calculator,
+  Radar,
+  Navigation,
+  CalendarPlus,
+  FileCheck,
+  Briefcase,
+  Landmark,
 } from "lucide-react";
+
 import { toast } from "sonner";
 import { CreatePermissionModal } from "@/features/users/components/CreatePermissionModal";
 import { ManageModulesModal } from "@/features/users/components/ManageModulesModal";
@@ -62,13 +66,13 @@ import { AuditLogPanel } from "@/features/audit/components/AuditLogPanel";
 import { useRoles } from "@/features/users/hooks/useRoles";
 
 /**
- * Tipos
+ * 👉 2. TIPOS ACTUALIZADOS AL INGLÉS (Homologado con BD)
  */
 type Permiso = {
-  ver: boolean;
-  editar: boolean;
-  eliminar: boolean;
-  exportar: boolean;
+  read: boolean;
+  update: boolean;
+  delete: boolean;
+  export: boolean;
 };
 
 type PermisosMap = Record<string, Permiso>;
@@ -96,25 +100,36 @@ type MeUser = {
   avatar_url?: string | null;
 };
 
+// 👉 3. MAPA DE ICONOS DINÁMICOS PARA EMPATAR CON EL SIDEBAR
 const iconMap: Record<string, React.ElementType> = {
-  LayoutDashboard,
+  dashboard: LayoutDashboard,
+  clients: Users,
+  rates: Calculator,
+  fleet: Truck,
+  monitoring: Radar,
+  traffic: Navigation,
+  dispatch: CalendarPlus,
+  fuel: Fuel,
+  settlements: FileCheck,
+  payables: Briefcase,
+  receivables: DollarSign,
+  treasury: Landmark,
+  admin: Settings,
+  users: Users,
+  // Fallbacks de la versión anterior
+  Shield,
   Radio,
-  Users,
-  Truck,
-  Fuel,
-  DollarSign,
   FileText,
   Receipt,
   CreditCard,
   BarChart3,
-  Shield,
 };
 
 const EMPTY_PERMISO: Permiso = {
-  ver: false,
-  editar: false,
-  eliminar: false,
-  exportar: false,
+  read: false,
+  update: false,
+  delete: false,
+  export: false,
 };
 
 // ---- helpers localStorage/fetch ----
@@ -127,7 +142,6 @@ function safeJsonParse<T>(value: string | null): T | null {
   }
 }
 
-// Ajusta si tu token se llama diferente
 function getAuthToken(): string | null {
   return (
     localStorage.getItem("access_token") ||
@@ -178,7 +192,11 @@ const RolesPermissions: React.FC = () => {
     setRoles: React.Dispatch<React.SetStateAction<Role[]>>;
     modules: Module[];
     isLoading: boolean;
-    createRole: (nombre: string, descripcion?: string) => Promise<boolean>;
+    createRole: (
+      nombre: string,
+      descripcion?: string,
+      permisos?: unknown,
+    ) => Promise<boolean>;
     deleteRole: (roleId: number) => Promise<boolean>;
     updateRole: (
       roleId: number,
@@ -193,7 +211,6 @@ const RolesPermissions: React.FC = () => {
     deleteSystemModule: (moduleId: string) => Promise<boolean>;
   };
 
-  //   usuario desde localStorage o /auth/me
   const [meUser, setMeUser] = useState<MeUser | null>(null);
   const [meLoading, setMeLoading] = useState(true);
 
@@ -224,7 +241,6 @@ const RolesPermissions: React.FC = () => {
     };
   }, []);
 
-  //   resolver role_key con role_id + roles
   const myRoleResolved = useMemo(() => {
     const roleId = meUser?.role_id ?? null;
     const found = roleId ? roles.find((r) => r.id === roleId) : undefined;
@@ -241,7 +257,6 @@ const RolesPermissions: React.FC = () => {
     };
   }, [meUser?.role_id, roles]);
 
-  //   admin
   const isAdminUser =
     myRoleResolved.roleKey === "admin" || myRoleResolved.roleId === 1;
 
@@ -252,6 +267,7 @@ const RolesPermissions: React.FC = () => {
   const [newRoleName, setNewRoleName] = useState("");
   const [newRoleDescription, setNewRoleDescription] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [draftPermisos, setDraftPermisos] = useState<PermisosMap>({});
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [roleToDelete, setRoleToDelete] = useState<number | null>(null);
@@ -266,9 +282,6 @@ const RolesPermissions: React.FC = () => {
     [roles, selectedRoleId],
   );
 
-  // ==========================================
-  // NORMALIZADOR BLINDADO DE PERMISOS
-  // ==========================================
   const currentPermisos: PermisosMap = useMemo(() => {
     const out: PermisosMap = {};
     const raw = currentRole?.permisos;
@@ -313,70 +326,109 @@ const RolesPermissions: React.FC = () => {
         return "bg-gray-100 text-gray-700";
     }
   };
+  const normalizePerms = (raw: any, modules: Module[]): PermisosMap => {
+    // console.log("=== 🔍 INICIANDO DEBUG DE PERMISOS ===");
+    // console.log("1️⃣ Permisos crudos recibidos del Rol:", raw);
+    // console.log( "2️⃣ Módulos disponibles en la BD:",modules.map((m) => m.id),);
 
-  // ==========================================
-  // MANEJADORES DE LA MATRIZ DE PERMISOS
-  // ==========================================
+    const out: PermisosMap = {};
+
+    // Inicializamos todo en falso para que no haya undefined
+    modules.forEach((m) => {
+      out[m.id.toLowerCase()] = { ...EMPTY_PERMISO };
+    });
+
+    if (!raw) {
+      // console.log("No hay permisos, regresando todo en falso.");
+      return out;
+    }
+
+    let permsData = raw;
+    try {
+      if (typeof raw === "string") permsData = JSON.parse(raw);
+    } catch {
+      console.error("Error al parsear permisos:", raw);
+    }
+
+    // console.log("3️⃣ Permisos parseados como Objeto:", permsData);
+
+    if (typeof permsData === "object" && permsData !== null) {
+      const isAll = permsData.all === true;
+
+      // 🛠 MAPA DE TRADUCCIÓN:
+      // Si la BD de módulos sigue teniendo IDs en español, esto los traduce
+      // al vuelo para buscar la llave correcta en el JSON en inglés.
+      const translationMap: Record<string, string> = {
+        monitoreo: "monitoring",
+        flota: "fleet",
+        combustible: "fuel",
+        tarifas: "rates",
+        despacho: "dispatch",
+        cxc: "receivables",
+        cxp: "payables",
+        configuracion: "admin",
+        usuarios: "users",
+        trackingop: "traffic",
+        reportes: "reports",
+      };
+
+      modules.forEach((m) => {
+        const id = m.id.toLowerCase();
+        const englishKey = translationMap[id] || id;
+
+        // Buscamos el permiso usando el ID original o su traducción al inglés
+        const val = permsData[id] || permsData[englishKey];
+
+        // console.log( `   🔸 Evaluando módulo: [${id}] -> Buscando llave en JSON: [${englishKey}] -> Encontró:`,  val,);
+
+        if (isAll) {
+          out[id] = { read: true, update: true, delete: true, export: true };
+        } else if (typeof val === "boolean") {
+          out[id] = { read: val, update: val, delete: val, export: val };
+        } else if (typeof val === "object" && val !== null) {
+          out[id] = {
+            read: !!(val.read || val.ver),
+            update: !!(val.update || val.editar),
+            delete: !!(val.delete || val.eliminar),
+            export: !!(val.export || val.exportar),
+          };
+        }
+      });
+    }
+
+    // console.log("4️⃣ Matriz final generada para las casillas (Draft):", out);
+    // console.log("=========================================");
+
+    return out;
+  };
+
+  // 👉 4. TOGGLES REFACTORIZADOS AL INGLÉS
+
   const handleTogglePermiso = (
     moduloId: string,
     field: keyof Permiso,
   ): void => {
-    const idStr = String(moduloId).toLowerCase();
-
-    setRoles((prev) =>
-      prev.map((r) => {
-        if (r.id !== selectedRoleId) return r;
-
-        const safePerms: PermisosMap =
-          typeof r.permisos === "object" &&
-          r.permisos !== null &&
-          !Array.isArray(r.permisos)
-            ? ({ ...(r.permisos as PermisosMap) } as PermisosMap)
-            : {};
-
-        const modPerms = safePerms[idStr] || EMPTY_PERMISO;
-
-        return {
-          ...r,
-          permisos: {
-            ...safePerms,
-            [idStr]: { ...modPerms, [field]: !modPerms[field] },
-          },
-        };
-      }),
-    );
+    const key = moduloId.toLowerCase();
+    setDraftPermisos((prev) => ({
+      ...prev,
+      [key]: { ...prev[key], [field]: !prev[key][field] },
+    }));
   };
 
   const handleToggleAllModulePermisos = (moduloId: string): void => {
-    const idStr = String(moduloId).toLowerCase();
-    const p = getPermiso(idStr);
-    const allEnabled = p.ver && p.editar && p.eliminar && p.exportar;
+    const key = moduloId.toLowerCase();
+    const p = draftPermisos[key] || EMPTY_PERMISO;
+    const allEnabled = p.read && p.update && p.delete && p.export;
 
-    setRoles((prev) =>
-      prev.map((r) => {
-        if (r.id !== selectedRoleId) return r;
-
-        const safePerms: PermisosMap =
-          typeof r.permisos === "object" &&
-          r.permisos !== null &&
-          !Array.isArray(r.permisos)
-            ? ({ ...(r.permisos as PermisosMap) } as PermisosMap)
-            : {};
-
-        return {
-          ...r,
-          permisos: {
-            ...safePerms,
-            [idStr]: {
-              ver: !allEnabled,
-              editar: !allEnabled,
-              eliminar: !allEnabled,
-              exportar: !allEnabled,
-            },
-          },
-        };
-      }),
-    );
+    setDraftPermisos((prev) => ({
+      ...prev,
+      [key]: {
+        read: !allEnabled,
+        update: !allEnabled,
+        delete: !allEnabled,
+        export: !allEnabled,
+      },
+    }));
   };
 
   const handleToggleColumnPermiso = (field: keyof Permiso): void => {
@@ -405,25 +457,32 @@ const RolesPermissions: React.FC = () => {
   };
 
   const handleSavePermisos = async (): Promise<void> => {
-    setIsSaving(true);
+    // Solo abortar si NO hay un ID seleccionado Y TAMPOCO estamos creando uno nuevo
+    if (!selectedRoleId && !isCreatingRole) return;
 
+    setIsSaving(true);
     try {
+      let success = false;
+
       if (isCreatingRole) {
-        const success = await createRole(newRoleName, newRoleDescription);
-        if (success) {
-          toast.success("Rol creado exitosamente");
-          setShowRoleEditor(false);
-        }
-      } else if (currentRole) {
-        const success = await updateRole(currentRole.id, {
+        // 1. Lógica para CREAR un nuevo rol
+        success = await createRole(
+          newRoleName,
+          newRoleDescription,
+          draftPermisos,
+        );
+      } else {
+        // 2. Lógica para ACTUALIZAR un rol existente
+        success = await updateRole(selectedRoleId!, {
           nombre: newRoleName,
           descripcion: newRoleDescription,
-          permisos: currentRole.permisos,
+          permisos: draftPermisos,
         });
-        if (success) {
-          toast.success("Rol actualizado exitosamente");
-          setShowRoleEditor(false);
-        }
+      }
+
+      // 3. Si todo salió bien, cerramos el modal
+      if (success) {
+        setShowRoleEditor(false);
       }
     } finally {
       setIsSaving(false);
@@ -432,13 +491,13 @@ const RolesPermissions: React.FC = () => {
 
   const openRoleEditor = (roleId: number): void => {
     const role = roles.find((r) => r.id === roleId);
-
     setSelectedRoleId(roleId);
     setIsCreatingRole(false);
-
     setNewRoleName(role?.nombre || "");
     setNewRoleDescription(role?.descripcion || "");
 
+    // 👉 AQUÍ CARGAMOS EL BORRADOR LIMPIO
+    setDraftPermisos(normalizePerms(role?.permisos, availableModules));
     setShowRoleEditor(true);
   };
 
@@ -452,10 +511,17 @@ const RolesPermissions: React.FC = () => {
 
   const handleDeleteRole = async (): Promise<void> => {
     if (!roleToDelete) return;
-    await deleteRole(roleToDelete);
-    setShowDeleteDialog(false);
-    setRoleToDelete(null);
-    toast.success("Rol eliminado exitosamente");
+
+    // Llamamos a la API. Si falla, el interceptor muestra el Toast con el mensaje de FastAPI.
+    const success = await deleteRole(roleToDelete);
+
+    // Solo si success es true, cerramos el modal y limpiamos el estado
+    if (success) {
+      setShowDeleteDialog(false);
+      setRoleToDelete(null);
+      // El toast de éxito puede quedarse aquí o en el hook
+      toast.success("Rol eliminado exitosamente");
+    }
   };
 
   const promptDeleteRole = (roleId: number, e: React.MouseEvent): void => {
@@ -479,11 +545,9 @@ const RolesPermissions: React.FC = () => {
     <div className="p-6 space-y-6">
       <PageHeader
         title="Roles y Permisos"
-        description="Define permisos por acción para cada módulo (lectura, edición,
-                eliminación, exportacion)."
+        description="Define permisos por acción para cada módulo (lectura, edición, eliminación, exportación)."
         icon={<Shield className="h-8 w-8 text-brand-red" />}
       >
-        {/* Los botones "Ver Actividad", "Crear Permiso" y "Nuevo Rol" van AQUÍ */}
         <Button
           variant="outline"
           onClick={() => setShowAuditLogPanel(true)}
@@ -502,42 +566,14 @@ const RolesPermissions: React.FC = () => {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <div>
-              {/* DEBUG: rol real del usuario */}
-              {/*               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    "text-xs",
-                    getRoleBadgeColor(myRoleResolved.roleKey || ""),
-                  )}
-                >
-                  Mi rol:{" "}
-                  {myRoleResolved.roleKey
-                    ? myRoleResolved.roleKey.toUpperCase()
-                    : meLoading
-                      ? "CARGANDO..."
-                      : "NO DEFINIDO"}
-                </Badge>
-
-                <Badge variant="outline" className="text-xs">
-                  role_id: {myRoleResolved.roleId ?? "NULL"}
-                </Badge>
-
-                <Badge variant="outline" className="text-xs">
-                  usuario:{" "}
-                  {meUser?.email ?? (meLoading ? "cargando..." : "N/A")}
-                </Badge>
-              </div> */}
-            </div>
-
+            <div />
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
                 onClick={() => setShowCreatePermissionModal(true)}
                 className="gap-2"
               >
-                <Key className="h-4 w-4" /> Crear Permiso
+                <Key className="h-4 w-4" /> Crear Módulo
               </Button>
 
               <Button
@@ -571,19 +607,19 @@ const RolesPermissions: React.FC = () => {
                   ? (localPermsRaw as PermisosMap)
                   : {};
 
+              // Cálculo de total con llaves en inglés
               const totalPermisos = Object.values(localPerms).reduce(
                 (acc: number, p: Permiso) =>
                   acc +
-                  (p?.ver ? 1 : 0) +
-                  (p?.editar ? 1 : 0) +
-                  (p?.eliminar ? 1 : 0) +
-                  (p?.exportar ? 1 : 0),
+                  (p?.read ? 1 : 0) +
+                  (p?.update ? 1 : 0) +
+                  (p?.delete ? 1 : 0) +
+                  (p?.export ? 1 : 0),
                 0,
               );
 
               const maxPermisos = availableModules.length * 4;
 
-              //   REGLA FINAL: SOLO depende del usuario (admin elimina todo)
               const canDeleteByUser = isAdminUser;
               const deleteDisabled = !canDeleteByUser;
 
@@ -654,7 +690,6 @@ const RolesPermissions: React.FC = () => {
                         </span>
                       </div>
 
-                      {/*   Tooltip + toast cuando esté disabled */}
                       <span
                         className="shrink-0"
                         title={
@@ -716,7 +751,6 @@ const RolesPermissions: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Sheet para crear/editar rol */}
       <Sheet open={showRoleEditor} onOpenChange={setShowRoleEditor}>
         <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
           <SheetHeader className="space-y-3">
@@ -766,7 +800,7 @@ const RolesPermissions: React.FC = () => {
                         <th className="text-center px-3 py-3">
                           <button
                             type="button"
-                            onClick={() => handleToggleColumnPermiso("ver")}
+                            onClick={() => handleToggleColumnPermiso("read")}
                             className="hover:text-primary"
                           >
                             <Eye className="h-4 w-4 text-blue-500 mx-auto" />
@@ -776,7 +810,7 @@ const RolesPermissions: React.FC = () => {
                         <th className="text-center px-3 py-3">
                           <button
                             type="button"
-                            onClick={() => handleToggleColumnPermiso("editar")}
+                            onClick={() => handleToggleColumnPermiso("update")}
                             className="hover:text-primary"
                           >
                             <Pencil className="h-4 w-4 text-amber-500 mx-auto" />
@@ -786,9 +820,7 @@ const RolesPermissions: React.FC = () => {
                         <th className="text-center px-3 py-3">
                           <button
                             type="button"
-                            onClick={() =>
-                              handleToggleColumnPermiso("eliminar")
-                            }
+                            onClick={() => handleToggleColumnPermiso("delete")}
                             className="hover:text-primary"
                           >
                             <Trash2 className="h-4 w-4 text-red-500 mx-auto" />
@@ -798,9 +830,7 @@ const RolesPermissions: React.FC = () => {
                         <th className="text-center px-3 py-3">
                           <button
                             type="button"
-                            onClick={() =>
-                              handleToggleColumnPermiso("exportar")
-                            }
+                            onClick={() => handleToggleColumnPermiso("export")}
                             className="hover:text-primary"
                           >
                             <Download className="h-4 w-4 text-green-500 mx-auto" />
@@ -810,16 +840,23 @@ const RolesPermissions: React.FC = () => {
                     </thead>
 
                     <tbody className="divide-y">
+                      {/* 👉 5. ITERAMOS LOS MÓDULOS DE LA BD */}
                       {availableModules.map((modulo) => {
-                        const permiso = getPermiso(modulo.id);
+                        const permiso =
+                          draftPermisos[modulo.id.toLowerCase()] ||
+                          EMPTY_PERMISO;
+
+                        // Resuelve el icono correcto desde el Map (o fallback a Dashboard)
                         const IconComponent =
-                          iconMap[modulo.icono] || LayoutDashboard;
+                          iconMap[modulo.id] ||
+                          iconMap[modulo.icono] ||
+                          LayoutDashboard;
 
                         const allEnabled =
-                          permiso.ver &&
-                          permiso.editar &&
-                          permiso.eliminar &&
-                          permiso.exportar;
+                          permiso.read &&
+                          permiso.update &&
+                          permiso.delete &&
+                          permiso.export;
 
                         return (
                           <tr
@@ -841,59 +878,63 @@ const RolesPermissions: React.FC = () => {
                               </div>
 
                               {modulo.descripcion && (
-                                <p className=" text-muted-foreground pl-7">
+                                <p className=" text-muted-foreground pl-7 text-xs mt-1">
                                   {modulo.descripcion}
                                 </p>
                               )}
                             </td>
 
+                            {/* CHECKBOX: READ */}
                             <td
                               className="text-center px-3 py-3"
                               onClick={(e) => e.stopPropagation()}
                             >
                               <Checkbox
-                                checked={permiso.ver}
+                                checked={permiso.read}
                                 onCheckedChange={() =>
-                                  handleTogglePermiso(modulo.id, "ver")
+                                  handleTogglePermiso(modulo.id, "read")
                                 }
                                 className="data-[state=checked]:bg-blue-500"
                               />
                             </td>
 
+                            {/* CHECKBOX: UPDATE */}
                             <td
                               className="text-center px-3 py-3"
                               onClick={(e) => e.stopPropagation()}
                             >
                               <Checkbox
-                                checked={permiso.editar}
+                                checked={permiso.update}
                                 onCheckedChange={() =>
-                                  handleTogglePermiso(modulo.id, "editar")
+                                  handleTogglePermiso(modulo.id, "update")
                                 }
                                 className="data-[state=checked]:bg-amber-500"
                               />
                             </td>
 
+                            {/* CHECKBOX: DELETE */}
                             <td
                               className="text-center px-3 py-3"
                               onClick={(e) => e.stopPropagation()}
                             >
                               <Checkbox
-                                checked={permiso.eliminar}
+                                checked={permiso.delete}
                                 onCheckedChange={() =>
-                                  handleTogglePermiso(modulo.id, "eliminar")
+                                  handleTogglePermiso(modulo.id, "delete")
                                 }
                                 className="data-[state=checked]:bg-red-500"
                               />
                             </td>
 
+                            {/* CHECKBOX: EXPORT */}
                             <td
                               className="text-center px-3 py-3"
                               onClick={(e) => e.stopPropagation()}
                             >
                               <Checkbox
-                                checked={permiso.exportar}
+                                checked={permiso.export}
                                 onCheckedChange={() =>
-                                  handleTogglePermiso(modulo.id, "exportar")
+                                  handleTogglePermiso(modulo.id, "export")
                                 }
                                 className="data-[state=checked]:bg-green-500"
                               />

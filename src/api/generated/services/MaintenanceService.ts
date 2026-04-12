@@ -290,4 +290,48 @@ export class MaintenanceService {
             },
         });
     }
+    /**
+     * Update Work Order
+     * @param orderId
+     * @param requestBody
+     * @returns WorkOrderResponse Successful Response
+     * @throws ApiError
+     */
+    public static updateWorkOrderApiMaintenanceWorkOrdersOrderIdPut(
+        orderId: number,
+        requestBody: WorkOrderCreate,
+    ): CancelablePromise<WorkOrderResponse> {
+        return __request(OpenAPI, {
+            method: 'PUT',
+            url: '/api/maintenance/work-orders/{order_id}',
+            path: {
+                'order_id': orderId,
+            },
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Delete Work Order
+     * @param orderId
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static deleteWorkOrderApiMaintenanceWorkOrdersOrderIdDelete(
+        orderId: number,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'DELETE',
+            url: '/api/maintenance/work-orders/{order_id}',
+            path: {
+                'order_id': orderId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
 }

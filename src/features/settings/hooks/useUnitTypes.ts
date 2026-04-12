@@ -50,7 +50,7 @@ export function useUnitTypes() {
       setTiposUnidad(tipos);
       toast.success("Catálogo actualizado en el servidor");
     } catch (error) {
-      toast.error("Error al guardar cambios");
+      console.error("Error al guardar cambios");
     } finally {
       setLoading(false);
     }
