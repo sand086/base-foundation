@@ -582,7 +582,7 @@ def update_work_order_status(
             saldo_pendiente=total_parts_cost,
             moneda=models.Currency.MXN,
             fecha_emision=date.today(),
-            fecha_vencimiento=date.today() + timedelta(days=15),  # 15 días por defecto
+            fecha_vencimiento=date.today() + timedelta(days=15),
             clasificacion=clasificacion_pago,
             estatus=models.InvoiceStatus.PENDIENTE,
         )

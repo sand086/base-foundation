@@ -67,7 +67,9 @@ interface UpdateStatusModalProps {
   trip?: Trip | null;
   activeLeg?: TripLeg;
   // FIX CRÍTICO 1: Permitir que onSubmit sea asíncrono (Promise) para esperar al backend
-  onSubmit: (data: StatusUpdateData) => void | Promise<void> | Promise<string | number>;
+  onSubmit: (
+    data: StatusUpdateData,
+  ) => void | Promise<void> | Promise<string | number>;
   eventToEdit?: TripTimelineEvent | null; // Prop para el modo edición
 }
 
@@ -385,8 +387,6 @@ export function UpdateStatusModal({
         fase_operativa: activeLeg?.leg_type || "desconocida",
         timestamp: eventToEdit ? formData.timestamp : timestamp,
       });
-      // FIX CRÍTICO 2: Obligamos al componente padre a cerrarse y refrescar la tabla
-      toast.success("Estatus actualizado exitosamente.");
       onOpenChange(false);
     } catch (err) {
       toast.error("Error al guardar el reporte en la base de datos.");

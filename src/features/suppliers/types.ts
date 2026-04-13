@@ -1,11 +1,67 @@
 // src/features/suppliers/types.ts
 import { UnitType } from "@/features/settings/types";
 import { Currency, RecordStatus } from "@/types/api.types.globals";
+
 // ==========================================
 // ENUMS (Alineados a Postgres)
 // ==========================================
 export type SupplierStatus = "activo" | "inactivo" | "suspendido";
 export type TariffStatus = "activa" | "vencida" | "por_vencer";
+export type InvoiceStatus =
+  | "PENDIENTE"
+  | "PAGO_PARCIAL"
+  | "PAGADO"
+  | "CANCELADO";
+
+// ==========================================
+// PAGOS CXP (Model: InvoicePayment)
+// ==========================================
+export interface InvoicePayment {
+  id: number;
+  invoice_id: number;
+  fecha_pago: string; // ISO Date "YYYY-MM-DD"
+  monto: number;
+  metodo_pago?: string | null;
+  referencia?: string | null;
+  cuenta_retiro?: string | null;
+  complemento_uuid?: string | null;
+
+  record_status?: RecordStatus;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+// ==========================================
+// FACTURAS CXP (Model: PayableInvoice)
+// ==========================================
+export interface PayableInvoice {
+  id: number;
+  supplier_id: number;
+  uuid: string;
+  folio_interno?: string | null;
+  supplier_razon_social?: string | null;
+
+  monto_total: number;
+  saldo_pendiente: number;
+  moneda: Currency;
+
+  fecha_emision: string; // ISO Date "YYYY-MM-DD"
+  fecha_vencimiento: string; // ISO Date "YYYY-MM-DD"
+
+  concepto?: string | null;
+  clasificacion?: string | null;
+  estatus: InvoiceStatus;
+
+  pdf_url?: string | null;
+  xml_url?: string | null;
+  orden_compra_id?: string | null;
+
+  payments?: InvoicePayment[];
+
+  record_status?: RecordStatus;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
 
 // ==========================================
 // TARIFAS DE PROVEEDOR (Model: SupplierTariff)
@@ -15,7 +71,7 @@ export interface SupplierTariff {
   supplier_id: number;
   rate_template_id?: number | null;
   nombre_ruta: string;
-  tipo_unidad: UnitType;
+  tipo_unidad: UnitType | string;
   tarifa_base: number;
   costo_casetas: number;
   moneda: Currency;
@@ -75,7 +131,7 @@ export interface Supplier {
 
   // Relaciones (Solo disponibles en SupplierResponse)
   tariffs?: SupplierTariff[];
-  invoices?: any[]; // Aquí puedes importar PayableInvoice si ya lo tienes definido
+  invoices?: PayableInvoice[];
 
   // AuditMixin
   record_status?: RecordStatus;
@@ -88,7 +144,6 @@ export interface Supplier {
 // ==========================================
 // DTOs para Formularios (Create/Update)
 // ==========================================
-
 export interface SupplierCreate extends Omit<
   Supplier,
   "id" | "record_status" | "created_at" | "updated_at" | "tariffs" | "invoices"

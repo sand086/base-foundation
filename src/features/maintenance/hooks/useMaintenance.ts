@@ -22,6 +22,14 @@ interface CreateWorkOrderPayload {
   tipo_mantenimiento?: string;
 }
 
+// Función helper para extraer el error del backend generado por openapi
+const getErrorDetail = (err: any, fallbackMessage: string): string => {
+  const detail = err?.body?.detail;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) return detail.map((d: any) => d.msg).join(", ");
+  return err?.message || fallbackMessage;
+};
+
 export const useMaintenance = () => {
   const queryClient = useQueryClient();
 
@@ -174,9 +182,9 @@ export const useMaintenance = () => {
       try {
         await createItemMut.mutateAsync(item);
         return true;
-      } catch (err) {
+      } catch (err: any) {
         toast.error("Error al crear", {
-          description: "Verifica que el SKU no exista.",
+          description: getErrorDetail(err, "Verifica que el SKU no exista."),
         });
         return false;
       }
@@ -186,9 +194,12 @@ export const useMaintenance = () => {
       try {
         await updateItemMut.mutateAsync({ id, item });
         return true;
-      } catch (err) {
+      } catch (err: any) {
         toast.error("Error al actualizar", {
-          description: "No se pudieron guardar los cambios.",
+          description: getErrorDetail(
+            err,
+            "No se pudieron guardar los cambios.",
+          ),
         });
         return false;
       }
@@ -197,8 +208,10 @@ export const useMaintenance = () => {
     deleteItem: async (id: number) => {
       try {
         await deleteItemMut.mutateAsync(id);
-      } catch (err) {
-        toast.error("Error", { description: "No se pudo eliminar el item." });
+      } catch (err: any) {
+        toast.error("Error", {
+          description: getErrorDetail(err, "No se pudo eliminar el item."),
+        });
       }
     },
 
@@ -207,9 +220,12 @@ export const useMaintenance = () => {
       try {
         await createWorkOrderMut.mutateAsync(order);
         return true;
-      } catch (err) {
+      } catch (err: any) {
         toast.error("Error", {
-          description: "Verifica stock suficiente para las piezas.",
+          description: getErrorDetail(
+            err,
+            "Verifica stock suficiente para las piezas.",
+          ),
         });
         return false;
       }
@@ -220,9 +236,9 @@ export const useMaintenance = () => {
       try {
         await updateWorkOrderMut.mutateAsync({ id, order });
         return true;
-      } catch (err) {
+      } catch (err: any) {
         toast.error("Fallo al actualizar", {
-          description: "Revisa los datos de la orden.",
+          description: getErrorDetail(err, "Revisa los datos de la orden."),
         });
         return false;
       }
@@ -233,9 +249,12 @@ export const useMaintenance = () => {
       try {
         await deleteWorkOrderMut.mutateAsync(id);
         return true;
-      } catch (err) {
+      } catch (err: any) {
         toast.error("Fallo al eliminar", {
-          description: "No se pudo eliminar la orden de trabajo.",
+          description: getErrorDetail(
+            err,
+            "No se pudo eliminar la orden de trabajo.",
+          ),
         });
         return false;
       }
@@ -245,9 +264,12 @@ export const useMaintenance = () => {
       try {
         await updateOrderStatusMut.mutateAsync({ id, status });
         return true;
-      } catch (err) {
+      } catch (err: any) {
         toast.error("Fallo al actualizar", {
-          description: "No se pudo cambiar el estatus de la orden.",
+          description: getErrorDetail(
+            err,
+            "No se pudo cambiar el estatus de la orden.",
+          ),
         });
         return false;
       }

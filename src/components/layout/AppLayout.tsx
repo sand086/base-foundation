@@ -103,19 +103,6 @@ export function AppLayout() {
               {new Date().getFullYear()}
             </span>
           </div>
-
-          <div className="flex items-center gap-3 px-3 py-1.5 rounded-full bg-emerald-500/10 dark:bg-emerald-900/30 border border-emerald-500/20 dark:border-emerald-500/30 cursor-default transition-all hover:bg-emerald-500/20 dark:hover:bg-emerald-900/50">
-            <div className="relative flex h-2 w-2 items-center justify-center">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 dark:bg-emerald-500 opacity-75" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest leading-none mt-[1px]">
-                Servidor Online
-              </span>
-              <Server className="h-3 w-3 text-emerald-600/70 dark:text-emerald-400/70" />
-            </div>
-          </div>
         </footer>
       </div>
     </div>
