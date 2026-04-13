@@ -37,7 +37,15 @@ import { cn } from "@/lib/utils";
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "/";
 
 //   Extendemos los tipos soportados
-export type EntityType = "unit" | "client" | "operator" | "fuel";
+export type EntityType =
+  | "unit"
+  | "client"
+  | "operator"
+  | "fuel"
+  | "cxp_payment"
+  | "cxc_payment"
+  | "bank_movement"
+  | "trip_delivery";
 
 export type DocHistoryItem = {
   id: number;
@@ -126,6 +134,13 @@ function buildHistoryEndpoint(
   activeId: number,
   docType: string,
 ) {
+  if (
+    ["cxp_payment", "cxc_payment", "bank_movement", "trip_delivery"].includes(
+      entityType,
+    )
+  ) {
+    return `/api/utils/receipt/${entityType}/${activeId}/history`;
+  }
   switch (entityType) {
     case "unit":
       return `/api/fleet/units/${activeId}/documents/${docType}/history`;
@@ -139,6 +154,14 @@ function buildHistoryEndpoint(
 }
 
 function buildDeleteEndpoint(entityType: EntityType, docId: number) {
+  if (
+    ["cxp_payment", "cxc_payment", "bank_movement", "trip_delivery"].includes(
+      entityType,
+    )
+  ) {
+    // Aquí docId es el id de la entidad (pago/viaje) porque así lo armamos en el backend
+    return `/api/utils/receipt/${entityType}/${docId}`;
+  }
   switch (entityType) {
     case "client":
       return `/api/clients/documents/${docId}`;
@@ -212,7 +235,22 @@ export function DocumentUploadManager({
     try {
       let result: any;
 
-      if (entityType === "unit") {
+      if (
+        [
+          "cxp_payment",
+          "cxc_payment",
+          "bank_movement",
+          "trip_delivery",
+        ].includes(entityType)
+      ) {
+        const formData = new FormData();
+        formData.append("file", file);
+        const res = await axiosClient.post(
+          `/api/utils/upload-receipt/${entityType}/${activeId}`,
+          formData,
+        );
+        result = res.data;
+      } else if (entityType === "unit") {
         result =
           await FleetUnitsService.uploadUnitDocumentApiFleetUnitsUnitTermDocumentsDocTypePost(
             String(activeId),

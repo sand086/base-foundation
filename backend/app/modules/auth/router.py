@@ -28,7 +28,7 @@ from app.modules.monitoring.crud import log_audit
 router = APIRouter(tags=["Authentication"])
 
 reusable_oauth2 = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
-BYPASS_AUTH = True
+BYPASS_AUTH = False
 
 
 # -----------------------------------------------------------------------------

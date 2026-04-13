@@ -661,6 +661,7 @@ class Trip(AuditMixin, Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     closed_at = Column(DateTime(timezone=True))
+    comprobante_entrega_url = Column(String(500), nullable=True)
 
     client = relationship("Client", back_populates="trips")
     sub_client = relationship("SubClient", back_populates="trips")
@@ -1152,6 +1153,7 @@ class InvoicePayment(AuditMixin, Base):
     referencia = Column(String(100))
     cuenta_retiro = Column(String(50))
     complemento_uuid = Column(String(36))
+    comprobante_url = Column(String(500), nullable=True)
 
     invoice = relationship("PayableInvoice", back_populates="payments")
     bank_account = relationship("BankAccount")
@@ -1463,6 +1465,7 @@ class ReceivableInvoicePayment(AuditMixin, Base):
     referencia = Column(String(100))
     cuenta_deposito = Column(String(50))
     complemento_uuid = Column(String(36), nullable=True)
+    comprobante_url = Column(String(500), nullable=True)
 
     invoice = relationship("ReceivableInvoice", back_populates="payments")
     bank_account = relationship("BankAccount")
@@ -1518,6 +1521,7 @@ class BankMovement(AuditMixin, Base):
     fecha = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     concepto = Column(String(255))
     referencia = Column(String(100))
+    comprobante_url = Column(String(500), nullable=True)
 
     bank_account = relationship("BankAccount", backref="movements")
 

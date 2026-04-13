@@ -544,9 +544,7 @@ export function NextLegModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="w-[95vw] sm:max-w-[1000px] p-0 flex flex-col max-h-[90vh] bg-card/95 backdrop-blur-xl border border-border shadow-2xl rounded-2xl overflow-hidden"
-      >
+      <DialogContent className="w-[95vw] sm:max-w-[1000px] p-0 flex flex-col max-h-[90vh] bg-card/95 backdrop-blur-xl border border-border shadow-2xl rounded-2xl overflow-hidden">
         <DialogHeader className="p-6 bg-card border-b border-border shrink-0 relative z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex justify-between items-center gap-6">
@@ -557,7 +555,7 @@ export function NextLegModal({
                 </div>
                 <div>
                   <DialogTitle className="text-3xl font-black uppercase tracking-tighter text-slate-900 dark:text-white heading-crisp">
-                    SERV- {tripPadre.public_id ?? tripPadre.id}
+                    TRP- {tripPadre.public_id ?? tripPadre.id}
                   </DialogTitle>
                   <div className="text-[10px] font-black text-slate-400 dark:text-white/40 uppercase tracking-[0.3em] mt-1">
                     Asignación Logística Operativa
@@ -827,7 +825,7 @@ export function NextLegModal({
                         </Label>
                         <Input
                           placeholder="Ej. MSCU7654321"
-                        className="h-11 font-mono uppercase bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100"
+                          className="h-11 font-mono uppercase bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100"
                           value={tripFiscalData.contenedor_2}
                           onChange={(e) =>
                             setTripFiscalData((p) => ({
@@ -1031,9 +1029,7 @@ export function NextLegModal({
               </Select>
             </div>
 
-            <div
-              className="p-8 rounded-2xl border shadow-xl space-y-8 bg-card border-slate-200 dark:border-white/10"
-            >
+            <div className="p-8 rounded-2xl border shadow-xl space-y-8 bg-card border-slate-200 dark:border-white/10">
               <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-white/10">
                 <h5 className="text-[11px] font-black text-slate-700 dark:text-white uppercase tracking-[0.2em] flex items-center gap-2">
                   <Box className="h-4 w-4 text-brand-red" />
