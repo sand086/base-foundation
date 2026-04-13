@@ -453,8 +453,8 @@ export class DefaultService {
      * @throws ApiError
      */
     public static getDashboardStatsApiDashboardStatsGet(
-        startDate: string,
-        endDate: string,
+        startDate?: string,
+        endDate?: string,
     ): CancelablePromise<DashboardData> {
         return __request(OpenAPI, {
             method: 'GET',

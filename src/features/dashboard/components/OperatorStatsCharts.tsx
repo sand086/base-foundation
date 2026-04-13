@@ -7,25 +7,36 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-//  importacion actualizada al nuevo servicio
 import { OperatorStats } from "@/features/dashboard/types";
 import {
   getOperatorTripsData,
   getOperatorIncidentsData,
 } from "@/features/dashboard/utils/dashboardUtils";
+import { useMemo } from "react";
 
 interface OperatorStatsChartsProps {
   operators: OperatorStats[];
 }
 
 export function OperatorStatsCharts({ operators }: OperatorStatsChartsProps) {
-  // Usamos los helpers del servicio para transformar los datos reales
   const tripsData = getOperatorTripsData(operators);
   const incidentsData = getOperatorIncidentsData(operators);
 
+  // Extraemos la info de rendimiento y la ordenamos de mayor a menor eficiencia
+  const rendimientoData = useMemo(() => {
+    return operators
+      .map((op) => ({
+        name: op.shortName || op.name,
+        rendimiento: op.rendimiento || 0,
+      }))
+      .filter((op) => op.rendimiento > 0) // No mostramos a los que tienen 0
+      .sort((a, b) => b.rendimiento - a.rendimiento);
+  }, [operators]);
+
   return (
-    <div className="grid gap-3 md:grid-cols-2">
-      {/* Top Operadores por Viajes */}
+    // Cambiamos a lg:grid-cols-3 para acomodar las 3 gráficas
+    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+      {/* 1. Top Operadores por Viajes */}
       <Card className="rounded-xl border shadow-none glass-card">
         <CardHeader className="pb-2 pt-3 px-3">
           <CardTitle className="text-sm font-semibold text-brand-dark heading-crisp">
@@ -58,19 +69,6 @@ export function OperatorStatsCharts({ operators }: OperatorStatsChartsProps) {
                       stopOpacity={0.8}
                     />
                   </linearGradient>
-                  <filter
-                    id="glowGreen"
-                    x="-20%"
-                    y="-20%"
-                    width="140%"
-                    height="140%"
-                  >
-                    <feGaussianBlur stdDeviation="2" result="coloredBlur" />
-                    <feMerge>
-                      <feMergeNode in="coloredBlur" />
-                      <feMergeNode in="SourceGraphic" />
-                    </feMerge>
-                  </filter>
                 </defs>
                 <XAxis
                   dataKey="name"
@@ -91,9 +89,7 @@ export function OperatorStatsCharts({ operators }: OperatorStatsChartsProps) {
                   contentStyle={{
                     backgroundColor: "hsl(var(--card) / 0.9)",
                     backdropFilter: "blur(12px)",
-                    border: "1px solid hsl(0 0% 100% / 0.1)",
                     borderRadius: "12px",
-                    boxShadow: "0 8px 32px rgba(0,0,0,0.1)",
                   }}
                 />
                 <Bar
@@ -101,7 +97,6 @@ export function OperatorStatsCharts({ operators }: OperatorStatsChartsProps) {
                   fill="url(#barGradientGreen)"
                   radius={[4, 4, 0, 0]}
                   barSize={24}
-                  filter="url(#glowGreen)"
                 />
               </BarChart>
             </ResponsiveContainer>
@@ -109,7 +104,71 @@ export function OperatorStatsCharts({ operators }: OperatorStatsChartsProps) {
         </CardContent>
       </Card>
 
-      {/* Operadores con Más Incidencias */}
+      {/* 2. NUEVA: Rendimiento de Combustible por Operador */}
+      <Card className="rounded-xl border shadow-none glass-card">
+        <CardHeader className="pb-2 pt-3 px-3">
+          <CardTitle className="text-sm font-semibold text-brand-dark heading-crisp">
+            Eficiencia Combustible (Km/L)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-3 pb-3">
+          <div className="h-[180px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={rendimientoData}
+                margin={{ top: 5, right: 10, left: -15, bottom: 5 }}
+              >
+                <defs>
+                  <linearGradient
+                    id="barGradientBlue"
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="1"
+                  >
+                    <stop offset="0%" stopColor="#3b82f6" stopOpacity={1} />
+                    <stop offset="100%" stopColor="#1d4ed8" stopOpacity={0.8} />
+                  </linearGradient>
+                </defs>
+                <XAxis
+                  dataKey="name"
+                  tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }}
+                  tickFormatter={(value) =>
+                    value.length > 12 ? `${value.substring(0, 10)}...` : value
+                  }
+                  interval={0}
+                  angle={-15}
+                  textAnchor="end"
+                  height={45}
+                />
+                <YAxis
+                  domain={["auto", "auto"]}
+                  tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                />
+                <Tooltip
+                  formatter={(value: number) => [
+                    `${value} km/l`,
+                    "Rendimiento",
+                  ]}
+                  contentStyle={{
+                    backgroundColor: "hsl(var(--card) / 0.9)",
+                    backdropFilter: "blur(12px)",
+                    borderRadius: "12px",
+                  }}
+                />
+                <Bar
+                  dataKey="rendimiento"
+                  fill="url(#barGradientBlue)"
+                  radius={[4, 4, 0, 0]}
+                  barSize={24}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 3. Operadores con Más Incidencias */}
       <Card className="rounded-xl border shadow-none glass-card">
         <CardHeader className="pb-2 pt-3 px-3">
           <CardTitle className="text-sm font-semibold text-brand-dark heading-crisp">
@@ -142,19 +201,6 @@ export function OperatorStatsCharts({ operators }: OperatorStatsChartsProps) {
                       stopOpacity={0.8}
                     />
                   </linearGradient>
-                  <filter
-                    id="glowRed"
-                    x="-20%"
-                    y="-20%"
-                    width="140%"
-                    height="140%"
-                  >
-                    <feGaussianBlur stdDeviation="2" result="coloredBlur" />
-                    <feMerge>
-                      <feMergeNode in="coloredBlur" />
-                      <feMergeNode in="SourceGraphic" />
-                    </feMerge>
-                  </filter>
                 </defs>
                 <XAxis
                   dataKey="name"
@@ -175,7 +221,6 @@ export function OperatorStatsCharts({ operators }: OperatorStatsChartsProps) {
                   contentStyle={{
                     backgroundColor: "hsl(var(--card) / 0.9)",
                     backdropFilter: "blur(12px)",
-                    border: "1px solid hsl(0 0% 100% / 0.1)",
                     borderRadius: "12px",
                   }}
                 />
@@ -184,7 +229,6 @@ export function OperatorStatsCharts({ operators }: OperatorStatsChartsProps) {
                   fill="url(#barGradientRed)"
                   radius={[4, 4, 0, 0]}
                   barSize={24}
-                  filter="url(#glowRed)"
                 />
               </BarChart>
             </ResponsiveContainer>

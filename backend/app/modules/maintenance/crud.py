@@ -108,35 +108,58 @@ def create_inventory_item(db: Session, item_in: schemas.InventoryItemCreate):
     # 2. Crear el registro en el inventario
     db_item = models.InventoryItem(**item_in.model_dump())
     db.add(db_item)
-
-    # Usamos flush para obtener el ID de db_item antes del commit definitivo
     db.flush()
 
-    # 3. INTEGRACIÓN FINANCIERA: Si entra con stock inicial, generar cuenta por pagar
-    if db_item.stock_actual > 0:
-        if not db_item.proveedor_id:
-            # Opcional: podrías lanzar un error si quieres obligar a tener proveedor al meter stock
-            pass
-        else:
-            total_compra = db_item.stock_actual * db_item.precio_unitario
+    # 3. INTEGRACIÓN FINANCIERA MEJORADA
+    if db_item.stock_actual > 0 and db_item.precio_unitario > 0:
+        total_compra = db_item.stock_actual * db_item.precio_unitario
+        es_caja_chica = False
+        supplier_id = db_item.proveedor_id
 
-            # Crear la factura por pagar (CXP)
-            new_payable = models.PayableInvoice(
-                supplier_id=db_item.proveedor_id,
-                viaje_id=None,  # Es una compra de almacén, no ligada a un viaje específico
-                unit_id=None,
-                folio_interno=f"INV-{db_item.sku}-{int(time.time())}",
-                concepto=f"Carga inicial de inventario: {db_item.descripcion} ({db_item.stock_actual} pzas)",
-                monto_total=total_compra,
-                saldo_pendiente=total_compra,
-                moneda=models.Currency.MXN,
-                fecha_emision=date.today(),
-                # Se calcula el vencimiento según los días de crédito del proveedor (asumimos 30 si no hay)
-                fecha_vencimiento=date.today() + timedelta(days=30),
-                estatus=models.InvoiceStatus.PENDIENTE,
-                clasificacion="gasto_indirecto_variable",
+        # Si no hay proveedor, asignamos el de CAJA CHICA
+        if not supplier_id:
+            petty_cash_supplier = get_or_create_petty_cash_supplier(db)
+            supplier_id = petty_cash_supplier.id
+            es_caja_chica = True
+
+        # Determinar estatus y saldo
+        estatus_factura = (
+            models.InvoiceStatus.PAGADO
+            if es_caja_chica
+            else models.InvoiceStatus.PENDIENTE
+        )
+        saldo_inicial = 0.0 if es_caja_chica else total_compra
+
+        # Crear la factura por pagar (CXP)
+        new_payable = models.PayableInvoice(
+            supplier_id=supplier_id,
+            viaje_id=None,
+            unit_id=None,
+            folio_interno=f"INV-{db_item.sku}-{int(time.time())}",
+            concepto=f"Carga de inventario: {db_item.descripcion} ({db_item.stock_actual} pzas)",
+            monto_total=total_compra,
+            saldo_pendiente=saldo_inicial,
+            moneda=models.Currency.MXN,
+            fecha_emision=date.today(),
+            fecha_vencimiento=(
+                date.today() if es_caja_chica else date.today() + timedelta(days=30)
+            ),
+            estatus=estatus_factura,
+            clasificacion="gasto_indirecto_variable",
+        )
+        db.add(new_payable)
+        db.flush()  # Obtenemos el ID de la factura
+
+        # Si es de caja chica, generamos el pago para que cuadre la contabilidad
+        if es_caja_chica:
+            pago_automatico = models.InvoicePayment(
+                invoice_id=new_payable.id,
+                fecha_pago=date.today(),
+                monto=total_compra,
+                metodo_pago="efectivo",
+                referencia="COMPRA DIRECTA CAJA CHICA",
             )
-            db.add(new_payable)
+            db.add(pago_automatico)
 
     # 4. Confirmar transacciones
     db.commit()
@@ -541,6 +564,7 @@ def update_work_order_status(
     if not order:
         _not_found("Orden de trabajo")
 
+    # Devolver el stock si se cancela
     if (
         status == models.WorkOrderStatus.CANCELADA
         and order.status != models.WorkOrderStatus.CANCELADA
@@ -554,40 +578,31 @@ def update_work_order_status(
     if status == models.WorkOrderStatus.CERRADA:
         order.fecha_cierre = datetime.now(timezone.utc)
 
-        # --- NUEVA INTEGRACIÓN CON CXP ---
-        # 1. Calcular el monto total de las refacciones usadas
-        total_parts_cost = sum(
-            p.cantidad * p.costo_unitario_snapshot for p in order.parts
-        )
-
-        # 2. Determinar el concepto y clasificación
-        concepto_pago = (
-            f"Orden de Trabajo {order.folio} - Unidad ECO-{order.unit.numero_economico}"
-        )
-        clasificacion_pago = "costo_mantenimiento"
-
-        # 3. Crear la factura por pagar (PayableInvoice)
-        # Nota: Usamos el proveedor de la primera refacción si existe, o el taller si tuvieras ese campo
-        main_supplier_id = None
-        if order.parts and order.parts[0].item:
-            main_supplier_id = order.parts[0].item.proveedor_id
-
-        new_payable = models.PayableInvoice(
-            supplier_id=main_supplier_id,
-            viaje_id=order.trip_id,
-            unit_id=order.unit_id,
-            folio_interno=order.folio,
-            concepto=concepto_pago,
-            monto_total=total_parts_cost,
-            saldo_pendiente=total_parts_cost,
-            moneda=models.Currency.MXN,
-            fecha_emision=date.today(),
-            fecha_vencimiento=date.today() + timedelta(days=15),
-            clasificacion=clasificacion_pago,
-            estatus=models.InvoiceStatus.PENDIENTE,
-        )
-        db.add(new_payable)
-        # --------------------------------
+        # --- CORRECCIÓN DE DOBLE CONTABILIDAD ---
+        # El gasto de las refacciones YA SE REGISTRÓ en CxP cuando ingresaron al inventario.
+        # Aquí NO creamos otra PayableInvoice para evitar duplicar la deuda en finanzas.
+        # Solo descontamos físicamente las piezas (lo cual ya se hizo al crear la WorkOrder).
 
     db.commit()
     return get_work_order(db, order_id)
+
+
+def get_or_create_petty_cash_supplier(db: Session):
+    rfc_generico = "XAXX010101000"
+    supplier = (
+        db.query(models.Supplier).filter(models.Supplier.rfc == rfc_generico).first()
+    )
+
+    if not supplier:
+        supplier = models.Supplier(
+            razon_social="PROVEEDOR MOSTRADOR / CAJA CHICA",
+            rfc=rfc_generico,
+            tipo_proveedor="servicios_generales",
+            dias_credito=0,
+            limite_credito=0.0,
+            estatus=models.SupplierStatus.ACTIVO,
+        )
+        db.add(supplier)
+        db.flush()  # Importante: flush para obtener el ID sin cerrar la transacción
+
+    return supplier

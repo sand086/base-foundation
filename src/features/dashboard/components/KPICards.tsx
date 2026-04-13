@@ -1,14 +1,13 @@
 import {
   TrendingUp,
-  TrendingDown,
   Clock,
   Truck,
   AlertTriangle,
   DollarSign,
   Wrench,
+  Droplet, // <-- Agregamos Droplet para el combustible
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-//  Cambiado a dashboardService
 import { ServiceStats } from "@/features/dashboard/types";
 import { useMemo } from "react";
 
@@ -42,7 +41,8 @@ export function KPICards({ stats }: KPICardsProps) {
   }, []);
 
   return (
-    <div className="grid gap-4 grid-cols-2 lg:grid-cols-5">
+    // Ampliamos a lg:grid-cols-6 para acomodar la nueva tarjeta sin apretar todo
+    <div className="grid gap-4 grid-cols-2 lg:grid-cols-6">
       {/* Total Servicios */}
       <Card className="kpi-card rounded-2xl border-0 shadow-none glass-card overflow-hidden">
         <CardHeader className="flex flex-row items-center justify-between pb-2 pt-4 px-4">
@@ -127,6 +127,28 @@ export function KPICards({ stats }: KPICardsProps) {
               {formatCurrency(stats.estimatedRevenue)}
             </span>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* NUEVA: Rendimiento de Combustible */}
+      <Card className="kpi-card rounded-2xl border-0 shadow-none glass-card overflow-hidden">
+        <CardHeader className="flex flex-row items-center justify-between pb-2 pt-4 px-4">
+          <CardTitle className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+            Eficiencia (Km/L)
+          </CardTitle>
+          <div className="h-8 w-8 rounded-xl bg-blue-500/10 flex items-center justify-center">
+            <Droplet className="h-4 w-4 text-blue-600" />
+          </div>
+        </CardHeader>
+        <CardContent className="px-4 pb-4">
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-bold text-blue-600 tracking-tight">
+              {stats.avgRendimiento}
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            {stats.totalKms.toLocaleString("es-MX")} km totales
+          </p>
         </CardContent>
       </Card>
 

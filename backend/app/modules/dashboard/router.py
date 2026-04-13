@@ -1,4 +1,3 @@
-# --- Fuente: api_dashboard.py ---
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func, case
@@ -13,7 +12,9 @@ router = APIRouter()
 
 
 @router.get("/stats", response_model=DashboardData)
-def get_dashboard_stats(start_date: str, end_date: str, db: Session = Depends(get_db)):
+def get_dashboard_stats(
+    start_date: str = None, end_date: str = None, db: Session = Depends(get_db)
+):
     # 1. Ajuste de fechas por defecto (últimos 30 días)
     if not start_date:
         start_date = date.today() - timedelta(days=30)
@@ -38,6 +39,20 @@ def get_dashboard_stats(start_date: str, end_date: str, db: Session = Depends(ge
 
     on_time_percentage = (on_time / total_services * 100) if total_services > 0 else 0
 
+    # --- NUEVO: MÉTRICAS DE FLOTA (Diésel y Kms) ---
+    fleet_metrics = (
+        db.query(
+            func.sum(TripLeg.kms_recorridos).label("total_kms"),
+            func.sum(TripLeg.litros_cargados).label("total_liters"),
+        )
+        .filter(TripLeg.start_date.between(start_date, end_date))
+        .first()
+    )
+
+    t_kms = float(fleet_metrics.total_kms or 0.0)
+    t_liters = float(fleet_metrics.total_liters or 0.0)
+    avg_rendimiento = round((t_kms / t_liters), 2) if t_liters > 0 else 0.0
+
     # --- TOP CLIENTS ---
     top_clients = (
         db.query(
@@ -55,7 +70,6 @@ def get_dashboard_stats(start_date: str, end_date: str, db: Session = Depends(ge
     )
 
     # --- OPERATOR STATS ---
-    # Nota: Los incidentes se cuentan si el tramo (TripLeg) tiene algo registrado
     op_stats = (
         db.query(
             Operator.name.label("name"),
@@ -63,7 +77,12 @@ def get_dashboard_stats(start_date: str, end_date: str, db: Session = Depends(ge
             func.count(TripLeg.id).label("trips"),
             func.sum(case((TripLeg.rendimiento_real == None, 0), else_=0)).label(
                 "incidents"
-            ),  # Ajustar lógica según tu uso de incidentes
+            ),
+            # NUEVO: Rendimiento por operador (Usa nullif para evitar error si no hay litros registrados)
+            (
+                func.sum(TripLeg.kms_recorridos)
+                / func.nullif(func.sum(TripLeg.litros_cargados), 0)
+            ).label("rendimiento"),
         )
         .join(TripLeg, TripLeg.operator_id == Operator.id)
         .filter(TripLeg.start_date.between(start_date, end_date))
@@ -88,15 +107,24 @@ def get_dashboard_stats(start_date: str, end_date: str, db: Session = Depends(ge
             "lateCount": late,
             "estimatedRevenue": total_revenue,
             "onTimePercentage": round(on_time_percentage, 1),
+            # Inyectados al JSON de respuesta:
+            "totalKms": t_kms,
+            "totalLiters": t_liters,
+            "avgRendimiento": avg_rendimiento,
         },
         "clientServices": [dict(c._mapping) for c in top_clients],
         "operatorStats": [
-            {**dict(o._mapping), "onTimeRate": 95.0}
-            for o in op_stats  # onTimeRate quemado o calculado
+            {
+                **dict(o._mapping),
+                "onTimeRate": 95.0,
+                # Formateamos a 2 decimales para que se vea limpio en el Frontend (ej. 2.17)
+                "rendimiento": round(o.rendimiento, 2) if o.rendimiento else 0.0,
+            }
+            for o in op_stats
         ],
         "recentServices": [
             {
-                "id": f"SRV-{t.id}",
+                "id": f"TRP-{t.id}",
                 "clientId": str(t.client_id),
                 "clientName": t.client.razon_social,
                 "route": f"{t.origin} → {t.destination}",

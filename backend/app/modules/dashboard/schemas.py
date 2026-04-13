@@ -1,4 +1,3 @@
-
 # --- Fuente: schemas_dashboard.py ---
 from pydantic import BaseModel
 from typing import List, Optional
@@ -11,6 +10,9 @@ class ServiceStats(BaseModel):
     lateCount: int
     estimatedRevenue: float
     onTimePercentage: float
+    totalKms: float
+    totalLiters: float
+    avgRendimiento: float
 
 
 class ClientServiceCount(BaseModel):
@@ -26,6 +28,7 @@ class OperatorStats(BaseModel):
     trips: int
     incidents: int
     onTimeRate: float
+    rendimiento: float
 
 
 class RecentService(BaseModel):
@@ -47,4 +50,3 @@ class DashboardData(BaseModel):
     clientServices: List[ClientServiceCount]
     operatorStats: List[OperatorStats]
     recentServices: List[RecentService]
-

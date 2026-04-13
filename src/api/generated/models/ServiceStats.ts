@@ -8,5 +8,8 @@ export type ServiceStats = {
     lateCount: number;
     estimatedRevenue: number;
     onTimePercentage: number;
+    totalKms: number;
+    totalLiters: number;
+    avgRendimiento: number;
 };
 
