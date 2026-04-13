@@ -8,8 +8,8 @@ import type { InvoiceStatus } from './InvoiceStatus';
 import type { RecordStatus } from './RecordStatus';
 export type PayableInvoiceResponse = {
     id: number;
-    supplier_id: number;
-    uuid: string;
+    supplier_id?: (number | null);
+    uuid?: (string | null);
     folio_interno?: (string | null);
     supplier_razon_social?: (string | null);
     monto_total: number;
@@ -20,6 +20,9 @@ export type PayableInvoiceResponse = {
     concepto?: (string | null);
     clasificacion?: (string | null);
     estatus: InvoiceStatus;
+    metodo_pago?: (string | null);
+    forma_pago?: (string | null);
+    tipo_comprobante?: (string | null);
     pdf_url?: (string | null);
     xml_url?: (string | null);
     orden_compra_id?: (string | null);
