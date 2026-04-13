@@ -29,6 +29,7 @@ import {
   Settings2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 import {
   PayableInvoice,
@@ -442,17 +443,27 @@ export function RegisterExpenseModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-foreground">
-            <FileText className="h-5 w-5" />
-            {editInvoice ? "Editar Gasto" : "Registrar Gasto"}
-            {formData.orden_compra_folio && (
-              <Badge variant="outline" className="ml-2 text-xs">
-                Origen: {formData.orden_compra_folio}
-              </Badge>
-            )}
-          </DialogTitle>
+      <DialogContent className="w-[95vw] sm:max-w-[700px] p-0 flex flex-col max-h-[90vh] bg-card/95 backdrop-blur-xl border border-border shadow-2xl rounded-2xl overflow-hidden">
+        <DialogHeader className="p-6 bg-card border-b border-border shrink-0 relative z-10">
+          <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
+          <div className="relative z-10 flex items-center gap-4 sm:gap-5">
+            <div className={cn(
+              "w-12 h-12 rounded-xl flex items-center justify-center shadow-inner shrink-0",
+              editInvoice
+                ? "bg-amber-100 dark:bg-amber-900/30"
+                : "bg-emerald-100 dark:bg-emerald-900/30",
+            )}>
+              <FileText className={cn("h-6 w-6", editInvoice ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400")} />
+            </div>
+            <div className="flex flex-col gap-1 text-left">
+              <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-foreground heading-crisp leading-none">
+                {editInvoice ? "Editar Gasto" : "Registrar Gasto"}
+              </DialogTitle>
+              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mt-1">
+                {formData.orden_compra_folio ? `Origen: ${formData.orden_compra_folio}` : "Registro de factura o gasto operativo"}
+              </p>
+            </div>
+          </div>
         </DialogHeader>
 
         {validationErrors.length > 0 && (
@@ -473,10 +484,10 @@ export function RegisterExpenseModal({
           </div>
         )}
 
-        <div className="space-y-4 pt-4">
+        <div className="flex-1 overflow-y-auto p-6 bg-muted/50 custom-scrollbar space-y-4">
           {/* Proveedor */}
           <div className="space-y-2">
-            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
               Proveedor (Opcional)
             </Label>
             <Select
@@ -487,7 +498,7 @@ export function RegisterExpenseModal({
               disabled={isProviderLocked}
             >
               <SelectTrigger
-                className={`h-10 ${isProviderLocked ? "bg-muted cursor-not-allowed" : ""}`}
+                className={`h-11 font-bold shadow-sm bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100 ${isProviderLocked ? "bg-muted cursor-not-allowed" : ""}`}
               >
                 <SelectValue placeholder="Seleccionar proveedor" />
               </SelectTrigger>
@@ -514,9 +525,9 @@ export function RegisterExpenseModal({
           </div>
 
           {/* Clasificación financiera */}
-          <div className="p-4 bg-muted/30 rounded-lg border space-y-4">
+          <div className="p-4 bg-muted/30 rounded-2xl border border-border space-y-4">
             <div className="space-y-2">
-              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
                 Clasificación Financiera{" "}
                 <span className="text-status-danger">*</span>
               </Label>
@@ -535,7 +546,7 @@ export function RegisterExpenseModal({
                   setNewCategoryName("");
                 }}
               >
-                <SelectTrigger className="h-10">
+                <SelectTrigger className="h-11 font-bold shadow-sm bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
                   <SelectValue placeholder="Selecciona la clasificación" />
                 </SelectTrigger>
                 <SelectContent className="bg-card">
@@ -569,7 +580,7 @@ export function RegisterExpenseModal({
 
             {formData.clasificacion === "costo_directo_viaje" && (
               <div className="space-y-2">
-                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
                   Viaje Asociado <span className="text-status-danger">*</span>
                 </Label>
                 <Select
@@ -578,7 +589,7 @@ export function RegisterExpenseModal({
                     setFormData((p) => ({ ...p, viaje_id: value }))
                   }
                 >
-                  <SelectTrigger className="h-10">
+                  <SelectTrigger className="h-11 font-bold shadow-sm bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
                     <SelectValue placeholder="Selecciona el viaje" />
                   </SelectTrigger>
                   <SelectContent className="bg-card">
@@ -597,7 +608,7 @@ export function RegisterExpenseModal({
 
             {formData.clasificacion === "costo_mantenimiento" && (
               <div className="space-y-2">
-                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
                   Unidad Económica <span className="text-status-danger">*</span>
                 </Label>
                 <Select
@@ -606,7 +617,7 @@ export function RegisterExpenseModal({
                     setFormData((p) => ({ ...p, unidad_id: value }))
                   }
                 >
-                  <SelectTrigger className="h-10">
+                  <SelectTrigger className="h-11 font-bold shadow-sm bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
                     <SelectValue placeholder="Selecciona la unidad" />
                   </SelectTrigger>
                   <SelectContent className="bg-card">
@@ -627,7 +638,7 @@ export function RegisterExpenseModal({
               formData.clasificacion === "gasto_indirecto_variable") && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
                     Categoría de Gasto{" "}
                     <span className="text-status-danger">*</span>
                   </Label>
@@ -656,7 +667,7 @@ export function RegisterExpenseModal({
                         }));
                     }}
                   >
-                    <SelectTrigger className="h-10">
+                    <SelectTrigger className="h-11 font-bold shadow-sm bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
                       <SelectValue placeholder="Selecciona la categoría" />
                     </SelectTrigger>
                     <SelectContent className="bg-card">
@@ -682,7 +693,7 @@ export function RegisterExpenseModal({
                       placeholder="Nombre de la nueva categoría"
                       value={newCategoryName}
                       onChange={(e) => setNewCategoryName(e.target.value)}
-                      className="h-10"
+                      className="h-11 bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100"
                       autoFocus
                     />
                     <Button
@@ -713,7 +724,7 @@ export function RegisterExpenseModal({
 
           {/* Concepto */}
           <div className="space-y-2">
-            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
               Concepto
             </Label>
             <Textarea
@@ -722,14 +733,14 @@ export function RegisterExpenseModal({
               onChange={(e) =>
                 setFormData((p) => ({ ...p, concepto: e.target.value }))
               }
-              className="min-h-[60px]"
+              className="min-h-[60px] bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100"
             />
           </div>
 
           {/* Monto / Moneda */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
                 <DollarSign className="h-3 w-3 inline mr-1" /> Monto Total{" "}
                 <span className="text-status-danger">*</span>
               </Label>
@@ -743,12 +754,12 @@ export function RegisterExpenseModal({
                     monto_total: normalizeMoney(e.target.value),
                   }))
                 }
-                className={`h-10 ${isAmountLocked ? "bg-muted cursor-not-allowed" : ""}`}
+                className={`h-11 font-mono font-bold bg-muted border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-100 ${isAmountLocked ? "cursor-not-allowed" : ""}`}
                 disabled={isAmountLocked}
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
                 Moneda
               </Label>
               <Select
@@ -757,7 +768,7 @@ export function RegisterExpenseModal({
                   setFormData((p) => ({ ...p, moneda: value }))
                 }
               >
-                <SelectTrigger className="h-10">
+                <SelectTrigger className="h-11 font-bold shadow-sm bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-card">
@@ -771,7 +782,7 @@ export function RegisterExpenseModal({
           {/* Fecha emisión / días crédito */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
                 <Calendar className="h-3 w-3 inline mr-1" /> Fecha Emisión
               </Label>
               <Input
@@ -780,11 +791,11 @@ export function RegisterExpenseModal({
                 onChange={(e) =>
                   setFormData((p) => ({ ...p, fecha_emision: e.target.value }))
                 }
-                className="h-10"
+                className="h-11 font-mono font-bold bg-muted border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-100"
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
                 Días de Crédito
               </Label>
               <Select
@@ -796,7 +807,7 @@ export function RegisterExpenseModal({
                   }))
                 }
               >
-                <SelectTrigger className="h-10">
+                <SelectTrigger className="h-11 font-bold shadow-sm bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-card">
@@ -810,7 +821,7 @@ export function RegisterExpenseModal({
             </div>
           </div>
 
-          <div className="p-3 bg-muted/50 rounded-md border">
+          <div className="p-3 bg-muted/50 rounded-xl border border-border">
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">
                 Fecha de Vencimiento (calculada):
@@ -823,7 +834,7 @@ export function RegisterExpenseModal({
 
           {/* UUID */}
           <div className="space-y-2">
-            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
               Folio Fiscal o Recibo (Opcional)
             </Label>
             <Input
@@ -832,7 +843,7 @@ export function RegisterExpenseModal({
               onChange={(e) =>
                 setFormData((p) => ({ ...p, uuid: e.target.value }))
               }
-              className="h-10 font-mono text-sm"
+              className="h-11 font-mono text-sm bg-muted border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-100 tracking-widest uppercase"
             />
           </div>
 
@@ -840,7 +851,7 @@ export function RegisterExpenseModal({
           <div className="grid grid-cols-2 gap-4">
             {/* Comprobante General */}
             <div className="space-y-2">
-              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
                 <Upload className="h-3 w-3 inline mr-1" /> Comprobante (PDF /
                 Imagen)
               </Label>
@@ -872,7 +883,7 @@ export function RegisterExpenseModal({
 
             {/* XML Opcional */}
             <div className="space-y-2">
-              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
                 <Upload className="h-3 w-3 inline mr-1" /> XML (Opcional)
               </Label>
               <Input
@@ -908,18 +919,24 @@ export function RegisterExpenseModal({
             </div>
           ) : null}
         </div>
-
-        <DialogFooter className="pt-4 border-t">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            className="bg-brand-green hover:bg-brand-green/90 text-white"
-            disabled={uploadingPdf || uploadingXml || creatingCategory}
-          >
-            {editInvoice ? "Guardar Cambios" : "Registrar Gasto"}
-          </Button>
+        <DialogFooter className="p-6 sm:p-8 bg-muted/50 border-t border-slate-200 dark:border-white/10 shrink-0">
+          <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
+            <Button variant="outline" onClick={() => onOpenChange(false)} className="w-full sm:w-auto haptic-press font-black uppercase tracking-widest text-[10px]">
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              className={cn(
+                "w-full sm:w-auto haptic-press border-none text-white font-black uppercase tracking-widest text-[10px]",
+                editInvoice
+                  ? "bg-brand-green hover:bg-[hsl(152,100%,24%)] shadow-[0_4px_15px_rgba(0,151,64,0.3)]"
+                  : "bg-brand-red hover:bg-brand-red/90 shadow-[0_4px_15px_rgba(190,8,17,0.3)]",
+              )}
+              disabled={uploadingPdf || uploadingXml || creatingCategory}
+            >
+              {editInvoice ? "Guardar Cambios" : "Registrar Gasto"}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

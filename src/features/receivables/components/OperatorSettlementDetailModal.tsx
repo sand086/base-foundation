@@ -102,13 +102,13 @@ export function OperatorSettlementDetailModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[95vw] sm:max-w-4xl p-0 flex flex-col max-h-[90vh] bg-white dark:bg-brand-navy border border-slate-200 dark:border-white/10 shadow-2xl rounded-2xl overflow-hidden print:fixed print:inset-0 print:w-screen print:h-screen print:max-h-none print:max-w-none print:border-none print:shadow-none print:rounded-none print:bg-white print:m-0 print:z-50 print:block">
+      <DialogContent className="w-[95vw] sm:max-w-4xl p-0 flex flex-col max-h-[90vh] bg-card/90 dark:bg-card/95 backdrop-blur-xl border-none shadow-2xl rounded-2xl overflow-hidden animate-modal-show print:fixed print:inset-0 print:w-screen print:h-screen print:max-h-none print:max-w-none print:border-none print:shadow-none print:rounded-none print:bg-white print:m-0 print:z-50 print:block">
         <div className="absolute inset-0 z-0 flex items-center justify-center opacity-[0.02] pointer-events-none print:opacity-5 print:hidden">
           <Truck className="w-[400px] h-[400px] transform -rotate-12" />
         </div>
 
         {/* HEADER TAHOE */}
-        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden print:bg-white print:border-black print:pb-4 print:pt-8">
+        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-card dark:bg-card border-b border-border shrink-0 relative overflow-hidden print:bg-white print:border-black print:pb-4 print:pt-8">
           <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none print:hidden" />
 
           <div className="relative z-10 flex justify-between items-start">
@@ -375,9 +375,9 @@ export function OperatorSettlementDetailModal({
         </div>
 
         {/* FOOTER */}
-        <DialogFooter className="p-4 sm:p-6 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-md border-t border-slate-200 dark:border-white/10 flex flex-col-reverse sm:flex-row justify-end gap-3 print:hidden">
+        <DialogFooter className="p-4 sm:p-6 bg-card/80 dark:bg-card/80 backdrop-blur-md border-t border-border flex flex-col-reverse sm:flex-row justify-end gap-3 print:hidden">
           <Button
-            className="w-full sm:w-auto min-w-[120px] font-black uppercase tracking-widest text-[10px]"
+            className="w-full sm:w-auto min-w-[120px] haptic-press font-black uppercase tracking-widest text-[10px]"
             variant="outline"
             size="lg"
             onClick={() => onOpenChange(false)}
@@ -385,7 +385,7 @@ export function OperatorSettlementDetailModal({
             Cerrar
           </Button>
           <Button
-            className="w-full sm:w-auto min-w-[220px] gap-2 font-black uppercase tracking-widest text-[10px] bg-slate-800 text-white hover:bg-slate-900 shadow-lg"
+            className="w-full sm:w-auto min-w-[220px] gap-2 haptic-press font-black uppercase tracking-widest text-[10px] border-none text-white bg-brand-dark hover:bg-brand-dark/90 shadow-lg"
             size="lg"
             onClick={() => window.print()}
           >

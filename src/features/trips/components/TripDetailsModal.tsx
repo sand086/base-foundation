@@ -466,15 +466,15 @@ export function TripDetailsModal({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-6xl w-[95vw] h-[90vh] bg-card/90 backdrop-blur-xl border border-border flex flex-col p-0 overflow-hidden rounded-2xl shadow-2xl">
+        <DialogContent className="max-w-6xl w-[95vw] h-[90vh] bg-card/95 backdrop-blur-xl border border-border flex flex-col p-0 overflow-hidden rounded-2xl shadow-2xl">
           {/* HEADER PRINCIPAL */}
-          <DialogHeader className="p-4 sm:p-6 pb-4 sm:pb-6 bg-card border-b border-border shrink-0 relative overflow-hidden z-10">
+          <DialogHeader className="p-4 sm:p-6 pb-4 sm:pb-6 bg-card border-b border-border shrink-0 relative z-10">
             <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
 
             <div className="relative z-10 flex flex-col md:flex-row justify-between md:items-start gap-6 pr-10">
               <div className="flex items-center gap-4 sm:gap-5">
-                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shadow-inner shrink-0 icon-plate border border-blue-200 dark:border-blue-500/20">
-                  <Navigation className="h-7 w-7 sm:h-8 sm:w-8 text-blue-600 dark:text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.4)]" />
+                <div className="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shadow-inner shrink-0">
+                  <Navigation className="h-6 w-6 text-blue-600 dark:text-blue-400" />
                 </div>
                 <div>
                   <DialogTitle className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter heading-crisp leading-none">
@@ -714,7 +714,7 @@ export function TripDetailsModal({
                               <Card
                                 key={leg.id}
                                 className={cn(
-                                  "relative border-l-4 shadow-sm overflow-hidden bg-white dark:bg-slate-900 border-t border-r border-b border-slate-200 dark:border-white/10",
+                                  "relative border-l-4 shadow-sm overflow-hidden bg-card border-t border-r border-b border-slate-200 dark:border-white/10",
                                   leg.id === activeLeg?.id
                                     ? "border-l-emerald-500 ring-1 ring-emerald-500/20"
                                     : "border-l-slate-300 dark:border-l-slate-700 opacity-90",
@@ -1089,7 +1089,7 @@ export function TripDetailsModal({
                                     onChange={(e) =>
                                       setTarifaBase(Number(e.target.value))
                                     }
-                                    className="font-mono text-lg font-bold h-12 pl-8 bg-white dark:bg-slate-900 border-amber-200 dark:border-amber-900/50 shadow-sm"
+                                    className="font-mono text-lg font-bold h-12 pl-8 bg-card border-amber-200 dark:border-amber-900/50 shadow-sm text-slate-800 dark:text-slate-100"
                                   />
                                 </div>
                                 <div className="text-[10px] text-amber-700/80 dark:text-amber-400/80 font-medium leading-relaxed">
@@ -1111,7 +1111,7 @@ export function TripDetailsModal({
                                     onChange={(e) =>
                                       setCostoCasetas(Number(e.target.value))
                                     }
-                                    className="font-mono text-lg font-bold h-12 pl-8 bg-white dark:bg-slate-900 border-amber-200 dark:border-amber-900/50 shadow-sm"
+                                    className="font-mono text-lg font-bold h-12 pl-8 bg-card border-amber-200 dark:border-amber-900/50 shadow-sm text-slate-800 dark:text-slate-100"
                                   />
                                 </div>
                               </div>
@@ -1165,7 +1165,7 @@ export function TripDetailsModal({
                                   </span>
                                 </div>
                               </div>
-                              <div className="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-2xl border border-slate-200 dark:border-white/10 flex flex-col sm:flex-row items-center justify-between gap-6 mt-8 shadow-sm">
+                              <div className="bg-card p-6 sm:p-8 rounded-2xl border border-slate-200 dark:border-white/10 flex flex-col sm:flex-row items-center justify-between gap-6 mt-8 shadow-sm">
                                 <div className="text-left">
                                   <h4 className="text-brand-navy dark:text-blue-400 font-black text-sm uppercase tracking-tight flex items-center gap-2">
                                     <FileText className="h-5 w-5" /> Emisión
@@ -1263,7 +1263,7 @@ export function TripDetailsModal({
                       value="bitacora"
                       className="m-0 space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500"
                     >
-                      <div className="flex justify-between items-center bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-white/10 shadow-sm max-w-4xl mx-auto">
+                      <div className="flex justify-between items-center bg-card p-4 rounded-xl border border-slate-200 dark:border-white/10 shadow-sm max-w-4xl mx-auto">
                         <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-2">
                           <History className="h-4 w-4 text-blue-500" /> Línea de
                           Tiempo del Servicio
@@ -1341,7 +1341,7 @@ export function TripDetailsModal({
 
       {/*  ALERT DIALOG PARA DESHACER FASE */}
       <AlertDialog open={showUndoDialog} onOpenChange={setShowUndoDialog}>
-        <AlertDialogContent className="w-[95vw] sm:max-w-md p-0 overflow-hidden border-none shadow-2xl rounded-2xl bg-white dark:bg-brand-navy">
+        <AlertDialogContent className="w-[95vw] sm:max-w-md p-0 overflow-hidden shadow-2xl rounded-2xl bg-card/95 backdrop-blur-xl border border-border">
           <AlertDialogHeader className="p-6 bg-rose-50 dark:bg-rose-900/20 border-b border-rose-100 dark:border-rose-800/30">
             <div className="flex items-center gap-4">
               <div className="h-12 w-12 rounded-full bg-rose-100 dark:bg-rose-800/50 flex items-center justify-center shadow-inner border border-rose-200 dark:border-rose-700">
@@ -1364,7 +1364,7 @@ export function TripDetailsModal({
                 : "¿Estás seguro de deshacer la última fase? El camión y operador de la fase previa volverán a estar activos en la ruta y se borrará este tramo."}
             </p>
           </div>
-          <AlertDialogFooter className="p-6 bg-slate-50/80 dark:bg-slate-950/50 border-t border-slate-100 dark:border-white/5">
+          <AlertDialogFooter className="p-6 bg-muted/50 border-t border-slate-200 dark:border-white/10">
             <AlertDialogCancel
               onClick={() => setShowUndoDialog(false)}
               disabled={isUndoing}

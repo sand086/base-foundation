@@ -216,28 +216,29 @@ export function BankAccountModal({
       open={open}
       onOpenChange={(isOpen) => !isPending && onOpenChange(isOpen)}
     >
-      <DialogContent className="sm:max-w-[500px] rounded-2xl p-0 overflow-hidden border-border bg-card/95 backdrop-blur-xl shadow-2xl">
-        <DialogHeader className="p-6 bg-card border-b border-border relative z-10">
-          <div className="flex items-center gap-4">
+      <DialogContent className="w-[95vw] sm:max-w-[500px] flex flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-card/95 backdrop-blur-xl rounded-2xl">
+        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-card dark:bg-card border-b border-slate-200 dark:border-white/10 shrink-0 relative z-10">
+          <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
+          <div className="relative z-10 flex items-center gap-4 sm:gap-5">
             <div
               className={cn(
-                "w-14 h-14 rounded-2xl flex items-center justify-center shadow-inner shrink-0 border",
+                "w-12 h-12 rounded-xl flex items-center justify-center shadow-inner shrink-0 icon-plate border",
                 isEditMode
-                  ? "bg-amber-100 dark:bg-amber-900/30 border-amber-200"
-                  : "bg-blue-100 dark:bg-blue-900/30 border-blue-200",
+                  ? "bg-amber-100 dark:bg-amber-900/30 border-amber-200 dark:border-amber-500/20"
+                  : "bg-blue-100 dark:bg-blue-900/30 border-blue-200 dark:border-blue-500/20",
               )}
             >
               <Landmark
                 className={cn(
-                  "h-7 w-7",
+                  "h-6 w-6 drop-shadow-md",
                   isEditMode
                     ? "text-amber-600 dark:text-amber-400"
                     : "text-blue-600 dark:text-blue-400",
                 )}
               />
             </div>
-            <div className="flex flex-col text-left">
-              <DialogTitle className="text-xl font-black uppercase tracking-tighter">
+            <div className="flex flex-col gap-1 text-left">
+              <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-foreground heading-crisp leading-none">
                 {isEditMode ? "Ajuste de Cuenta" : "Nueva Cuenta"}
               </DialogTitle>
               <Badge
@@ -253,7 +254,9 @@ export function BankAccountModal({
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit(onSubmit)}
-            className="p-6 space-y-6 overflow-y-auto max-h-[70vh] custom-scrollbar"
+            className="flex-1 min-h-0 overflow-hidden flex flex-col"
+          >
+            <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-muted/50 dark:bg-transparent custom-scrollbar space-y-6"
           >
             {/* 💰 SECCIÓN DE SALDO CON SEGURIDAD */}
             <FormField
@@ -321,7 +324,7 @@ export function BankAccountModal({
                                 setMasterPassword(e.target.value)
                               }
                               placeholder="Confirmar Contraseña"
-                              className="h-9 text-xs bg-white dark:bg-slate-950 border-rose-200 font-bold pr-10"
+                              className="h-9 text-xs bg-card border-rose-200 dark:border-rose-800 font-bold pr-10 text-slate-800 dark:text-slate-100"
                             />
                             <button
                               type="button"
@@ -353,7 +356,7 @@ export function BankAccountModal({
                     <FormLabel>Banco *</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
-                        <SelectTrigger className="h-11 rounded-xl">
+                        <SelectTrigger className="h-11 rounded-xl bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
                           <SelectValue placeholder="Banco..." />
                         </SelectTrigger>
                       </FormControl>
@@ -381,7 +384,7 @@ export function BankAccountModal({
                     <FormLabel>Tipo *</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
-                        <SelectTrigger className="h-11 rounded-xl">
+                        <SelectTrigger className="h-11 rounded-xl bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
                           <SelectValue />
                         </SelectTrigger>
                       </FormControl>
@@ -405,7 +408,7 @@ export function BankAccountModal({
                   <FormControl>
                     <Input
                       {...field}
-                      className="h-11 font-bold shadow-sm"
+                      className="h-11 font-bold shadow-sm bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100"
                       placeholder="Ej: BBVA Nómina"
                     />
                   </FormControl>
@@ -425,7 +428,7 @@ export function BankAccountModal({
                       <Input
                         type="number"
                         {...field}
-                        className="h-11 font-mono"
+                        className="h-11 font-mono bg-muted border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-100"
                         placeholder="Ej: 0123456789"
                       />
                     </FormControl>
@@ -441,7 +444,7 @@ export function BankAccountModal({
                     <FormLabel>Moneda *</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
-                        <SelectTrigger className="h-11 rounded-xl">
+                        <SelectTrigger className="h-11 rounded-xl bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
                           <SelectValue />
                         </SelectTrigger>
                       </FormControl>
@@ -468,7 +471,7 @@ export function BankAccountModal({
                       type="number"
                       maxLength={18}
                       {...field}
-                      className="h-11 font-mono tracking-widest"
+                      className="h-11 font-mono tracking-widest bg-muted border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-100"
                       placeholder="18 dígitos"
                     />
                   </FormControl>
@@ -477,30 +480,38 @@ export function BankAccountModal({
               )}
             />
 
-            <DialogFooter className="pt-6 border-t border-border mt-2">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => onOpenChange(false)}
-                className="rounded-xl font-bold text-slate-500"
-                disabled={isPending}
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="submit"
-                disabled={isPending}
-                className="h-11 px-8 bg-brand-navy text-white rounded-xl font-black shadow-lg"
-              >
-                {isPending ? (
-                  <Loader2 className="animate-spin h-4 w-4 mr-2" />
-                ) : isEditMode ? (
-                  <Save className="h-4 w-4 mr-2" />
-                ) : (
-                  <Plus className="h-4 w-4 mr-2" />
-                )}
-                {isEditMode ? "Guardar Cambios" : "Aperturar"}
-              </Button>
+            </div>
+            <DialogFooter className="p-6 sm:p-8 bg-muted/50 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
+              <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                  className="w-full sm:w-auto haptic-press font-black uppercase tracking-widest text-[10px]"
+                  disabled={isPending}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isPending}
+                  className={cn(
+                    "w-full sm:w-auto haptic-press border-none text-white font-black uppercase tracking-widest text-[10px]",
+                    isEditMode
+                      ? "bg-brand-green hover:bg-[hsl(152,100%,24%)] shadow-[0_4px_15px_rgba(0,151,64,0.3)]"
+                      : "bg-brand-red hover:bg-brand-red/90 shadow-[0_4px_15px_rgba(190,8,17,0.3)]",
+                  )}
+                >
+                  {isPending ? (
+                    <Loader2 className="animate-spin h-4 w-4 mr-2" />
+                  ) : isEditMode ? (
+                    <Save className="h-4 w-4 mr-2" />
+                  ) : (
+                    <Plus className="h-4 w-4 mr-2" />
+                  )}
+                  {isEditMode ? "Guardar Cambios" : "Aperturar"}
+                </Button>
+              </div>
             </DialogFooter>
           </form>
         </Form>

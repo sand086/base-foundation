@@ -24,7 +24,7 @@ export function useUnitTypes() {
         "/api/catalogs/unit-types",
       );
 
-      if (data && data.length > 0) {
+      if (Array.isArray(data) && data.length > 0) {
         setTiposUnidad(data);
       } else {
         setTiposUnidad(FALLBACK_TIPOS);
@@ -58,7 +58,7 @@ export function useUnitTypes() {
 
   // --- Helpers de UI ---
 
-  const tiposActivos = tiposUnidad.filter((t) => t.activo);
+  const tiposActivos = Array.isArray(tiposUnidad) ? tiposUnidad.filter((t) => t.activo) : [];
 
   const getTipo = useCallback(
     (idOrNombre: string) => {

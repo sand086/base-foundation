@@ -604,7 +604,7 @@ export function PatrimonialView() {
             </CardDescription>
           </div>
         </CardHeader>
-        <CardContent className="p-0 bg-card dark:bg-background">
+        <CardContent className="p-0 bg-white dark:bg-slate-950 [&_thead]:bg-slate-50/80 dark:[&_thead]:bg-slate-900/80 [&_thead]:backdrop-blur-xl [&_th]:bg-transparent [&_th]:border-b [&_th]:border-slate-200 dark:[&_th]:border-white/10 [&_th]:text-[10px] [&_th]:font-black [&_th]:uppercase [&_th]:tracking-[0.2em] [&_th]:text-slate-500 dark:[&_th]:text-slate-400 [&_th]:h-12 [&_td]:border-b [&_td]:border-slate-100 dark:[&_td]:border-white/5">
           <EnhancedDataTable
             data={activos}
             columns={columns}

@@ -47,7 +47,7 @@ export function useSystemConfig(key: ConfigKey) {
 
       try {
         const data = await fetchPromise;
-        globalCache = data; // Guardamos en memoria global
+        globalCache = Array.isArray(data) ? data : []; // Guardamos en memoria global
 
         const found = data.find((c) => c.key === key);
         if (found && isMounted) {

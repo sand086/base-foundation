@@ -292,14 +292,14 @@ export function OperadoresTable({
                   onClick={() => handleViewDetails(operador)}
                   className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
                 >
-                  <Eye className="h-4 w-4 text-brand-navy dark:text-slate-400" />{" "}
+                  <Eye className="h-4 w-4 text-blue-500 dark:text-blue-400" />{" "}
                   Ver detalles
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => onEdit?.(operador)}
                   className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
                 >
-                  <Edit className="h-4 w-4 text-blue-500 dark:text-blue-400" />{" "}
+                  <Edit className="h-4 w-4 text-brand-green dark:text-[#009740]" />{" "}
                   Editar
                 </DropdownMenuItem>
                 <DropdownMenuSeparator className="dark:bg-white/10" />

@@ -131,13 +131,13 @@ export function MountTireModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[95vw] sm:max-w-lg flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-card/90 dark:bg-card/95 backdrop-blur-xl rounded-2xl transition-all duration-300">
-        {/*  CAPA 2: HEADER TAHOE (Blanco en Light, Navy oscuro en Dark) */}
-        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-card dark:bg-card border-b border-border shrink-0 relative overflow-hidden z-10">
+      <DialogContent className="w-[95vw] sm:max-w-2xl p-0 flex flex-col max-h-[90vh] bg-card/95 backdrop-blur-xl border border-border shadow-2xl rounded-2xl overflow-hidden">
+        {/*  CAPA 2: HEADER TAHOE */}
+        <DialogHeader className="p-6 bg-card border-b border-border shrink-0 relative z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center gap-4 sm:gap-5">
-            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shadow-inner shrink-0 icon-plate border border-blue-200 dark:border-blue-500/20">
-              <ArrowDownToLine className="h-7 w-7 sm:h-8 sm:w-8 text-blue-600 dark:text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.4)]" />
+            <div className="w-12 h-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center shadow-inner shrink-0">
+              <ArrowDownToLine className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
             </div>
             <div className="flex flex-col gap-1 text-left min-w-0">
               <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-foreground heading-crisp leading-none">
@@ -160,7 +160,7 @@ export function MountTireModal({
             onSubmit={form.handleSubmit(onFormSubmit)}
             className="flex-1 min-h-0 overflow-hidden flex flex-col"
           >
-            <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-muted/30 dark:bg-transparent custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-muted/50 custom-scrollbar">
               <div className="space-y-8">
                 {/* 🏷️ SECCIÓN 1: Selección de Inventario */}
                 <div className="space-y-6">
@@ -183,7 +183,7 @@ export function MountTireModal({
                           disabled={loadingTires || isSubmitting}
                         >
                           <FormControl>
-                            <SelectTrigger className="h-11 glass-card font-black uppercase text-xs shadow-sm bg-card border-border text-brand-navy dark:text-slate-100">
+                            <SelectTrigger className="h-11 font-black uppercase text-xs shadow-sm bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
                               <SelectValue
                                 placeholder={
                                   loadingTires
@@ -249,7 +249,7 @@ export function MountTireModal({
                             disabled={isSubmitting}
                           >
                             <FormControl>
-                              <SelectTrigger className="h-11 glass-card font-bold text-xs bg-card border-border shadow-sm text-brand-navy dark:text-slate-100">
+                              <SelectTrigger className="h-11 font-bold text-xs bg-card border-slate-200 dark:border-white/10 shadow-sm text-slate-800 dark:text-slate-100">
                                 <SelectValue placeholder="Seleccionar posición (1 al 10)..." />
                               </SelectTrigger>
                             </FormControl>
@@ -275,7 +275,7 @@ export function MountTireModal({
             </div>
 
             {/*  CAPA 4: FOOTER TAHOE */}
-            <DialogFooter className="p-6 sm:p-8 bg-card/80 dark:bg-card/80 backdrop-blur-xl border-t border-border shrink-0 z-10">
+            <DialogFooter className="p-6 sm:p-8 bg-muted/50 border-t border-slate-200 dark:border-white/10 shrink-0">
               <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
                 <Button
                   type="button"
@@ -292,7 +292,7 @@ export function MountTireModal({
                   variant="default"
                   size="lg"
                   disabled={isSubmitting || availableTires.length === 0}
-                  className="w-full sm:w-auto haptic-press flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white border-none shadow-lg shadow-blue-500/20 font-black uppercase tracking-widest text-[10px]"
+                  className="w-full sm:w-auto haptic-press flex-shrink-0 bg-brand-green hover:bg-[hsl(152,100%,24%)] text-white border-none shadow-lg shadow-brand-green/20 font-black uppercase tracking-widest text-[10px]"
                 >
                   {isSubmitting ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />

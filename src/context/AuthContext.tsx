@@ -37,7 +37,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     id: 1,
     nombre: "Modo",
     apellido: "Bypass",
-    email: "admin@test.com",
+    email: "admin@transportes.com",
     activo: true,
     role: { nombre: "Admin", permisos: {} },
   } as any;

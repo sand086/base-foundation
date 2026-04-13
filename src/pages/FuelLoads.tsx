@@ -383,33 +383,33 @@ const FuelLoads = () => {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 haptic-press rounded-full"
+                className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200/50 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 haptic-press"
               >
-                <MoreVertical size={16} />
+                <MoreVertical className="h-4 w-4 text-slate-500 dark:text-slate-400" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="end"
-              className="rounded-2xl border-slate-200 dark:border-white/10 bg-white/95 dark:bg-brand-navy/95 backdrop-blur-xl shadow-2xl p-1"
+              className="glass-panel border-white/20 min-w-[160px] z-50 dark:bg-slate-900/90"
             >
               <DropdownMenuItem
                 onClick={() => setCargaToView(row)}
-                className="cursor-pointer font-bold uppercase text-[10px] py-2.5 px-3 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
+                className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
               >
-                <Eye className="h-3.5 w-3.5 mr-2 text-blue-500" /> Consultar
+                <Eye className="h-4 w-4 text-blue-500 dark:text-blue-400" /> Consultar
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => setCargaToEdit(row)}
-                className="cursor-pointer font-bold uppercase text-[10px] py-2.5 px-3 rounded-xl text-brand-green hover:bg-brand-green/5 transition-colors"
+                className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
               >
-                <Pencil className="h-3.5 w-3.5 mr-2" /> Refactorizar
+                <Pencil className="h-4 w-4 text-brand-green dark:text-[#009740]" /> Refactorizar
               </DropdownMenuItem>
-              <DropdownMenuSeparator className="bg-slate-100 dark:bg-white/5 my-1" />
+              <DropdownMenuSeparator className="dark:bg-white/10" />
               <DropdownMenuItem
-                className="text-rose-600 focus:bg-rose-50 dark:focus:bg-rose-500/10 font-bold uppercase text-[10px] py-2.5 px-3 rounded-xl cursor-pointer"
+                className="gap-2 font-bold text-xs uppercase tracking-tight text-rose-600 dark:text-rose-500 cursor-pointer dark:focus:bg-rose-950/30"
                 onClick={() => setIdParaEliminar(row.id)}
               >
-                <Trash2 className="h-3.5 w-3.5 mr-2" /> Purgar Registro
+                <Trash2 className="h-4 w-4" /> Purgar Registro
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -629,33 +629,65 @@ const FuelLoads = () => {
         open={!!idParaEliminar}
         onOpenChange={(o) => !o && setIdParaEliminar(null)}
       >
-        <AlertDialogContent className="rounded-[2.5rem] bg-white/95 dark:bg-brand-navy/98 backdrop-blur-2xl border-none shadow-3xl p-8">
-          <AlertDialogHeader className="space-y-4">
-            <div className="w-16 h-16 rounded-2xl bg-rose-500/10 text-rose-600 flex items-center justify-center shadow-inner mb-2 animate-bounce">
-              <Trash2 size={32} />
+        <AlertDialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
+          <AlertDialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
+            <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
+            <div className="relative z-10 flex items-center gap-4 sm:gap-5">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center shadow-inner shrink-0 icon-plate border border-rose-200 dark:border-rose-500/20">
+                <AlertTriangle className="h-7 w-7 sm:h-8 sm:w-8 text-rose-600 dark:text-rose-400 drop-shadow-[0_0_8px_rgba(244,63,94,0.4)]" />
+              </div>
+              <div className="flex flex-col gap-1 text-left">
+                <AlertDialogTitle className="text-2xl font-black uppercase tracking-tighter text-rose-600 dark:text-rose-500 heading-crisp leading-none">
+                  Purgar Registro
+                </AlertDialogTitle>
+                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-1">
+                  Acción Irreversible • Bitácora Combustible
+                </p>
+              </div>
             </div>
-            <AlertDialogTitle className="text-slate-900 dark:text-white font-black uppercase tracking-tighter text-3xl">
-              Purgar Registro
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-slate-500 dark:text-slate-400 font-bold text-sm leading-relaxed">
-              Esta acción es irreversible y afectará el historial de rendimiento
-              de la unidad ECO-
-              <span className="text-slate-900 dark:text-white font-black ml-1">
-                {cargas.find((c) => c.id === idParaEliminar)?.unidad_numero}
-              </span>
-              . ¿Desea proceder con la eliminación del activo digital?
-            </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="mt-8 gap-4">
-            <AlertDialogCancel className="rounded-2xl h-12 px-8 font-black uppercase text-[10px] tracking-widest border-slate-200 haptic-press">
-              Abortar Operación
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              className="bg-rose-600 hover:bg-rose-700 text-white rounded-2xl h-12 px-10 font-black uppercase text-[10px] tracking-widest haptic-press shadow-lg shadow-rose-500/20"
-            >
-              Confirmar Purga
-            </AlertDialogAction>
+
+          <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
+            <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block space-y-6">
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                Esta acción es irreversible y afectará el historial de rendimiento
+                de la unidad ECO-
+                <span className="text-slate-900 dark:text-white font-black ml-1">
+                  {cargas.find((c) => c.id === idParaEliminar)?.unidad_numero}
+                </span>.
+              </p>
+              <div className="p-5 sm:p-6 bg-rose-50 dark:bg-rose-950/20 border-l-4 border-rose-500 rounded-r-2xl shadow-sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+                  <h4 className="text-[10px] sm:text-[11px] font-black text-rose-800 dark:text-rose-400 uppercase tracking-widest">
+                    Pérdida de Datos
+                  </h4>
+                </div>
+                <p className="text-xs sm:text-sm leading-relaxed text-rose-900 dark:text-rose-200/80">
+                  El registro será eliminado permanentemente del activo digital. <b className="font-black">¿Desea proceder?</b>
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </div>
+
+          <AlertDialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
+            <div className="flex flex-col-reverse sm:flex-row sm:flex-wrap justify-end items-stretch sm:items-center gap-3 w-full">
+              <AlertDialogCancel
+                variant="outline"
+                size="lg"
+                className="w-full sm:w-auto haptic-press flex-shrink-0 font-black uppercase tracking-widest text-[10px]"
+              >
+                Abortar Operación
+              </AlertDialogCancel>
+              <AlertDialogAction
+                variant="destructive"
+                size="lg"
+                onClick={handleDelete}
+                className="w-full sm:w-auto haptic-press shadow-rose-600/10 flex-shrink-0 border-none bg-rose-600 hover:bg-rose-700 text-white font-black uppercase tracking-widest text-[10px]"
+              >
+                <Trash2 className="h-4 w-4 mr-2" /> Confirmar Purga
+              </AlertDialogAction>
+            </div>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

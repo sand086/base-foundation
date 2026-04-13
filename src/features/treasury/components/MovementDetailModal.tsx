@@ -39,7 +39,6 @@ export function MovementDetailModal({
 
   if (!movement) return null;
 
-  // Ajuste de lógica: Validamos por tipo o por monto si el tipo no viene
   const isIngreso = movement.tipo === "ingreso" || movement.monto > 0;
 
   const getModuleRoute = () => {
@@ -58,37 +57,39 @@ export function MovementDetailModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[520px] p-0 overflow-hidden bg-card/70 backdrop-blur-2xl border-border shadow-2xl transition-all duration-500 ring-1 ring-border">
-        {/* Header */}
-        <DialogHeader className="p-6 pb-4 flex flex-row items-center justify-between border-b border-border bg-muted/20">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-gradient-to-br from-brand-navy to-brand-blue rounded-xl shadow-lg shadow-brand-blue/20 ring-1 ring-white/30">
-              <Receipt className="h-5 w-5 text-white" />
+      {/* CAPA 1: CASCARÓN */}
+      <DialogContent className="w-[95vw] sm:max-w-[520px] flex flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-card/90 dark:bg-card/95 backdrop-blur-xl rounded-2xl">
+        {/* CAPA 2: HEADER TAHOE */}
+        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-card dark:bg-card border-b border-border shrink-0 relative overflow-hidden z-10">
+          <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
+          <div className="relative z-10 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4 sm:gap-5">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shadow-inner shrink-0 icon-plate border bg-slate-100 dark:bg-slate-800/50 border-slate-200 dark:border-white/10">
+                <Receipt className="h-7 w-7 sm:h-8 sm:w-8 text-slate-500 dark:text-slate-400 drop-shadow-md" />
+              </div>
+              <div className="flex flex-col text-left min-w-0">
+                <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-foreground heading-crisp leading-none">
+                  Detalle Financiero
+                </DialogTitle>
+                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mt-1">
+                  REGISTRY ID:{" "}
+                  {movement.id?.toString().slice(-8).toUpperCase() || "N/A"}
+                </p>
+              </div>
             </div>
-            <div>
-              <DialogTitle className="text-2xl font-black tracking-tight text-foreground">
-                Detalle Financiero
-              </DialogTitle>
-              <p className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground">
-                REGISTRY ID:{" "}
-                {movement.id?.toString().slice(-8).toUpperCase() || "N/A"}
-              </p>
-            </div>
+            <Badge
+              variant={isIngreso ? "success" : "destructive"}
+              className="h-7 px-3 text-[10px] font-black tracking-widest"
+            >
+              {isIngreso ? "INGRESO" : "EGRESO"}
+            </Badge>
           </div>
-          <Badge
-            variant={isIngreso ? "success" : "destructive"}
-            className="h-7 px-3 text-[10px] font-bold tracking-widest border border-border backdrop-blur-md shadow-sm"
-          >
-            {isIngreso ? "INGRESO" : "EGRESO"}
-          </Badge>
         </DialogHeader>
 
-        <div className="p-6 space-y-5">
-          {/* Main Amount Card */}
-          <Card
-            variant="glass"
-            className="relative overflow-hidden p-6 border-border bg-card/50"
-          >
+        {/* CAPA 3: BODY */}
+        <div className="flex-1 overflow-y-auto px-6 pb-6 sm:px-8 sm:pb-8 bg-muted/30 dark:bg-transparent custom-scrollbar space-y-6 mt-4">
+          {/* Monto Card */}
+          <div className="p-5 border border-border rounded-2xl bg-card shadow-sm relative overflow-hidden">
             <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
               {isIngreso ? (
                 <ArrowUpRight size={80} />
@@ -97,9 +98,9 @@ export function MovementDetailModal({
               )}
             </div>
 
-            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground block mb-2">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mb-2">
               Monto de la Operación
-            </label>
+            </p>
             <div className="flex items-baseline gap-2">
               <span
                 className={cn(
@@ -118,73 +119,69 @@ export function MovementDetailModal({
                 {movement.moneda}
               </span>
             </div>
-          </Card>
+          </div>
+
+          {/* Concepto */}
+          <div className="px-1">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mb-1.5">
+              Concepto de Transacción
+            </p>
+            <p className="text-lg font-semibold text-foreground leading-tight">
+              {movement.concepto}
+            </p>
+          </div>
 
           {/* Data Grid */}
-          <div className="grid grid-cols-1 gap-4">
-            <div className="px-1">
-              <label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground block mb-1.5">
-                Concepto de Transacción
-              </label>
-              <p className="text-lg font-semibold text-foreground leading-tight">
-                {movement.concepto}
-              </p>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="p-4 border border-border rounded-2xl bg-card shadow-sm">
+              <div className="flex items-center gap-2 mb-2 text-muted-foreground">
+                <Calendar className="h-3.5 w-3.5" />
+                <span className="text-[9px] font-black uppercase tracking-widest">
+                  Afectación
+                </span>
+              </div>
+              <p className="font-bold text-foreground">{movement.fecha}</p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <Card variant="glass" className="p-4 bg-card/30 border-border">
-                <div className="flex items-center gap-2 mb-2 text-muted-foreground">
-                  <Calendar className="h-3.5 w-3.5" />
-                  <span className="text-[9px] font-black uppercase tracking-widest">
-                    Afectación
-                  </span>
-                </div>
-                <p className="font-bold text-foreground">{movement.fecha}</p>
-              </Card>
-
-              <Card variant="glass" className="p-4 bg-card/30 border-border">
-                <div className="flex items-center gap-2 mb-2 text-muted-foreground">
-                  <Landmark className="h-3.5 w-3.5" />
-                  <span className="text-[9px] font-black uppercase tracking-widest">
-                    Cuenta
-                  </span>
-                </div>
-                <p className="font-bold text-foreground leading-none mb-1">
-                  {movement.banco}
-                </p>
-                <p className="text-[10px] font-mono font-medium text-muted-foreground">
-                  •••• {movement.cuenta_bancaria?.slice(-4)}
-                </p>
-              </Card>
+            <div className="p-4 border border-border rounded-2xl bg-card shadow-sm">
+              <div className="flex items-center gap-2 mb-2 text-muted-foreground">
+                <Landmark className="h-3.5 w-3.5" />
+                <span className="text-[9px] font-black uppercase tracking-widest">
+                  Cuenta
+                </span>
+              </div>
+              <p className="font-bold text-foreground leading-none mb-1">
+                {movement.banco}
+              </p>
+              <p className="text-[10px] font-mono font-medium text-muted-foreground tracking-widest">
+                •••• {movement.cuenta_bancaria?.slice(-4)}
+              </p>
             </div>
           </div>
 
           {/* Reference Block */}
-          <div className="relative group haptic-press">
-            <div className="absolute -inset-0.5 bg-gradient-to-r from-amber-500/20 to-orange-600/20 rounded-xl blur-sm opacity-50 transition duration-1000"></div>
-            <div className="relative p-4 bg-amber-50/40 dark:bg-amber-900/10 border border-amber-200/50 dark:border-amber-800/50 rounded-xl flex justify-between items-center backdrop-blur-sm">
-              <div>
-                <label className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-700/70 dark:text-amber-500/70 block mb-1">
-                  Referencia Bancaria / SPEI
-                </label>
-                <p className="font-mono font-black text-amber-800 dark:text-amber-400 text-xl tracking-wider">
-                  {movement.referencia_bancaria}
-                </p>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-amber-700 dark:text-amber-400 hover:bg-amber-200/50 dark:hover:bg-amber-900/30"
-                onClick={() =>
-                  navigator.clipboard.writeText(movement.referencia_bancaria)
-                }
-              >
-                <FileText className="h-4 w-4" />
-              </Button>
+          <div className="p-4 border border-amber-200 dark:border-amber-800/50 rounded-2xl bg-amber-50/40 dark:bg-amber-900/10 flex justify-between items-center">
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground mb-1">
+                Referencia Bancaria / SPEI
+              </p>
+              <p className="font-mono font-black text-foreground text-xl tracking-wider">
+                {movement.referencia_bancaria}
+              </p>
             </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground hover:text-foreground haptic-press"
+              onClick={() =>
+                navigator.clipboard.writeText(movement.referencia_bancaria)
+              }
+            >
+              <FileText className="h-4 w-4" />
+            </Button>
           </div>
 
-          {/* Status & Validation Bar */}
+          {/* Status Bar */}
           <div
             className={cn(
               "flex items-center gap-4 p-4 rounded-2xl border transition-all duration-300 shadow-inner",
@@ -208,20 +205,18 @@ export function MovementDetailModal({
               )}
             </div>
             <div className="flex-1">
-              <div className="flex justify-between items-center mb-1">
-                <p
-                  className={cn(
-                    "font-black text-[11px] uppercase tracking-wider",
-                    movement.conciliado
-                      ? "text-emerald-700 dark:text-emerald-400"
-                      : "text-muted-foreground",
-                  )}
-                >
-                  {movement.conciliado
-                    ? "Conciliación Exitosa"
-                    : "Por Conciliar"}
-                </p>
-              </div>
+              <p
+                className={cn(
+                  "font-black text-[11px] uppercase tracking-wider mb-1",
+                  movement.conciliado
+                    ? "text-emerald-700 dark:text-emerald-400"
+                    : "text-muted-foreground",
+                )}
+              >
+                {movement.conciliado
+                  ? "Conciliación Exitosa"
+                  : "Por Conciliar"}
+              </p>
               <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
                 <div
                   className={cn(
@@ -235,7 +230,7 @@ export function MovementDetailModal({
             </div>
           </div>
 
-          {/* Footer Registro de detallesde detalles */}
+          {/* Registro */}
           <div className="flex justify-between items-center px-2 pt-2 border-t border-border opacity-80">
             <div className="flex items-center gap-2">
               <User className="h-3 w-3 text-muted-foreground" />

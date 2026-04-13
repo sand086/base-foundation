@@ -42,6 +42,7 @@ import {
   Shield,
   Activity,
   ShieldAlert,
+  AlertTriangle,
 } from "lucide-react";
 import { useUsers, UserDisplay } from "@/features/users/hooks/useUsers";
 
@@ -288,17 +289,17 @@ const Users = () => {
             <Button
               variant="ghost"
               size="icon"
-              className="h-9 w-9 hover:bg-slate-100 rounded-xl transition-all"
+              className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200/50 dark:border-white/10 bg-white/50 dark:bg-slate-900/50"
             >
-              <MoreHorizontal className="h-5 w-5 text-slate-400" />
+              <MoreHorizontal className="h-4 w-4 text-slate-500 dark:text-slate-400" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent
             align="end"
-            className="glass-panel border-white/20 min-w-[180px]"
+            className="glass-panel border-white/20 min-w-[180px] z-50 dark:bg-slate-900/90"
           >
             <DropdownMenuItem
-              className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer"
+              className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
               onClick={() => {
                 setSelectedUserForEdit({
                   id: user.id,
@@ -317,10 +318,10 @@ const Users = () => {
                 setIsEditModalOpen(true);
               }}
             >
-              <Edit className="h-4 w-4 text-blue-500" /> Editar Perfil
+              <Edit className="h-4 w-4 text-brand-green dark:text-[#009740]" /> Editar Perfil
             </DropdownMenuItem>
             <DropdownMenuItem
-              className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer"
+              className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
               onClick={() => {
                 setSelectedUserId(user.id);
                 setShowResetPasswordDialog(true);
@@ -328,7 +329,7 @@ const Users = () => {
             >
               <Key className="h-4 w-4 text-amber-500" /> Reset Password
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
+            <DropdownMenuSeparator className="dark:bg-white/10" />
             <DropdownMenuItem
               onClick={() => {
                 setSelectedUserId(user.id);
@@ -336,7 +337,7 @@ const Users = () => {
               }}
               className={cn(
                 "gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer",
-                user.estado === "activo" ? "text-rose-600" : "text-emerald-600",
+                user.estado === "activo" ? "text-rose-600 dark:text-rose-500 dark:focus:bg-rose-950/30" : "text-emerald-600 dark:text-emerald-500 dark:focus:bg-emerald-950/30",
               )}
             >
               {user.estado === "activo" ? (
@@ -454,32 +455,73 @@ const Users = () => {
         open={showResetPasswordDialog}
         onOpenChange={setShowResetPasswordDialog}
       >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Seguridad de Acceso</AlertDialogTitle>
-            <AlertDialogDescription>
-              ¿Confirmas el reseteo de contraseña para{" "}
-              <strong className="text-brand-navy">
-                {selectedUser?.nombre}
-              </strong>
-              ?
-              <br />
-              <div className="mt-4 p-3 bg-slate-100 rounded-xl border border-slate-200 text-center">
-                Clave Temporal:{" "}
-                <code className="font-mono font-black text-brand-red">
+        <AlertDialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
+          <AlertDialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
+            <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 dark:from-amber-500/10 to-transparent pointer-events-none" />
+            <div className="relative z-10 flex items-center gap-4 sm:gap-5">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shadow-inner shrink-0 icon-plate border border-amber-200 dark:border-amber-500/20">
+                <Key className="h-7 w-7 sm:h-8 sm:w-8 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div className="flex flex-col gap-1 text-left">
+                <AlertDialogTitle className="text-2xl font-black uppercase tracking-tighter text-amber-700 dark:text-amber-400 heading-crisp leading-none">
+                  Seguridad de Acceso
+                </AlertDialogTitle>
+                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mt-1">
+                  Reseteo de Contraseña • Credenciales
+                </p>
+              </div>
+            </div>
+          </AlertDialogHeader>
+
+          <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
+            <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block space-y-6">
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                ¿Confirmas el reseteo de contraseña para{" "}
+                <b className="text-slate-900 dark:text-white text-lg font-black tracking-tight uppercase">
+                  {selectedUser?.nombre}
+                </b>
+                ?
+              </p>
+
+              <div className="p-5 bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-2xl text-center">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-2">Clave Temporal</p>
+                <code className="font-mono font-black text-lg text-brand-red tracking-wide">
                   Temporal123!
                 </code>
               </div>
+
+              <div className="p-5 bg-amber-50 dark:bg-amber-950/20 border-l-4 border-amber-500 rounded-r-2xl shadow-sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                  <h4 className="text-[10px] sm:text-[11px] font-black text-amber-800 dark:text-amber-400 uppercase tracking-widest">
+                    Acción de Seguridad
+                  </h4>
+                </div>
+                <p className="text-xs sm:text-sm leading-relaxed text-amber-900 dark:text-amber-200/80">
+                  El usuario deberá cambiar esta contraseña en su próximo inicio de sesión.
+                </p>
+              </div>
             </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleResetPasswordConfirm}
-              className="btn-primary-gradient h-10 px-6 border-none"
-            >
-              Confirmar Reset
-            </AlertDialogAction>
+          </div>
+
+          <AlertDialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0">
+            <div className="flex flex-col-reverse sm:flex-row sm:flex-wrap justify-end items-stretch sm:items-center gap-3 w-full">
+              <AlertDialogCancel
+                variant="outline"
+                size="lg"
+                className="w-full sm:w-auto haptic-press flex-shrink-0 font-black uppercase tracking-widest text-[10px]"
+              >
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                variant="default"
+                size="lg"
+                onClick={handleResetPasswordConfirm}
+                className="w-full sm:w-auto haptic-press flex-shrink-0 border-none bg-amber-600 hover:bg-amber-700 text-white font-black uppercase tracking-widest text-[10px] shadow-md"
+              >
+                Confirmar Reset
+              </AlertDialogAction>
+            </div>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -489,35 +531,110 @@ const Users = () => {
         open={showToggleStatusDialog}
         onOpenChange={setShowToggleStatusDialog}
       >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {selectedUser?.estado === "activo"
-                ? "Suspender Acceso"
-                : "Reactivar Acceso"}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              Estás a punto de cambiar el estatus operativo de{" "}
-              <strong className="text-brand-navy">
-                {selectedUser?.nombre}
-              </strong>
-              . Esto afectará sus permisos de inicio de sesión de manera
-              inmediata.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Regresar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleToggleStatusConfirm}
-              className={cn(
-                "h-10 px-6 border-none text-white",
+        <AlertDialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
+          <AlertDialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
+            <div className={cn(
+              "absolute inset-0 bg-gradient-to-br to-transparent pointer-events-none",
+              selectedUser?.estado === "activo" ? "from-rose-500/5 dark:from-rose-500/10" : "from-emerald-500/5 dark:from-emerald-500/10"
+            )} />
+            <div className="relative z-10 flex items-center gap-4 sm:gap-5">
+              <div className={cn(
+                "w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shadow-inner shrink-0 icon-plate border",
                 selectedUser?.estado === "activo"
-                  ? "bg-destructive hover:bg-destructive/90"
-                  : "bg-emerald-600 hover:bg-emerald-700",
-              )}
-            >
-              Confirmar Cambio
-            </AlertDialogAction>
+                  ? "bg-rose-100 dark:bg-rose-900/30 border-rose-200 dark:border-rose-500/20"
+                  : "bg-emerald-100 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-500/20"
+              )}>
+                {selectedUser?.estado === "activo" ? (
+                  <UserX className="h-7 w-7 sm:h-8 sm:w-8 text-rose-600 dark:text-rose-400" />
+                ) : (
+                  <UserCheck className="h-7 w-7 sm:h-8 sm:w-8 text-emerald-600 dark:text-emerald-400" />
+                )}
+              </div>
+              <div className="flex flex-col gap-1 text-left">
+                <AlertDialogTitle className={cn(
+                  "text-2xl font-black uppercase tracking-tighter heading-crisp leading-none",
+                  selectedUser?.estado === "activo"
+                    ? "text-rose-600 dark:text-rose-500"
+                    : "text-emerald-700 dark:text-emerald-400"
+                )}>
+                  {selectedUser?.estado === "activo"
+                    ? "Suspender Acceso"
+                    : "Reactivar Acceso"}
+                </AlertDialogTitle>
+                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mt-1">
+                  Gestión de Estatus • Usuarios
+                </p>
+              </div>
+            </div>
+          </AlertDialogHeader>
+
+          <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
+            <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block space-y-6">
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                Estás a punto de cambiar el estatus operativo de{" "}
+                <b className="text-slate-900 dark:text-white text-lg font-black tracking-tight uppercase">
+                  {selectedUser?.nombre}
+                </b>
+                .
+              </p>
+
+              <div className={cn(
+                "p-5 border-l-4 rounded-r-2xl shadow-sm",
+                selectedUser?.estado === "activo"
+                  ? "bg-rose-50 dark:bg-rose-950/20 border-rose-500"
+                  : "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-500"
+              )}>
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertTriangle className={cn(
+                    "h-4 w-4",
+                    selectedUser?.estado === "activo"
+                      ? "text-rose-600 dark:text-rose-400"
+                      : "text-emerald-600 dark:text-emerald-400"
+                  )} />
+                  <h4 className={cn(
+                    "text-[10px] sm:text-[11px] font-black uppercase tracking-widest",
+                    selectedUser?.estado === "activo"
+                      ? "text-rose-800 dark:text-rose-400"
+                      : "text-emerald-800 dark:text-emerald-400"
+                  )}>
+                    Efecto Inmediato
+                  </h4>
+                </div>
+                <p className={cn(
+                  "text-xs sm:text-sm leading-relaxed",
+                  selectedUser?.estado === "activo"
+                    ? "text-rose-900 dark:text-rose-200/80"
+                    : "text-emerald-900 dark:text-emerald-200/80"
+                )}>
+                  Esto afectará sus permisos de inicio de sesión de manera inmediata.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </div>
+
+          <AlertDialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0">
+            <div className="flex flex-col-reverse sm:flex-row sm:flex-wrap justify-end items-stretch sm:items-center gap-3 w-full">
+              <AlertDialogCancel
+                variant="outline"
+                size="lg"
+                className="w-full sm:w-auto haptic-press flex-shrink-0 font-black uppercase tracking-widest text-[10px]"
+              >
+                Regresar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                variant="default"
+                size="lg"
+                onClick={handleToggleStatusConfirm}
+                className={cn(
+                  "w-full sm:w-auto haptic-press flex-shrink-0 border-none text-white font-black uppercase tracking-widest text-[10px] shadow-md",
+                  selectedUser?.estado === "activo"
+                    ? "bg-rose-600 hover:bg-rose-700"
+                    : "bg-emerald-600 hover:bg-emerald-700",
+                )}
+              >
+                Confirmar Cambio
+              </AlertDialogAction>
+            </div>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

@@ -17,22 +17,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CreditCard, DollarSign, AlertCircle } from "lucide-react";
+import { CreditCard, DollarSign, AlertCircle, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-//   1. ÚNICA FUENTE DE LA VERDAD (api.types.ts)
 import {
   PayableInvoice,
   RegisterPaymentPayload,
 } from "@/features/payables/types";
 import { BankAccount } from "@/features/treasury/types";
 
-//   2. INTERFAZ LOCAL (Solo para los props del componente)
 interface RegisterPaymentModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   invoice: PayableInvoice | null;
-  bankAccounts: BankAccount[]; // Viene de api.types
+  bankAccounts: BankAccount[];
   onSubmit: (
     invoiceId: number,
     payment: RegisterPaymentPayload,
@@ -40,7 +38,6 @@ interface RegisterPaymentModalProps {
   defaultMethod?: string;
 }
 
-// Helpers locales de formato
 const today = () => new Date().toISOString().split("T")[0];
 
 const toNumber = (v: any): number => {
@@ -61,7 +58,6 @@ export function RegisterPaymentModal({
   onSubmit,
   defaultMethod = "Transferencia",
 }: RegisterPaymentModalProps) {
-  // Estado local del formulario
   const [formData, setFormData] = useState<{
     fecha_pago: string;
     monto: number;
@@ -78,9 +74,6 @@ export function RegisterPaymentModal({
 
   const [error, setError] = useState<string>("");
 
-  // ===========
-  // Normalizar datos desde invoice tipado
-  // ===========
   const invoiceId = useMemo(() => {
     return invoice ? toInt(invoice.id) : 0;
   }, [invoice]);
@@ -97,15 +90,12 @@ export function RegisterPaymentModal({
     return invoice ? toNumber(invoice.saldo_pendiente) : 0;
   }, [invoice]);
 
-  // ===========
-  // Reset cuando cambia invoice / abre modal
-  // ===========
   useEffect(() => {
     if (!invoice || !open) return;
 
     setFormData({
       fecha_pago: today(),
-      monto: saldoPendiente, // Por defecto sugiere pagar todo el saldo
+      monto: saldoPendiente,
       metodo_pago: defaultMethod,
       cuenta_retiro: "",
       referencia: "",
@@ -115,9 +105,6 @@ export function RegisterPaymentModal({
 
   if (!invoice) return null;
 
-  // ===========
-  // Validaciones
-  // ===========
   const validate = (): boolean => {
     const errors: string[] = [];
 
@@ -137,18 +124,12 @@ export function RegisterPaymentModal({
     return errors.length === 0;
   };
 
-  // ===========
-  // Preview
-  // ===========
   const remainingAfterPayment = Math.max(
     0,
     saldoPendiente - (formData.monto || 0),
   );
   const willBeFullyPaid = remainingAfterPayment === 0;
 
-  // ===========
-  // Submit
-  // ===========
   const handleSubmit = async () => {
     if (!validate()) {
       toast.error("Revisa los campos obligatorios");
@@ -157,7 +138,6 @@ export function RegisterPaymentModal({
 
     const accountId = toInt(formData.cuenta_retiro);
 
-    // Armamos el payload estricto como lo pide api.types.ts
     const payload: RegisterPaymentPayload = {
       fecha_pago: formData.fecha_pago,
       monto: toNumber(formData.monto),
@@ -165,7 +145,7 @@ export function RegisterPaymentModal({
       referencia: formData.referencia.trim()
         ? formData.referencia.trim()
         : null,
-      cuenta_retiro: accountId, // Se manda como número
+      cuenta_retiro: accountId,
     };
 
     try {
@@ -178,39 +158,52 @@ export function RegisterPaymentModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[480px] bg-card">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-foreground">
-            <CreditCard className="h-5 w-5" />
-            Registrar Pago
-          </DialogTitle>
+      {/* CAPA 1: CASCARÓN TAHOE */}
+      <DialogContent className="w-[95vw] sm:max-w-lg flex flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-card/95 backdrop-blur-xl rounded-2xl">
+        {/* CAPA 2: HEADER */}
+        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-card dark:bg-card border-b border-slate-200 dark:border-white/10 shrink-0 relative z-10">
+          <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
+          <div className="relative z-10 flex items-center gap-4 sm:gap-5">
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center shadow-inner shrink-0 icon-plate border bg-emerald-100 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-500/20">
+              <CreditCard className="h-6 w-6 text-emerald-600 dark:text-emerald-400 drop-shadow-md" />
+            </div>
+            <div className="flex flex-col gap-1 text-left min-w-0">
+              <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-foreground heading-crisp leading-none">
+                Registrar Pago
+              </DialogTitle>
+              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mt-1">
+                Cuentas por pagar
+              </p>
+            </div>
+          </div>
         </DialogHeader>
 
-        <div className="space-y-4 pt-4">
+        {/* CAPA 3: BODY */}
+        <div className="flex-1 overflow-y-auto px-6 pb-6 sm:px-8 sm:pb-8 bg-muted/50 dark:bg-transparent custom-scrollbar space-y-5 mt-4">
           {/* Resumen */}
-          <div className="p-4 bg-muted/50 rounded-lg border border-border">
+          <div className="p-5 border border-slate-200 dark:border-white/10 rounded-2xl bg-card shadow-sm">
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
-                <p className="text-muted-foreground text-xs">Factura</p>
-                <p className="font-medium text-foreground">
+                <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Factura</p>
+                <p className="font-bold text-foreground">
                   {invoice.folio_interno || invoiceId}
                 </p>
               </div>
               <div>
-                <p className="text-muted-foreground text-xs">Proveedor</p>
-                <p className="font-medium truncate text-foreground" title={supplierName}>
+                <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Proveedor</p>
+                <p className="font-bold truncate text-foreground" title={supplierName}>
                   {supplierName}
                 </p>
               </div>
               <div>
-                <p className="text-muted-foreground text-xs">Monto Total</p>
-                <p className="font-medium text-foreground">
+                <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Monto Total</p>
+                <p className="font-mono font-bold text-foreground">
                   ${montoTotal.toLocaleString("es-MX")}
                 </p>
               </div>
               <div>
-                <p className="text-muted-foreground text-xs">Saldo Pendiente</p>
-                <p className="font-bold text-amber-700 dark:text-amber-400">
+                <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Saldo Pendiente</p>
+                <p className="font-mono font-bold text-amber-700 dark:text-amber-400">
                   ${saldoPendiente.toLocaleString("es-MX")}
                 </p>
               </div>
@@ -219,8 +212,8 @@ export function RegisterPaymentModal({
 
           {/* Fecha pago */}
           <div className="space-y-2">
-            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Fecha de Pago <span className="text-status-danger">*</span>
+            <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
+              Fecha de Pago <span className="text-destructive">*</span>
             </Label>
             <Input
               type="date"
@@ -229,15 +222,15 @@ export function RegisterPaymentModal({
                 setFormData((p) => ({ ...p, fecha_pago: e.target.value }));
                 setError("");
               }}
-              className="h-10"
+              className="h-11 shadow-sm font-mono font-bold bg-muted border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-100"
             />
           </div>
 
           {/* Monto */}
           <div className="space-y-2">
-            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
               <DollarSign className="h-3 w-3 inline mr-1" />
-              Monto a Pagar <span className="text-status-danger">*</span>
+              Monto a Pagar <span className="text-destructive">*</span>
             </Label>
             <Input
               type="number"
@@ -247,7 +240,7 @@ export function RegisterPaymentModal({
                 setFormData((p) => ({ ...p, monto: toNumber(e.target.value) }));
                 setError("");
               }}
-              className="h-10 text-lg font-medium"
+              className="h-11 text-lg font-mono font-bold shadow-sm bg-muted border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-100"
               max={saldoPendiente}
             />
             <div className="flex items-center justify-between text-xs">
@@ -256,11 +249,11 @@ export function RegisterPaymentModal({
                 onClick={() =>
                   setFormData((p) => ({ ...p, monto: saldoPendiente }))
                 }
-                className="text-primary hover:underline"
+                className="text-primary hover:underline font-bold"
               >
                 Pagar saldo completo
               </button>
-              <span className="text-muted-foreground">
+              <span className="text-muted-foreground font-mono">
                 Máximo: ${saldoPendiente.toLocaleString("es-MX")}
               </span>
             </div>
@@ -268,8 +261,8 @@ export function RegisterPaymentModal({
 
           {/* Cuenta retiro */}
           <div className="space-y-2">
-            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Cuenta de Retiro <span className="text-status-danger">*</span>
+            <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
+              Cuenta de Retiro <span className="text-destructive">*</span>
             </Label>
             <Select
               value={formData.cuenta_retiro}
@@ -278,7 +271,7 @@ export function RegisterPaymentModal({
                 setError("");
               }}
             >
-              <SelectTrigger className="h-10">
+              <SelectTrigger className="h-11 shadow-sm font-bold bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
                 <SelectValue placeholder="Seleccionar cuenta" />
               </SelectTrigger>
               <SelectContent>
@@ -307,7 +300,7 @@ export function RegisterPaymentModal({
 
           {/* Referencia */}
           <div className="space-y-2">
-            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
               Referencia / Número de Operación
             </Label>
             <Input
@@ -316,7 +309,7 @@ export function RegisterPaymentModal({
               onChange={(e) =>
                 setFormData((p) => ({ ...p, referencia: e.target.value }))
               }
-              className="h-10"
+              className="h-11 shadow-sm font-mono font-bold uppercase bg-muted border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-100"
             />
           </div>
 
@@ -330,13 +323,13 @@ export function RegisterPaymentModal({
                   Saldo después del pago:
                 </span>
                 <span
-                  className={`font-bold ${willBeFullyPaid ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"}`}
+                  className={`font-mono font-bold ${willBeFullyPaid ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"}`}
                 >
                   ${remainingAfterPayment.toLocaleString("es-MX")}
                 </span>
               </div>
               <p
-                className={`text-xs mt-1 ${willBeFullyPaid ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}
+                className={`text-xs mt-1 font-bold ${willBeFullyPaid ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}
               >
                 {willBeFullyPaid
                   ? "✓ La factura quedará completamente pagada"
@@ -347,24 +340,33 @@ export function RegisterPaymentModal({
 
           {/* Error */}
           {error && (
-            <div className="flex items-center gap-2 text-status-danger text-sm p-2 bg-red-50 dark:bg-red-950/20 rounded border border-red-200 dark:border-red-800/50">
+            <div className="flex items-center gap-2 text-destructive text-sm p-3 bg-red-50 dark:bg-red-950/20 rounded-xl border border-red-200 dark:border-red-800/50 font-bold">
               <AlertCircle className="h-4 w-4" />
               {error}
             </div>
           )}
         </div>
 
-        <DialogFooter className="pt-4 border-t border-border">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            className="bg-brand-green hover:bg-brand-green/90 text-white"
-            disabled={formData.monto <= 0 || !formData.cuenta_retiro}
-          >
-            Confirmar Pago
-          </Button>
+        {/* CAPA 5: FOOTER */}
+        <DialogFooter className="p-6 sm:p-8 bg-muted/50 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
+          <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              className="w-full sm:w-auto haptic-press font-black uppercase tracking-widest text-[10px]"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              className="w-full sm:w-auto haptic-press border-none text-white bg-brand-green hover:bg-[hsl(152,100%,24%)] shadow-[0_4px_15px_rgba(0,151,64,0.3)] font-black uppercase tracking-widest text-[10px]"
+              disabled={formData.monto <= 0 || !formData.cuenta_retiro}
+            >
+              <Check className="h-4 w-4 mr-2" />
+              Confirmar Pago
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -4,7 +4,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -130,145 +130,150 @@ export function CreatePermissionModal({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="w-[95vw] sm:max-w-[500px] max-h-[90vh] p-0 overflow-hidden glass-panel border-none shadow-2xl animate-modal-show">
-        {/* HEADER */}
-        <DialogHeader className="px-5 sm:px-8 py-5 sm:py-6 bg-brand-navy/95 backdrop-blur-md shrink-0 relative overflow-hidden border-b border-white/10">
-          <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent pointer-events-none" />
-          <div className="relative z-10 flex items-center gap-4">
-            <div className="icon-plate p-2.5 rounded-xl">
-              <Key className="h-5 w-5 text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.4)]" />
+      {/* CAPA 1: CASCARÓN */}
+      <DialogContent className="w-[95vw] sm:max-w-[520px] flex flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-card/90 dark:bg-card/95 backdrop-blur-xl rounded-2xl">
+        {/* CAPA 2: HEADER TAHOE */}
+        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-card dark:bg-card border-b border-border shrink-0 relative overflow-hidden z-10">
+          <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
+          <div className="relative z-10 flex items-center gap-4 sm:gap-5">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shadow-inner shrink-0 icon-plate border bg-slate-100 dark:bg-slate-800/50 border-slate-200 dark:border-white/10">
+              <Key className="h-7 w-7 sm:h-8 sm:w-8 text-slate-500 dark:text-slate-400 drop-shadow-md" />
             </div>
-            <div className="flex flex-col">
-              <DialogTitle className="text-xl sm:text-2xl font-black heading-crisp text-white text-shadow-premium uppercase tracking-tighter">
+            <div className="flex flex-col text-left min-w-0">
+              <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-foreground heading-crisp leading-none">
                 Nuevo Permiso
               </DialogTitle>
-              <DialogDescription className="text-[10px] font-bold text-white/50 uppercase tracking-[0.3em] mt-1">
+              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mt-1">
                 Generación de Llave de Acceso
-              </DialogDescription>
+              </p>
             </div>
           </div>
         </DialogHeader>
 
-        {/* FORM BODY */}
+        {/* CAPA 3: BODY FORMULARIO */}
         <form
           onSubmit={handleSubmit}
-          className="p-5 sm:p-8 space-y-5 sm:space-y-6 bg-card/40 dark:bg-card/20 backdrop-blur-sm overflow-y-auto max-h-[calc(90vh-10rem)]"
+          className="flex-1 min-h-0 overflow-hidden flex flex-col"
         >
-          {/* Module Select */}
-          <div className="space-y-2">
-            <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] ml-1">
-              Módulo del Sistema
-            </Label>
-            <Select value={selectedModulo} onValueChange={handleModuloChange}>
-              <SelectTrigger className="h-12 glass-card border-border focus:ring-brand-red/20 font-bold text-foreground shadow-sm">
-                <SelectValue placeholder="Selecciona un módulo..." />
-              </SelectTrigger>
-              <SelectContent className="glass-panel border-border">
-                {modules.map((modulo) => (
-                  <SelectItem key={modulo.id} value={modulo.id} className="font-semibold">
-                    {modulo.nombre}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Action Select */}
-          <div className="space-y-2">
-            <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] ml-1">
-              Acción a Permitir
-            </Label>
-            <Select value={selectedAccion} onValueChange={handleAccionChange}>
-              <SelectTrigger className="h-12 glass-card border-border font-bold text-foreground shadow-sm">
-                <SelectValue placeholder="Selecciona una acción..." />
-              </SelectTrigger>
-              <SelectContent className="glass-panel border-border">
-                {acciones.map((accion) => (
-                  <SelectItem key={accion.id} value={accion.id}>
-                    <span className="font-semibold">{accion.nombre}</span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Custom Action Input */}
-          {selectedAccion === "otro" && (
-            <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
-              <Label className="text-[10px] font-black text-brand-red uppercase tracking-[0.2em] ml-1">
-                Especificar Acción Personalizada
-              </Label>
-              <Input
-                value={customAccion}
-                onChange={(e) => handleCustomAccionChange(e.target.value)}
-                placeholder="Ej: Aprobar solicitudes..."
-                className="h-12 glass-card border-brand-red/20 focus:ring-brand-red/20 font-medium"
-              />
-            </div>
-          )}
-
-          {/* Generated Key Preview */}
-          {generatedKey && (
-            <div className="p-5 bg-foreground/95 dark:bg-card rounded-2xl border border-border shadow-2xl space-y-4 relative overflow-hidden group">
-              <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent pointer-events-none" />
-
-              <div className="flex items-center gap-2 relative z-10">
-                <Sparkles className="h-4 w-4 text-emerald-400 animate-pulse" />
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-400">
-                  Permiso Generado
-                </span>
+          <div className="flex-1 overflow-y-auto px-6 pb-6 sm:px-8 sm:pb-8 bg-muted/30 dark:bg-transparent custom-scrollbar space-y-8 mt-4">
+            {/* Tarjeta: Módulo y Acción */}
+            <div className="p-5 border border-border rounded-2xl bg-card shadow-sm space-y-5">
+              <div className="space-y-1.5">
+                <Label variant="brand" required>
+                  Módulo del Sistema
+                </Label>
+                <Select value={selectedModulo} onValueChange={handleModuloChange}>
+                  <SelectTrigger className="h-11 shadow-sm font-bold">
+                    <SelectValue placeholder="Selecciona un módulo..." />
+                  </SelectTrigger>
+                  <SelectContent className="glass-panel border-border dark:border-white/10 backdrop-blur-xl">
+                    {modules.map((modulo) => (
+                      <SelectItem key={modulo.id} value={modulo.id} className="font-semibold">
+                        {modulo.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
-              <div className="space-y-3 relative z-10">
-                <div className="flex items-center gap-3 bg-black/40 p-3 rounded-xl border border-white/5 shadow-inner">
-                  <span className="text-[9px] font-black text-white/40 uppercase w-12">Key:</span>
-                  <code className="text-sm font-mono font-bold text-white tracking-tight">
-                    {generatedKey}
-                  </code>
+              <div className="space-y-1.5">
+                <Label variant="brand" required>
+                  Acción a Permitir
+                </Label>
+                <Select value={selectedAccion} onValueChange={handleAccionChange}>
+                  <SelectTrigger className="h-11 shadow-sm font-bold">
+                    <SelectValue placeholder="Selecciona una acción..." />
+                  </SelectTrigger>
+                  <SelectContent className="glass-panel border-border dark:border-white/10 backdrop-blur-xl">
+                    {acciones.map((accion) => (
+                      <SelectItem key={accion.id} value={accion.id}>
+                        <span className="font-semibold">{accion.nombre}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {selectedAccion === "otro" && (
+                <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <Label variant="brand" required className="text-destructive">
+                    Especificar Acción Personalizada
+                  </Label>
+                  <Input
+                    value={customAccion}
+                    onChange={(e) => handleCustomAccionChange(e.target.value)}
+                    placeholder="Ej: Aprobar solicitudes..."
+                    className="h-11 shadow-sm font-bold uppercase"
+                  />
                 </div>
-                <div className="flex items-start gap-3 px-3">
-                  <span className="text-[9px] font-black text-white/40 uppercase w-12 mt-1">Desc:</span>
-                  <span className="text-xs text-white/70 font-medium leading-relaxed">
-                    {getDescripcion()}
+              )}
+            </div>
+
+            {/* Generated Key Preview */}
+            {generatedKey && (
+              <div className="p-5 border border-border rounded-2xl bg-card shadow-sm space-y-4 relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent pointer-events-none" />
+
+                <div className="flex items-center gap-2 relative z-10">
+                  <Sparkles className="h-4 w-4 text-emerald-500 dark:text-emerald-400 animate-pulse" />
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-600 dark:text-emerald-400">
+                    Permiso Generado
                   </span>
                 </div>
+
+                <div className="space-y-3 relative z-10">
+                  <div className="flex items-center gap-3 bg-muted/50 p-3 rounded-xl border border-border">
+                    <span className="text-[9px] font-black text-muted-foreground uppercase w-12">Key:</span>
+                    <code className="text-sm font-mono font-bold text-foreground tracking-tight">
+                      {generatedKey}
+                    </code>
+                  </div>
+                  <div className="flex items-start gap-3 px-3">
+                    <span className="text-[9px] font-black text-muted-foreground uppercase w-12 mt-1">Desc:</span>
+                    <span className="text-xs text-muted-foreground font-medium leading-relaxed">
+                      {getDescripcion()}
+                    </span>
+                  </div>
+                </div>
               </div>
+            )}
+
+            {/* Info Box */}
+            <div className="flex items-start gap-3 p-4 border border-border rounded-2xl bg-card shadow-sm">
+              <AlertCircle className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+              <p className="text-[11px] text-muted-foreground font-semibold leading-relaxed">
+                El permiso se agregará automáticamente a la matriz y podrá asignarse a cualquier rol del sistema.
+              </p>
             </div>
-          )}
-
-          {/* Info Box */}
-          <div className="flex items-start gap-3 p-4 bg-accent rounded-2xl border border-border backdrop-blur-sm">
-            <AlertCircle className="h-4 w-4 text-accent-foreground/60 mt-0.5 flex-shrink-0" />
-            <p className="text-[11px] text-accent-foreground/80 font-semibold leading-relaxed">
-              El permiso se agregará automáticamente a la matriz y podrá asignarse a cualquier rol del sistema.
-            </p>
           </div>
 
-          {/* FOOTER */}
-          <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-6 border-t border-border">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={handleClose}
-              className="h-11 px-6 text-[11px] font-black uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-transparent"
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="submit"
-              disabled={isSaving || !generatedKey}
-              className="btn-primary-gradient h-11 px-8 font-black uppercase text-[11px] tracking-[0.2em] shadow-lg disabled:opacity-50"
-            >
-              {isSaving ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Procesando...
-                </>
-              ) : (
-                "Crear Permiso"
-              )}
-            </Button>
-          </div>
+          {/* CAPA 5: FOOTER TAHOE */}
+          <DialogFooter className="p-6 sm:p-8 bg-card/80 dark:bg-card/80 backdrop-blur-xl border-t border-border shrink-0 z-10">
+            <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleClose}
+                className="w-full sm:w-auto haptic-press font-black uppercase tracking-widest text-[10px]"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={isSaving || !generatedKey}
+                className="w-full sm:w-auto haptic-press border-none text-white bg-brand-red hover:bg-brand-red/90 shadow-[0_4px_15px_rgba(190,8,17,0.3)] font-black uppercase tracking-widest text-[10px]"
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Procesando...
+                  </>
+                ) : (
+                  "Crear Permiso"
+                )}
+              </Button>
+            </div>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

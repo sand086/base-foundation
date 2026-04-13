@@ -244,7 +244,7 @@ export default function Receivables() {
           return (
             <div className="flex flex-col">
               <span
-                className={`font-mono text-sm font-bold ${statusInfo.status === "danger" ? "text-red-700" : "text-brand-navy"}`}
+                className={`font-mono text-sm font-bold uppercase ${statusInfo.status === "danger" ? "text-red-700 dark:text-red-400" : "text-slate-700 dark:text-slate-300"}`}
               >
                 {value}
               </span>
@@ -256,7 +256,7 @@ export default function Receivables() {
         key: "cliente",
         header: "Cliente",
         render: (value) => (
-          <span className="text-sm font-black text-slate-700 max-w-[200px] truncate block uppercase">
+          <span className="text-sm font-black text-brand-navy dark:text-white max-w-[200px] truncate block uppercase tracking-tight">
             {value}
           </span>
         ),
@@ -266,12 +266,14 @@ export default function Receivables() {
         header: "Monto",
         type: "number",
         render: (value, row) => (
-          <span className="text-sm font-bold text-slate-700">
-            {formatMoney(value)}
-            <span className="text-[10px] text-muted-foreground ml-1">
+          <div className="flex flex-col">
+            <span className="font-mono text-sm font-bold text-slate-700 dark:text-slate-300 uppercase">
+              {formatMoney(value)}
+            </span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mt-1">
               {row.moneda}
             </span>
-          </span>
+          </div>
         ),
       },
       {
@@ -282,7 +284,7 @@ export default function Receivables() {
           const statusInfo = getInvoiceStatusInfo(row);
           return (
             <span
-              className={`text-sm font-black ${value === 0 ? "text-emerald-600" : statusInfo.status === "danger" ? "text-red-600" : "text-amber-600"}`}
+              className={`font-mono text-sm font-black ${value === 0 ? "text-emerald-600 dark:text-emerald-400" : statusInfo.status === "danger" ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400"}`}
             >
               {formatMoney(value)}
             </span>
@@ -294,7 +296,7 @@ export default function Receivables() {
         header: "Emisión",
         type: "date",
         render: (value) => (
-          <span className="text-xs font-medium text-slate-500">
+          <span className="font-mono text-sm font-bold text-slate-700 dark:text-slate-300 uppercase">
             {new Date(value).toLocaleDateString("es-MX")}
           </span>
         ),
@@ -309,12 +311,12 @@ export default function Receivables() {
           return (
             <div className="flex flex-col">
               <span
-                className={`text-xs font-bold ${isPastDue ? "text-red-600" : "text-slate-700"}`}
+                className={`font-mono text-sm font-bold uppercase ${isPastDue ? "text-red-600 dark:text-red-400" : "text-slate-700 dark:text-slate-300"}`}
               >
                 {new Date(value).toLocaleDateString("es-MX")}
               </span>
               {isPastDue && (
-                <span className="text-[10px] text-red-500 font-black animate-pulse">
+                <span className="text-[10px] font-black uppercase tracking-widest text-red-500 dark:text-red-400 mt-1 animate-pulse">
                   +{daysOverdue} DÍAS VENCIDO
                 </span>
               )}
@@ -346,34 +348,33 @@ export default function Receivables() {
         render: (_, row) => (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <MoreHorizontal className="h-4 w-4" />
+              <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200/50 dark:border-white/10 bg-white/50 dark:bg-slate-900/50">
+                <MoreHorizontal className="h-4 w-4 text-slate-500 dark:text-slate-400" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="end"
-              className="bg-white rounded-xl shadow-xl p-1"
+              className="glass-panel border-white/20 min-w-[160px] z-50 dark:bg-slate-900/90"
             >
               <DropdownMenuItem
                 onClick={() => {
                   setSelectedInvoice(row);
                   setIsDetailSheetOpen(true);
                 }}
-                className="rounded-lg cursor-pointer"
+                className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
               >
-                <Eye className="h-4 w-4 mr-2 text-slate-600" /> Ver Detalle
+                <Eye className="h-4 w-4 mr-2 text-blue-500 dark:text-blue-400" /> Ver Detalle
               </DropdownMenuItem>
 
-              {/*  OCULTAMOS ESTA OPCIÓN SI YA ESTÁ PAGADA COMPLETAMENTE */}
               {row.saldo_pendiente > 0 && (
                 <>
-                  <DropdownMenuSeparator />
+                  <DropdownMenuSeparator className="dark:bg-white/10" />
                   <DropdownMenuItem
                     onClick={() => {
                       setInvoicesToPay([row]);
                       setIsPaymentModalOpen(true);
                     }}
-                    className="text-emerald-700 font-bold rounded-lg cursor-pointer"
+                    className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer text-amber-600 dark:text-amber-400 dark:focus:bg-amber-900/30"
                   >
                     <CreditCard className="h-4 w-4 mr-2" /> Registrar Cobro y
                     REP
@@ -381,13 +382,13 @@ export default function Receivables() {
                 </>
               )}
 
-              <DropdownMenuSeparator />
+              <DropdownMenuSeparator className="dark:bg-white/10" />
               <DropdownMenuItem
                 onClick={() => {
                   setInvoiceToDelete(row);
                   setIsDeleteDialogOpen(true);
                 }}
-                className="text-red-600 font-bold rounded-lg cursor-pointer"
+                className="gap-2 font-bold text-xs uppercase tracking-tight text-rose-600 dark:text-rose-500 cursor-pointer dark:focus:bg-rose-950/30"
               >
                 <Trash2 className="h-4 w-4 mr-2" /> Eliminar Factura
               </DropdownMenuItem>
@@ -471,11 +472,11 @@ export default function Receivables() {
       <div className="grid gap-4 md:grid-cols-4">
         <Card className="border-l-4 border-l-emerald-500 shadow-sm hover:shadow-md transition-shadow">
           <CardContent className="p-5">
-            <p className="text-xs font-black text-slate-600 uppercase tracking-widest flex items-center gap-1.5 mb-1">
+            <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] flex items-center gap-1.5 mb-1">
               <CheckCircle2 className="h-4 w-4 text-emerald-500" /> Corriente
               (Al Día)
             </p>
-            <p className="text-2xl font-black text-slate-800">
+            <p className="text-2xl font-black text-brand-navy dark:text-white leading-none tracking-tighter">
               $
               {agingReport.corriente.toLocaleString("es-MX", {
                 minimumFractionDigits: 2,
@@ -485,10 +486,10 @@ export default function Receivables() {
         </Card>
         <Card className="border-l-4 border-l-amber-400 shadow-sm hover:shadow-md transition-shadow">
           <CardContent className="p-5">
-            <p className="text-xs font-black text-slate-600 uppercase tracking-widest flex items-center gap-1.5 mb-1">
+            <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] flex items-center gap-1.5 mb-1">
               <Clock className="h-4 w-4 text-amber-500" /> Vencido 1-30 Días
             </p>
-            <p className="text-2xl font-black text-amber-600">
+            <p className="text-2xl font-black text-amber-600 dark:text-amber-400 leading-none tracking-tighter">
               $
               {agingReport.vencido1_30.toLocaleString("es-MX", {
                 minimumFractionDigits: 2,
@@ -498,11 +499,11 @@ export default function Receivables() {
         </Card>
         <Card className="border-l-4 border-l-orange-500 shadow-sm hover:shadow-md transition-shadow">
           <CardContent className="p-5">
-            <p className="text-xs font-black text-slate-600 uppercase tracking-widest flex items-center gap-1.5 mb-1">
+            <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] flex items-center gap-1.5 mb-1">
               <AlertCircle className="h-4 w-4 text-orange-500" /> Vencido 31-60
               Días
             </p>
-            <p className="text-2xl font-black text-orange-600">
+            <p className="text-2xl font-black text-orange-600 dark:text-orange-400 leading-none tracking-tighter">
               $
               {agingReport.vencido31_60.toLocaleString("es-MX", {
                 minimumFractionDigits: 2,
@@ -512,10 +513,10 @@ export default function Receivables() {
         </Card>
         <Card className="border-l-4 border-l-red-600 shadow-sm hover:shadow-md transition-shadow">
           <CardContent className="p-5">
-            <p className="text-xs font-black text-slate-600 uppercase tracking-widest flex items-center gap-1.5 mb-1">
+            <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] flex items-center gap-1.5 mb-1">
               <Ban className="h-4 w-4 text-red-500" /> Cartera Vencida (+90)
             </p>
-            <p className="text-2xl font-black text-red-700">
+            <p className="text-2xl font-black text-red-700 dark:text-red-400 leading-none tracking-tighter">
               $
               {agingReport.incobrable.toLocaleString("es-MX", {
                 minimumFractionDigits: 2,
@@ -525,8 +526,8 @@ export default function Receivables() {
         </Card>
       </div>
 
-      <Card className="shadow-lg border-slate-200 overflow-hidden rounded-2xl">
-        <CardContent className="p-0">
+      <Card className="shadow-2xl border-none overflow-hidden bg-transparent">
+        <CardContent className="p-0 bg-white dark:bg-slate-950 [&_thead]:bg-slate-50/80 dark:[&_thead]:bg-slate-900/80 [&_thead]:backdrop-blur-xl [&_th]:bg-transparent [&_th]:border-b [&_th]:border-slate-200 dark:[&_th]:border-white/10 [&_th]:text-[10px] [&_th]:font-black [&_th]:uppercase [&_th]:tracking-[0.2em] [&_th]:text-slate-500 dark:[&_th]:text-slate-400">
           <EnhancedDataTable
             data={invoices}
             columns={columns}
@@ -579,15 +580,25 @@ export default function Receivables() {
         open={isDeleteDialogOpen}
         onOpenChange={setIsDeleteDialogOpen}
       >
-        <AlertDialogContent className="rounded-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-brand-navy font-black">
-              ¿Eliminar Factura?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
+        <AlertDialogContent className="w-[95vw] sm:max-w-md flex-col overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
+          <AlertDialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
+            <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
+            <div className="relative z-10 flex items-center gap-4">
+              <div className="w-14 h-14 rounded-2xl bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center shadow-inner shrink-0 border border-rose-200 dark:border-rose-500/20">
+                <AlertCircle className="h-7 w-7 text-rose-600 dark:text-rose-400 drop-shadow-[0_0_8px_rgba(244,63,94,0.4)]" />
+              </div>
+              <div className="flex flex-col gap-1 text-left">
+                <AlertDialogTitle className="text-xl font-black uppercase tracking-tighter text-rose-600 dark:text-rose-500 heading-crisp leading-none">
+                  ¿Eliminar Factura?
+                </AlertDialogTitle>
+              </div>
+            </div>
+          </AlertDialogHeader>
+          <div className="p-6 sm:p-8 bg-slate-50/50 dark:bg-transparent">
+            <AlertDialogDescription className="text-slate-600 dark:text-slate-300 text-sm font-medium">
               {invoiceToDelete &&
               invoiceToDelete.saldo_pendiente < invoiceToDelete.monto_total ? (
-                <span className="text-red-600 font-bold bg-red-50 p-3 rounded-lg block mt-2 border border-red-200">
+                <span className="text-red-600 dark:text-red-400 font-bold bg-red-50 dark:bg-red-950/30 p-3 rounded-lg block mt-2 border border-red-200 dark:border-red-900/50">
                   Error: Esta factura ya tiene abonos/pagos registrados. Por
                   auditoría fiscal, no es posible eliminarla. Cancele los pagos
                   primero.
@@ -599,21 +610,23 @@ export default function Receivables() {
                 </span>
               )}
             </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-xl">
-              Cancelar
-            </AlertDialogCancel>
-            {invoiceToDelete &&
-              invoiceToDelete.saldo_pendiente ===
-                invoiceToDelete.monto_total && (
-                <AlertDialogAction
-                  onClick={handleDeleteInvoice}
-                  className="bg-red-600 hover:bg-red-700 text-white rounded-xl"
-                >
-                  Sí, Eliminar
-                </AlertDialogAction>
-              )}
+          </div>
+          <AlertDialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
+            <div className="flex w-full gap-3 justify-end">
+              <AlertDialogCancel className="haptic-press font-black uppercase tracking-widest text-[10px]">
+                Cancelar
+              </AlertDialogCancel>
+              {invoiceToDelete &&
+                invoiceToDelete.saldo_pendiente ===
+                  invoiceToDelete.monto_total && (
+                  <AlertDialogAction
+                    onClick={handleDeleteInvoice}
+                    className="bg-rose-600 hover:bg-rose-700 text-white font-black uppercase tracking-widest text-[10px] haptic-press shadow-rose-600/20"
+                  >
+                    Sí, Eliminar
+                  </AlertDialogAction>
+                )}
+            </div>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

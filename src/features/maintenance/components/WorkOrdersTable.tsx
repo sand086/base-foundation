@@ -351,7 +351,7 @@ export const WorkOrdersTable = () => {
                   className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
                   onClick={() => setOrderToView(order)}
                 >
-                  <Eye className="h-4 w-4 text-brand-navy dark:text-slate-400" />{" "}
+                  <Eye className="h-4 w-4 text-blue-500 dark:text-blue-400" />{" "}
                   Ver detalles
                 </DropdownMenuItem>
 
@@ -364,7 +364,7 @@ export const WorkOrdersTable = () => {
                       setIsModalOpen(true);
                     }}
                   >
-                    <Edit className="h-4 w-4 text-brand-green" /> Editar Orden
+                    <Edit className="h-4 w-4 text-brand-green dark:text-[#009740]" /> Editar Orden
                   </DropdownMenuItem>
                 )}
 
@@ -586,59 +586,79 @@ export const WorkOrdersTable = () => {
         open={!!orderToClose}
         onOpenChange={(open) => !open && setOrderToClose(null)}
       >
-        <AlertDialogContent className="w-[95vw] sm:max-w-md p-0 overflow-hidden border-none shadow-2xl rounded-2xl bg-white dark:bg-brand-navy">
-          <AlertDialogHeader className="p-6 bg-emerald-50 dark:bg-emerald-900/20 border-b border-emerald-100 dark:border-emerald-800/30">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-full bg-emerald-100 dark:bg-emerald-800/50 flex items-center justify-center shadow-inner border border-emerald-200 dark:border-emerald-700">
-                <Receipt className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+        <AlertDialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
+          <AlertDialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
+            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 dark:from-emerald-500/10 to-transparent pointer-events-none" />
+            <div className="relative z-10 flex items-center gap-4 sm:gap-5">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center shadow-inner shrink-0 icon-plate border border-emerald-200 dark:border-emerald-500/20">
+                <Receipt className="h-7 w-7 sm:h-8 sm:w-8 text-emerald-600 dark:text-emerald-400" />
               </div>
-              <div className="text-left">
-                <AlertDialogTitle className="text-xl font-black text-emerald-800 dark:text-emerald-400 uppercase tracking-tighter">
+              <div className="flex flex-col gap-1 text-left">
+                <AlertDialogTitle className="text-2xl font-black uppercase tracking-tighter text-emerald-700 dark:text-emerald-400 heading-crisp leading-none">
                   Cerrar Orden
                 </AlertDialogTitle>
-                <AlertDialogDescription className="text-[10px] font-bold uppercase tracking-widest text-emerald-600/70 dark:text-emerald-500 mt-1">
+                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mt-1">
                   Integración con Cuentas por Pagar
-                </AlertDialogDescription>
+                </p>
               </div>
             </div>
           </AlertDialogHeader>
-          <div className="p-6 space-y-5">
-            <p className="text-sm font-medium text-slate-600 dark:text-slate-300 leading-relaxed">
-              Al finalizar esta orden de trabajo, los costos asociados a
-              refacciones externas y mano de obra de terceros{" "}
-              <b>
-                se enviarán automáticamente al módulo de Cuentas por Pagar
-                (Proveedores)
-              </b>{" "}
-              para su liquidación.
-            </p>
-            <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 text-xs font-bold rounded-lg border border-amber-200 dark:border-amber-800">
-              <AlertTriangle className="h-4 w-4" /> Esta acción cerrará la orden
-              y no se podrá editar.
-            </div>
+
+          <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
+            <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block space-y-6">
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-relaxed">
+                Al finalizar esta orden de trabajo, los costos asociados a
+                refacciones externas y mano de obra de terceros{" "}
+                <b className="font-black">
+                  se enviarán automáticamente al módulo de Cuentas por Pagar
+                  (Proveedores)
+                </b>{" "}
+                para su liquidación.
+              </p>
+
+              <div className="p-5 bg-amber-50 dark:bg-amber-950/20 border-l-4 border-amber-500 rounded-r-2xl shadow-sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                  <h4 className="text-[10px] sm:text-[11px] font-black text-amber-800 dark:text-amber-400 uppercase tracking-widest">
+                    Acción Permanente
+                  </h4>
+                </div>
+                <p className="text-xs sm:text-sm leading-relaxed text-amber-900 dark:text-amber-200/80">
+                  Esta acción cerrará la orden y{" "}
+                  <b className="font-black underline">no se podrá editar</b>.
+                </p>
+              </div>
+            </AlertDialogDescription>
           </div>
-          <AlertDialogFooter className="p-6 bg-slate-50/80 dark:bg-slate-950/50 border-t border-slate-100 dark:border-white/5">
-            <AlertDialogCancel
-              disabled={isProcessing}
-              className="font-black uppercase tracking-widest text-[10px]"
-            >
-              Cancelar
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                handleCloseOrder();
-              }}
-              disabled={isProcessing}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase tracking-widest text-[10px] shadow-md border-none haptic-press"
-            >
-              {isProcessing ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <CheckCircle className="h-4 w-4 mr-2" />
-              )}
-              Confirmar y Enviar a CxP
-            </AlertDialogAction>
+
+          <AlertDialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0">
+            <div className="flex flex-col-reverse sm:flex-row sm:flex-wrap justify-end items-stretch sm:items-center gap-3 w-full">
+              <AlertDialogCancel
+                variant="outline"
+                size="lg"
+                disabled={isProcessing}
+                className="w-full sm:w-auto haptic-press flex-shrink-0 font-black uppercase tracking-widest text-[10px]"
+              >
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                variant="default"
+                size="lg"
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleCloseOrder();
+                }}
+                disabled={isProcessing}
+                className="w-full sm:w-auto haptic-press flex-shrink-0 border-none bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase tracking-widest text-[10px] shadow-md"
+              >
+                {isProcessing ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                )}
+                Confirmar y Enviar a CxP
+              </AlertDialogAction>
+            </div>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -648,50 +668,73 @@ export const WorkOrdersTable = () => {
         open={!!orderToDelete}
         onOpenChange={(open) => !open && setOrderToDelete(null)}
       >
-        <AlertDialogContent className="w-[95vw] sm:max-w-md p-0 overflow-hidden border-none shadow-2xl rounded-2xl bg-white dark:bg-brand-navy">
-          <AlertDialogHeader className="p-6 bg-rose-50 dark:bg-rose-900/20 border-b border-rose-100 dark:border-rose-800/30">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-full bg-rose-100 dark:bg-rose-800/50 flex items-center justify-center shadow-inner border border-rose-200 dark:border-rose-700">
-                <Trash2 className="h-6 w-6 text-rose-600 dark:text-rose-400" />
+        <AlertDialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
+          <AlertDialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
+            <div className="absolute inset-0 bg-gradient-to-br from-rose-500/5 dark:from-rose-500/10 to-transparent pointer-events-none" />
+            <div className="relative z-10 flex items-center gap-4 sm:gap-5">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center shadow-inner shrink-0 icon-plate border border-rose-200 dark:border-rose-500/20">
+                <AlertTriangle className="h-7 w-7 sm:h-8 sm:w-8 text-rose-600 dark:text-rose-400" />
               </div>
-              <div className="text-left">
-                <AlertDialogTitle className="text-xl font-black text-rose-800 dark:text-rose-400 uppercase tracking-tighter">
+              <div className="flex flex-col gap-1 text-left">
+                <AlertDialogTitle className="text-2xl font-black uppercase tracking-tighter text-rose-600 dark:text-rose-500 heading-crisp leading-none">
                   Eliminar Orden
                 </AlertDialogTitle>
-                <AlertDialogDescription className="text-[10px] font-bold uppercase tracking-widest text-rose-600/70 dark:text-rose-500 mt-1">
-                  Acción irreversible
-                </AlertDialogDescription>
+                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mt-1">
+                  Acción Irreversible • Mantenimiento
+                </p>
               </div>
             </div>
           </AlertDialogHeader>
-          <div className="p-6">
-            <p className="text-sm font-medium text-slate-600 dark:text-slate-300 leading-relaxed">
-              ¿Estás seguro de querer eliminar esta orden de trabajo? Se borrará
-              todo su historial y registro de sistema de forma permanente.
-            </p>
+
+          <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
+            <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block space-y-6">
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-relaxed">
+                ¿Estás seguro de querer eliminar esta orden de trabajo?
+              </p>
+
+              <div className="p-5 bg-rose-50 dark:bg-rose-950/20 border-l-4 border-rose-500 rounded-r-2xl shadow-sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+                  <h4 className="text-[10px] sm:text-[11px] font-black text-rose-800 dark:text-rose-400 uppercase tracking-widest">
+                    Pérdida de Datos
+                  </h4>
+                </div>
+                <p className="text-xs sm:text-sm leading-relaxed text-rose-900 dark:text-rose-200/80">
+                  Se borrará todo su historial y registro de sistema de forma permanente.{" "}
+                  <b className="font-black">Esta acción no se puede deshacer</b>.
+                </p>
+              </div>
+            </AlertDialogDescription>
           </div>
-          <AlertDialogFooter className="p-6 bg-slate-50/80 dark:bg-slate-950/50 border-t border-slate-100 dark:border-white/5">
-            <AlertDialogCancel
-              disabled={isProcessing}
-              className="font-black uppercase tracking-widest text-[10px]"
-            >
-              Cancelar
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                handleDelete();
-              }}
-              disabled={isProcessing}
-              className="bg-rose-600 hover:bg-rose-700 text-white font-black uppercase tracking-widest text-[10px] shadow-md border-none haptic-press"
-            >
-              {isProcessing ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Trash2 className="h-4 w-4 mr-2" />
-              )}
-              Eliminar Permanentemente
-            </AlertDialogAction>
+
+          <AlertDialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0">
+            <div className="flex flex-col-reverse sm:flex-row sm:flex-wrap justify-end items-stretch sm:items-center gap-3 w-full">
+              <AlertDialogCancel
+                variant="outline"
+                size="lg"
+                disabled={isProcessing}
+                className="w-full sm:w-auto haptic-press flex-shrink-0 font-black uppercase tracking-widest text-[10px]"
+              >
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                variant="destructive"
+                size="lg"
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleDelete();
+                }}
+                disabled={isProcessing}
+                className="w-full sm:w-auto haptic-press shadow-rose-600/10 flex-shrink-0 border-none bg-rose-600 hover:bg-rose-700 text-white font-black uppercase tracking-widest text-[10px]"
+              >
+                {isProcessing ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4 mr-2" />
+                )}
+                Eliminar Permanentemente
+              </AlertDialogAction>
+            </div>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

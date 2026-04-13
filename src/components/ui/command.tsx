@@ -40,10 +40,14 @@ const CommandDialog = ({
 }: CommandDialogProps) => {
   return (
     <Dialog {...props}>
-      <DialogContent className="overflow-hidden p-0 max-w-2xl border-none bg-white/90 dark:bg-brand-navy/95 backdrop-blur-2xl shadow-[0_30px_60px_rgba(0,0,0,0.2)] dark:shadow-[0_30px_60px_rgba(0,0,0,0.5)] animate-modal-show rounded-2xl">
+      <DialogContent
+        className={cn(
+          "overflow-hidden p-0 max-w-2xl border-none bg-white/90 dark:bg-brand-navy/95 backdrop-blur-2xl shadow-[0_30px_60px_rgba(0,0,0,0.2)] dark:shadow-[0_30px_60px_rgba(0,0,0,0.5)] animate-modal-show rounded-2xl",
+          className,
+        )}
+      >
         <DialogTitle className="sr-only">Buscador de Comandos</DialogTitle>
 
-        {/*  FIX: Le pasamos el className aquí al Command para que tome los estilos extra */}
         <Command
           className={cn(
             "bg-transparent",
@@ -54,7 +58,6 @@ const CommandDialog = ({
             "[&_[cmdk-item]]:px-4 [&_[cmdk-item]]:py-3.5 [&_[cmdk-item]]:rounded-xl [&_[cmdk-item]]:transition-all [&_[cmdk-item]]:duration-200",
             "[&_[cmdk-item][data-selected=true]]:bg-brand-red [&_[cmdk-item][data-selected=true]]:text-white [&_[cmdk-item][data-selected=true]]:shadow-lg [&_[cmdk-item][data-selected=true]]:scale-[1.01]",
             "[&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5 [&_[cmdk-item]_svg]:mr-3 [&_[cmdk-item]_svg]:opacity-60 [&_[cmdk-item][data-selected=true]_svg]:opacity-100 [&_[cmdk-item][data-selected=true]_svg]:drop-shadow-md",
-            className, // <-- Aplicamos la clase aquí
           )}
         >
           {children}

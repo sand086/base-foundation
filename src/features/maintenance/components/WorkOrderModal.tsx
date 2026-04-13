@@ -236,27 +236,27 @@ export const WorkOrderModal = ({
         if (!isOpen && !isSubmitting) handleClose();
       }}
     >
-      <DialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-slate-50/50 dark:bg-transparent backdrop-blur-xl rounded-2xl">
-        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-brand-navy/95 dark:bg-slate-900 backdrop-blur-md shrink-0 border-b border-white/10 relative overflow-hidden z-10">
-          <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
+      <DialogContent className="w-[95vw] sm:max-w-2xl p-0 flex flex-col max-h-[90vh] bg-card/95 backdrop-blur-xl border border-border shadow-2xl rounded-2xl overflow-hidden">
+        <DialogHeader className="p-6 bg-card border-b border-border shrink-0 relative z-10">
+          <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center gap-4 sm:gap-5">
             <div
               className={cn(
-                "w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shadow-inner shrink-0 icon-plate",
+                "w-12 h-12 rounded-xl flex items-center justify-center shadow-inner shrink-0",
                 orderToEdit
-                  ? "bg-emerald-500/20 text-emerald-400"
-                  : "bg-blue-500/20 text-blue-400",
+                  ? "bg-amber-100 dark:bg-amber-900/30"
+                  : "bg-emerald-100 dark:bg-emerald-900/30",
               )}
             >
-              <Wrench className="h-7 w-7 sm:h-8 sm:w-8 drop-shadow-md" />
+              <Wrench className={cn("h-6 w-6", orderToEdit ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400")} />
             </div>
             <div className="flex flex-col gap-1 text-left">
-              <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-white text-shadow-premium heading-crisp leading-none">
+              <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-foreground heading-crisp leading-none">
                 {orderToEdit
                   ? "Editar Orden de Trabajo"
                   : "Abrir Orden de Trabajo"}
               </DialogTitle>
-              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-brand-secondary dark:text-slate-400 mt-1">
+              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mt-1">
                 {orderToEdit
                   ? `Modificando Folio: ${orderToEdit.folio}`
                   : "Generar ticket de servicio y descontar inventario"}
@@ -265,7 +265,7 @@ export const WorkOrderModal = ({
           </div>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar bg-muted/50">
           <div className="space-y-8">
             <div className="space-y-6">
               <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-2">
@@ -283,10 +283,10 @@ export const WorkOrderModal = ({
                     onValueChange={setSelectedUnit}
                     disabled={isSubmitting}
                   >
-                    <SelectTrigger className="h-11 glass-card font-black uppercase text-xs bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm text-brand-navy dark:text-slate-100">
+                    <SelectTrigger className="h-11 font-black uppercase text-xs bg-card border-slate-200 dark:border-white/10 shadow-sm text-slate-800 dark:text-slate-100">
                       <SelectValue placeholder="Seleccionar unidad..." />
                     </SelectTrigger>
-                    <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-slate-200 dark:border-white/10 max-h-[40vh]">
+                    <SelectContent className="bg-card/90 dark:bg-card/90 backdrop-blur-xl border-slate-200 dark:border-white/10 max-h-[40vh]">
                       {unidades.map((unit) => (
                         <SelectItem
                           key={unit.id}
@@ -312,10 +312,10 @@ export const WorkOrderModal = ({
                     onValueChange={setSelectedMechanic}
                     disabled={isSubmitting}
                   >
-                    <SelectTrigger className="h-11 font-bold bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm text-sm">
+                    <SelectTrigger className="h-11 font-bold bg-card border-slate-200 dark:border-white/10 shadow-sm text-sm text-slate-800 dark:text-slate-100">
                       <SelectValue placeholder="Seleccionar mecánico..." />
                     </SelectTrigger>
-                    <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-slate-200 dark:border-white/10">
+                    <SelectContent className="bg-card/90 dark:bg-card/90 backdrop-blur-xl border-slate-200 dark:border-white/10">
                       {mechanics.map((mech) => (
                         <SelectItem
                           key={mech.id}
@@ -416,7 +416,7 @@ export const WorkOrderModal = ({
                   value={descripcion}
                   onChange={(e) => setDescripcion(e.target.value)}
                   rows={3}
-                  className="min-h-[80px] resize-none glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm font-medium text-sm"
+                  className="min-h-[80px] resize-none bg-card border-slate-200 dark:border-white/10 shadow-sm font-medium text-sm text-slate-800 dark:text-slate-100"
                   disabled={isSubmitting}
                 />
               </div>
@@ -649,7 +649,7 @@ export const WorkOrderModal = ({
           </div>
         </div>
 
-        <DialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0">
+        <DialogFooter className="p-6 sm:p-8 bg-muted/50 border-t border-slate-200 dark:border-white/10 shrink-0">
           <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
             <Button
               type="button"
@@ -657,7 +657,7 @@ export const WorkOrderModal = ({
               size="lg"
               onClick={handleClose}
               disabled={isSubmitting}
-              className="w-full sm:w-auto haptic-press flex-shrink-0"
+              className="w-full sm:w-auto haptic-press flex-shrink-0 font-black uppercase tracking-widest text-[10px]"
             >
               Cancelar
             </Button>
@@ -668,10 +668,10 @@ export const WorkOrderModal = ({
               disabled={!isValid || isSubmitting}
               onClick={handleSubmit}
               className={cn(
-                "w-full sm:w-auto haptic-press flex-shrink-0 border-none text-white",
+                "w-full sm:w-auto haptic-press flex-shrink-0 border-none text-white font-black uppercase tracking-widest text-[10px]",
                 orderToEdit
-                  ? "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20"
-                  : "bg-blue-600 hover:bg-blue-700 shadow-blue-500/20",
+                  ? "bg-brand-green hover:bg-[hsl(152,100%,24%)] shadow-[0_4px_15px_rgba(0,151,64,0.3)]"
+                  : "bg-brand-red hover:bg-brand-red/90 shadow-[0_4px_15px_rgba(190,8,17,0.3)]",
               )}
             >
               {isSubmitting ? (
