@@ -47,6 +47,14 @@ def pg_enum(py_enum, pg_name: str):
     )
 
 
+class PurchaseOrderStatus(str, PyEnum):
+    BORRADOR = "borrador"
+    PENDIENTE = "pendiente"
+    AUTORIZADA = "autorizada"
+    RECIBIDA = "recibida"
+    CANCELADA = "cancelada"
+
+
 class UnitType(str, PyEnum):
     SENCILLO = "sencillo"
     FULL = "full"
@@ -1098,6 +1106,10 @@ class PayableInvoice(AuditMixin, Base):
     concepto = Column(String(200))
     clasificacion = Column(String(50))
 
+    metodo_pago = Column(String(5), nullable=True)  # PUE o PPD
+    forma_pago = Column(String(5), nullable=True)  # 01, 03, 99...
+    tipo_comprobante = Column(String(5), nullable=True)
+
     estatus = Column(
         pg_enum(InvoiceStatus, "invoicestatus"), default=InvoiceStatus.PENDIENTE
     )
@@ -1418,7 +1430,10 @@ class ReceivableInvoice(AuditMixin, Base):
     pdf_url = Column(String(500))
     xml_url = Column(String(500))
 
-    client = relationship("Client")
+    metodo_pago = Column(String(5), nullable=True)  # PUE o PPD
+    forma_pago = Column(String(5), nullable=True)  # 01, 03, 99...
+    tipo_comprobante = Column(String(5), nullable=True)  # I, E, P
+
     sub_client = relationship("SubClient")
     trip = relationship("Trip")
     payments = relationship(
@@ -1595,3 +1610,59 @@ class SystemModule(AuditMixin, Base):
     nombre = Column(String(100), nullable=False)
     icono = Column(String(50), default="LayoutDashboard")
     descripcion = Column(String(200), nullable=True)
+
+
+class PurchaseOrder(AuditMixin, Base):
+    __tablename__ = "purchase_orders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    folio = Column(String(50), unique=True, nullable=False)
+
+    # compra (inventario), servicio, gasto_indirecto
+    tipo = Column(String(50), nullable=False)
+
+    supplier_id = Column(
+        Integer, ForeignKey("suppliers.id", ondelete="RESTRICT"), nullable=False
+    )
+    cost_center = Column(String(50))
+    indirect_category_id = Column(
+        Integer, ForeignKey("indirect_expense_categories.id"), nullable=True
+    )
+
+    requester = Column(String(100))
+    required_date = Column(Date)
+    service_description = Column(Text)
+
+    subtotal = Column(Float, default=0.0)
+    iva = Column(Float, default=0.0)
+    total = Column(Float, default=0.0)
+    moneda = Column(String(10), default="MXN")
+
+    status = Column(
+        pg_enum(PurchaseOrderStatus, "purchaseorderstatus"),
+        default=PurchaseOrderStatus.PENDIENTE,
+    )
+
+    supplier = relationship("Supplier")
+    items = relationship(
+        "PurchaseOrderItem", back_populates="order", cascade="all, delete-orphan"
+    )
+
+
+class PurchaseOrderItem(AuditMixin, Base):
+    __tablename__ = "purchase_order_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    order_id = Column(
+        Integer, ForeignKey("purchase_orders.id", ondelete="CASCADE"), nullable=False
+    )
+    inventory_item_id = Column(Integer, ForeignKey("inventory_items.id"), nullable=True)
+
+    descripcion = Column(String(200))
+    cantidad = Column(Float)
+    unidad = Column(String(20))
+    precio_unitario = Column(Float)
+    subtotal = Column(Float)
+
+    order = relationship("PurchaseOrder", back_populates="items")
+    inventory_item = relationship("InventoryItem")

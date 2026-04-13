@@ -1,9 +1,9 @@
+import { useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge, StatusType } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
-//  Cambiamos la ruta al nuevo servicio centralizado
 import { RecentService } from "@/features/dashboard/types";
 import {
   Tooltip,
@@ -11,15 +11,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { ChartActionMenu } from "@/components/ui/chart-action-menu"; // Importamos el menú
 
 interface RecentServicesTableProps {
   services: RecentService[];
 }
 
-/**
- * 🛠️ Configuración de estados actualizada para coincidir
- * con los Enums de TripStatus en el backend de Python.
- */
 const getStatusConfig = (
   status: string,
 ): { type: StatusType; label: string } => {
@@ -38,7 +35,9 @@ const getStatusConfig = (
 
 export function RecentServicesTable({ services }: RecentServicesTableProps) {
   const navigate = useNavigate();
+  const tableRef = useRef<HTMLDivElement>(null); // Referencia para exportar imagen
 
+  // Handler para ir al detalle (Monitoreo)
   const handleRowClick = (service: RecentService) => {
     const params = new URLSearchParams({
       serviceId: service.id,
@@ -47,6 +46,7 @@ export function RecentServicesTable({ services }: RecentServicesTableProps) {
     navigate(`/monitoreo?${params.toString()}`);
   };
 
+  // Handler para ir a Despacho
   const handleViewInDispatch = (
     e: React.MouseEvent,
     service: RecentService,
@@ -60,15 +60,25 @@ export function RecentServicesTable({ services }: RecentServicesTableProps) {
   };
 
   return (
-    <Card className="rounded-2xl shadow-2xl border-none overflow-hidden bg-transparent">
+    <Card
+      ref={tableRef}
+      className="rounded-2xl shadow-2xl border-none overflow-hidden bg-transparent"
+    >
       <CardHeader className="flex flex-row items-center justify-between border-b border-slate-200 dark:border-white/10 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-xl py-6 px-6">
-        <CardTitle className="text-xl font-black uppercase tracking-tighter text-brand-navy dark:text-white heading-crisp flex items-center gap-3">
-          Últimos Servicios
-        </CardTitle>
-        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
-          Click en fila para ver en Monitoreo
-        </span>
+        <div className="w-full">
+          {/* Añadimos el menú de acciones al título de la tabla */}
+          <ChartActionMenu
+            title="Últimos Servicios"
+            data={services} // Los datos que se irán al Excel
+            containerRef={tableRef} // Para bajar la foto de la tabla
+            onViewDetail={() => navigate("/monitoreo")} // Redirige a la vista general de servicios
+          />
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mt-1">
+            Click en fila para ver detalle en Monitoreo
+          </p>
+        </div>
       </CardHeader>
+
       <CardContent className="p-0 bg-white dark:bg-slate-950">
         <div className="overflow-x-auto max-h-[400px] custom-scrollbar">
           <table className="w-full">
@@ -127,8 +137,12 @@ export function RecentServicesTable({ services }: RecentServicesTableProps) {
                     </td>
                     <td className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
                       <span>{service.origin}</span>
-                      <span className="mx-2 text-slate-300 dark:text-slate-600">→</span>
-                      <span className="text-slate-700 dark:text-slate-300">{service.destination}</span>
+                      <span className="mx-2 text-slate-300 dark:text-slate-600">
+                        →
+                      </span>
+                      <span className="text-slate-700 dark:text-slate-300">
+                        {service.destination}
+                      </span>
                     </td>
                     <td className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 max-w-[140px] truncate">
                       {service.operator}
@@ -148,10 +162,8 @@ export function RecentServicesTable({ services }: RecentServicesTableProps) {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200/50 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 haptic-press opacity-0 group-hover:opacity-100"
-                              onClick={(e) =>
-                                handleViewInDispatch(e, service)
-                              }
+                              className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200/50 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 opacity-0 group-hover:opacity-100"
+                              onClick={(e) => handleViewInDispatch(e, service)}
                             >
                               <ExternalLink className="h-4 w-4 text-blue-500 dark:text-blue-400" />
                             </Button>

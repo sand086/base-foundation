@@ -25,6 +25,7 @@ from app.modules.suppliers.router import router as suppliers_router
 from app.modules.maintenance.router import router as maintenance_router
 from app.modules.monitoring.router import router as monitoring_router
 from app.modules.utils.router import router as utils_router
+from app.modules.purchases.router import router as purchases_router
 
 # 2. importacion de Routers de Integraciones Externas
 from app.integrations.sat.router import router as sat_router
@@ -74,7 +75,7 @@ api_router.include_router(monitoring_router, prefix="/monitoring")
 # Integraciones Externas
 api_router.include_router(sat_router, prefix="/sat")
 api_router.include_router(utils_router, prefix="/utils")
-
+api_router.include_router(purchases_router, prefix="/purchases")
 app.include_router(api_router)
 
 

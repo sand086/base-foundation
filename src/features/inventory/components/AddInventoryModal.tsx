@@ -125,6 +125,7 @@ export function AddInventoryModal({
       await onSave({
         ...data,
         categoria: data.categoria.toLowerCase(),
+        bank_account_id: !data.proveedor_id ? 1 : null,
       });
       toast.success(
         isEditMode ? "Refacción actualizada" : "Refacción agregada",

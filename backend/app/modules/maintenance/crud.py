@@ -18,6 +18,8 @@ print("models loaded from =>", getattr(models, "__file__", None))
  """
 
 from . import schemas
+from app.modules.finance import crud as finance_crud
+from app.modules.finance import schemas as finance_schemas
 
 # -----------------------------
 # Helpers
@@ -90,7 +92,7 @@ def get_inventory_item(db: Session, item_id: int):
 
 
 def create_inventory_item(db: Session, item_in: schemas.InventoryItemCreate):
-    # 1. Buscar si ya existe uno activo con ese SKU para evitar duplicados
+    # 1. Evitar duplicados (Tu lógica actual)
     existe = (
         db.query(models.InventoryItem)
         .filter(
@@ -99,44 +101,41 @@ def create_inventory_item(db: Session, item_in: schemas.InventoryItemCreate):
         )
         .first()
     )
-
     if existe:
-        raise HTTPException(
-            status_code=400, detail="El SKU ya existe en un artículo activo."
-        )
+        raise HTTPException(status_code=400, detail="El SKU ya existe.")
 
-    # 2. Crear el registro en el inventario
-    db_item = models.InventoryItem(**item_in.model_dump())
+    # 2. Crear el registro en inventario
+    db_item = models.InventoryItem(**item_in.model_dump(exclude={"bank_account_id"}))
     db.add(db_item)
     db.flush()
 
-    # 3. INTEGRACIÓN FINANCIERA MEJORADA
+    # 3. 🔥 INTEGRACIÓN AUTOMÁTICA CON CXP 🔥
     if db_item.stock_actual > 0 and db_item.precio_unitario > 0:
         total_compra = db_item.stock_actual * db_item.precio_unitario
-        es_caja_chica = False
-        supplier_id = db_item.proveedor_id
+        es_caja_chica = db_item.proveedor_id is None
 
-        # Si no hay proveedor, asignamos el de CAJA CHICA
-        if not supplier_id:
+        # Asignar proveedor (Si es nulo, usamos el genérico de Caja Chica)
+        supplier_id = db_item.proveedor_id
+        if es_caja_chica:
             petty_cash_supplier = get_or_create_petty_cash_supplier(db)
             supplier_id = petty_cash_supplier.id
-            es_caja_chica = True
 
-        # Determinar estatus y saldo
+        # Definir estatus fiscal para la Provisión
+        # Si es caja chica nace PAGADA (PUE), si no, nace PENDIENTE (PPD)
         estatus_factura = (
             models.InvoiceStatus.PAGADO
             if es_caja_chica
             else models.InvoiceStatus.PENDIENTE
         )
+        metodo_pago = "PUE" if es_caja_chica else "PPD"
         saldo_inicial = 0.0 if es_caja_chica else total_compra
 
         # Crear la factura por pagar (CXP)
         new_payable = models.PayableInvoice(
             supplier_id=supplier_id,
-            viaje_id=None,
-            unit_id=None,
             folio_interno=f"INV-{db_item.sku}-{int(time.time())}",
             concepto=f"Carga de inventario: {db_item.descripcion} ({db_item.stock_actual} pzas)",
+            subtotal=total_compra,
             monto_total=total_compra,
             saldo_pendiente=saldo_inicial,
             moneda=models.Currency.MXN,
@@ -145,15 +144,21 @@ def create_inventory_item(db: Session, item_in: schemas.InventoryItemCreate):
                 date.today() if es_caja_chica else date.today() + timedelta(days=30)
             ),
             estatus=estatus_factura,
-            clasificacion="gasto_indirecto_variable",
+            metodo_pago=metodo_pago,  # <--- Importante para el Excel de Gustavo
+            tipo_comprobante="I",  # <--- "I" de Ingreso (Factura)
+            clasificacion="mantenimiento_refacciones",
         )
         db.add(new_payable)
-        db.flush()  # Obtenemos el ID de la factura
+        db.flush()
 
-        # Si es de caja chica, generamos el pago para que cuadre la contabilidad
+        # 4. Si es Caja Chica, registramos el pago y el movimiento bancario inmediato
         if es_caja_chica:
+            # Registrar el pago de la factura
             pago_automatico = models.InvoicePayment(
                 invoice_id=new_payable.id,
+                bank_account_id=getattr(
+                    item_in, "bank_account_id", 1
+                ),  # Default a la cuenta 1 si no viene
                 fecha_pago=date.today(),
                 monto=total_compra,
                 metodo_pago="efectivo",
@@ -161,10 +166,21 @@ def create_inventory_item(db: Session, item_in: schemas.InventoryItemCreate):
             )
             db.add(pago_automatico)
 
-    # 4. Confirmar transacciones
+            # Descontar saldo de la cuenta bancaria en Tesorería
+            from app.modules.finance import crud as finance_crud
+            from app.modules.finance import schemas as finance_schemas
+
+            mov_schema = finance_schemas.BankMovementCreate(
+                bank_account_id=pago_automatico.bank_account_id,
+                tipo="egreso",
+                monto=total_compra,
+                concepto=f"Gasto Caja Chica: Refacción {db_item.sku}",
+                referencia="INV_AUTO",
+            )
+            finance_crud.create_bank_movement(db, mov_schema, current_user_id=1)
+
     db.commit()
     db.refresh(db_item)
-
     return db_item
 
 

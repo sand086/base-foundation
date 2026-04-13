@@ -11,5 +11,7 @@ export type InventoryItemCreate = {
     stock_minimo?: number;
     ubicacion?: (string | null);
     precio_unitario?: number;
+    proveedor_id?: (number | null);
+    bank_account_id?: (number | null);
 };
 
