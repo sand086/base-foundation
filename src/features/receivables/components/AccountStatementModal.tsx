@@ -42,7 +42,6 @@ interface AccountStatementModalProps {
   invoices: ReceivableInvoice[];
 }
 
-// Mock company bank data
 const companyBankData = {
   razonSocial: "Transportes Rápidos 3T S.A. de C.V.",
   rfc: "TR3T850101ABC",
@@ -69,13 +68,11 @@ export function AccountStatementModal({
 }: AccountStatementModalProps) {
   const [selectedClient, setSelectedClient] = useState<string>("all");
 
-  // Get unique clients
   const clients = useMemo(() => {
     const uniqueClients = [...new Set(invoices.map((inv) => inv.cliente))];
     return uniqueClients.sort();
   }, [invoices]);
 
-  // Filter invoices by client and pending balance
   const filteredInvoices = useMemo(() => {
     let filtered = invoices.filter((inv) => inv.saldo_pendiente > 0);
     if (selectedClient !== "all") {
@@ -88,7 +85,6 @@ export function AccountStatementModal({
     );
   }, [invoices, selectedClient]);
 
-  // Calculate totals
   const totals = useMemo(() => {
     const corriente = filteredInvoices
       .filter((inv) => calculateDaysOverdue(inv.fecha_vencimiento) <= 0)
@@ -132,240 +128,254 @@ export function AccountStatementModal({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-card">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-foreground">
-            <Receipt className="h-5 w-5" />
-            Estado de Cuenta
-          </DialogTitle>
-          <DialogDescription>
-            Resumen de facturas pendientes de cobro
-          </DialogDescription>
+      {/* CAPA 1: CASCARÓN TAHOE */}
+      <DialogContent className="w-[95vw] sm:max-w-3xl flex flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-card/90 dark:bg-card/95 backdrop-blur-xl rounded-2xl">
+        {/* CAPA 2: HEADER */}
+        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-card dark:bg-card border-b border-border shrink-0 relative overflow-hidden z-10">
+          <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
+          <div className="relative z-10 flex items-center gap-4 sm:gap-5">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shadow-inner shrink-0 icon-plate border bg-slate-100 dark:bg-slate-800/50 border-slate-200 dark:border-white/10">
+              <Receipt className="h-7 w-7 sm:h-8 sm:w-8 text-slate-700 dark:text-slate-300 drop-shadow-md" />
+            </div>
+            <div className="flex flex-col gap-1 text-left min-w-0">
+              <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-foreground heading-crisp leading-none">
+                Estado de Cuenta
+              </DialogTitle>
+              <DialogDescription className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mt-1">
+                Resumen de facturas pendientes de cobro
+              </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
 
-        {/* Client Filter */}
-        <div className="flex items-center gap-4 p-4 bg-muted/50 rounded-lg">
-          <div className="flex-1">
-            <Label className="text-xs uppercase tracking-wider text-muted-foreground mb-2 block">
-              Filtrar por Cliente
-            </Label>
-            <Select value={selectedClient} onValueChange={setSelectedClient}>
-              <SelectTrigger>
-                <SelectValue placeholder="Todos los clientes" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos los Clientes</SelectItem>
-                {clients.map((client) => (
-                  <SelectItem key={client} value={client}>
-                    {client}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="text-right">
-            <p className="text-xs text-muted-foreground">Fecha de Corte</p>
-            <p className="font-medium text-foreground">{currentDate}</p>
-          </div>
-        </div>
-
-        {/* Statement Content */}
-        <div className="bg-card border-2 border-dashed border-border rounded-lg p-6 space-y-6">
-          {/* Header */}
-          <div className="flex justify-between items-start border-b border-border pb-4">
-            <div>
-              <h2 className="text-xl font-bold text-primary flex items-center gap-2">
-                <Building2 className="h-5 w-5" />
-                {companyBankData.razonSocial}
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                RFC: {companyBankData.rfc}
-              </p>
+        {/* CAPA 3: BODY */}
+        <div className="flex-1 overflow-y-auto px-6 pb-6 sm:px-8 sm:pb-8 bg-muted/30 dark:bg-transparent custom-scrollbar space-y-6 mt-4">
+          {/* Client Filter */}
+          <div className="flex items-center gap-4 p-5 border border-border rounded-2xl bg-card shadow-sm">
+            <div className="flex-1">
+              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-2 block">
+                Filtrar por Cliente
+              </Label>
+              <Select value={selectedClient} onValueChange={setSelectedClient}>
+                <SelectTrigger className="h-11 shadow-sm font-bold">
+                  <SelectValue placeholder="Todos los clientes" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los Clientes</SelectItem>
+                  {clients.map((client) => (
+                    <SelectItem key={client} value={client}>
+                      {client}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <Badge className="bg-primary text-primary-foreground">ESTADO DE CUENTA</Badge>
+            <div className="text-right">
+              <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Fecha de Corte</p>
+              <p className="font-bold text-foreground">{currentDate}</p>
+            </div>
           </div>
 
-          {/* Client Info (if filtered) */}
-          {selectedClient !== "all" && (
-            <div className="p-3 bg-muted/30 rounded-lg">
-              <p className="text-xs text-muted-foreground uppercase tracking-wider">
-                Cliente
-              </p>
-              <p className="font-semibold text-lg text-foreground">{selectedClient}</p>
-            </div>
-          )}
-
-          {/* Invoice List */}
-          <div>
-            <h3 className="font-bold text-sm uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
-              <DollarSign className="h-4 w-4" /> Facturas Pendientes
-            </h3>
-
-            {filteredInvoices.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <CheckCircle2 className="h-12 w-12 mx-auto mb-2 text-status-success" />
-                <p>No hay facturas pendientes de cobro</p>
+          {/* Statement Content */}
+          <div className="p-5 border-2 border-dashed border-border rounded-2xl bg-card shadow-sm space-y-6">
+            {/* Header */}
+            <div className="flex justify-between items-start border-b border-border pb-4">
+              <div>
+                <h2 className="text-xl font-bold text-primary flex items-center gap-2">
+                  <Building2 className="h-5 w-5" />
+                  {companyBankData.razonSocial}
+                </h2>
+                <p className="text-sm text-muted-foreground font-mono">
+                  RFC: {companyBankData.rfc}
+                </p>
               </div>
-            ) : (
-              <div className="space-y-2 overflow-x-auto">
-                {/* Table Header */}
-                <div className="grid grid-cols-12 gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider py-2 border-b border-border min-w-[600px]">
-                  <div className="col-span-2">Folio</div>
-                  <div className="col-span-3">Cliente</div>
-                  <div className="col-span-2 text-right">Monto</div>
-                  <div className="col-span-2 text-right">Saldo</div>
-                  <div className="col-span-2">Vencimiento</div>
-                  <div className="col-span-1">Estado</div>
-                </div>
+              <Badge className="bg-primary text-primary-foreground font-black text-[10px]">ESTADO DE CUENTA</Badge>
+            </div>
 
-                {/* Invoice Rows */}
-                {filteredInvoices.map((invoice) => {
-                  const statusInfo = getInvoiceStatusInfo(invoice);
-                  const daysOverdue = calculateDaysOverdue(
-                    invoice.fecha_vencimiento,
-                  );
-                  const isOverdue = daysOverdue > 0;
-
-                  return (
-                    <div
-                      key={invoice.id}
-                      className={`grid grid-cols-12 gap-2 text-sm py-2 border-b border-border/50 min-w-[600px] ${
-                        isOverdue ? "bg-red-50 dark:bg-red-950/20" : ""
-                      }`}
-                    >
-                      <div className="col-span-2 font-mono font-medium text-foreground">
-                        {invoice.folio_interno}
-                      </div>
-                      <div className="col-span-3 truncate text-foreground">
-                        {invoice.cliente}
-                      </div>
-                      <div className="col-span-2 text-right font-mono text-foreground">
-                        {formatCurrency(invoice.monto_total)}
-                      </div>
-                      <div
-                        className={`col-span-2 text-right font-mono font-bold ${
-                          isOverdue
-                            ? "text-status-danger"
-                            : "text-status-warning"
-                        }`}
-                      >
-                        {formatCurrency(invoice.saldo_pendiente)}
-                      </div>
-                      <div className="col-span-2 flex flex-col text-foreground">
-                        <span>
-                          {new Date(
-                            invoice.fecha_vencimiento,
-                          ).toLocaleDateString("es-MX")}
-                        </span>
-                        {isOverdue && (
-                          <span className="text-status-danger font-medium">
-                            +{daysOverdue}d vencido
-                          </span>
-                        )}
-                      </div>
-                      <div className="col-span-1">
-                        {isOverdue ? (
-                          <AlertCircle className="h-4 w-4 text-status-danger" />
-                        ) : (
-                          <Clock className="h-4 w-4 text-status-warning" />
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+            {/* Client Info (if filtered) */}
+            {selectedClient !== "all" && (
+              <div className="p-3 bg-muted/30 rounded-lg">
+                <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
+                  Cliente
+                </p>
+                <p className="font-black text-lg text-foreground">{selectedClient}</p>
               </div>
             )}
-          </div>
 
-          <Separator />
+            {/* Invoice List */}
+            <div>
+              <h3 className="font-black text-sm uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2 text-[10px]">
+                <DollarSign className="h-4 w-4" /> Facturas Pendientes
+              </h3>
 
-          {/* Totals */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="p-4 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/50 rounded-lg">
-              <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400 mb-1">
-                <CheckCircle2 className="h-4 w-4" />
-                Por Vencer (Corriente)
-              </div>
-              <p className="text-xl font-bold text-emerald-800 dark:text-emerald-300 font-mono">
-                {formatCurrency(totals.corriente)}
-              </p>
+              {filteredInvoices.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <CheckCircle2 className="h-12 w-12 mx-auto mb-2 text-emerald-500" />
+                  <p>No hay facturas pendientes de cobro</p>
+                </div>
+              ) : (
+                <div className="space-y-2 overflow-x-auto">
+                  <div className="grid grid-cols-12 gap-2 text-[10px] font-black text-muted-foreground uppercase tracking-widest py-2 border-b border-border min-w-[600px]">
+                    <div className="col-span-2">Folio</div>
+                    <div className="col-span-3">Cliente</div>
+                    <div className="col-span-2 text-right">Monto</div>
+                    <div className="col-span-2 text-right">Saldo</div>
+                    <div className="col-span-2">Vencimiento</div>
+                    <div className="col-span-1">Estado</div>
+                  </div>
+
+                  {filteredInvoices.map((invoice) => {
+                    const statusInfo = getInvoiceStatusInfo(invoice);
+                    const daysOverdue = calculateDaysOverdue(
+                      invoice.fecha_vencimiento,
+                    );
+                    const isOverdue = daysOverdue > 0;
+
+                    return (
+                      <div
+                        key={invoice.id}
+                        className={`grid grid-cols-12 gap-2 text-sm py-2 border-b border-border/50 min-w-[600px] ${
+                          isOverdue ? "bg-red-50 dark:bg-red-950/20" : ""
+                        }`}
+                      >
+                        <div className="col-span-2 font-mono font-bold text-foreground">
+                          {invoice.folio_interno}
+                        </div>
+                        <div className="col-span-3 truncate text-foreground font-bold">
+                          {invoice.cliente}
+                        </div>
+                        <div className="col-span-2 text-right font-mono font-bold text-foreground">
+                          {formatCurrency(invoice.monto_total)}
+                        </div>
+                        <div
+                          className={`col-span-2 text-right font-mono font-black ${
+                            isOverdue
+                              ? "text-destructive"
+                              : "text-amber-600 dark:text-amber-400"
+                          }`}
+                        >
+                          {formatCurrency(invoice.saldo_pendiente)}
+                        </div>
+                        <div className="col-span-2 flex flex-col text-foreground font-bold">
+                          <span>
+                            {new Date(
+                              invoice.fecha_vencimiento,
+                            ).toLocaleDateString("es-MX")}
+                          </span>
+                          {isOverdue && (
+                            <span className="text-destructive font-bold text-[10px]">
+                              +{daysOverdue}d vencido
+                            </span>
+                          )}
+                        </div>
+                        <div className="col-span-1">
+                          {isOverdue ? (
+                            <AlertCircle className="h-4 w-4 text-destructive" />
+                          ) : (
+                            <Clock className="h-4 w-4 text-amber-500" />
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-            <div className="p-4 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/50 rounded-lg">
-              <div className="flex items-center gap-2 text-sm text-red-700 dark:text-red-400 mb-1">
-                <AlertCircle className="h-4 w-4" />
-                Vencido
-              </div>
-              <p className="text-xl font-bold text-red-800 dark:text-red-300 font-mono">
-                {formatCurrency(totals.vencido)}
-              </p>
-            </div>
-            <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
-              <div className="flex items-center gap-2 text-sm text-primary mb-1">
-                <DollarSign className="h-4 w-4" />
-                Saldo Total
-              </div>
-              <p className="text-2xl font-bold text-primary font-mono">
-                {formatCurrency(totals.total)}
-              </p>
-            </div>
-          </div>
 
-          <Separator className="border-2" />
+            <Separator className="bg-border" />
 
-          {/* Bank Details */}
-          <div>
-            <h3 className="font-bold text-sm uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
-              <CreditCard className="h-4 w-4" /> Datos Bancarios para Depósito
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {companyBankData.cuentas.map((cuenta, idx) => (
-                <div key={idx} className="p-4 bg-muted/50 border border-border rounded-lg">
-                  <p className="font-semibold text-primary mb-2">
-                    {cuenta.banco}
-                  </p>
-                  <div className="space-y-1 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">CLABE:</span>
-                      <span className="font-mono font-medium text-foreground">
-                        {cuenta.clabe}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Cuenta:</span>
-                      <span className="font-mono text-foreground">{cuenta.cuenta}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Titular:</span>
-                      <span className="text-xs truncate max-w-[200px] text-foreground">
-                        {cuenta.titular}
-                      </span>
+            {/* Totals */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="p-4 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/50 rounded-xl">
+                <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400 mb-1 font-black">
+                  <CheckCircle2 className="h-4 w-4" />
+                  Por Vencer
+                </div>
+                <p className="text-xl font-black text-emerald-800 dark:text-emerald-300 font-mono">
+                  {formatCurrency(totals.corriente)}
+                </p>
+              </div>
+              <div className="p-4 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/50 rounded-xl">
+                <div className="flex items-center gap-2 text-sm text-red-700 dark:text-red-400 mb-1 font-black">
+                  <AlertCircle className="h-4 w-4" />
+                  Vencido
+                </div>
+                <p className="text-xl font-black text-red-800 dark:text-red-300 font-mono">
+                  {formatCurrency(totals.vencido)}
+                </p>
+              </div>
+              <div className="p-4 bg-primary/5 border border-primary/20 rounded-xl">
+                <div className="flex items-center gap-2 text-sm text-primary mb-1 font-black">
+                  <DollarSign className="h-4 w-4" />
+                  Saldo Total
+                </div>
+                <p className="text-2xl font-black text-primary font-mono">
+                  {formatCurrency(totals.total)}
+                </p>
+              </div>
+            </div>
+
+            <Separator className="bg-border" />
+
+            {/* Bank Details */}
+            <div>
+              <h3 className="font-black text-[10px] uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2">
+                <CreditCard className="h-4 w-4" /> Datos Bancarios para Depósito
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {companyBankData.cuentas.map((cuenta, idx) => (
+                  <div key={idx} className="p-4 bg-muted/50 border border-border rounded-lg">
+                    <p className="font-black text-primary mb-2">
+                      {cuenta.banco}
+                    </p>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">CLABE:</span>
+                        <span className="font-mono font-bold text-foreground">
+                          {cuenta.clabe}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Cuenta:</span>
+                        <span className="font-mono font-bold text-foreground">{cuenta.cuenta}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Titular:</span>
+                        <span className="text-xs truncate max-w-[200px] font-bold text-foreground">
+                          {cuenta.titular}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
 
-          {/* Footer */}
-          <div className="text-center text-xs text-muted-foreground pt-4 border-t border-dashed border-border">
-            <p>Documento generado el {currentDate}</p>
-            <p className="mt-1">
-              Transportes Rápidos 3T © 2025 - Sistema de Gestión
-            </p>
+            {/* Footer del doc */}
+            <div className="text-center text-[10px] text-muted-foreground pt-4 border-t border-dashed border-border">
+              <p>Documento generado el {currentDate}</p>
+              <p className="mt-1 font-black uppercase tracking-widest">
+                Transportes Rápidos 3T © 2025 - Sistema de Gestión
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4">
-          <Button variant="outline" className="gap-2" onClick={handlePrint}>
-            <Printer className="h-4 w-4" />
-            Imprimir
-          </Button>
-          <Button variant="outline" className="gap-2" onClick={handleDownload}>
-            <Download className="h-4 w-4" />
-            Descargar PDF
-          </Button>
-          <Button onClick={onClose}>Cerrar</Button>
+        {/* CAPA 5: FOOTER */}
+        <div className="p-6 sm:p-8 bg-card/80 dark:bg-card/80 backdrop-blur-xl border-t border-border shrink-0 z-10">
+          <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
+            <Button variant="outline" className="w-full sm:w-auto haptic-press font-black uppercase tracking-widest text-[10px] gap-2" onClick={handlePrint}>
+              <Printer className="h-4 w-4" />
+              Imprimir
+            </Button>
+            <Button variant="outline" className="w-full sm:w-auto haptic-press font-black uppercase tracking-widest text-[10px] gap-2" onClick={handleDownload}>
+              <Download className="h-4 w-4" />
+              Descargar PDF
+            </Button>
+            <Button onClick={onClose} className="w-full sm:w-auto haptic-press border-none text-white bg-brand-green hover:bg-[hsl(152,100%,24%)] shadow-[0_4px_15px_rgba(0,151,64,0.3)] font-black uppercase tracking-widest text-[10px]">
+              Cerrar
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

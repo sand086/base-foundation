@@ -1,4 +1,6 @@
 import { useState, useMemo } from "react";
+// 🔥 IMPORTACIÓN NUEVA: Necesaria para limpiar la caché de React Query
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Plus,
   AlertTriangle,
@@ -56,6 +58,9 @@ const categories = [
 ];
 
 export const InventoryTable = () => {
+  // 🔥 NUEVO: Instanciamos el cliente de React Query
+  const queryClient = useQueryClient();
+
   // 1. Hook de datos
   const { inventory, isLoading, createItem, deleteItem, updateItem } =
     useMaintenance();
@@ -152,6 +157,8 @@ export const InventoryTable = () => {
     if (success) {
       setIsAddModalOpen(false);
       setItemToEdit(null);
+      // 🔥 LA MAGIA DE CACHÉ: Le avisamos a toda la app que el inventario cambió
+      queryClient.invalidateQueries({ queryKey: ["inventory"] });
     }
   };
 
@@ -159,6 +166,8 @@ export const InventoryTable = () => {
     if (!itemToDelete) return;
     await deleteItem(itemToDelete);
     setItemToDelete(null);
+    // 🔥 También invalidamos al eliminar por si acaso
+    queryClient.invalidateQueries({ queryKey: ["inventory"] });
   };
 
   const handleEdit = (item: InventoryItem) => {
@@ -322,7 +331,8 @@ export const InventoryTable = () => {
                   onClick={() => handleEdit(item)}
                   className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
                 >
-                  <Edit className="h-4 w-4 text-brand-green" /> Editar
+                  <Edit className="h-4 w-4 text-brand-green dark:text-[#009740]" />{" "}
+                  Editar
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="gap-2 font-bold text-xs uppercase tracking-tight text-rose-600 dark:text-rose-500 cursor-pointer dark:focus:bg-rose-950/30"

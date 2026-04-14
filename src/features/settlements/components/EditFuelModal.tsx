@@ -36,10 +36,6 @@ import { DocumentUploadManager } from "@/components/common/DocumentUploadManager
 import { DatePicker } from "@/components/ui/date-picker";
 import { cn } from "@/lib/utils";
 
-/** =========================
- * REGLA 3: Tipografía Técnica Industrial
- * Componente local para labels estandarizados
- * ========================= */
 const FormLabelBrand = ({
   children,
   className,
@@ -57,9 +53,6 @@ const FormLabelBrand = ({
   </Label>
 );
 
-/** =========================
- * Tipos y Lógica de Dominio
- * ========================= */
 type ID = string | number;
 type TipoCombustible = "diesel" | "urea";
 
@@ -87,7 +80,6 @@ interface CargaCombustible {
   odometro?: number | null;
   estacion?: string | null;
   evidencia_url?: string | null;
-  // Fallbacks de compatibilidad
   unidadId?: string;
   operadorId?: string;
   tipoCombustible?: TipoCombustible;
@@ -120,7 +112,6 @@ export function EditFuelModal({
 }: EditFuelModalProps) {
   const [isSaving, setIsSaving] = useState(false);
 
-  // El estado de fecha_hora ahora es Date | undefined para ser compatible con el DatePicker
   const [formData, setFormData] = useState<{
     unit_id: string;
     operator_id: string;
@@ -136,7 +127,6 @@ export function EditFuelModal({
   useEffect(() => {
     if (!carga || !open) return;
 
-    // Normalización de datos recibidos
     const unitId = String(
       carga.unit_id ?? (carga as any).unidad_id ?? carga.unidadId ?? "",
     );
@@ -223,119 +213,122 @@ export function EditFuelModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* CAPA 1 (Cascarón Tahoe) */}
-      <DialogContent className="p-0 border-none sm:max-w-[650px] bg-card/90 dark:bg-card/95 backdrop-blur-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-300">
-        {/* CAPA 2 (Header Tahoe - Icon Plate) */}
-        <DialogHeader className="p-6 bg-card dark:bg-card border-b border-border flex flex-row items-center gap-5 space-y-0">
-          <div className="w-14 h-14 rounded-2xl bg-brand-green/10 text-brand-green flex items-center justify-center shadow-inner shrink-0">
-            <Edit size={28} />
-          </div>
-          <div className="flex flex-col">
-            <DialogTitle className="heading-crisp text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">
-              Editar Registro de Carga
-            </DialogTitle>
-            <DialogDescription className="font-mono text-[10px] uppercase tracking-[0.2em] opacity-60">
-              Transaction Log ID: #{carga.id}
-            </DialogDescription>
+      {/* CAPA 1: CASCARÓN TAHOE */}
+      <DialogContent className="w-[95vw] sm:max-w-3xl flex flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-card/95 backdrop-blur-xl rounded-2xl">
+        {/* CAPA 2: HEADER */}
+        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-card dark:bg-card border-b border-slate-200 dark:border-white/10 shrink-0 relative z-10">
+          <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
+          <div className="relative z-10 flex items-center gap-4 sm:gap-5">
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center shadow-inner shrink-0 icon-plate border bg-amber-100 dark:bg-amber-900/30 border-amber-200 dark:border-amber-500/20">
+              <Edit className="h-6 w-6 text-amber-600 dark:text-amber-400 drop-shadow-md" />
+            </div>
+            <div className="flex flex-col gap-1 text-left min-w-0">
+              <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-foreground heading-crisp leading-none">
+                Editar Registro de Carga
+              </DialogTitle>
+              <DialogDescription className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mt-1">
+                Transaction Log ID: <span className="font-mono text-foreground">#{carga.id}</span>
+              </DialogDescription>
+            </div>
           </div>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit}>
-          {/* CAPA 3 (Cuerpo/Formulario Hundido) */}
-          <div className="p-6 space-y-6 bg-muted/30 dark:bg-transparent max-h-[65vh] overflow-y-auto custom-scrollbar">
-            {/* Fila: Fecha y Tipo */}
-            <div className="grid grid-cols-2 gap-6">
-              <div className="space-y-1.5">
-                <FormLabelBrand>Timestamp Operativo</FormLabelBrand>
-                {/* SOLUCIÓN AL ERROR: Usamos onDateChange en lugar de setDate */}
-                <DatePicker
-                  date={formData.fecha_hora}
-                  onDateChange={(d) =>
-                    setFormData((p) => (p ? { ...p, fecha_hora: d } : p))
-                  }
-                />
-              </div>
+        <form onSubmit={handleSubmit} className="flex-1 min-h-0 overflow-hidden flex flex-col">
+          {/* CAPA 3: BODY */}
+          <div className="flex-1 overflow-y-auto px-6 pb-6 sm:px-8 sm:pb-8 bg-muted/50 dark:bg-transparent custom-scrollbar space-y-6 mt-4">
+            {/* Fecha y Tipo */}
+            <div className="p-5 border border-slate-200 dark:border-white/10 rounded-2xl bg-card shadow-sm space-y-5">
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-1.5">
+                  <FormLabelBrand>Timestamp Operativo</FormLabelBrand>
+                  <DatePicker
+                    date={formData.fecha_hora}
+                    onDateChange={(d) =>
+                      setFormData((p) => (p ? { ...p, fecha_hora: d } : p))
+                    }
+                  />
+                </div>
 
-              <div className="space-y-1.5">
-                <FormLabelBrand>Fluido Energético</FormLabelBrand>
-                <Select
-                  value={formData.tipo_combustible}
-                  onValueChange={(v: TipoCombustible) =>
-                    setFormData((p) => (p ? { ...p, tipo_combustible: v } : p))
-                  }
-                >
-                  <SelectTrigger className="h-11 bg-card border-border font-bold">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="diesel">
-                      <div className="flex items-center gap-2">
-                        <Fuel className="h-4 w-4 text-amber-500" /> DIESEL
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="urea">
-                      <div className="flex items-center gap-2">
-                        <Droplets className="h-4 w-4 text-blue-500" /> UREA /
-                        DEF
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-                {selectedUnit && (
-                  <p className="text-[9px] font-black uppercase text-slate-400 text-right mt-1">
-                    Capacidad Tank:{" "}
-                    <span className="text-foreground">{tankCapacity}L</span>
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Fila: Unidad y Operador */}
-            <div className="grid grid-cols-2 gap-6">
-              <div className="space-y-1.5">
-                <FormLabelBrand>Activo de Flota</FormLabelBrand>
-                <Select
-                  value={formData.unit_id}
-                  onValueChange={(v) =>
-                    setFormData((p) => (p ? { ...p, unit_id: v } : p))
-                  }
-                >
-                  <SelectTrigger className="h-11 bg-card border-border font-mono font-bold">
-                    <SelectValue placeholder="Seleccionar..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {units.map((u) => (
-                      <SelectItem
-                        key={u.id}
-                        value={String(u.id)}
-                        className="font-mono"
-                      >
-                        {u.numero_economico || `ID-${u.id}`}
+                <div className="space-y-1.5">
+                  <FormLabelBrand>Fluido Energético</FormLabelBrand>
+                  <Select
+                    value={formData.tipo_combustible}
+                    onValueChange={(v: TipoCombustible) =>
+                      setFormData((p) => (p ? { ...p, tipo_combustible: v } : p))
+                    }
+                  >
+                    <SelectTrigger className="h-11 shadow-sm font-bold bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="diesel">
+                        <div className="flex items-center gap-2">
+                          <Fuel className="h-4 w-4 text-amber-500" /> DIESEL
+                        </div>
                       </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                      <SelectItem value="urea">
+                        <div className="flex items-center gap-2">
+                          <Droplets className="h-4 w-4 text-blue-500" /> UREA / DEF
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {selectedUnit && (
+                    <p className="text-[9px] font-black uppercase text-muted-foreground text-right mt-1">
+                      Capacidad Tank:{" "}
+                      <span className="text-foreground">{tankCapacity}L</span>
+                    </p>
+                  )}
+                </div>
               </div>
 
-              <div className="space-y-1.5">
-                <FormLabelBrand>Operador Asignado</FormLabelBrand>
-                <Select
-                  value={formData.operator_id}
-                  onValueChange={(v) =>
-                    setFormData((p) => (p ? { ...p, operator_id: v } : p))
-                  }
-                >
-                  <SelectTrigger className="h-11 bg-card border-border font-black uppercase text-[11px]">
-                    <SelectValue placeholder="Asignar..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {operators.map((o) => (
-                      <SelectItem key={o.id} value={String(o.id)}>
-                        {o.name ?? o.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              {/* Unidad y Operador */}
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-1.5">
+                  <FormLabelBrand>Activo de Flota</FormLabelBrand>
+                  <Select
+                    value={formData.unit_id}
+                    onValueChange={(v) =>
+                      setFormData((p) => (p ? { ...p, unit_id: v } : p))
+                    }
+                  >
+                    <SelectTrigger className="h-11 shadow-sm font-mono font-bold bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
+                      <SelectValue placeholder="Seleccionar..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {units.map((u) => (
+                        <SelectItem
+                          key={u.id}
+                          value={String(u.id)}
+                          className="font-mono"
+                        >
+                          {u.numero_economico || `ID-${u.id}`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <FormLabelBrand>Operador Asignado</FormLabelBrand>
+                  <Select
+                    value={formData.operator_id}
+                    onValueChange={(v) =>
+                      setFormData((p) => (p ? { ...p, operator_id: v } : p))
+                    }
+                  >
+                    <SelectTrigger className="h-11 shadow-sm font-bold uppercase text-[11px] bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
+                      <SelectValue placeholder="Asignar..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {operators.map((o) => (
+                        <SelectItem key={o.id} value={String(o.id)}>
+                          {o.name ?? o.nombre}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
 
@@ -343,9 +336,9 @@ export function EditFuelModal({
             <div className="space-y-1.5">
               <FormLabelBrand>Estación de Suministro</FormLabelBrand>
               <div className="relative group">
-                <Navigation className="absolute left-3 top-3.5 h-4 w-4 text-slate-400 group-focus-within:text-brand-red transition-colors" />
+                <Navigation className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground group-focus-within:text-brand-red transition-colors" />
                 <Input
-                  className="h-11 pl-10 font-black uppercase"
+                  className="h-11 pl-10 font-bold uppercase shadow-sm bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100"
                   value={formData.estacion}
                   onChange={(e) =>
                     setFormData((p) =>
@@ -358,60 +351,62 @@ export function EditFuelModal({
             </div>
 
             {/* Métricas: Litros, Precio, Odómetro */}
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-1.5">
-                <FormLabelBrand>Volumen (L)</FormLabelBrand>
-                <Input
-                  type="number"
-                  className="h-11 font-mono font-bold text-center"
-                  value={formData.litros}
-                  onChange={(e) =>
-                    setFormData((p) =>
-                      p ? { ...p, litros: safeNumber(e.target.value) } : p,
-                    )
-                  }
-                />
-              </div>
-              <div className="space-y-1.5">
-                <FormLabelBrand>Precio/L</FormLabelBrand>
-                <div className="relative">
-                  <DollarSign className="absolute left-3 top-3.5 h-4 w-4 text-emerald-500" />
+            <div className="p-5 border border-slate-200 dark:border-white/10 rounded-2xl bg-card shadow-sm">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <FormLabelBrand>Volumen (L)</FormLabelBrand>
                   <Input
                     type="number"
-                    className="h-11 pl-8 font-mono font-bold text-center"
-                    value={formData.precio_por_litro}
+                    className="h-11 font-mono font-bold text-center shadow-sm bg-muted border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-100"
+                    value={formData.litros}
                     onChange={(e) =>
                       setFormData((p) =>
-                        p
-                          ? {
-                              ...p,
-                              precio_por_litro: safeNumber(e.target.value),
-                            }
-                          : p,
+                        p ? { ...p, litros: safeNumber(e.target.value) } : p,
                       )
                     }
                   />
                 </div>
-              </div>
-              <div className="space-y-1.5">
-                <FormLabelBrand>Odómetro</FormLabelBrand>
-                <div className="relative">
-                  <Hash className="absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
-                  <Input
-                    type="number"
-                    className="h-11 pl-8 font-mono font-bold text-center"
-                    value={formData.odometro}
-                    onChange={(e) =>
-                      setFormData((p) =>
-                        p ? { ...p, odometro: safeNumber(e.target.value) } : p,
-                      )
-                    }
-                  />
+                <div className="space-y-1.5">
+                  <FormLabelBrand>Precio/L</FormLabelBrand>
+                  <div className="relative">
+                    <DollarSign className="absolute left-3 top-3.5 h-4 w-4 text-emerald-500" />
+                    <Input
+                      type="number"
+                      className="h-11 pl-8 font-mono font-bold text-center shadow-sm bg-muted border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-100"
+                      value={formData.precio_por_litro}
+                      onChange={(e) =>
+                        setFormData((p) =>
+                          p
+                            ? {
+                                ...p,
+                                precio_por_litro: safeNumber(e.target.value),
+                              }
+                            : p,
+                        )
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <FormLabelBrand>Odómetro</FormLabelBrand>
+                  <div className="relative">
+                    <Hash className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      type="number"
+                      className="h-11 pl-8 font-mono font-bold text-center shadow-sm bg-muted border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-100"
+                      value={formData.odometro}
+                      onChange={(e) =>
+                        setFormData((p) =>
+                          p ? { ...p, odometro: safeNumber(e.target.value) } : p,
+                        )
+                      }
+                    />
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Alerta Tahoe de Exceso */}
+            {/* Alerta de Exceso */}
             {exceedsTank && (
               <div className="flex items-center gap-3 p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl animate-pulse">
                 <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />
@@ -423,23 +418,23 @@ export function EditFuelModal({
               </div>
             )}
 
-            {/* Resumen de Liquid Glass */}
-            <div className="p-5 bg-slate-900 dark:bg-white rounded-2xl shadow-xl flex items-center justify-between transition-transform hover:scale-[1.01]">
+            {/* Resumen Total */}
+            <div className="p-5 bg-foreground rounded-2xl shadow-xl flex items-center justify-between transition-transform hover:scale-[1.01]">
               <div className="flex flex-col">
-                <span className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
+                <span className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground">
                   Inversión Total
                 </span>
-                <span className="text-2xl font-mono font-black text-white dark:text-slate-900">
+                <span className="text-2xl font-mono font-black text-background">
                   ${total.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
                 </span>
               </div>
-              <div className="bg-emerald-500/20 text-emerald-600 dark:text-emerald-500 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-emerald-500/30">
+              <div className="bg-emerald-500/20 text-emerald-500 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-emerald-500/30">
                 Pesos MXN
               </div>
             </div>
 
             {/* Gestión de Evidencia */}
-            <div className="p-5 bg-card rounded-2xl border border-border shadow-inner">
+            <div className="p-5 border border-slate-200 dark:border-white/10 rounded-2xl bg-card shadow-sm">
               <FormLabelBrand className="mb-4 flex items-center gap-2">
                 <Camera size={14} className="text-brand-green" /> Digitalización
                 de Recurso / Ticket
@@ -458,29 +453,31 @@ export function EditFuelModal({
             </div>
           </div>
 
-          {/* CAPA 4 (Footer / Control Bar Crystal) */}
-          <div className="p-4 bg-card/80 dark:bg-card/80 backdrop-blur-md border-t border-border flex justify-end gap-3 sticky bottom-0">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              className="h-11 px-8 rounded-full font-black uppercase text-[10px] tracking-widest haptic-press transition-all hover:bg-slate-100 dark:hover:bg-white/5"
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="submit"
-              disabled={isSaving}
-              className="h-11 px-10 rounded-full bg-brand-green hover:bg-emerald-600 text-white font-black uppercase text-[10px] tracking-widest haptic-press shadow-lg shadow-emerald-500/20"
-            >
-              {isSaving ? (
-                <div className="flex items-center gap-2">
-                  <Loader2 className="animate-spin h-4 w-4" /> SINCRONIZANDO
-                </div>
-              ) : (
-                "Guardar Cambios"
-              )}
-            </Button>
+          {/* CAPA 5: FOOTER */}
+          <div className="p-6 sm:p-8 bg-muted/50 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
+            <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                className="w-full sm:w-auto haptic-press font-black uppercase tracking-widest text-[10px]"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={isSaving}
+                className="w-full sm:w-auto haptic-press border-none text-white bg-brand-green hover:bg-[hsl(152,100%,24%)] shadow-[0_4px_15px_rgba(0,151,64,0.3)] font-black uppercase tracking-widest text-[10px]"
+              >
+                {isSaving ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="animate-spin h-4 w-4" /> SINCRONIZANDO
+                  </div>
+                ) : (
+                  "Guardar Cambios"
+                )}
+              </Button>
+            </div>
           </div>
         </form>
       </DialogContent>

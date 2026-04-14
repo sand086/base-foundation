@@ -471,14 +471,14 @@ export function AddUnidadModal({
       }}
     >
       {/*  CAPA 1: CASCARÓN */}
-      <DialogContent className="w-[95vw] sm:max-w-3xl flex flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-card/90 dark:bg-card/95 backdrop-blur-xl rounded-2xl">
-        {/*  CAPA 2: HEADER TAHOE (Blanco en Light, Navy en Dark) */}
-        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-card dark:bg-card border-b border-border shrink-0 relative overflow-hidden z-10">
+      <DialogContent className="w-[95vw] sm:max-w-2xl p-0 flex flex-col max-h-[90vh] bg-card/95 backdrop-blur-xl border border-border shadow-2xl rounded-2xl overflow-hidden">
+        {/*  CAPA 2: HEADER TAHOE */}
+        <DialogHeader className="p-6 bg-card border-b border-border shrink-0 relative z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center gap-4 sm:gap-5">
             <div
               className={cn(
-                "w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shadow-inner shrink-0 icon-plate border border-emerald-200 dark:border-emerald-500/20",
+                "w-12 h-12 rounded-xl flex items-center justify-center shadow-inner shrink-0",
                 isEditMode
                   ? "bg-amber-100 dark:bg-amber-900/30"
                   : "bg-emerald-100 dark:bg-emerald-900/30",
@@ -486,7 +486,7 @@ export function AddUnidadModal({
             >
               <Truck
                 className={cn(
-                  "h-7 w-7 sm:h-8 sm:w-8 drop-shadow-[0_0_8px_rgba(52,211,153,0.4)]",
+                  "h-6 w-6",
                   isEditMode
                     ? "text-amber-600 dark:text-amber-400"
                     : "text-emerald-600 dark:text-emerald-400",
@@ -546,7 +546,7 @@ export function AddUnidadModal({
               </div>
 
               {/* SCROLL AREA */}
-              <div className="flex-1 overflow-y-auto px-6 pb-6 sm:px-8 sm:pb-8 bg-muted/30 dark:bg-transparent custom-scrollbar">
+              <div className="flex-1 overflow-y-auto px-6 pb-6 sm:px-8 sm:pb-8 bg-muted/50 custom-scrollbar">
                 {/* TAB GENERAL */}
                 <TabsContent
                   value="general"
@@ -580,7 +580,7 @@ export function AddUnidadModal({
                               onValueChange={field.onChange}
                             >
                               <FormControl>
-                                <SelectTrigger className="h-11 glass-card font-black uppercase text-xs shadow-sm bg-card border-border text-brand-navy dark:text-slate-100">
+                                <SelectTrigger className="h-11 font-black uppercase text-xs shadow-sm bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
                                   <SelectValue placeholder="Seleccione..." />
                                 </SelectTrigger>
                               </FormControl>
@@ -764,7 +764,7 @@ export function AddUnidadModal({
                               onValueChange={field.onChange}
                             >
                               <FormControl>
-                                <SelectTrigger className="h-11 glass-card font-black uppercase text-xs bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-white/10 shadow-sm">
+                                <SelectTrigger className="h-11 font-black uppercase text-xs bg-card border-slate-200 dark:border-white/10 shadow-sm text-slate-800 dark:text-slate-100">
                                   <SelectValue />
                                 </SelectTrigger>
                               </FormControl>
@@ -1160,7 +1160,7 @@ export function AddUnidadModal({
             </Tabs>
 
             {/*  CAPA 4: FOOTER TAHOE */}
-            <DialogFooter className="p-6 sm:p-8 bg-card/80 dark:bg-card/80 backdrop-blur-xl border-t border-border shrink-0 z-10">
+            <DialogFooter className="p-6 sm:p-8 bg-muted/50 border-t border-slate-200 dark:border-white/10 shrink-0">
               <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
                 <Button
                   type="button"

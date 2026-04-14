@@ -861,6 +861,8 @@ def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload)
                     fecha_emision=date.today(),
                     fecha_vencimiento=date.today() + timedelta(days=dias_credito),
                     estatus=models.InvoiceStatus.PENDIENTE,
+                    metodo_pago="PPD",  # <--- Añade esto
+                    tipo_comprobante="I",
                 )
                 db.add(nueva_cxc)
                 cxc_creadas += 1

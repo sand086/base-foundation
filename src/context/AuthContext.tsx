@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import { User } from "@/features/users/types";
 import { authService } from "@/features/users/services/authService";
+import { BYPASS_AUTH } from "@/lib/utils";
 
 //  1. IMPORTAR EL OBJETO OpenAPI GENERADO
 import { OpenAPI } from "@/api/generated/core/OpenAPI";
@@ -31,6 +32,15 @@ export const AuthContext = createContext<AuthContextType | undefined>(
 );
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  // <--  USUARIO DE PRUEBA -->
+  const mockUser = {
+    id: 1,
+    nombre: "Modo",
+    apellido: "Bypass",
+    email: "admin@transportes.com",
+    activo: true,
+    role: { nombre: "Admin", permisos: {} },
+  } as any;
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -120,7 +130,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     <AuthContext.Provider
       value={{
         user,
-        isAuthenticated: !!user,
+        isAuthenticated: BYPASS_AUTH ? true : !!user,
         login,
         logout,
         isLoading,

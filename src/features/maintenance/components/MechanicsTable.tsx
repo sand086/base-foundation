@@ -129,33 +129,42 @@ export function MechanicsTable({
       sortable: false,
       width: "w-[100px]",
       render: (_: any, row: Mechanic) => (
-        <div className="flex gap-2 justify-end pr-4">
+        <div className="flex justify-end gap-2 pr-2">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="icon"
                   onClick={() => onOpenExpediente(row)}
-                  className="h-8 w-8 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-500/30 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-lg shadow-sm transition-colors"
+                  className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200/50 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 haptic-press"
                 >
-                  <FileSearch className="h-4 w-4" />
+                  <FileSearch className="h-4 w-4 text-blue-500 dark:text-blue-400" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent className="bg-slate-900 text-white font-bold text-xs uppercase tracking-widest border-none">
-                <p>Ver Expediente</p>
+              <TooltipContent className="bg-brand-navy border-white/10 text-[10px] font-black uppercase tracking-widest px-3 py-2 text-white">
+                Ver Expediente
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
 
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => onEdit(row)}
-            className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors border border-transparent hover:border-slate-200 dark:hover:border-white/10"
-          >
-            <Edit className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => onEdit(row)}
+                  className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200/50 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 haptic-press"
+                >
+                  <Edit className="h-4 w-4 text-brand-green dark:text-[#009740]" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent className="bg-brand-navy border-white/10 text-[10px] font-black uppercase tracking-widest px-3 py-2 text-white">
+                Editar Mecánico
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       ),
     },

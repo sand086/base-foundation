@@ -168,7 +168,7 @@ export default function Purchases() {
         key: "folio",
         header: "Folio",
         render: (v) => (
-          <span className="font-mono font-medium">{v as string}</span>
+          <span className="font-mono text-sm font-bold text-slate-700 dark:text-slate-300 uppercase">{v as string}</span>
         ),
       },
       {
@@ -182,14 +182,18 @@ export default function Purchases() {
           </Badge>
         ),
       },
-      { key: "supplier_name", header: "Proveedor" }, //  Corregido de proveedorNombre
-      { key: "requester", header: "Solicitante" }, //  Corregido de solicitante
+      { key: "supplier_name", header: "Proveedor", render: (v) => (
+        <span className="font-black text-brand-navy dark:text-white uppercase tracking-tight">{v as string}</span>
+      ) },
+      { key: "requester", header: "Solicitante", render: (v) => (
+        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">{v as string}</span>
+      ) },
       {
         key: "total",
         header: "Monto",
         type: "number",
         render: (v, r) => (
-          <span className="font-mono">
+          <span className="font-mono text-sm font-bold text-slate-700 dark:text-slate-300 uppercase">
             {formatCurrency(v as number, r.moneda)}
           </span>
         ),
@@ -217,25 +221,26 @@ export default function Purchases() {
         render: (_, row) => (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <MoreHorizontal className="h-4 w-4" />
+              <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200/50 dark:border-white/10 bg-white/50 dark:bg-slate-900/50">
+                <MoreHorizontal className="h-4 w-4 text-slate-500 dark:text-slate-400" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="glass-panel border-white/20 min-w-[160px] z-50 dark:bg-slate-900/90">
               <DropdownMenuItem
                 onClick={() => {
                   setEditingOrder(row);
                   setWizardOpen(true);
                 }}
+                className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
               >
-                <Edit className="h-4 w-4 mr-2" />
+                <Edit className="h-4 w-4 mr-2 text-brand-green dark:text-[#009740]" />
                 Editar
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handlePrint(row)}>
-                <Printer className="h-4 w-4 mr-2" />
+              <DropdownMenuItem onClick={() => handlePrint(row)} className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800">
+                <Printer className="h-4 w-4 mr-2 text-blue-500 dark:text-blue-400" />
                 Imprimir PDF
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
+              <DropdownMenuSeparator className="dark:bg-white/10" />
               {row.status === "borrador" && (
                 <DropdownMenuItem
                   onClick={() => {
@@ -248,14 +253,15 @@ export default function Purchases() {
                     );
                     toast.success("Enviada a aprobación");
                   }}
+                  className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
                 >
-                  <Send className="h-4 w-4 mr-2" />
+                  <Send className="h-4 w-4 mr-2 text-amber-500 dark:text-amber-400" />
                   Enviar a Aprobación
                 </DropdownMenuItem>
               )}
               {row.status === "pendiente_aprobacion" && (
-                <DropdownMenuItem onClick={() => handleApprove(row)}>
-                  <CheckCircle className="h-4 w-4 mr-2" />
+                <DropdownMenuItem onClick={() => handleApprove(row)} className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800">
+                  <CheckCircle className="h-4 w-4 mr-2 text-emerald-500 dark:text-emerald-400" />
                   Aprobar
                 </DropdownMenuItem>
               )}
@@ -265,8 +271,9 @@ export default function Purchases() {
                     setSelectedOrder(row);
                     setReceiveModalOpen(true);
                   }}
+                  className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
                 >
-                  <Package className="h-4 w-4 mr-2" />
+                  <Package className="h-4 w-4 mr-2 text-blue-500 dark:text-blue-400" />
                   Recibir
                 </DropdownMenuItem>
               )}
@@ -276,18 +283,19 @@ export default function Purchases() {
                     setSelectedOrder(row);
                     setConvertModalOpen(true);
                   }}
+                  className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
                 >
-                  <ArrowRight className="h-4 w-4 mr-2" />
+                  <ArrowRight className="h-4 w-4 mr-2 text-brand-green dark:text-[#009740]" />
                   Convertir a CxP
                 </DropdownMenuItem>
               )}
-              <DropdownMenuSeparator />
+              <DropdownMenuSeparator className="dark:bg-white/10" />
               <DropdownMenuItem
                 onClick={() => {
                   setSelectedOrder(row);
                   setDeleteDialogOpen(true);
                 }}
-                className="text-destructive"
+                className="gap-2 font-bold text-xs uppercase tracking-tight text-rose-600 dark:text-rose-500 cursor-pointer dark:focus:bg-rose-950/30"
               >
                 <Trash2 className="h-4 w-4 mr-2" />
                 Eliminar
@@ -342,15 +350,18 @@ export default function Purchases() {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader className="flex-row items-center justify-between">
-          <CardTitle>Órdenes</CardTitle>
+      <Card className="shadow-2xl border-none overflow-hidden bg-transparent">
+        <CardHeader className="flex flex-row items-center justify-between border-b border-slate-200 dark:border-white/10 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-xl py-6 px-6">
+          <CardTitle className="text-xl font-black uppercase tracking-tighter text-brand-navy dark:text-white heading-crisp flex items-center gap-3">
+            <Package className="h-5 w-5 text-brand-red" />
+            Órdenes
+          </CardTitle>
           <ActionButton onClick={() => setWizardOpen(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Nueva Orden
           </ActionButton>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0 bg-white dark:bg-slate-950 [&_thead]:bg-slate-50/80 dark:[&_thead]:bg-slate-900/80 [&_thead]:backdrop-blur-xl [&_th]:bg-transparent [&_th]:border-b [&_th]:border-slate-200 dark:[&_th]:border-white/10 [&_th]:text-[10px] [&_th]:font-black [&_th]:uppercase [&_th]:tracking-[0.2em] [&_th]:text-slate-500 dark:[&_th]:text-slate-400">
           <EnhancedDataTable
             data={orders}
             columns={columns}

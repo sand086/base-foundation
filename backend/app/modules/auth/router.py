@@ -28,6 +28,7 @@ from app.modules.monitoring.crud import log_audit
 router = APIRouter(tags=["Authentication"])
 
 reusable_oauth2 = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
+BYPASS_AUTH = False
 
 
 # -----------------------------------------------------------------------------
@@ -36,6 +37,12 @@ reusable_oauth2 = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/log
 async def get_current_user(
     db: Session = Depends(get_db), token: str = Depends(reusable_oauth2)
 ) -> models.User:
+    if BYPASS_AUTH:
+        user = db.query(models.User).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="No hay usuarios en la BD")
+        return user
+
     try:
         payload = jwt.decode(
             token, settings.SECRET_KEY, algorithms=[security.ALGORITHM]

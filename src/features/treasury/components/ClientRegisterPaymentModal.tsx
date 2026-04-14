@@ -35,7 +35,7 @@ import { cn } from "@/lib/utils";
 interface ClientRegisterPaymentModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  invoices: ReceivableInvoice[]; // AHORA RECIBE MÚLTIPLES FACTURAS
+  invoices: ReceivableInvoice[];
   clientName?: string;
   clientId?: number;
   onSubmit: (payload: any) => Promise<void> | void;
@@ -53,21 +53,18 @@ export function ClientRegisterPaymentModal({
 }: ClientRegisterPaymentModalProps) {
   const [formData, setFormData] = useState({
     fecha: new Date().toISOString().split("T")[0],
-    metodoPago: "03", // 03 = Transferencia Electrónica
+    metodoPago: "03",
     referencia: "",
     cuenta_deposito: "",
   });
 
-  // Estado para llevar el control de cuánto se abona a CADA factura
   const [abonos, setAbonos] = useState<Record<number, number>>({});
   const [error, setError] = useState("");
 
-  // Reiniciar montos cuando se abre el modal o cambian las facturas
   useEffect(() => {
     if (open && invoices.length > 0) {
       const initialAbonos: Record<number, number> = {};
       invoices.forEach((inv) => {
-        // Por defecto, sugerimos liquidar el total del saldo pendiente
         initialAbonos[inv.id] = inv.saldo_pendiente;
       });
       setAbonos(initialAbonos);
@@ -80,7 +77,6 @@ export function ClientRegisterPaymentModal({
     }
   }, [invoices, open]);
 
-  // Calculamos el Gran Total a Recibir
   const granTotal = useMemo(() => {
     return Object.values(abonos).reduce((sum, val) => sum + (val || 0), 0);
   }, [abonos]);
@@ -97,7 +93,6 @@ export function ClientRegisterPaymentModal({
       return;
     }
 
-    // Validar que no estemos cobrando de más en ninguna factura
     for (const inv of invoices) {
       const abono = abonos[inv.id] || 0;
       if (abono > inv.saldo_pendiente) {
@@ -108,7 +103,6 @@ export function ClientRegisterPaymentModal({
       }
     }
 
-    // 🛡️ BLINDAJE CONTRA EL ERROR DE PYDANTIC (Missing client_id)
     const finalClientId = clientId || invoices[0]?.client_id;
 
     if (!finalClientId) {
@@ -126,7 +120,7 @@ export function ClientRegisterPaymentModal({
       }));
 
     const payloadBackend = {
-      client_id: Number(finalClientId), // Lo forzamos a número explícitamente
+      client_id: Number(finalClientId),
       pagos: payloadPagos,
       forma_pago: formData.metodoPago,
       fecha_pago: formData.fecha,
@@ -144,29 +138,31 @@ export function ClientRegisterPaymentModal({
       open={open}
       onOpenChange={(val) => !isSubmitting && onOpenChange(val)}
     >
-      <DialogContent className="sm:max-w-[700px] bg-card/95 backdrop-blur-xl border border-border shadow-2xl rounded-2xl overflow-hidden p-0 flex flex-col max-h-[90vh]">
-        {/* HEADER */}
-        <DialogHeader className="p-6 sm:p-8 bg-brand-navy border-b border-brand-navy/80 shrink-0">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-xl bg-white/10 flex items-center justify-center border border-white/20 shadow-inner">
-                <Layers className="h-6 w-6 text-emerald-400" />
+      {/* CAPA 1: CASCARÓN TAHOE */}
+      <DialogContent className="w-[95vw] sm:max-w-3xl flex flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-card/95 backdrop-blur-xl rounded-2xl">
+        {/* CAPA 2: HEADER */}
+        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-card dark:bg-card border-b border-slate-200 dark:border-white/10 shrink-0 relative z-10">
+          <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
+          <div className="relative z-10 flex items-center justify-between">
+            <div className="flex items-center gap-4 sm:gap-5">
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center shadow-inner shrink-0 icon-plate border bg-emerald-100 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-500/20">
+                <Layers className="h-6 w-6 text-emerald-600 dark:text-emerald-400 drop-shadow-md" />
               </div>
-              <div className="text-left">
-                <DialogTitle className="text-xl sm:text-2xl font-black text-white uppercase tracking-tighter">
+              <div className="flex flex-col gap-1 text-left min-w-0">
+                <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-foreground heading-crisp leading-none">
                   Cobro Múltiple y REP
                 </DialogTitle>
-                <DialogDescription className="text-[10px] sm:text-xs font-bold text-slate-300 uppercase tracking-widest mt-1">
+                <DialogDescription className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mt-1">
                   Cliente: {clientName}
                 </DialogDescription>
               </div>
             </div>
 
             <div className="hidden sm:block text-right">
-              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400/80 mb-1">
+              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 mb-1">
                 Total a Recibir
               </p>
-              <p className="text-3xl font-black text-white font-mono tracking-tighter drop-shadow-md">
+              <p className="text-3xl font-black text-foreground font-mono tracking-tighter drop-shadow-md">
                 $
                 {granTotal.toLocaleString("es-MX", {
                   minimumFractionDigits: 2,
@@ -176,17 +172,17 @@ export function ClientRegisterPaymentModal({
           </div>
         </DialogHeader>
 
-        {/* CUERPO DEL MODAL (Scrollable) */}
-        <ScrollArea className="flex-1 p-6 sm:p-8 bg-slate-50/50 dark:bg-slate-900/50 custom-scrollbar">
+        {/* CAPA 3: BODY (Scrollable) */}
+        <ScrollArea className="flex-1 px-6 pb-6 sm:px-8 sm:pb-8 bg-muted/50 dark:bg-transparent custom-scrollbar mt-4">
           <div className="space-y-6">
             {/* CONFIGURACIÓN DEL PAGO */}
-            <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-white/10 shadow-sm">
-              <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-4 flex items-center gap-1.5">
-                <Building2 className="h-3.5 w-3.5" /> Datos de la Transacción
+            <div className="p-5 border border-slate-200 dark:border-white/10 rounded-2xl bg-card shadow-sm">
+              <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-4 flex items-center gap-1.5">
+                <Building2 className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" /> Datos de la Transacción
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-600 dark:text-slate-400">
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
                     <Calendar className="inline h-3 w-3 mr-1" /> Fecha de Pago *
                   </Label>
                   <Input
@@ -195,14 +191,13 @@ export function ClientRegisterPaymentModal({
                     onChange={(e) =>
                       setFormData({ ...formData, fecha: e.target.value })
                     }
-                    className="h-10 bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-white/10"
+                    className="h-11 shadow-sm font-mono font-bold bg-muted border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-100"
                     disabled={isSubmitting}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-600 dark:text-slate-400">
-                    <CreditCard className="inline h-3 w-3 mr-1" /> Forma de Pago
-                    *
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                    <CreditCard className="inline h-3 w-3 mr-1" /> Forma de Pago *
                   </Label>
                   <Select
                     value={formData.metodoPago}
@@ -211,7 +206,7 @@ export function ClientRegisterPaymentModal({
                     }
                     disabled={isSubmitting}
                   >
-                    <SelectTrigger className="h-10 bg-slate-50 dark:bg-slate-950 font-bold text-xs border-slate-200 dark:border-white/10">
+                    <SelectTrigger className="h-11 shadow-sm font-bold text-xs bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -222,7 +217,7 @@ export function ClientRegisterPaymentModal({
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-600 dark:text-slate-400">
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
                     Ref. / Operación
                   </Label>
                   <Input
@@ -231,18 +226,18 @@ export function ClientRegisterPaymentModal({
                     onChange={(e) =>
                       setFormData({ ...formData, referencia: e.target.value })
                     }
-                    className="h-10 text-sm bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-white/10"
+                    className="h-11 shadow-sm text-sm font-bold uppercase bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100"
                     disabled={isSubmitting}
                   />
                 </div>
               </div>
             </div>
 
-            {/* LISTA DE FACTURAS SELECCIONADAS */}
+            {/* LISTA DE FACTURAS */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                  <FileText className="h-3.5 w-3.5" /> Desglose de Facturas a
+                <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
+                  <FileText className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" /> Desglose de Facturas a
                   Pagar ({invoices.length})
                 </h4>
               </div>
@@ -257,7 +252,7 @@ export function ClientRegisterPaymentModal({
                     <div
                       key={inv.id}
                       className={cn(
-                        "flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border bg-white dark:bg-slate-800 transition-colors shadow-sm",
+                        "flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border bg-card transition-colors shadow-sm",
                         exceeds
                           ? "border-rose-300 dark:border-rose-800 bg-rose-50/50 dark:bg-rose-900/20"
                           : "border-slate-200 dark:border-white/10",
@@ -265,16 +260,16 @@ export function ClientRegisterPaymentModal({
                     >
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="font-black text-brand-navy dark:text-white uppercase tracking-tight text-sm">
+                          <span className="font-black text-foreground uppercase tracking-tight text-sm">
                             {inv.folio_interno}
                           </span>
-                          <span className="text-[9px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 px-2 py-0.5 rounded uppercase tracking-widest">
+                          <span className="text-[9px] font-bold bg-muted text-muted-foreground px-2 py-0.5 rounded uppercase tracking-widest">
                             UUID: {inv.uuid ? inv.uuid.slice(0, 8) : "SIN UUID"}
                           </span>
                         </div>
-                        <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                        <p className="text-xs font-bold text-muted-foreground">
                           Saldo actual:{" "}
-                          <span className="font-mono text-slate-700 dark:text-slate-200">
+                          <span className="font-mono text-foreground">
                             $
                             {saldo.toLocaleString("es-MX", {
                               minimumFractionDigits: 2,
@@ -295,10 +290,10 @@ export function ClientRegisterPaymentModal({
                             handleAbonoChange(inv.id, e.target.value)
                           }
                           className={cn(
-                            "pl-8 font-mono font-black text-right shadow-inner",
+                            "pl-8 font-mono font-black text-right shadow-inner h-11",
                             exceeds
-                              ? "border-rose-300 text-rose-600 bg-white"
-                              : "border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 bg-emerald-50/30 dark:bg-emerald-950/30",
+                              ? "border-rose-300 text-rose-600"
+                              : "border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400",
                           )}
                           disabled={isSubmitting}
                         />
@@ -318,10 +313,10 @@ export function ClientRegisterPaymentModal({
           </div>
         </ScrollArea>
 
-        {/* FOOTER TOTALES Y ACCIÓN */}
-        <DialogFooter className="p-4 sm:p-6 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-white/10 shrink-0 flex flex-col sm:flex-row items-center justify-between gap-4">
+        {/* CAPA 5: FOOTER */}
+        <DialogFooter className="p-6 sm:p-8 bg-muted/50 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
           <div className="sm:hidden w-full text-center mb-2">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
               Total a Recibir
             </p>
             <p className="text-2xl font-black text-emerald-600 font-mono">
@@ -329,26 +324,29 @@ export function ClientRegisterPaymentModal({
             </p>
           </div>
 
-          <Button
-            variant="ghost"
-            onClick={() => onOpenChange(false)}
-            className="w-full sm:w-auto font-black text-[10px] uppercase tracking-widest text-slate-500 hover:text-slate-800 dark:hover:text-white"
-            disabled={isSubmitting}
-          >
-            Cancelar
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] uppercase tracking-widest shadow-lg shadow-emerald-500/20 haptic-press h-12 px-8"
-            disabled={isSubmitting || granTotal <= 0}
-          >
-            {isSubmitting ? (
-              <Loader2 className="animate-spin h-4 w-4 mr-2" />
-            ) : (
-              <CheckCircle2 className="h-4 w-4 mr-2" />
-            )}
-            {isSubmitting ? "Timbrando REP..." : "Timbrar Complemento de Pago"}
-          </Button>
+          <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              className="w-full sm:w-auto haptic-press font-black uppercase tracking-widest text-[10px]"
+              disabled={isSubmitting}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              className="w-full sm:w-auto haptic-press border-none text-white bg-brand-green hover:bg-[hsl(152,100%,24%)] shadow-[0_4px_15px_rgba(0,151,64,0.3)] font-black uppercase tracking-widest text-[10px] h-12 px-8"
+              disabled={isSubmitting || granTotal <= 0}
+            >
+              {isSubmitting ? (
+                <Loader2 className="animate-spin h-4 w-4 mr-2" />
+              ) : (
+                <CheckCircle2 className="h-4 w-4 mr-2" />
+              )}
+              {isSubmitting ? "Timbrando REP..." : "Timbrar Complemento de Pago"}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

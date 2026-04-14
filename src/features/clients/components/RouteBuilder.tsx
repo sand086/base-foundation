@@ -1143,7 +1143,7 @@ export const RouteBuilder: React.FC = () => {
             </CardHeader>
 
             {/* TOOLBAR SECUNDARIO */}
-            <div className="bg-muted/50 border-b border-slate-200 dark:border-white/10 p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="bg-slate-100/50 dark:bg-slate-950/40 border-b border-slate-200/50 dark:border-white/10 p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div className="flex items-center space-x-3">
                 <Switch
                   id="advanced-mode"
@@ -1177,15 +1177,15 @@ export const RouteBuilder: React.FC = () => {
 
             {/*  TABLA DND */}
             <CardContent className="p-0">
-              <div className="relative w-full overflow-hidden bg-muted/50">
+              <div className="relative w-full overflow-hidden bg-white/30 dark:bg-slate-950/30">
                 <DndContext
                   sensors={sensors}
                   collisionDetection={closestCenter}
                   onDragEnd={handleDragEnd}
                 >
                   <Table className="w-full caption-bottom text-sm">
-                    <TableHeader className="bg-muted/80">
-                      <TableRow className="border-b border-slate-300 dark:border-white/10">
+                    <TableHeader className="sticky top-0 z-20 backdrop-blur-xl bg-slate-50/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-white/10">
+                      <TableRow className="hover:bg-transparent border-none">
                         <TableHead className="w-12 pl-4"></TableHead>
                         <TableHead
                           className={cn(
@@ -1513,7 +1513,7 @@ export const RouteBuilder: React.FC = () => {
             </TabsList>
           </Tabs>
         </CardHeader>
-        <CardContent className="pt-6 p-0 bg-card">
+        <CardContent className="pt-6 p-0 bg-white dark:bg-slate-950 [&_thead]:bg-slate-50/80 dark:[&_thead]:bg-slate-900/80 [&_thead]:backdrop-blur-xl [&_th]:bg-transparent [&_th]:border-b [&_th]:border-slate-200 dark:[&_th]:border-white/10 [&_th]:text-[10px] [&_th]:font-black [&_th]:uppercase [&_th]:tracking-[0.2em] [&_th]:text-slate-500 dark:[&_th]:text-slate-400 [&_th]:h-12 [&_td]:border-b [&_td]:border-slate-100 dark:[&_td]:border-white/5">
           <EnhancedDataTable
             data={rutasFiltradas}
             columns={historyColumns}
@@ -1525,14 +1525,15 @@ export const RouteBuilder: React.FC = () => {
 
       {/*  MODAL ELIMINAR RUTA */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent className="w-[95vw] sm:max-w-2xl p-0 flex flex-col max-h-[90vh] bg-card/95 backdrop-blur-xl border border-border shadow-2xl rounded-2xl transition-all duration-300 overflow-hidden">
-          <AlertDialogHeader className="p-6 sm:p-8 bg-card border-b border-border shrink-0">
-            <div className="flex items-center gap-4 sm:gap-5">
-              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center shadow-inner shrink-0">
+        <AlertDialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
+          <AlertDialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
+            <div className="absolute inset-0 bg-gradient-to-br from-rose-500/5 dark:from-rose-500/10 to-transparent pointer-events-none" />
+            <div className="relative z-10 flex items-center gap-4 sm:gap-5">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center shadow-inner shrink-0 icon-plate border border-rose-200 dark:border-rose-500/20">
                 <AlertTriangle className="h-7 w-7 sm:h-8 sm:w-8 text-rose-600 dark:text-rose-400" />
               </div>
               <div className="flex flex-col gap-1">
-                <AlertDialogTitle className="text-rose-600 dark:text-rose-500 text-lg sm:text-2xl font-black uppercase tracking-tighter heading-crisp leading-none">
+                <AlertDialogTitle className="text-2xl font-black uppercase tracking-tighter text-rose-600 dark:text-rose-500 heading-crisp leading-none">
                   Eliminar Plantilla de Ruta
                 </AlertDialogTitle>
                 <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mt-1">
@@ -1542,12 +1543,12 @@ export const RouteBuilder: React.FC = () => {
             </div>
           </AlertDialogHeader>
 
-          <div className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-6 custom-scrollbar bg-transparent">
+          <div className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-6 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
             <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block">
               <div className="space-y-6">
                 <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
                   Estás a punto de eliminar la ruta{" "}
-                  <b className="text-slate-900 dark:text-white uppercase">
+                  <b className="text-slate-900 dark:text-white text-lg font-black tracking-tight uppercase">
                     {routeToDelete?.origen}
                   </b>
                   .
@@ -1570,20 +1571,29 @@ export const RouteBuilder: React.FC = () => {
                   </div>
                 </div>
 
-                <p className="text-sm text-slate-600 dark:text-slate-400 mt-4 border-l-4 border-amber-500 pl-4 py-1">
-                  Sin embargo, esta plantilla se desactivará y{" "}
-                  <b>ya no podrá ser seleccionada</b> en despachos futuros.
-                </p>
+                <div className="p-5 bg-rose-50 dark:bg-rose-950/20 border-l-4 border-rose-500 rounded-r-2xl shadow-sm">
+                  <div className="flex items-center gap-2 mb-3">
+                    <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+                    <h4 className="text-[10px] sm:text-[11px] font-black text-rose-800 dark:text-rose-400 uppercase tracking-widest">
+                      Advertencia
+                    </h4>
+                  </div>
+                  <p className="text-xs sm:text-sm leading-relaxed text-rose-900 dark:text-rose-200/80">
+                    Esta plantilla se desactivará y{" "}
+                    <b className="font-black underline">ya no podrá ser seleccionada</b> en despachos futuros.{" "}
+                    <b className="font-black">Esta acción no se puede deshacer</b>.
+                  </p>
+                </div>
               </div>
             </AlertDialogDescription>
           </div>
 
-          <AlertDialogFooter className="p-6 sm:p-8 bg-muted/50 border-t border-slate-200 dark:border-white/10 shrink-0">
+          <AlertDialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0">
             <div className="flex flex-col-reverse sm:flex-row sm:flex-wrap justify-end items-stretch sm:items-center gap-3 w-full">
               <AlertDialogCancel
                 variant="outline"
                 size="lg"
-                className="w-full sm:w-auto haptic-press flex-shrink-0"
+                className="w-full sm:w-auto haptic-press flex-shrink-0 font-black uppercase tracking-widest text-[10px]"
               >
                 Cancelar
               </AlertDialogCancel>
@@ -1591,7 +1601,7 @@ export const RouteBuilder: React.FC = () => {
                 variant="destructive"
                 size="lg"
                 onClick={handleConfirmDelete}
-                className="w-full sm:w-auto haptic-press shadow-rose-600/10 flex-shrink-0"
+                className="w-full sm:w-auto haptic-press shadow-rose-600/10 flex-shrink-0 border-none bg-rose-600 hover:bg-rose-700 text-white font-black uppercase tracking-widest text-[10px]"
               >
                 <Trash2 className="h-4 w-4 mr-2" /> Sí, Eliminar Ruta
               </AlertDialogAction>

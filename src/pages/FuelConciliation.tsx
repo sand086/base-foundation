@@ -1131,30 +1131,61 @@ export default function FuelConciliation() {
         open={!!legToReset}
         onOpenChange={(open) => !open && setLegToReset(null)}
       >
-        <AlertDialogContent className="rounded-3xl p-8 border-none shadow-2xl bg-white dark:bg-slate-900">
-          <AlertDialogHeader>
-            <div className="w-16 h-16 rounded-2xl bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-500 flex items-center justify-center mb-4 border border-rose-100 dark:border-rose-800">
-              <Trash2 size={32} />
+        <AlertDialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
+          <AlertDialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
+            <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
+            <div className="relative z-10 flex items-center gap-4 sm:gap-5">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center shadow-inner shrink-0 icon-plate border border-rose-200 dark:border-rose-500/20">
+                <AlertTriangle className="h-7 w-7 sm:h-8 sm:w-8 text-rose-600 dark:text-rose-400 drop-shadow-[0_0_8px_rgba(244,63,94,0.4)]" />
+              </div>
+              <div className="flex flex-col gap-1 text-left">
+                <AlertDialogTitle className="text-2xl font-black uppercase tracking-tighter text-rose-600 dark:text-rose-500 heading-crisp leading-none">
+                  Revertir Registro
+                </AlertDialogTitle>
+                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-1">
+                  Acción Irreversible • Conciliación Combustible
+                </p>
+              </div>
             </div>
-            <AlertDialogTitle className="text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">
-              Revertir Registro de detalles
-            </AlertDialogTitle>
-            <AlertDialogDescription className="font-medium text-slate-500 dark:text-slate-400">
-              ¿Estás seguro de que deseas eliminar esta conciliación? Los
-              cálculos se borrarán y la fase volverá a quedar pendiente de
-              auditar.
-            </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="mt-6">
-            <AlertDialogCancel className="rounded-xl h-11 font-bold uppercase text-[10px] tracking-widest px-6 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-none">
-              Cancelar
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleResetAudit}
-              className="rounded-xl h-11 font-black uppercase text-[10px] tracking-widest px-6 bg-rose-600 hover:bg-rose-700 text-white"
-            >
-              Sí, Revertir
-            </AlertDialogAction>
+
+          <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
+            <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block space-y-6">
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                ¿Estás seguro de que deseas eliminar esta conciliación?
+              </p>
+              <div className="p-5 sm:p-6 bg-rose-50 dark:bg-rose-950/20 border-l-4 border-rose-500 rounded-r-2xl shadow-sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+                  <h4 className="text-[10px] sm:text-[11px] font-black text-rose-800 dark:text-rose-400 uppercase tracking-widest">
+                    Consecuencia
+                  </h4>
+                </div>
+                <p className="text-xs sm:text-sm leading-relaxed text-rose-900 dark:text-rose-200/80">
+                  Los cálculos se borrarán y la fase <b className="font-black">volverá a quedar pendiente</b> de auditar.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </div>
+
+          <AlertDialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
+            <div className="flex flex-col-reverse sm:flex-row sm:flex-wrap justify-end items-stretch sm:items-center gap-3 w-full">
+              <AlertDialogCancel
+                variant="outline"
+                size="lg"
+                className="w-full sm:w-auto haptic-press flex-shrink-0 font-black uppercase tracking-widest text-[10px]"
+              >
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                variant="destructive"
+                size="lg"
+                onClick={handleResetAudit}
+                className="w-full sm:w-auto haptic-press shadow-rose-600/10 flex-shrink-0 border-none bg-rose-600 hover:bg-rose-700 text-white font-black uppercase tracking-widest text-[10px]"
+              >
+                <Trash2 className="h-4 w-4 mr-2" /> Sí, Revertir
+              </AlertDialogAction>
+            </div>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

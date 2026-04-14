@@ -302,32 +302,32 @@ export function AddTicketModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[1000px] max-h-[95vh] flex flex-col p-0 gap-0 border-0 rounded-[28px] shadow-2xl overflow-hidden bg-background dark:bg-background">
-        <DialogHeader className="shrink-0 border-b border-border bg-card p-6 shadow-sm">
-          <DialogTitle className="flex items-start gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-red/10 text-brand-red">
-              <Fuel className="h-6 w-6" />
+        <DialogContent className="w-[95vw] sm:max-w-[1000px] max-h-[90vh] flex flex-col p-0 gap-0 border-none shadow-2xl overflow-hidden animate-modal-show bg-card/95 backdrop-blur-xl rounded-2xl">
+        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-card dark:bg-card border-b border-slate-200 dark:border-white/10 shrink-0 relative z-10">
+          <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
+          <div className="relative z-10 flex items-center gap-4 sm:gap-5">
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center shadow-inner shrink-0 icon-plate border bg-rose-100 dark:bg-rose-900/30 border-rose-200 dark:border-rose-500/20">
+              <Fuel className="h-6 w-6 text-brand-red drop-shadow-md" />
             </div>
-            <div>
-              <h2 className="text-xl font-black uppercase text-foreground">
-                Registro Multi-Ticket de Combustible
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Vincule el viaje y agregue todos los vales que el operador
-                presente.
+            <div className="flex flex-col gap-1 text-left">
+              <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-foreground heading-crisp leading-none">
+                Registro Multi-Ticket
+              </DialogTitle>
+              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mt-1">
+                Vincule el viaje y agregue todos los vales del operador
               </p>
             </div>
-          </DialogTitle>
+          </div>
         </DialogHeader>
 
         <form
           onSubmit={handleSubmit}
           className="flex flex-col flex-1 overflow-hidden"
         >
-          <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
+          <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar bg-muted/50 dark:bg-transparent">
             {/* 1. SECCIÓN VINCULACIÓN */}
-            <section className="bg-card p-6 rounded-[24px] border border-border shadow-sm space-y-6">
-              <div className="flex items-center gap-2 border-b pb-3 border-border">
+            <section className="bg-card p-6 rounded-2xl border border-slate-200 dark:border-white/10 shadow-sm space-y-6">
+              <div className="flex items-center gap-2 border-b pb-3 border-slate-200 dark:border-white/10">
                 <MapPin className="h-4 w-4 text-brand-navy" />
                 <h3 className="text-xs font-black uppercase tracking-widest text-foreground">
                   1. Datos del Viaje y Unidad
@@ -385,7 +385,7 @@ export function AddTicketModal({
                 {tickets.map((ticket, index) => (
                   <div
                     key={ticket.id}
-                    className="relative group bg-card p-5 rounded-[24px] border border-border shadow-sm animate-in fade-in slide-in-from-left-2"
+                    className="relative group bg-card p-5 rounded-2xl border border-slate-200 dark:border-white/10 shadow-sm animate-in fade-in slide-in-from-left-2"
                   >
                     {tickets.length > 1 && (
                       <Button
@@ -477,7 +477,7 @@ export function AddTicketModal({
                         <Label className="text-[9px] font-black uppercase text-muted-foreground/80">
                           Evidencia
                         </Label>
-                        <div className="relative h-10 border-2 border-dashed border-slate-200 rounded-lg hover:border-brand-navy hover:bg-slate-50 transition-colors flex items-center justify-center overflow-hidden">
+                        <div className="relative h-10 border-2 border-dashed border-slate-200 dark:border-white/10 rounded-lg hover:border-brand-navy hover:bg-muted/50 transition-colors flex items-center justify-center overflow-hidden">
                           <input
                             type="file"
                             accept="image/*"
@@ -509,9 +509,9 @@ export function AddTicketModal({
             </section>
           </div>
 
-          <div className="shrink-0 flex items-center justify-between border-t bg-slate-100 dark:bg-slate-900 p-6">
+          <div className="shrink-0 flex flex-col sm:flex-row items-stretch sm:items-center justify-between border-t border-slate-200 dark:border-white/10 bg-muted/50 backdrop-blur-xl p-6 sm:p-8 z-10 gap-4">
             <div className="flex flex-col">
-              <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
+              <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
                 Inversión Total de Carga
               </span>
               <span className="text-3xl font-black font-mono text-foreground tracking-tighter">
@@ -522,18 +522,18 @@ export function AddTicketModal({
               </span>
             </div>
 
-            <div className="flex gap-3">
+            <div className="flex flex-col-reverse sm:flex-row gap-3">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => onOpenChange(false)}
-                className="h-12 font-bold px-8"
+                className="w-full sm:w-auto haptic-press font-black uppercase tracking-widest text-[10px]"
               >
                 Cancelar
               </Button>
               <Button
                 type="submit"
-                className="h-12 px-10 font-black bg-brand-navy text-white shadow-xl hover:bg-slate-800"
+                className="w-full sm:w-auto haptic-press border-none text-white bg-brand-red hover:bg-brand-red/90 shadow-[0_4px_15px_rgba(190,8,17,0.3)] font-black uppercase tracking-widest text-[10px]"
               >
                 <Upload className="mr-2 h-4 w-4" />
                 Guardar {tickets.length} Vales

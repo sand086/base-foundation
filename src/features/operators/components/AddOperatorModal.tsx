@@ -30,11 +30,9 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-//  NUEVOS IMPORTS FSD
 import { Operator } from "@/features/operators/types";
 import { useUnits } from "@/features/units/hooks/useUnits";
 
-// UI Components
 import {
   Form,
   FormControl,
@@ -53,9 +51,6 @@ interface AddOperatorModalProps {
   isSaving?: boolean;
 }
 
-// =====================
-// ESQUEMA ZOD (VALIDACIÓN)
-// =====================
 const operatorSchema = z.object({
   name: z.string().min(2, "El nombre es requerido"),
   rfc: z.string().min(12, "RFC inválido").max(13, "RFC inválido"),
@@ -70,7 +65,6 @@ const operatorSchema = z.object({
   emergency_phone: z.string().optional(),
 });
 
-// Este tipo es local para el formulario (UI State)
 type OperatorFormValues = z.infer<typeof operatorSchema>;
 
 export function AddOperatorModal({
@@ -150,7 +144,6 @@ export function AddOperatorModal({
       unitIdToSend = Number.isNaN(parsed) ? null : parsed;
     }
 
-    // Mapeo final para que coincida con el modelo de Python
     const payload = {
       ...(isEditMode && { id: operatorToEdit?.id }),
       status: operatorToEdit?.status || "activo",
@@ -172,271 +165,273 @@ export function AddOperatorModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[95vw] sm:max-w-2xl p-0 flex flex-col max-h-[90vh] bg-white dark:bg-brand-navy border border-slate-200 dark:border-white/10 shadow-2xl rounded-2xl overflow-hidden">
-        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden">
+      {/* CAPA 1: CASCARÓN TAHOE */}
+      <DialogContent className="w-[95vw] sm:max-w-2xl p-0 flex flex-col max-h-[90vh] bg-card/95 backdrop-blur-xl border border-border shadow-2xl rounded-2xl overflow-hidden">
+        {/* CAPA 2: HEADER */}
+        <DialogHeader className="p-6 bg-card border-b border-border shrink-0 relative z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
-          <DialogTitle className="flex items-center gap-4 sm:gap-5 text-slate-800 dark:text-white text-xl font-black relative z-10 text-left">
+          <div className="relative z-10 flex items-center gap-4 sm:gap-5">
             <div
               className={cn(
-                "w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shadow-inner shrink-0",
+                "w-12 h-12 rounded-xl flex items-center justify-center shadow-inner shrink-0",
                 isEditMode
                   ? "bg-amber-100 dark:bg-amber-900/30"
-                  : "bg-blue-100 dark:bg-blue-900/30",
+                  : "bg-emerald-100 dark:bg-emerald-900/30",
               )}
             >
               <User
-                className={cn(
-                  "h-7 w-7 sm:h-8 sm:w-8",
-                  isEditMode
-                    ? "text-amber-600 dark:text-amber-400"
-                    : "text-blue-600 dark:text-blue-400",
+                  className={cn(
+                    "h-6 w-6",
+                    isEditMode
+                      ? "text-amber-600 dark:text-amber-400"
+                      : "text-emerald-600 dark:text-emerald-400",
                 )}
               />
             </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-2xl font-black uppercase tracking-tighter leading-none">
+            <div className="flex flex-col gap-1 text-left min-w-0">
+              <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-foreground heading-crisp leading-none">
                 {isEditMode ? "Editar Operador" : "Nuevo Operador"}
-              </span>
-              <span className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400 mt-1">
+              </DialogTitle>
+              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mt-1">
                 Datos obligatorios para complemento carta porte
-              </span>
+              </p>
             </div>
-          </DialogTitle>
+          </div>
         </DialogHeader>
 
+        {/* CAPA 3: BODY */}
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit(onSubmit)}
             className="flex-1 min-h-0 overflow-hidden flex flex-col"
           >
-            <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-slate-50/50 dark:bg-transparent custom-scrollbar">
-              <div className="space-y-8">
-                {/* IDENTIFICACIÓN */}
-                <div className="space-y-6">
-                  <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-2">
-                    <Fingerprint className="h-3.5 w-3.5 text-blue-500" />
-                    Identificación y Contacto
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormField
-                      control={form.control}
-                      name="name"
-                      render={({ field }) => (
-                        <FormItem className="col-span-1 md:col-span-2">
-                          <FormLabel variant="brand" required>
-                            Nombre Completo
-                          </FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              placeholder="Ej: Juan Pérez"
-                              className="h-11 font-black uppercase bg-white dark:bg-slate-900"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="rfc"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel variant="brand" required>
-                            RFC (SAT)
-                          </FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              placeholder="XAXX010101000"
-                              className="h-11 font-mono uppercase font-bold bg-white dark:bg-slate-900"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="phone"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel variant="brand" required>
-                            Teléfono Celular
-                          </FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              placeholder="10 dígitos"
-                              className="h-11 font-mono font-bold bg-white dark:bg-slate-900"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+            <div className="flex-1 overflow-y-auto p-6 bg-muted/50 custom-scrollbar space-y-8">
+              {/* IDENTIFICACIÓN */}
+              <div className="p-5 border border-border rounded-2xl bg-card shadow-sm space-y-5">
+                <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground flex items-center gap-2 border-b border-border pb-2">
+                  <Fingerprint className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+                  Identificación y Contacto
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem className="col-span-1 md:col-span-2">
+                        <FormLabel variant="brand" required>
+                          Nombre Completo
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder="Ej: Juan Pérez"
+                            className="h-11 font-bold uppercase shadow-sm bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="rfc"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel variant="brand" required>
+                          RFC (SAT)
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder="XAXX010101000"
+                            className="h-11 font-mono uppercase font-bold tracking-widest shadow-sm bg-muted border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-100"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="phone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel variant="brand" required>
+                          Teléfono Celular
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder="10 dígitos"
+                            className="h-11 font-mono font-bold shadow-sm bg-muted border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-100"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
+              </div>
 
-                {/* LICENCIA */}
-                <div className="space-y-6">
-                  <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-2">
-                    <CreditCard className="h-3.5 w-3.5 text-blue-500" />
-                    Licencia Federal y Médica
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormField
-                      control={form.control}
-                      name="license_number"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel variant="brand" required>
-                            Folio de Licencia
-                          </FormLabel>
+              {/* LICENCIA */}
+              <div className="p-5 border border-border rounded-2xl bg-card shadow-sm space-y-5">
+                <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground flex items-center gap-2 border-b border-border pb-2">
+                  <CreditCard className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+                  Licencia Federal y Médica
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <FormField
+                    control={form.control}
+                    name="license_number"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel variant="brand" required>
+                          Folio de Licencia
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder="LIC-000000"
+                            className="h-11 font-mono uppercase font-bold tracking-widest shadow-sm bg-muted border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-100"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="license_type"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel variant="brand" required>
+                          Tipo
+                        </FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                          value={field.value}
+                        >
                           <FormControl>
-                            <Input
-                              {...field}
-                              placeholder="LIC-000000"
-                              className="h-11 font-mono uppercase font-bold bg-white dark:bg-slate-900"
-                            />
+                            <SelectTrigger className="h-11 font-bold shadow-sm bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
+                              <SelectValue placeholder="Tipo" />
+                            </SelectTrigger>
                           </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="license_type"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel variant="brand" required>
-                            Tipo
-                          </FormLabel>
-                          <Select
-                            onValueChange={field.onChange}
-                            defaultValue={field.value}
-                            value={field.value}
-                          >
-                            <FormControl>
-                              <SelectTrigger className="h-11 font-bold bg-white dark:bg-slate-900">
-                                <SelectValue placeholder="Tipo" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="A">Tipo A</SelectItem>
-                              <SelectItem value="B">Tipo B</SelectItem>
-                              <SelectItem value="E">
-                                Tipo E (Federal)
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="license_expiry"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel variant="brand" required>
-                            Vigencia Licencia
-                          </FormLabel>
-                          <FormControl>
-                            <DatePicker
-                              date={field.value}
-                              onDateChange={field.onChange}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="medical_check_expiry"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel variant="brand" required>
-                            Examen Médico
-                          </FormLabel>
-                          <FormControl>
-                            <DatePicker
-                              date={field.value}
-                              onDateChange={field.onChange}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+                          <SelectContent>
+                            <SelectItem value="A">Tipo A</SelectItem>
+                            <SelectItem value="B">Tipo B</SelectItem>
+                            <SelectItem value="E">
+                              Tipo E (Federal)
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="license_expiry"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel variant="brand" required>
+                          Vigencia Licencia
+                        </FormLabel>
+                        <FormControl>
+                          <DatePicker
+                            date={field.value}
+                            onDateChange={field.onChange}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="medical_check_expiry"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel variant="brand" required>
+                          Examen Médico
+                        </FormLabel>
+                        <FormControl>
+                          <DatePicker
+                            date={field.value}
+                            onDateChange={field.onChange}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
+              </div>
 
-                {/* ASIGNACIÓN */}
-                <div className="space-y-6">
-                  <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-2">
-                    <Truck className="h-3.5 w-3.5 text-blue-500" />
-                    Asignación y Alta
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormField
-                      control={form.control}
-                      name="assigned_unit_id"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel variant="brand">Unidad Asignada</FormLabel>
-                          <Select
-                            onValueChange={field.onChange}
-                            value={field.value}
-                          >
-                            <FormControl>
-                              <SelectTrigger className="h-11 font-bold bg-white dark:bg-slate-900">
-                                <SelectValue placeholder="Sin asignar" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="none">
-                                Sin unidad fija
-                              </SelectItem>
-                              {unidadesSelectables.map((unit) => (
-                                <SelectItem
-                                  key={unit.id}
-                                  value={unit.id.toString()}
-                                >
-                                  ECO-{unit.numero_economico}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="hire_date"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel variant="brand" required>
-                            Fecha Ingreso
-                          </FormLabel>
+              {/* ASIGNACIÓN */}
+              <div className="p-5 border border-border rounded-2xl bg-card shadow-sm space-y-5">
+                <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground flex items-center gap-2 border-b border-border pb-2">
+                  <Truck className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+                  Asignación y Alta
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <FormField
+                    control={form.control}
+                    name="assigned_unit_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel variant="brand">Unidad Asignada</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value}
+                        >
                           <FormControl>
-                            <DatePicker
-                              date={field.value}
-                              onDateChange={field.onChange}
-                            />
+                            <SelectTrigger className="h-11 font-bold shadow-sm bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
+                              <SelectValue placeholder="Sin asignar" />
+                            </SelectTrigger>
                           </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+                          <SelectContent>
+                            <SelectItem value="none">
+                              Sin unidad fija
+                            </SelectItem>
+                            {unidadesSelectables.map((unit) => (
+                              <SelectItem
+                                key={unit.id}
+                                value={unit.id.toString()}
+                              >
+                                ECO-{unit.numero_economico}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="hire_date"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel variant="brand" required>
+                          Fecha Ingreso
+                        </FormLabel>
+                        <FormControl>
+                          <DatePicker
+                            date={field.value}
+                            onDateChange={field.onChange}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
               </div>
             </div>
 
-            <DialogFooter className="p-6 sm:p-8 bg-slate-50/50 dark:bg-black/20 border-t border-slate-200 dark:border-white/10 shrink-0">
+            {/* CAPA 5: FOOTER */}
+            <DialogFooter className="p-6 sm:p-8 bg-muted/50 border-t border-slate-200 dark:border-white/10 shrink-0">
               <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
                 <Button
                   type="button"
@@ -444,6 +439,7 @@ export function AddOperatorModal({
                   size="lg"
                   onClick={() => onOpenChange(false)}
                   disabled={isSaving}
+                  className="w-full sm:w-auto haptic-press font-black uppercase tracking-widest text-[10px]"
                 >
                   Cancelar
                 </Button>
@@ -452,8 +448,10 @@ export function AddOperatorModal({
                   size="lg"
                   disabled={isSaving}
                   className={cn(
-                    "text-white w-full sm:w-auto",
-                    isEditMode ? "bg-amber-600" : "bg-blue-600",
+                    "w-full sm:w-auto haptic-press border-none text-white font-black uppercase tracking-widest text-[10px]",
+                    isEditMode
+                      ? "bg-brand-green hover:bg-[hsl(152,100%,24%)] shadow-[0_4px_15px_rgba(0,151,64,0.3)]"
+                      : "bg-brand-red hover:bg-brand-red/90 shadow-[0_4px_15px_rgba(190,8,17,0.3)]",
                   )}
                 >
                   {isSaving ? (

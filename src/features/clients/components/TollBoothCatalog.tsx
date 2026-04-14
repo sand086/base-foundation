@@ -504,7 +504,7 @@ export const TollBoothCatalog = () => {
       </div>
 
       {/*  TOOLBAR TAHOE */}
-      <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-card/40 p-4 rounded-2xl border border-white/20 dark:border-white/10 shadow-sm backdrop-blur-md">
+      <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-2xl bg-slate-100/50 dark:bg-slate-950/40 border border-slate-200/60 dark:border-white/5 shadow-inner mb-6">
         <div className="flex items-center gap-3 w-full md:max-w-md">
           <div className="relative flex-1">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -540,10 +540,8 @@ export const TollBoothCatalog = () => {
             </Button>
           )}
           <Button
-            variant="default"
-            size="lg"
             onClick={handleOpenCreate}
-            className="h-11 shadow-lg shadow-brand-red/20 w-full sm:w-auto"
+            className="bg-brand-red hover:bg-brand-red/90 text-white shadow-lg shadow-brand-red/20 border-none haptic-press font-black uppercase tracking-widest text-[10px] sm:text-xs h-11 px-6 rounded-xl"
           >
             <Plus className="h-4 w-4 mr-2" /> Nueva Caseta
           </Button>
@@ -693,7 +691,7 @@ export const TollBoothCatalog = () => {
                             className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
                             onClick={() => handleOpenEdit(t)}
                           >
-                            <Edit className="h-4 w-4 text-blue-500 dark:text-blue-400" />{" "}
+                            <Edit className="h-4 w-4 text-brand-green dark:text-[#009740]" />{" "}
                             Editar Peaje
                           </DropdownMenuItem>
                           <DropdownMenuSeparator className="dark:bg-white/10" />

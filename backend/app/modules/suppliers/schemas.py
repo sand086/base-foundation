@@ -148,9 +148,9 @@ class PayableInvoiceUpdate(ORMBase):
 
 class PayableInvoiceResponse(ORMBase):
     id: int
-    supplier_id: int
+    supplier_id: Optional[int] = None
 
-    uuid: str
+    uuid: Optional[str] = None
     folio_interno: Optional[str] = None
     supplier_razon_social: Optional[str] = None
     monto_total: float
@@ -163,6 +163,10 @@ class PayableInvoiceResponse(ORMBase):
     concepto: Optional[str] = None
     clasificacion: Optional[str] = None
     estatus: InvoiceStatus
+
+    metodo_pago: Optional[str] = None
+    forma_pago: Optional[str] = None
+    tipo_comprobante: Optional[str] = None
 
     pdf_url: Optional[str] = None
     xml_url: Optional[str] = None

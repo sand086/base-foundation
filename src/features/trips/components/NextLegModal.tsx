@@ -146,7 +146,7 @@ function SearchableSelect({
           role="combobox"
           aria-expanded={open}
           className={cn(
-            "h-11 w-full justify-between rounded-xl border-slate-200/80 bg-white/90 px-4 font-semibold text-slate-800 shadow-sm backdrop-blur-xl hover:bg-white dark:bg-slate-900 dark:border-white/10 dark:text-slate-200",
+            "h-11 w-full justify-between rounded-xl border-slate-200 bg-card px-4 font-semibold text-slate-800 shadow-sm backdrop-blur-xl dark:border-white/10 dark:text-slate-100",
             className,
           )}
         >
@@ -544,36 +544,18 @@ export function NextLegModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className={cn(
-          "w-[95vw] sm:max-w-[1000px] p-0 overflow-hidden border-none shadow-2xl",
-          "animate-in fade-in slide-in-from-bottom-2 duration-300",
-          "bg-card/90 backdrop-blur-xl",
-        )}
-      >
-        <DialogHeader
-          className={cn(
-            "p-8 shrink-0 relative overflow-hidden",
-            "bg-white dark:bg-slate-900",
-            "border-b border-slate-200 dark:border-white/10",
-          )}
-        >
+      <DialogContent className="w-[95vw] sm:max-w-[1000px] p-0 flex flex-col max-h-[90vh] bg-card/95 backdrop-blur-xl border border-border shadow-2xl rounded-2xl overflow-hidden">
+        <DialogHeader className="p-6 bg-card border-b border-border shrink-0 relative z-10">
+          <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex justify-between items-center gap-6">
             <div className="space-y-4">
               <div className="flex items-center gap-4">
-                <div
-                  className={cn(
-                    "p-3 rounded-2xl w-14 h-14 flex items-center justify-center",
-                    "bg-brand-red/10 dark:bg-brand-red/20",
-                    "border border-brand-red/20 dark:border-brand-red/30",
-                    "shadow-inner",
-                  )}
-                >
-                  <Truck className="h-7 w-7 text-brand-red" />
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center shadow-inner shrink-0 bg-emerald-100 dark:bg-emerald-900/30">
+                  <Truck className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
                 </div>
                 <div>
                   <DialogTitle className="text-3xl font-black uppercase tracking-tighter text-slate-900 dark:text-white heading-crisp">
-                    SERV- {tripPadre.public_id ?? tripPadre.id}
+                    TRP- {tripPadre.public_id ?? tripPadre.id}
                   </DialogTitle>
                   <div className="text-[10px] font-black text-slate-400 dark:text-white/40 uppercase tracking-[0.3em] mt-1">
                     Asignación Logística Operativa
@@ -607,27 +589,16 @@ export function NextLegModal({
           </div>
         </DialogHeader>
 
-        <div
-          className={cn(
-            "grid grid-cols-1 md:grid-cols-12 gap-0 overflow-y-auto max-h-[75vh] custom-scrollbar",
-            "bg-slate-50/50 dark:bg-transparent",
-          )}
-        >
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-0 overflow-y-auto max-h-[75vh] custom-scrollbar bg-muted/50">
           {/* ── Panel izquierdo: Finanzas ── */}
-          <div
-            className={cn(
-              "md:col-span-4 p-8 space-y-8",
-              "border-r border-slate-200 dark:border-white/10",
-              "bg-white dark:bg-slate-900/40",
-            )}
-          >
+          <div className="md:col-span-4 p-8 space-y-8 border-r border-slate-200 dark:border-white/10 bg-card">
             <div className="space-y-4">
               <h4 className="text-[11px] font-black text-slate-500 dark:text-white/50 uppercase tracking-[0.2em] flex items-center gap-2">
                 <ShieldCheck className="h-4 w-4 text-emerald-500" />
                 Negocio Pactado
               </h4>
 
-              <Card className="border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800/50 shadow-sm">
+              <Card className="border border-slate-200 dark:border-white/10 bg-card shadow-sm">
                 <CardContent className="p-5 space-y-3">
                   {[
                     {
@@ -716,12 +687,7 @@ export function NextLegModal({
           </div>
 
           {/* ── Panel derecho: Formulario ── */}
-          <div
-            className={cn(
-              "md:col-span-8 p-10 space-y-10",
-              "bg-white/40 dark:bg-transparent backdrop-blur-sm",
-            )}
-          >
+          <div className="md:col-span-8 p-10 space-y-10 bg-muted/30">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8">
               <div className="space-y-3">
                 <Label className="text-[11px] font-black uppercase text-slate-600 dark:text-slate-400 tracking-widest ml-1">
@@ -733,7 +699,7 @@ export function NextLegModal({
                     setFormData((p) => ({ ...p, leg_type: v }))
                   }
                 >
-                  <SelectTrigger className="h-11 bg-white dark:bg-slate-800 border-slate-200 dark:border-white/10 font-bold text-slate-700 dark:text-white shadow-sm">
+                  <SelectTrigger className="h-11 bg-card border-slate-200 dark:border-white/10 font-bold text-slate-800 dark:text-slate-100 shadow-sm">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10">
@@ -771,7 +737,7 @@ export function NextLegModal({
                     setFormData((p) => ({ ...p, operator_id: Number(v) }))
                   }
                 >
-                  <SelectTrigger className="h-11 bg-white dark:bg-slate-800 border-slate-200 dark:border-white/10 font-bold dark:text-white shadow-sm">
+                  <SelectTrigger className="h-11 bg-card border-slate-200 dark:border-white/10 font-bold text-slate-800 dark:text-slate-100 shadow-sm">
                     <SelectValue placeholder="Asignar Operador..." />
                   </SelectTrigger>
                   <SelectContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10">
@@ -790,7 +756,7 @@ export function NextLegModal({
             </div>
 
             {/* BLOQUE FISCAL DINÁMICO */}
-            <div className="rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/50 shadow-sm overflow-hidden animate-in fade-in transition-all">
+            <div className="rounded-3xl border border-slate-200 dark:border-white/10 bg-card shadow-sm overflow-hidden animate-in fade-in transition-all">
               <button
                 type="button"
                 onClick={() => setShowFiscalData(!showFiscalData)}
@@ -840,7 +806,7 @@ export function NextLegModal({
                       </Label>
                       <Input
                         placeholder="Ej. TAMU1234567"
-                        className="h-11 font-mono uppercase bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10"
+                        className="h-11 font-mono uppercase bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100"
                         value={tripFiscalData.contenedor_1}
                         onChange={(e) =>
                           setTripFiscalData((p) => ({
@@ -859,7 +825,7 @@ export function NextLegModal({
                         </Label>
                         <Input
                           placeholder="Ej. MSCU7654321"
-                          className="h-11 font-mono uppercase bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10"
+                          className="h-11 font-mono uppercase bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100"
                           value={tripFiscalData.contenedor_2}
                           onChange={(e) =>
                             setTripFiscalData((p) => ({
@@ -878,7 +844,7 @@ export function NextLegModal({
                       </Label>
                       <Input
                         placeholder="Ej. KH5697143"
-                        className="h-11 font-mono uppercase bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10"
+                        className="h-11 font-mono uppercase bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100"
                         value={tripFiscalData.referencia}
                         onChange={(e) =>
                           setTripFiscalData((p) => ({
@@ -904,7 +870,7 @@ export function NextLegModal({
                         type="number"
                         placeholder="Ej. 25.5"
                         className={cn(
-                          "h-11 font-mono bg-white dark:bg-slate-900",
+                          "h-11 font-mono bg-card",
                           !tripFiscalData.peso_toneladas
                             ? "border-rose-300 dark:border-rose-800 ring-1 ring-rose-500/20 bg-rose-50/50"
                             : "border-slate-200 dark:border-white/10",
@@ -974,7 +940,7 @@ export function NextLegModal({
                       </Label>
                       <Input
                         placeholder="Ej. 78101802"
-                        className="h-11 font-mono bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10"
+                        className="h-11 font-mono bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100"
                         value={tripFiscalData.sat_clave_producto}
                         onChange={(e) =>
                           setTripFiscalData((p) => ({
@@ -997,7 +963,7 @@ export function NextLegModal({
                       </Label>
                       <Input
                         placeholder="Ej. E48"
-                        className="h-11 font-mono uppercase bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10"
+                        className="h-11 font-mono uppercase bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100"
                         value={tripFiscalData.sat_clave_unidad}
                         onChange={(e) =>
                           setTripFiscalData((p) => ({
@@ -1028,7 +994,7 @@ export function NextLegModal({
                       destino_vacio: e.target.value,
                     }))
                   }
-                  className="h-11 border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 shadow-sm font-medium"
+                  className="h-11 border-slate-200 dark:border-white/10 bg-card shadow-sm font-medium text-slate-800 dark:text-slate-100"
                 />
                 <p className="text-[10px] text-slate-500 font-medium ml-1">
                   Debe indicar dónde se desenganchó físicamente el equipo.
@@ -1046,7 +1012,7 @@ export function NextLegModal({
                   setFormData((p) => ({ ...p, unit_id: Number(v) }))
                 }
               >
-                <SelectTrigger className="h-12 bg-white dark:bg-slate-800 border-slate-300 dark:border-white/20 text-slate-900 dark:text-white font-black shadow-md">
+                <SelectTrigger className="h-12 bg-card border-slate-300 dark:border-white/20 text-slate-800 dark:text-slate-100 font-black shadow-md">
                   <SelectValue placeholder="Seleccionar unidad de tracción..." />
                 </SelectTrigger>
                 <SelectContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10">
@@ -1063,13 +1029,7 @@ export function NextLegModal({
               </Select>
             </div>
 
-            <div
-              className={cn(
-                "p-8 rounded-2xl border shadow-xl space-y-8",
-                "bg-white dark:bg-slate-800/50",
-                "border-slate-200 dark:border-white/10",
-              )}
-            >
+            <div className="p-8 rounded-2xl border shadow-xl space-y-8 bg-card border-slate-200 dark:border-white/10">
               <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-white/10">
                 <h5 className="text-[11px] font-black text-slate-700 dark:text-white uppercase tracking-[0.2em] flex items-center gap-2">
                   <Box className="h-4 w-4 text-brand-red" />
@@ -1097,7 +1057,7 @@ export function NextLegModal({
                       setFormData((p) => ({ ...p, remolque_1_id: Number(v) }))
                     }
                   >
-                    <SelectTrigger className="h-10 font-bold border-slate-200 dark:border-white/10 dark:text-white bg-white dark:bg-slate-800">
+                    <SelectTrigger className="h-10 font-bold border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100 bg-card">
                       <SelectValue placeholder="R1" />
                     </SelectTrigger>
                     <SelectContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10">
@@ -1133,7 +1093,7 @@ export function NextLegModal({
                           setFormData((p) => ({ ...p, dolly_id: Number(v) }))
                         }
                       >
-                        <SelectTrigger className="h-10 font-bold border-slate-200 dark:border-white/10 dark:text-white bg-white dark:bg-slate-800">
+                        <SelectTrigger className="h-10 font-bold border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100 bg-card">
                           <SelectValue placeholder="Dolly" />
                         </SelectTrigger>
                         <SelectContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10">
@@ -1167,7 +1127,7 @@ export function NextLegModal({
                           }))
                         }
                       >
-                        <SelectTrigger className="h-10 font-bold border-slate-200 dark:border-white/10 dark:text-white bg-white dark:bg-slate-800">
+                        <SelectTrigger className="h-10 font-bold border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100 bg-card">
                           <SelectValue placeholder="R2" />
                         </SelectTrigger>
                         <SelectContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10">
@@ -1258,8 +1218,8 @@ export function NextLegModal({
                           type="number"
                           className={cn(
                             "pl-9 h-11 font-mono text-sm",
-                            "bg-white dark:bg-slate-800",
-                            "dark:text-white dark:placeholder:text-slate-500",
+                            "bg-card",
+                            "text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500",
                             accent === "blue"
                               ? "border-blue-200 dark:border-blue-700/50 bg-blue-50/50 dark:bg-blue-900/20"
                               : "border-amber-200/50 dark:border-amber-700/30",
@@ -1281,13 +1241,7 @@ export function NextLegModal({
           </div>
         </div>
 
-        <DialogFooter
-          className={cn(
-            "p-4 sm:p-6 md:px-10 flex flex-col-reverse sm:flex-row sm:justify-between sm:items-center gap-4",
-            "bg-card/80 backdrop-blur-xl",
-            "border-t border-border",
-          )}
-        >
+        <DialogFooter className="p-6 sm:p-8 bg-muted/50 border-t border-slate-200 dark:border-white/10 shrink-0">
           <div className="flex items-center gap-3 px-2 hidden sm:flex">
             <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
             <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">

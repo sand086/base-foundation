@@ -33,7 +33,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 
-// --- NUEVO: IMPORTAR HOOK DE PROVEEDORES ---
 import { useSuppliers } from "@/features/suppliers/hooks/useSuppliers";
 
 interface AddInventoryModalProps {
@@ -52,9 +51,6 @@ const categories = [
   { value: "general", label: "General" },
 ];
 
-// =====================
-// ESQUEMA ZOD ACTUALIZADO
-// =====================
 const inventorySchema = z.object({
   sku: z.string().min(2, "El SKU es requerido"),
   descripcion: z.string().min(3, "La descripción es requerida"),
@@ -63,7 +59,7 @@ const inventorySchema = z.object({
   stock_minimo: z.coerce.number().min(0, "Debe ser mayor o igual a 0"),
   precio_unitario: z.coerce.number().min(0, "El precio no puede ser negativo"),
   ubicacion: z.string().optional(),
-  proveedor_id: z.coerce.number().optional().nullable(), // NUEVO
+  proveedor_id: z.coerce.number().optional().nullable(),
 });
 
 type InventoryFormData = z.infer<typeof inventorySchema>;
@@ -76,7 +72,6 @@ export function AddInventoryModal({
 }: AddInventoryModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // --- NUEVO: CARGAR PROVEEDORES ---
   const { suppliers, isLoadingSuppliers } = useSuppliers();
 
   const form = useForm<InventoryFormData>({
@@ -107,7 +102,7 @@ export function AddInventoryModal({
           stock_minimo: itemToEdit.stock_minimo,
           ubicacion: itemToEdit.ubicacion || "",
           precio_unitario: itemToEdit.precio_unitario,
-          proveedor_id: (itemToEdit as any).proveedor_id || null, // Mapeo seguro
+          proveedor_id: (itemToEdit as any).proveedor_id || null,
         });
       } else {
         reset({
@@ -130,6 +125,7 @@ export function AddInventoryModal({
       await onSave({
         ...data,
         categoria: data.categoria.toLowerCase(),
+        bank_account_id: !data.proveedor_id ? 1 : null,
       });
       toast.success(
         isEditMode ? "Refacción actualizada" : "Refacción agregada",
@@ -158,29 +154,31 @@ export function AddInventoryModal({
         if (!isOpen && !isSubmitting) handleClose();
       }}
     >
-      <DialogContent className="w-[95vw] sm:max-w-2xl flex flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
-        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
+      {/* CAPA 1: CASCARÓN TAHOE */}
+      <DialogContent className="w-[95vw] sm:max-w-2xl p-0 flex flex-col max-h-[90vh] bg-card/95 backdrop-blur-xl border border-border shadow-2xl rounded-2xl overflow-hidden">
+        {/* CAPA 2: HEADER */}
+        <DialogHeader className="p-6 bg-card border-b border-border shrink-0 relative z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center gap-4 sm:gap-5">
             <div
               className={cn(
-                "w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shadow-inner shrink-0 icon-plate",
+                "w-12 h-12 rounded-xl flex items-center justify-center shadow-inner shrink-0",
                 isEditMode
-                  ? "bg-brand-green/10 dark:bg-brand-green/20"
-                  : "bg-brand-red/10 dark:bg-brand-red/20",
+                  ? "bg-amber-100 dark:bg-amber-900/30"
+                  : "bg-emerald-100 dark:bg-emerald-900/30",
               )}
             >
               {isEditMode ? (
-                <Edit className="h-7 w-7 sm:h-8 sm:w-8 text-brand-green drop-shadow-[0_0_8px_rgba(16,185,129,0.4)]" />
+                <Edit className="h-6 w-6 text-amber-600 dark:text-amber-400" />
               ) : (
-                <Package className="h-7 w-7 sm:h-8 sm:w-8 text-brand-red drop-shadow-[0_0_8px_rgba(220,38,38,0.4)]" />
+                <Package className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
               )}
             </div>
             <div className="flex flex-col gap-1 text-left min-w-0">
-              <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white heading-crisp leading-none truncate">
+              <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-foreground heading-crisp leading-none truncate">
                 {isEditMode ? "Editar Refacción" : "Nueva Refacción"}
               </DialogTitle>
-              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-1">
+              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mt-1">
                 {isEditMode
                   ? "Modifica los datos del elemento en el almacén."
                   : "Registra una nueva pieza en el inventario global."}
@@ -189,13 +187,14 @@ export function AddInventoryModal({
           </div>
         </DialogHeader>
 
+        {/* CAPA 3: BODY */}
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit(onFormSubmit)}
             className="flex-1 min-h-0 overflow-hidden flex flex-col"
           >
-            <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-slate-50/50 dark:bg-transparent custom-scrollbar">
-              <div className="space-y-6">
+            <div className="flex-1 overflow-y-auto px-6 pb-6 sm:px-8 sm:pb-8 bg-muted/50 custom-scrollbar space-y-8 mt-4">
+              <div className="p-5 border border-border rounded-2xl bg-card shadow-sm space-y-5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <FormField
                     control={form.control}
@@ -211,9 +210,9 @@ export function AddInventoryModal({
                             disabled={isEditMode}
                             placeholder="REF-001"
                             className={cn(
-                              "h-11 font-mono font-bold uppercase bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm",
+                              "h-11 font-mono font-bold uppercase shadow-sm",
                               isEditMode &&
-                                "bg-slate-100 dark:bg-slate-800 text-slate-500 cursor-not-allowed",
+                                "bg-muted text-muted-foreground cursor-not-allowed",
                             )}
                           />
                         </FormControl>
@@ -236,11 +235,11 @@ export function AddInventoryModal({
                           value={field.value}
                         >
                           <FormControl>
-                            <SelectTrigger className="h-11 font-black uppercase text-xs glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm text-brand-navy dark:text-slate-100">
+                            <SelectTrigger className="h-11 font-bold uppercase text-xs shadow-sm bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
                               <SelectValue placeholder="Seleccione..." />
                             </SelectTrigger>
                           </FormControl>
-                          <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-slate-200 dark:border-white/10">
+                          <SelectContent>
                             {categories.map((cat) => (
                               <SelectItem
                                 key={cat.value}
@@ -257,7 +256,6 @@ export function AddInventoryModal({
                     )}
                   />
 
-                  {/* --- NUEVO: CAMPO PROVEEDOR --- */}
                   <FormField
                     control={form.control}
                     name="proveedor_id"
@@ -272,11 +270,11 @@ export function AddInventoryModal({
                           disabled={isLoadingSuppliers}
                         >
                           <FormControl>
-                            <SelectTrigger className="h-11 font-bold text-xs bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm text-slate-700 dark:text-slate-200">
+                            <SelectTrigger className="h-11 font-bold text-xs shadow-sm bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
                               <SelectValue placeholder="Seleccione un proveedor (Opcional)" />
                             </SelectTrigger>
                           </FormControl>
-                          <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-slate-200 dark:border-white/10 max-h-60">
+                          <SelectContent className="max-h-60">
                             {suppliers.map((sup) => (
                               <SelectItem
                                 key={sup.id}
@@ -305,7 +303,7 @@ export function AddInventoryModal({
                           <Input
                             {...field}
                             placeholder="Ej: Filtro de aceite para motor Cummins"
-                            className="h-11 font-medium bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                            className="h-11 font-bold uppercase shadow-sm bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100"
                           />
                         </FormControl>
                         <FormMessage />
@@ -325,7 +323,7 @@ export function AddInventoryModal({
                           <Input
                             type="number"
                             {...field}
-                            className="h-11 font-mono font-bold glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                            className="h-11 font-mono font-bold shadow-sm bg-muted border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-100"
                           />
                         </FormControl>
                         <FormMessage />
@@ -345,7 +343,7 @@ export function AddInventoryModal({
                           <Input
                             type="number"
                             {...field}
-                            className="h-11 font-mono font-bold glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                            className="h-11 font-mono font-bold shadow-sm bg-muted border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-100"
                           />
                         </FormControl>
                         <FormMessage />
@@ -363,14 +361,14 @@ export function AddInventoryModal({
                         </FormLabel>
                         <FormControl>
                           <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-black">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-black">
                               $
                             </span>
                             <Input
                               type="number"
                               step="0.01"
                               {...field}
-                              className="h-11 pl-7 font-mono font-bold glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                              className="h-11 pl-7 font-mono font-bold shadow-sm bg-muted border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-100"
                             />
                           </div>
                         </FormControl>
@@ -389,7 +387,7 @@ export function AddInventoryModal({
                           <Input
                             {...field}
                             placeholder="Ej: Almacén A - Estante 3"
-                            className="h-11 font-bold uppercase glass-card bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+                            className="h-11 font-bold uppercase shadow-sm bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100"
                           />
                         </FormControl>
                         <FormMessage />
@@ -400,7 +398,8 @@ export function AddInventoryModal({
               </div>
             </div>
 
-            <DialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
+            {/* CAPA 5: FOOTER */}
+            <DialogFooter className="p-6 sm:p-8 bg-muted/50 border-t border-slate-200 dark:border-white/10 shrink-0">
               <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
                 <Button
                   type="button"
@@ -408,20 +407,19 @@ export function AddInventoryModal({
                   size="lg"
                   onClick={handleClose}
                   disabled={isSubmitting}
-                  className="w-full sm:w-auto haptic-press flex-shrink-0 font-black uppercase tracking-widest text-[10px]"
+                  className="w-full sm:w-auto haptic-press font-black uppercase tracking-widest text-[10px]"
                 >
                   Cancelar
                 </Button>
                 <Button
                   type="submit"
-                  variant="default"
                   size="lg"
                   disabled={isSubmitting}
                   className={cn(
-                    "w-full sm:w-auto haptic-press flex-shrink-0 border-none text-white font-black uppercase tracking-widest text-[10px]",
+                    "w-full sm:w-auto haptic-press border-none text-white font-black uppercase tracking-widest text-[10px]",
                     isEditMode
-                      ? "bg-brand-green hover:bg-brand-green/80 shadow-emerald-500/20"
-                      : "bg-brand-red hover:bg-brand-red/80 shadow-brand-red/20",
+                      ? "bg-brand-green hover:bg-[hsl(152,100%,24%)] shadow-[0_4px_15px_rgba(0,151,64,0.3)]"
+                      : "bg-brand-red hover:bg-brand-red/90 shadow-[0_4px_15px_rgba(190,8,17,0.3)]",
                   )}
                 >
                   {isSubmitting ? (

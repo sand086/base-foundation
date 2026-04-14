@@ -82,42 +82,45 @@ export function ViewFuelModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* CAPA 1: CASCARÓN TAHOE (Glassmorphism Pesado) */}
-      <DialogContent className="p-0 overflow-hidden sm:max-w-[700px] border-none bg-card/90 dark:bg-card/95 backdrop-blur-xl shadow-2xl animate-in fade-in zoom-in-95 slide-in-from-bottom-4 duration-300">
-        {/* CAPA 2: HEADER TAHOE (Contraste Puro) */}
-        <DialogHeader className="relative p-6 bg-card dark:bg-card border-b border-border flex flex-row items-center gap-5 space-y-0">
-          {/* ICON PLATE SEMÁNTICO */}
-          <div
-            className={cn(
-              "w-16 h-16 rounded-2xl shadow-inner flex items-center justify-center shrink-0 haptic-press transition-transform",
-              carga.tipo_combustible === "diesel"
-                ? "bg-amber-500/20 text-amber-600 dark:text-amber-400 shadow-amber-500/10"
-                : "bg-blue-500/20 text-blue-600 dark:text-blue-400 shadow-blue-500/10",
-            )}
-          >
-            {carga.tipo_combustible === "diesel" ? (
-              <Fuel size={32} strokeWidth={2.5} />
-            ) : (
-              <Droplets size={32} strokeWidth={2.5} />
-            )}
-          </div>
+      {/* CAPA 1: CASCARÓN TAHOE */}
+      <DialogContent className="w-[95vw] sm:max-w-3xl flex flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-card/90 dark:bg-card/95 backdrop-blur-xl rounded-2xl">
+        {/* CAPA 2: HEADER TAHOE */}
+        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-card dark:bg-card border-b border-border shrink-0 relative overflow-hidden z-10">
+          <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
+          <div className="relative z-10 flex items-center gap-4 sm:gap-5">
+            {/* ICON PLATE SEMÁNTICO */}
+            <div
+              className={cn(
+                "w-14 h-14 sm:w-16 sm:h-16 rounded-2xl shadow-inner flex items-center justify-center shrink-0 icon-plate border",
+                carga.tipo_combustible === "diesel"
+                  ? "bg-amber-100 dark:bg-amber-900/30 border-amber-200 dark:border-amber-500/20"
+                  : "bg-blue-100 dark:bg-blue-900/30 border-blue-200 dark:border-blue-500/20",
+              )}
+            >
+              {carga.tipo_combustible === "diesel" ? (
+                <Fuel className="h-7 w-7 sm:h-8 sm:w-8 text-amber-600 dark:text-amber-400 drop-shadow-md" />
+              ) : (
+                <Droplets className="h-7 w-7 sm:h-8 sm:w-8 text-blue-600 dark:text-blue-400 drop-shadow-md" />
+              )}
+            </div>
 
-          <div className="flex flex-col gap-0.5">
-            <DialogTitle className="text-2xl font-black uppercase tracking-tighter heading-crisp text-foreground">
-              Detalle de Carga
-            </DialogTitle>
-            <DialogDescription className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
-              Transaction Log ID:{" "}
-              <span className="text-slate-900 dark:text-slate-300">
-                #{carga.id}
-              </span>
-            </DialogDescription>
+            <div className="flex flex-col gap-1 text-left min-w-0">
+              <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-foreground heading-crisp leading-none">
+                Detalle de Carga
+              </DialogTitle>
+              <DialogDescription className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mt-1">
+                Transaction Log ID:{" "}
+                <span className="font-mono text-foreground">
+                  #{carga.id}
+                </span>
+              </DialogDescription>
+            </div>
           </div>
         </DialogHeader>
 
-        {/* CAPA 3: CUERPO (Hundido Industrial) */}
-        <div className="p-6 space-y-6 bg-muted/30 dark:bg-transparent max-h-[70vh] overflow-y-auto">
-          {/* ALERTA DE EXCESO (Status Crítico) */}
+        {/* CAPA 3: CUERPO (Scroll Area) */}
+        <div className="flex-1 overflow-y-auto px-6 pb-6 sm:px-8 sm:pb-8 bg-muted/30 dark:bg-transparent custom-scrollbar space-y-6 mt-4">
+          {/* ALERTA DE EXCESO */}
           {excede && (
             <div className="flex items-center gap-4 p-4 bg-rose-500/10 border border-rose-500/20 rounded-xl animate-pulse">
               <div className="bg-rose-500 p-2 rounded-lg text-white shadow-lg shadow-rose-500/40">
@@ -138,12 +141,12 @@ export function ViewFuelModal({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-4">
               {/* Unidad Info */}
-              <div className="p-4 bg-card rounded-2xl border border-border shadow-sm">
-                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2 block">
+              <div className="p-5 border border-border rounded-2xl bg-card shadow-sm">
+                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mb-2 block">
                   Identificación de Unidad
                 </label>
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-muted rounded-lg text-slate-600 dark:text-muted-foreground/80">
+                  <div className="p-2 bg-muted rounded-lg text-slate-500 dark:text-slate-400">
                     <Truck size={18} />
                   </div>
                   <span className="text-lg font-black uppercase tracking-tight text-foreground">
@@ -153,25 +156,25 @@ export function ViewFuelModal({
               </div>
 
               {/* Operador Info */}
-              <div className="p-4 bg-card rounded-2xl border border-border shadow-sm">
-                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2 block">
+              <div className="p-5 border border-border rounded-2xl bg-card shadow-sm">
+                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mb-2 block">
                   Operador Asignado
                 </label>
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-muted rounded-lg text-slate-600 dark:text-muted-foreground/80">
+                  <div className="p-2 bg-muted rounded-lg text-slate-500 dark:text-slate-400">
                     <User size={18} />
                   </div>
-                  <span className="text-md font-bold uppercase truncate text-slate-800 dark:text-slate-200">
+                  <span className="text-md font-bold uppercase truncate text-foreground">
                     {carga.operadorNombre || "Sin asignar"}
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* MÉTRICAS DE LIQUID GLASS */}
+            {/* MÉTRICAS */}
             <div className="grid grid-cols-1 gap-2">
               <div className="grid grid-cols-2 gap-2">
-                <div className="p-4 bg-slate-900 dark:bg-white text-white dark:text-slate-950 rounded-2xl flex flex-col justify-between shadow-xl">
+                <div className="p-4 bg-foreground text-background rounded-2xl flex flex-col justify-between shadow-xl">
                   <span className="text-[9px] font-black uppercase tracking-[0.1em] opacity-70">
                     Litros Totales
                   </span>
@@ -179,8 +182,8 @@ export function ViewFuelModal({
                     {Number(carga.litros || 0).toFixed(1)}
                   </span>
                 </div>
-                <div className="p-4 bg-white dark:bg-slate-800 rounded-2xl border border-border flex flex-col justify-between">
-                  <span className="text-[9px] font-black uppercase tracking-[0.1em] text-muted-foreground/80">
+                <div className="p-4 bg-card rounded-2xl border border-border flex flex-col justify-between">
+                  <span className="text-[9px] font-black uppercase tracking-[0.1em] text-muted-foreground">
                     Precio / L
                   </span>
                   <span className="text-xl font-mono font-bold text-foreground">
@@ -209,10 +212,10 @@ export function ViewFuelModal({
 
           <Separator className="bg-border" />
 
-          {/* EVIDENCIA SECTION (Industrial Viewport) */}
+          {/* EVIDENCIA SECTION */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 flex items-center gap-2">
+              <label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-2">
                 <Camera size={14} className="text-brand-red" /> Evidencia
                 Fotográfica HD
               </label>
@@ -229,7 +232,7 @@ export function ViewFuelModal({
               )}
             </div>
 
-            <div className="relative group border-2 border-dashed border-border rounded-[2rem] overflow-hidden bg-slate-100 dark:bg-slate-950/50 flex items-center justify-center min-h-[350px] transition-all hover:border-slate-300 dark:hover:border-white/20">
+            <div className="relative group border-2 border-dashed border-border rounded-[2rem] overflow-hidden bg-muted/50 flex items-center justify-center min-h-[350px] transition-all hover:border-muted-foreground/30">
               {isImage && !imgError && (
                 <img
                   src={fullUrl!}
@@ -247,7 +250,7 @@ export function ViewFuelModal({
                   <p className="text-sm font-black uppercase tracking-tight text-foreground">
                     Fallo de Previsualización
                   </p>
-                  <p className="text-xs text-slate-500 mt-1 max-w-[200px]">
+                  <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">
                     Formato ({extension}) no compatible con el renderizador
                     nativo.
                   </p>
@@ -266,7 +269,7 @@ export function ViewFuelModal({
 
               {isPdf && !imgError && (
                 <div className="w-full h-[450px] p-4 flex flex-col">
-                  <div className="flex-1 bg-white rounded-xl overflow-hidden shadow-inner">
+                  <div className="flex-1 bg-card rounded-xl overflow-hidden shadow-inner">
                     <iframe
                       src={`${fullUrl}#view=FitH&toolbar=0`}
                       className="w-full h-full border-none"
@@ -288,17 +291,17 @@ export function ViewFuelModal({
           </div>
         </div>
 
-        {/* CAPA 4: FOOTER (Control Bar Crystal) */}
-        <div className="p-4 bg-card/80 dark:bg-card/80 backdrop-blur-md border-t border-border flex items-center justify-between">
+        {/* CAPA 5: FOOTER */}
+        <div className="p-6 sm:p-8 bg-card/80 dark:bg-card/80 backdrop-blur-xl border-t border-border shrink-0 z-10 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Calendar size={14} className="text-slate-400" />
-            <span className="font-mono text-[11px] font-bold text-slate-500 uppercase">
+            <Calendar size={14} className="text-muted-foreground" />
+            <span className="font-mono text-[11px] font-bold text-muted-foreground uppercase">
               Timestamp: {carga.fecha_hora?.split("T")[0] || carga.fechaHora}
             </span>
           </div>
           <Button
             onClick={() => onOpenChange(false)}
-            className="bg-slate-900 dark:bg-white text-white dark:text-slate-950 font-black uppercase text-[11px] tracking-widest px-8 rounded-full h-11 haptic-press hover:scale-105 transition-all shadow-xl"
+            className="bg-foreground text-background font-black uppercase text-[11px] tracking-widest px-8 rounded-full h-11 haptic-press hover:scale-105 transition-all shadow-xl"
           >
             Cerrar Registro
           </Button>

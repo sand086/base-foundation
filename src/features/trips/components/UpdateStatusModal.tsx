@@ -67,7 +67,9 @@ interface UpdateStatusModalProps {
   trip?: Trip | null;
   activeLeg?: TripLeg;
   // FIX CRÍTICO 1: Permitir que onSubmit sea asíncrono (Promise) para esperar al backend
-  onSubmit: (data: StatusUpdateData) => void | Promise<void> | Promise<string | number>;
+  onSubmit: (
+    data: StatusUpdateData,
+  ) => void | Promise<void> | Promise<string | number>;
   eventToEdit?: TripTimelineEvent | null; // Prop para el modo edición
 }
 
@@ -385,8 +387,6 @@ export function UpdateStatusModal({
         fase_operativa: activeLeg?.leg_type || "desconocida",
         timestamp: eventToEdit ? formData.timestamp : timestamp,
       });
-      // FIX CRÍTICO 2: Obligamos al componente padre a cerrarse y refrescar la tabla
-      toast.success("Estatus actualizado exitosamente.");
       onOpenChange(false);
     } catch (err) {
       toast.error("Error al guardar el reporte en la base de datos.");
@@ -411,14 +411,14 @@ export function UpdateStatusModal({
         if (!isOpen && !isSubmitting) onOpenChange(false);
       }}
     >
-      <DialogContent className="w-[95vw] sm:max-w-[550px] p-0 flex flex-col max-h-[90vh] overflow-hidden border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl transition-all duration-300">
+      <DialogContent className="w-[95vw] sm:max-w-[550px] p-0 flex flex-col max-h-[90vh] bg-card/95 backdrop-blur-xl border border-border shadow-2xl rounded-2xl overflow-hidden">
         {/* CAPA 2: HEADER TAHOE */}
-        <DialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
+        <DialogHeader className="p-6 bg-card border-b border-border shrink-0 relative z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center gap-4 sm:gap-5">
             <div
               className={cn(
-                "w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shadow-inner shrink-0 icon-plate",
+                "w-12 h-12 rounded-xl flex items-center justify-center shadow-inner shrink-0",
                 eventToEdit
                   ? "bg-brand-green/10 border-brand-green/20"
                   : isIncidentUI
@@ -427,11 +427,11 @@ export function UpdateStatusModal({
               )}
             >
               {eventToEdit ? (
-                <Edit2 className="h-7 w-7 sm:h-8 sm:w-8 text-brand-green drop-shadow-[0_0_8px_rgba(16,185,129,0.4)]" />
+                <Edit2 className="h-6 w-6 text-brand-green" />
               ) : isIncidentUI ? (
-                <AlertTriangle className="h-7 w-7 sm:h-8 sm:w-8 text-rose-600 dark:text-rose-400 drop-shadow-[0_0_8px_rgba(244,63,94,0.4)]" />
+                <AlertTriangle className="h-6 w-6 text-rose-600 dark:text-rose-400" />
               ) : (
-                <Navigation className="h-7 w-7 sm:h-8 sm:w-8 text-blue-600 dark:text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.4)]" />
+                <Navigation className="h-6 w-6 text-blue-600 dark:text-blue-400" />
               )}
             </div>
             <div className="flex flex-col gap-1 text-left min-w-0">
@@ -462,7 +462,7 @@ export function UpdateStatusModal({
           onSubmit={handleSubmit}
           className="flex-1 min-h-0 overflow-hidden flex flex-col"
         >
-          <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-slate-50/50 dark:bg-transparent custom-scrollbar">
+          <div className="flex-1 overflow-y-auto p-6 bg-muted/50 custom-scrollbar">
             <div className="space-y-6">
               {/* TIPO DE EVENTO */}
               <div className="space-y-2">
@@ -480,10 +480,10 @@ export function UpdateStatusModal({
                 >
                   <SelectTrigger
                     className={cn(
-                      "h-12 border font-bold transition-all bg-white dark:bg-slate-900 shadow-sm text-sm",
+                      "h-12 border font-bold transition-all bg-card shadow-sm text-sm",
                       isIncidentUI
                         ? "border-rose-300 dark:border-rose-500/50 bg-rose-50 dark:bg-rose-950/20 text-rose-700 dark:text-rose-400 ring-2 ring-rose-500/20"
-                        : "border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20 text-slate-700 dark:text-slate-200",
+                        : "border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20 text-slate-800 dark:text-slate-100",
                     )}
                   >
                     <SelectValue placeholder="Selecciona el motivo...">
@@ -537,7 +537,7 @@ export function UpdateStatusModal({
               </div>
 
               {/* UBICACIÓN CON GEOAPIFY */}
-              <div className="space-y-4 border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/50 p-5 rounded-2xl shadow-sm">
+              <div className="space-y-4 border border-slate-200 dark:border-white/10 bg-card p-5 rounded-2xl shadow-sm">
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
                     <MapPin className="h-3.5 w-3.5 text-emerald-500" />{" "}
@@ -776,7 +776,7 @@ export function UpdateStatusModal({
                     </Label>
                     <Input
                       placeholder="Ej: 19.4326"
-                      className="h-10 font-mono text-sm bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-white/5 shadow-inner"
+                      className="h-10 font-mono text-sm bg-muted border-slate-200 dark:border-white/5 shadow-inner text-slate-800 dark:text-slate-100"
                       value={formData.lat}
                       disabled={isSubmitting}
                       onChange={(e) =>
@@ -790,7 +790,7 @@ export function UpdateStatusModal({
                     </Label>
                     <Input
                       placeholder="Ej: -99.1332"
-                      className="h-10 font-mono text-sm bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-white/5 shadow-inner"
+                      className="h-10 font-mono text-sm bg-muted border-slate-200 dark:border-white/5 shadow-inner text-slate-800 dark:text-slate-100"
                       value={formData.lng}
                       disabled={isSubmitting}
                       onChange={(e) =>
@@ -818,7 +818,7 @@ export function UpdateStatusModal({
                           terminal_entrega_vacio: e.target.value.toUpperCase(),
                         })
                       }
-                      className="h-11 font-bold bg-white"
+                      className="h-11 font-bold bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100"
                       required
                     />
                   </div>
@@ -826,7 +826,7 @@ export function UpdateStatusModal({
 
               {/* TELEMETRÍA */}
               {!eventToEdit && (
-                <div className="grid grid-cols-3 gap-4 p-5 bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-white/10 rounded-2xl mt-2 shadow-sm">
+                <div className="grid grid-cols-3 gap-4 p-5 bg-card border border-slate-200 dark:border-white/10 rounded-2xl mt-2 shadow-sm">
                   <div className="col-span-3 pb-3 border-b border-slate-100 dark:border-white/5 mb-1">
                     <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center justify-between">
                       Parámetros de Unidad
@@ -842,7 +842,7 @@ export function UpdateStatusModal({
                     <Input
                       type="number"
                       placeholder="Km"
-                      className="h-10 font-mono text-sm font-bold bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-white/10 shadow-inner"
+                      className="h-10 font-mono text-sm font-bold bg-muted border-slate-200 dark:border-white/10 shadow-inner text-slate-800 dark:text-slate-100"
                       value={formData.odometro}
                       disabled={isSubmitting}
                       onChange={(e) =>
@@ -858,7 +858,7 @@ export function UpdateStatusModal({
                       type="number"
                       max="100"
                       placeholder="%"
-                      className="h-10 font-mono text-sm font-bold bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-white/10 shadow-inner"
+                      className="h-10 font-mono text-sm font-bold bg-muted border-slate-200 dark:border-white/10 shadow-inner text-slate-800 dark:text-slate-100"
                       value={formData.combustible_porcentaje}
                       disabled={isSubmitting}
                       onChange={(e) =>
@@ -876,7 +876,7 @@ export function UpdateStatusModal({
                     <Input
                       type="number"
                       placeholder="Lts"
-                      className="h-10 font-mono text-sm font-bold bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-white/10 shadow-inner"
+                      className="h-10 font-mono text-sm font-bold bg-muted border-slate-200 dark:border-white/10 shadow-inner text-slate-800 dark:text-slate-100"
                       value={formData.combustible_litros}
                       disabled={isSubmitting}
                       onChange={(e) =>
@@ -932,7 +932,7 @@ export function UpdateStatusModal({
                     "resize-none font-medium text-sm transition-all shadow-sm",
                     isIncidentUI
                       ? "border-rose-300 dark:border-rose-500/50 bg-rose-50 dark:bg-rose-950/20 focus-visible:ring-rose-200 dark:focus-visible:ring-rose-500/20"
-                      : "bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 focus-visible:bg-slate-50 dark:focus-visible:bg-slate-800",
+                      : "bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100",
                   )}
                   required={isIncidentUI}
                 />
@@ -941,7 +941,7 @@ export function UpdateStatusModal({
           </div>
 
           {/* CAPA 4: FOOTER TAHOE */}
-          <DialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
+          <DialogFooter className="p-6 sm:p-8 bg-muted/50 border-t border-slate-200 dark:border-white/10 shrink-0">
             <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
               <Button
                 type="button"

@@ -290,31 +290,38 @@ export default function TripSettlementModal({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-6xl p-0 overflow-hidden bg-background dark:bg-background rounded-2xl border-none shadow-2xl">
-        <div className="bg-brand-navy p-6 flex justify-between items-center text-white">
-          <div>
-            <DialogTitle className="text-2xl font-black flex items-center gap-2">
-              <Calculator className="h-6 w-6 text-emerald-400" /> Liquidación
-              Operativa
-            </DialogTitle>
-            <DialogDescription className="text-slate-300 font-bold text-[11px] uppercase mt-1">
-              Operador: {activeLegs[0]?.operator?.name || "S/A"}
-            </DialogDescription>
+      <DialogContent className="w-[95vw] max-w-6xl p-0 overflow-hidden bg-card/90 dark:bg-card/95 backdrop-blur-xl rounded-2xl border-none shadow-2xl animate-modal-show flex flex-col max-h-[90vh]">
+        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-card dark:bg-card border-b border-border shrink-0 relative overflow-hidden z-10">
+          <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
+          <div className="relative z-10 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4 sm:gap-5">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shadow-inner shrink-0 icon-plate border bg-emerald-100 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-500/20">
+                <Calculator className="h-7 w-7 sm:h-8 sm:w-8 text-emerald-600 dark:text-emerald-400 drop-shadow-md" />
+              </div>
+              <div className="flex flex-col gap-1 text-left">
+                <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-foreground heading-crisp leading-none">
+                  Liquidación Operativa
+                </DialogTitle>
+                <DialogDescription className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mt-1">
+                  Operador: {activeLegs[0]?.operator?.name || "S/A"}
+                </DialogDescription>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              className="h-9 haptic-press font-black uppercase tracking-widest text-[10px]"
+              onClick={handleManualSync}
+              disabled={isSyncing}
+            >
+              {isSyncing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <History className="h-4 w-4 mr-2" />
+              )}
+              Sincronizar
+            </Button>
           </div>
-          <Button
-            variant="outline"
-            className="bg-white/10 border-white/20 text-white h-9"
-            onClick={handleManualSync}
-            disabled={isSyncing}
-          >
-            {isSyncing ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <History className="h-4 w-4 mr-2" />
-            )}
-            Sincronizar Vales
-          </Button>
-        </div>
+        </DialogHeader>
 
         <div className="p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 max-h-[75vh] overflow-y-auto custom-scrollbar">
           {/* =========================================
@@ -670,27 +677,29 @@ export default function TripSettlementModal({
           </div>
         </div>
 
-        <DialogFooter className="bg-muted p-5 px-8 border-t border-border flex justify-end gap-4 rounded-b-2xl">
-          <Button
-            variant="ghost"
-            onClick={handleClose}
-            disabled={isSubmitting}
-            className="font-black uppercase tracking-widest text-[10px]"
-          >
-            CANCELAR
-          </Button>
-          <Button
-            className="bg-brand-navy hover:bg-slate-800 text-white font-black px-12 h-12 rounded-xl text-xs uppercase tracking-widest shadow-xl shadow-brand-navy/20 transition-all haptic-press"
-            disabled={isSubmitting || !odometroFinal}
-            onClick={handleSettle}
-          >
-            {isSubmitting ? (
-              <Loader2 className="animate-spin mr-2 h-4 w-4" />
-            ) : (
-              <CheckCircle2 className="mr-2 h-4 w-4 text-emerald-400" />
-            )}
-            Autorizar y Cerrar Fase
-          </Button>
+        <DialogFooter className="p-6 sm:p-8 bg-card/80 dark:bg-card/80 backdrop-blur-xl border-t border-border shrink-0 z-10">
+          <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
+            <Button
+              variant="outline"
+              onClick={handleClose}
+              disabled={isSubmitting}
+              className="w-full sm:w-auto haptic-press font-black uppercase tracking-widest text-[10px]"
+            >
+              Cancelar
+            </Button>
+            <Button
+              className="w-full sm:w-auto haptic-press border-none text-white bg-brand-green hover:bg-[hsl(152,100%,24%)] shadow-[0_4px_15px_rgba(0,151,64,0.3)] font-black uppercase tracking-widest text-[10px]"
+              disabled={isSubmitting || !odometroFinal}
+              onClick={handleSettle}
+            >
+              {isSubmitting ? (
+                <Loader2 className="animate-spin mr-2 h-4 w-4" />
+              ) : (
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+              )}
+              Autorizar y Cerrar Fase
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

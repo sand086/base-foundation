@@ -1,9 +1,9 @@
+import { useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge, StatusType } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
-//  Cambiamos la ruta al nuevo servicio centralizado
 import { RecentService } from "@/features/dashboard/types";
 import {
   Tooltip,
@@ -11,15 +11,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { ChartActionMenu } from "@/components/ui/chart-action-menu"; // Importamos el menú
 
 interface RecentServicesTableProps {
   services: RecentService[];
 }
 
-/**
- * 🛠️ Configuración de estados actualizada para coincidir
- * con los Enums de TripStatus en el backend de Python.
- */
 const getStatusConfig = (
   status: string,
 ): { type: StatusType; label: string } => {
@@ -38,7 +35,9 @@ const getStatusConfig = (
 
 export function RecentServicesTable({ services }: RecentServicesTableProps) {
   const navigate = useNavigate();
+  const tableRef = useRef<HTMLDivElement>(null); // Referencia para exportar imagen
 
+  // Handler para ir al detalle (Monitoreo)
   const handleRowClick = (service: RecentService) => {
     const params = new URLSearchParams({
       serviceId: service.id,
@@ -47,6 +46,7 @@ export function RecentServicesTable({ services }: RecentServicesTableProps) {
     navigate(`/monitoreo?${params.toString()}`);
   };
 
+  // Handler para ir a Despacho
   const handleViewInDispatch = (
     e: React.MouseEvent,
     service: RecentService,
@@ -60,117 +60,125 @@ export function RecentServicesTable({ services }: RecentServicesTableProps) {
   };
 
   return (
-    <Card className="rounded-2xl border-0 shadow-none bg-transparent">
-      <CardHeader className="pb-3 pt-4 px-4 flex flex-row items-center justify-between">
-        <CardTitle className="text-sm font-semibold text-brand-dark heading-crisp">
-          Últimos Servicios
-        </CardTitle>
-        <span className="text-xs text-muted-foreground">
-          Click en fila para ver en Monitoreo
-        </span>
+    <Card
+      ref={tableRef}
+      className="rounded-2xl shadow-2xl border-none overflow-hidden bg-transparent"
+    >
+      <CardHeader className="flex flex-row items-center justify-between border-b border-slate-200 dark:border-white/10 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-xl py-6 px-6">
+        <div className="w-full">
+          {/* Añadimos el menú de acciones al título de la tabla */}
+          <ChartActionMenu
+            title="Últimos Servicios"
+            data={services} // Los datos que se irán al Excel
+            containerRef={tableRef} // Para bajar la foto de la tabla
+            onViewDetail={() => navigate("/monitoreo")} // Redirige a la vista general de servicios
+          />
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mt-1">
+            Click en fila para ver detalle en Monitoreo
+          </p>
+        </div>
       </CardHeader>
-      <CardContent className="px-0 pb-0">
-        <div className="overflow-hidden rounded-xl mx-4 mb-4 liquid-glass-table">
-          <div className="overflow-x-auto max-h-[400px]">
-            <table className="w-full">
-              <thead className="sticky top-0 z-10 bg-white/80 dark:bg-black/40 backdrop-blur-xl">
-                <tr className="border-b border-muted/20">
-                  <th className="text-left py-3 px-4 text-[11px] font-semibold uppercase text-muted-foreground tracking-wider">
-                    ID
-                  </th>
-                  <th className="text-left py-3 px-4 text-[11px] font-semibold uppercase text-muted-foreground tracking-wider">
-                    Cliente
-                  </th>
-                  <th className="text-left py-3 px-4 text-[11px] font-semibold uppercase text-muted-foreground tracking-wider">
-                    Ruta
-                  </th>
-                  <th className="text-left py-3 px-4 text-[11px] font-semibold uppercase text-muted-foreground tracking-wider">
-                    Operador
-                  </th>
-                  <th className="text-left py-3 px-4 text-[11px] font-semibold uppercase text-muted-foreground tracking-wider">
-                    Estatus
-                  </th>
-                  <th className="text-left py-3 px-4 text-[11px] font-semibold uppercase text-muted-foreground tracking-wider">
-                    Fecha
-                  </th>
-                  <th className="text-left py-3 px-4 text-[11px] font-semibold uppercase text-muted-foreground tracking-wider">
-                    Acción
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {services.map((service) => {
-                  const statusConfig = getStatusConfig(service.status);
-                  return (
-                    <tr
-                      key={service.id}
-                      onClick={() => handleRowClick(service)}
-                      className="group border-b border-muted/20 dark:border-white/5 hover:bg-muted/40 dark:hover:bg-white/5 transition-all duration-200 cursor-pointer"
-                    >
-                      <td className="py-4 px-4 text-sm font-medium text-brand-red">
-                        {service.id}
-                      </td>
-                      <td className="py-4 px-4 text-sm max-w-[160px] truncate">
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="cursor-default">
-                                {service.clientName.length > 22
-                                  ? `${service.clientName.substring(0, 22)}...`
-                                  : service.clientName}
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>{service.clientName}</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </td>
-                      <td className="py-4 px-4 text-sm">
-                        <span className="text-muted-foreground">
-                          {service.origin}
-                        </span>
-                        <span className="mx-2 text-muted-foreground/40">→</span>
-                        <span>{service.destination}</span>
-                      </td>
-                      <td className="py-4 px-4 text-sm max-w-[140px] truncate">
-                        {service.operator}
-                      </td>
-                      <td className="py-4 px-4">
-                        <StatusBadge status={statusConfig.type}>
-                          {statusConfig.label}
-                        </StatusBadge>
-                      </td>
-                      <td className="py-4 px-4 text-sm text-muted-foreground">
-                        {service.date}
-                      </td>
-                      <td className="py-4 px-4">
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-                                onClick={(e) =>
-                                  handleViewInDispatch(e, service)
-                                }
-                              >
-                                <ExternalLink className="h-4 w-4 text-muted-foreground hover:text-brand-dark" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Ver en Dispatch</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+
+      <CardContent className="p-0 bg-white dark:bg-slate-950">
+        <div className="overflow-x-auto max-h-[400px] custom-scrollbar">
+          <table className="w-full">
+            <thead className="sticky top-0 z-10 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-xl">
+              <tr className="border-b border-slate-200 dark:border-white/10">
+                <th className="text-left py-3 px-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 bg-transparent">
+                  ID
+                </th>
+                <th className="text-left py-3 px-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 bg-transparent">
+                  Cliente
+                </th>
+                <th className="text-left py-3 px-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 bg-transparent">
+                  Ruta
+                </th>
+                <th className="text-left py-3 px-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 bg-transparent">
+                  Operador
+                </th>
+                <th className="text-left py-3 px-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 bg-transparent">
+                  Estatus
+                </th>
+                <th className="text-left py-3 px-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 bg-transparent">
+                  Fecha
+                </th>
+                <th className="text-left py-3 px-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 bg-transparent">
+                  Acción
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {services.map((service) => {
+                const statusConfig = getStatusConfig(service.status);
+                return (
+                  <tr
+                    key={service.id}
+                    onClick={() => handleRowClick(service)}
+                    className="group border-b border-slate-100 dark:border-white/5 hover:bg-slate-50/50 dark:hover:bg-white/5 transition-all duration-200 cursor-pointer"
+                  >
+                    <td className="py-4 px-4 font-mono text-sm font-bold text-brand-red uppercase">
+                      {service.id}
+                    </td>
+                    <td className="py-4 px-4 max-w-[160px] truncate">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="font-black text-brand-navy dark:text-white uppercase tracking-tight text-sm cursor-default">
+                              {service.clientName.length > 22
+                                ? `${service.clientName.substring(0, 22)}...`
+                                : service.clientName}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent className="bg-brand-navy border-white/10 text-[10px] font-black uppercase tracking-widest px-3 py-2 text-white">
+                            {service.clientName}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </td>
+                    <td className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                      <span>{service.origin}</span>
+                      <span className="mx-2 text-slate-300 dark:text-slate-600">
+                        →
+                      </span>
+                      <span className="text-slate-700 dark:text-slate-300">
+                        {service.destination}
+                      </span>
+                    </td>
+                    <td className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 max-w-[140px] truncate">
+                      {service.operator}
+                    </td>
+                    <td className="py-4 px-4">
+                      <StatusBadge status={statusConfig.type}>
+                        {statusConfig.label}
+                      </StatusBadge>
+                    </td>
+                    <td className="py-4 px-4 font-mono text-sm font-bold text-slate-700 dark:text-slate-300 uppercase">
+                      {service.date}
+                    </td>
+                    <td className="py-4 px-4">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200/50 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 opacity-0 group-hover:opacity-100"
+                              onClick={(e) => handleViewInDispatch(e, service)}
+                            >
+                              <ExternalLink className="h-4 w-4 text-blue-500 dark:text-blue-400" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent className="bg-brand-navy border-white/10 text-[10px] font-black uppercase tracking-widest px-3 py-2 text-white">
+                            Ver en Dispatch
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </CardContent>
     </Card>
