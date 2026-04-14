@@ -1,4 +1,5 @@
 // src/features/dashboard/components/DashboardTrends.tsx
+import { useRef } from "react";
 import {
   AreaChart,
   Area,
@@ -15,22 +16,36 @@ import {
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DashboardData } from "@/features/dashboard/types";
+import { ChartActionMenu } from "@/components/ui/chart-action-menu"; // <-- Importamos el menú
 
 interface DashboardTrendsProps {
   data: DashboardData;
 }
 
 export function DashboardTrends({ data }: DashboardTrendsProps) {
+  // 1. Creamos las referencias para exportar las gráficas como imagen/PDF
+  const revenueRef = useRef<HTMLDivElement>(null);
+  const tripConfigRef = useRef<HTMLDivElement>(null);
+  const fuelRef = useRef<HTMLDivElement>(null);
+
   return (
     <div className="grid gap-4 grid-cols-1 lg:grid-cols-2 mt-4">
       {/* 1. GRÁFICA DE INGRESOS MENSUALES (Area Chart) */}
-      <Card className="col-span-1 lg:col-span-2 rounded-2xl shadow-sm border-slate-100">
-        <CardHeader>
-          <CardTitle className="text-sm font-bold uppercase tracking-widest text-slate-500">
-            Evolución de Ingresos
+      <Card
+        ref={revenueRef}
+        className="col-span-1 lg:col-span-2 rounded-2xl shadow-sm border-slate-100"
+      >
+        <CardHeader className="pb-2 pt-3 px-3">
+          <CardTitle>
+            {/* 2. Reemplazamos el texto por el menú de acciones */}
+            <ChartActionMenu
+              title="Evolución de Ingresos"
+              data={data.revenueTrend}
+              containerRef={revenueRef}
+            />
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-3 pb-3">
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart
@@ -85,13 +100,20 @@ export function DashboardTrends({ data }: DashboardTrendsProps) {
       </Card>
 
       {/* 2. GRÁFICA DE VIAJES FULL VS SENCILLO (Stacked Bar Chart) */}
-      <Card className="rounded-2xl shadow-sm border-slate-100">
-        <CardHeader>
-          <CardTitle className="text-sm font-bold uppercase tracking-widest text-slate-500">
-            Volumen: Full vs Sencillo
+      <Card
+        ref={tripConfigRef}
+        className="rounded-2xl shadow-sm border-slate-100"
+      >
+        <CardHeader className="pb-2 pt-3 px-3">
+          <CardTitle>
+            <ChartActionMenu
+              title="Volumen: Full vs Sencillo"
+              data={data.tripConfigTrend}
+              containerRef={tripConfigRef}
+            />
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-3 pb-3">
           <div className="h-[250px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
@@ -137,13 +159,17 @@ export function DashboardTrends({ data }: DashboardTrendsProps) {
       </Card>
 
       {/* 3. GRÁFICA DE COMBUSTIBLE (Combo Chart: Barras + Línea) */}
-      <Card className="rounded-2xl shadow-sm border-slate-100">
-        <CardHeader>
-          <CardTitle className="text-sm font-bold uppercase tracking-widest text-slate-500">
-            Consumo vs Rendimiento (Km/L)
+      <Card ref={fuelRef} className="rounded-2xl shadow-sm border-slate-100">
+        <CardHeader className="pb-2 pt-3 px-3">
+          <CardTitle>
+            <ChartActionMenu
+              title="Consumo vs Rendimiento"
+              data={data.fuelTrend}
+              containerRef={fuelRef}
+            />
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-3 pb-3">
           <div className="h-[250px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart
