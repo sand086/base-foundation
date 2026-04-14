@@ -1092,6 +1092,10 @@ class PayableInvoice(AuditMixin, Base):
         Integer, ForeignKey("indirect_expense_categories.id"), nullable=True
     )
 
+    orden_compra_id = Column(
+        Integer, ForeignKey("purchase_orders.id", ondelete="SET NULL"), nullable=True
+    )
+
     uuid = Column(String(36), unique=True, nullable=True)
     folio_interno = Column(String(50))
 

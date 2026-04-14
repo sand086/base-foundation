@@ -1,9 +1,12 @@
 from typing import List, Optional  #  Correcto: Optional viene de typing
 
-from fastapi import APIRouter, Depends, HTTPException
+# SOLUCIÓN: Agregamos Body aquí
+from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
+from app.models import models
+from app.modules.auth.router import get_current_active_user
 from . import schemas, crud
 
 router = APIRouter(tags=["Suppliers"])
@@ -78,13 +81,43 @@ def delete_invoice(invoice_id: int, db: Session = Depends(get_db)):
 )
 def register_payment(
     invoice_id: int,
-    payment: schemas.InvoicePaymentCreate,
+    payment: dict = Body(...),  # Ahora FastAPI sí sabe qué es Body
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
 ):
-    invoice = crud.register_payment(db, invoice_id, payment)
-    if not invoice:
-        raise HTTPException(status_code=404, detail="Factura no encontrada")
-    return invoice
+    try:
+        invoice = crud.register_payment(db, invoice_id, payment, current_user.id)
+        if not invoice:
+            raise HTTPException(status_code=404, detail="Factura no encontrada")
+        return invoice
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+
+
+@router.delete("/invoices/payments/{payment_id}")
+def delete_payment(
+    payment_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(
+        get_current_active_user
+    ),  # Inyectamos el usuario
+):
+    """
+    Elimina (Soft Delete) un pago, recalcula la factura y devuelve el dinero a Tesorería.
+    """
+    try:
+        success = crud.delete_payment(db, payment_id, current_user.id)
+        if not success:
+            raise HTTPException(
+                status_code=404, detail="Pago no encontrado o ya eliminado"
+            )
+        return {
+            "message": "Pago cancelado. El saldo de la factura y la Tesorería han sido recalculados."
+        }
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
 # --- Rutas de Proveedor Individual ---

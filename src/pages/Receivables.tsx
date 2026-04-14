@@ -43,8 +43,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-import axiosClient from "@/api/axiosClient";
-
 import { ImportServicesModal } from "@/features/receivables/components/ImportServicesModal";
 import { CreateInvoiceModal } from "@/features/receivables/components/CreateInvoiceModal";
 import { InvoiceDetailSheet } from "@/features/receivables/components/InvoiceDetailSheet";
@@ -60,16 +58,24 @@ import {
   calculateDaysOverdue,
 } from "@/features/receivables/types";
 
+// HOOKS
 import { useBankAccounts } from "@/features/treasury/hooks/useBankAccounts";
-import { receivableService } from "@/features/receivables/services/receivableService";
-import { cn } from "@/lib/utils";
+import { useReceivables } from "@/features/receivables/hooks/useReceivables";
 
 export default function Receivables() {
-  const [invoices, setInvoices] = useState<ReceivableInvoice[]>([]);
-  const [services, setServices] = useState<FinalizableService[]>([]);
-  const [loading, setLoading] = useState(true);
+  // 1. OBTENEMOS DATOS DEL HOOK
+  const {
+    receivables,
+    isLoadingReceivables,
+    refreshReceivables,
+    deleteReceivable,
+    registerPayment,
+  } = useReceivables();
+
   const { bankAccounts = [] } = useBankAccounts();
 
+  // Estados UI (Modales y Selección)
+  const [services, setServices] = useState<FinalizableService[]>([]);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false);
@@ -87,37 +93,59 @@ export default function Receivables() {
   const [invoiceToDelete, setInvoiceToDelete] =
     useState<ReceivableInvoice | null>(null);
 
-  const fetchInvoices = async () => {
-    try {
-      setLoading(true);
-      const data = await receivableService.getInvoices();
-
-      const formattedData: ReceivableInvoice[] = data.map((inv: any) => ({
-        ...inv,
-        client_id: inv.client_id || inv.cliente_id || inv.client?.id,
-        folio: inv.folio_interno || `CXC-${String(inv.id)}`,
-        cliente: inv.client?.razon_social || "Cliente Desconocido",
-        requiereREP: inv.saldo_pendiente > 0,
-        fechaEmision: inv.fecha_emision,
-        fechaVencimiento: inv.fecha_vencimiento,
-        cobros: inv.payments || [],
-      }));
-
-      setInvoices(formattedData);
-    } catch (error) {
-      toast.error("Error al cargar las cuentas por cobrar");
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // === 👀 DEBUGGER: ESTE CONSOLE.LOG TE DIRÁ EXACTAMENTE QUÉ HAY ===
   useEffect(() => {
-    fetchInvoices();
-  }, []);
+    console.log("🚀 INFO CRUDA DEL BACKEND (receivables):", receivables);
+  }, [receivables]);
 
+  // 2. FORMATEAMOS LOS DATOS DE LA API
+  const formattedInvoices = useMemo(() => {
+    // Verificamos si es un array o si viene paginado dentro de un objeto
+    let dataArray = [];
+    if (Array.isArray(receivables)) {
+      dataArray = receivables;
+    } else if (receivables && typeof receivables === "object") {
+      // Intenta extraer de las propiedades comunes de paginación de FastAPI
+      dataArray =
+        (receivables as any).items ||
+        (receivables as any).data ||
+        (receivables as any).results ||
+        [];
+    }
+
+    console.log("📊 ARRAY EXTRAÍDO PARA LA TABLA:", dataArray);
+
+    // Mapeamos las variables EXACTAMENTE como las pide el 'key' de las columnas
+    return dataArray.map((inv: any) => ({
+      ...inv,
+      id: inv.id,
+      client_id: inv.client_id || inv.cliente_id || inv.client?.id,
+      folio:
+        inv.folio_interno ||
+        (inv.uuid ? inv.uuid.substring(0, 8) : `CXC-${inv.id}`),
+      cliente:
+        inv.client?.razon_social ||
+        inv.clientName ||
+        inv.client_razon_social ||
+        "Cliente Desconocido",
+      requiereREP: (inv.saldo_pendiente || 0) > 0,
+
+      // Las llaves que conectan con los 'key' de las columnas
+      monto_total: inv.monto_total || 0,
+      saldo_pendiente:
+        inv.saldo_pendiente !== undefined
+          ? inv.saldo_pendiente
+          : inv.monto_total || 0,
+      fecha_emision: inv.fecha_emision || inv.created_at,
+      fecha_vencimiento: inv.fecha_vencimiento,
+      estatus: inv.estatus || inv.status || "corriente",
+      cobros: inv.payments || [],
+    })) as ReceivableInvoice[];
+  }, [receivables]);
+
+  // 3. LÓGICA DE EXPORTACIÓN Y KPIS
   const handleExportToExcel = () => {
-    if (invoices.length === 0) {
+    if (formattedInvoices.length === 0) {
       toast.error("No hay datos para exportar");
       return;
     }
@@ -133,16 +161,16 @@ export default function Receivables() {
       "Días Vencidos",
     ];
 
-    const rows = invoices.map((inv) => {
+    const rows = formattedInvoices.map((inv) => {
       const diasVencidos = calculateDaysOverdue(inv.fecha_vencimiento);
       return [
-        inv.folio_interno,
+        inv.folio_interno || inv.uuid,
         `"${inv.cliente}"`,
         inv.fecha_emision,
         inv.fecha_vencimiento,
         inv.monto_total,
         inv.saldo_pendiente,
-        inv.estatus.toUpperCase(),
+        inv.estatus?.toUpperCase() || "",
         diasVencidos > 0 ? diasVencidos : 0,
       ].join(",");
     });
@@ -167,23 +195,25 @@ export default function Receivables() {
   };
 
   const agingReport = useMemo(() => {
-    const corriente = invoices
+    const corriente = formattedInvoices
       .filter(
         (inv) =>
-          getAgingCategory(inv) === "corriente" && inv.saldo_pendiente > 0,
+          getAgingCategory(inv) === "corriente" &&
+          (inv.saldo_pendiente || 0) > 0,
       )
-      .reduce((sum, inv) => sum + inv.saldo_pendiente, 0);
-    const vencido1_30 = invoices
+      .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
+    const vencido1_30 = formattedInvoices
       .filter((inv) => getAgingCategory(inv) === "vencido_1_30")
-      .reduce((sum, inv) => sum + inv.saldo_pendiente, 0);
-    const vencido31_60 = invoices
+      .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
+    const vencido31_60 = formattedInvoices
       .filter((inv) => getAgingCategory(inv) === "vencido_31_60")
-      .reduce((sum, inv) => sum + inv.saldo_pendiente, 0);
-    const incobrable = invoices
+      .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
+    const incobrable = formattedInvoices
       .filter((inv) => getAgingCategory(inv) === "incobrable")
-      .reduce((sum, inv) => sum + inv.saldo_pendiente, 0);
+      .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
+
     return { corriente, vencido1_30, vencido31_60, incobrable };
-  }, [invoices]);
+  }, [formattedInvoices]);
 
   const handleImportServices = (selectedServices: FinalizableService[]) => {
     setImportedServices(selectedServices);
@@ -197,30 +227,22 @@ export default function Receivables() {
     toast.info("Función de creación manual en desarrollo");
   };
 
+  // 4. REGISTRAR PAGO
   const handleRegisterPayment = async (payload: any) => {
-    try {
-      await axiosClient.post(`/api/sat/stamp/payment`, payload);
-      toast.success("¡Cobro Registrado y Complemento Timbrado!");
+    if (invoicesToPay.length === 0) return;
+    const invoiceId = invoicesToPay[0].id;
+    const success = await registerPayment(invoiceId, payload);
+    if (success) {
       setIsPaymentModalOpen(false);
       setInvoicesToPay([]);
-      fetchInvoices();
-    } catch (error: any) {
-      toast.error(
-        error.response?.data?.detail ||
-          "Error al registrar el cobro y timbrar REP",
-      );
     }
   };
 
+  // 5. ELIMINAR FACTURA
   const handleDeleteInvoice = async () => {
     if (!invoiceToDelete) return;
-    try {
-      await axiosClient.delete(`api/receivables/${invoiceToDelete.id}`);
-      setInvoices(invoices.filter((inv) => inv.id !== invoiceToDelete.id));
-      toast.success("Factura eliminada correctamente");
-    } catch (error) {
-      toast.error("Error al eliminar la factura");
-    } finally {
+    const success = await deleteReceivable(invoiceToDelete.id);
+    if (success) {
       setIsDeleteDialogOpen(false);
       setInvoiceToDelete(null);
     }
@@ -234,6 +256,7 @@ export default function Receivables() {
     }).format(amount || 0);
   };
 
+  // 6. COLUMNAS DE LA TABLA
   const columns: ColumnDef<ReceivableInvoice>[] = useMemo(
     () => [
       {
@@ -262,7 +285,7 @@ export default function Receivables() {
         ),
       },
       {
-        key: "montoTotal",
+        key: "monto_total",
         header: "Monto",
         type: "number",
         render: (value, row) => (
@@ -271,43 +294,45 @@ export default function Receivables() {
               {formatMoney(value)}
             </span>
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mt-1">
-              {row.moneda}
+              {row.moneda || "MXN"}
             </span>
           </div>
         ),
       },
       {
-        key: "saldoPendiente",
+        key: "saldo_pendiente",
         header: "Saldo a Cobrar",
         type: "number",
         render: (value, row) => {
+          const saldo = value || 0;
           const statusInfo = getInvoiceStatusInfo(row);
           return (
             <span
-              className={`font-mono text-sm font-black ${value === 0 ? "text-emerald-600 dark:text-emerald-400" : statusInfo.status === "danger" ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400"}`}
+              className={`font-mono text-sm font-black ${saldo === 0 ? "text-emerald-600 dark:text-emerald-400" : statusInfo.status === "danger" ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400"}`}
             >
-              {formatMoney(value)}
+              {formatMoney(saldo)}
             </span>
           );
         },
       },
       {
-        key: "fechaEmision",
+        key: "fecha_emision",
         header: "Emisión",
         type: "date",
         render: (value) => (
           <span className="font-mono text-sm font-bold text-slate-700 dark:text-slate-300 uppercase">
-            {new Date(value).toLocaleDateString("es-MX")}
+            {value ? new Date(value).toLocaleDateString("es-MX") : "—"}
           </span>
         ),
       },
       {
-        key: "fechaVencimiento",
+        key: "fecha_vencimiento",
         header: "Vencimiento",
         type: "date",
         render: (value, row) => {
+          if (!value) return "—";
           const daysOverdue = calculateDaysOverdue(value);
-          const isPastDue = daysOverdue > 0 && row.saldo_pendiente > 0;
+          const isPastDue = daysOverdue > 0 && (row.saldo_pendiente || 0) > 0;
           return (
             <div className="flex flex-col">
               <span
@@ -348,7 +373,11 @@ export default function Receivables() {
         render: (_, row) => (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200/50 dark:border-white/10 bg-white/50 dark:bg-slate-900/50">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200/50 dark:border-white/10 bg-white/50 dark:bg-slate-900/50"
+              >
                 <MoreHorizontal className="h-4 w-4 text-slate-500 dark:text-slate-400" />
               </Button>
             </DropdownMenuTrigger>
@@ -363,10 +392,11 @@ export default function Receivables() {
                 }}
                 className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
               >
-                <Eye className="h-4 w-4 mr-2 text-blue-500 dark:text-blue-400" /> Ver Detalle
+                <Eye className="h-4 w-4 mr-2 text-blue-500 dark:text-blue-400" />{" "}
+                Ver Detalle
               </DropdownMenuItem>
 
-              {row.saldo_pendiente > 0 && (
+              {(row.saldo_pendiente || 0) > 0 && (
                 <>
                   <DropdownMenuSeparator className="dark:bg-white/10" />
                   <DropdownMenuItem
@@ -400,7 +430,7 @@ export default function Receivables() {
     [],
   );
 
-  if (loading) {
+  if (isLoadingReceivables) {
     return (
       <div className="flex justify-center items-center h-64">
         <Loader2 className="h-8 w-8 animate-spin text-brand-navy" />
@@ -415,7 +445,7 @@ export default function Receivables() {
         description="Gestión de cartera, antigüedad de saldos y cobranza a clientes."
       >
         <div className="flex flex-wrap items-center gap-3">
-          <Button
+          {/*      <Button
             variant="outline"
             className="border-emerald-500 bg-emerald-50/50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 font-black tracking-wide shadow-sm haptic-press transition-all"
             onClick={() => setIsImportXMLOpen(true)}
@@ -423,7 +453,7 @@ export default function Receivables() {
             <FileCode2 className="h-4 w-4 mr-2 text-emerald-600" /> Cobro
             Automático (XML)
           </Button>
-
+ */}
           <Button
             variant="outline"
             className="border-slate-300 bg-white text-slate-700 hover:bg-slate-50 font-bold haptic-press shadow-sm"
@@ -529,7 +559,7 @@ export default function Receivables() {
       <Card className="shadow-2xl border-none overflow-hidden bg-transparent">
         <CardContent className="p-0 bg-white dark:bg-slate-950 [&_thead]:bg-slate-50/80 dark:[&_thead]:bg-slate-900/80 [&_thead]:backdrop-blur-xl [&_th]:bg-transparent [&_th]:border-b [&_th]:border-slate-200 dark:[&_th]:border-white/10 [&_th]:text-[10px] [&_th]:font-black [&_th]:uppercase [&_th]:tracking-[0.2em] [&_th]:text-slate-500 dark:[&_th]:text-slate-400">
           <EnhancedDataTable
-            data={invoices}
+            data={formattedInvoices}
             columns={columns}
             exportFileName="cuentas_por_cobrar"
           />
@@ -568,12 +598,12 @@ export default function Receivables() {
       <AccountStatementModal
         open={isAccountStatementOpen}
         onClose={() => setIsAccountStatementOpen(false)}
-        invoices={invoices}
+        invoices={formattedInvoices}
       />
       <ImportXMLPaymentModal
         open={isImportXMLOpen}
         onOpenChange={setIsImportXMLOpen}
-        onSuccess={fetchInvoices}
+        onSuccess={refreshReceivables}
       />
 
       <AlertDialog
@@ -597,7 +627,8 @@ export default function Receivables() {
           <div className="p-6 sm:p-8 bg-slate-50/50 dark:bg-transparent">
             <AlertDialogDescription className="text-slate-600 dark:text-slate-300 text-sm font-medium">
               {invoiceToDelete &&
-              invoiceToDelete.saldo_pendiente < invoiceToDelete.monto_total ? (
+              (invoiceToDelete.saldo_pendiente || 0) <
+                (invoiceToDelete.monto_total || 0) ? (
                 <span className="text-red-600 dark:text-red-400 font-bold bg-red-50 dark:bg-red-950/30 p-3 rounded-lg block mt-2 border border-red-200 dark:border-red-900/50">
                   Error: Esta factura ya tiene abonos/pagos registrados. Por
                   auditoría fiscal, no es posible eliminarla. Cancele los pagos
@@ -606,7 +637,10 @@ export default function Receivables() {
               ) : (
                 <span className="block mt-2">
                   Esta acción no se puede deshacer. Se eliminará la factura{" "}
-                  <strong>{invoiceToDelete?.folio_interno}</strong> del sistema.
+                  <strong>
+                    {invoiceToDelete?.uuid || invoiceToDelete?.folio_interno}
+                  </strong>{" "}
+                  del sistema.
                 </span>
               )}
             </AlertDialogDescription>
@@ -617,8 +651,8 @@ export default function Receivables() {
                 Cancelar
               </AlertDialogCancel>
               {invoiceToDelete &&
-                invoiceToDelete.saldo_pendiente ===
-                  invoiceToDelete.monto_total && (
+                (invoiceToDelete.saldo_pendiente || 0) ===
+                  (invoiceToDelete.monto_total || 0) && (
                   <AlertDialogAction
                     onClick={handleDeleteInvoice}
                     className="bg-rose-600 hover:bg-rose-700 text-white font-black uppercase tracking-widest text-[10px] haptic-press shadow-rose-600/20"

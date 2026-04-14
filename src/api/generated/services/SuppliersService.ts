@@ -2,7 +2,6 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-import type { InvoicePaymentCreate } from '../models/InvoicePaymentCreate';
 import type { PayableInvoiceCreate } from '../models/PayableInvoiceCreate';
 import type { PayableInvoiceResponse } from '../models/PayableInvoiceResponse';
 import type { PayableInvoiceUpdate } from '../models/PayableInvoiceUpdate';
@@ -170,7 +169,7 @@ export class SuppliersService {
      */
     public static registerPaymentApiSuppliersInvoicesInvoiceIdPaymentsPost(
         invoiceId: number,
-        requestBody: InvoicePaymentCreate,
+        requestBody: Record<string, any>,
     ): CancelablePromise<PayableInvoiceResponse> {
         return __request(OpenAPI, {
             method: 'POST',
@@ -180,6 +179,27 @@ export class SuppliersService {
             },
             body: requestBody,
             mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Delete Payment
+     * Elimina (Soft Delete) un pago, recalcula la factura y devuelve el dinero a Tesorería.
+     * @param paymentId
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static deletePaymentApiSuppliersInvoicesPaymentsPaymentIdDelete(
+        paymentId: number,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'DELETE',
+            url: '/api/suppliers/invoices/payments/{payment_id}',
+            path: {
+                'payment_id': paymentId,
+            },
             errors: {
                 422: `Validation Error`,
             },
