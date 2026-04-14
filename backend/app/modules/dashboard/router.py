@@ -13,19 +13,24 @@ from app.modules.dashboard.schemas import DashboardData
 
 router = APIRouter()
 
+# --- backend/app/modules/dashboard/router.py ---
+# (Mantén tus importaciones actuales en la parte de arriba)
+
 
 @router.get("/stats", response_model=DashboardData)
 def get_dashboard_stats(
     start_date: str = None, end_date: str = None, db: Session = Depends(get_db)
 ):
     try:
-        # 1. Ajuste de fechas por defecto (últimos 30 días)
+        # 1. Ajuste de fechas por defecto
         if not start_date:
-            start_date = date.today() - timedelta(days=30)
+            start_date = date.today() - timedelta(
+                days=120
+            )  # Ampliado para ver gráficas de meses
         if not end_date:
             end_date = date.today()
 
-        # Total servicios y ganancias
+        # Total servicios y ganancias (Se mantiene igual)
         base_query = db.query(Trip).filter(
             Trip.start_date.between(start_date, end_date)
         )
@@ -43,8 +48,7 @@ def get_dashboard_stats(
             (on_time / total_services * 100) if total_services > 0 else 0
         )
 
-        # --- MÉTRICAS DE FLOTA CORREGIDAS ---
-        # Consultamos la tabla FuelLog que es la que realmente tiene los litros y km
+        # Métricas de Flota (Se mantiene igual)
         fleet_metrics = (
             db.query(
                 func.sum(FuelLog.km_sm).label("total_kms"),
@@ -58,6 +62,7 @@ def get_dashboard_stats(
         t_liters = float(fleet_metrics.total_liters or 0.0) if fleet_metrics else 0.0
         avg_rendimiento = round((t_kms / t_liters), 2) if t_liters > 0 else 0.0
 
+        # Top Clientes (Se mantiene igual)
         top_clients = (
             db.query(
                 Client.razon_social.label("client"),
@@ -73,7 +78,7 @@ def get_dashboard_stats(
             .all()
         )
 
-        # --- OPERATOR STATS CORREGIDO ---
+        # --- 2. OPERATOR STATS ACTUALIZADO (Añadido sumatoria de revenue) ---
         op_stats = (
             db.query(
                 Operator.name.label("name"),
@@ -82,16 +87,20 @@ def get_dashboard_stats(
                 func.sum(case((TripLeg.rendimiento_real == None, 0), else_=0)).label(
                     "incidents"
                 ),
-                # Promediamos la columna 'rendimiento_real' que ya tienes en TripLeg
                 func.avg(TripLeg.rendimiento_real).label("rendimiento"),
+                func.sum(Trip.tarifa_base).label(
+                    "revenue"
+                ),  # <--- NUEVO: Dinero generado por operador
             )
             .join(TripLeg, TripLeg.operator_id == Operator.id)
+            .join(Trip, TripLeg.trip_id == Trip.id)
             .filter(TripLeg.start_date.between(start_date, end_date))
             .group_by(Operator.id)
             .limit(8)
             .all()
         )
 
+        # Recent Services (Se mantiene igual)
         recent = (
             db.query(Trip)
             .join(Client, Trip.client_id == Client.id)
@@ -99,6 +108,30 @@ def get_dashboard_stats(
             .limit(10)
             .all()
         )
+
+        # --- 3. NUEVAS MÉTRICAS MENSUALES PARA GRÁFICAS ---
+        # (Nota: Agrupaciones hechas simuladas para armar la gráfica.
+        # Luego puedes cambiar esto a consultas GROUP BY MONTH en tu BD real)
+        revenueTrend = [
+            {"month": "Ene 2025", "revenue": 3400000.0},
+            {"month": "Feb 2025", "revenue": 4300000.0},
+            {"month": "Mar 2025", "revenue": 5000000.0},
+            {"month": "Abr 2025", "revenue": 4000000.0},
+        ]
+
+        tripConfigTrend = [
+            {"month": "Ene", "fullCount": 20, "sencilloCount": 50},
+            {"month": "Feb", "fullCount": 25, "sencilloCount": 60},
+            {"month": "Mar", "fullCount": 30, "sencilloCount": 80},
+            {"month": "Abr", "fullCount": 26, "sencilloCount": 65},
+        ]
+
+        fuelTrend = [
+            {"month": "Ene", "liters": 37000.0, "kms": 68000.0, "rendimiento": 1.84},
+            {"month": "Feb", "liters": 40000.0, "kms": 78000.0, "rendimiento": 1.95},
+            {"month": "Mar", "liters": 56000.0, "kms": 105000.0, "rendimiento": 1.87},
+            {"month": "Abr", "liters": 45000.0, "kms": 100000.0, "rendimiento": 2.22},
+        ]
 
         return {
             "serviceStats": {
@@ -117,6 +150,7 @@ def get_dashboard_stats(
                     **dict(o._mapping),
                     "onTimeRate": 95.0,
                     "rendimiento": round(o.rendimiento, 2) if o.rendimiento else 0.0,
+                    "revenue": float(o.revenue or 0.0),  # <--- NUEVO mapeo de retorno
                 }
                 for o in op_stats
             ],
@@ -140,9 +174,14 @@ def get_dashboard_stats(
                 }
                 for t in recent
             ],
+            "revenueTrend": revenueTrend,  # <--- NUEVO
+            "tripConfigTrend": tripConfigTrend,  # <--- NUEVO
+            "fuelTrend": fuelTrend,  # <--- NUEVO
         }
 
     except Exception as e:
         error_detail = f"Error interno: {str(e)}"
+        import traceback
+
         print(traceback.format_exc())
         raise HTTPException(status_code=400, detail=error_detail)

@@ -2,13 +2,10 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-export type OperatorStats = {
-    name: string;
-    shortName: string;
-    trips: number;
-    incidents: number;
-    onTimeRate: number;
+export type MonthlyFuelStat = {
+    month: string;
+    liters: number;
+    kms: number;
     rendimiento: number;
-    revenue: number;
 };
 

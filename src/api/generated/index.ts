@@ -69,6 +69,9 @@ export type { MechanicDocumentResponse } from './models/MechanicDocumentResponse
 export type { MechanicResponse } from './models/MechanicResponse';
 export type { MechanicUpdate } from './models/MechanicUpdate';
 export type { ModuleSchema } from './models/ModuleSchema';
+export type { MonthlyFuelStat } from './models/MonthlyFuelStat';
+export type { MonthlyRevenue } from './models/MonthlyRevenue';
+export type { MonthlyTripConfig } from './models/MonthlyTripConfig';
 export type { NotificationCreate } from './models/NotificationCreate';
 export type { NotificationResponse } from './models/NotificationResponse';
 export { OperationType } from './models/OperationType';

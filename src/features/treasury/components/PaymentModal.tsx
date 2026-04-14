@@ -179,7 +179,8 @@ export function PaymentModal({
           <div className="p-5 border border-border rounded-2xl bg-card shadow-sm space-y-5">
             <div className="space-y-1.5">
               <Label variant="brand" required>
-                <Landmark className="h-3 w-3 inline mr-1" /> Cuenta Bancaria de Origen
+                <Landmark className="h-3 w-3 inline mr-1" /> Cuenta Bancaria de
+                Origen
               </Label>
               <Select
                 value={formData.cuenta_id}
@@ -230,9 +231,7 @@ export function PaymentModal({
             </div>
 
             <div className="space-y-1.5">
-              <Label variant="brand">
-                Referencia de Transferencia
-              </Label>
+              <Label variant="brand">Referencia de Transferencia</Label>
               <Input
                 placeholder="Número de rastreo o autorización"
                 className="h-11 shadow-sm font-mono font-bold uppercase tracking-widest"
@@ -263,7 +262,7 @@ export function PaymentModal({
               }
               className="w-full sm:w-auto haptic-press border-none text-white bg-brand-red hover:bg-brand-red/90 shadow-[0_4px_15px_rgba(190,8,17,0.3)] font-black uppercase tracking-widest text-[10px]"
             >
-              Confirmar Pago
+              Confirmar Pago_
             </Button>
           </div>
         </DialogFooter>

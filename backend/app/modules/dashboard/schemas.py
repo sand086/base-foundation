@@ -29,6 +29,7 @@ class OperatorStats(BaseModel):
     incidents: int
     onTimeRate: float
     rendimiento: float
+    revenue: float
 
 
 class RecentService(BaseModel):
@@ -45,8 +46,29 @@ class RecentService(BaseModel):
     unitNumber: str
 
 
+class MonthlyRevenue(BaseModel):
+    month: str
+    revenue: float
+
+
+class MonthlyTripConfig(BaseModel):
+    month: str
+    fullCount: int
+    sencilloCount: int
+
+
+class MonthlyFuelStat(BaseModel):
+    month: str
+    liters: float
+    kms: float
+    rendimiento: float
+
+
 class DashboardData(BaseModel):
     serviceStats: ServiceStats
     clientServices: List[ClientServiceCount]
     operatorStats: List[OperatorStats]
     recentServices: List[RecentService]
+    revenueTrend: List[MonthlyRevenue]
+    tripConfigTrend: List[MonthlyTripConfig]
+    fuelTrend: List[MonthlyFuelStat]

@@ -23,10 +23,11 @@ export function useDashboard(startDate?: Date, endDate?: Date) {
           ? format(endDate, "yyyy-MM-dd")
           : format(new Date(), "yyyy-MM-dd");
 
-        const responseData = await DefaultService.getDashboardStatsApiDashboardStatsGet(
-          formattedStart,
-          formattedEnd,
-        );
+        const responseData =
+          await DefaultService.getDashboardStatsApiDashboardStatsGet(
+            formattedStart,
+            formattedEnd,
+          );
 
         setData(responseData);
       } catch (err: any) {
@@ -45,9 +46,13 @@ export function useDashboard(startDate?: Date, endDate?: Date) {
 
   return {
     serviceStats: data?.serviceStats,
-    clientServices: data?.clientServices ?? [],
-    operatorStats: data?.operatorStats ?? [],
-    recentServices: data?.recentServices ?? [],
+    clientServices: data?.clientServices,
+    operatorStats: data?.operatorStats,
+    recentServices: data?.recentServices,
+    // Asegúrate de agregar estas 3 líneas en el return de tu hook:
+    revenueTrend: data?.revenueTrend,
+    tripConfigTrend: data?.tripConfigTrend,
+    fuelTrend: data?.fuelTrend,
     isLoading,
     error,
   };

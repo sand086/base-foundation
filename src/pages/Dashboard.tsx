@@ -1,3 +1,4 @@
+// src/pages/Dashboard.tsx
 import { useState } from "react";
 import { DateRange } from "react-day-picker";
 import { subDays } from "date-fns";
@@ -12,7 +13,10 @@ import { OnTimeChart } from "@/features/dashboard/components/OnTimeChart";
 import { TopClientsChart } from "@/features/dashboard/components/TopClientsChart";
 import { OperatorStatsCharts } from "@/features/dashboard/components/OperatorStatsCharts";
 import { RecentServicesTable } from "@/features/dashboard/components/RecentServicesTable";
+// 1. IMPORTAMOS EL NUEVO COMPONENTE
+import { DashboardTrends } from "@/features/dashboard/components/DashboardTrends";
 import { useDashboard } from "@/features/dashboard/hooks/useDashboard";
+import { DashboardData } from "@/features/dashboard/types";
 
 export default function Dashboard() {
   // 1. Estado para el filtro de fechas (por defecto últimos 30 días)
@@ -27,6 +31,10 @@ export default function Dashboard() {
     clientServices,
     operatorStats,
     recentServices,
+    // 2. EXTRAEMOS LAS NUEVAS SERIES DE TIEMPO DEL HOOK
+    revenueTrend,
+    tripConfigTrend,
+    fuelTrend,
     isLoading,
     error,
   } = useDashboard(dateRange?.from, dateRange?.to);
@@ -35,6 +43,17 @@ export default function Dashboard() {
   const handleRetry = () => {
     window.location.reload();
   };
+
+  // Reconstruimos el objeto data para pasárselo a DashboardTrends
+  const dashboardData = {
+    serviceStats,
+    clientServices,
+    operatorStats,
+    recentServices,
+    revenueTrend: revenueTrend || [],
+    tripConfigTrend: tripConfigTrend || [],
+    fuelTrend: fuelTrend || [],
+  } as DashboardData;
 
   return (
     <div className="space-y-6">
@@ -53,7 +72,7 @@ export default function Dashboard() {
 
       {/* --- CONDITIONAL RENDERING --- */}
 
-      {/* A. ESTADO DE ERROR (Si el backend falla) */}
+      {/* A. ESTADO DE ERROR */}
       {error ? (
         <div className="flex flex-col items-center justify-center min-h-[400px] p-8 text-center border-2 border-dashed rounded-3xl bg-destructive/5">
           <div className="h-12 w-12 rounded-full bg-destructive/10 flex items-center justify-center mb-4">
@@ -76,7 +95,7 @@ export default function Dashboard() {
           </Button>
         </div>
       ) : isLoading ? (
-        /* B. ESTADO DE CARGA (Loading Spinner) */
+        /* B. ESTADO DE CARGA */
         <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
           <div className="relative flex items-center justify-center">
             <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -94,8 +113,12 @@ export default function Dashboard() {
       ) : (
         /* C. ESTADO DE DATOS (Dashboard Real) */
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-          {/* KPI Cards: Métricas principales */}
+          {/* KPI Cards: Métricas principales (Tarjetas de arriba) */}
           {serviceStats && <KPICards stats={serviceStats} />}
+
+          {/* 3. NUEVO COMPONENTE DE TENDENCIAS MENSUALES */}
+          {/* Lo colocamos justo debajo de las tarjetas para un impacto visual fuerte */}
+          <DashboardTrends data={dashboardData} />
 
           {/* Fila de Gráficas: Pastel de Puntualidad + Barras de Clientes */}
           <div className="grid gap-4 md:grid-cols-2">
@@ -103,18 +126,18 @@ export default function Dashboard() {
               {serviceStats && <OnTimeChart stats={serviceStats} />}
             </div>
             <div className="bento-card">
-              <TopClientsChart clients={clientServices} />
+              <TopClientsChart clients={clientServices || []} />
             </div>
           </div>
 
           {/* Tabla de Servicios Recientes (Full Width) */}
           <div className="bento-card">
-            <RecentServicesTable services={recentServices} />
+            <RecentServicesTable services={recentServices || []} />
           </div>
 
-          {/* Estadísticas de Operadores */}
+          {/* Estadísticas de Operadores (Ahora incluye la gráfica de Ingresos) */}
           <div className="bento-card">
-            <OperatorStatsCharts operators={operatorStats} />
+            <OperatorStatsCharts operators={operatorStats || []} />
           </div>
 
           {/* Nota al pie (Footer del Dash) */}
