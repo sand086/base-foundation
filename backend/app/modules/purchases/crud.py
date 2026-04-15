@@ -3,6 +3,7 @@ from datetime import date, timedelta
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from app.models import models
+from app.models.models import RecordStatus  # <-- Importante para el filtro
 
 
 def create_purchase_order(db: Session, order_data: dict, user_id: int):
@@ -58,7 +59,11 @@ def receive_purchase_order(
     """
     order = (
         db.query(models.PurchaseOrder)
-        .filter(models.PurchaseOrder.id == order_id)
+        .filter(
+            models.PurchaseOrder.id == order_id,
+            models.PurchaseOrder.record_status
+            != RecordStatus.ELIMINADO,  # <-- PROTECCIÓN AGREGADA
+        )
         .first()
     )
 
@@ -73,7 +78,11 @@ def receive_purchase_order(
             if item.inventory_item_id:
                 inv_item = (
                     db.query(models.InventoryItem)
-                    .filter(models.InventoryItem.id == item.inventory_item_id)
+                    .filter(
+                        models.InventoryItem.id == item.inventory_item_id,
+                        models.InventoryItem.record_status
+                        != RecordStatus.ELIMINADO,  # <-- PROTECCIÓN AGREGADA
+                    )
                     .first()
                 )
                 if inv_item:

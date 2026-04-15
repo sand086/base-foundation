@@ -152,7 +152,6 @@ def get_invoice(db: Session, invoice_id: int):
 def create_invoice(db: Session, invoice_in: schemas.PayableInvoiceCreate):
     try:
         # saldo inicial = total, estatus inicial = PENDIENTE
-        # payload = invoice_in.model_dump(exclude={"payments"})
         payload = invoice_in.model_dump(exclude={"payments", "orden_compra_id"})
 
         # Validamos que monto_total nunca sea None para evitar fallos en BD
@@ -341,15 +340,21 @@ def delete_payment(db: Session, payment_id: int, user_id: int):
         if not payment:
             return False
 
-        # 2. Bloquear la Factura asociada (Evita race conditions)
+        # 2. Bloquear la Factura asociada (Evita race conditions y PROTEGE CONTRA ELIMINADOS)
         invoice = (
             db.query(models.PayableInvoice)
-            .filter(models.PayableInvoice.id == payment.invoice_id)
+            .filter(
+                models.PayableInvoice.id == payment.invoice_id,
+                models.PayableInvoice.record_status
+                != RecordStatus.ELIMINADO,  # <-- PROTECCIÓN AGREGADA
+            )
             .with_for_update()
             .first()
         )
         if not invoice:
-            raise ValueError("La factura asociada a este pago no existe.")
+            raise ValueError(
+                "La factura asociada a este pago no existe o fue eliminada."
+            )
 
         # 3. Marcar el pago como eliminado (Soft Delete)
         payment.record_status = RecordStatus.ELIMINADO
@@ -367,11 +372,15 @@ def delete_payment(db: Session, payment_id: int, user_id: int):
 
         db.add(invoice)
 
-        # 5. RECALCULAR TESORERÍA (Devolver el dinero al banco)
+        # 5. RECALCULAR TESORERÍA (Devolver el dinero al banco y PROTEGE CONTRA ELIMINADOS)
         if payment.bank_account_id:
             account = (
                 db.query(models.BankAccount)
-                .filter(models.BankAccount.id == payment.bank_account_id)
+                .filter(
+                    models.BankAccount.id == payment.bank_account_id,
+                    models.BankAccount.record_status
+                    != RecordStatus.ELIMINADO,  # <-- PROTECCIÓN AGREGADA
+                )
                 .with_for_update()
                 .first()
             )
