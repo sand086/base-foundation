@@ -500,19 +500,25 @@ EXPECTED_TIRES = {
 
 
 def get_unit_last_odometer(db: Session, unit_id: int):
-    # 1. Busca en el último tramo de viaje de esa unidad
+    # 1. Busca en el último tramo de viaje de esa unidad (PROTEGIDO)
     last_leg = (
         db.query(models.TripLeg)
-        .filter(models.TripLeg.unit_id == unit_id)
+        .filter(
+            models.TripLeg.unit_id == unit_id,
+            models.TripLeg.record_status != RecordStatus.ELIMINADO,
+        )
         .order_by(models.TripLeg.id.desc())
         .first()
     )
 
-    # 2. Si no hay viajes, busca en el último vale de combustible
+    # 2. Si no hay viajes, busca en el último vale de combustible (PROTEGIDO)
     if not last_leg or not last_leg.odometro_final:
         last_fuel = (
             db.query(models.FuelLog)
-            .filter(models.FuelLog.unit_id == unit_id)
+            .filter(
+                models.FuelLog.unit_id == unit_id,
+                models.FuelLog.record_status != RecordStatus.ELIMINADO,
+            )
             .order_by(models.FuelLog.odometro.desc())
             .first()
         )

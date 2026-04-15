@@ -1,6 +1,5 @@
 # --- Fuente: crud_maintenance.py ---
 
-
 import os
 import shutil
 import time
@@ -51,9 +50,7 @@ def list_inventory(
     query = (
         db.query(models.InventoryItem)
         .options(joinedload(models.InventoryItem.proveedor))  # CARGAMOS EL PROVEEDOR
-        .filter(
-            models.InventoryItem.record_status != models.RecordStatus.ELIMINADO.value
-        )
+        .filter(models.InventoryItem.record_status != models.RecordStatus.ELIMINADO)
     )
 
     if q:
@@ -82,7 +79,7 @@ def get_inventory_item(db: Session, item_id: int):
         db.query(models.InventoryItem)
         .filter(
             models.InventoryItem.id == item_id,
-            models.InventoryItem.record_status != models.RecordStatus.ELIMINADO.value,
+            models.InventoryItem.record_status != models.RecordStatus.ELIMINADO,
         )
         .first()
     )
@@ -97,7 +94,7 @@ def create_inventory_item(db: Session, item_in: schemas.InventoryItemCreate):
         db.query(models.InventoryItem)
         .filter(
             models.InventoryItem.sku == item_in.sku,
-            models.InventoryItem.record_status != models.RecordStatus.ELIMINADO.value,
+            models.InventoryItem.record_status != models.RecordStatus.ELIMINADO,
         )
         .first()
     )
@@ -198,7 +195,7 @@ def update_inventory_item(
 def delete_inventory_item(db: Session, item_id: int):
     # Soft delete: record_status = E
     item = get_inventory_item(db, item_id)
-    item.record_status = models.RecordStatus.ELIMINADO.value
+    item.record_status = models.RecordStatus.ELIMINADO
     item.sku = f"{item.sku}_DEL_{int(time.time())}"
     db.commit()
     return True
@@ -215,7 +212,7 @@ def list_mechanics(
     query = (
         db.query(models.Mechanic)
         .options(joinedload(models.Mechanic.documents))
-        .filter(models.Mechanic.record_status != models.RecordStatus.ELIMINADO.value)
+        .filter(models.Mechanic.record_status != models.RecordStatus.ELIMINADO)
     )
 
     if only_active:
@@ -230,7 +227,7 @@ def get_mechanic(db: Session, mechanic_id: int):
         .options(joinedload(models.Mechanic.documents))
         .filter(
             models.Mechanic.id == mechanic_id,
-            models.Mechanic.record_status != models.RecordStatus.ELIMINADO.value,
+            models.Mechanic.record_status != models.RecordStatus.ELIMINADO,
         )
         .first()
     )
@@ -259,7 +256,7 @@ def update_mechanic(db: Session, mechanic_id: int, mechanic_in: schemas.Mechanic
 def delete_mechanic(db: Session, mechanic_id: int):
     db_mech = get_mechanic(db, mechanic_id)
     db_mech.activo = False
-    db_mech.record_status = models.RecordStatus.ELIMINADO.value
+    db_mech.record_status = models.RecordStatus.ELIMINADO
 
     # Liberamos RFC, NSS y Email (los que tengan unique=True en tu modelo)
     timestamp = int(time.time())
@@ -315,8 +312,7 @@ def list_mechanic_documents(db: Session, mechanic_id: int):
         db.query(models.MechanicDocument)
         .filter(
             models.MechanicDocument.mechanic_id == mechanic_id,
-            models.MechanicDocument.record_status
-            != models.RecordStatus.ELIMINADO.value,
+            models.MechanicDocument.record_status != models.RecordStatus.ELIMINADO,
         )
         .order_by(models.MechanicDocument.id.desc())
         .all()
@@ -324,14 +320,11 @@ def list_mechanic_documents(db: Session, mechanic_id: int):
 
 
 def delete_mechanic_document(db: Session, document_id: int):
-
-    print(models.RecordStatus.ELIMINADO.value)
-
     doc = (
         db.query(models.MechanicDocument)
         .filter(
             models.MechanicDocument.id == document_id,
-            models.MechanicDocument.record_status != "E",
+            models.MechanicDocument.record_status != models.RecordStatus.ELIMINADO,
         )
         .first()
     )
@@ -346,7 +339,7 @@ def delete_mechanic_document(db: Session, document_id: int):
     except Exception:
         pass
 
-    doc.record_status = models.RecordStatus.ELIMINADO.value
+    doc.record_status = models.RecordStatus.ELIMINADO
     db.commit()
     return True
 
@@ -369,7 +362,7 @@ def list_work_orders(
             joinedload(models.WorkOrder.mechanic),
             joinedload(models.WorkOrder.parts).joinedload(models.WorkOrderPart.item),
         )
-        .filter(models.WorkOrder.record_status != models.RecordStatus.ELIMINADO.value)
+        .filter(models.WorkOrder.record_status != models.RecordStatus.ELIMINADO)
     )
 
     if status:
@@ -402,7 +395,7 @@ def get_work_order(db: Session, order_id: int):
         )
         .filter(
             models.WorkOrder.id == order_id,
-            models.WorkOrder.record_status != models.RecordStatus.ELIMINADO.value,
+            models.WorkOrder.record_status != models.RecordStatus.ELIMINADO,
         )
         .first()
     )
@@ -456,7 +449,7 @@ def create_work_order(db: Session, order_in: schemas.WorkOrderCreate):
                     status_code=404,
                     detail=f"Refacción con ID {part.inventory_item_id} no encontrada",
                 )
-            if item.record_status == models.RecordStatus.ELIMINADO.value:
+            if item.record_status == models.RecordStatus.ELIMINADO:
                 raise HTTPException(
                     status_code=400,
                     detail=f"Refacción {item.sku} está eliminada",
@@ -494,7 +487,7 @@ def update_work_order(db: Session, order_id: int, order_in: schemas.WorkOrderCre
         db.query(models.WorkOrder)
         .filter(
             models.WorkOrder.id == order_id,
-            models.WorkOrder.record_status != models.RecordStatus.ELIMINADO.value,
+            models.WorkOrder.record_status != models.RecordStatus.ELIMINADO,
         )
         .first()
     )
@@ -511,14 +504,11 @@ def update_work_order(db: Session, order_id: int, order_in: schemas.WorkOrderCre
 
     # 3. Manejo de Refacciones (CERO DELETES)
     for old_part in db_order.parts:
-        if (
-            getattr(old_part, "record_status", "A")
-            != models.RecordStatus.ELIMINADO.value
-        ):
+        if getattr(old_part, "record_status", "A") != models.RecordStatus.ELIMINADO:
             if old_part.item:
                 old_part.item.stock_actual += old_part.cantidad
             if hasattr(old_part, "record_status"):
-                old_part.record_status = models.RecordStatus.ELIMINADO.value
+                old_part.record_status = models.RecordStatus.ELIMINADO
 
     now = datetime.now(timezone.utc)
     for part in order_in.parts:
@@ -528,7 +518,7 @@ def update_work_order(db: Session, order_id: int, order_in: schemas.WorkOrderCre
             .first()
         )
 
-        if not item or item.record_status == models.RecordStatus.ELIMINADO.value:
+        if not item or item.record_status == models.RecordStatus.ELIMINADO:
             raise HTTPException(
                 status_code=404,
                 detail=f"Refacción ID {part.inventory_item_id} no válida o eliminada",
@@ -557,8 +547,15 @@ def update_work_order(db: Session, order_id: int, order_in: schemas.WorkOrderCre
 
 
 def delete_work_order(db: Session, order_id: int):
-    # Soft delete: record_status
-    order = db.query(models.WorkOrder).filter(models.WorkOrder.id == order_id).first()
+    # Soft delete: record_status (AÑADIDA PROTECCIÓN ELIMINADO)
+    order = (
+        db.query(models.WorkOrder)
+        .filter(
+            models.WorkOrder.id == order_id,
+            models.WorkOrder.record_status != models.RecordStatus.ELIMINADO,
+        )
+        .first()
+    )
     if not order:
         _not_found("Orden de trabajo")
 
@@ -568,7 +565,7 @@ def delete_work_order(db: Session, order_id: int):
             if part.item:
                 part.item.stock_actual += part.cantidad
 
-    order.record_status = models.RecordStatus.ELIMINADO.value
+    order.record_status = models.RecordStatus.ELIMINADO
     db.commit()
     return True
 
@@ -576,7 +573,15 @@ def delete_work_order(db: Session, order_id: int):
 def update_work_order_status(
     db: Session, order_id: int, status: models.WorkOrderStatus
 ):
-    order = db.query(models.WorkOrder).filter(models.WorkOrder.id == order_id).first()
+    # (AÑADIDA PROTECCIÓN ELIMINADO)
+    order = (
+        db.query(models.WorkOrder)
+        .filter(
+            models.WorkOrder.id == order_id,
+            models.WorkOrder.record_status != models.RecordStatus.ELIMINADO,
+        )
+        .first()
+    )
     if not order:
         _not_found("Orden de trabajo")
 
@@ -605,8 +610,14 @@ def update_work_order_status(
 
 def get_or_create_petty_cash_supplier(db: Session):
     rfc_generico = "XAXX010101000"
+    # (AÑADIDA PROTECCIÓN ELIMINADO)
     supplier = (
-        db.query(models.Supplier).filter(models.Supplier.rfc == rfc_generico).first()
+        db.query(models.Supplier)
+        .filter(
+            models.Supplier.rfc == rfc_generico,
+            models.Supplier.record_status != models.RecordStatus.ELIMINADO,
+        )
+        .first()
     )
 
     if not supplier:
