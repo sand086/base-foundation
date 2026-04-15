@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from app.db.database import get_db
-from app.models.models import Brand
+from app.models.models import Brand, RecordStatus
 from .schemas import BrandResponse, BrandCreate
 
 router = APIRouter()
@@ -13,7 +13,7 @@ router = APIRouter()
 def get_brands(db: Session = Depends(get_db)):
     return (
         db.query(Brand)
-        .filter(Brand.record_status == "A")
+        .filter(Brand.record_status != RecordStatus.ELIMINADO)
         .order_by(Brand.nombre.asc())
         .all()
     )
@@ -26,14 +26,23 @@ def create_brand(obj_in: BrandCreate, db: Session = Depends(get_db)):
 
     # Buscamos si ya existe para no duplicar
     existing = db.query(Brand).filter(Brand.nombre == nombre_limpio).first()
+
     if existing:
+        # Si existe pero estaba borrada, la revivimos en lugar de crear un error
+        if existing.record_status == RecordStatus.ELIMINADO:
+            existing.record_status = RecordStatus.ACTIVO
+            existing.tipo_activo = (
+                obj_in.tipo_activo.upper() if obj_in.tipo_activo else None
+            )
+            db.commit()
+            db.refresh(existing)
+            return existing
         return existing
 
     # Si no existe, la creamos
     new_brand = Brand(
         nombre=nombre_limpio,
         tipo_activo=obj_in.tipo_activo.upper() if obj_in.tipo_activo else None,
-        record_status="A",
     )
     db.add(new_brand)
     db.commit()
@@ -81,7 +90,11 @@ DEFAULT_MODULES = [
 
 @router.get("/unit-types", response_model=List[schemas.UnitTypeBase])
 def get_unit_types(db: Session = Depends(get_db)):
-    return db.query(models.UnitTypeCatalog).all()
+    return (
+        db.query(models.UnitTypeCatalog)
+        .filter(models.UnitTypeCatalog.record_status != RecordStatus.ELIMINADO)
+        .all()
+    )
 
 
 @router.post("/unit-types/bulk")
@@ -93,7 +106,10 @@ def save_unit_types_bulk(
     for item in tipos:
         db_item = (
             db.query(models.UnitTypeCatalog)
-            .filter(models.UnitTypeCatalog.id == item.id)
+            .filter(
+                models.UnitTypeCatalog.id == item.id,
+                models.UnitTypeCatalog.record_status != RecordStatus.ELIMINADO,
+            )
             .first()
         )
         if db_item:
@@ -119,7 +135,10 @@ def save_unit_types_bulk(
 def get_system_config(db: Session = Depends(get_db)):
     return (
         db.query(models.SystemConfig)
-        .filter(models.SystemConfig.key != "modules_list")
+        .filter(
+            models.SystemConfig.key != "modules_list",
+            models.SystemConfig.record_status != RecordStatus.ELIMINADO,
+        )
         .all()
     )
 
@@ -132,7 +151,12 @@ def upsert_system_config(
     current_user: models.User = Depends(get_current_active_user),
 ):
     config = (
-        db.query(models.SystemConfig).filter(models.SystemConfig.key == key).first()
+        db.query(models.SystemConfig)
+        .filter(
+            models.SystemConfig.key == key,
+            models.SystemConfig.record_status != RecordStatus.ELIMINADO,
+        )
+        .first()
     )
     if not config:
         config = models.SystemConfig(
@@ -162,7 +186,10 @@ def update_system_config_bulk(
     for item in payload:
         config = (
             db.query(models.SystemConfig)
-            .filter(models.SystemConfig.key == item.key)
+            .filter(
+                models.SystemConfig.key == item.key,
+                models.SystemConfig.record_status != RecordStatus.ELIMINADO,
+            )
             .first()
         )
         if config:
@@ -174,7 +201,10 @@ def update_system_config_bulk(
             base_key = item.key.replace("_qa", "")
             base_config = (
                 db.query(models.SystemConfig)
-                .filter(models.SystemConfig.key == base_key)
+                .filter(
+                    models.SystemConfig.key == base_key,
+                    models.SystemConfig.record_status != RecordStatus.ELIMINADO,
+                )
                 .first()
             )
 
@@ -224,6 +254,8 @@ def create_route_catalog(
             models.RateTemplate.origen == ruta.origen,
             models.RateTemplate.destino == ruta.destino,
             models.RateTemplate.tipo_unidad == ruta.tipo_unidad,
+            models.RateTemplate.record_status
+            != RecordStatus.ELIMINADO,  # <-- IGNORAR ELIMINADOS
         )
         .first()
     )
@@ -252,12 +284,18 @@ def delete_route_catalog(
     current_user: models.User = Depends(get_current_active_user),
 ):
     route = (
-        db.query(models.RateTemplate).filter(models.RateTemplate.id == route_id).first()
+        db.query(models.RateTemplate)
+        .filter(
+            models.RateTemplate.id == route_id,
+            models.RateTemplate.record_status != RecordStatus.ELIMINADO,
+        )
+        .first()
     )
     if not route:
         raise HTTPException(status_code=404, detail="Ruta no encontrada")
 
-    db.delete(route)
+    # <-- SOFT DELETE EN LUGAR DE db.delete(route)
+    route.record_status = RecordStatus.ELIMINADO
     db.commit()
     return {"message": "Ruta eliminada"}
 
@@ -271,7 +309,10 @@ def delete_route_catalog(
 def get_modules(db: Session = Depends(get_db)):
     config = (
         db.query(models.SystemConfig)
-        .filter(models.SystemConfig.key == "modules_list")
+        .filter(
+            models.SystemConfig.key == "modules_list",
+            models.SystemConfig.record_status != RecordStatus.ELIMINADO,
+        )
         .first()
     )
 
@@ -298,7 +339,10 @@ def add_module(
 ):
     config = (
         db.query(models.SystemConfig)
-        .filter(models.SystemConfig.key == "modules_list")
+        .filter(
+            models.SystemConfig.key == "modules_list",
+            models.SystemConfig.record_status != RecordStatus.ELIMINADO,
+        )
         .first()
     )
 
@@ -335,7 +379,10 @@ def update_module(
 ):
     config = (
         db.query(models.SystemConfig)
-        .filter(models.SystemConfig.key == "modules_list")
+        .filter(
+            models.SystemConfig.key == "modules_list",
+            models.SystemConfig.record_status != RecordStatus.ELIMINADO,
+        )
         .first()
     )
     if not config:
@@ -367,7 +414,10 @@ def delete_module(
 ):
     config = (
         db.query(models.SystemConfig)
-        .filter(models.SystemConfig.key == "modules_list")
+        .filter(
+            models.SystemConfig.key == "modules_list",
+            models.SystemConfig.record_status != RecordStatus.ELIMINADO,
+        )
         .first()
     )
     if not config:
@@ -408,7 +458,10 @@ def save_license_types_bulk(
     for item in tipos:
         db_item = (
             db.query(models.LicenseTypeCatalog)
-            .filter(models.LicenseTypeCatalog.id == item.id)
+            .filter(
+                models.LicenseTypeCatalog.id == item.id,
+                models.LicenseTypeCatalog.record_status != RecordStatus.ELIMINADO,
+            )
             .first()
             if item.id
             else None
@@ -448,7 +501,10 @@ def save_settlement_concepts_bulk(
     for item in conceptos:
         db_item = (
             db.query(models.SettlementConceptCatalog)
-            .filter(models.SettlementConceptCatalog.id == item.id)
+            .filter(
+                models.SettlementConceptCatalog.id == item.id,
+                models.SettlementConceptCatalog.record_status != RecordStatus.ELIMINADO,
+            )
             .first()
             if item.id
             else None
@@ -488,7 +544,10 @@ def save_insurers_bulk(
     for item in insurers:
         db_item = (
             db.query(models.InsurerCatalog)
-            .filter(models.InsurerCatalog.id == item.id)
+            .filter(
+                models.InsurerCatalog.id == item.id,
+                models.InsurerCatalog.record_status != RecordStatus.ELIMINADO,
+            )
             .first()
             if item.id
             else None
@@ -510,6 +569,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.models import models
+from app.models.models import RecordStatus
 from pydantic import BaseModel
 from typing import List
 from app.modules.auth.router import get_current_user
@@ -527,7 +587,9 @@ class TerminalResponse(TerminalBase):
 
 @router.get("/terminals", response_model=List[TerminalResponse])
 def get_terminals(search: str = "", db: Session = Depends(get_db)):
-    query = db.query(models.Terminal).filter(models.Terminal.record_status == "A")
+    query = db.query(models.Terminal).filter(
+        models.Terminal.record_status != RecordStatus.ELIMINADO
+    )
     if search:
         query = query.filter(models.Terminal.nombre.ilike(f"%{search}%"))
     return query.order_by(models.Terminal.nombre.asc()).all()
@@ -544,8 +606,9 @@ def create_terminal(
         .first()
     )
     if exist:
-        if exist.record_status != "A":
-            exist.record_status = "A"
+        # Si existe pero fue eliminada, la "revivimos"
+        if exist.record_status == RecordStatus.ELIMINADO:
+            exist.record_status = RecordStatus.ACTIVO
             db.commit()
             db.refresh(exist)
             return exist
@@ -564,10 +627,19 @@ def create_terminal(
 def delete_terminal(
     terminal_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)
 ):
-    terminal = db.query(models.Terminal).get(terminal_id)
+    terminal = (
+        db.query(models.Terminal)
+        .filter(
+            models.Terminal.id == terminal_id,
+            models.Terminal.record_status != RecordStatus.ELIMINADO,
+        )
+        .first()
+    )
     if not terminal:
-        raise HTTPException(status_code=404)
-    terminal.record_status = "E"
+        raise HTTPException(status_code=404, detail="Terminal no encontrada")
+
+    # Soft delete
+    terminal.record_status = RecordStatus.ELIMINADO
     terminal.updated_by_id = user.id
     db.commit()
     return {"message": "Terminal eliminada"}
@@ -580,9 +652,17 @@ def update_terminal(
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    terminal = db.query(models.Terminal).get(terminal_id)
+    terminal = (
+        db.query(models.Terminal)
+        .filter(
+            models.Terminal.id == terminal_id,
+            models.Terminal.record_status != RecordStatus.ELIMINADO,
+        )
+        .first()
+    )
     if not terminal:
-        raise HTTPException(status_code=404)
+        raise HTTPException(status_code=404, detail="Terminal no encontrada")
+
     terminal.nombre = data.nombre.upper().strip()
     terminal.updated_by_id = user.id
     db.commit()

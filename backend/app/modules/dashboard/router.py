@@ -7,8 +7,16 @@ import traceback
 
 from app.db.database import get_db
 
-# Agregamos FuelLog a los imports
-from app.models.models import Trip, Client, Operator, TripLeg, Unit, FuelLog
+# Agregamos RecordStatus a los imports
+from app.models.models import (
+    Trip,
+    Client,
+    Operator,
+    TripLeg,
+    Unit,
+    FuelLog,
+    RecordStatus,
+)
 from app.modules.dashboard.schemas import DashboardData
 
 router = APIRouter()
@@ -30,14 +38,18 @@ def get_dashboard_stats(
         if not end_date:
             end_date = date.today()
 
-        # Total servicios y ganancias (Se mantiene igual)
+        # Total servicios y ganancias (Se mantiene igual pero con FILTRO DE ELIMINADOS)
         base_query = db.query(Trip).filter(
-            Trip.start_date.between(start_date, end_date)
+            Trip.start_date.between(start_date, end_date),
+            Trip.record_status != RecordStatus.ELIMINADO,  # <-- PROTECCIÓN
         )
         total_services = base_query.count()
         total_revenue = (
             db.query(func.sum(Trip.tarifa_base))
-            .filter(Trip.start_date.between(start_date, end_date))
+            .filter(
+                Trip.start_date.between(start_date, end_date),
+                Trip.record_status != RecordStatus.ELIMINADO,  # <-- PROTECCIÓN
+            )
             .scalar()
             or 0.0
         )
@@ -48,13 +60,16 @@ def get_dashboard_stats(
             (on_time / total_services * 100) if total_services > 0 else 0
         )
 
-        # Métricas de Flota (Se mantiene igual)
+        # Métricas de Flota (Filtramos vales eliminados)
         fleet_metrics = (
             db.query(
                 func.sum(FuelLog.km_sm).label("total_kms"),
                 func.sum(FuelLog.litros).label("total_liters"),
             )
-            .filter(FuelLog.fecha_hora.between(start_date, end_date))
+            .filter(
+                FuelLog.fecha_hora.between(start_date, end_date),
+                FuelLog.record_status != RecordStatus.ELIMINADO,  # <-- PROTECCIÓN
+            )
             .first()
         )
 
@@ -62,7 +77,7 @@ def get_dashboard_stats(
         t_liters = float(fleet_metrics.total_liters or 0.0) if fleet_metrics else 0.0
         avg_rendimiento = round((t_kms / t_liters), 2) if t_liters > 0 else 0.0
 
-        # Top Clientes (Se mantiene igual)
+        # Top Clientes (Filtramos viajes eliminados)
         top_clients = (
             db.query(
                 Client.razon_social.label("client"),
@@ -71,14 +86,18 @@ def get_dashboard_stats(
                 func.sum(Trip.tarifa_base).label("revenue"),
             )
             .join(Trip, Trip.client_id == Client.id)
-            .filter(Trip.start_date.between(start_date, end_date))
+            .filter(
+                Trip.start_date.between(start_date, end_date),
+                Trip.record_status != RecordStatus.ELIMINADO,  # <-- PROTECCIÓN
+            )
             .group_by(Client.id)
             .order_by(func.count(Trip.id).desc())
             .limit(5)
             .all()
         )
 
-        # --- 2. OPERATOR STATS ACTUALIZADO (Añadido sumatoria de revenue) ---
+        # --- 2. OPERATOR STATS ACTUALIZADO ---
+        # Filtramos tanto tramos como viajes eliminados
         op_stats = (
             db.query(
                 Operator.name.label("name"),
@@ -90,20 +109,25 @@ def get_dashboard_stats(
                 func.avg(TripLeg.rendimiento_real).label("rendimiento"),
                 func.sum(Trip.tarifa_base).label(
                     "revenue"
-                ),  # <--- NUEVO: Dinero generado por operador
+                ),  # <--- Dinero generado por operador
             )
             .join(TripLeg, TripLeg.operator_id == Operator.id)
             .join(Trip, TripLeg.trip_id == Trip.id)
-            .filter(TripLeg.start_date.between(start_date, end_date))
+            .filter(
+                TripLeg.start_date.between(start_date, end_date),
+                TripLeg.record_status != RecordStatus.ELIMINADO,  # <-- PROTECCIÓN
+                Trip.record_status != RecordStatus.ELIMINADO,  # <-- PROTECCIÓN EXTRA
+            )
             .group_by(Operator.id)
             .limit(8)
             .all()
         )
 
-        # Recent Services (Se mantiene igual)
+        # Recent Services (Filtramos viajes eliminados)
         recent = (
             db.query(Trip)
             .join(Client, Trip.client_id == Client.id)
+            .filter(Trip.record_status != RecordStatus.ELIMINADO)  # <-- PROTECCIÓN
             .order_by(Trip.created_at.desc())
             .limit(10)
             .all()
@@ -150,7 +174,7 @@ def get_dashboard_stats(
                     **dict(o._mapping),
                     "onTimeRate": 95.0,
                     "rendimiento": round(o.rendimiento, 2) if o.rendimiento else 0.0,
-                    "revenue": float(o.revenue or 0.0),  # <--- NUEVO mapeo de retorno
+                    "revenue": float(o.revenue or 0.0),  # <--- Mapeo de retorno
                 }
                 for o in op_stats
             ],
