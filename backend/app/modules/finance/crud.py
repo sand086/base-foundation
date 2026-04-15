@@ -3,7 +3,9 @@ from sqlalchemy import func
 from typing import List, Optional
 from fastapi import HTTPException
 from datetime import datetime, timedelta, date
+
 from app.models import models
+from app.models.models import RecordStatus  # <-- Importante para el filtro
 from . import schemas
 
 # =====================================================================
@@ -12,7 +14,13 @@ from . import schemas
 
 
 def get_providers(db: Session, skip: int = 0, limit: int = 100):
-    return db.query(models.Provider).offset(skip).limit(limit).all()
+    return (
+        db.query(models.Provider)
+        .filter(models.Provider.record_status != RecordStatus.ELIMINADO)
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
 
 def create_provider(db: Session, provider: schemas.ProviderCreate):
@@ -25,17 +33,27 @@ def create_provider(db: Session, provider: schemas.ProviderCreate):
 
 def delete_provider(db: Session, provider_id: str):
     provider = (
-        db.query(models.Provider).filter(models.Provider.id == provider_id).first()
+        db.query(models.Provider)
+        .filter(
+            models.Provider.id == provider_id,
+            models.Provider.record_status != RecordStatus.ELIMINADO,
+        )
+        .first()
     )
     if provider:
-        db.delete(provider)
+        # Reemplazamos db.delete por Soft Delete
+        provider.record_status = RecordStatus.ELIMINADO
         db.commit()
         return True
     return False
 
 
 def get_indirect_categories(db: Session):
-    return db.query(models.IndirectExpenseCategory).all()
+    return (
+        db.query(models.IndirectExpenseCategory)
+        .filter(models.IndirectExpenseCategory.record_status != RecordStatus.ELIMINADO)
+        .all()
+    )
 
 
 # =====================================================================
@@ -44,10 +62,13 @@ def get_indirect_categories(db: Session):
 
 
 def get_bank_accounts(db: Session):
-    """Obtiene solo las cuentas bancarias activas (Oculta las archivadas)"""
+    """Obtiene solo las cuentas bancarias activas (Oculta las archivadas y eliminadas)"""
     return (
         db.query(models.BankAccount)
-        .filter(models.BankAccount.estatus == "activo")
+        .filter(
+            models.BankAccount.estatus == "activo",
+            models.BankAccount.record_status != RecordStatus.ELIMINADO,
+        )
         .all()
     )
 
@@ -67,7 +88,12 @@ def update_bank_account(db: Session, account_id: int, account_data: dict, user_i
     Si trae 'saldo' (por ajuste manual de administrador), también lo afectará.
     """
     account = (
-        db.query(models.BankAccount).filter(models.BankAccount.id == account_id).first()
+        db.query(models.BankAccount)
+        .filter(
+            models.BankAccount.id == account_id,
+            models.BankAccount.record_status != RecordStatus.ELIMINADO,
+        )
+        .first()
     )
 
     if not account:
@@ -88,17 +114,20 @@ def delete_bank_account(db: Session, account_id: int):
     No se elimina de la base de datos para no romper reportes históricos.
     """
     account = (
-        db.query(models.BankAccount).filter(models.BankAccount.id == account_id).first()
+        db.query(models.BankAccount)
+        .filter(
+            models.BankAccount.id == account_id,
+            models.BankAccount.record_status != RecordStatus.ELIMINADO,
+        )
+        .first()
     )
 
     if not account:
         return False
 
-    #  MAGIA: SOFT DELETE (No usamos db.delete(account))
+    #  MAGIA: SOFT DELETE
     account.estatus = "inactivo"
-
-    # Si tienes habilitado AuditMixin en tu modelo, descomenta la siguiente línea:
-    # account.record_status = "I"
+    account.record_status = RecordStatus.ELIMINADO
 
     db.commit()
     return True
@@ -106,7 +135,10 @@ def delete_bank_account(db: Session, account_id: int):
 
 def get_bank_movements(db: Session):
     return (
-        db.query(models.BankMovement).order_by(models.BankMovement.fecha.desc()).all()
+        db.query(models.BankMovement)
+        .filter(models.BankMovement.record_status != RecordStatus.ELIMINADO)
+        .order_by(models.BankMovement.fecha.desc())
+        .all()
     )
 
 
@@ -120,7 +152,10 @@ def create_bank_movement(
     # Bloqueo de fila para evitar que dos pagos al mismo tiempo rompan el saldo
     account = (
         db.query(models.BankAccount)
-        .filter(models.BankAccount.id == movement_data.bank_account_id)
+        .filter(
+            models.BankAccount.id == movement_data.bank_account_id,
+            models.BankAccount.record_status != RecordStatus.ELIMINADO,
+        )
         .with_for_update()
         .first()
     )
@@ -177,14 +212,24 @@ def process_bulk_payables(db: Session, payload_data: list[dict]):
         # 1. EVITAR DUPLICADOS
         existing_invoice = (
             db.query(models.PayableInvoice)
-            .filter(models.PayableInvoice.uuid == uuid_fiscal)
+            .filter(
+                models.PayableInvoice.uuid == uuid_fiscal,
+                models.PayableInvoice.record_status != RecordStatus.ELIMINADO,
+            )
             .first()
         )
         if existing_invoice:
             continue  # Ya existe, nos la saltamos
 
         # 2. GESTIÓN DEL PROVEEDOR
-        provider = db.query(models.Provider).filter(models.Provider.rfc == rfc).first()
+        provider = (
+            db.query(models.Provider)
+            .filter(
+                models.Provider.rfc == rfc,
+                models.Provider.record_status != RecordStatus.ELIMINADO,
+            )
+            .first()
+        )
 
         # Obtener días de crédito (del Excel o 0 por defecto)
         try:
@@ -275,7 +320,10 @@ def register_payable_payment(
         # Bloqueo de fila para evitar Race Conditions (Doble cobro simultáneo)
         invoice = (
             db.query(models.PayableInvoice)
-            .filter(models.PayableInvoice.id == invoice_id)
+            .filter(
+                models.PayableInvoice.id == invoice_id,
+                models.PayableInvoice.record_status != RecordStatus.ELIMINADO,
+            )
             .with_for_update()
             .first()
         )
@@ -292,7 +340,10 @@ def register_payable_payment(
         if not bank_account_id:
             caja_general = (
                 db.query(models.BankAccount)
-                .filter(models.BankAccount.alias == "Caja General Virtual")
+                .filter(
+                    models.BankAccount.alias == "Caja General Virtual",
+                    models.BankAccount.record_status != RecordStatus.ELIMINADO,
+                )
                 .first()
             )
             if not caja_general:
@@ -448,7 +499,10 @@ def process_sat_master_report(
                 # Búsqueda/Creación de Cliente
                 client = (
                     db.query(models.Client)
-                    .filter(models.Client.rfc == rfc_receptor)
+                    .filter(
+                        models.Client.rfc == rfc_receptor,
+                        models.Client.record_status != RecordStatus.ELIMINADO,
+                    )
                     .first()
                 )
                 if not client:
@@ -461,7 +515,11 @@ def process_sat_master_report(
                 # ¿Ya existe? (Quizás la creó Operaciones sin UUID)
                 invoice = (
                     db.query(models.ReceivableInvoice)
-                    .filter(models.ReceivableInvoice.uuid == uuid_fiscal)
+                    .filter(
+                        models.ReceivableInvoice.uuid == uuid_fiscal,
+                        models.ReceivableInvoice.record_status
+                        != RecordStatus.ELIMINADO,
+                    )
                     .first()
                 )
                 if not invoice:
@@ -490,7 +548,10 @@ def process_sat_master_report(
                 # Búsqueda/Creación de Proveedor
                 provider = (
                     db.query(models.Provider)
-                    .filter(models.Provider.rfc == rfc_emisor)
+                    .filter(
+                        models.Provider.rfc == rfc_emisor,
+                        models.Provider.record_status != RecordStatus.ELIMINADO,
+                    )
                     .first()
                 )
                 if not provider:
@@ -502,7 +563,10 @@ def process_sat_master_report(
 
                 invoice = (
                     db.query(models.PayableInvoice)
-                    .filter(models.PayableInvoice.uuid == uuid_fiscal)
+                    .filter(
+                        models.PayableInvoice.uuid == uuid_fiscal,
+                        models.PayableInvoice.record_status != RecordStatus.ELIMINADO,
+                    )
                     .first()
                 )
                 if not invoice:
@@ -539,7 +603,11 @@ def process_sat_master_report(
             if is_cxc:
                 orig_inv = (
                     db.query(models.ReceivableInvoice)
-                    .filter(models.ReceivableInvoice.uuid == uuid_relacionado)
+                    .filter(
+                        models.ReceivableInvoice.uuid == uuid_relacionado,
+                        models.ReceivableInvoice.record_status
+                        != RecordStatus.ELIMINADO,
+                    )
                     .first()
                 )
                 if orig_inv and orig_inv.saldo_pendiente > 0:
@@ -551,7 +619,10 @@ def process_sat_master_report(
             else:
                 orig_inv = (
                     db.query(models.PayableInvoice)
-                    .filter(models.PayableInvoice.uuid == uuid_relacionado)
+                    .filter(
+                        models.PayableInvoice.uuid == uuid_relacionado,
+                        models.PayableInvoice.record_status != RecordStatus.ELIMINADO,
+                    )
                     .first()
                 )
                 if orig_inv and orig_inv.saldo_pendiente > 0:
@@ -570,7 +641,11 @@ def process_sat_master_report(
             if is_cxc:
                 orig_inv = (
                     db.query(models.ReceivableInvoice)
-                    .filter(models.ReceivableInvoice.uuid == uuid_relacionado)
+                    .filter(
+                        models.ReceivableInvoice.uuid == uuid_relacionado,
+                        models.ReceivableInvoice.record_status
+                        != RecordStatus.ELIMINADO,
+                    )
                     .first()
                 )
                 if orig_inv:
@@ -596,7 +671,10 @@ def process_sat_master_report(
             else:
                 orig_inv = (
                     db.query(models.PayableInvoice)
-                    .filter(models.PayableInvoice.uuid == uuid_relacionado)
+                    .filter(
+                        models.PayableInvoice.uuid == uuid_relacionado,
+                        models.PayableInvoice.record_status != RecordStatus.ELIMINADO,
+                    )
                     .first()
                 )
                 if orig_inv:

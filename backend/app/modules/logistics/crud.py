@@ -1,6 +1,5 @@
 # --- Fuente: crud_trips.py ---
 
-
 from datetime import datetime
 import uuid
 
@@ -147,7 +146,7 @@ def update_trip_status(
     if trip.legs:
         active_leg = trip.legs[-1]
 
-    #  PROTECCIÓN DE FASE 2: Misma lógica, mantener vivo el viaje padre
+    #  PROTECCIÓN DE FASE 2: Misma lógica, mantener vivo el viaje padre
     if status == models.TripStatus.ENTREGADO:
         is_last_leg = False
         if trip.legs:
@@ -177,10 +176,7 @@ def update_trip_status(
         if trip.status in [models.TripStatus.ENTREGADO, models.TripStatus.CERRADO]:
             trip.actual_arrival = datetime.utcnow()
 
-        if trip.status == models.TripStatus.CERRADO:
-            trip.closed_at = datetime.utcnow()
-
-        #  LIBERACIÓN DE UNIDADES INTELIGENTE
+        #  LIBERACIÓN DE UNIDADES INTELIGENTE
         # Solo liberamos chasis y dolly si el viaje se terminó (fase vacía completada)
         if trip.status in [models.TripStatus.ENTREGADO, models.TripStatus.CERRADO]:
             unit_ids_to_free = [
@@ -431,7 +427,10 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
     leg = (
         db.query(models.TripLeg)
         .options(joinedload(models.TripLeg.trip))
-        .filter(models.TripLeg.id == trip_leg_id)
+        .filter(
+            models.TripLeg.id == trip_leg_id,
+            models.TripLeg.record_status != RecordStatus.ELIMINADO,
+        )
         .first()
     )
     if not leg or not leg.trip:
@@ -625,7 +624,14 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
 def close_trip_settlement(
     db: Session, trip_leg_id: int, payload: schemas.CloseSettlementPayload
 ):
-    leg = db.query(models.TripLeg).filter(models.TripLeg.id == trip_leg_id).first()
+    leg = (
+        db.query(models.TripLeg)
+        .filter(
+            models.TripLeg.id == trip_leg_id,
+            models.TripLeg.record_status != RecordStatus.ELIMINADO,
+        )
+        .first()
+    )
     if not leg:
         return None
 
@@ -660,7 +666,13 @@ def close_trip_settlement(
 
 def create_next_leg(db: Session, trip_id: str, payload: schemas.TripLegCreate):
     tid = int(trip_id)
-    trip = db.query(models.Trip).filter(models.Trip.id == tid).first()
+    trip = (
+        db.query(models.Trip)
+        .filter(
+            models.Trip.id == tid, models.Trip.record_status != RecordStatus.ELIMINADO
+        )
+        .first()
+    )
 
     if not trip:
         return None
@@ -757,7 +769,14 @@ def create_next_leg(db: Session, trip_id: str, payload: schemas.TripLegCreate):
 
 
 def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload):
-    legs = db.query(models.TripLeg).filter(models.TripLeg.id.in_(payload.leg_ids)).all()
+    legs = (
+        db.query(models.TripLeg)
+        .filter(
+            models.TripLeg.id.in_(payload.leg_ids),
+            models.TripLeg.record_status != RecordStatus.ELIMINADO,
+        )
+        .all()
+    )
     if not legs:
         return None
 
@@ -832,7 +851,10 @@ def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload)
             #  CREACIÓN DE CXC
             existing_cxc = (
                 db.query(models.ReceivableInvoice)
-                .filter(models.ReceivableInvoice.viaje_id == trip.id)
+                .filter(
+                    models.ReceivableInvoice.viaje_id == trip.id,
+                    models.ReceivableInvoice.record_status != RecordStatus.ELIMINADO,
+                )
                 .first()
             )
             if not existing_cxc:
@@ -883,7 +905,10 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
             joinedload(models.TripLeg.unit),
             joinedload(models.TripLeg.fuel_logs),
         )
-        .filter(models.TripLeg.id.in_(leg_ids))
+        .filter(
+            models.TripLeg.id.in_(leg_ids),
+            models.TripLeg.record_status != RecordStatus.ELIMINADO,
+        )
         .all()
     )
 
@@ -996,7 +1021,9 @@ def get_last_unit_odometer(db: Session, unit_id: int) -> int:
     last_leg = (
         db.query(models.TripLeg)
         .filter(
-            models.TripLeg.unit_id == unit_id, models.TripLeg.odometro_final != None
+            models.TripLeg.unit_id == unit_id,
+            models.TripLeg.odometro_final != None,
+            models.TripLeg.record_status != RecordStatus.ELIMINADO,
         )
         .order_by(models.TripLeg.id.desc())
         .first()
@@ -1007,7 +1034,10 @@ def get_last_unit_odometer(db: Session, unit_id: int) -> int:
 
     last_fuel = (
         db.query(models.FuelLog)
-        .filter(models.FuelLog.unit_id == unit_id)
+        .filter(
+            models.FuelLog.unit_id == unit_id,
+            models.FuelLog.record_status != RecordStatus.ELIMINADO,
+        )
         .order_by(models.FuelLog.odometro.desc())
         .first()
     )
@@ -1017,7 +1047,13 @@ def get_last_unit_odometer(db: Session, unit_id: int) -> int:
 
 def undo_last_leg(db: Session, trip_id: str):
     tid = int(trip_id)
-    trip = db.query(models.Trip).filter(models.Trip.id == tid).first()
+    trip = (
+        db.query(models.Trip)
+        .filter(
+            models.Trip.id == tid, models.Trip.record_status != RecordStatus.ELIMINADO
+        )
+        .first()
+    )
 
     if not trip or not trip.legs:
         return False
@@ -1073,7 +1109,14 @@ def undo_last_leg(db: Session, trip_id: str):
 
 
 def reset_leg_audit(db: Session, leg_id: int):
-    leg = db.query(models.TripLeg).filter(models.TripLeg.id == leg_id).first()
+    leg = (
+        db.query(models.TripLeg)
+        .filter(
+            models.TripLeg.id == leg_id,
+            models.TripLeg.record_status != RecordStatus.ELIMINADO,
+        )
+        .first()
+    )
     if not leg:
         return None
 
