@@ -1139,8 +1139,13 @@ class BillingService:
 
         env = Environment(loader=FileSystemLoader(str(self.templates_dir)))
         html_out = env.get_template("carta_porte.html").render(context)
-        HTML(string=html_out, base_url=str(self.templates_dir)).write_pdf(
-            self.storage_dir / f"{uuid}.pdf"
+        pdf_path = self.storage_dir / f"{uuid}.pdf"
+
+        HTML(
+            string=html_out, 
+            base_url=self.templates_dir.as_uri()  # <-- CRÍTICO: Debe ser un URI (ej. file:///...)
+        ).write_pdf(
+            str(pdf_path) # <-- CRÍTICO: Castear explícitamente a string
         )
 
     def _guardar_xml_disco(self, xml_bytes: bytes, uuid: str):
