@@ -789,6 +789,10 @@ export function TripDetailsModal({
                         {(localTrip.legs as ExtendedTripLeg[])?.map(
                           (leg, idx) => {
                             const btnUI = getRelayButtonUI(leg.leg_type);
+                            const activeFuelLogs =
+                              leg.fuel_logs?.filter(
+                                (log: any) => log.record_status !== "E",
+                              ) || [];
 
                             return (
                               <Card
@@ -830,51 +834,48 @@ export function TripDetailsModal({
                                         </span>
                                       </div>
                                       {/* INYECCIÓN NUEVA: VALES DE COMBUSTIBLE */}
-                                      {leg.fuel_logs &&
-                                        leg.fuel_logs.length > 0 && (
-                                          <div className="mt-3 pt-3 border-t border-dashed border-slate-200 dark:border-white/10">
-                                            <p className="text-[9px] font-black text-amber-600 dark:text-amber-500 uppercase tracking-widest flex items-center gap-1 mb-2">
-                                              <Fuel className="h-3 w-3" /> Vales
-                                              de Combustible Asociados (
-                                              {leg.fuel_logs.length})
-                                            </p>
-                                            <div className="space-y-1.5">
-                                              {leg.fuel_logs.map(
-                                                (log: any, i: number) => (
-                                                  <div
-                                                    key={log.id || i}
-                                                    className="flex justify-between items-center bg-amber-50/50 dark:bg-amber-950/20 px-2 py-1.5 rounded border border-amber-100 dark:border-amber-900/30"
-                                                  >
-                                                    <div className="flex items-center gap-2">
-                                                      <span className="font-mono text-[9px] font-bold text-slate-500">
-                                                        #{log.id}
-                                                      </span>
-                                                      <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 truncate max-w-[120px]">
-                                                        {log.estacion}
-                                                      </span>
-                                                    </div>
-                                                    <div className="flex items-center gap-3">
-                                                      <span className="font-mono font-black text-[10px] text-amber-700 dark:text-amber-400">
-                                                        {log.litros?.toFixed(1)}{" "}
-                                                        L
-                                                      </span>
-                                                      <span className="font-mono font-bold text-[10px] text-slate-600 dark:text-slate-400">
-                                                        $
-                                                        {log.total?.toLocaleString(
-                                                          "es-MX",
-                                                          {
-                                                            minimumFractionDigits: 2,
-                                                          },
-                                                        )}
-                                                      </span>
-                                                    </div>
+                                      {activeFuelLogs.length > 0 && (
+                                        <div className="mt-3 pt-3 border-t border-dashed border-slate-200 dark:border-white/10">
+                                          <p className="text-[9px] font-black text-amber-600 dark:text-amber-500 uppercase tracking-widest flex items-center gap-1 mb-2">
+                                            <Fuel className="h-3 w-3" /> Vales
+                                            de Combustible Asociados (
+                                            {activeFuelLogs.length})
+                                          </p>
+                                          <div className="space-y-1.5">
+                                            {activeFuelLogs.map(
+                                              (log: any, i: number) => (
+                                                <div
+                                                  key={log.id || i}
+                                                  className="flex justify-between items-center bg-amber-50/50 dark:bg-amber-950/20 px-2 py-1.5 rounded border border-amber-100 dark:border-amber-900/30"
+                                                >
+                                                  <div className="flex items-center gap-2">
+                                                    <span className="font-mono text-[9px] font-bold text-slate-500">
+                                                      #{log.id}
+                                                    </span>
+                                                    <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 truncate max-w-[120px]">
+                                                      {log.estacion}
+                                                    </span>
                                                   </div>
-                                                ),
-                                              )}
-                                            </div>
+                                                  <div className="flex items-center gap-3">
+                                                    <span className="font-mono font-black text-[10px] text-amber-700 dark:text-amber-400">
+                                                      {log.litros?.toFixed(1)} L
+                                                    </span>
+                                                    <span className="font-mono font-bold text-[10px] text-slate-600 dark:text-slate-400">
+                                                      $
+                                                      {log.total?.toLocaleString(
+                                                        "es-MX",
+                                                        {
+                                                          minimumFractionDigits: 2,
+                                                        },
+                                                      )}
+                                                    </span>
+                                                  </div>
+                                                </div>
+                                              ),
+                                            )}
                                           </div>
-                                        )}
-                                      {/* FIN INYECCIÓN */}
+                                        </div>
+                                      )}
                                     </div>
 
                                     <div className="flex flex-col sm:items-end gap-3 shrink-0">
