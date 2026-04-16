@@ -432,36 +432,6 @@ export function InvoiceDetailSheet({
               </div>
             )}
           </div>
-
-          <Separator className="bg-border/50" />
-
-          {/* ================= ARCHIVOS FACTURA ORIGINAL ================= */}
-          <div className="bg-slate-900 dark:bg-slate-950 p-5 rounded-2xl text-white shadow-xl relative overflow-hidden group">
-            <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/5 rounded-full blur-2xl group-hover:bg-white/10 transition-all"></div>
-            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-4 flex items-center gap-2 relative z-10">
-              <FileText className="h-3.5 w-3.5" /> Archivos de Origen (Deuda
-              Total)
-            </h3>
-
-            <div className="flex gap-3 relative z-10">
-              <Button
-                variant="outline"
-                className="flex-1 bg-white/5 border-white/10 hover:bg-white/10 text-white gap-2 font-bold tracking-wide h-10 rounded-xl backdrop-blur-sm transition-all"
-                disabled={!uuid || uuid === "NO TIMBRADO"}
-                onClick={() => handleDownload("pdf", uuid)}
-              >
-                <Download className="h-4 w-4 text-rose-400" /> PDF
-              </Button>
-              <Button
-                variant="outline"
-                className="flex-1 bg-white/5 border-white/10 hover:bg-white/10 text-white gap-2 font-bold tracking-wide h-10 rounded-xl backdrop-blur-sm transition-all"
-                disabled={!uuid || uuid === "NO TIMBRADO"}
-                onClick={() => handleDownload("xml", uuid)}
-              >
-                <Download className="h-4 w-4 text-blue-400" /> XML
-              </Button>
-            </div>
-          </div>
         </div>
       </SheetContent>
     </Sheet>
