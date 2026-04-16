@@ -279,38 +279,66 @@ def generar_factura_final(
 @router.get("/invoice/{uuid}/pdf")
 def download_invoice_pdf(uuid: str, db: Session = Depends(get_db)):
     """
-    Busca el archivo PDF generado en el disco y lo descarga.
+    Busca el archivo PDF generado en el disco y lo descarga,
+    soportando prefijos del frontend (ej. CFDI_Final_UUID).
     """
+    # 🛡️ FIX: Extraemos SOLO el UUID puro usando una expresión regular
+    import re
+
+    match = re.search(
+        r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
+        str(uuid),
+    )
+    clean_uuid = match.group(0).upper() if match else str(uuid)
+
     service = BillingService(db)
-    pdf_path = service.storage_dir / f"{uuid}.pdf"
+    pdf_path = service.storage_dir / f"{clean_uuid}.pdf"
 
     if not pdf_path.exists():
         raise HTTPException(
             status_code=404,
-            detail="El PDF timbrado aún no existe o no se pudo generar.",
+            detail=f"El PDF del documento {clean_uuid} no se encontró en el servidor.",
         )
 
+    # FORZAMOS LA DESCARGA COMO ATTACHMENT
     return FileResponse(
-        path=pdf_path, filename=f"Carta_Porte_{uuid}.pdf", media_type="application/pdf"
+        path=str(pdf_path),
+        filename=f"{uuid}.pdf",  # Mantiene el prefijo original en el nombre de descarga
+        media_type="application/pdf",
+        content_disposition_type="attachment",
     )
 
 
 @router.get("/invoice/{uuid}/xml")
 def download_invoice_xml(uuid: str, db: Session = Depends(get_db)):
     """
-    Busca el archivo XML timbrado en el disco y lo descarga.
+    Busca el archivo XML timbrado en el disco y lo descarga,
+    soportando prefijos del frontend.
     """
+    # 🛡️ FIX: Extraemos SOLO el UUID puro
+    import re
+
+    match = re.search(
+        r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
+        str(uuid),
+    )
+    clean_uuid = match.group(0).upper() if match else str(uuid)
+
     service = BillingService(db)
-    xml_path = service.storage_dir / f"{uuid}.xml"
+    xml_path = service.storage_dir / f"{clean_uuid}.xml"
 
     if not xml_path.exists():
         raise HTTPException(
             status_code=404,
-            detail="El XML timbrado aún no existe o no se pudo generar.",
+            detail=f"El XML del documento {clean_uuid} no se encontró en el servidor.",
         )
 
+    # FORZAMOS LA DESCARGA COMO ATTACHMENT
     return FileResponse(
-        path=xml_path, filename=f"Carta_Porte_{uuid}.xml", media_type="application/xml"
+        path=str(xml_path),
+        filename=f"{uuid}.xml",
+        media_type="application/xml",
+        content_disposition_type="attachment",
     )
 
 
