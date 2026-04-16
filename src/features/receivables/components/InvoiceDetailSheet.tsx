@@ -100,61 +100,42 @@ export function InvoiceDetailSheet({
   const ordenFolio =
     safeStr(inv.orden_compra_folio) || safeStr(inv.ordenCompraFolio);
 
-  //  DESCARGA ULTRA-ROBUSTA (Con validación de errores reales)
-  const handleDownload = async (
-    fileType: "pdf" | "xml",
-    targetUuid: string,
-  ) => {
-    // Ponemos un toast de carga
+  // 🛡️ DESCARGA NATIVA (100% Inmune a corrupciones de Javascript)
+  const handleDownload = (fileType: "pdf" | "xml", targetUuid: string) => {
     const toastId = toast.loading(`Descargando ${fileType.toUpperCase()}...`);
 
     try {
+      // 1. Obtenemos la URL de tu API
       const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "/api";
       const baseURL = rawBaseURL.replace(/\/$/, "");
+
+      // 2. Armamos la URL exacta del archivo en el servidor
       const fileUrl = `${baseURL}/sat/invoice/${targetUuid}/${fileType}`;
 
-      // 1. Hacemos la petición con Fetch para ver qué responde realmente el backend
-      const response = await fetch(fileUrl, { method: "GET" });
+      // 🔥 EL TRUCO MAGISTRAL 🔥
+      // En lugar de usar fetch() para traer los bytes a Javascript,
+      // dejamos que el NAVEGADOR haga la petición directamente creando un link invisible.
+      // Como tu backend de Python ya dice "attachment", el navegador lo descargará intacto.
 
-      // 2. Si el servidor responde con error (404, 500, etc.)
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          errorData.detail || `El archivo no está disponible en el servidor.`,
-        );
-      }
-
-      // 3. Verificamos que el servidor NO nos esté mandando un JSON disfrazado
-      const contentType = response.headers.get("content-type");
-      if (contentType && contentType.includes("application/json")) {
-        const errorData = await response.json();
-        throw new Error(
-          errorData.detail || "El servidor devolvió un error inesperado.",
-        );
-      }
-
-      // 4. Si todo es exitoso, extraemos el archivo binario (Blob) intacto
-      const blob = await response.blob();
-      const localUrl = window.URL.createObjectURL(blob);
-
-      // 5. Forzamos la descarga segura en el navegador
       const link = document.createElement("a");
-      link.href = localUrl;
+      link.href = fileUrl;
+      link.target = "_blank"; // Por seguridad
       link.setAttribute("download", `CFDI_${targetUuid}.${fileType}`);
+
       document.body.appendChild(link);
       link.click();
       link.remove();
 
-      // 6. Liberamos memoria y quitamos el toast
-      setTimeout(() => window.URL.revokeObjectURL(localUrl), 1000);
       toast.success(`${fileType.toUpperCase()} descargado correctamente.`, {
         id: toastId,
       });
     } catch (error: any) {
       console.error("Error al descargar:", error);
       toast.error(
-        error.message || `Fallo al descargar el ${fileType.toUpperCase()}`,
-        { id: toastId },
+        `Fallo al iniciar la descarga del ${fileType.toUpperCase()}`,
+        {
+          id: toastId,
+        },
       );
     }
   };
