@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Download,
   AlertCircle,
@@ -93,19 +94,12 @@ export default function Receivables() {
   const [invoiceToDelete, setInvoiceToDelete] =
     useState<ReceivableInvoice | null>(null);
 
-  // === 👀 DEBUGGER: ESTE CONSOLE.LOG TE DIRÁ EXACTAMENTE QUÉ HAY ===
-  useEffect(() => {
-    console.log("🚀 INFO CRUDA DEL BACKEND (receivables):", receivables);
-  }, [receivables]);
-
   // 2. FORMATEAMOS LOS DATOS DE LA API
   const formattedInvoices = useMemo(() => {
-    // Verificamos si es un array o si viene paginado dentro de un objeto
     let dataArray = [];
     if (Array.isArray(receivables)) {
       dataArray = receivables;
     } else if (receivables && typeof receivables === "object") {
-      // Intenta extraer de las propiedades comunes de paginación de FastAPI
       dataArray =
         (receivables as any).items ||
         (receivables as any).data ||
@@ -113,9 +107,6 @@ export default function Receivables() {
         [];
     }
 
-    console.log("📊 ARRAY EXTRAÍDO PARA LA TABLA:", dataArray);
-
-    // Mapeamos las variables EXACTAMENTE como las pide el 'key' de las columnas
     return dataArray.map((inv: any) => ({
       ...inv,
       id: inv.id,
@@ -129,8 +120,6 @@ export default function Receivables() {
         inv.client_razon_social ||
         "Cliente Desconocido",
       requiereREP: (inv.saldo_pendiente || 0) > 0,
-
-      // Las llaves que conectan con los 'key' de las columnas
       monto_total: inv.monto_total || 0,
       saldo_pendiente:
         inv.saldo_pendiente !== undefined
@@ -256,7 +245,7 @@ export default function Receivables() {
     }).format(amount || 0);
   };
 
-  // 6. COLUMNAS DE LA TABLA
+  // 6. COLUMNAS DE LA TABLA Y SEMÁFORO DE COBRANZA
   const columns: ColumnDef<ReceivableInvoice>[] = useMemo(
     () => [
       {
@@ -331,22 +320,54 @@ export default function Receivables() {
         type: "date",
         render: (value, row) => {
           if (!value) return "—";
-          const daysOverdue = calculateDaysOverdue(value);
-          const isPastDue = daysOverdue > 0 && (row.saldo_pendiente || 0) > 0;
-          return (
-            <div className="flex flex-col">
-              <span
-                className={`font-mono text-sm font-bold uppercase ${isPastDue ? "text-red-600 dark:text-red-400" : "text-slate-700 dark:text-slate-300"}`}
-              >
-                {new Date(value).toLocaleDateString("es-MX")}
+          if (row.saldo_pendiente === 0)
+            return (
+              <span className="text-emerald-600 font-bold uppercase text-[10px]">
+                Liquidado
               </span>
-              {isPastDue && (
+            );
+
+          const daysOverdue = calculateDaysOverdue(value);
+          const formattedDate = new Date(value).toLocaleDateString("es-MX");
+
+          // SEMÁFORO DE COBRANZA INTELIGENTE
+          if (daysOverdue > 0) {
+            // ROJO: Vencido
+            return (
+              <div className="flex flex-col">
+                <span className="font-mono text-sm font-bold uppercase text-red-600 dark:text-red-400">
+                  {formattedDate}
+                </span>
                 <span className="text-[10px] font-black uppercase tracking-widest text-red-500 dark:text-red-400 mt-1 animate-pulse">
                   +{daysOverdue} DÍAS VENCIDO
                 </span>
-              )}
-            </div>
-          );
+              </div>
+            );
+          } else if (daysOverdue >= -5 && daysOverdue <= 0) {
+            // AMARILLO: Por vencer (En los próximos 5 días)
+            return (
+              <div className="flex flex-col">
+                <span className="font-mono text-sm font-bold uppercase text-amber-600 dark:text-amber-400">
+                  {formattedDate}
+                </span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-500 mt-1">
+                  POR VENCER ({Math.abs(daysOverdue)}D)
+                </span>
+              </div>
+            );
+          } else {
+            // VERDE: A tiempo
+            return (
+              <div className="flex flex-col">
+                <span className="font-mono text-sm font-bold uppercase text-slate-700 dark:text-slate-300">
+                  {formattedDate}
+                </span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-500 mt-1">
+                  A TIEMPO
+                </span>
+              </div>
+            );
+          }
         },
       },
       {
@@ -439,13 +460,14 @@ export default function Receivables() {
   }
 
   return (
-    <div className="space-y-6 pb-20">
+    <div className="space-y-6 pb-20 animate-page-enter">
       <PageHeader
         title="Cuentas por Cobrar (Tesorería)"
         description="Gestión de cartera, antigüedad de saldos y cobranza a clientes."
       >
         <div className="flex flex-wrap items-center gap-3">
-          {/*      <Button
+          {/* FIX: BOTÓN XML ACTIVADO Y DESCOMENTADO PARA AUTOMATIZAR PAGOS */}
+          <Button
             variant="outline"
             className="border-emerald-500 bg-emerald-50/50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 font-black tracking-wide shadow-sm haptic-press transition-all"
             onClick={() => setIsImportXMLOpen(true)}
@@ -453,7 +475,7 @@ export default function Receivables() {
             <FileCode2 className="h-4 w-4 mr-2 text-emerald-600" /> Cobro
             Automático (XML)
           </Button>
- */}
+
           <Button
             variant="outline"
             className="border-slate-300 bg-white text-slate-700 hover:bg-slate-50 font-bold haptic-press shadow-sm"
@@ -566,6 +588,7 @@ export default function Receivables() {
         </CardContent>
       </Card>
 
+      {/* MODALES */}
       <ImportServicesModal
         open={isImportModalOpen}
         onOpenChange={setIsImportModalOpen}
@@ -600,6 +623,8 @@ export default function Receivables() {
         onClose={() => setIsAccountStatementOpen(false)}
         invoices={formattedInvoices}
       />
+
+      {/* MODAL DEL XML QUE DESBLOQUEAMOS */}
       <ImportXMLPaymentModal
         open={isImportXMLOpen}
         onOpenChange={setIsImportXMLOpen}
