@@ -836,9 +836,15 @@ class BillingService:
             "placa_remolque_2": _clean_placa(
                 _get_safe(remolque2, "placas", "1XXXX99"), "1XXXX99"
             ),
-            "subtipo_remolque": _get_safe(remolque1, "config_vehicular_sat", "CTR010"),
-            "subtipo_remolque_2": _get_safe(
-                remolque2, "config_vehicular_sat", "CTR010"
+            "subtipo_remolque": (
+                str(_get_safe(remolque1, "config_vehicular_sat", "CTR010"))
+                if str(_get_safe(remolque1, "config_vehicular_sat", "")).startswith("CTR")
+                else "CTR010"
+            ),
+            "subtipo_remolque_2": (
+                str(_get_safe(remolque2, "config_vehicular_sat", "CTR010"))
+                if str(_get_safe(remolque2, "config_vehicular_sat", "")).startswith("CTR")
+                else "CTR010"
             ),
             "bienes_transp": bienes_transporte,
             "id_ccp": f"CCC{str(uuid.uuid4())[3:]}",
