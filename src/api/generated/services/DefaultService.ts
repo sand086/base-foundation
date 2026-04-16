@@ -736,7 +736,8 @@ export class DefaultService {
     }
     /**
      * Download Invoice Pdf
-     * Busca el archivo PDF generado en el disco y lo descarga.
+     * Busca el archivo PDF generado en el disco y lo descarga,
+     * soportando prefijos del frontend (ej. CFDI_Final_UUID).
      * @param uuid
      * @returns any Successful Response
      * @throws ApiError
@@ -757,7 +758,8 @@ export class DefaultService {
     }
     /**
      * Download Invoice Xml
-     * Busca el archivo XML timbrado en el disco y lo descarga.
+     * Busca el archivo XML timbrado en el disco y lo descarga,
+     * soportando prefijos del frontend.
      * @param uuid
      * @returns any Successful Response
      * @throws ApiError
