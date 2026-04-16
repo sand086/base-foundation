@@ -46,7 +46,7 @@ export const useReceivables = () => {
   // 🔥 5. NUEVA MUTACIÓN: Registrar Múltiples Pagos y Timbrar REP en el SAT 🔥
   const registerMultiPaymentRepMut = useMutation({
     mutationFn: (payload: any) =>
-      axiosClient.post("/sat/stamp/payment", payload),
+      axiosClient.post("/api/sat/stamp/payment", payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["receivables"] });
     },
