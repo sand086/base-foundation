@@ -73,10 +73,10 @@ export const useTrips = () => {
       const msg =
         error instanceof ApiError
           ? error.body?.detail
-          : "No se pudo realizar el desenganche.";
+          : "No se pudo realizar el relevo.";
       toast({
         title: "Error",
-        description: msg || "No se pudo realizar el desenganche.",
+        description: msg || "No se pudo realizar el relevo.",
         variant: "destructive",
       });
       return null;
@@ -149,7 +149,6 @@ export const useTrips = () => {
     }
   };
 
-  // 👈 NUEVA FUNCIÓN PARA "DESHACER MOVIMIENTO" CON REFRESCO AUTOMÁTICO
   const undoTripLeg = async (tripId: string | number) => {
     try {
       const data =
@@ -303,11 +302,9 @@ export const useTrips = () => {
     }
   };
 
-  // Agrega esta función dentro de tu hook useTrips
   const unhookTrip = async (tripId: string) => {
     try {
       setLoading(true);
-      // Usamos tu servicio autogenerado en lugar de axiosClient directamente
       await LogisticsService.unhookTripInYardApiLogisticsTripsTripIdUnhookPost(
         Number(tripId),
       );
@@ -318,10 +315,9 @@ export const useTrips = () => {
           "El operador y el tractocamión están libres. La carga espera en patio.",
       });
 
-      await fetchTrips(); // Refrescamos la lista
+      await fetchTrips();
       return true;
     } catch (error: any) {
-      // El OpenAPI codegen suele meter los errores de FastAPI en error.body.detail
       const errorMsg =
         error.body?.detail ||
         error.message ||
@@ -357,5 +353,6 @@ export const useTrips = () => {
     refreshTrips,
     liquidarLote,
     getSettlementPreview,
+    undoTripLeg,
   };
 };

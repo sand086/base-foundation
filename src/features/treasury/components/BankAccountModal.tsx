@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Landmark, Plus, Save, Loader2, Lock, Eye, EyeOff } from "lucide-react";
+import { Landmark, Plus, Save, Loader2 } from "lucide-react"; // Se eliminaron Lock, Eye, EyeOff
 
 import { Badge } from "@/components/ui/badge";
 
@@ -34,7 +34,7 @@ import { useBankAccounts } from "../hooks/useBankAccounts";
 import { BankAccount } from "../types";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import axiosClient from "@/api/axiosClient";
+// Se eliminó axiosClient ya que no verificaremos la contraseña
 import { useAuth } from "@/hooks/useAuth";
 
 const bancos = [
@@ -68,7 +68,7 @@ const formSchema = z.object({
     .max(18, "La CLABE no puede superar los 18 dígitos.")
     .optional()
     .nullable()
-    .transform((val) => val || ""), // Limpieza de nulos
+    .transform((val) => val || ""),
   alias: z.string().min(3, "El alias debe tener al menos 3 caracteres."),
   saldo_inicial: z.coerce
     .number()
@@ -95,8 +95,7 @@ export function BankAccountModal({
   const isAdmin = roleKey === "admin" || roleKey === "superadmin";
 
   const [showOverride, setShowOverride] = useState(false);
-  const [masterPassword, setMasterPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+  // Se eliminaron los estados de masterPassword y showPassword
 
   const isEditMode = !!account;
 
@@ -119,7 +118,6 @@ export function BankAccountModal({
   useEffect(() => {
     if (open) {
       setShowOverride(false);
-      setMasterPassword("");
       if (isEditMode && account) {
         form.reset({
           banco: account.banco,
@@ -145,29 +143,10 @@ export function BankAccountModal({
   }, [open, account, isEditMode, form]);
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    if (isEditMode && isSaldoModified) {
-      if (!masterPassword) {
-        toast.error("Contraseña requerida", {
-          description:
-            "Debe ingresar su contraseña para autorizar el cambio de saldo.",
-        });
-        return;
-      }
-      try {
-        await axiosClient.post("/api/auth/verify-password", {
-          password: masterPassword,
-        });
-      } catch (error) {
-        toast.error("Error de Autorización", {
-          description: "La contraseña ingresada es incorrecta.",
-        });
-        return;
-      }
-    }
+    // 🗑️ Se eliminó la validación de isSaldoModified con masterPassword y axiosClient
 
     setIsPending(true);
 
-    // 🛡️ BLINDAJE CONTRA ERRORES DE RED O DEL BACKEND
     try {
       const payload: any = {
         banco: values.banco,
@@ -177,7 +156,7 @@ export function BankAccountModal({
         clabe: values.clabe,
         alias: values.alias,
         banco_logo: bankLogos[values.banco] || "🏦",
-        // En creación SIEMPRE mandamos el saldo inicial. En edición, solo si hubo override
+        // Actualiza el saldo si hubo modificación, sino mantiene el actual
         saldo: isEditMode
           ? isSaldoModified
             ? values.saldo_inicial
@@ -189,7 +168,7 @@ export function BankAccountModal({
       if (isEditMode && account) {
         result = await updateAccount(account.id, payload);
       } else {
-        payload.estatus = "activo"; // Status por defecto al crear
+        payload.estatus = "activo";
         result = await createAccount(payload);
       }
 
@@ -256,230 +235,200 @@ export function BankAccountModal({
             onSubmit={form.handleSubmit(onSubmit)}
             className="flex-1 min-h-0 overflow-hidden flex flex-col"
           >
-            <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-muted/50 dark:bg-transparent custom-scrollbar space-y-6"
-          >
-            {/* 💰 SECCIÓN DE SALDO CON SEGURIDAD */}
-            <FormField
-              control={form.control}
-              name="saldo_inicial"
-              render={({ field }) => (
-                <FormItem className="p-5 bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/50 dark:border-emerald-900/50 rounded-2xl transition-all">
-                  <div className="flex justify-between items-center mb-2">
-                    <FormLabel className="text-[10px] font-black text-emerald-800 dark:text-emerald-500 tracking-[0.2em] uppercase flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                      {isEditMode ? "Saldo Actual" : "Apertura de Saldo"}
-                    </FormLabel>
+            <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-muted/50 dark:bg-transparent custom-scrollbar space-y-6">
+              {/* 💰 SECCIÓN DE SALDO SIMPLIFICADA */}
+              <FormField
+                control={form.control}
+                name="saldo_inicial"
+                render={({ field }) => (
+                  <FormItem className="p-5 bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/50 dark:border-emerald-900/50 rounded-2xl transition-all">
+                    <div className="flex justify-between items-center mb-2">
+                      <FormLabel className="text-[10px] font-black text-emerald-800 dark:text-emerald-500 tracking-[0.2em] uppercase flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        {isEditMode ? "Saldo Actual" : "Apertura de Saldo"}
+                      </FormLabel>
 
-                    {isEditMode && isAdmin && (
-                      <Button
-                        type="button"
-                        variant={showOverride ? "destructive" : "outline"}
-                        size="sm"
-                        onClick={() => {
-                          setShowOverride(!showOverride);
-                          if (showOverride) setMasterPassword("");
-                        }}
-                        className="h-7 px-3 text-[9px] uppercase font-black tracking-widest shadow-sm"
-                      >
-                        {showOverride ? "Cancelar Ajuste" : "Ajuste Manual"}
-                      </Button>
-                    )}
-                  </div>
-
-                  <div className="relative flex items-baseline gap-2">
-                    <span className="text-3xl font-bold text-emerald-600/50">
-                      $
-                    </span>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        disabled={isEditMode && !showOverride}
-                        {...field}
-                        className={cn(
-                          "h-auto p-0 text-4xl font-mono font-black bg-transparent border-none focus-visible:ring-0 shadow-none",
-                          isEditMode && !showOverride
-                            ? "text-slate-400"
-                            : "text-emerald-700 dark:text-emerald-400",
-                        )}
-                      />
-                    </FormControl>
-                  </div>
-
-                  {isSaldoModified && (
-                    <div className="mt-5 p-4 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 rounded-xl animate-in fade-in slide-in-from-top-2">
-                      <div className="flex items-start gap-3">
-                        <Lock className="h-4 w-4 mt-1 text-rose-600 shrink-0" />
-                        <div className="space-y-3 w-full">
-                          <p className="text-[11px] font-medium leading-relaxed text-rose-800 dark:text-rose-300">
-                            <b>Punto de Corte Activo:</b> Los nuevos recursos y
-                            cobros se basarán en este monto. Requiere validación
-                            de identidad.
-                          </p>
-                          <div className="relative">
-                            <Input
-                              type={showPassword ? "text" : "password"}
-                              value={masterPassword}
-                              onChange={(e) =>
-                                setMasterPassword(e.target.value)
-                              }
-                              placeholder="Confirmar Contraseña"
-                              className="h-9 text-xs bg-card border-rose-200 dark:border-rose-800 font-bold pr-10 text-slate-800 dark:text-slate-100"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setShowPassword(!showPassword)}
-                              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-600"
-                            >
-                              {showPassword ? (
-                                <EyeOff size={14} />
-                              ) : (
-                                <Eye size={14} />
-                              )}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
+                      {isEditMode && isAdmin && (
+                        <Button
+                          type="button"
+                          variant={showOverride ? "destructive" : "outline"}
+                          size="sm"
+                          onClick={() => {
+                            setShowOverride(!showOverride);
+                          }}
+                          className="h-7 px-3 text-[9px] uppercase font-black tracking-widest shadow-sm"
+                        >
+                          {showOverride ? "Cancelar Ajuste" : "Ajuste Manual"}
+                        </Button>
+                      )}
                     </div>
+
+                    <div className="relative flex items-baseline gap-2">
+                      <span className="text-3xl font-bold text-emerald-600/50">
+                        $
+                      </span>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          disabled={isEditMode && !showOverride}
+                          {...field}
+                          className={cn(
+                            "h-auto p-0 text-4xl font-mono font-black bg-transparent border-none focus-visible:ring-0 shadow-none",
+                            isEditMode && !showOverride
+                              ? "text-slate-400"
+                              : "text-emerald-700 dark:text-emerald-400",
+                          )}
+                        />
+                      </FormControl>
+                    </div>
+                    {/* 🗑️ Se eliminó el bloque condicional isSaldoModified con el input de password */}
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* RESTO DE LOS CAMPOS */}
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="banco"
+                  render={({ field }) => (
+                    <FormItem className="space-y-1.5">
+                      <FormLabel>Banco *</FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="h-11 rounded-xl bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
+                            <SelectValue placeholder="Banco..." />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {bancos.map((b) => (
+                            <SelectItem
+                              key={b}
+                              value={b}
+                              className="font-bold text-xs"
+                            >
+                              {bankLogos[b]} {b}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
                   )}
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                />
+                <FormField
+                  control={form.control}
+                  name="tipo_cuenta"
+                  render={({ field }) => (
+                    <FormItem className="space-y-1.5">
+                      <FormLabel>Tipo *</FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="h-11 rounded-xl bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="operativa">Operativa</SelectItem>
+                          <SelectItem value="cobranza">Cobranza</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
-            <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="banco"
+                name="alias"
                 render={({ field }) => (
                   <FormItem className="space-y-1.5">
-                    <FormLabel>Banco *</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger className="h-11 rounded-xl bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
-                          <SelectValue placeholder="Banco..." />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {bancos.map((b) => (
-                          <SelectItem
-                            key={b}
-                            value={b}
-                            className="font-bold text-xs"
-                          >
-                            {bankLogos[b]} {b}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="tipo_cuenta"
-                render={({ field }) => (
-                  <FormItem className="space-y-1.5">
-                    <FormLabel>Tipo *</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger className="h-11 rounded-xl bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="operativa">Operativa</SelectItem>
-                        <SelectItem value="cobranza">Cobranza</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <FormField
-              control={form.control}
-              name="alias"
-              render={({ field }) => (
-                <FormItem className="space-y-1.5">
-                  <FormLabel>Alias / Identificador *</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      className="h-11 font-bold shadow-sm bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100"
-                      placeholder="Ej: BBVA Nómina"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="numero_cuenta"
-                render={({ field }) => (
-                  <FormItem className="space-y-1.5">
-                    <FormLabel>No. Cuenta *</FormLabel>
+                    <FormLabel>Alias / Identificador *</FormLabel>
                     <FormControl>
                       <Input
-                        type="number"
                         {...field}
-                        className="h-11 font-mono bg-muted border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-100"
-                        placeholder="Ej: 0123456789"
+                        className="h-11 font-bold shadow-sm bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100"
+                        placeholder="Ej: BBVA Nómina"
                       />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="numero_cuenta"
+                  render={({ field }) => (
+                    <FormItem className="space-y-1.5">
+                      <FormLabel>No. Cuenta *</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          {...field}
+                          className="h-11 font-mono bg-muted border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-100"
+                          placeholder="Ej: 0123456789"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="moneda"
+                  render={({ field }) => (
+                    <FormItem className="space-y-1.5">
+                      <FormLabel>Moneda *</FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="h-11 rounded-xl bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="MXN">MXN</SelectItem>
+                          <SelectItem value="USD">USD</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
               <FormField
                 control={form.control}
-                name="moneda"
+                name="clabe"
                 render={({ field }) => (
                   <FormItem className="space-y-1.5">
-                    <FormLabel>Moneda *</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger className="h-11 rounded-xl bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="MXN">MXN</SelectItem>
-                        <SelectItem value="USD">USD</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <FormLabel>CLABE Interbancaria</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        maxLength={18}
+                        {...field}
+                        className="h-11 font-mono tracking-widest bg-muted border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-100"
+                        placeholder="18 dígitos"
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-            </div>
-
-            {/*  EL CAMPO CLABE QUE FALTABA */}
-            <FormField
-              control={form.control}
-              name="clabe"
-              render={({ field }) => (
-                <FormItem className="space-y-1.5">
-                  <FormLabel>CLABE Interbancaria</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      maxLength={18}
-                      {...field}
-                      className="h-11 font-mono tracking-widest bg-muted border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-100"
-                      placeholder="18 dígitos"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
             </div>
             <DialogFooter className="p-6 sm:p-8 bg-muted/50 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
               <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
