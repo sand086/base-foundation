@@ -96,7 +96,7 @@ export default function Receivables() {
   const [invoiceToDelete, setInvoiceToDelete] =
     useState<ReceivableInvoice | null>(null);
 
-  // 🔥 ESTADO PARA LA SELECCIÓN MÚLTIPLE EN LA TABLA 🔥
+  //   ESTADO PARA LA SELECCIÓN MÚLTIPLE EN LA TABLA
   const [selectedRows, setSelectedRows] = useState<ReceivableInvoice[]>([]);
 
   // 2. FORMATEAMOS LOS DATOS DE LA API
@@ -137,7 +137,7 @@ export default function Receivables() {
     })) as ReceivableInvoice[];
   }, [receivables]);
 
-  // 🔥 LÓGICA DEL BOTÓN DE COBRO MÚLTIPLE 🔥
+  //   LÓGICA DEL BOTÓN DE COBRO MÚLTIPLE
   const handlePaySelectedInvoices = () => {
     if (selectedRows.length === 0) return;
 
@@ -621,7 +621,7 @@ export default function Receivables() {
         </CardContent>
       </Card>
 
-      {/* 🔥 PANEL FLOTANTE DE COBRO MULTIPLE 🔥 */}
+      {/*   PANEL FLOTANTE DE COBRO MULTIPLE   */}
       {selectedRows.length > 0 && (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 fade-in duration-300 ease-out">
           <div className="glass-panel bg-brand-navy/95 dark:bg-slate-900/95 text-white px-3 py-3 rounded-2xl shadow-2xl flex items-center gap-4 sm:gap-6 border border-white/20">

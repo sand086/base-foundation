@@ -58,7 +58,7 @@ export function InvoiceDetailSheet({
 }: InvoiceDetailSheetProps) {
   useEffect(() => {
     if (invoice && open) {
-      console.log("🔥 FACTURA DE CLIENTE ABIERTA:", invoice);
+      console.log("  FACTURA DE CLIENTE ABIERTA:", invoice);
     }
   }, [invoice, open]);
 

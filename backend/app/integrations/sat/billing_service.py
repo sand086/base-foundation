@@ -26,6 +26,7 @@ from weasyprint import HTML
 
 try:
     from num2words import num2words
+
     HAS_NUM2WORDS = True
 except ImportError:
     HAS_NUM2WORDS = False
@@ -348,10 +349,17 @@ class BillingService:
                 .first()
             )
 
-            if not factura or not factura.uuid:
+            #   VALIDACIONES MEJORADAS Y AMIGABLES PARA EL USUARIO
+            if not factura:
                 raise HTTPException(
                     status_code=404,
-                    detail=f"Factura {invoice_id} no válida o sin timbrar.",
+                    detail=f"La factura seleccionada (ID {invoice_id}) ya no existe en el sistema.",
+                )
+
+            if not factura.uuid:
+                raise HTTPException(
+                    status_code=400,  # Cambiamos a 400 (Bad Request) porque es un error de lógica de negocio
+                    detail=f"La factura {factura.folio_interno or invoice_id} NO está timbrada. El SAT exige que la factura original tenga un UUID antes de poder generarle un Complemento de Pago (REP).",
                 )
 
             saldo_anterior = Decimal(str(factura.saldo_pendiente))
@@ -766,13 +774,20 @@ class BillingService:
 
             if 1000 <= cp_int <= 16999:
                 estado_destino = "CMX"
-                if cp_cliente == "08400": municipio_destino = "006"
-                elif cp_cliente in ["03100", "03710"]: municipio_destino = "014"
-                elif cp_cliente.startswith("02"): municipio_destino = "002"
-                elif cp_cliente.startswith("01"): municipio_destino = "010"
-                elif cp_cliente.startswith("09"): municipio_destino = "007"
-                elif cp_cliente.startswith("07"): municipio_destino = "005"
-                else: municipio_destino = "015"
+                if cp_cliente == "08400":
+                    municipio_destino = "006"
+                elif cp_cliente in ["03100", "03710"]:
+                    municipio_destino = "014"
+                elif cp_cliente.startswith("02"):
+                    municipio_destino = "002"
+                elif cp_cliente.startswith("01"):
+                    municipio_destino = "010"
+                elif cp_cliente.startswith("09"):
+                    municipio_destino = "007"
+                elif cp_cliente.startswith("07"):
+                    municipio_destino = "005"
+                else:
+                    municipio_destino = "015"
             elif 50000 <= cp_int <= 57999:
                 estado_destino = "MEX"
                 # HEURÍSTICA MEJORADA Y DEFAULT AL 012
@@ -793,12 +808,14 @@ class BillingService:
                 elif cp_cliente.startswith("548"):
                     municipio_destino = "024"
                 else:
-                    municipio_destino = "012"  # <-- EL SALVAVIDAS AHORA APUNTA AL 012 (ATIZAPÁN)
+                    municipio_destino = (
+                        "012"  # <-- EL SALVAVIDAS AHORA APUNTA AL 012 (ATIZAPÁN)
+                    )
             else:
                 # Fuera de CMX y MEX, no adivinamos
                 raise HTTPException(
-                    status_code=400, 
-                    detail=f"ERROR SAT PREVENTIVO: El Código Postal destino {cp_cliente} no está en el catálogo local. Agrégalo a la BD para timbrar."
+                    status_code=400,
+                    detail=f"ERROR SAT PREVENTIVO: El Código Postal destino {cp_cliente} no está en el catálogo local. Agrégalo a la BD para timbrar.",
                 )
 
             logger.warning(
@@ -1183,10 +1200,7 @@ class BillingService:
         html_out = env.get_template("carta_porte.html").render(context)
         pdf_path = self.storage_dir / f"{uuid}.pdf"
 
-        HTML(
-            string=html_out, 
-            base_url=self.templates_dir.as_uri()
-        ).write_pdf(
+        HTML(string=html_out, base_url=self.templates_dir.as_uri()).write_pdf(
             str(pdf_path)
         )
 

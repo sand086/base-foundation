@@ -157,7 +157,7 @@ def get_receivable_invoices(
         )
         .filter(
             models.ReceivableInvoice.record_status == models.RecordStatus.ACTIVO.value,
-            # 🔥 AQUÍ ESTÁ LA MAGIA: Filtramos los que no tienen folio 🔥
+            #   AQUÍ ESTÁ LA MAGIA: Filtramos los que no tienen folio
             models.ReceivableInvoice.folio_interno.isnot(None),
             models.ReceivableInvoice.folio_interno != "",
         )

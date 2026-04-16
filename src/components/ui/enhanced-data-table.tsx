@@ -61,7 +61,7 @@ interface EnhancedDataTableProps<T> {
   exportFileName?: string;
   searchPlaceholder?: string;
   isLoading?: boolean;
-  // 🔥 NUEVAS PROPS PARA SELECCIÓN MULTIPLE 🔥
+  //   NUEVAS PROPS PARA SELECCIÓN MULTIPLE
   enableRowSelection?: boolean;
   selectedRows?: T[];
   onSelectedRowsChange?: (rows: T[]) => void;
@@ -503,7 +503,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
           <table className="w-full caption-bottom text-sm border-collapse">
             <thead className="sticky top-0 z-20">
               <tr className="bg-slate-100/90 dark:bg-slate-900/95 border-b border-slate-200 dark:border-white/10 backdrop-blur-md shadow-sm">
-                {/* 🔥 COLUMNA DE SELECCIÓN HEADER 🔥 */}
+                {/*   COLUMNA DE SELECCIÓN HEADER   */}
                 {enableRowSelection && (
                   <th className="h-14 px-6 py-4 text-center align-middle w-16">
                     <Checkbox
@@ -604,7 +604,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                     )}
                     onClick={() => onRowClick?.(row)}
                   >
-                    {/* 🔥 COLUMNA DE SELECCIÓN ROW 🔥 */}
+                    {/*   COLUMNA DE SELECCIÓN ROW   */}
                     {enableRowSelection && (
                       <td
                         className="px-6 py-4 align-middle text-center"

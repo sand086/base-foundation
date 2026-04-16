@@ -574,6 +574,20 @@ def registrar_pago_multiple(
     Endpoint Fase 3.2: Registra el pago de una o múltiples facturas y genera
     el Complemento de Pago (REP) ante el SAT.
     """
+    for pago in payload.pagos:
+        factura = (
+            db.query(models.ReceivableInvoice)
+            .filter(models.ReceivableInvoice.id == pago.invoice_id)
+            .first()
+        )
+        if factura and factura.uuid:
+            clean_uuid = factura.uuid.strip()
+            if len(clean_uuid) != 36:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"La factura {factura.folio_interno or factura.id} tiene un UUID inválido de {len(clean_uuid)} caracteres. El SAT exige exactamente 36 caracteres.",
+                )
+
     service = BillingService(db)
     try:
         resultado = service.registrar_pago_y_timbrar_complemento(

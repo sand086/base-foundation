@@ -106,7 +106,7 @@ def create_inventory_item(db: Session, item_in: schemas.InventoryItemCreate):
     db.add(db_item)
     db.flush()
 
-    # 3. 🔥 INTEGRACIÓN AUTOMÁTICA CON CXP 🔥
+    # 3.   INTEGRACIÓN AUTOMÁTICA CON CXP
     if db_item.stock_actual > 0 and db_item.precio_unitario > 0:
         total_compra = db_item.stock_actual * db_item.precio_unitario
         es_caja_chica = db_item.proveedor_id is None

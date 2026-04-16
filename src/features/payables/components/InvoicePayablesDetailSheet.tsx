@@ -54,7 +54,7 @@ export function InvoicePayablesDetailSheet({
 }: InvoiceDetailSheetProps) {
   useEffect(() => {
     if (invoice && open) {
-      console.log("🔥 FACTURA DE PROVEEDOR ABIERTA:", invoice);
+      console.log("  FACTURA DE PROVEEDOR ABIERTA:", invoice);
     }
   }, [invoice, open]);
 
@@ -216,7 +216,9 @@ export function InvoicePayablesDetailSheet({
                 <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mb-0.5">
                   Emisión
                 </p>
-                <p className="font-bold text-sm text-foreground">{fD(fechaEmision)}</p>
+                <p className="font-bold text-sm text-foreground">
+                  {fD(fechaEmision)}
+                </p>
               </div>
             </div>
             <div
