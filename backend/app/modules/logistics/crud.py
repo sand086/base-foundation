@@ -307,14 +307,24 @@ def add_timeline_event(
     if not trip:
         return None
 
-    active_leg = next(
-        (
-            leg
-            for leg in reversed(trip.legs)
-            if leg.status not in ["entregado", "cerrado", "liquidado"]
-        ),
-        trip.legs[-1] if trip.legs else None,
-    )
+    active_leg = None
+
+    # 1. NUEVA LÓGICA: Si React mandó el ID exacto del tramo (Ej. el de Juan), lo buscamos y usamos ese.
+    if getattr(payload, "trip_leg_id", None):
+        active_leg = next(
+            (leg for leg in trip.legs if leg.id == payload.trip_leg_id), None
+        )
+
+    # 2. LÓGICA ANTERIOR (Respaldo): Si React no mandó nada, buscamos el último tramo activo (Ej. Gustavo).
+    if not active_leg:
+        active_leg = next(
+            (
+                leg
+                for leg in reversed(trip.legs)
+                if leg.status not in ["entregado", "cerrado", "liquidado"]
+            ),
+            trip.legs[-1] if trip.legs else None,
+        )
 
     #  MAPEO SEGURO DE ESTADOS (Frontend -> ENUM PostgreSQL)
     status_db_validos = ["detenido", "retraso", "accidente", "bloqueado", "entregado"]

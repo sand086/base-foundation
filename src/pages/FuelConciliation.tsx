@@ -273,7 +273,9 @@ export default function FuelConciliation() {
     const toastId = toast.loading("Revirtiendo auditoría...");
 
     try {
-      await axiosClient.post(`/legs/${legToReset}/reset-audit`);
+      await axiosClient.post(
+        `/api/logistics/trips/legs/${legToReset}/reset-audit`,
+      );
       toast.success("Registro de detalles Revertida", {
         id: toastId,
         description: "El tramo ha vuelto a estatus pendiente.",
@@ -374,6 +376,7 @@ export default function FuelConciliation() {
           comments: `Detalles Fase. Km ECM: ${kmECM}. Litros ECM: ${ltECM}. Vales: ${vales}. Rend Real: ${rReal.toFixed(2)} km/L. Ver: ${est}.`,
           odometro: Number(formData.odometroFinal),
           combustible_litros: vales,
+          trip_leg_id: Number(selectedLegId),
         },
       );
 
@@ -1162,7 +1165,9 @@ export default function FuelConciliation() {
                   </h4>
                 </div>
                 <p className="text-xs sm:text-sm leading-relaxed text-rose-900 dark:text-rose-200/80">
-                  Los cálculos se borrarán y la fase <b className="font-black">volverá a quedar pendiente</b> de auditar.
+                  Los cálculos se borrarán y la fase{" "}
+                  <b className="font-black">volverá a quedar pendiente</b> de
+                  auditar.
                 </p>
               </div>
             </AlertDialogDescription>
