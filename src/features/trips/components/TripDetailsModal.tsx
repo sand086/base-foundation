@@ -381,20 +381,25 @@ export function TripDetailsModal({
     }
   };
 
-  // ... (Las funciones de Descarga y NOM-087 se mantienen igual, solo cambian `trip` por `localTrip`)
   const handleDownloadBothFiles = async (
     uuidToDownload: string,
     isFinal: boolean = false,
   ) => {
-    /* Mismo código, sin cambios */
     const toastId = toast.loading("Preparando archivos para descarga...");
     try {
       const resPdf = await axiosClient.get(
         `/billing/invoice/${uuidToDownload}/pdf`,
         { responseType: "blob" },
       );
+
+      // FIX: Adaptable por si tu axiosClient tiene interceptores
+      const blobPdf = resPdf.data ? resPdf.data : resPdf;
+
+      // PREVENCIÓN: Si el server mandó un error (JSON), no lo descargues como PDF
+      if (blobPdf.type?.includes("json")) throw new Error("PDF no encontrado");
+
       const pdfURL = window.URL.createObjectURL(
-        new Blob([resPdf.data], { type: "application/pdf" }),
+        new Blob([blobPdf], { type: "application/pdf" }),
       );
       const pdfLink = document.createElement("a");
       pdfLink.href = pdfURL;
@@ -404,15 +409,22 @@ export function TripDetailsModal({
       );
       document.body.appendChild(pdfLink);
       pdfLink.click();
-      document.body.removeChild(pdfLink);
+      pdfLink.remove();
+      window.URL.revokeObjectURL(pdfURL); // Libera memoria
+
       setTimeout(async () => {
         try {
           const resXml = await axiosClient.get(
             `/billing/invoice/${uuidToDownload}/xml`,
             { responseType: "blob" },
           );
+          const blobXml = resXml.data ? resXml.data : resXml;
+
+          if (blobXml.type?.includes("json"))
+            throw new Error("XML no encontrado");
+
           const xmlURL = window.URL.createObjectURL(
-            new Blob([resXml.data], { type: "application/xml" }),
+            new Blob([blobXml], { type: "application/xml" }),
           );
           const xmlLink = document.createElement("a");
           xmlLink.href = xmlURL;
@@ -422,7 +434,9 @@ export function TripDetailsModal({
           );
           document.body.appendChild(xmlLink);
           xmlLink.click();
-          document.body.removeChild(xmlLink);
+          xmlLink.remove();
+          window.URL.revokeObjectURL(xmlURL);
+
           toast.success("PDF y XML descargados exitosamente.", { id: toastId });
         } catch (error) {
           toast.error("El PDF se descargó, pero hubo un error con el XML.", {
@@ -442,15 +456,22 @@ export function TripDetailsModal({
         `/billing/invoice/${uuidToDownload}/xml`,
         { responseType: "blob" },
       );
+      const blobXml = res.data ? res.data : res;
+
+      if (blobXml.type?.includes("json"))
+        throw new Error("Archivo no encontrado");
+
       const xmlURL = window.URL.createObjectURL(
-        new Blob([res.data], { type: "application/xml" }),
+        new Blob([blobXml], { type: "application/xml" }),
       );
       const link = document.createElement("a");
       link.href = xmlURL;
       link.setAttribute("download", `CFDI_${uuidToDownload}.xml`);
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
+      link.remove();
+      window.URL.revokeObjectURL(xmlURL);
+
       toast.success("XML descargado exitosamente.", { id: toastId });
     } catch {
       toast.error("Error al descargar el XML.", { id: toastId });
@@ -464,15 +485,22 @@ export function TripDetailsModal({
         `/billing/invoice/${uuidToDownload}/pdf`,
         { responseType: "blob" },
       );
+      const blobPdf = res.data ? res.data : res;
+
+      if (blobPdf.type?.includes("json"))
+        throw new Error("Archivo no encontrado");
+
       const fileURL = window.URL.createObjectURL(
-        new Blob([res.data], { type: "application/pdf" }),
+        new Blob([blobPdf], { type: "application/pdf" }),
       );
       const link = document.createElement("a");
       link.href = fileURL;
       link.setAttribute("download", `CFDI_${uuidToDownload}.pdf`);
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
+      link.remove();
+      window.URL.revokeObjectURL(fileURL);
+
       toast.success("PDF descargado exitosamente.", { id: toastId });
     } catch {
       toast.error("Error al descargar el PDF.", { id: toastId });
