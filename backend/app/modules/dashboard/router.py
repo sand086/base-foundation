@@ -4,10 +4,11 @@ from sqlalchemy import func, case
 from datetime import date, timedelta
 from typing import Optional
 import traceback
+from app.models.models import SystemConfig
 
 from app.db.database import get_db
 
-# Agregamos RecordStatus a los imports
+# Agregamos RecordStatus y los modelos de Taller
 from app.models.models import (
     Trip,
     Client,
@@ -16,6 +17,10 @@ from app.models.models import (
     Unit,
     FuelLog,
     RecordStatus,
+    Mechanic,  # <-- NUEVO
+    WorkOrder,  # <-- NUEVO
+    WorkOrderPart,  # <-- NUEVO
+    WorkOrderStatus,  # <-- NUEVO
 )
 from app.modules.dashboard.schemas import DashboardData
 
@@ -72,7 +77,7 @@ def get_dashboard_stats(
         t_liters = float(fleet_metrics.total_liters or 0.0) if fleet_metrics else 0.0
         avg_rendimiento = round((t_kms / t_liters), 2) if t_liters > 0 else 0.0
 
-        # Top Clientes
+        # Top Clientes (AHORA TODOS, ORDENADOS POR MONTO)
         top_clients = (
             db.query(
                 Client.razon_social.label("client"),
@@ -86,9 +91,8 @@ def get_dashboard_stats(
                 Trip.record_status != RecordStatus.ELIMINADO,  # <-- PROTECCIÓN
             )
             .group_by(Client.id)
-            .order_by(func.count(Trip.id).desc())
-            .limit(5)
-            .all()
+            .order_by(func.sum(Trip.tarifa_base).desc())  # Ordenado por ingresos ($)
+            .all()  # <-- SIN LÍMITE (Trae todos los del mes)
         )
 
         # --- 2. OPERATOR STATS ACTUALIZADO ---
@@ -96,15 +100,19 @@ def get_dashboard_stats(
             db.query(
                 Operator.name.label("name"),
                 Operator.name.label("shortName"),
-                func.count(TripLeg.id).label("trips"),
+                func.count(TripLeg.id.distinct()).label("trips"),
                 func.sum(case((TripLeg.rendimiento_real == None, 0), else_=0)).label(
                     "incidents"
                 ),
-                func.avg(TripLeg.rendimiento_real).label("rendimiento"),
+                func.avg(FuelLog.rendimiento_sm).label("rendimiento_lectura"),
+                func.avg(FuelLog.rendimiento_real).label("rendimiento_real"),
                 func.sum(Trip.tarifa_base).label("revenue"),
             )
             .join(TripLeg, TripLeg.operator_id == Operator.id)
             .join(Trip, TripLeg.trip_id == Trip.id)
+            .outerjoin(
+                FuelLog, TripLeg.id == FuelLog.trip_leg_id
+            )  # Outerjoin para métricas de telemetría
             .filter(
                 TripLeg.start_date.between(start_date, end_date),
                 TripLeg.record_status != RecordStatus.ELIMINADO,  # <-- PROTECCIÓN
@@ -125,9 +133,70 @@ def get_dashboard_stats(
             .all()
         )
 
-        # --- 3. NUEVAS MÉTRICAS MENSUALES PARA GRÁFICAS ---
-        # LIMPIADO: Se envían listas vacías para que el dashboard nazca en 0 en producción.
-        # Posteriormente aquí tendrás que implementar las consultas a la base de datos agrupadas por mes.
+        # --- 4. VENTAS DIARIAS VS META ---
+
+        meta_config = (
+            db.query(SystemConfig)
+            .filter(SystemConfig.key == "meta_diaria_ventas")
+            .first()
+        )
+
+        # Si la configuración existe, la usamos. Si no, la dejamos en 0.0 por defecto
+        try:
+            META_DIARIA = (
+                float(meta_config.value) if meta_config and meta_config.value else 0.0
+            )
+        except ValueError:
+            META_DIARIA = 0.0  # Por si alguien guardó texto en lugar de números
+
+        daily_query = (
+            db.query(
+                func.date(Trip.start_date).label("day"),
+                func.sum(Trip.tarifa_base).label("revenue"),
+            )
+            .filter(
+                Trip.start_date.between(start_date, end_date),
+                Trip.record_status != RecordStatus.ELIMINADO,
+            )
+            .group_by(func.date(Trip.start_date))
+            .order_by(func.date(Trip.start_date).asc())
+            .all()
+        )
+
+        daily_revenue_data = [
+            {"day": str(d.day), "revenue": float(d.revenue or 0.0), "meta": META_DIARIA}
+            for d in daily_query
+        ]
+
+        # --- 5. MÉTRICAS DE TALLER (Órdenes cerradas y gastos por mecánico) ---
+        mechanic_query = (
+            db.query(
+                Mechanic.nombre.label("mechanic_name"),
+                func.count(WorkOrder.id.distinct()).label("ordenes_cerradas"),
+                func.sum(
+                    WorkOrderPart.cantidad * WorkOrderPart.costo_unitario_snapshot
+                ).label("gasto_total"),
+            )
+            .join(WorkOrder, WorkOrder.mechanic_id == Mechanic.id)
+            .outerjoin(WorkOrderPart, WorkOrderPart.work_order_id == WorkOrder.id)
+            .filter(
+                WorkOrder.status == WorkOrderStatus.CERRADA,
+                WorkOrder.fecha_cierre.between(start_date, end_date),
+            )
+            .group_by(Mechanic.id)
+            .all()
+        )
+
+        mechanic_stats_data = [
+            {
+                "mechanic_name": m.mechanic_name,
+                "ordenes_cerradas": m.ordenes_cerradas,
+                "gasto_total": float(m.gasto_total or 0.0),
+            }
+            for m in mechanic_query
+        ]
+
+        # --- 3. MÉTRICAS MENSUALES PARA GRÁFICAS (Mantenemos por si las usas en DashboardTrends) ---
         revenueTrend = []
         tripConfigTrend = []
         fuelTrend = []
@@ -146,16 +215,27 @@ def get_dashboard_stats(
             "clientServices": [dict(c._mapping) for c in top_clients],
             "operatorStats": [
                 {
-                    **dict(o._mapping),
+                    "name": o.name,
+                    "shortName": o.shortName,
+                    "trips": o.trips,
+                    "incidents": o.incidents,
                     "onTimeRate": 95.0,
-                    "rendimiento": round(o.rendimiento, 2) if o.rendimiento else 0.0,
+                    # Mapeo de los nuevos campos de rendimiento, protegidos contra nulos
+                    "rendimiento_lectura": (
+                        round(o.rendimiento_lectura, 2)
+                        if o.rendimiento_lectura
+                        else 0.0
+                    ),
+                    "rendimiento_real": (
+                        round(o.rendimiento_real, 2) if o.rendimiento_real else 0.0
+                    ),
                     "revenue": float(o.revenue or 0.0),
                 }
                 for o in op_stats
             ],
             "recentServices": [
                 {
-                    "id": f"SRV-{t.id}",
+                    "id": f"TRP-{t.id}",
                     "clientId": str(t.client_id),
                     "clientName": t.client.razon_social,
                     "route": f"{t.origin} → {t.destination}",
@@ -169,13 +249,15 @@ def get_dashboard_stats(
                     "operatorId": str(t.legs[0].operator_id) if t.legs else "0",
                     "status": t.status.value,
                     "date": t.start_date.date(),
-                    "unitNumber": "TR-100",  # Ojo: esto también está en duro, podrías querer cambiarlo a t.remolque_1.numero_economico si aplica
+                    "unitNumber": "TR-100",
                 }
                 for t in recent
             ],
             "revenueTrend": revenueTrend,
             "tripConfigTrend": tripConfigTrend,
             "fuelTrend": fuelTrend,
+            "dailyRevenue": daily_revenue_data,  # <-- NUEVO
+            "mechanicStats": mechanic_stats_data,  # <-- NUEVO
         }
 
     except Exception as e:

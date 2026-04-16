@@ -39,6 +39,19 @@ class RegistroPagoPayload(BaseModel):
     cuenta_deposito: Optional[str] = ""
 
 
+# Función auxiliar para traducir errores crudos a mensajes amigables
+def parse_sat_error(e: Exception) -> str:
+    error_msg = str(e).lower()
+    if (
+        "not found" in error_msg
+        or "no such file" in error_msg
+        or "cer" in error_msg
+        or "key" in error_msg
+    ):
+        return "Fallo el timbrado: Actualiza tus sellos (CSD) en configuración. Al parecer no se encuentran, la contraseña es incorrecta o ya no son vigentes."
+    return str(e)
+
+
 @router.get("/test-invoice-pro")
 def test_invoice_pro():
     try:
@@ -60,7 +73,8 @@ def test_invoice_pro():
                 logo_src = f"data:image/png;base64,{encoded_string}"
 
         def chunk_b64(text, length):
-            if not text: return ""
+            if not text:
+                return ""
             text = str(text).replace(" ", "").replace("\n", "").replace("\r", "")
             return " ".join([text[i : i + length] for i in range(0, len(text), length)])
 
@@ -86,9 +100,18 @@ def test_invoice_pro():
             "cert_sat": "00001000000719545303",
             "fecha_certificacion": "2026-03-02T12:36:24",
             "qr_src": "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://verificacfdi.facturaelectronica.sat.gob.mx/",
-            "sello_emisor": chunk_b64("M085BkYeJH+LmnkY75WIziDPCQp917lel30V7PeXTMx8Y7+sYeReZTt6l8FPSDtIMDAKDAZQzPw1zTBpbzZYkw57pTjlxtLOTkiStguhrZHMLuuKV3aAXlyrA1+eN6AeFolyysC3Y3YM2p8mh29esBK2KZJFh6eCzRA6ZX0g+2gYCp691n8BjPXzFXzJFedrtytiMRHq+A+MyziBCnquGqgjzqxTu7quN7x+F4F619NC9JsBX561LwbeeHEkOsz+VK3YuJ9qiKjqHg770DSh5Sw++tpTaEbDowo4EpeQG4lFC6F165vk29XilalEne8SBa3coQmYTa90BU2GUBKB2uJg==", 112),
-            "sello_sat": chunk_b64("Gi/zO5izu35e5+j24Fx7DQn16RpiGS8i9k+ttZG/MMh0p7z1f2PJatkD/VUOX3pU1n7HeBjOU7q+1ZMxOEpg5tLFJZgB9l+0+TQbvCXrCklizxmuvHSskkYMgDHZG7/r2gcB13Nu7FNuK1p2tK3x7VgaCZa9W4vWHFviGkyyWqM3NeLYFixEl+ZX3EVU7qgBmORqD6bN0zn8562sJV2n4+9mtoXb85B+C0Z16hM7uTjuyuDSawu4w+zAVBkzmuagBXvq20a4nzQsppB5o7laYf32IIVIILIKESGIKTV6UL1GmBs1C9sYusJJ784UKtwd8jEHVJ1svLzx57Mg57Ud6g==", 135),
-            "cadena_original": chunk_b64("||1.1|94FBAB5B-DDAF-4858-84EC-F23AA4CDC611|2026-03-02T12:36:24|L501306189R5|M085BkYeJH+LmnkY75WIziDPCQp917lel30V7PeXTMx8Y7+sYeReZTt6l8FPSDtIMDaKDAZOzPw1zTBpbzZYkw57pTjixtLOTkiSftguhrZHMLuuKV3aAXlyrA1+eN6AeFolyysC3Y3YM2p8mh29esBK2KZJFh6eCzRA6ZX0g+2gYCp691n8BjPXzFXzJFe4rtytiMRHq+A+MJziBCnquGajzqxTu7quN7x+F4F619NC9JsBX561LwbeeHEkOsz+VK3YuJ9qiKjgHg770DSh5Sw++fpTaEbDowo4EpeQG4IFc6F165vk2gXilalEne8Ba3coQmYTa90BU2GUBkB2uJg==|00001000000719545303||", 135),
+            "sello_emisor": chunk_b64(
+                "M085BkYeJH+LmnkY75WIziDPCQp917lel30V7PeXTMx8Y7+sYeReZTt6l8FPSDtIMDAKDAZQzPw1zTBpbzZYkw57pTjlxtLOTkiStguhrZHMLuuKV3aAXlyrA1+eN6AeFolyysC3Y3YM2p8mh29esBK2KZJFh6eCzRA6ZX0g+2gYCp691n8BjPXzFXzJFedrtytiMRHq+A+MyziBCnquGqgjzqxTu7quN7x+F4F619NC9JsBX561LwbeeHEkOsz+VK3YuJ9qiKjqHg770DSh5Sw++tpTaEbDowo4EpeQG4lFC6F165vk29XilalEne8SBa3coQmYTa90BU2GUBKB2uJg==",
+                112,
+            ),
+            "sello_sat": chunk_b64(
+                "Gi/zO5izu35e5+j24Fx7DQn16RpiGS8i9k+ttZG/MMh0p7z1f2PJatkD/VUOX3pU1n7HeBjOU7q+1ZMxOEpg5tLFJZgB9l+0+TQbvCXrCklizxmuvHSskkYMgDHZG7/r2gcB13Nu7FNuK1p2tK3x7VgaCZa9W4vWHFviGkyyWqM3NeLYFixEl+ZX3EVU7qgBmORqD6bN0zn8562sJV2n4+9mtoXb85B+C0Z16hM7uTjuyuDSawu4w+zAVBkzmuagBXvq20a4nzQsppB5o7laYf32IIVIILIKESGIKTV6UL1GmBs1C9sYusJJ784UKtwd8jEHVJ1svLzx57Mg57Ud6g==",
+                135,
+            ),
+            "cadena_original": chunk_b64(
+                "||1.1|94FBAB5B-DDAF-4858-84EC-F23AA4CDC611|2026-03-02T12:36:24|L501306189R5|M085BkYeJH+LmnkY75WIziDPCQp917lel30V7PeXTMx8Y7+sYeReZTt6l8FPSDtIMDaKDAZOzPw1zTBpbzZYkw57pTjixtLOTkiSftguhrZHMLuuKV3aAXlyrA1+eN6AeFolyysC3Y3YM2p8mh29esBK2KZJFh6eCzRA6ZX0g+2gYCp691n8BjPXzFXzJFe4rtytiMRHq+A+MJziBCnquGajzqxTu7quN7x+F4F619NC9JsBX561LwbeeHEkOsz+VK3YuJ9qiKjgHg770DSh5Sw++fpTaEbDowo4EpeQG4IFc6F165vk2gXilalEne8Ba3coQmYTa90BU2GUBkB2uJg==|00001000000719545303||",
+                135,
+            ),
             "importe_letra": "(*** TREINTA Y CINCO MIL OCHOCIENTOS CUARENTA PESOS 00/100 MXN ***)",
             "subtotal": "32,000.00",
             "iva": "5,120.00",
@@ -120,7 +143,9 @@ def test_invoice_pro():
 
     except Exception as e:
         import traceback
+
         return {"error": str(e), "trace": traceback.format_exc()}
+
 
 @router.get("/debug-ping")
 def debug_ping():
@@ -148,7 +173,8 @@ def generar_carta_porte_nominal(
             },
         }
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        custom_error = parse_sat_error(e)
+        raise HTTPException(status_code=400, detail=custom_error)
 
 
 #  FASE 2: NUEVO ENDPOINT PARA TIMBRADO REAL DESDE LA UI DE Dispatch
@@ -202,7 +228,8 @@ def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
             "data": {"factura_id": factura_final.id, "uuid": factura_final.uuid},
         }
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        custom_error = parse_sat_error(e)
+        raise HTTPException(status_code=400, detail=custom_error)
 
 
 @router.post("/stamp/final", response_model=dict)
@@ -245,7 +272,8 @@ def generar_factura_final(
             },
         }
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        custom_error = parse_sat_error(e)
+        raise HTTPException(status_code=400, detail=custom_error)
 
 
 @router.get("/invoice/{uuid}/pdf")
@@ -513,4 +541,5 @@ def registrar_pago_multiple(
         )
         return resultado
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        custom_error = parse_sat_error(e)
+        raise HTTPException(status_code=400, detail=custom_error)

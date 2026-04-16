@@ -1135,3 +1135,71 @@ def reset_leg_audit(db: Session, leg_id: int):
     db.commit()
     db.refresh(leg)
     return leg
+
+
+def unhook_in_yard(db: Session, trip_id: str):
+    tid = int(trip_id)
+    trip = (
+        db.query(models.Trip)
+        .filter(
+            models.Trip.id == tid, models.Trip.record_status != RecordStatus.ELIMINADO
+        )
+        .first()
+    )
+
+    if not trip or not trip.legs:
+        return None
+
+    # Obtenemos la fase activa
+    active_leg = trip.legs[-1]
+
+    if active_leg.status in ["entregado", "cerrado", "liquidado"]:
+        raise ValueError("Este tramo ya está cerrado o entregado.")
+
+    # REGLA DE GUSTAVO: Solo se puede desenganchar en la Fase 1 (Carga Patio/Muelle)
+    if active_leg.leg_type != "carga_muelle":
+        raise ValueError(
+            "Solo se permite desenganchar viajes que están en fase de Carga en Patio/Muelle."
+        )
+
+    # 1. Liberamos SOLO Tractocamión y Operador.
+    # (El Remolque 1, Dolly y Remolque 2 siguen atados al `Trip` maestro)
+    if active_leg.unit_id:
+        tracto = (
+            db.query(models.Unit).filter(models.Unit.id == active_leg.unit_id).first()
+        )
+        if tracto:
+            tracto.status = models.UnitStatus.DISPONIBLE
+
+    if active_leg.operator_id:
+        op = (
+            db.query(models.Operator)
+            .filter(models.Operator.id == active_leg.operator_id)
+            .first()
+        )
+        if op:
+            op.status = models.OperatorStatus.ACTIVO
+
+    # 2. Marcamos el tramo local como completado
+    active_leg.status = models.TripStatus.ENTREGADO
+    active_leg.actual_arrival = datetime.utcnow()
+    active_leg.last_update = datetime.utcnow()
+
+    # 3. Ponemos el Viaje en estado DETENIDO (o un estado custom) para que el despachador
+    # sepa que está en patio esperando asignación de carretera
+    trip.status = models.TripStatus.DETENIDO
+    trip.last_update = datetime.utcnow()
+
+    # 4. Dejamos el registro en la Bitácora
+    db_event = models.TripTimelineEvent(
+        trip_leg_id=active_leg.id,
+        time=datetime.utcnow(),
+        event="Desenganche en patio. Operador y Tractocamión liberados. Carga en espera de asignación de carretera.",
+        event_type="info",
+        location="Patio de Operaciones",
+    )
+    db.add(db_event)
+
+    db.commit()
+    db.refresh(trip)
+    return trip

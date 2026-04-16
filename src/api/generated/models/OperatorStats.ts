@@ -8,7 +8,8 @@ export type OperatorStats = {
     trips: number;
     incidents: number;
     onTimeRate: number;
-    rendimiento: number;
+    rendimiento_lectura: number;
+    rendimiento_real: number;
     revenue: number;
 };
 

@@ -54,9 +54,19 @@ import { es } from "date-fns/locale";
 import { ManageCategoriesModal } from "@/features/suppliers/components/ManageCategoriesModal";
 import { useSuppliers } from "@/features/suppliers/hooks/useSuppliers";
 
-import { RegisterExpenseModal } from "@/features/payables/components/RegisterExpenseModal";
+// FIX: Importamos el LocalPrefillData (que ahora está extendido)
+import {
+  RegisterExpenseModal,
+  LocalPrefillData,
+} from "@/features/payables/components/RegisterExpenseModal";
 import { InvoicePayablesDetailSheet } from "@/features/payables/components/InvoicePayablesDetailSheet";
 import { PayableInvoice } from "@/features/payables/types";
+
+// FIX: Importamos el nuevo Importador de XML
+import {
+  ImportXMLExpenseModal,
+  XMLParsedData,
+} from "@/features/payables/components/ImportXMLExpenseModal";
 
 import { RegisterPaymentModal } from "@/features/treasury/components/RegisterPaymentModal";
 import { useBankAccounts } from "@/features/treasury/hooks/useBankAccounts";
@@ -68,15 +78,6 @@ import {
   getClasificacionColor,
 } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-
-interface PrefillData {
-  proveedor: string;
-  proveedorId: string;
-  concepto: string;
-  montoTotal: number;
-  ordenCompraId: string;
-  ordenCompraFolio: string;
-}
 
 const safeLower = (v: unknown) =>
   typeof v === "string" ? v.toLowerCase() : "";
@@ -117,6 +118,9 @@ export default function Payables() {
   const [isDeleteInvoiceOpen, setIsDeleteInvoiceOpen] = useState(false);
   const [isManageCatOpen, setIsManageCatOpen] = useState(false);
 
+  // FIX: Estado para el modal de arrastrar XML
+  const [isXmlModalOpen, setIsXmlModalOpen] = useState(false);
+
   const [invoiceToDelete, setInvoiceToDelete] = useState<PayableInvoice | null>(
     null,
   );
@@ -126,12 +130,12 @@ export default function Payables() {
   const [editingInvoice, setEditingInvoice] = useState<PayableInvoice | null>(
     null,
   );
-  const [prefillData, setPrefillData] = useState<PrefillData | null>(null);
+  const [prefillData, setPrefillData] = useState<LocalPrefillData | null>(null);
 
   useEffect(() => {
     const fromPurchases = searchParams.get("fromPurchases");
     if (fromPurchases === "true") {
-      const prefill: PrefillData = {
+      const prefill: LocalPrefillData = {
         proveedor: searchParams.get("proveedor") || "",
         proveedorId: searchParams.get("proveedorId") || "",
         concepto: searchParams.get("concepto") || "",
@@ -157,6 +161,22 @@ export default function Payables() {
     return () =>
       document.removeEventListener("open-manage-categories", handleOpen);
   }, []);
+
+  // FIX: Función que recibe el XML parseado y abre el formulario final
+  const handleXmlParsed = (data: XMLParsedData) => {
+    setIsXmlModalOpen(false);
+    setPrefillData({
+      proveedor: data.emisorNombre,
+      proveedorId: "", // Buscaremos por nombre en el UseEffect del Modal
+      concepto: `Gasto amparado por CFDI (${data.emisorRfc})`,
+      montoTotal: data.montoTotal,
+      uuid: data.uuid,
+      fecha_emision: data.fecha,
+      xml_file: data.xmlFile,
+    });
+    setEditingInvoice(null);
+    setIsExpenseModalOpen(true); // Abre el modal de siempre, pero ya Lleno!
+  };
 
   // 1. FORMATEO DE DATOS DE FACTURAS
   const normalizedInvoices = useMemo(() => {
@@ -574,11 +594,11 @@ export default function Payables() {
         }
       >
         <div className="flex flex-wrap items-center gap-3">
-          {/* BOTÓN DE XML (IDÉNTICO A RECEIVABLES) */}
+          {/* FIX: BOTÓN QUE ABRE EL MODAL DE ARRASTRAR XML */}
           <Button
             variant="outline"
             className="border-indigo-500 bg-indigo-50/50 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-800 font-black tracking-wide shadow-sm haptic-press transition-all"
-            onClick={() => toast.info("Lectura de XML en desarrollo")}
+            onClick={() => setIsXmlModalOpen(true)}
           >
             <FileCode2 className="h-4 w-4 mr-2 text-indigo-600" /> Leer XML /
             Gasto
@@ -688,7 +708,6 @@ export default function Payables() {
             </Card>
           </div>
 
-          {/* NUEVA TABLA INTELIGENTE (FACTURAS) */}
           <Card className="shadow-2xl border-none overflow-hidden bg-transparent">
             <CardContent className="p-0 bg-white dark:bg-slate-950 [&_thead]:bg-slate-50/80 dark:[&_thead]:bg-slate-900/80 [&_thead]:backdrop-blur-xl [&_th]:bg-transparent [&_th]:border-b [&_th]:border-slate-200 dark:[&_th]:border-white/10 [&_th]:text-[10px] [&_th]:font-black [&_th]:uppercase [&_th]:tracking-[0.2em] [&_th]:text-slate-500 dark:[&_th]:text-slate-400">
               <EnhancedDataTable
@@ -705,7 +724,6 @@ export default function Payables() {
           value="pagos"
           className="m-0 focus-visible:outline-none animate-in fade-in slide-in-from-bottom-2 duration-500 space-y-6"
         >
-          {/* NUEVA TABLA INTELIGENTE (PAGOS) */}
           <Card className="shadow-2xl border-none overflow-hidden bg-transparent">
             <CardContent className="p-0 bg-white dark:bg-slate-950 [&_thead]:bg-slate-50/80 dark:[&_thead]:bg-slate-900/80 [&_thead]:backdrop-blur-xl [&_th]:bg-transparent [&_th]:border-b [&_th]:border-slate-200 dark:[&_th]:border-white/10 [&_th]:text-[10px] [&_th]:font-black [&_th]:uppercase [&_th]:tracking-[0.2em] [&_th]:text-slate-500 dark:[&_th]:text-slate-400">
               <EnhancedDataTable
@@ -719,6 +737,14 @@ export default function Payables() {
       </Tabs>
 
       {/* MODALES */}
+
+      {/* FIX: Componente Drag & Drop para Leer XML */}
+      <ImportXMLExpenseModal
+        open={isXmlModalOpen}
+        onOpenChange={setIsXmlModalOpen}
+        onSuccess={handleXmlParsed}
+      />
+
       <RegisterExpenseModal
         open={isExpenseModalOpen}
         onOpenChange={(open) => {

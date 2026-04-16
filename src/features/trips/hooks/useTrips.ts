@@ -303,6 +303,40 @@ export const useTrips = () => {
     }
   };
 
+  // Agrega esta función dentro de tu hook useTrips
+  const unhookTrip = async (tripId: string) => {
+    try {
+      setLoading(true);
+      // Usamos tu servicio autogenerado en lugar de axiosClient directamente
+      await LogisticsService.unhookTripInYardApiLogisticsTripsTripIdUnhookPost(
+        Number(tripId),
+      );
+
+      toast({
+        title: "Desenganche Exitoso",
+        description:
+          "El operador y el tractocamión están libres. La carga espera en patio.",
+      });
+
+      await fetchTrips(); // Refrescamos la lista
+      return true;
+    } catch (error: any) {
+      // El OpenAPI codegen suele meter los errores de FastAPI en error.body.detail
+      const errorMsg =
+        error.body?.detail ||
+        error.message ||
+        "No se pudo desenganchar el viaje.";
+      toast({
+        title: "Error al desenganchar",
+        description: errorMsg,
+        variant: "destructive",
+      });
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchTrips();
   }, [fetchTrips]);
@@ -310,6 +344,7 @@ export const useTrips = () => {
   return {
     trips,
     loading,
+    unhookTrip,
     fetchTrips,
     createTrip,
     createNextLeg,

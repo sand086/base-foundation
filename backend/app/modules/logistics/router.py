@@ -1100,3 +1100,14 @@ def reset_audit_endpoint(leg_id: int, db: Session = Depends(get_db)):
     if not leg:
         raise HTTPException(status_code=404, detail="Tramo no encontrado")
     return {"message": "Registro de detalles revertida exitosamente"}
+
+
+@router.post("/trips/{trip_id}/unhook", response_model=schemas.TripResponse)
+def unhook_trip_in_yard(trip_id: int, db: Session = Depends(get_db)):
+    try:
+        trip = crud.unhook_in_yard(db, str(trip_id))
+        if not trip:
+            raise HTTPException(status_code=404, detail="Viaje no encontrado.")
+        return trip
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))

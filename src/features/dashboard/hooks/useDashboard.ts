@@ -49,10 +49,15 @@ export function useDashboard(startDate?: Date, endDate?: Date) {
     clientServices: data?.clientServices,
     operatorStats: data?.operatorStats,
     recentServices: data?.recentServices,
-    // Asegúrate de agregar estas 3 líneas en el return de tu hook:
     revenueTrend: data?.revenueTrend,
     tripConfigTrend: data?.tripConfigTrend,
     fuelTrend: data?.fuelTrend,
+
+    // NUEVAS PROPIEDADES (con 'as any' temporalmente para evitar el error de TypeScript
+    // hasta que regeneres tu API con npm run generate-api)
+    dailyRevenue: (data as any)?.dailyRevenue,
+    mechanicStats: (data as any)?.mechanicStats,
+
     isLoading,
     error,
   };

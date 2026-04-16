@@ -3,6 +3,8 @@
 /* tslint:disable */
 /* eslint-disable */
 import type { ClientServiceCount } from './ClientServiceCount';
+import type { DailyRevenue } from './DailyRevenue';
+import type { MechanicStats } from './MechanicStats';
 import type { MonthlyFuelStat } from './MonthlyFuelStat';
 import type { MonthlyRevenue } from './MonthlyRevenue';
 import type { MonthlyTripConfig } from './MonthlyTripConfig';
@@ -17,5 +19,7 @@ export type DashboardData = {
     revenueTrend: Array<MonthlyRevenue>;
     tripConfigTrend: Array<MonthlyTripConfig>;
     fuelTrend: Array<MonthlyFuelStat>;
+    dailyRevenue: Array<DailyRevenue>;
+    mechanicStats: Array<MechanicStats>;
 };
 

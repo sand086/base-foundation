@@ -28,7 +28,8 @@ class OperatorStats(BaseModel):
     trips: int
     incidents: int
     onTimeRate: float
-    rendimiento: float
+    rendimiento_lectura: float  # NUEVO: Para la línea 1 de la gráfica
+    rendimiento_real: float  # NUEVO: Para la línea 2 de la gráfica
     revenue: float
 
 
@@ -64,6 +65,18 @@ class MonthlyFuelStat(BaseModel):
     rendimiento: float
 
 
+class DailyRevenue(BaseModel):
+    day: str
+    revenue: float
+    meta: float
+
+
+class MechanicStats(BaseModel):
+    mechanic_name: str
+    ordenes_cerradas: int
+    gasto_total: float
+
+
 class DashboardData(BaseModel):
     serviceStats: ServiceStats
     clientServices: List[ClientServiceCount]
@@ -72,3 +85,5 @@ class DashboardData(BaseModel):
     revenueTrend: List[MonthlyRevenue]
     tripConfigTrend: List[MonthlyTripConfig]
     fuelTrend: List[MonthlyFuelStat]
+    dailyRevenue: List[DailyRevenue]
+    mechanicStats: List[MechanicStats]

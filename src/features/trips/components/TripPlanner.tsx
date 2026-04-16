@@ -35,6 +35,7 @@ import {
   Plus,
   ShieldAlert,
   Route as RouteIcon,
+  Container,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -57,13 +58,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuContent,
 } from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
 
 import {
   DataTable,
@@ -73,24 +67,25 @@ import {
   DataTableHeader,
   DataTableRow,
 } from "@/components/ui/data-table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 import { useTrips } from "@/features/trips/hooks/useTrips";
 import { useUnits } from "@/features/units/hooks/useUnits";
 import { Trip, TripLeg, TripStatus, StatusUpdateData } from "../types";
 
-//  Módulo de Viajes (Trips)
 import { UpdateStatusModal } from "@/features/trips/components/UpdateStatusModal";
 import { NextLegModal } from "@/features/trips/components/NextLegModal";
 import { TripDetailsModal } from "@/features/trips/components/TripDetailsModal";
 import TripSettlementModal from "@/features/settlements/components/TripSettlementModal";
 
-// 🛠️ Utilidades Globales
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
-
-// =====================
-// Interfaces & Helpers
-// =====================
+import { cn, checkIsFullTrip } from "@/lib/utils";
 
 const normalizeStatus = (s: unknown) =>
   String(s ?? "")
@@ -99,13 +94,12 @@ const normalizeStatus = (s: unknown) =>
     .split(" ")
     .join("_");
 
-// Helper: Estatus Operativos Reales
 const getOperationalStatusBadge = (leg: TripLeg) => {
   const status = normalizeStatus(leg.status);
 
   if (status === "creado") {
     return (
-      <Badge className="bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-500/30 shadow-sm w-full justify-center py-1">
+      <Badge className="bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-500/30 shadow-sm w-full hover:text-white justify-center py-1">
         <Clock className="h-3 w-3 mr-1.5" /> ASIGNADO / EN RUTA
       </Badge>
     );
@@ -113,39 +107,39 @@ const getOperationalStatusBadge = (leg: TripLeg) => {
 
   if (status === "entregado" && leg.leg_type === "carga_muelle")
     return (
-      <Badge className="bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-500/30 shadow-sm w-full justify-center py-1">
-        📦 CARGADO EN PATIO
+      <Badge className="bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-500/30 hover:text-white shadow-sm w-full justify-center py-1">
+        CARGADO EN PATIO
       </Badge>
     );
   if (status === "entregado" && leg.leg_type === "ruta_carretera")
     return (
-      <Badge className="bg-purple-100 text-purple-800 border-purple-300 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-500/30 shadow-sm w-full justify-center py-1">
-        ⏳ DESENGANCHADO / PATIO
+      <Badge className="bg-purple-100 text-purple-800 border-purple-300 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-500/30 hover:text-white  shadow-sm w-full justify-center py-1">
+        DESENGANCHADO / PATIO
       </Badge>
     );
   if (status === "entregado" && leg.leg_type === "entrega_vacio")
     return (
-      <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-500/30 shadow-sm w-full justify-center py-1">
-        🏁 FINALIZADO
+      <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-500/30 hover:text-white  shadow-sm w-full justify-center py-1">
+        FINALIZADO
       </Badge>
     );
 
   if (status === "en_transito") {
     if (leg.leg_type === "carga_muelle")
       return (
-        <Badge className="bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-900/30 dark:text-sky-400 dark:border-sky-500/30 shadow-sm w-full justify-center py-1">
-          🚜 OPERANDO EN MUELLE
+        <Badge className="bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-900/30 dark:text-sky-400 dark:border-sky-500/30 shadow-sm w-full hover:text-white  justify-center py-1">
+          OPERANDO EN MUELLE
         </Badge>
       );
     if (leg.leg_type === "ruta_carretera")
       return (
-        <Badge className="bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-500/30 shadow-sm w-full justify-center py-1">
-          🚚 EN CARRETERA
+        <Badge className="bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-500/30 shadow-sm hover:text-white  w-full justify-center py-1">
+          EN CARRETERA
         </Badge>
       );
     if (leg.leg_type === "entrega_vacio")
       return (
-        <Badge className="bg-indigo-100 text-indigo-800 border-indigo-300 dark:bg-indigo-900/30 dark:text-indigo-400 dark:border-indigo-500/30 shadow-sm w-full justify-center py-1">
+        <Badge className="bg-indigo-100 text-indigo-800 hover:text-white  border-indigo-300 dark:bg-indigo-900/30 dark:text-indigo-400 dark:border-indigo-500/30 shadow-sm w-full justify-center py-1">
           RETORNANDO VACÍO
         </Badge>
       );
@@ -153,7 +147,7 @@ const getOperationalStatusBadge = (leg: TripLeg) => {
 
   if (["detenido", "retraso", "accidente"].includes(status)) {
     return (
-      <Badge className="bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-500/30 shadow-sm uppercase animate-pulse w-full justify-center py-1">
+      <Badge className="bg-rose-100 text-rose-800 border-rose-300 hover:text-white  dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-500/30 shadow-sm uppercase animate-pulse w-full justify-center py-1">
         <ShieldAlert className="h-3 w-3 mr-1.5" /> {status}
       </Badge>
     );
@@ -162,7 +156,7 @@ const getOperationalStatusBadge = (leg: TripLeg) => {
   return (
     <Badge
       variant="outline"
-      className="uppercase w-full justify-center bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 py-1 border-slate-200 dark:border-slate-700"
+      className="uppercase w-full justify-center bg-slate-100 dark:bg-slate-800 hover:text-white text-slate-700 dark:text-slate-300 py-1 border-slate-200 dark:border-slate-700"
     >
       {status.replace("_", " ")}
     </Badge>
@@ -180,11 +174,9 @@ const legTypeShort: Record<string, string> = {
   entrega_vacio: "F3: ENTREGA VACÍO",
 };
 
-// =====================
-// MAIN COMPONENT
-// =====================
 export const TripPlanner = () => {
   const navigate = useNavigate();
+  // FIX: Destructuramos unhookTrip desde el useTrips
   const {
     trips,
     loading,
@@ -192,11 +184,10 @@ export const TripPlanner = () => {
     deleteTrip,
     createNextLeg,
     fetchTrips,
+    unhookTrip,
   } = useTrips();
 
-  // Solo mantenemos la vista de Tabla y Standby (Planeador)
   const [viewMode, setViewMode] = useState<"table" | "standby">("table");
-
   const [tripToView, setTripToView] = useState<Trip | null>(null);
   const { updateLoadStatus } = useUnits();
   const [selectedTripPadre, setSelectedTripPadre] = useState<Trip | null>(null);
@@ -209,17 +200,18 @@ export const TripPlanner = () => {
     leg: TripLeg;
     tripPadre: Trip;
   } | null>(null);
-
-  // legToRelay se usa ahora solo para el modal NextLegModal en viajes ya en tránsito.
   const [legToRelay, setLegToRelay] = useState<{
     leg: TripLeg;
     tripPadre: Trip;
   } | null>(null);
-
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
   const handleNextLegSubmit = async (tripId: string, payload: any) => {
     const res = await createNextLeg(tripId, payload);
+    // FIX: Refrescamos la tabla global al pasar a la siguiente fase
+    if (res) {
+      await fetchTrips();
+    }
     return !!res;
   };
 
@@ -246,7 +238,6 @@ export const TripPlanner = () => {
     for (const trip of safeTrips) {
       if (trip.status === "cerrado") continue;
       if (trip.legs && trip.legs.length > 0) {
-        // REGLA DE LA TABLA (Avance de fase)
         const activeLeg =
           trip.legs.find(
             (leg) =>
@@ -262,7 +253,6 @@ export const TripPlanner = () => {
   const handleSaveStatusEvent = async (data: StatusUpdateData) => {
     if (!selectedTripPadre) return;
 
-    // REGLA DEL MODAL DE NOVEDADES
     const activeLeg =
       selectedLegToUpdate ||
       selectedTripPadre.legs?.find(
@@ -287,6 +277,9 @@ export const TripPlanner = () => {
     );
     if (ok) {
       setUpdateModalOpen(false);
+      // FIX: Refrescamos la tabla global al guardar novedad
+      await fetchTrips();
+
       if (data.status === "entregado") {
         toast.success("Servicio reportado como Entregado. Ya puedes liquidar.");
         if (activeLeg.leg_type === "entrega_vacio") {
@@ -332,7 +325,6 @@ export const TripPlanner = () => {
     setUpdateModalOpen(true);
   };
 
-  // Redirección directa al Wizard inyectando el ID y la data
   const handleAssignInWizard = (trip: Trip) => {
     navigate(`/dispatch/new?tripId=${trip.id}`, { state: { trip } });
   };
@@ -349,7 +341,6 @@ export const TripPlanner = () => {
 
   return (
     <div className="h-full flex flex-col space-y-4 animate-in fade-in duration-500">
-      {/* HEADER DE PESTAÑAS */}
       <div className="flex flex-col md:flex-row md:items-center justify-between bg-card/40 p-4 rounded-2xl border border-border shadow-sm backdrop-blur-md gap-4">
         <h2 className="text-lg sm:text-xl font-black text-foreground flex items-center gap-3 px-2 uppercase tracking-tighter heading-crisp">
           <div className="p-2 bg-blue-600 rounded-xl shadow-inner border border-blue-500">
@@ -390,7 +381,6 @@ export const TripPlanner = () => {
         </div>
       </div>
 
-      {/* MODO TABLA */}
       {viewMode === "table" && (
         <Card className="border-border shadow-2xl rounded-2xl overflow-hidden bg-card/50 backdrop-blur-xl liquid-glass-table">
           <CardContent className="p-0">
@@ -521,11 +511,30 @@ export const TripPlanner = () => {
                               >
                                 <DropdownMenuItem
                                   onClick={() => setTripToView(tripPadre)}
-                                  className="rounded-lg cursor-pointer py-2.5 font-bold text-[10px] uppercase tracking-widest text-slate-700 dark:text-slate-300 focus:bg-slate-100 dark:focus:bg-slate-800"
+                                  className="rounded-lg cursor-pointer py-2.5 font-bold text-[10px] uppercase tracking-widest text-slate-700 dark:text-slate-300 focus:bg-slate-100 dark:focus:bg-slate-800 hover:text-blue-500"
                                 >
                                   <Eye className="h-4 w-4 mr-3 text-blue-500" />{" "}
                                   Abrir Centro de Mando
                                 </DropdownMenuItem>
+
+                                {/* FIX: Agregamos el botón de Desenganchar directamente en el menú de la tabla */}
+                                {leg.leg_type === "carga_muelle" &&
+                                  ["creado", "en_transito"].includes(
+                                    leg.status,
+                                  ) && (
+                                    <DropdownMenuItem
+                                      onClick={async () => {
+                                        const ok = await unhookTrip(
+                                          String(tripPadre.id),
+                                        );
+                                        if (ok) await fetchTrips();
+                                      }}
+                                      className="rounded-lg cursor-pointer py-2.5 font-bold text-[10px] uppercase tracking-widest text-purple-700 dark:text-purple-400 focus:bg-purple-50 dark:focus:bg-purple-950/30"
+                                    >
+                                      <Container className="h-4 w-4 mr-3 text-purple-600" />{" "}
+                                      Desenganchar en Patio
+                                    </DropdownMenuItem>
+                                  )}
 
                                 {leg.status === "entregado" && (
                                   <DropdownMenuItem
@@ -560,10 +569,8 @@ export const TripPlanner = () => {
         </Card>
       )}
 
-      {/* MODO STANDBY (CALENDARIO / PLANEADOR) */}
       {viewMode === "standby" && (
         <div className="flex flex-col xl:flex-row gap-6 h-full min-h-0">
-          {/* Panel Lateral: Atrasados / Sin Asignar */}
           {(delayedTrips.length > 0 || unscheduledTrips.length > 0) && (
             <div className="w-full xl:w-72 flex flex-col gap-6 shrink-0 h-full overflow-y-auto hide-scrollbar pb-6">
               {delayedTrips.length > 0 && (
@@ -633,7 +640,6 @@ export const TripPlanner = () => {
             </div>
           )}
 
-          {/* Calendario Mensual */}
           <Card className="flex-1 shadow-2xl border-slate-200/50 dark:border-white/10 bg-white dark:bg-slate-950 rounded-2xl overflow-hidden flex flex-col h-full min-h-0">
             <CardHeader className="p-4 border-b border-slate-200 dark:border-white/10 flex flex-row items-center justify-between bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-xl shrink-0">
               <Button
@@ -755,8 +761,6 @@ export const TripPlanner = () => {
         </div>
       )}
 
-      {/* --- MODALES COMPARTIDOS --- */}
-
       {selectedTripPadre && (
         <UpdateStatusModal
           open={updateModalOpen}
@@ -769,7 +773,6 @@ export const TripPlanner = () => {
         />
       )}
 
-      {/* ALERTA DE ELIMINACIÓN DE VIAJE */}
       <AlertDialog
         open={!!tripToDelete}
         onOpenChange={(open) => !open && setTripToDelete(null)}
@@ -847,13 +850,11 @@ export const TripPlanner = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* NextLegModal solo se usa si ya estaba en curso y alguien solicitó relevo desde la tabla */}
       <NextLegModal
         open={!!legToRelay}
         onOpenChange={(open) => !open && setLegToRelay(null)}
         tripPadre={legToRelay?.tripPadre || null}
         onSubmit={handleNextLegSubmit}
-        // 👇 AGREGA ESTA LÍNEA AQUÍ TAMBIÉN
         onSuccessRefresh={fetchTrips}
       />
       <TripSettlementModal
@@ -872,7 +873,6 @@ export const TripPlanner = () => {
         onUpdateStatusClick={(t, l) => openUpdateStatusModal(t, l)}
       />
 
-      {/* MODAL DIA DE VIAJES (Standby) */}
       <Dialog
         open={!!selectedDayTrips}
         onOpenChange={() => setSelectedDayTrips(null)}
