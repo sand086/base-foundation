@@ -232,7 +232,12 @@ class BillingService:
             .first()
         )
         self.emisor_estado = loc_emisor.estado_clave if loc_emisor else "VER"
-        self.emisor_municipio = loc_emisor.municipio_clave if loc_emisor else "193"
+        # 🛡️ FIX: Forzamos 3 dígitos para el SAT
+        self.emisor_municipio = (
+            str(loc_emisor.municipio_clave).zfill(3)
+            if loc_emisor and loc_emisor.municipio_clave
+            else "193"
+        )
 
     def generar_carta_porte_nominal(
         self, invoice_data: ReceivableInvoiceCreate
@@ -747,14 +752,36 @@ class BillingService:
                 uso_cfdi_cliente = "S01"
             regimen_cliente = str(_get_safe(cliente, "regimen_fiscal", "601"))
 
-        cp_cliente = _get_safe(cliente, "codigo_postal_fiscal", self.emisor_cp)
+        cp_cliente = str(
+            _get_safe(cliente, "codigo_postal_fiscal", self.emisor_cp)
+        ).strip()
         ubicacion = (
             self.db.query(SatLocationCode)
             .filter(SatLocationCode.codigo_postal == cp_cliente)
             .first()
         )
-        estado_destino = ubicacion.estado_clave if ubicacion else "CMX"
-        municipio_destino = ubicacion.municipio_clave if ubicacion else "007"
+
+        if ubicacion:
+            estado_destino = ubicacion.estado_clave
+            # 🛡️ FIX: SAT exige exactamente 3 dígitos (ej. "006" en lugar de "6")
+            municipio_destino = (
+                str(ubicacion.municipio_clave).zfill(3)
+                if ubicacion.municipio_clave
+                else ""
+            )
+        else:
+            # 🛡️ FIX: Fallback dinámico. Si tu BD no tiene el CP 08400 (Iztacalco), forzamos 006 para evitar el error del SAT.
+            estado_destino = "CMX"
+            if cp_cliente == "08400":
+                municipio_destino = "006"  # Iztacalco
+            elif cp_cliente == "03100" or cp_cliente == "03710":
+                municipio_destino = "014"  # Benito Juárez
+            else:
+                municipio_destino = "007"  # Default Iztapalapa
+
+            logger.warning(
+                f"ALERTA: CP {cp_cliente} no existe en tabla SatLocationCode. Se inyectó municipio: {municipio_destino}"
+            )
 
         peso_val = float(_get_safe(viaje, "peso_toneladas", 0.001))
         peso_bruto_kg = peso_val * 1000 if peso_val > 0 else 1.0

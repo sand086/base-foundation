@@ -273,6 +273,7 @@ export default function FuelConciliation() {
     const toastId = toast.loading("Revirtiendo auditoría...");
 
     try {
+      // 🚀 Corrección de la URL (ruta completa)
       await axiosClient.post(
         `/api/logistics/trips/legs/${legToReset}/reset-audit`,
       );
@@ -347,6 +348,7 @@ export default function FuelConciliation() {
   };
 
   //  GUARDAR AUDITORÍA Y VOLVER A LA TABLA
+  //  GUARDAR AUDITORÍA Y VOLVER A LA TABLA
   const handleAuthorizeAndClose = async () => {
     if (!activeTrip || !selectedLegId) return;
 
@@ -368,16 +370,23 @@ export default function FuelConciliation() {
       const est = auditResult?.estatus || "CONCILIADO";
       const isRobo = auditResult?.esRoboSospechado || false;
 
+      // Creamos el comentario de la bitácora
+      const comentarioBitacora = `Detalles Fase. Km ECM: ${kmECM}. Litros ECM: ${ltECM}. Vales: ${vales}. Rend Real: ${rReal.toFixed(2)} km/L. Ver: ${est}.`;
+
+      // Armamos el payload EXACTO que el backend de FastAPI (schemas_trips.py) espera
+      const payload = {
+        status: isRobo ? "incidencia" : "info",
+        location: "Conciliación de Combustible",
+        comments: comentarioBitacora,
+        odometro: Number(formData.odometroFinal), // <- Este es tu Odómetro Final
+        combustible_litros: Number(vales),
+        trip_leg_id: Number(selectedLegId), // <- MUY IMPORTANTE: Forzamos la fase seleccionada
+      };
+
+      // Se lo enviamos al servidor
       await axiosClient.post(
         `/api/logistics/trips/${selectedTripId}/timeline`,
-        {
-          status: isRobo ? "incidencia" : "info",
-          location: "Conciliación de Combustible",
-          comments: `Detalles Fase. Km ECM: ${kmECM}. Litros ECM: ${ltECM}. Vales: ${vales}. Rend Real: ${rReal.toFixed(2)} km/L. Ver: ${est}.`,
-          odometro: Number(formData.odometroFinal),
-          combustible_litros: vales,
-          trip_leg_id: Number(selectedLegId),
-        },
+        payload,
       );
 
       toast.success(
