@@ -481,28 +481,45 @@ export function TripDetailsModal({
   const handleDownloadPDF = async (uuidToDownload: string) => {
     const toastId = toast.loading("Descargando PDF...");
     try {
-      const res = await axiosClient.get(
-        `/billing/invoice/${uuidToDownload}/pdf`,
-        { responseType: "blob" },
-      );
-      const blobPdf = res.data ? res.data : res;
+      // 1. Usamos FETCH nativo para evitar que Axios corrompa el binario.
+      // NOTA: Ajusta la URL base si es diferente (ej. import.meta.env.VITE_API_URL)
+      const apiUrl = `/billing/invoice/${uuidToDownload}/pdf`;
 
-      if (blobPdf.type?.includes("json"))
-        throw new Error("Archivo no encontrado");
+      // Si usas un token en localStorage, descomenta las líneas de headers:
+      // const token = localStorage.getItem("token"); // o de donde saques tu token
 
-      const fileURL = window.URL.createObjectURL(
-        new Blob([blobPdf], { type: "application/pdf" }),
-      );
+      const response = await fetch(apiUrl, {
+        method: "GET",
+        // headers: token ? { "Authorization": `Bearer ${token}` } : {},
+      });
+
+      if (!response.ok) {
+        throw new Error("No se pudo descargar el archivo");
+      }
+
+      // 2. Extraemos el Blob puro directamente del navegador (intacto)
+      const blob = await response.blob();
+
+      // 3. Creamos la URL del archivo local
+      const fileURL = window.URL.createObjectURL(blob);
+
+      // OPCIÓN A: FORZAR DESCARGA (Lo que ya hacías)
       const link = document.createElement("a");
       link.href = fileURL;
       link.setAttribute("download", `CFDI_${uuidToDownload}.pdf`);
       document.body.appendChild(link);
       link.click();
       link.remove();
-      window.URL.revokeObjectURL(fileURL);
+
+      // OPCIÓN B: ABRIR EN NUEVA PESTAÑA (Descomenta esta línea si prefieres que solo se abra para verlo)
+      window.open(fileURL, "_blank");
+
+      // 4. Limpiamos memoria
+      setTimeout(() => window.URL.revokeObjectURL(fileURL), 1000);
 
       toast.success("PDF descargado exitosamente.", { id: toastId });
-    } catch {
+    } catch (error) {
+      console.error("Error en descarga:", error);
       toast.error("Error al descargar el PDF.", { id: toastId });
     }
   };
