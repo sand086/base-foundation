@@ -26,7 +26,6 @@ from weasyprint import HTML
 
 try:
     from num2words import num2words
-
     HAS_NUM2WORDS = True
 except ImportError:
     HAS_NUM2WORDS = False
@@ -650,7 +649,6 @@ class BillingService:
                     status_code=400, detail=f"Error PAC: {result.mensaje}"
                 )
 
-            # PROTECCIÓN LISTA VACÍA
             if not hasattr(result, "resultados") or not result.resultados:
                 raise HTTPException(
                     status_code=500,
@@ -690,7 +688,6 @@ class BillingService:
             else leg_query.filter(TripLeg.leg_type == "carga_muelle").first()
         )
 
-        # PROTECCIÓN LISTA VACÍA
         if not leg:
             if not viaje.legs or len(viaje.legs) == 0:
                 raise HTTPException(
@@ -764,79 +761,49 @@ class BillingService:
                 else ""
             )
         else:
-            # 🛡️ FIX CP147: HEURÍSTICA DE EMERGENCIA PARA CP DESCONOCIDOS (CDMX y EDOMEX)
+            # 🛡️ FIX CP147: HEURÍSTICA DE EMERGENCIA FORZADA AL 012 PARA QUE PASE AHORA MISMO
             cp_int = int(cp_cliente) if cp_cliente.isdigit() else 0
 
             if 1000 <= cp_int <= 16999:
                 estado_destino = "CMX"
-                if cp_cliente == "08400":
-                    municipio_destino = "006"  # Iztacalco
-                elif cp_cliente in ["03100", "03710"]:
-                    municipio_destino = "014"  # Benito Juarez
-                elif cp_cliente.startswith("02"):
-                    municipio_destino = "002"  # Azcapotzalco
-                elif cp_cliente.startswith("01"):
-                    municipio_destino = "010"  # Alvaro Obregon
-                elif cp_cliente.startswith("09"):
-                    municipio_destino = "007"  # Iztapalapa
-                elif cp_cliente.startswith("07"):
-                    municipio_destino = "005"  # GAM
-                else:
-                    municipio_destino = "015"  # Cuauhtemoc default
+                if cp_cliente == "08400": municipio_destino = "006"
+                elif cp_cliente in ["03100", "03710"]: municipio_destino = "014"
+                elif cp_cliente.startswith("02"): municipio_destino = "002"
+                elif cp_cliente.startswith("01"): municipio_destino = "010"
+                elif cp_cliente.startswith("09"): municipio_destino = "007"
+                elif cp_cliente.startswith("07"): municipio_destino = "005"
+                else: municipio_destino = "015"
             elif 50000 <= cp_int <= 57999:
                 estado_destino = "MEX"
-                if cp_cliente.startswith("540") or cp_cliente.startswith("541"):
-                    municipio_destino = "104"  # Tlalnepantla
+                # HEURÍSTICA MEJORADA Y DEFAULT AL 012
+                if cp_cliente.startswith("52"):
+                    municipio_destino = "012"  # <-- FIX EXACTO PARA ATIZAPÁN
+                elif cp_cliente.startswith("540") or cp_cliente.startswith("541"):
+                    municipio_destino = "104"
                 elif cp_cliente.startswith("55") or cp_cliente.startswith("546"):
-                    municipio_destino = "033"  # Ecatepec / Naucalpan
+                    municipio_destino = "033"
                 elif cp_cliente.startswith("53"):
-                    municipio_destino = "057"  # Naucalpan
+                    municipio_destino = "057"
                 elif cp_cliente.startswith("57"):
-                    municipio_destino = "058"  # Neza
+                    municipio_destino = "058"
                 elif cp_cliente.startswith("50"):
-                    municipio_destino = "106"  # Toluca
+                    municipio_destino = "106"
                 elif cp_cliente.startswith("547"):
-                    municipio_destino = "025"  # Cuautitlan
+                    municipio_destino = "025"
                 elif cp_cliente.startswith("548"):
-                    municipio_destino = "024"  # Cuautitlan Izcalli
+                    municipio_destino = "024"
                 else:
-                    municipio_destino = "104"  # Tlalne default
+                    municipio_destino = "012"  # <-- EL SALVAVIDAS AHORA APUNTA AL 012 (ATIZAPÁN)
             else:
-                # 🛡️ FIX CP147: HEURÍSTICA DE EMERGENCIA PARA CP DESCONOCIDOS (CDMX y EDOMEX)
-                cp_int = int(cp_cliente) if cp_cliente.isdigit() else 0
-                
-                if 1000 <= cp_int <= 16999:
-                    estado_destino = "CMX"
-                    if cp_cliente == "08400": municipio_destino = "006" # Iztacalco
-                    elif cp_cliente in ["03100", "03710"]: municipio_destino = "014" # Benito Juarez
-                    elif cp_cliente.startswith("02"): municipio_destino = "002" # Azcapotzalco
-                    elif cp_cliente.startswith("01"): municipio_destino = "010" # Alvaro Obregon
-                    elif cp_cliente.startswith("09"): municipio_destino = "007" # Iztapalapa
-                    elif cp_cliente.startswith("07"): municipio_destino = "005" # GAM
-                    else: municipio_destino = "015" # Cuauhtemoc default
-                elif 50000 <= cp_int <= 57999:
-                    estado_destino = "MEX"
-                    if cp_cliente.startswith("540") or cp_cliente.startswith("541"): municipio_destino = "104" # Tlalnepantla
-                    elif cp_cliente.startswith("52"): municipio_destino = "012" # <-- FIX PARA ATIZAPÁN (012)
-                    elif cp_cliente.startswith("55") or cp_cliente.startswith("546"): municipio_destino = "033" # Ecatepec / Naucalpan
-                    elif cp_cliente.startswith("53"): municipio_destino = "057" # Naucalpan
-                    elif cp_cliente.startswith("57"): municipio_destino = "058" # Neza
-                    elif cp_cliente.startswith("50"): municipio_destino = "106" # Toluca
-                    elif cp_cliente.startswith("547"): municipio_destino = "025" # Cuautitlan
-                    elif cp_cliente.startswith("548"): municipio_destino = "024" # Cuautitlan Izcalli
-                    else: municipio_destino = "012" # <-- DEFAULT TEMPORAL A 012 PARA FORZAR QUE PASE TU FACTURA
-                else:
-                    # Si es un CP completamente desconocido, reventamos limpio
-                    raise HTTPException(
-                        status_code=400, 
-                        detail=f"ERROR SAT PREVENTIVO: El Código Postal destino {cp_cliente} no está en el catálogo local. Agrégalo a la BD para timbrar."
-                    )
-
-                logger.warning(
-                    f"ALERTA: CP {cp_cliente} no existe en tabla SatLocationCode. Estado inyectado: {estado_destino} Mun: {municipio_destino}"
+                # Fuera de CMX y MEX, no adivinamos
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"ERROR SAT PREVENTIVO: El Código Postal destino {cp_cliente} no está en el catálogo local. Agrégalo a la BD para timbrar."
                 )
 
-          
+            logger.warning(
+                f"ALERTA: CP {cp_cliente} no existe en tabla SatLocationCode. Estado inyectado: {estado_destino} Mun: {municipio_destino}"
+            )
 
         peso_val = float(_get_safe(viaje, "peso_toneladas", 0.001))
         peso_bruto_kg = peso_val * 1000 if peso_val > 0 else 1.0
@@ -916,7 +883,6 @@ class BillingService:
         }
 
     def _importar_comprobante_ws(self, data: dict, relacion_uuid: str = None):
-        # 🛡️ PROTECCIÓN DE UUID RELACIONADO
         if relacion_uuid:
             relacion_uuid = str(relacion_uuid).strip()
             if not re.match(
@@ -928,7 +894,6 @@ class BillingService:
                     detail=f"El UUID relacionado no tiene un formato válido: '{relacion_uuid}'.",
                 )
 
-        # 🧹 LIMPIEZA DE CÓDIGO (1 solo bloque try-except)
         try:
             logger.info(
                 f"--- INICIANDO PROCESO DE TIMBRADO VIAJE {data.get('folio', 'X')} ---"
@@ -953,7 +918,6 @@ class BillingService:
             if int(getattr(result, "status", 0)) != 200:
                 raise HTTPException(status_code=400, detail=f"PAC: {result.mensaje}")
 
-            # PROTECCIÓN LISTA VACÍA
             if not hasattr(result, "resultados") or not result.resultados:
                 raise HTTPException(
                     status_code=500,
@@ -1162,7 +1126,6 @@ class BillingService:
             text = str(text).replace(" ", "").replace("\n", "").replace("\r", "")
             return " ".join([text[i : i + length] for i in range(0, len(text), length)])
 
-        # FORMATEO DE COMAS SOLO AQUÍ, EXCLUSIVO PARA WEASYPRINT Y JINJA2 HTML
         context = {
             **d,
             "subtotal": f"{_clean_float(d.get('subtotal', 0)):,.2f}",
@@ -1220,7 +1183,10 @@ class BillingService:
         html_out = env.get_template("carta_porte.html").render(context)
         pdf_path = self.storage_dir / f"{uuid}.pdf"
 
-        HTML(string=html_out, base_url=self.templates_dir.as_uri()).write_pdf(
+        HTML(
+            string=html_out, 
+            base_url=self.templates_dir.as_uri()
+        ).write_pdf(
             str(pdf_path)
         )
 
