@@ -857,6 +857,117 @@ class BillingService:
         }
 
     def _importar_comprobante_ws(self, data: dict, relacion_uuid: str = None):
+        # --- FIX URGENTE PRODUCCIÓN ---
+        if relacion_uuid:
+            relacion_uuid = str(relacion_uuid).strip()
+            # Expresión regular para validar formato UUID real del SAT
+            if not re.match(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", relacion_uuid):
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"El UUID relacionado no tiene un formato válido: '{relacion_uuid}'. Revisa lo que envía el Frontend."
+                )
+        # ------------------------------
+        
+        try:
+            logger.info(
+                f"--- INICIANDO PROCESO DE TIMBRADO VIAJE {data.get('folio', 'X')} ---"
+            )
+            client = zeep.Client(self.wsdl_timbrado, plugins=[self.history])
+
+            xml_base = self._armar_xml_sin_sello(data, relacion_uuid)
+            xml_sellado = self._sellar_xml(xml_base, data, relacion_uuid)
+
+            with open(
+                self.storage_dir
+                / f"DEBUG_PRE_ENVIO_VIAJE_{data.get('folio', 'X')}.xml",
+                "w",
+                encoding="utf-8",
+            ) as f:
+                f.write(xml_sellado)
+
+            result = client.service.timbrar(
+                self.pac_user, self.pac_pass, xml_sellado.encode("utf-8"), False
+            )
+
+            if int(getattr(result, "status", 0)) != 200:
+                raise HTTPException(status_code=400, detail=f"PAC: {result.mensaje}")
+
+            res_sat = result.resultados[0]
+            if int(getattr(res_sat, "status", 0)) == 200:
+                logger.info(f"¡TIMBRADO EXITOSO! UUID: {res_sat.uuid}")
+                raw_cfdi = res_sat.cfdiTimbrado
+                cfdi_bytes = (
+                    (
+                        raw_cfdi.encode("utf-8")
+                        if "<cfdi:Comprobante" in raw_cfdi
+                        else base64.b64decode(raw_cfdi)
+                    )
+                    if isinstance(raw_cfdi, str)
+                    else raw_cfdi
+                )
+
+                self._guardar_xml_disco(cfdi_bytes, res_sat.uuid)
+
+                root = etree.fromstring(cfdi_bytes)
+                ns = {
+                    "cfdi": "http://www.sat.gob.mx/cfd/4",
+                    "tfd": "http://www.sat.gob.mx/TimbreFiscalDigital",
+                }
+
+                tfd_nodes = root.xpath("//tfd:TimbreFiscalDigital", namespaces=ns)
+                if not tfd_nodes:
+                    raise Exception(
+                        "No se encontró el nodo TimbreFiscalDigital en la respuesta del PAC"
+                    )
+                tfd_node = tfd_nodes[0]
+
+                s_sat = tfd_node.get("SelloSAT", "0000")
+                c_sat = tfd_node.get("NoCertificadoSAT", "0000")
+
+                s_emi_nodes = root.xpath("//cfdi:Comprobante/@Sello", namespaces=ns)
+                s_emi = s_emi_nodes[0] if s_emi_nodes else "00000000"
+
+                cadena_original = f"||{tfd_node.get('Version', '1.1')}|{res_sat.uuid}|{tfd_node.get('FechaTimbrado')}|{tfd_node.get('RfcProvCertif')}|{tfd_node.get('SelloCFD')}|{c_sat}||"
+
+                total_float = _clean_float(data["total"])
+                if HAS_NUM2WORDS:
+                    entero = int(total_float)
+                    decimales = int(round((total_float - entero) * 100))
+                    texto = num2words(entero, lang="es").upper()
+                    importe_letra = f"(*** {texto} PESOS {decimales:02d}/100 MXN ***)"
+                else:
+                    importe_letra = f"(*** {total_float:,.2f} MXN ***)"
+
+                qr_string = f"https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id={res_sat.uuid}&re={self.emisor_rfc}&rr={data['rfc_cliente']}&tt={total_float:.2f}&fe={s_emi[-8:]}"
+                qr = qrcode.QRCode(version=1, box_size=10, border=2)
+                qr.add_data(qr_string)
+                qr.make(fit=True)
+                buffer = BytesIO()
+                qr.make_image(fill_color="black", back_color="white").save(
+                    buffer, format="PNG"
+                )
+
+                self._generar_pdf_con_diseno(
+                    data,
+                    res_sat.uuid,
+                    buffer.getvalue(),
+                    s_sat,
+                    s_emi,
+                    c_sat,
+                    cadena_original,
+                    importe_letra,
+                )
+                return res_sat
+            else:
+                raise HTTPException(status_code=400, detail=f"SAT: {res_sat.mensaje}")
+
+        except HTTPException as http_exc:
+            raise http_exc
+        except Exception as e:
+            self.db.rollback()
+            raise HTTPException(
+                status_code=500, detail=f"Fallo interno del servidor: {str(e)}"
+            )
         try:
             logger.info(
                 f"--- INICIANDO PROCESO DE TIMBRADO VIAJE {data.get('folio', 'X')} ---"
