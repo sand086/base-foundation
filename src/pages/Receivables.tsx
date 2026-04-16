@@ -70,6 +70,7 @@ export default function Receivables() {
     isLoadingReceivables,
     refreshReceivables,
     deleteReceivable,
+    registerMultiplePaymentRep, // Función que creamos para el SAT
     registerPayment,
   } = useReceivables();
 
@@ -216,11 +217,13 @@ export default function Receivables() {
     toast.info("Función de creación manual en desarrollo");
   };
 
-  // 4. REGISTRAR PAGO
+  // 4. REGISTRAR PAGO Y TIMBRAR REP MÚLTIPLE (SAT)
   const handleRegisterPayment = async (payload: any) => {
     if (invoicesToPay.length === 0) return;
-    const invoiceId = invoicesToPay[0].id;
-    const success = await registerPayment(invoiceId, payload);
+
+    // Le pasamos el payload intacto (generado por el modal) a nuestra nueva función
+    const success = await registerMultiplePaymentRep(payload);
+
     if (success) {
       setIsPaymentModalOpen(false);
       setInvoicesToPay([]);

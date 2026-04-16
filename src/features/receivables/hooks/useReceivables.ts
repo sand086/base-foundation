@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { receivableService } from "@/features/receivables/services/receivableService";
 import { ReceivableInvoice } from "@/features/receivables/types";
+import axiosClient from "@/api/axiosClient"; // <-- IMPORTANTE AGREGAR ESTO
 
 export const useReceivables = () => {
   const queryClient = useQueryClient();
@@ -11,7 +12,7 @@ export const useReceivables = () => {
   const receivablesQuery = useQuery({
     queryKey: ["receivables"],
     queryFn: () => receivableService.getInvoices(),
-    staleTime: 1000 * 60 * 5, // La data se considera fresca por 5 minutos
+    staleTime: 1000 * 60 * 5,
   });
 
   // 2. MUTACIÓN: Eliminar una factura
@@ -23,7 +24,7 @@ export const useReceivables = () => {
     },
   });
 
-  // 3. MUTACIÓN: Registrar un pago manualmente
+  // 3. MUTACIÓN: Registrar un pago manualmente (Simple / 1 factura)
   const registerPaymentMut = useMutation({
     mutationFn: ({ id, data }: { id: number; data: any }) =>
       receivableService.registerPayment(id, data),
@@ -42,23 +43,26 @@ export const useReceivables = () => {
     },
   });
 
-  // RETORNO DEL HOOK (Lo que usará tu componente Receivables.tsx)
+  // 🔥 5. NUEVA MUTACIÓN: Registrar Múltiples Pagos y Timbrar REP en el SAT 🔥
+  const registerMultiPaymentRepMut = useMutation({
+    mutationFn: (payload: any) =>
+      axiosClient.post("/sat/stamp/payment", payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["receivables"] });
+    },
+  });
+
   return {
-    // Estado y Datos
     receivables: (receivablesQuery.data || []) as ReceivableInvoice[],
     isLoadingReceivables: receivablesQuery.isLoading,
-
-    // Funciones de Refresco
     refreshReceivables: receivablesQuery.refetch,
 
-    // Acciones (Wrappers con manejo de errores local)
     deleteReceivable: async (id: number) => {
       try {
         await deleteReceivableMut.mutateAsync(id);
         return true;
       } catch (error: any) {
         toast.error("Error al eliminar la factura");
-        console.error(error);
         return false;
       }
     },
@@ -74,7 +78,6 @@ export const useReceivables = () => {
         toast.error(
           error.response?.data?.detail || "Error al registrar el pago",
         );
-        console.error(error);
         return false;
       }
     },
@@ -85,6 +88,22 @@ export const useReceivables = () => {
         return true;
       } catch (error: any) {
         toast.error(error.response?.data?.detail || "Error al procesar el XML");
+        return false;
+      }
+    },
+
+    // 🔥 NUEVA FUNCIÓN EXPUESTA PARA USAR EN TU COMPONENTE 🔥
+    registerMultiplePaymentRep: async (payload: any) => {
+      try {
+        await registerMultiPaymentRepMut.mutateAsync(payload);
+        toast.success(
+          "Pago registrado y Complemento (REP) timbrado con éxito.",
+        );
+        return true;
+      } catch (error: any) {
+        toast.error(
+          error.response?.data?.detail || "Error al timbrar el REP en el SAT",
+        );
         console.error(error);
         return false;
       }
