@@ -26,6 +26,7 @@ import {
   ColumnDef,
 } from "@/components/ui/enhanced-data-table";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge"; // Agregado Badge para la barra flotante
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -70,7 +71,7 @@ export default function Receivables() {
     isLoadingReceivables,
     refreshReceivables,
     deleteReceivable,
-    registerMultiplePaymentRep, // Función que creamos para el SAT
+    registerMultiplePaymentRep,
     registerPayment,
   } = useReceivables();
 
@@ -94,6 +95,9 @@ export default function Receivables() {
   >();
   const [invoiceToDelete, setInvoiceToDelete] =
     useState<ReceivableInvoice | null>(null);
+
+  // 🔥 ESTADO PARA LA SELECCIÓN MÚLTIPLE EN LA TABLA 🔥
+  const [selectedRows, setSelectedRows] = useState<ReceivableInvoice[]>([]);
 
   // 2. FORMATEAMOS LOS DATOS DE LA API
   const formattedInvoices = useMemo(() => {
@@ -132,6 +136,29 @@ export default function Receivables() {
       cobros: inv.payments || [],
     })) as ReceivableInvoice[];
   }, [receivables]);
+
+  // 🔥 LÓGICA DEL BOTÓN DE COBRO MÚLTIPLE 🔥
+  const handlePaySelectedInvoices = () => {
+    if (selectedRows.length === 0) return;
+
+    // VALIDACIÓN DE NEGOCIO: Todas deben ser del mismo cliente
+    const firstClientId = selectedRows[0].client_id;
+    const allSameClient = selectedRows.every(
+      (inv) => inv.client_id === firstClientId,
+    );
+
+    if (!allSameClient) {
+      toast.error("Selección Inválida", {
+        description:
+          "Para generar un solo REP, todas las facturas seleccionadas deben pertenecer al MISMO CLIENTE.",
+      });
+      return;
+    }
+
+    // Si pasan, abrimos el modal
+    setInvoicesToPay(selectedRows);
+    setIsPaymentModalOpen(true);
+  };
 
   // 3. LÓGICA DE EXPORTACIÓN Y KPIS
   const handleExportToExcel = () => {
@@ -221,12 +248,12 @@ export default function Receivables() {
   const handleRegisterPayment = async (payload: any) => {
     if (invoicesToPay.length === 0) return;
 
-    // Le pasamos el payload intacto (generado por el modal) a nuestra nueva función
     const success = await registerMultiplePaymentRep(payload);
 
     if (success) {
       setIsPaymentModalOpen(false);
       setInvoicesToPay([]);
+      setSelectedRows([]); // Limpiamos las palomitas de la tabla al pagar con éxito
     }
   };
 
@@ -463,13 +490,12 @@ export default function Receivables() {
   }
 
   return (
-    <div className="space-y-6 pb-20 animate-page-enter">
+    <div className="space-y-6 pb-20 animate-page-enter relative">
       <PageHeader
         title="Cuentas por Cobrar (Tesorería)"
         description="Gestión de cartera, antigüedad de saldos y cobranza a clientes."
       >
         <div className="flex flex-wrap items-center gap-3">
-          {/* FIX: BOTÓN XML ACTIVADO Y DESCOMENTADO PARA AUTOMATIZAR PAGOS */}
           <Button
             variant="outline"
             className="border-emerald-500 bg-emerald-50/50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 font-black tracking-wide shadow-sm haptic-press transition-all"
@@ -581,15 +607,50 @@ export default function Receivables() {
         </Card>
       </div>
 
-      <Card className="shadow-2xl border-none overflow-hidden bg-transparent">
+      <Card className="shadow-2xl border-none overflow-hidden bg-transparent relative z-0">
         <CardContent className="p-0 bg-white dark:bg-slate-950 [&_thead]:bg-slate-50/80 dark:[&_thead]:bg-slate-900/80 [&_thead]:backdrop-blur-xl [&_th]:bg-transparent [&_th]:border-b [&_th]:border-slate-200 dark:[&_th]:border-white/10 [&_th]:text-[10px] [&_th]:font-black [&_th]:uppercase [&_th]:tracking-[0.2em] [&_th]:text-slate-500 dark:[&_th]:text-slate-400">
           <EnhancedDataTable
             data={formattedInvoices}
             columns={columns}
             exportFileName="cuentas_por_cobrar"
+            enableRowSelection={true}
+            selectedRows={selectedRows}
+            onSelectedRowsChange={setSelectedRows}
+            rowKey="id"
           />
         </CardContent>
       </Card>
+
+      {/* 🔥 PANEL FLOTANTE DE COBRO MULTIPLE 🔥 */}
+      {selectedRows.length > 0 && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 fade-in duration-300 ease-out">
+          <div className="glass-panel bg-brand-navy/95 dark:bg-slate-900/95 text-white px-3 py-3 rounded-2xl shadow-2xl flex items-center gap-4 sm:gap-6 border border-white/20">
+            <div className="flex items-center gap-3 pl-3">
+              <Badge className="bg-emerald-500 text-white font-black text-sm h-7 px-3 border-none">
+                {selectedRows.length}
+              </Badge>
+              <div className="hidden sm:flex flex-col">
+                <span className="font-bold text-xs uppercase tracking-widest leading-none">
+                  Facturas
+                </span>
+                <span className="text-[9px] text-emerald-400 font-bold uppercase tracking-widest leading-none mt-1">
+                  Seleccionadas
+                </span>
+              </div>
+            </div>
+
+            <div className="h-8 w-px bg-white/20 hidden sm:block"></div>
+
+            <Button
+              onClick={handlePaySelectedInvoices}
+              className="bg-emerald-500 hover:bg-emerald-600 text-white font-black uppercase tracking-widest text-[10px] sm:text-xs h-11 px-6 rounded-xl border-none shadow-[0_0_15px_rgba(16,185,129,0.4)] transition-all hover:scale-[1.02] haptic-press"
+            >
+              <CreditCard className="w-4 h-4 mr-2" />
+              Generar REP
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* MODALES */}
       <ImportServicesModal
@@ -627,7 +688,6 @@ export default function Receivables() {
         invoices={formattedInvoices}
       />
 
-      {/* MODAL DEL XML QUE DESBLOQUEAMOS */}
       <ImportXMLPaymentModal
         open={isImportXMLOpen}
         onOpenChange={setIsImportXMLOpen}
