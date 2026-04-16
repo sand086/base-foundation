@@ -394,6 +394,8 @@ export function TripDetailsModal({
       // 2. Construimos la ruta dinámica correcta
       const fileUrl = `${baseURL}/sat/invoice/${uuidToDownload}/pdf`;
 
+      console.log(rawBaseURL);
+
       // 3. Descarga nativa (inmune a corrupciones de Axios)
       const link = document.createElement("a");
       link.href = fileUrl;
@@ -415,6 +417,7 @@ export function TripDetailsModal({
     try {
       // 1. URL Dinámica
       const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "/api";
+      console.log(rawBaseURL);
       const baseURL = rawBaseURL.replace(/\/$/, "");
 
       // 2. Ruta dinámica
