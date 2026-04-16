@@ -100,13 +100,27 @@ export function InvoiceDetailSheet({
     safeStr(inv.orden_compra_folio) || safeStr(inv.ordenCompraFolio);
 
   //  DESCARGA ROBUSTA
-  const handleDownload = (urlOrName: string) => {
-    if (urlOrName.startsWith("http")) {
-      window.open(urlOrName, "_blank", "noopener,noreferrer");
-    } else if (urlOrName.startsWith("/")) {
-      const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
-      const finalUrl = baseUrl ? `${baseUrl}${urlOrName}` : urlOrName;
-      window.open(finalUrl, "_blank", "noopener,noreferrer");
+  // 🛡️ DESCARGA ROBUSTA (Inmune a problemas de red y Axios)
+  const handleDownload = (fileType: "pdf" | "xml", targetUuid: string) => {
+    try {
+      // 1. Tomamos la base URL de Vite o usamos /api como respaldo relativo
+      const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "/api";
+      const baseURL = rawBaseURL.replace(/\/$/, "");
+
+      // 2. Armamos la ruta exacta apuntando a nuestro backend en Python
+      const fileUrl = `${baseURL}/sat/invoice/${targetUuid}/${fileType}`;
+
+      // 3. Forzamos descarga nativa
+      const link = document.createElement("a");
+      link.href = fileUrl;
+      link.target = "_blank";
+      link.setAttribute("download", `CFDI_${targetUuid}.${fileType}`);
+
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      console.error("Error al descargar:", error);
     }
   };
 
@@ -387,9 +401,7 @@ export function InvoiceDetailSheet({
                                   title="Descargar PDF"
                                   className="h-8 w-8 rounded-lg text-rose-600 border-rose-200 bg-rose-50 hover:bg-rose-100 hover:border-rose-300 dark:bg-rose-950/30 dark:border-rose-900/50 dark:hover:bg-rose-900/50 transition-all shadow-sm"
                                   onClick={() =>
-                                    handleDownload(
-                                      `/api/sat/invoice/${complementoUuid}/pdf`,
-                                    )
+                                    handleDownload("pdf", complementoUuid)
                                   }
                                 >
                                   <FileText className="h-4 w-4" />
@@ -400,9 +412,7 @@ export function InvoiceDetailSheet({
                                   title="Descargar XML"
                                   className="h-8 w-8 rounded-lg text-blue-600 border-blue-200 bg-blue-50 hover:bg-blue-100 hover:border-blue-300 dark:bg-blue-950/30 dark:border-blue-900/50 dark:hover:bg-blue-900/50 transition-all shadow-sm"
                                   onClick={() =>
-                                    handleDownload(
-                                      `/api/sat/invoice/${complementoUuid}/xml`,
-                                    )
+                                    handleDownload("xml", complementoUuid)
                                   }
                                 >
                                   <FileCode2 className="h-4 w-4" />
@@ -437,16 +447,16 @@ export function InvoiceDetailSheet({
               <Button
                 variant="outline"
                 className="flex-1 bg-white/5 border-white/10 hover:bg-white/10 text-white gap-2 font-bold tracking-wide h-10 rounded-xl backdrop-blur-sm transition-all"
-                disabled={!pdfUrl}
-                onClick={() => pdfUrl && handleDownload(pdfUrl)}
+                disabled={!uuid || uuid === "NO TIMBRADO"}
+                onClick={() => handleDownload("pdf", uuid)}
               >
                 <Download className="h-4 w-4 text-rose-400" /> PDF
               </Button>
               <Button
                 variant="outline"
                 className="flex-1 bg-white/5 border-white/10 hover:bg-white/10 text-white gap-2 font-bold tracking-wide h-10 rounded-xl backdrop-blur-sm transition-all"
-                disabled={!xmlUrl}
-                onClick={() => xmlUrl && handleDownload(xmlUrl)}
+                disabled={!uuid || uuid === "NO TIMBRADO"}
+                onClick={() => handleDownload("xml", uuid)}
               >
                 <Download className="h-4 w-4 text-blue-400" /> XML
               </Button>
