@@ -381,147 +381,61 @@ export function TripDetailsModal({
     }
   };
 
-  const handleDownloadBothFiles = async (
-    uuidToDownload: string,
-    isFinal: boolean = false,
-  ) => {
-    const toastId = toast.loading("Preparando archivos para descarga...");
-    try {
-      const resPdf = await axiosClient.get(
-        `/billing/invoice/${uuidToDownload}/pdf`,
-        { responseType: "blob" },
-      );
-
-      // FIX: Adaptable por si tu axiosClient tiene interceptores
-      const blobPdf = resPdf.data ? resPdf.data : resPdf;
-
-      // PREVENCIÓN: Si el server mandó un error (JSON), no lo descargues como PDF
-      if (blobPdf.type?.includes("json")) throw new Error("PDF no encontrado");
-
-      const pdfURL = window.URL.createObjectURL(
-        new Blob([blobPdf], { type: "application/pdf" }),
-      );
-      const pdfLink = document.createElement("a");
-      pdfLink.href = pdfURL;
-      pdfLink.setAttribute(
-        "download",
-        `${isFinal ? "CFDI_Final" : "Carta_Porte"}_${uuidToDownload}.pdf`,
-      );
-      document.body.appendChild(pdfLink);
-      pdfLink.click();
-      pdfLink.remove();
-      window.URL.revokeObjectURL(pdfURL); // Libera memoria
-
-      setTimeout(async () => {
-        try {
-          const resXml = await axiosClient.get(
-            `/billing/invoice/${uuidToDownload}/xml`,
-            { responseType: "blob" },
-          );
-          const blobXml = resXml.data ? resXml.data : resXml;
-
-          if (blobXml.type?.includes("json"))
-            throw new Error("XML no encontrado");
-
-          const xmlURL = window.URL.createObjectURL(
-            new Blob([blobXml], { type: "application/xml" }),
-          );
-          const xmlLink = document.createElement("a");
-          xmlLink.href = xmlURL;
-          xmlLink.setAttribute(
-            "download",
-            `${isFinal ? "CFDI_Final" : "Carta_Porte"}_${uuidToDownload}.xml`,
-          );
-          document.body.appendChild(xmlLink);
-          xmlLink.click();
-          xmlLink.remove();
-          window.URL.revokeObjectURL(xmlURL);
-
-          toast.success("PDF y XML descargados exitosamente.", { id: toastId });
-        } catch (error) {
-          toast.error("El PDF se descargó, pero hubo un error con el XML.", {
-            id: toastId,
-          });
-        }
-      }, 800);
-    } catch (error) {
-      toast.error("Error al descargar el archivo PDF.", { id: toastId });
-    }
-  };
-
-  const handleDownloadXML = async (uuidToDownload: string) => {
-    const toastId = toast.loading("Descargando XML...");
-    try {
-      const res = await axiosClient.get(
-        `/billing/invoice/${uuidToDownload}/xml`,
-        { responseType: "blob" },
-      );
-      const blobXml = res.data ? res.data : res;
-
-      if (blobXml.type?.includes("json"))
-        throw new Error("Archivo no encontrado");
-
-      const xmlURL = window.URL.createObjectURL(
-        new Blob([blobXml], { type: "application/xml" }),
-      );
-      const link = document.createElement("a");
-      link.href = xmlURL;
-      link.setAttribute("download", `CFDI_${uuidToDownload}.xml`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(xmlURL);
-
-      toast.success("XML descargado exitosamente.", { id: toastId });
-    } catch {
-      toast.error("Error al descargar el XML.", { id: toastId });
-    }
-  };
-
-  const handleDownloadPDF = async (uuidToDownload: string) => {
+  const handleDownloadPDF = (uuidToDownload: string) => {
     const toastId = toast.loading("Descargando PDF...");
     try {
-      // 1. Usamos FETCH nativo para evitar que Axios corrompa el binario.
-      // NOTA: Ajusta la URL base si es diferente (ej. import.meta.env.VITE_API_URL)
-      const apiUrl = `/billing/invoice/${uuidToDownload}/pdf`;
+      // Tomamos tu URL base de las variables de entorno
+      const baseURL = import.meta.env.VITE_API_BASE_URL || "/api";
+      const fileUrl = `${baseURL}/billing/invoice/${uuidToDownload}/pdf`;
 
-      // Si usas un token en localStorage, descomenta las líneas de headers:
-      // const token = localStorage.getItem("token"); // o de donde saques tu token
-
-      const response = await fetch(apiUrl, {
-        method: "GET",
-        // headers: token ? { "Authorization": `Bearer ${token}` } : {},
-      });
-
-      if (!response.ok) {
-        throw new Error("No se pudo descargar el archivo");
-      }
-
-      // 2. Extraemos el Blob puro directamente del navegador (intacto)
-      const blob = await response.blob();
-
-      // 3. Creamos la URL del archivo local
-      const fileURL = window.URL.createObjectURL(blob);
-
-      // OPCIÓN A: FORZAR DESCARGA (Lo que ya hacías)
+      // Creamos un link HTML nativo (como una etiqueta <a> normal)
       const link = document.createElement("a");
-      link.href = fileURL;
+      link.href = fileUrl;
+      link.target = "_blank"; // Abre o descarga de forma segura
       link.setAttribute("download", `CFDI_${uuidToDownload}.pdf`);
+
+      // Simulamos el clic nativo del navegador
       document.body.appendChild(link);
       link.click();
       link.remove();
-
-      // OPCIÓN B: ABRIR EN NUEVA PESTAÑA (Descomenta esta línea si prefieres que solo se abra para verlo)
-      window.open(fileURL, "_blank");
-
-      // 4. Limpiamos memoria
-      setTimeout(() => window.URL.revokeObjectURL(fileURL), 1000);
 
       toast.success("PDF descargado exitosamente.", { id: toastId });
     } catch (error) {
-      console.error("Error en descarga:", error);
-      toast.error("Error al descargar el PDF.", { id: toastId });
+      toast.error("Error al iniciar la descarga.", { id: toastId });
     }
+  };
+
+  const handleDownloadXML = (uuidToDownload: string) => {
+    const toastId = toast.loading("Descargando XML...");
+    try {
+      const baseURL = import.meta.env.VITE_API_BASE_URL || "/api";
+      const fileUrl = `${baseURL}/billing/invoice/${uuidToDownload}/xml`;
+
+      const link = document.createElement("a");
+      link.href = fileUrl;
+      link.target = "_blank";
+      link.setAttribute("download", `CFDI_${uuidToDownload}.xml`);
+
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      toast.success("XML descargado exitosamente.", { id: toastId });
+    } catch {
+      toast.error("Error al iniciar la descarga del XML.", { id: toastId });
+    }
+  };
+
+  const handleDownloadBothFiles = (
+    uuidToDownload: string,
+    isFinal: boolean = false,
+  ) => {
+    handleDownloadPDF(uuidToDownload);
+
+    // Le damos medio segundo al navegador para que no bloquee la segunda descarga
+    setTimeout(() => {
+      handleDownloadXML(uuidToDownload);
+    }, 500);
   };
 
   const handlePrintNOM087 = async () => {
