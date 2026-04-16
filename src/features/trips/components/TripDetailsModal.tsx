@@ -384,17 +384,23 @@ export function TripDetailsModal({
   const handleDownloadPDF = (uuidToDownload: string) => {
     const toastId = toast.loading("Descargando PDF...");
     try {
-      // Tomamos tu URL base de las variables de entorno
-      const baseURL = import.meta.env.VITE_API_BASE_URL || "/api";
-      const fileUrl = `${baseURL}/api/sat/invoice/${uuidToDownload}/pdf`;
+      // 1. Obtenemos la URL base desde el archivo .env (Local o Producción)
+      // Si no existe la variable, usamos localhost por defecto.
+      const rawBaseURL =
+        import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
 
-      // Creamos un link HTML nativo (como una etiqueta <a> normal)
+      // Limpiamos la URL por si tiene un slash al final (ej: /api/ -> /api)
+      const baseURL = rawBaseURL.replace(/\/$/, "");
+
+      // 2. Construimos la ruta dinámica correcta
+      const fileUrl = `${baseURL}/sat/invoice/${uuidToDownload}/pdf`;
+
+      // 3. Descarga nativa (inmune a corrupciones de Axios)
       const link = document.createElement("a");
       link.href = fileUrl;
-      link.target = "_blank"; // Abre o descarga de forma segura
+      link.target = "_blank";
       link.setAttribute("download", `CFDI_${uuidToDownload}.pdf`);
 
-      // Simulamos el clic nativo del navegador
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -408,9 +414,13 @@ export function TripDetailsModal({
   const handleDownloadXML = (uuidToDownload: string) => {
     const toastId = toast.loading("Descargando XML...");
     try {
-      const baseURL = import.meta.env.VITE_API_BASE_URL || "/api";
+      // 1. URL Dinámica
+      const rawBaseURL =
+        import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
+      const baseURL = rawBaseURL.replace(/\/$/, "");
 
-      const fileUrl = `${baseURL}/api/sat/invoice/${uuidToDownload}/xml`;
+      // 2. Ruta dinámica
+      const fileUrl = `${baseURL}/sat/invoice/${uuidToDownload}/xml`;
 
       const link = document.createElement("a");
       link.href = fileUrl;
