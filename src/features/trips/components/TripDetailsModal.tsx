@@ -386,7 +386,7 @@ export function TripDetailsModal({
     try {
       // Tomamos tu URL base de las variables de entorno
       const baseURL = import.meta.env.VITE_API_BASE_URL || "/api";
-      const fileUrl = `${baseURL}/sat/invoice/${uuidToDownload}/pdf`;
+      const fileUrl = `${baseURL}/api/sat/invoice/${uuidToDownload}/pdf`;
 
       // Creamos un link HTML nativo (como una etiqueta <a> normal)
       const link = document.createElement("a");
@@ -410,7 +410,7 @@ export function TripDetailsModal({
     try {
       const baseURL = import.meta.env.VITE_API_BASE_URL || "/api";
 
-      const fileUrl = `${baseURL}/sat/invoice/${uuidToDownload}/xml`;
+      const fileUrl = `${baseURL}/api/sat/invoice/${uuidToDownload}/xml`;
 
       const link = document.createElement("a");
       link.href = fileUrl;
