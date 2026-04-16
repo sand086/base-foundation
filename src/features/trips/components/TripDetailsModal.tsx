@@ -386,8 +386,7 @@ export function TripDetailsModal({
     try {
       // 1. Obtenemos la URL base desde el archivo .env (Local o Producción)
       // Si no existe la variable, usamos localhost por defecto.
-      const rawBaseURL =
-        import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
+      const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "/api";
 
       // Limpiamos la URL por si tiene un slash al final (ej: /api/ -> /api)
       const baseURL = rawBaseURL.replace(/\/$/, "");
@@ -415,8 +414,7 @@ export function TripDetailsModal({
     const toastId = toast.loading("Descargando XML...");
     try {
       // 1. URL Dinámica
-      const rawBaseURL =
-        import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
+      const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "/api";
       const baseURL = rawBaseURL.replace(/\/$/, "");
 
       // 2. Ruta dinámica
