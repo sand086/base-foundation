@@ -2,10 +2,10 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-export type SatProductResponse = {
+export type SatNeighborhoodResponse = {
     clave: string;
-    descripcion: string;
-    es_material_peligroso: string;
+    codigo_postal: string;
+    nombre: string;
     id: number;
     activo: boolean;
 };

@@ -20,8 +20,6 @@ import type { ModuleSchema } from '../models/ModuleSchema';
 import type { ReceivableInvoiceCreate } from '../models/ReceivableInvoiceCreate';
 import type { RegistroPagoPayload } from '../models/RegistroPagoPayload';
 import type { RouteCreate } from '../models/RouteCreate';
-import type { SatProductCreate } from '../models/SatProductCreate';
-import type { SatProductResponse } from '../models/SatProductResponse';
 import type { SettlementConceptBase } from '../models/SettlementConceptBase';
 import type { SettlementConceptCreate } from '../models/SettlementConceptCreate';
 import type { SystemConfigResponse } from '../models/SystemConfigResponse';
@@ -888,84 +886,6 @@ export class DefaultService {
             url: '/api/sat/stamp/payment',
             body: requestBody,
             mediaType: 'application/json',
-            errors: {
-                422: `Validation Error`,
-            },
-        });
-    }
-    /**
-     * Get Sat Products
-     * Obtiene la lista de productos/servicios del catálogo del SAT
-     * @returns SatProductResponse Successful Response
-     * @throws ApiError
-     */
-    public static getSatProductsApiSatSatProductsGet(): CancelablePromise<Array<SatProductResponse>> {
-        return __request(OpenAPI, {
-            method: 'GET',
-            url: '/api/sat/sat-products',
-        });
-    }
-    /**
-     * Create Sat Product
-     * Crea un nuevo producto/servicio en el catálogo del SAT
-     * @param requestBody
-     * @returns SatProductResponse Successful Response
-     * @throws ApiError
-     */
-    public static createSatProductApiSatSatProductsPost(
-        requestBody: SatProductCreate,
-    ): CancelablePromise<SatProductResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/sat/sat-products',
-            body: requestBody,
-            mediaType: 'application/json',
-            errors: {
-                422: `Validation Error`,
-            },
-        });
-    }
-    /**
-     * Update Sat Product
-     * Actualiza un producto del catálogo del SAT
-     * @param productId
-     * @param requestBody
-     * @returns SatProductResponse Successful Response
-     * @throws ApiError
-     */
-    public static updateSatProductApiSatSatProductsProductIdPut(
-        productId: number,
-        requestBody: SatProductCreate,
-    ): CancelablePromise<SatProductResponse> {
-        return __request(OpenAPI, {
-            method: 'PUT',
-            url: '/api/sat/sat-products/{product_id}',
-            path: {
-                'product_id': productId,
-            },
-            body: requestBody,
-            mediaType: 'application/json',
-            errors: {
-                422: `Validation Error`,
-            },
-        });
-    }
-    /**
-     * Delete Sat Product
-     * Realiza un borrado lógico (soft delete) del producto SAT
-     * @param productId
-     * @returns void
-     * @throws ApiError
-     */
-    public static deleteSatProductApiSatSatProductsProductIdDelete(
-        productId: number,
-    ): CancelablePromise<void> {
-        return __request(OpenAPI, {
-            method: 'DELETE',
-            url: '/api/sat/sat-products/{product_id}',
-            path: {
-                'product_id': productId,
-            },
             errors: {
                 422: `Validation Error`,
             },

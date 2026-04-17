@@ -2,10 +2,10 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-export type SatProductResponse = {
+export type SatPermitTypeResponse = {
     clave: string;
     descripcion: string;
-    es_material_peligroso: string;
+    clave_transporte?: (string | null);
     id: number;
     activo: boolean;
 };

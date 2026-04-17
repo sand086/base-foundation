@@ -2,10 +2,10 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-export type SatProductResponse = {
+export type SatHazardousMaterialResponse = {
     clave: string;
     descripcion: string;
-    es_material_peligroso: string;
+    clase_div?: (string | null);
     id: number;
     activo: boolean;
 };

@@ -1,5 +1,4 @@
-// src/features/configuracion/SatCatalogsConfig.tsx
-import { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   Card,
   CardContent,
@@ -10,7 +9,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Dialog,
   DialogContent,
@@ -41,101 +41,291 @@ import {
   Plus,
   Pencil,
   Trash2,
-  Tags,
   Loader2,
   AlertTriangle,
   Search,
   Download,
-  Copy,
   ChevronLeft,
   ChevronRight,
   ArrowUpDown,
+  Upload,
+  Package,
+  Truck,
+  Box,
+  Container,
+  MapPin,
+  FileText,
+  Scale,
+  Database,
+  FileSpreadsheet,
+  ClipboardList,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-import {
-  useSatCatalogs,
-  SatProduct,
-} from "@/features/settings/hooks/useSatCatalogs";
+// Solo importamos el hook (ya no importamos SatProduct para que sea 100% dinámico)
+import { useSatCatalogs } from "@/features/settings/hooks/useSatCatalogs";
+
+// ==========================================
+// INTERFACES ESTRICTAS (Para evitar errores TS)
+// ==========================================
+type CatalogField = {
+  key: string;
+  label: string;
+};
+
+type CatalogDef = {
+  id: string;
+  endpoint: string;
+  name: string;
+  icon: React.ElementType; // Tipado correcto para los iconos de Lucide
+  fields: CatalogField[];
+};
+
+// ==========================================
+// DEFINICIÓN DINÁMICA DE LOS 13 CATÁLOGOS
+// ==========================================
+const SAT_CATALOGS: CatalogDef[] = [
+  {
+    id: "sat-products",
+    endpoint: "sat-products",
+    name: "Productos y Servicios",
+    icon: Package,
+    fields: [
+      { key: "clave", label: "Clave" },
+      { key: "descripcion", label: "Descripción" },
+      { key: "es_material_peligroso", label: "Mat. Peligroso" },
+    ],
+  },
+  {
+    id: "sat-services",
+    endpoint: "sat-services",
+    name: "Tipos de Servicio",
+    icon: Truck,
+    fields: [
+      { key: "clave", label: "Clave" },
+      { key: "descripcion", label: "Descripción" },
+    ],
+  },
+  {
+    id: "sat-cargo-types",
+    endpoint: "sat-cargo-types",
+    name: "Tipos de Carga",
+    icon: Box,
+    fields: [
+      { key: "clave", label: "Clave" },
+      { key: "descripcion", label: "Descripción" },
+    ],
+  },
+  {
+    id: "sat-trailer-subtypes",
+    endpoint: "sat-trailer-subtypes",
+    name: "Subtipos de Remolque",
+    icon: Container,
+    fields: [
+      { key: "clave", label: "Clave" },
+      { key: "descripcion", label: "Descripción" },
+    ],
+  },
+  {
+    id: "sat-truck-configs",
+    endpoint: "sat-truck-configs",
+    name: "Config. Autotransporte",
+    icon: Truck,
+    fields: [
+      { key: "clave", label: "Clave" },
+      { key: "descripcion", label: "Descripción" },
+      { key: "ejes", label: "Ejes" },
+      { key: "llantas", label: "Llantas" },
+    ],
+  },
+  {
+    id: "sat-municipalities",
+    endpoint: "sat-municipalities",
+    name: "Municipios",
+    icon: MapPin,
+    fields: [
+      { key: "clave", label: "Clave" },
+      { key: "estado_clave", label: "Estado" },
+      { key: "descripcion", label: "Descripción" },
+    ],
+  },
+  {
+    id: "sat-localities",
+    endpoint: "sat-localities",
+    name: "Localidades",
+    icon: MapPin,
+    fields: [
+      { key: "clave", label: "Clave" },
+      { key: "estado_clave", label: "Estado" },
+      { key: "descripcion", label: "Descripción" },
+    ],
+  },
+  {
+    id: "sat-neighborhoods",
+    endpoint: "sat-neighborhoods",
+    name: "Colonias",
+    icon: MapPin,
+    fields: [
+      { key: "clave", label: "Clave" },
+      { key: "codigo_postal", label: "C.P." },
+      { key: "nombre", label: "Nombre" },
+    ],
+  },
+  {
+    id: "sat-permit-types",
+    endpoint: "sat-permit-types",
+    name: "Tipos de Permiso",
+    icon: FileText,
+    fields: [
+      { key: "clave", label: "Clave" },
+      { key: "descripcion", label: "Descripción" },
+      { key: "clave_transporte", label: "Transporte" },
+    ],
+  },
+  {
+    id: "sat-packaging-types",
+    endpoint: "sat-packaging-types",
+    name: "Tipos de Embalaje",
+    icon: Box,
+    fields: [
+      { key: "clave", label: "Clave" },
+      { key: "descripcion", label: "Descripción" },
+    ],
+  },
+  {
+    id: "sat-hazardous-materials",
+    endpoint: "sat-hazardous-materials",
+    name: "Materiales Peligrosos",
+    icon: AlertTriangle,
+    fields: [
+      { key: "clave", label: "Clave" },
+      { key: "descripcion", label: "Descripción" },
+      { key: "clase_div", label: "Clase Div" },
+    ],
+  },
+  {
+    id: "sat-stations",
+    endpoint: "sat-stations",
+    name: "Estaciones y Puertos",
+    icon: MapPin,
+    fields: [
+      { key: "clave_identificacion", label: "Clave Ident." },
+      { key: "descripcion", label: "Descripción" },
+      { key: "clave_transporte", label: "Transporte" },
+      { key: "nacionalidad", label: "Nacionalidad" },
+    ],
+  },
+  {
+    id: "sat-unit-weights",
+    endpoint: "sat-unit-weights",
+    name: "Unidades de Medida",
+    icon: Scale,
+    fields: [
+      { key: "clave", label: "Clave" },
+      { key: "nombre", label: "Nombre" },
+      { key: "descripcion", label: "Descripción" },
+      { key: "simbolo", label: "Símbolo" },
+    ],
+  },
+];
 
 export function SatCatalogsConfig() {
-  const { products, loading, saveProduct, deleteProduct } = useSatCatalogs();
-  const [localProducts, setLocalProducts] = useState<SatProduct[]>([]);
+  const { fetchCatalog, saveItem, deleteItem } = useSatCatalogs();
 
-  // ==========================================
-  // ESTADOS PARA LA TABLA INTERACTIVA
-  // ==========================================
+  const [activeCatalogId, setActiveCatalogId] = useState<string>(
+    SAT_CATALOGS[0].id,
+  );
+  const activeCatalog = useMemo(
+    () => SAT_CATALOGS.find((c) => c.id === activeCatalogId)!,
+    [activeCatalogId],
+  );
+
+  // Usamos Record<string, any> para no amarrarnos a un tipo estricto y permitir dinamismo
+  const [localData, setLocalData] = useState<Record<string, any>[]>([]);
+  const [isFetching, setIsFetching] = useState(false);
+
+  // Estados Tabla y Multi-select
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [sortConfig, setSortConfig] = useState<{
-    key: keyof SatProduct;
+    key: string;
     direction: "asc" | "desc";
   } | null>(null);
 
-  useEffect(() => {
-    if (!loading && products) {
-      setLocalProducts(products);
-    }
-  }, [products, loading]);
-
-  // Estados del modal y formulario
+  // Estados Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState<SatProduct | null>(null);
-  const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [formData, setFormData] = useState({
-    id: 0,
-    clave: "",
-    descripcion: "",
-    es_material_peligroso: "0",
-  });
+  const [editingItem, setEditingItem] = useState<Record<string, any> | null>(
+    null,
+  );
+  const [deleteIdsConfig, setDeleteIdsConfig] = useState<number[] | null>(null);
+  const [formData, setFormData] = useState<Record<string, any>>({});
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ==========================================
-  // LÓGICA DE FILTRADO, ORDENAMIENTO Y PAGINACIÓN
+  // CARGAR DATOS DEL CATÁLOGO ACTIVO
+  // ==========================================
+  const loadData = async () => {
+    setIsFetching(true);
+    setSelectedIds([]);
+    try {
+      const data = await fetchCatalog(activeCatalog.endpoint);
+      setLocalData(data || []);
+    } catch (e) {
+      setLocalData([]);
+    } finally {
+      setIsFetching(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+    setSearchTerm("");
+    setCurrentPage(1);
+    setSortConfig(null);
+  }, [activeCatalogId]);
+
+  // ==========================================
+  // FILTRADO Y PAGINACIÓN
   // ==========================================
   const processedData = useMemo(() => {
-    let result = [...localProducts];
+    let result = [...localData];
 
-    // 1. Búsqueda (Filtro)
     if (searchTerm) {
       const lowercasedTerm = searchTerm.toLowerCase();
-      result = result.filter(
-        (p) =>
-          p.clave.toLowerCase().includes(lowercasedTerm) ||
-          p.descripcion.toLowerCase().includes(lowercasedTerm),
+      result = result.filter((item) =>
+        activeCatalog.fields.some((f) =>
+          String(item[f.key] || "")
+            .toLowerCase()
+            .includes(lowercasedTerm),
+        ),
       );
     }
 
-    // 2. Ordenamiento
     if (sortConfig !== null) {
       result.sort((a, b) => {
-        const aValue = String(a[sortConfig.key]).toLowerCase();
-        const bValue = String(b[sortConfig.key]).toLowerCase();
+        const aValue = String(a[sortConfig.key] || "").toLowerCase();
+        const bValue = String(b[sortConfig.key] || "").toLowerCase();
         if (aValue < bValue) return sortConfig.direction === "asc" ? -1 : 1;
         if (aValue > bValue) return sortConfig.direction === "asc" ? 1 : -1;
         return 0;
       });
     }
-
     return result;
-  }, [localProducts, searchTerm, sortConfig]);
+  }, [localData, searchTerm, sortConfig, activeCatalog]);
 
-  // 3. Paginación
   const totalPages =
     pageSize === 0 ? 1 : Math.ceil(processedData.length / pageSize);
   const paginatedData = useMemo(() => {
-    if (pageSize === 0) return processedData; // "0" significa mostrar todos
+    if (pageSize === 0) return processedData;
     const startIndex = (currentPage - 1) * pageSize;
     return processedData.slice(startIndex, startIndex + pageSize);
   }, [processedData, currentPage, pageSize]);
 
-  // Resetear a la página 1 si se busca o cambia el tamaño
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, pageSize]);
-
-  const handleSort = (key: keyof SatProduct) => {
+  const handleSort = (key: string) => {
     let direction: "asc" | "desc" = "asc";
     if (
       sortConfig &&
@@ -148,40 +338,106 @@ export function SatCatalogsConfig() {
   };
 
   // ==========================================
-  // FUNCIONES DE EXPORTAR Y COPIAR
+  // MULTI-SELECT
   // ==========================================
-  const handleCopy = () => {
-    if (processedData.length === 0)
-      return toast.info("No hay datos para copiar");
-    const header = "Clave\tDescripción\tMat. Peligroso\n";
-    const rows = processedData
-      .map((p) => `${p.clave}\t${p.descripcion}\t${p.es_material_peligroso}`)
-      .join("\n");
-    navigator.clipboard.writeText(header + rows);
-    toast.success("Catálogo copiado al portapapeles");
+  const toggleSelectAll = () => {
+    if (selectedIds.length === paginatedData.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(paginatedData.map((item) => item.id));
+    }
   };
 
+  const toggleSelect = (id: number) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  };
+
+  // ==========================================
+  // EXPORTAR Y DESCARGAR PLANTILLAS CSV
+  // ==========================================
+
+  // Descarga los datos que se están viendo actualmente en la tabla
   const handleExportCSV = () => {
     if (processedData.length === 0)
       return toast.info("No hay datos para exportar");
-    const header = "Clave,Descripción,Mat. Peligroso\n";
+
+    const headers = activeCatalog.fields.map((f) => f.label).join(",");
     const rows = processedData
-      .map(
-        (p) =>
-          `"${p.clave}","${p.descripcion.replace(/"/g, '""')}","${p.es_material_peligroso}"`,
+      .map((item) =>
+        activeCatalog.fields
+          .map((f) => `"${String(item[f.key] || "").replace(/"/g, '""')}"`)
+          .join(","),
       )
       .join("\n");
 
-    const blob = new Blob([header + rows], { type: "text/csv;charset=utf-8;" });
+    const csvContent = headers + "\n" + rows;
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", "catalogo_sat_productos.csv");
-    link.style.visibility = "hidden";
-    document.body.appendChild(link);
+    link.href = URL.createObjectURL(blob);
+    link.download = `${activeCatalog.id}_exportado.csv`;
     link.click();
-    document.body.removeChild(link);
-    toast.success("Archivo Excel (CSV) descargado");
+
+    toast.success("Archivo Excel/CSV descargado");
+  };
+
+  // Descarga una plantilla vacía con los encabezados correspondientes al catálogo activo
+  const handleDownloadTemplate = () => {
+    const headers = activeCatalog.fields.map((f) => f.label).join(",");
+    const blob = new Blob([headers + "\n"], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `Plantilla_${activeCatalog.name.replace(/ /g, "_")}.csv`;
+    link.click();
+
+    toast.success(`Plantilla descargada para ${activeCatalog.name}`);
+  };
+
+  const handleFileUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    toast.info("Procesando archivo CSV...");
+    const text = await file.text();
+    const rows = text.split("\n").filter((row) => row.trim().length > 0);
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (let i = 1; i < rows.length; i++) {
+      const columns = rows[i].split(",");
+      const payload: Record<string, any> = {};
+
+      activeCatalog.fields.forEach((field, index) => {
+        const val = columns[index]?.replace(/"/g, "").trim() || "";
+        // Si el campo espera un número (ejes, llantas), lo parseamos
+        if (field.key === "ejes" || field.key === "llantas") {
+          payload[field.key] = val ? parseInt(val) : null;
+        } else {
+          payload[field.key] = val;
+        }
+      });
+
+      if (payload[activeCatalog.fields[0].key]) {
+        try {
+          await saveItem(activeCatalog.endpoint, payload);
+          successCount++;
+        } catch (err) {
+          errorCount++;
+        }
+      }
+    }
+
+    toast.success(
+      `Carga masiva finalizada. Éxitos: ${successCount}. Errores/Duplicados: ${errorCount}`,
+    );
+    loadData();
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   // ==========================================
@@ -189,345 +445,377 @@ export function SatCatalogsConfig() {
   // ==========================================
   const handleOpenNew = () => {
     setEditingItem(null);
-    setFormData({
-      id: 0,
-      clave: "",
-      descripcion: "",
-      es_material_peligroso: "0",
-    });
+    const initialData: Record<string, any> = { id: 0 };
+    activeCatalog.fields.forEach((f) => (initialData[f.key] = ""));
+    setFormData(initialData);
     setIsModalOpen(true);
   };
 
-  const handleEdit = (item: SatProduct) => {
+  const handleEdit = (item: Record<string, any>) => {
     setEditingItem(item);
-    setFormData({
-      id: item.id,
-      clave: item.clave,
-      descripcion: item.descripcion,
-      es_material_peligroso: item.es_material_peligroso || "0",
-    });
+    setFormData({ ...item });
     setIsModalOpen(true);
   };
 
   const handleSave = async () => {
-    if (!formData.clave.trim() || !formData.descripcion.trim()) {
-      toast.error("La clave y la descripción son obligatorias");
+    const primaryKey = activeCatalog.fields[0].key;
+    if (!formData[primaryKey]?.toString().trim()) {
+      toast.error(`El campo ${activeCatalog.fields[0].label} es obligatorio`);
       return;
     }
+
     try {
-      await saveProduct(formData);
-      let updatedArray: SatProduct[];
-      if (editingItem) {
-        updatedArray = localProducts.map((p) =>
-          p.id === editingItem.id ? { ...p, ...formData } : p,
-        );
-      } else {
-        const newItem: SatProduct = { ...formData, id: Date.now() };
-        updatedArray = [...localProducts, newItem];
-      }
-      setLocalProducts(updatedArray);
-      toast.success(editingItem ? "Producto actualizado" : "Producto guardado");
+      await saveItem(activeCatalog.endpoint, formData);
+      toast.success(
+        editingItem ? "Registro actualizado" : "Registro agregado con éxito",
+      );
       setIsModalOpen(false);
+      loadData();
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || "Error al guardar");
+      toast.error(
+        error.response?.data?.detail || "Error al guardar el registro",
+      );
     }
   };
 
-  const handleDelete = async () => {
-    if (!deleteId) return;
+  const handleConfirmDelete = async () => {
+    if (!deleteIdsConfig) return;
     try {
-      await deleteProduct(deleteId);
-      setLocalProducts(localProducts.filter((p) => p.id !== deleteId));
-      toast.success("Producto eliminado del catálogo");
+      for (const id of deleteIdsConfig) {
+        await deleteItem(activeCatalog.endpoint, id);
+      }
+      toast.success(
+        `Se eliminaron ${deleteIdsConfig.length} registros exitosamente.`,
+      );
+      setSelectedIds([]);
+      loadData();
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || "Error al eliminar");
+      toast.error(
+        error.response?.data?.detail || "Error al eliminar algunos registros",
+      );
     } finally {
-      setDeleteId(null);
+      setDeleteIdsConfig(null);
     }
   };
+
+  const ActiveIcon = activeCatalog.icon;
 
   return (
-    <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden mt-8">
-      <CardHeader className="bg-slate-50/50 border-b border-slate-100 pb-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <CardTitle className="flex items-center gap-2 text-brand-navy">
-              <Tags className="h-5 w-5 text-emerald-600" />
-              Catálogo de Productos y Servicios (SAT)
+    <div>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-8 animate-in fade-in">
+        {/* ================================
+            PANEL IZQUIERDO (MENÚ CATÁLOGOS)
+        ================================= */}
+        <Card className="lg:col-span-3 border-slate-200 shadow-sm rounded-2xl h-fit">
+          <CardHeader className="bg-slate-50/50 border-b border-slate-100 pb-4">
+            <CardTitle className="flex items-center gap-2 text-brand-navy text-sm font-black uppercase tracking-widest">
+              <Database className="h-4 w-4 text-emerald-600" /> Catálogos SAT
             </CardTitle>
-            <CardDescription>
-              Administra las claves ProdServ autorizadas para la facturación
-            </CardDescription>
-          </div>
-          <Button
-            type="button"
-            onClick={handleOpenNew}
-            className="gap-2 bg-brand-navy hover:bg-brand-navy/90 text-white rounded-xl shrink-0"
-            disabled={loading}
-          >
-            <Plus className="h-4 w-4" />
-            Agregar Clave
-          </Button>
-        </div>
-
-        {/* BARRA DE HERRAMIENTAS (Buscador y Botones) */}
-        <div className="flex flex-col sm:flex-row gap-3 pt-4 items-center justify-between">
-          <div className="relative w-full sm:max-w-xs">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-600" />
-            <Input
-              placeholder="Buscar por clave o descripción..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 h-10 rounded-xl"
-            />
-          </div>
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleCopy}
-              className="rounded-lg text-slate-600 h-10"
-              title="Copiar al portapapeles"
-            >
-              <Copy className="h-4 w-4 mr-2" /> Copiar
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleExportCSV}
-              className="rounded-lg text-emerald-700 border-emerald-200 hover:bg-emerald-50 h-10"
-              title="Exportar a Excel (CSV)"
-            >
-              <Download className="h-4 w-4 mr-2" /> Excel
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-
-      <CardContent className="p-0">
-        {loading ? (
-          <div className="flex justify-center items-center py-12 text-slate-600">
-            <Loader2 className="h-8 w-8 animate-spin" />
-          </div>
-        ) : processedData.length === 0 ? (
-          <div className="text-center py-12 text-slate-500 text-sm bg-slate-50/30">
-            No se encontraron resultados.
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader className="bg-slate-50">
-                <TableRow>
-                  <TableHead
-                    className="w-[120px] font-bold text-slate-600 cursor-pointer hover:text-brand-navy transition-colors"
-                    onClick={() => handleSort("clave")}
-                  >
-                    <div className="flex items-center gap-1">
-                      Clave <ArrowUpDown className="h-3 w-3" />
-                    </div>
-                  </TableHead>
-                  <TableHead
-                    className="font-bold text-slate-600 cursor-pointer hover:text-brand-navy transition-colors"
-                    onClick={() => handleSort("descripcion")}
-                  >
-                    <div className="flex items-center gap-1">
-                      Descripción <ArrowUpDown className="h-3 w-3" />
-                    </div>
-                  </TableHead>
-                  <TableHead
-                    className="w-[150px] text-center font-bold text-slate-600 cursor-pointer hover:text-brand-navy transition-colors"
-                    onClick={() => handleSort("es_material_peligroso")}
-                  >
-                    <div className="flex items-center justify-center gap-1">
-                      Mat. Peligroso <ArrowUpDown className="h-3 w-3" />
-                    </div>
-                  </TableHead>
-                  <TableHead className="w-[100px] text-right font-bold text-slate-600">
-                    Acciones
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paginatedData.map((product) => (
-                  <TableRow key={product.id} className="hover:bg-slate-50/50">
-                    <TableCell className="font-mono font-medium text-emerald-700">
-                      {product.clave}
-                    </TableCell>
-                    <TableCell
-                      className="max-w-[300px] truncate"
-                      title={product.descripcion}
-                    >
-                      {product.descripcion}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {product.es_material_peligroso === "1" ? (
-                        <Badge
-                          variant="outline"
-                          className="border-amber-300 bg-amber-50 text-amber-700 gap-1"
-                        >
-                          <AlertTriangle className="h-3 w-3" /> Sí
-                        </Badge>
-                      ) : (
-                        <span className="text-slate-500 font-medium">
-                          {product.es_material_peligroso}
-                        </span>
+          </CardHeader>
+          <CardContent className="p-2">
+            <ScrollArea className="h-[60vh]">
+              <div className="flex flex-col gap-1 pr-3 pt-2">
+                {SAT_CATALOGS.map((catalog) => {
+                  const Icon = catalog.icon;
+                  const isActive = activeCatalogId === catalog.id;
+                  return (
+                    <button
+                      key={catalog.id}
+                      onClick={() => setActiveCatalogId(catalog.id)}
+                      className={cn(
+                        "flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all font-bold text-xs uppercase tracking-wider",
+                        isActive
+                          ? "bg-brand-navy text-white shadow-md scale-[1.02]"
+                          : "text-slate-600 hover:bg-slate-100 hover:text-brand-navy",
                       )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-slate-600 hover:text-brand-navy"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handleEdit(product);
-                          }}
+                    >
+                      <Icon
+                        className={cn(
+                          "h-4 w-4 shrink-0",
+                          isActive ? "text-emerald-400" : "text-slate-400",
+                        )}
+                      />
+                      <span className="truncate">{catalog.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </ScrollArea>
+          </CardContent>
+        </Card>
+
+        {/* ================================
+            PANEL DERECHO (TABLA INTERACTIVA)
+        ================================= */}
+        <Card className="lg:col-span-9 border-slate-200 shadow-sm rounded-2xl overflow-hidden flex flex-col h-[75vh]">
+          <CardHeader className="bg-white border-b border-slate-100 pb-4 shrink-0">
+            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+              <div>
+                <CardTitle className="text-xl font-black text-brand-navy flex items-center gap-2 uppercase tracking-tighter">
+                  <ActiveIcon className="h-6 w-6 text-emerald-500" />{" "}
+                  {activeCatalog.name}
+                </CardTitle>
+                <CardDescription className="font-medium mt-1 uppercase text-[10px] tracking-widest">
+                  Administra y configura los datos para facturación y carta
+                  porte.
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <input
+                  type="file"
+                  accept=".csv"
+                  className="hidden"
+                  ref={fileInputRef}
+                  onChange={handleFileUpload}
+                />
+                <Button
+                  variant="outline"
+                  onClick={handleDownloadTemplate}
+                  className="rounded-xl border-amber-200 text-amber-700 bg-amber-50/50 hover:bg-amber-100 h-10 font-bold uppercase tracking-widest text-[10px] haptic-press"
+                  title="Descargar Layout (Plantilla) vacío"
+                >
+                  <ClipboardList className="h-4 w-4 mr-2" /> Plantilla
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="rounded-xl border-blue-200 text-blue-700 bg-blue-50/50 hover:bg-blue-100 h-10 font-bold uppercase tracking-widest text-[10px] haptic-press"
+                >
+                  <Upload className="h-4 w-4 mr-2" /> Importar CSV
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleExportCSV}
+                  className="rounded-xl border-emerald-200 text-emerald-700 bg-emerald-50/50 hover:bg-emerald-100 h-10 font-bold uppercase tracking-widest text-[10px] haptic-press"
+                  disabled={processedData.length === 0}
+                >
+                  <Download className="h-4 w-4 mr-2" /> Exportar
+                </Button>
+                <Button
+                  onClick={handleOpenNew}
+                  className="bg-brand-navy hover:bg-brand-navy/90 text-white rounded-xl h-10 font-black uppercase tracking-widest text-[10px] shadow-md haptic-press"
+                >
+                  <Plus className="h-4 w-4 mr-2" /> Nuevo Registro
+                </Button>
+              </div>
+            </div>
+
+            {/* Barra de Búsqueda y Acciones Multi-select */}
+            <div className="flex items-center justify-between pt-4">
+              <div className="relative w-full max-w-sm">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Input
+                  placeholder="Buscar en este catálogo..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-9 h-11 rounded-xl bg-slate-50 border-slate-200 font-medium"
+                />
+              </div>
+
+              {selectedIds.length > 0 && (
+                <Button
+                  variant="destructive"
+                  onClick={() => setDeleteIdsConfig(selectedIds)}
+                  className="rounded-xl font-black uppercase text-[10px] tracking-widest h-11 px-6 shadow-rose-600/20 bg-rose-600 hover:bg-rose-700 animate-in fade-in zoom-in-95 haptic-press"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" /> Eliminar (
+                  {selectedIds.length})
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+
+          <CardContent className="p-0 flex-1 overflow-hidden flex flex-col bg-slate-50/30">
+            {isFetching ? (
+              <div className="flex-1 flex justify-center items-center text-emerald-600">
+                <Loader2 className="h-10 w-10 animate-spin" />
+              </div>
+            ) : processedData.length === 0 ? (
+              // ESTADO VACÍO
+              <div className="flex-1 flex flex-col justify-center items-center text-slate-400 p-8 text-center animate-in fade-in">
+                <FileSpreadsheet className="h-16 w-16 mb-4 opacity-20 text-blue-500" />
+                <p className="font-bold text-lg uppercase tracking-tighter text-slate-600">
+                  Catálogo Vacío
+                </p>
+                <p className="text-xs mt-1 uppercase tracking-widest mb-6">
+                  No hay registros. Descarga la plantilla para importar en masa.
+                </p>
+              </div>
+            ) : (
+              <ScrollArea className="flex-1">
+                <Table>
+                  <TableHeader className="bg-white sticky top-0 z-10 shadow-sm border-b border-slate-200">
+                    <TableRow>
+                      <TableHead className="w-[50px] text-center">
+                        <Checkbox
+                          checked={
+                            selectedIds.length === paginatedData.length &&
+                            paginatedData.length > 0
+                          }
+                          onCheckedChange={toggleSelectAll}
+                        />
+                      </TableHead>
+                      {activeCatalog.fields.map((field) => (
+                        <TableHead
+                          key={field.key}
+                          className="font-black text-[10px] uppercase tracking-widest text-slate-500 cursor-pointer hover:text-brand-navy"
+                          onClick={() => handleSort(field.key)}
                         >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-slate-600 hover:text-red-600 hover:bg-red-50"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setDeleteId(product.id);
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
+                          <div className="flex items-center gap-1">
+                            {field.label}{" "}
+                            <ArrowUpDown className="h-3 w-3 opacity-50" />
+                          </div>
+                        </TableHead>
+                      ))}
+                      <TableHead className="w-[100px] text-right font-black text-[10px] uppercase tracking-widest text-slate-500">
+                        Acciones
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedData.map((item) => (
+                      <TableRow
+                        key={item.id}
+                        className={cn(
+                          "hover:bg-slate-50/80 transition-colors",
+                          selectedIds.includes(item.id) && "bg-emerald-50/50",
+                        )}
+                      >
+                        <TableCell className="text-center">
+                          <Checkbox
+                            checked={selectedIds.includes(item.id)}
+                            onCheckedChange={() => toggleSelect(item.id)}
+                          />
+                        </TableCell>
+                        {activeCatalog.fields.map((field, idx) => (
+                          <TableCell
+                            key={field.key}
+                            className={cn(
+                              "text-xs py-3",
+                              idx === 0
+                                ? "font-mono font-bold text-emerald-700"
+                                : "text-slate-600 font-medium",
+                            )}
+                          >
+                            {item[field.key] || "—"}
+                          </TableCell>
+                        ))}
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-slate-400 hover:text-blue-600 haptic-press"
+                              onClick={() => handleEdit(item)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-slate-400 hover:text-rose-600 hover:bg-rose-50 haptic-press"
+                              onClick={() => setDeleteIdsConfig([item.id])}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            )}
+          </CardContent>
 
-        {/* FOOTER DE PAGINACIÓN */}
-        {processedData.length > 0 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between p-4 border-t border-slate-100 bg-white gap-4">
-            <div className="flex items-center gap-2 text-sm text-slate-500">
-              <span>Mostrar</span>
-              <select
-                className="border border-slate-200 rounded-md p-1 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-navy"
-                value={pageSize}
-                onChange={(e) => setPageSize(Number(e.target.value))}
-              >
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-                <option value={0}>Todas</option>
-              </select>
-              <span>registros</span>
+          {/* FOOTER DE PAGINACIÓN */}
+          {processedData.length > 0 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between p-4 border-t border-slate-100 bg-white gap-4 shrink-0">
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-widest">
+                <span>Mostrar</span>
+                <select
+                  className="border border-slate-200 rounded-lg p-1.5 bg-slate-50 text-brand-navy outline-none cursor-pointer"
+                  value={pageSize}
+                  onChange={(e) => setPageSize(Number(e.target.value))}
+                >
+                  <option value={10}>10</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                  <option value={0}>Todas</option>
+                </select>
+              </div>
+              <div className="text-[10px] uppercase font-black tracking-widest text-slate-400">
+                Mostrando {paginatedData.length} de {processedData.length}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8 rounded-lg haptic-press"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1 || pageSize === 0}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-xs font-black text-brand-navy min-w-[3rem] text-center">
+                  {pageSize === 0 ? 1 : currentPage} / {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8 rounded-lg haptic-press"
+                  onClick={() =>
+                    setCurrentPage((p) => Math.min(totalPages, p + 1))
+                  }
+                  disabled={currentPage === totalPages || pageSize === 0}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
+          )}
+        </Card>
+      </div>
 
-            <div className="text-sm text-slate-500 font-medium">
-              Mostrando{" "}
-              {pageSize === 0 ? processedData.length : paginatedData.length} de{" "}
-              {processedData.length}
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage === 1 || pageSize === 0}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="text-sm font-medium text-slate-600 min-w-[3rem] text-center">
-                {pageSize === 0 ? 1 : currentPage} / {totalPages}
-              </span>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() =>
-                  setCurrentPage((p) => Math.min(totalPages, p + 1))
-                }
-                disabled={currentPage === totalPages || pageSize === 0}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        )}
-      </CardContent>
-
-      {/* MODALES DE EDICIÓN Y ELIMINACIÓN */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="rounded-2xl sm:max-w-md">
+        <DialogContent className="rounded-2xl sm:max-w-md border-none shadow-2xl bg-card/95 backdrop-blur-xl">
           <DialogHeader>
-            <DialogTitle className="text-brand-navy font-black">
-              {editingItem ? "Editar Clave SAT" : "Nueva Clave SAT"}
+            <DialogTitle className="text-xl font-black uppercase tracking-tighter text-brand-navy">
+              {editingItem ? "Editar Registro" : "Nuevo Registro"}
             </DialogTitle>
-            <DialogDescription>
-              Asegúrate de que la clave coincida exactamente con el catálogo
-              oficial del SAT (c_ClaveProdServ).
+            <DialogDescription className="text-xs font-bold uppercase tracking-widest">
+              Catálogo:{" "}
+              <span className="text-emerald-600">{activeCatalog.name}</span>
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 pt-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-500 uppercase">
-                Clave ProdServ *
-              </Label>
-              <Input
-                placeholder="Ej: 78101802"
-                value={formData.clave}
-                onChange={(e) =>
-                  setFormData({ ...formData, clave: e.target.value })
-                }
-                className="rounded-lg font-mono"
-                maxLength={8}
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-500 uppercase">
-                Descripción *
-              </Label>
-              <Input
-                placeholder="Servicios de transporte de carga por carretera..."
-                value={formData.descripcion}
-                onChange={(e) =>
-                  setFormData({ ...formData, descripcion: e.target.value })
-                }
-                className="rounded-lg"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-500 uppercase">
-                ¿Es Material Peligroso?
-              </Label>
-              <Input
-                placeholder="0 = No, 1 = Sí, 0,1 = Opcional"
-                value={formData.es_material_peligroso}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    es_material_peligroso: e.target.value,
-                  })
-                }
-                className="rounded-lg font-mono"
-              />
-              <p className="text-[10px] text-slate-600 mt-1">
-                Valores válidos según el SAT: "0", "1", "0,1".
-              </p>
-            </div>
+            {activeCatalog.fields.map((field) => (
+              <div key={field.key} className="space-y-1.5">
+                <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                  {field.label}{" "}
+                  {field.key === activeCatalog.fields[0].key && "*"}
+                </Label>
+                <Input
+                  value={formData[field.key] || ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, [field.key]: e.target.value })
+                  }
+                  className={cn(
+                    "h-11 shadow-sm font-medium border-slate-200 focus-visible:ring-emerald-500",
+                    field.key === activeCatalog.fields[0].key &&
+                      "font-mono uppercase",
+                  )}
+                  placeholder={`Ej: Ingresar ${field.label.toLowerCase()}`}
+                  // Soporte numérico
+                  type={
+                    field.key === "ejes" || field.key === "llantas"
+                      ? "number"
+                      : "text"
+                  }
+                />
+              </div>
+            ))}
           </div>
 
           <DialogFooter className="pt-6">
@@ -535,80 +823,54 @@ export function SatCatalogsConfig() {
               type="button"
               variant="ghost"
               onClick={() => setIsModalOpen(false)}
-              className="rounded-xl"
+              className="rounded-xl font-bold uppercase tracking-widest text-[10px] haptic-press"
             >
               Cancelar
             </Button>
             <Button
               type="button"
               onClick={handleSave}
-              className="bg-brand-navy hover:bg-brand-navy/90 text-white rounded-xl"
+              className="bg-brand-navy hover:bg-brand-navy/90 text-white rounded-xl font-black uppercase tracking-widest text-[10px] shadow-md haptic-press"
             >
-              {editingItem ? "Guardar Cambios" : "Agregar Clave"}
+              {editingItem ? "Guardar Cambios" : "Agregar Registro"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
-        <AlertDialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
-          <AlertDialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
-            <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
-            <div className="relative z-10 flex items-center gap-4 sm:gap-5">
-              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center shadow-inner shrink-0 icon-plate border border-rose-200 dark:border-rose-500/20">
-                <AlertTriangle className="h-7 w-7 sm:h-8 sm:w-8 text-rose-600 dark:text-rose-400 drop-shadow-[0_0_8px_rgba(244,63,94,0.4)]" />
-              </div>
-              <div className="flex flex-col gap-1 text-left">
-                <AlertDialogTitle className="text-2xl font-black uppercase tracking-tighter text-rose-600 dark:text-rose-500 heading-crisp leading-none">
-                  ¿Eliminar clave SAT?
-                </AlertDialogTitle>
-                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-1">
-                  Acción Irreversible • Catálogos SAT
-                </p>
-              </div>
-            </div>
-          </AlertDialogHeader>
-
-          <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
-            <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block space-y-6">
-              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                Esta acción eliminará la clave del catálogo interno.
-              </p>
-              <div className="p-5 sm:p-6 bg-rose-50 dark:bg-rose-950/20 border-l-4 border-rose-500 rounded-r-2xl shadow-sm">
-                <div className="flex items-center gap-2 mb-3">
-                  <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
-                  <h4 className="text-[10px] sm:text-[11px] font-black text-rose-800 dark:text-rose-400 uppercase tracking-widest">
-                    Consecuencia
-                  </h4>
-                </div>
-                <p className="text-xs sm:text-sm leading-relaxed text-rose-900 dark:text-rose-200/80">
-                  Los viajes que ya hayan sido timbrados con esta clave <b className="font-black">no se verán afectados</b>, pero ya no podrás seleccionarla para nuevos viajes.
-                </p>
-              </div>
+      <AlertDialog
+        open={!!deleteIdsConfig}
+        onOpenChange={() => setDeleteIdsConfig(null)}
+      >
+        <AlertDialogContent className="rounded-2xl sm:max-w-md border-none shadow-2xl bg-white/95 backdrop-blur-xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl font-black uppercase tracking-tighter text-rose-600 flex items-center gap-2">
+              <AlertTriangle className="h-6 w-6" /> ¿Eliminar Registros?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="font-medium text-slate-600 mt-2">
+              Estás a punto de eliminar{" "}
+              <b className="text-rose-600 font-black">
+                {deleteIdsConfig?.length}
+              </b>{" "}
+              registro(s) del catálogo <b>{activeCatalog.name}</b>.
+              <br />
+              <br />
+              Esta acción no se puede deshacer.
             </AlertDialogDescription>
-          </div>
-
-          <AlertDialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
-            <div className="flex flex-col-reverse sm:flex-row sm:flex-wrap justify-end items-stretch sm:items-center gap-3 w-full">
-              <AlertDialogCancel
-                variant="outline"
-                size="lg"
-                className="w-full sm:w-auto haptic-press flex-shrink-0 font-black uppercase tracking-widest text-[10px]"
-              >
-                Cancelar
-              </AlertDialogCancel>
-              <AlertDialogAction
-                variant="destructive"
-                size="lg"
-                onClick={handleDelete}
-                className="w-full sm:w-auto haptic-press shadow-rose-600/10 flex-shrink-0 border-none bg-rose-600 hover:bg-rose-700 text-white font-black uppercase tracking-widest text-[10px]"
-              >
-                <Trash2 className="h-4 w-4 mr-2" /> Sí, Eliminar
-              </AlertDialogAction>
-            </div>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-4">
+            <AlertDialogCancel className="rounded-xl font-bold uppercase tracking-widest text-[10px] h-11 haptic-press">
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className="bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-black uppercase tracking-widest text-[10px] h-11 px-6 border-none shadow-md haptic-press"
+            >
+              Sí, Eliminar
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </Card>
+    </div>
   );
 }

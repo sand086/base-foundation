@@ -801,9 +801,17 @@ class BillingService:
             "distancia_total": f"{int(_clean_float(d.get('total_dist_rec', 0))):,}",
             "conceptos": [
                 {
-                    "clave": "78101802",
+                    "clave": (
+                        "84111506"
+                        if "Pago" in d.get("descripcion_concepto", "")
+                        else "78101802"
+                    ),
                     "cantidad": "1.00",
-                    "unidad": "E48 - SRV",
+                    "unidad": (
+                        "ACT"
+                        if "Pago" in d.get("descripcion_concepto", "")
+                        else "E48 - SRV"
+                    ),
                     "descripcion": d.get("descripcion_concepto", "PAGO"),
                     "detalles_extra": f"Folio: {d['folio']}",
                     "precio": f"{_clean_float(d.get('subtotal', 0)):,.2f}",
@@ -819,29 +827,43 @@ class BillingService:
             "fecha_emision": d["fecha"],
             "logo_src": logo_src,
             "qr_src": qr_src,
-            "metodo_pago": "PPD" if _clean_float(d.get("total", 0)) > 1.50 else "PUE",
-            "tipo_comprobante": (
-                "I (Ingreso)" if "CartaPorte" in d.get("uso_cfdi", "") else "P (Pago)"
+            "metodo_pago": d.get(
+                "metodo_pago",
+                "PUE" if _clean_float(d.get("total", 0)) <= 1.50 else "PPD",
             ),
-            "moneda": "MXN",
+            "tipo_comprobante": (
+                "P (Pago)"
+                if "PAGO" in d.get("descripcion_concepto", "").upper()
+                else "I (Ingreso)"
+            ),
+            "moneda": (
+                "MXN"
+                if "PAGO" not in d.get("descripcion_concepto", "").upper()
+                else "XXX"
+            ),
             "tc": "1",
             "forma_pago": d.get("forma_pago", "99"),
             "condiciones_pago": "Contado",
             "cert_sat": c_sat,
-            "cert_emisor": "00001000000504204441",
+            "cert_emisor": "00001000000504204441",  # Cambiar por tu certificado real extraído
             "sello_sat": chunk_b64(s_sat),
             "sello_emisor": chunk_b64(s_emi),
             "cadena_original": chunk_b64(cadena_original),
             "importe_letra": importe_letra,
+            # --- DATOS EXCLUSIVOS PARA CARTA PORTE ---
             "id_ccp": d.get("id_ccp", ""),
             "remitente_nombre": self.emisor_nombre,
             "remitente_rfc": self.emisor_rfc,
-            "fecha_salida": d["fecha"],
+            "fecha_salida": d.get("fecha", ""),
             "domicilio_origen": d.get("domicilio_origen", "N/A"),
-            "destinatario_nombre": d["nombre_cliente"],
-            "destinatario_rfc": d["rfc_cliente"],
-            "fecha_llegada": d["fecha"],
+            "destinatario_nombre": d.get("nombre_cliente", ""),
+            "destinatario_rfc": d.get("rfc_cliente", ""),
+            "fecha_llegada": d.get("fecha", ""),
             "domicilio_destino": f"{d.get('municipio_destino', '')}, {d.get('estado_destino', '')}, C.P. {d.get('cp_cliente', '')}",
+            # --- DATOS EXCLUSIVOS PARA COMPLEMENTO DE PAGO ---
+            "fecha_pago": d.get("fecha_pago", ""),
+            "monto_total_pago": f"{_clean_float(d.get('monto_total', 0)):,.2f}",
+            "doctos_relacionados": d.get("doctos_relacionados", []),
         }
 
         env = Environment(loader=FileSystemLoader(str(self.templates_dir)))

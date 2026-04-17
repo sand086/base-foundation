@@ -2,10 +2,11 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-export type SatProductResponse = {
+export type SatUnitWeightResponse = {
     clave: string;
-    descripcion: string;
-    es_material_peligroso: string;
+    nombre: string;
+    descripcion?: (string | null);
+    simbolo?: (string | null);
     id: number;
     activo: boolean;
 };

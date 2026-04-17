@@ -2,11 +2,10 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-export type SatProductResponse = {
+export type SatTruckConfigCreate = {
     clave: string;
     descripcion: string;
-    es_material_peligroso: string;
-    id: number;
-    activo: boolean;
+    ejes?: (number | null);
+    llantas?: (number | null);
 };
 

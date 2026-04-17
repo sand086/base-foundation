@@ -1674,3 +1674,115 @@ class PurchaseOrderItem(AuditMixin, Base):
 
     order = relationship("PurchaseOrder", back_populates="items")
     inventory_item = relationship("InventoryItem")
+
+
+# =========================================================
+# CATÁLOGOS DEL SAT PARA CARTA PORTE 3.1
+# =========================================================
+
+
+class SatServiceType(Base):
+    __tablename__ = "sat_service_types"
+    id = Column(Integer, primary_key=True, index=True)
+    clave = Column(String(10), unique=True, index=True, nullable=False)
+    descripcion = Column(String(255), nullable=False)
+    activo = Column(Boolean, default=True)
+
+
+class SatCargoType(Base):
+    __tablename__ = "sat_cargo_types"
+    id = Column(Integer, primary_key=True, index=True)
+    clave = Column(String(10), unique=True, index=True, nullable=False)
+    descripcion = Column(String(255), nullable=False)
+    activo = Column(Boolean, default=True)
+
+
+class SatTrailerSubtype(Base):
+    __tablename__ = "sat_trailer_subtypes"
+    id = Column(Integer, primary_key=True, index=True)
+    clave = Column(String(10), unique=True, index=True, nullable=False)
+    descripcion = Column(String(255), nullable=False)
+    activo = Column(Boolean, default=True)
+
+
+class SatTruckConfig(Base):
+    __tablename__ = "sat_truck_configs"
+    id = Column(Integer, primary_key=True, index=True)
+    clave = Column(String(10), unique=True, index=True, nullable=False)
+    descripcion = Column(String(255), nullable=False)
+    ejes = Column(Integer, nullable=True)
+    llantas = Column(Integer, nullable=True)
+    activo = Column(Boolean, default=True)
+
+
+class SatMunicipality(Base):
+    __tablename__ = "sat_municipalities"
+    id = Column(Integer, primary_key=True, index=True)
+    clave = Column(String(10), nullable=False)
+    estado_clave = Column(String(10), nullable=False)
+    descripcion = Column(String(255), nullable=False)
+    activo = Column(Boolean, default=True)
+
+
+class SatLocality(Base):
+    __tablename__ = "sat_localities"
+    id = Column(Integer, primary_key=True, index=True)
+    clave = Column(String(10), nullable=False)
+    estado_clave = Column(String(10), nullable=False)
+    descripcion = Column(String(255), nullable=False)
+    activo = Column(Boolean, default=True)
+
+
+class SatNeighborhood(Base):
+    __tablename__ = "sat_neighborhoods"
+    id = Column(Integer, primary_key=True, index=True)
+    clave = Column(String(10), nullable=False)
+    codigo_postal = Column(String(10), index=True, nullable=False)
+    nombre = Column(String(255), nullable=False)
+    activo = Column(Boolean, default=True)
+
+
+class SatPermitType(Base):
+    __tablename__ = "sat_permit_types"
+    id = Column(Integer, primary_key=True, index=True)
+    clave = Column(String(10), unique=True, index=True, nullable=False)
+    descripcion = Column(String(255), nullable=False)
+    clave_transporte = Column(String(10), nullable=True)
+    activo = Column(Boolean, default=True)
+
+
+class SatPackagingType(Base):
+    __tablename__ = "sat_packaging_types"
+    id = Column(Integer, primary_key=True, index=True)
+    clave = Column(String(10), unique=True, index=True, nullable=False)
+    descripcion = Column(String(255), nullable=False)
+    activo = Column(Boolean, default=True)
+
+
+class SatHazardousMaterial(Base):
+    __tablename__ = "sat_hazardous_materials"
+    id = Column(Integer, primary_key=True, index=True)
+    clave = Column(String(10), unique=True, index=True, nullable=False)
+    descripcion = Column(Text, nullable=False)
+    clase_div = Column(String(50), nullable=True)
+    activo = Column(Boolean, default=True)
+
+
+class SatStation(Base):
+    __tablename__ = "sat_stations"
+    id = Column(Integer, primary_key=True, index=True)
+    clave_identificacion = Column(String(20), unique=True, index=True, nullable=False)
+    descripcion = Column(String(255), nullable=False)
+    clave_transporte = Column(String(10), nullable=True)
+    nacionalidad = Column(String(50), nullable=True)
+    activo = Column(Boolean, default=True)
+
+
+class SatUnitWeight(Base):
+    __tablename__ = "sat_unit_weights"
+    id = Column(Integer, primary_key=True, index=True)
+    clave = Column(String(10), unique=True, index=True, nullable=False)
+    nombre = Column(String(150), nullable=False)
+    descripcion = Column(Text, nullable=True)
+    simbolo = Column(String(20), nullable=True)
+    activo = Column(Boolean, default=True)
