@@ -147,7 +147,7 @@ def get_receivable_invoices(
 ):
     """
     Obtiene todas las facturas de clientes (Cuentas por Cobrar)
-    con la información del cliente adjunta.
+    con la información del cliente adjunta, ignorando las que no tienen folio.
     """
     invoices = (
         db.query(models.ReceivableInvoice)
@@ -156,7 +156,10 @@ def get_receivable_invoices(
             joinedload(models.ReceivableInvoice.payments),
         )
         .filter(
-            models.ReceivableInvoice.record_status == models.RecordStatus.ACTIVO.value
+            models.ReceivableInvoice.record_status == models.RecordStatus.ACTIVO.value,
+            #   AQUÍ ESTÁ LA MAGIA: Filtramos los que no tienen folio
+            models.ReceivableInvoice.folio_interno.isnot(None),
+            models.ReceivableInvoice.folio_interno != "",
         )
         .order_by(models.ReceivableInvoice.id.desc())
         .offset(skip)
@@ -186,7 +189,7 @@ def get_receivable_invoices(
             {
                 "id": inv.id,
                 "uuid": inv.uuid,
-                "folio_interno": inv.folio_interno or "S/F",
+                "folio_interno": inv.folio_interno,  # Ya no ocupamos el 'or "S/F"' porque todos tendrán folio
                 "concepto": inv.concepto or "Servicio de Flete",
                 "monto_total": inv.monto_total,
                 "saldo_pendiente": inv.saldo_pendiente,
@@ -200,12 +203,12 @@ def get_receivable_invoices(
                 "moneda": inv.moneda,
                 "pdf_url": inv.pdf_url,
                 "xml_url": inv.xml_url,
-                "payments": pagos_list,  #  Enviamos la lista de abonos
+                "payments": pagos_list,
                 "client": (
                     {
                         "id": inv.client.id,
                         "razon_social": inv.client.razon_social,
-                        "rfc": inv.client.rfc,  #  Enviamos el RFC
+                        "rfc": inv.client.rfc,
                     }
                     if inv.client
                     else None

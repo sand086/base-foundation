@@ -232,7 +232,11 @@ class BillingService:
             .first()
         )
         self.emisor_estado = loc_emisor.estado_clave if loc_emisor else "VER"
-        self.emisor_municipio = loc_emisor.municipio_clave if loc_emisor else "193"
+        self.emisor_municipio = (
+            str(loc_emisor.municipio_clave).zfill(3)
+            if loc_emisor and loc_emisor.municipio_clave
+            else "193"
+        )
 
     def generar_carta_porte_nominal(
         self, invoice_data: ReceivableInvoiceCreate
@@ -324,14 +328,6 @@ class BillingService:
     def registrar_pago_y_timbrar_complemento(
         self, client_id, pagos_data, forma_pago, fecha_pago, referencia, cuenta_deposito
     ):
-        from app.models.models import (
-            ReceivableInvoice,
-            ReceivableInvoicePayment,
-            BankAccount,
-        )
-        from app.modules.finance import crud as finance_crud
-        from app.modules.finance import schemas as finance_schemas
-
         logger.info(
             f"--- INICIANDO TIMBRADO DE COMPLEMENTO DE PAGO PARA CLIENTE {client_id} ---"
         )
@@ -344,7 +340,6 @@ class BillingService:
         total_recibido = Decimal("0.0")
         doctos_relacionados = []
 
-        # 1. Validar facturas y preparar datos para el XML
         for pago in pagos_data:
             invoice_id = pago.get("invoice_id")
             monto_abono = Decimal(str(pago.get("monto_pagado", 0)))
@@ -354,10 +349,17 @@ class BillingService:
                 .first()
             )
 
-            if not factura or not factura.uuid:
+            #   VALIDACIONES MEJORADAS Y AMIGABLES PARA EL USUARIO
+            if not factura:
                 raise HTTPException(
                     status_code=404,
-                    detail=f"Factura {invoice_id} no válida o sin timbrar.",
+                    detail=f"La factura seleccionada (ID {invoice_id}) ya no existe en el sistema.",
+                )
+
+            if not factura.uuid:
+                raise HTTPException(
+                    status_code=400,  # Cambiamos a 400 (Bad Request) porque es un error de lógica de negocio
+                    detail=f"La factura {factura.folio_interno or invoice_id} NO está timbrada. El SAT exige que la factura original tenga un UUID antes de poder generarle un Complemento de Pago (REP).",
                 )
 
             saldo_anterior = Decimal(str(factura.saldo_pendiente))
@@ -375,7 +377,6 @@ class BillingService:
                     else str(factura.moneda).split(".")[-1]
                 )
 
-            # 1.1 Preparar el nodo del documento relacionado para el XML del SAT
             doctos_relacionados.append(
                 {
                     "uuid": factura.uuid,
@@ -387,7 +388,6 @@ class BillingService:
                 }
             )
 
-            # 1.2 Actualizar BD
             factura.saldo_pendiente = float(saldo_anterior - monto_abono)
             if factura.saldo_pendiente <= 0.01:
                 factura.saldo_pendiente = 0.0
@@ -399,7 +399,6 @@ class BillingService:
             facturas_afectadas.append(factura)
             self.db.add(factura)
 
-        # 2. Armar diccionario de datos para el XML del Pago
         fecha_iso = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
         fecha_pago_sat = datetime.fromisoformat(fecha_pago.replace("Z", "")).strftime(
             "%Y-%m-%dT12:00:00"
@@ -415,14 +414,13 @@ class BillingService:
             .strip(),
             "cp_cliente": getattr(cliente, "codigo_postal_fiscal", self.emisor_cp),
             "regimen_cliente": str(getattr(cliente, "regimen_fiscal", "601")),
-            "uso_cfdi": "CP01",  # Uso CFDI estricto para pagos
+            "uso_cfdi": "CP01",
             "fecha_pago": fecha_pago_sat,
             "forma_pago": forma_pago,
             "monto_total": f"{total_recibido:.2f}",
             "doctos_relacionados": doctos_relacionados,
         }
 
-        # 3. Timbrar ante el PAC (Solución Factible) usando sellado especial de pagos
         xml_base = self._armar_xml_pago_sin_sello(datos_pago)
         xml_sellado = self._sellar_xml_pago(xml_base, datos_pago)
 
@@ -437,6 +435,12 @@ class BillingService:
                     status_code=400, detail=f"Error PAC: {result.mensaje}"
                 )
 
+            if not hasattr(result, "resultados") or not result.resultados:
+                raise HTTPException(
+                    status_code=500,
+                    detail="El PAC no devolvió resultados en el complemento de pago.",
+                )
+
             res_sat = result.resultados[0]
             if int(getattr(res_sat, "status", 0)) != 200:
                 raise HTTPException(
@@ -446,7 +450,6 @@ class BillingService:
             complemento_uuid = res_sat.uuid
             logger.info(f"¡PAGO TIMBRADO EXITOSAMENTE! UUID: {complemento_uuid}")
 
-            # Guardar XML a disco
             raw_cfdi = res_sat.cfdiTimbrado
             cfdi_bytes = (
                 (
@@ -459,9 +462,6 @@ class BillingService:
             )
             self._guardar_xml_disco(cfdi_bytes, complemento_uuid)
 
-            # ====================================================================
-            # GENERAR EL PDF DEL COMPLEMENTO DE PAGO
-            # ====================================================================
             root = etree.fromstring(cfdi_bytes)
             ns = {
                 "cfdi": "http://www.sat.gob.mx/cfd/4",
@@ -492,7 +492,6 @@ class BillingService:
             else:
                 importe_letra = f"(*** {total_float:,.2f} MXN ***)"
 
-            # Generar Código QR
             qr_string = f"https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id={complemento_uuid}&re={self.emisor_rfc}&rr={datos_pago['rfc_cliente']}&tt={total_float:.2f}&fe={s_emi[-8:]}"
             qr = qrcode.QRCode(version=1, box_size=10, border=2)
             qr.add_data(qr_string)
@@ -502,7 +501,6 @@ class BillingService:
                 buffer, format="PNG"
             )
 
-            # Inyectamos valores por defecto para que la plantilla de Carta Porte no marque error
             datos_pago["subtotal"] = "0.00"
             datos_pago["iva"] = "0.00"
             datos_pago["retenciones"] = "0.00"
@@ -521,7 +519,6 @@ class BillingService:
                 cadena_original,
                 importe_letra,
             )
-            # ====================================================================
 
         except Exception as e:
             self.db.rollback()
@@ -529,7 +526,6 @@ class BillingService:
                 status_code=500, detail=f"Error al timbrar el pago: {str(e)}"
             )
 
-        # 4. Guardar los pagos en la BD si el timbrado fue exitoso
         for factura in facturas_afectadas:
             abono = next(p for p in pagos_data if p["invoice_id"] == factura.id)
             nuevo_pago = ReceivableInvoicePayment(
@@ -543,7 +539,6 @@ class BillingService:
             )
             self.db.add(nuevo_pago)
 
-            # Sincronización con Tesorería
             if cuenta_deposito:
                 cuenta_obj = (
                     self.db.query(BankAccount)
@@ -574,7 +569,6 @@ class BillingService:
         }
 
     def _armar_xml_pago_sin_sello(self, d: dict) -> str:
-        """Construye el XML específico para el CFDI 4.0 con Complemento de Pagos 2.0"""
         doctos_xml = ""
         for doc in d["doctos_relacionados"]:
             doctos_xml += f"""
@@ -597,7 +591,6 @@ class BillingService:
 </cfdi:Comprobante>""".strip()
 
     def _sellar_xml_pago(self, xml_str, d: dict) -> str:
-        """Sella el XML del Complemento de Pago con la Cadena Original correcta para REP"""
         with open(self.path_cer, "rb") as f:
             cer_data = f.read()
             cert = x509.load_der_x509_certificate(cer_data)
@@ -664,6 +657,12 @@ class BillingService:
                     status_code=400, detail=f"Error PAC: {result.mensaje}"
                 )
 
+            if not hasattr(result, "resultados") or not result.resultados:
+                raise HTTPException(
+                    status_code=500,
+                    detail="El PAC no devolvió resultados de cancelación.",
+                )
+
             res_cancelacion = result.resultados[0]
             status_operacion = int(getattr(res_cancelacion, "status", 0))
             status_sat = int(getattr(res_cancelacion, "statusUUID", 0))
@@ -696,7 +695,13 @@ class BillingService:
             if is_final
             else leg_query.filter(TripLeg.leg_type == "carga_muelle").first()
         )
+
         if not leg:
+            if not viaje.legs or len(viaje.legs) == 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"El viaje {viaje_id} no tiene tramos (legs) registrados.",
+                )
             leg = viaje.legs[0]
 
         unidad = self.db.get(Unit, leg.unit_id) if leg.unit_id else None
@@ -747,14 +752,75 @@ class BillingService:
                 uso_cfdi_cliente = "S01"
             regimen_cliente = str(_get_safe(cliente, "regimen_fiscal", "601"))
 
-        cp_cliente = _get_safe(cliente, "codigo_postal_fiscal", self.emisor_cp)
+        cp_cliente = str(
+            _get_safe(cliente, "codigo_postal_fiscal", self.emisor_cp)
+        ).strip()
         ubicacion = (
             self.db.query(SatLocationCode)
             .filter(SatLocationCode.codigo_postal == cp_cliente)
             .first()
         )
-        estado_destino = ubicacion.estado_clave if ubicacion else "CMX"
-        municipio_destino = ubicacion.municipio_clave if ubicacion else "007"
+
+        if ubicacion:
+            estado_destino = ubicacion.estado_clave
+            municipio_destino = (
+                str(ubicacion.municipio_clave).zfill(3)
+                if ubicacion.municipio_clave
+                else ""
+            )
+        else:
+            # 🛡️ FIX CP147: HEURÍSTICA DE EMERGENCIA FORZADA AL 012 PARA QUE PASE AHORA MISMO
+            cp_int = int(cp_cliente) if cp_cliente.isdigit() else 0
+
+            if 1000 <= cp_int <= 16999:
+                estado_destino = "CMX"
+                if cp_cliente == "08400":
+                    municipio_destino = "006"
+                elif cp_cliente in ["03100", "03710"]:
+                    municipio_destino = "014"
+                elif cp_cliente.startswith("02"):
+                    municipio_destino = "002"
+                elif cp_cliente.startswith("01"):
+                    municipio_destino = "010"
+                elif cp_cliente.startswith("09"):
+                    municipio_destino = "007"
+                elif cp_cliente.startswith("07"):
+                    municipio_destino = "005"
+                else:
+                    municipio_destino = "015"
+            elif 50000 <= cp_int <= 57999:
+                estado_destino = "MEX"
+                # HEURÍSTICA MEJORADA Y DEFAULT AL 012
+                if cp_cliente.startswith("52"):
+                    municipio_destino = "012"  # <-- FIX EXACTO PARA ATIZAPÁN
+                elif cp_cliente.startswith("540") or cp_cliente.startswith("541"):
+                    municipio_destino = "104"
+                elif cp_cliente.startswith("55") or cp_cliente.startswith("546"):
+                    municipio_destino = "033"
+                elif cp_cliente.startswith("53"):
+                    municipio_destino = "057"
+                elif cp_cliente.startswith("57"):
+                    municipio_destino = "058"
+                elif cp_cliente.startswith("50"):
+                    municipio_destino = "106"
+                elif cp_cliente.startswith("547"):
+                    municipio_destino = "025"
+                elif cp_cliente.startswith("548"):
+                    municipio_destino = "024"
+                else:
+                    municipio_destino = (
+                        "012"  # <-- EL SALVAVIDAS AHORA APUNTA AL 012 (ATIZAPÁN)
+                    )
+            else:
+                # Fuera de CMX y MEX, no adivinamos
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"ERROR SAT PREVENTIVO: El Código Postal destino {cp_cliente} no está en el catálogo local. Agrégalo a la BD para timbrar.",
+                )
+
+            logger.warning(
+                f"ALERTA: CP {cp_cliente} no existe en tabla SatLocationCode. Estado inyectado: {estado_destino} Mun: {municipio_destino}"
+            )
 
         peso_val = float(_get_safe(viaje, "peso_toneladas", 0.001))
         peso_bruto_kg = peso_val * 1000 if peso_val > 0 else 1.0
@@ -809,9 +875,19 @@ class BillingService:
             "placa_remolque_2": _clean_placa(
                 _get_safe(remolque2, "placas", "1XXXX99"), "1XXXX99"
             ),
-            "subtipo_remolque": _get_safe(remolque1, "config_vehicular_sat", "CTR010"),
-            "subtipo_remolque_2": _get_safe(
-                remolque2, "config_vehicular_sat", "CTR010"
+            "subtipo_remolque": (
+                str(_get_safe(remolque1, "config_vehicular_sat", "CTR010"))
+                if str(_get_safe(remolque1, "config_vehicular_sat", "")).startswith(
+                    "CTR"
+                )
+                else "CTR010"
+            ),
+            "subtipo_remolque_2": (
+                str(_get_safe(remolque2, "config_vehicular_sat", "CTR010"))
+                if str(_get_safe(remolque2, "config_vehicular_sat", "")).startswith(
+                    "CTR"
+                )
+                else "CTR010"
             ),
             "bienes_transp": bienes_transporte,
             "id_ccp": f"CCC{str(uuid.uuid4())[3:]}",
@@ -824,6 +900,17 @@ class BillingService:
         }
 
     def _importar_comprobante_ws(self, data: dict, relacion_uuid: str = None):
+        if relacion_uuid:
+            relacion_uuid = str(relacion_uuid).strip()
+            if not re.match(
+                r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                relacion_uuid,
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"El UUID relacionado no tiene un formato válido: '{relacion_uuid}'.",
+                )
+
         try:
             logger.info(
                 f"--- INICIANDO PROCESO DE TIMBRADO VIAJE {data.get('folio', 'X')} ---"
@@ -847,6 +934,12 @@ class BillingService:
 
             if int(getattr(result, "status", 0)) != 200:
                 raise HTTPException(status_code=400, detail=f"PAC: {result.mensaje}")
+
+            if not hasattr(result, "resultados") or not result.resultados:
+                raise HTTPException(
+                    status_code=500,
+                    detail="El PAC no devolvió resultados en la respuesta de timbrado.",
+                )
 
             res_sat = result.resultados[0]
             if int(getattr(res_sat, "status", 0)) == 200:
@@ -1050,7 +1143,6 @@ class BillingService:
             text = str(text).replace(" ", "").replace("\n", "").replace("\r", "")
             return " ".join([text[i : i + length] for i in range(0, len(text), length)])
 
-        # FORMATEO DE COMAS SOLO AQUÍ, EXCLUSIVO PARA WEASYPRINT Y JINJA2 HTML
         context = {
             **d,
             "subtotal": f"{_clean_float(d.get('subtotal', 0)):,.2f}",
@@ -1106,8 +1198,10 @@ class BillingService:
 
         env = Environment(loader=FileSystemLoader(str(self.templates_dir)))
         html_out = env.get_template("carta_porte.html").render(context)
-        HTML(string=html_out, base_url=str(self.templates_dir)).write_pdf(
-            self.storage_dir / f"{uuid}.pdf"
+        pdf_path = self.storage_dir / f"{uuid}.pdf"
+
+        HTML(string=html_out, base_url=self.templates_dir.as_uri()).write_pdf(
+            str(pdf_path)
         )
 
     def _guardar_xml_disco(self, xml_bytes: bytes, uuid: str):

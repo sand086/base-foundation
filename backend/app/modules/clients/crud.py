@@ -55,7 +55,6 @@ def get_client(db: Session, client_id: int):
 def create_client(db: Session, client: schemas.ClientCreate):
     """Crea cliente + subclientes + tarifas con mapeo completo."""
     try:
-
         # 1. Crear el objeto principal Client
         db_client = models.Client(
             public_id=client.public_id,
@@ -125,6 +124,7 @@ def create_client(db: Session, client: schemas.ClientCreate):
         db.commit()
         db.refresh(db_client)
         return db_client
+
     except Exception as e:
         db.rollback()
         print(
@@ -219,6 +219,8 @@ def delete_client(db: Session, client_id: int):
         return False
 
     client.record_status = RecordStatus.ELIMINADO
+
+    # El get_client ya filtró y trajo solo subclientes y tarifas activos
     for sub in client.sub_clients:
         sub.record_status = RecordStatus.ELIMINADO
         for t in sub.tariffs:

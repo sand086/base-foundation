@@ -2,8 +2,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
 from fastapi import HTTPException
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
+
 from app.models import models
+from app.models.models import RecordStatus  # <-- Importante para el filtro
 from . import schemas
 
 # =====================================================================
@@ -12,7 +14,13 @@ from . import schemas
 
 
 def get_providers(db: Session, skip: int = 0, limit: int = 100):
-    return db.query(models.Provider).offset(skip).limit(limit).all()
+    return (
+        db.query(models.Provider)
+        .filter(models.Provider.record_status != RecordStatus.ELIMINADO)
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
 
 def create_provider(db: Session, provider: schemas.ProviderCreate):
@@ -25,17 +33,27 @@ def create_provider(db: Session, provider: schemas.ProviderCreate):
 
 def delete_provider(db: Session, provider_id: str):
     provider = (
-        db.query(models.Provider).filter(models.Provider.id == provider_id).first()
+        db.query(models.Provider)
+        .filter(
+            models.Provider.id == provider_id,
+            models.Provider.record_status != RecordStatus.ELIMINADO,
+        )
+        .first()
     )
     if provider:
-        db.delete(provider)
+        # Reemplazamos db.delete por Soft Delete
+        provider.record_status = RecordStatus.ELIMINADO
         db.commit()
         return True
     return False
 
 
 def get_indirect_categories(db: Session):
-    return db.query(models.IndirectExpenseCategory).all()
+    return (
+        db.query(models.IndirectExpenseCategory)
+        .filter(models.IndirectExpenseCategory.record_status != RecordStatus.ELIMINADO)
+        .all()
+    )
 
 
 # =====================================================================
@@ -44,10 +62,13 @@ def get_indirect_categories(db: Session):
 
 
 def get_bank_accounts(db: Session):
-    """Obtiene solo las cuentas bancarias activas (Oculta las archivadas)"""
+    """Obtiene solo las cuentas bancarias activas (Oculta las archivadas y eliminadas)"""
     return (
         db.query(models.BankAccount)
-        .filter(models.BankAccount.estatus == "activo")
+        .filter(
+            models.BankAccount.estatus == "activo",
+            models.BankAccount.record_status != RecordStatus.ELIMINADO,
+        )
         .all()
     )
 
@@ -67,7 +88,12 @@ def update_bank_account(db: Session, account_id: int, account_data: dict, user_i
     Si trae 'saldo' (por ajuste manual de administrador), también lo afectará.
     """
     account = (
-        db.query(models.BankAccount).filter(models.BankAccount.id == account_id).first()
+        db.query(models.BankAccount)
+        .filter(
+            models.BankAccount.id == account_id,
+            models.BankAccount.record_status != RecordStatus.ELIMINADO,
+        )
+        .first()
     )
 
     if not account:
@@ -88,17 +114,20 @@ def delete_bank_account(db: Session, account_id: int):
     No se elimina de la base de datos para no romper reportes históricos.
     """
     account = (
-        db.query(models.BankAccount).filter(models.BankAccount.id == account_id).first()
+        db.query(models.BankAccount)
+        .filter(
+            models.BankAccount.id == account_id,
+            models.BankAccount.record_status != RecordStatus.ELIMINADO,
+        )
+        .first()
     )
 
     if not account:
         return False
 
-    #  MAGIA: SOFT DELETE (No usamos db.delete(account))
+    #  MAGIA: SOFT DELETE
     account.estatus = "inactivo"
-
-    # Si tienes habilitado AuditMixin en tu modelo, descomenta la siguiente línea:
-    # account.record_status = "I"
+    account.record_status = RecordStatus.ELIMINADO
 
     db.commit()
     return True
@@ -106,7 +135,10 @@ def delete_bank_account(db: Session, account_id: int):
 
 def get_bank_movements(db: Session):
     return (
-        db.query(models.BankMovement).order_by(models.BankMovement.fecha.desc()).all()
+        db.query(models.BankMovement)
+        .filter(models.BankMovement.record_status != RecordStatus.ELIMINADO)
+        .order_by(models.BankMovement.fecha.desc())
+        .all()
     )
 
 
@@ -114,13 +146,16 @@ def create_bank_movement(
     db: Session, movement_data: schemas.BankMovementCreate, current_user_id: int
 ):
     """
-    Registra un movimiento bancario y actualiza el saldo de la cuenta en una transacción atómica.
-    Evita race-conditions usando bloqueo de fila (with_for_update).
+    Registra un movimiento bancario y actualiza el saldo de la cuenta.
+    Esta función es el corazón del módulo de Treasury.
     """
-    # 1. Bloquear la fila de la cuenta bancaria temporalmente en la BD
+    # Bloqueo de fila para evitar que dos pagos al mismo tiempo rompan el saldo
     account = (
         db.query(models.BankAccount)
-        .filter(models.BankAccount.id == movement_data.bank_account_id)
+        .filter(
+            models.BankAccount.id == movement_data.bank_account_id,
+            models.BankAccount.record_status != RecordStatus.ELIMINADO,
+        )
         .with_for_update()
         .first()
     )
@@ -128,13 +163,13 @@ def create_bank_movement(
     if not account:
         raise HTTPException(status_code=404, detail="Cuenta bancaria no encontrada.")
 
-    # 2. Lógica matemática de saldos
+    # Lógica de saldos
     if movement_data.tipo == "ingreso":
         account.saldo += movement_data.monto
     elif movement_data.tipo == "egreso":
+        # Nota: Aquí podrías validar si tiene saldo suficiente, o permitir saldos negativos
         account.saldo -= movement_data.monto
 
-    # 3. Registrar el movimiento en el historial
     nuevo_movimiento = models.BankMovement(
         bank_account_id=account.id,
         tipo=movement_data.tipo,
@@ -145,8 +180,7 @@ def create_bank_movement(
     )
 
     db.add(nuevo_movimiento)
-    db.flush()
-
+    db.flush()  # Para que el ID esté disponible pero sin cerrar la transacción aún
     return nuevo_movimiento
 
 
@@ -178,14 +212,24 @@ def process_bulk_payables(db: Session, payload_data: list[dict]):
         # 1. EVITAR DUPLICADOS
         existing_invoice = (
             db.query(models.PayableInvoice)
-            .filter(models.PayableInvoice.uuid == uuid_fiscal)
+            .filter(
+                models.PayableInvoice.uuid == uuid_fiscal,
+                models.PayableInvoice.record_status != RecordStatus.ELIMINADO,
+            )
             .first()
         )
         if existing_invoice:
             continue  # Ya existe, nos la saltamos
 
         # 2. GESTIÓN DEL PROVEEDOR
-        provider = db.query(models.Provider).filter(models.Provider.rfc == rfc).first()
+        provider = (
+            db.query(models.Provider)
+            .filter(
+                models.Provider.rfc == rfc,
+                models.Provider.record_status != RecordStatus.ELIMINADO,
+            )
+            .first()
+        )
 
         # Obtener días de crédito (del Excel o 0 por defecto)
         try:
@@ -260,64 +304,104 @@ def process_bulk_payables(db: Session, payload_data: list[dict]):
 
 # =====================================================================
 # PAGOS A PROVEEDORES Y CAJA CHICA
-# =====================================================================
+# PAYMENTS (InvoicePayment) & TREASURY BRIDGE
+# =========================================================
 
 
 def register_payable_payment(
     db: Session, invoice_id: int, payment_data: dict, user_id: int
 ):
     """
-    Registra un pago a un proveedor, mata el saldo de la factura (CXP)
-    y genera un EGRESO en la cuenta bancaria seleccionada.
+    Registra un pago a un proveedor de forma ATÓMICA.
+    Si no se proporciona una cuenta bancaria (bank_account_id = None),
+    se registrará automáticamente en una "Caja General" virtual para auditoría de Tesorería.
     """
-    invoice = (
-        db.query(models.PayableInvoice)
-        .filter(models.PayableInvoice.id == invoice_id)
-        .first()
-    )
-    if not invoice:
-        return None
+    try:
+        # Bloqueo de fila para evitar Race Conditions (Doble cobro simultáneo)
+        invoice = (
+            db.query(models.PayableInvoice)
+            .filter(
+                models.PayableInvoice.id == invoice_id,
+                models.PayableInvoice.record_status != RecordStatus.ELIMINADO,
+            )
+            .with_for_update()
+            .first()
+        )
+        if not invoice:
+            raise ValueError("Factura no encontrada.")
 
-    monto_pago = float(payment_data.get("monto", 0))
-    if monto_pago <= 0 or monto_pago > invoice.saldo_pendiente:
-        raise ValueError("El monto es inválido o supera el saldo pendiente.")
+        monto_pago = float(payment_data.get("monto", 0))
+        if monto_pago <= 0 or monto_pago > invoice.saldo_pendiente:
+            raise ValueError("El monto es inválido o supera el saldo pendiente.")
 
-    # 1. Crear el registro del abono
-    nuevo_pago = models.InvoicePayment(
-        invoice_id=invoice.id,
-        bank_account_id=payment_data.get("bank_account_id"),
-        fecha_pago=payment_data.get("fecha_pago", date.today()),
-        monto=monto_pago,
-        metodo_pago=payment_data.get("metodo_pago", "TRANSFERENCIA"),
-        referencia=payment_data.get("referencia", ""),
-        created_by_id=user_id,
-    )
-    db.add(nuevo_pago)
+        bank_account_id = payment_data.get("bank_account_id")
 
-    # 2. Descontar el saldo de la factura
-    invoice.saldo_pendiente -= monto_pago
-    if invoice.saldo_pendiente <= 0.01:
-        invoice.saldo_pendiente = 0.0
-        invoice.estatus = models.InvoiceStatus.PAGADO
-    else:
-        invoice.estatus = models.InvoiceStatus.PAGO_PARCIAL
+        # LOGICA CRÍTICA: Si NO hay cuenta de retiro, creamos/buscamos la "Caja General"
+        if not bank_account_id:
+            caja_general = (
+                db.query(models.BankAccount)
+                .filter(
+                    models.BankAccount.alias == "Caja General Virtual",
+                    models.BankAccount.record_status != RecordStatus.ELIMINADO,
+                )
+                .first()
+            )
+            if not caja_general:
+                # El AuditMixin manejará el created_at y record_status
+                caja_general = models.BankAccount(
+                    banco="Efectivo / Virtual",
+                    numero_cuenta="0000000000",
+                    alias="Caja General Virtual",
+                    tipo_cuenta="virtual",
+                    saldo=0.0,
+                    created_by_id=user_id,
+                )
+                db.add(caja_general)
+                db.flush()  # Guardamos temporalmente para obtener su ID
+            bank_account_id = caja_general.id
 
-    # 3.  MAGIA DE TESORERÍA: Crear el Egreso en el Banco
-    bank_account_id = payment_data.get("bank_account_id")
-    if bank_account_id:
-        mov_schema = schemas.BankMovementCreate(
-            bank_account_id=int(bank_account_id),
-            tipo="egreso",  # ¡Sale dinero de la empresa!
+        # 1. Crear el registro del abono
+        # Aseguramos que referencia y cuenta_retiro sean strings ("") para evitar el error de Pydantic
+        nuevo_pago = models.InvoicePayment(
+            invoice_id=invoice.id,
+            bank_account_id=bank_account_id,
+            fecha_pago=payment_data.get("fecha_pago", date.today()),
             monto=monto_pago,
-            concepto=f"Pago Proveedor - Fra. {invoice.folio_interno or invoice.uuid[:8]}",
+            metodo_pago=payment_data.get("metodo_pago", "TRANSFERENCIA"),
+            referencia=payment_data.get("referencia", ""),
+            cuenta_retiro=payment_data.get("cuenta_retiro", ""),
+            created_by_id=user_id,
+        )
+        db.add(nuevo_pago)
+
+        # 2. Descontar el saldo de la factura
+        invoice.saldo_pendiente -= monto_pago
+        if invoice.saldo_pendiente <= 0.01:
+            invoice.saldo_pendiente = 0.0
+            invoice.estatus = models.InvoiceStatus.PAGADO
+        else:
+            invoice.estatus = models.InvoiceStatus.PAGO_PARCIAL
+
+        # 3. Crear el Egreso en Tesorería (Flujo de Caja)
+        mov_schema = schemas.BankMovementCreate(
+            bank_account_id=bank_account_id,
+            tipo="egreso",
+            monto=monto_pago,
+            concepto=f"Pago CxP - Fra. {invoice.folio_interno or invoice.uuid[:8]}",
             referencia=payment_data.get("referencia", ""),
         )
-        # Reutilizamos la función que bloquea la fila y resta el saldo de forma segura
+        # Delegamos a la función que ya ajusta los saldos bancarios de forma segura
         create_bank_movement(db, mov_schema, user_id)
 
-    db.commit()
-    db.refresh(invoice)
-    return invoice
+        # Confirmamos la transacción (Se aplican todos los db.add y db.flush)
+        db.commit()
+        db.refresh(invoice)
+        return invoice
+
+    except Exception as e:
+        # ATOMICIDAD: Si algo falla (ej. error en create_bank_movement), echamos todo para atrás
+        db.rollback()
+        raise e
 
 
 def register_petty_cash_expense(db: Session, expense_data: dict, user_id: int):
@@ -415,7 +499,10 @@ def process_sat_master_report(
                 # Búsqueda/Creación de Cliente
                 client = (
                     db.query(models.Client)
-                    .filter(models.Client.rfc == rfc_receptor)
+                    .filter(
+                        models.Client.rfc == rfc_receptor,
+                        models.Client.record_status != RecordStatus.ELIMINADO,
+                    )
                     .first()
                 )
                 if not client:
@@ -428,7 +515,11 @@ def process_sat_master_report(
                 # ¿Ya existe? (Quizás la creó Operaciones sin UUID)
                 invoice = (
                     db.query(models.ReceivableInvoice)
-                    .filter(models.ReceivableInvoice.uuid == uuid_fiscal)
+                    .filter(
+                        models.ReceivableInvoice.uuid == uuid_fiscal,
+                        models.ReceivableInvoice.record_status
+                        != RecordStatus.ELIMINADO,
+                    )
                     .first()
                 )
                 if not invoice:
@@ -457,7 +548,10 @@ def process_sat_master_report(
                 # Búsqueda/Creación de Proveedor
                 provider = (
                     db.query(models.Provider)
-                    .filter(models.Provider.rfc == rfc_emisor)
+                    .filter(
+                        models.Provider.rfc == rfc_emisor,
+                        models.Provider.record_status != RecordStatus.ELIMINADO,
+                    )
                     .first()
                 )
                 if not provider:
@@ -469,7 +563,10 @@ def process_sat_master_report(
 
                 invoice = (
                     db.query(models.PayableInvoice)
-                    .filter(models.PayableInvoice.uuid == uuid_fiscal)
+                    .filter(
+                        models.PayableInvoice.uuid == uuid_fiscal,
+                        models.PayableInvoice.record_status != RecordStatus.ELIMINADO,
+                    )
                     .first()
                 )
                 if not invoice:
@@ -506,7 +603,11 @@ def process_sat_master_report(
             if is_cxc:
                 orig_inv = (
                     db.query(models.ReceivableInvoice)
-                    .filter(models.ReceivableInvoice.uuid == uuid_relacionado)
+                    .filter(
+                        models.ReceivableInvoice.uuid == uuid_relacionado,
+                        models.ReceivableInvoice.record_status
+                        != RecordStatus.ELIMINADO,
+                    )
                     .first()
                 )
                 if orig_inv and orig_inv.saldo_pendiente > 0:
@@ -518,7 +619,10 @@ def process_sat_master_report(
             else:
                 orig_inv = (
                     db.query(models.PayableInvoice)
-                    .filter(models.PayableInvoice.uuid == uuid_relacionado)
+                    .filter(
+                        models.PayableInvoice.uuid == uuid_relacionado,
+                        models.PayableInvoice.record_status != RecordStatus.ELIMINADO,
+                    )
                     .first()
                 )
                 if orig_inv and orig_inv.saldo_pendiente > 0:
@@ -537,7 +641,11 @@ def process_sat_master_report(
             if is_cxc:
                 orig_inv = (
                     db.query(models.ReceivableInvoice)
-                    .filter(models.ReceivableInvoice.uuid == uuid_relacionado)
+                    .filter(
+                        models.ReceivableInvoice.uuid == uuid_relacionado,
+                        models.ReceivableInvoice.record_status
+                        != RecordStatus.ELIMINADO,
+                    )
                     .first()
                 )
                 if orig_inv:
@@ -563,7 +671,10 @@ def process_sat_master_report(
             else:
                 orig_inv = (
                     db.query(models.PayableInvoice)
-                    .filter(models.PayableInvoice.uuid == uuid_relacionado)
+                    .filter(
+                        models.PayableInvoice.uuid == uuid_relacionado,
+                        models.PayableInvoice.record_status != RecordStatus.ELIMINADO,
+                    )
                     .first()
                 )
                 if orig_inv:

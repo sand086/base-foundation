@@ -692,4 +692,24 @@ export class LogisticsService {
             },
         });
     }
+    /**
+     * Unhook Trip In Yard
+     * @param tripId
+     * @returns TripResponse Successful Response
+     * @throws ApiError
+     */
+    public static unhookTripInYardApiLogisticsTripsTripIdUnhookPost(
+        tripId: number,
+    ): CancelablePromise<TripResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/logistics/trips/{trip_id}/unhook',
+            path: {
+                'trip_id': tripId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
 }

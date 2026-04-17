@@ -1096,7 +1096,7 @@ export const DispatchWizard = ({
               <div className="grid grid-cols-1 gap-5 md:grid-cols-3 pt-2">
                 <div className="space-y-1.5 md:col-span-2">
                   <Label variant="brand" required>
-                    MERCANCÍA (CATÁLOGO SAT) *
+                    MERCANCÍA (CATÁLOGO SAT)
                   </Label>
                   <SearchableSelect
                     items={availableSatProducts}
@@ -1142,7 +1142,7 @@ export const DispatchWizard = ({
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
                 <div className="space-y-1.5">
                   <Label variant="brand" className="text-brand-red" required>
-                    CONTENEDOR 1 *
+                    CONTENEDOR 1
                   </Label>
                   <Input
                     placeholder="Ej: CMA U 1521457"
@@ -1159,7 +1159,7 @@ export const DispatchWizard = ({
                 {isFullTrip && (
                   <div className="space-y-1.5 animate-in fade-in">
                     <Label variant="brand" className="text-brand-red" required>
-                      CONTENEDOR 2 *
+                      CONTENEDOR 2
                     </Label>
                     <Input
                       placeholder="Ej: MSC U 8899221"
@@ -1198,12 +1198,12 @@ export const DispatchWizard = ({
             <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 animate-in slide-in-from-top-4 fade-in duration-300">
               <div className={sectionCardClass}>
                 <h4 className="text-sm font-black uppercase tracking-tighter text-foreground mb-4 flex items-center gap-2 border-b pb-2">
-                  <User className="h-5 w-5 text-brand-red" /> Ejecutor
+                  <User className="h-5 w-5 text-brand-red" /> Operador
                 </h4>
                 <div className="space-y-3">
                   <div className="space-y-1.5">
                     <Label variant="brand" required>
-                      TRACTOCAMIÓN *
+                      TRACTOCAMIÓN
                     </Label>
                     <SearchableSelect
                       items={availableTractos}
@@ -1214,7 +1214,7 @@ export const DispatchWizard = ({
                   </div>
                   <div className="space-y-1.5">
                     <Label variant="brand" required>
-                      OPERADOR *
+                      OPERADOR
                     </Label>
                     <SearchableSelect
                       items={availableOperators}
@@ -1233,7 +1233,7 @@ export const DispatchWizard = ({
                 <div className="space-y-3">
                   <div className="space-y-1.5">
                     <Label variant="brand" required>
-                      REMOLQUE 1 *
+                      REMOLQUE 1
                     </Label>
                     <SearchableSelect
                       items={availableRemolques}
@@ -1248,7 +1248,7 @@ export const DispatchWizard = ({
                     <>
                       <div className="space-y-1.5">
                         <Label variant="brand" required>
-                          DOLLY *
+                          DOLLY
                         </Label>
                         <SearchableSelect
                           items={availableDollies}
@@ -1261,7 +1261,7 @@ export const DispatchWizard = ({
                       </div>
                       <div className="space-y-1.5">
                         <Label variant="brand" required>
-                          REMOLQUE 2 *
+                          REMOLQUE 2
                         </Label>
                         <SearchableSelect
                           items={availableRemolques}

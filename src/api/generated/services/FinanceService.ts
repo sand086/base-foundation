@@ -198,7 +198,7 @@ export class FinanceService {
     /**
      * Get Receivable Invoices
      * Obtiene todas las facturas de clientes (Cuentas por Cobrar)
-     * con la información del cliente adjunta.
+     * con la información del cliente adjunta, ignorando las que no tienen folio.
      * @param skip
      * @param limit
      * @returns any Successful Response

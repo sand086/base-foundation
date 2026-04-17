@@ -73,10 +73,10 @@ export const useTrips = () => {
       const msg =
         error instanceof ApiError
           ? error.body?.detail
-          : "No se pudo realizar el desenganche.";
+          : "No se pudo realizar el relevo.";
       toast({
         title: "Error",
-        description: msg || "No se pudo realizar el desenganche.",
+        description: msg || "No se pudo realizar el relevo.",
         variant: "destructive",
       });
       return null;
@@ -149,7 +149,6 @@ export const useTrips = () => {
     }
   };
 
-  // 👈 NUEVA FUNCIÓN PARA "DESHACER MOVIMIENTO" CON REFRESCO AUTOMÁTICO
   const undoTripLeg = async (tripId: string | number) => {
     try {
       const data =
@@ -303,6 +302,37 @@ export const useTrips = () => {
     }
   };
 
+  const unhookTrip = async (tripId: string) => {
+    try {
+      setLoading(true);
+      await LogisticsService.unhookTripInYardApiLogisticsTripsTripIdUnhookPost(
+        Number(tripId),
+      );
+
+      toast({
+        title: "Desenganche Exitoso",
+        description:
+          "El operador y el tractocamión están libres. La carga espera en patio.",
+      });
+
+      await fetchTrips();
+      return true;
+    } catch (error: any) {
+      const errorMsg =
+        error.body?.detail ||
+        error.message ||
+        "No se pudo desenganchar el viaje.";
+      toast({
+        title: "Error al desenganchar",
+        description: errorMsg,
+        variant: "destructive",
+      });
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchTrips();
   }, [fetchTrips]);
@@ -310,6 +340,7 @@ export const useTrips = () => {
   return {
     trips,
     loading,
+    unhookTrip,
     fetchTrips,
     createTrip,
     createNextLeg,
@@ -322,5 +353,6 @@ export const useTrips = () => {
     refreshTrips,
     liquidarLote,
     getSettlementPreview,
+    undoTripLeg,
   };
 };

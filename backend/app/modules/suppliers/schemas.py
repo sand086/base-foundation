@@ -31,7 +31,7 @@ class InvoicePaymentBase(ORMBase):
     monto: float
     metodo_pago: Optional[str] = Field(default=None, max_length=50)
     referencia: Optional[str] = Field(default=None, max_length=100)
-    cuenta_retiro: Optional[str] = Field(default=None, max_length=50)
+    cuenta_retiro: Optional[str] = None
     complemento_uuid: Optional[str] = Field(default=None, max_length=36)
 
 

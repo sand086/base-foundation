@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-// 🔥 IMPORTACIÓN NUEVA: Necesaria para limpiar la caché de React Query
+//   IMPORTACIÓN NUEVA: Necesaria para limpiar la caché de React Query
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Plus,
@@ -58,7 +58,7 @@ const categories = [
 ];
 
 export const InventoryTable = () => {
-  // 🔥 NUEVO: Instanciamos el cliente de React Query
+  //   NUEVO: Instanciamos el cliente de React Query
   const queryClient = useQueryClient();
 
   // 1. Hook de datos
@@ -157,7 +157,7 @@ export const InventoryTable = () => {
     if (success) {
       setIsAddModalOpen(false);
       setItemToEdit(null);
-      // 🔥 LA MAGIA DE CACHÉ: Le avisamos a toda la app que el inventario cambió
+      //   LA MAGIA DE CACHÉ: Le avisamos a toda la app que el inventario cambió
       queryClient.invalidateQueries({ queryKey: ["inventory"] });
     }
   };
@@ -166,7 +166,7 @@ export const InventoryTable = () => {
     if (!itemToDelete) return;
     await deleteItem(itemToDelete);
     setItemToDelete(null);
-    // 🔥 También invalidamos al eliminar por si acaso
+    //   También invalidamos al eliminar por si acaso
     queryClient.invalidateQueries({ queryKey: ["inventory"] });
   };
 

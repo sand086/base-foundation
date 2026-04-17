@@ -61,6 +61,11 @@ interface EnhancedDataTableProps<T> {
   exportFileName?: string;
   searchPlaceholder?: string;
   isLoading?: boolean;
+  //   NUEVAS PROPS PARA SELECCIÓN MULTIPLE
+  enableRowSelection?: boolean;
+  selectedRows?: T[];
+  onSelectedRowsChange?: (rows: T[]) => void;
+  rowKey?: keyof T; // e.g., 'id'
 }
 
 type SortDirection = "asc" | "desc" | null;
@@ -90,6 +95,10 @@ export function EnhancedDataTable<T extends Record<string, any>>({
   exportFileName = "export",
   searchPlaceholder = "BUSCAR REGISTROS...",
   isLoading = false,
+  enableRowSelection = false,
+  selectedRows = [],
+  onSelectedRowsChange,
+  rowKey = "id" as keyof T,
 }: EnhancedDataTableProps<T>) {
   // State
   const [globalSearch, setGlobalSearch] = useState("");
@@ -488,13 +497,50 @@ export function EnhancedDataTable<T extends Record<string, any>>({
         </div>
       </div>
 
-      {/* CAPA 1: TABLE CONTAINER (Liquid Glass Style) */}
+      {/* CAPA 1: TABLE CONTAINER */}
       <div className="relative w-full overflow-hidden rounded-[2rem] border border-slate-200 dark:border-white/10 bg-white/40 dark:bg-brand-navy/30 backdrop-blur-xl shadow-2xl transition-all">
         <div className="overflow-auto max-h-[65vh] custom-scrollbar">
           <table className="w-full caption-bottom text-sm border-collapse">
             <thead className="sticky top-0 z-20">
-              {/* REGLA DE ORO: HEADER GRIS EN LIGHT, SOLID EN DARK */}
               <tr className="bg-slate-100/90 dark:bg-slate-900/95 border-b border-slate-200 dark:border-white/10 backdrop-blur-md shadow-sm">
+                {/*   COLUMNA DE SELECCIÓN HEADER   */}
+                {enableRowSelection && (
+                  <th className="h-14 px-6 py-4 text-center align-middle w-16">
+                    <Checkbox
+                      checked={
+                        paginatedData.length > 0 &&
+                        paginatedData.every((row) =>
+                          selectedRows?.some(
+                            (sr) => sr[rowKey] === row[rowKey],
+                          ),
+                        )
+                      }
+                      onCheckedChange={(checked) => {
+                        if (!onSelectedRowsChange) return;
+                        if (checked) {
+                          const newRows = [...selectedRows];
+                          paginatedData.forEach((row) => {
+                            if (
+                              !newRows.some((sr) => sr[rowKey] === row[rowKey])
+                            ) {
+                              newRows.push(row);
+                            }
+                          });
+                          onSelectedRowsChange(newRows);
+                        } else {
+                          const newRows = selectedRows.filter(
+                            (sr) =>
+                              !paginatedData.some(
+                                (row) => row[rowKey] === sr[rowKey],
+                              ),
+                          );
+                          onSelectedRowsChange(newRows);
+                        }
+                      }}
+                    />
+                  </th>
+                )}
+
                 {columns.map((col) => (
                   <th
                     key={col.key as string}
@@ -519,7 +565,10 @@ export function EnhancedDataTable<T extends Record<string, any>>({
             <tbody className="divide-y divide-slate-200/40 dark:divide-white/5 bg-transparent">
               {isLoading ? (
                 <tr>
-                  <td colSpan={columns.length} className="p-20 text-center">
+                  <td
+                    colSpan={columns.length + (enableRowSelection ? 1 : 0)}
+                    className="p-20 text-center"
+                  >
                     <div className="flex flex-col items-center justify-center gap-4">
                       <Loader2 className="h-10 w-10 animate-spin text-brand-red" />
                       <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-white/40">
@@ -530,7 +579,10 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                 </tr>
               ) : paginatedData.length === 0 ? (
                 <tr>
-                  <td colSpan={columns.length} className="p-20 text-center">
+                  <td
+                    colSpan={columns.length + (enableRowSelection ? 1 : 0)}
+                    className="p-20 text-center"
+                  >
                     <div className="flex flex-col items-center justify-center gap-3 opacity-40">
                       <TableIcon size={48} strokeWidth={1.5} />
                       <span className="text-[11px] font-black uppercase tracking-widest text-slate-500 dark:text-white/40">
@@ -546,10 +598,38 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                     className={cn(
                       "interactive-row transition-all duration-300 outline-none group",
                       "hover:bg-slate-500/[0.04] dark:hover:bg-white/[0.02]",
+                      selectedRows?.some((sr) => sr[rowKey] === row[rowKey]) &&
+                        "bg-brand-navy/5 dark:bg-brand-navy/20",
                       onRowClick && "cursor-pointer active:scale-[0.998]",
                     )}
                     onClick={() => onRowClick?.(row)}
                   >
+                    {/*   COLUMNA DE SELECCIÓN ROW   */}
+                    {enableRowSelection && (
+                      <td
+                        className="px-6 py-4 align-middle text-center"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Checkbox
+                          checked={selectedRows?.some(
+                            (sr) => sr[rowKey] === row[rowKey],
+                          )}
+                          onCheckedChange={(checked) => {
+                            if (!onSelectedRowsChange) return;
+                            if (checked) {
+                              onSelectedRowsChange([...selectedRows, row]);
+                            } else {
+                              onSelectedRowsChange(
+                                selectedRows.filter(
+                                  (sr) => sr[rowKey] !== row[rowKey],
+                                ),
+                              );
+                            }
+                          }}
+                        />
+                      </td>
+                    )}
+
                     {columns.map((col) => (
                       <td
                         key={col.key as string}
@@ -571,7 +651,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
           </table>
         </div>
 
-        {/* CAPA 4: FOOTER (Crystal Pagination Bar) */}
+        {/* CAPA 4: FOOTER */}
         <div className="flex flex-wrap items-center justify-between gap-4 px-8 py-5 border-t border-slate-200/50 dark:border-white/10 bg-white/80 dark:bg-black/40 backdrop-blur-md">
           <div className="flex items-center gap-4">
             <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-white/40">

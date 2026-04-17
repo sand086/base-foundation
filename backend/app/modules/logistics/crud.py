@@ -1,6 +1,5 @@
 # --- Fuente: crud_trips.py ---
 
-
 from datetime import datetime
 import uuid
 
@@ -147,7 +146,7 @@ def update_trip_status(
     if trip.legs:
         active_leg = trip.legs[-1]
 
-    #  PROTECCIÓN DE FASE 2: Misma lógica, mantener vivo el viaje padre
+    #  PROTECCIÓN DE FASE 2: Misma lógica, mantener vivo el viaje padre
     if status == models.TripStatus.ENTREGADO:
         is_last_leg = False
         if trip.legs:
@@ -177,10 +176,7 @@ def update_trip_status(
         if trip.status in [models.TripStatus.ENTREGADO, models.TripStatus.CERRADO]:
             trip.actual_arrival = datetime.utcnow()
 
-        if trip.status == models.TripStatus.CERRADO:
-            trip.closed_at = datetime.utcnow()
-
-        #  LIBERACIÓN DE UNIDADES INTELIGENTE
+        #  LIBERACIÓN DE UNIDADES INTELIGENTE
         # Solo liberamos chasis y dolly si el viaje se terminó (fase vacía completada)
         if trip.status in [models.TripStatus.ENTREGADO, models.TripStatus.CERRADO]:
             unit_ids_to_free = [
@@ -311,14 +307,24 @@ def add_timeline_event(
     if not trip:
         return None
 
-    active_leg = next(
-        (
-            leg
-            for leg in reversed(trip.legs)
-            if leg.status not in ["entregado", "cerrado", "liquidado"]
-        ),
-        trip.legs[-1] if trip.legs else None,
-    )
+    active_leg = None
+
+    # 1. NUEVA LÓGICA: Si React mandó el ID exacto del tramo (Ej. el de Juan), lo buscamos y usamos ese.
+    if getattr(payload, "trip_leg_id", None):
+        active_leg = next(
+            (leg for leg in trip.legs if leg.id == payload.trip_leg_id), None
+        )
+
+    # 2. LÓGICA ANTERIOR (Respaldo): Si React no mandó nada, buscamos el último tramo activo (Ej. Gustavo).
+    if not active_leg:
+        active_leg = next(
+            (
+                leg
+                for leg in reversed(trip.legs)
+                if leg.status not in ["entregado", "cerrado", "liquidado"]
+            ),
+            trip.legs[-1] if trip.legs else None,
+        )
 
     #  MAPEO SEGURO DE ESTADOS (Frontend -> ENUM PostgreSQL)
     status_db_validos = ["detenido", "retraso", "accidente", "bloqueado", "entregado"]
@@ -431,7 +437,10 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
     leg = (
         db.query(models.TripLeg)
         .options(joinedload(models.TripLeg.trip))
-        .filter(models.TripLeg.id == trip_leg_id)
+        .filter(
+            models.TripLeg.id == trip_leg_id,
+            models.TripLeg.record_status != RecordStatus.ELIMINADO,
+        )
         .first()
     )
     if not leg or not leg.trip:
@@ -625,7 +634,14 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
 def close_trip_settlement(
     db: Session, trip_leg_id: int, payload: schemas.CloseSettlementPayload
 ):
-    leg = db.query(models.TripLeg).filter(models.TripLeg.id == trip_leg_id).first()
+    leg = (
+        db.query(models.TripLeg)
+        .filter(
+            models.TripLeg.id == trip_leg_id,
+            models.TripLeg.record_status != RecordStatus.ELIMINADO,
+        )
+        .first()
+    )
     if not leg:
         return None
 
@@ -660,7 +676,13 @@ def close_trip_settlement(
 
 def create_next_leg(db: Session, trip_id: str, payload: schemas.TripLegCreate):
     tid = int(trip_id)
-    trip = db.query(models.Trip).filter(models.Trip.id == tid).first()
+    trip = (
+        db.query(models.Trip)
+        .filter(
+            models.Trip.id == tid, models.Trip.record_status != RecordStatus.ELIMINADO
+        )
+        .first()
+    )
 
     if not trip:
         return None
@@ -757,7 +779,14 @@ def create_next_leg(db: Session, trip_id: str, payload: schemas.TripLegCreate):
 
 
 def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload):
-    legs = db.query(models.TripLeg).filter(models.TripLeg.id.in_(payload.leg_ids)).all()
+    legs = (
+        db.query(models.TripLeg)
+        .filter(
+            models.TripLeg.id.in_(payload.leg_ids),
+            models.TripLeg.record_status != RecordStatus.ELIMINADO,
+        )
+        .all()
+    )
     if not legs:
         return None
 
@@ -832,7 +861,10 @@ def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload)
             #  CREACIÓN DE CXC
             existing_cxc = (
                 db.query(models.ReceivableInvoice)
-                .filter(models.ReceivableInvoice.viaje_id == trip.id)
+                .filter(
+                    models.ReceivableInvoice.viaje_id == trip.id,
+                    models.ReceivableInvoice.record_status != RecordStatus.ELIMINADO,
+                )
                 .first()
             )
             if not existing_cxc:
@@ -883,7 +915,10 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
             joinedload(models.TripLeg.unit),
             joinedload(models.TripLeg.fuel_logs),
         )
-        .filter(models.TripLeg.id.in_(leg_ids))
+        .filter(
+            models.TripLeg.id.in_(leg_ids),
+            models.TripLeg.record_status != RecordStatus.ELIMINADO,
+        )
         .all()
     )
 
@@ -996,7 +1031,9 @@ def get_last_unit_odometer(db: Session, unit_id: int) -> int:
     last_leg = (
         db.query(models.TripLeg)
         .filter(
-            models.TripLeg.unit_id == unit_id, models.TripLeg.odometro_final != None
+            models.TripLeg.unit_id == unit_id,
+            models.TripLeg.odometro_final != None,
+            models.TripLeg.record_status != RecordStatus.ELIMINADO,
         )
         .order_by(models.TripLeg.id.desc())
         .first()
@@ -1007,7 +1044,10 @@ def get_last_unit_odometer(db: Session, unit_id: int) -> int:
 
     last_fuel = (
         db.query(models.FuelLog)
-        .filter(models.FuelLog.unit_id == unit_id)
+        .filter(
+            models.FuelLog.unit_id == unit_id,
+            models.FuelLog.record_status != RecordStatus.ELIMINADO,
+        )
         .order_by(models.FuelLog.odometro.desc())
         .first()
     )
@@ -1017,7 +1057,13 @@ def get_last_unit_odometer(db: Session, unit_id: int) -> int:
 
 def undo_last_leg(db: Session, trip_id: str):
     tid = int(trip_id)
-    trip = db.query(models.Trip).filter(models.Trip.id == tid).first()
+    trip = (
+        db.query(models.Trip)
+        .filter(
+            models.Trip.id == tid, models.Trip.record_status != RecordStatus.ELIMINADO
+        )
+        .first()
+    )
 
     if not trip or not trip.legs:
         return False
@@ -1073,7 +1119,14 @@ def undo_last_leg(db: Session, trip_id: str):
 
 
 def reset_leg_audit(db: Session, leg_id: int):
-    leg = db.query(models.TripLeg).filter(models.TripLeg.id == leg_id).first()
+    leg = (
+        db.query(models.TripLeg)
+        .filter(
+            models.TripLeg.id == leg_id,
+            models.TripLeg.record_status != RecordStatus.ELIMINADO,
+        )
+        .first()
+    )
     if not leg:
         return None
 
@@ -1092,3 +1145,71 @@ def reset_leg_audit(db: Session, leg_id: int):
     db.commit()
     db.refresh(leg)
     return leg
+
+
+def unhook_in_yard(db: Session, trip_id: str):
+    tid = int(trip_id)
+    trip = (
+        db.query(models.Trip)
+        .filter(
+            models.Trip.id == tid, models.Trip.record_status != RecordStatus.ELIMINADO
+        )
+        .first()
+    )
+
+    if not trip or not trip.legs:
+        return None
+
+    # Obtenemos la fase activa
+    active_leg = trip.legs[-1]
+
+    if active_leg.status in ["entregado", "cerrado", "liquidado"]:
+        raise ValueError("Este tramo ya está cerrado o entregado.")
+
+    # REGLA DE GUSTAVO: Solo se puede desenganchar en la Fase 1 (Carga Patio/Muelle)
+    if active_leg.leg_type != "carga_muelle":
+        raise ValueError(
+            "Solo se permite desenganchar viajes que están en fase de Carga en Patio/Muelle."
+        )
+
+    # 1. Liberamos SOLO Tractocamión y Operador.
+    # (El Remolque 1, Dolly y Remolque 2 siguen atados al `Trip` maestro)
+    if active_leg.unit_id:
+        tracto = (
+            db.query(models.Unit).filter(models.Unit.id == active_leg.unit_id).first()
+        )
+        if tracto:
+            tracto.status = models.UnitStatus.DISPONIBLE
+
+    if active_leg.operator_id:
+        op = (
+            db.query(models.Operator)
+            .filter(models.Operator.id == active_leg.operator_id)
+            .first()
+        )
+        if op:
+            op.status = models.OperatorStatus.ACTIVO
+
+    # 2. Marcamos el tramo local como completado
+    active_leg.status = models.TripStatus.ENTREGADO
+    active_leg.actual_arrival = datetime.utcnow()
+    active_leg.last_update = datetime.utcnow()
+
+    # 3. Ponemos el Viaje en estado DETENIDO (o un estado custom) para que el despachador
+    # sepa que está en patio esperando asignación de carretera
+    trip.status = models.TripStatus.DETENIDO
+    trip.last_update = datetime.utcnow()
+
+    # 4. Dejamos el registro en la Bitácora
+    db_event = models.TripTimelineEvent(
+        trip_leg_id=active_leg.id,
+        time=datetime.utcnow(),
+        event="Desenganche en patio. Operador y Tractocamión liberados. Carga en espera de asignación de carretera.",
+        event_type="info",
+        location="Patio de Operaciones",
+    )
+    db.add(db_event)
+
+    db.commit()
+    db.refresh(trip)
+    return trip

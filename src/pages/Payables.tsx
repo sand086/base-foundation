@@ -14,24 +14,17 @@ import {
   Trash2,
   Receipt,
   FileCode2,
+  Loader2,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/ui/page-header";
 import { ActionButton } from "@/components/ui/action-button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Badge } from "@/components/ui/badge";
-import {
-  DataTable,
-  DataTableHeader,
-  DataTableBody,
-  DataTableRow,
-  DataTableHead,
-  DataTableCell,
-} from "@/components/ui/data-table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -49,6 +42,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  EnhancedDataTable,
+  ColumnDef,
+} from "@/components/ui/enhanced-data-table";
 
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -57,9 +54,19 @@ import { es } from "date-fns/locale";
 import { ManageCategoriesModal } from "@/features/suppliers/components/ManageCategoriesModal";
 import { useSuppliers } from "@/features/suppliers/hooks/useSuppliers";
 
-import { RegisterExpenseModal } from "@/features/payables/components/RegisterExpenseModal";
+// FIX: Importamos el LocalPrefillData (que ahora está extendido)
+import {
+  RegisterExpenseModal,
+  LocalPrefillData,
+} from "@/features/payables/components/RegisterExpenseModal";
 import { InvoicePayablesDetailSheet } from "@/features/payables/components/InvoicePayablesDetailSheet";
 import { PayableInvoice } from "@/features/payables/types";
+
+// FIX: Importamos el nuevo Importador de XML
+import {
+  ImportXMLExpenseModal,
+  XMLParsedData,
+} from "@/features/payables/components/ImportXMLExpenseModal";
 
 import { RegisterPaymentModal } from "@/features/treasury/components/RegisterPaymentModal";
 import { useBankAccounts } from "@/features/treasury/hooks/useBankAccounts";
@@ -71,15 +78,6 @@ import {
   getClasificacionColor,
 } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-
-interface PrefillData {
-  proveedor: string;
-  proveedorId: string;
-  concepto: string;
-  montoTotal: number;
-  ordenCompraId: string;
-  ordenCompraFolio: string;
-}
 
 const safeLower = (v: unknown) =>
   typeof v === "string" ? v.toLowerCase() : "";
@@ -114,14 +112,14 @@ export default function Payables() {
 
   const { bankAccounts, isLoading: isLoadingBankAccounts } = useBankAccounts();
 
-  const [searchCxP, setSearchCxP] = useState("");
-  const [searchPagos, setSearchPagos] = useState("");
-
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isDeleteInvoiceOpen, setIsDeleteInvoiceOpen] = useState(false);
   const [isManageCatOpen, setIsManageCatOpen] = useState(false);
+
+  // FIX: Estado para el modal de arrastrar XML
+  const [isXmlModalOpen, setIsXmlModalOpen] = useState(false);
 
   const [invoiceToDelete, setInvoiceToDelete] = useState<PayableInvoice | null>(
     null,
@@ -132,12 +130,12 @@ export default function Payables() {
   const [editingInvoice, setEditingInvoice] = useState<PayableInvoice | null>(
     null,
   );
-  const [prefillData, setPrefillData] = useState<PrefillData | null>(null);
+  const [prefillData, setPrefillData] = useState<LocalPrefillData | null>(null);
 
   useEffect(() => {
     const fromPurchases = searchParams.get("fromPurchases");
     if (fromPurchases === "true") {
-      const prefill: PrefillData = {
+      const prefill: LocalPrefillData = {
         proveedor: searchParams.get("proveedor") || "",
         proveedorId: searchParams.get("proveedorId") || "",
         concepto: searchParams.get("concepto") || "",
@@ -164,41 +162,46 @@ export default function Payables() {
       document.removeEventListener("open-manage-categories", handleOpen);
   }, []);
 
-  const kpis = useMemo(() => {
-    const totalVencido = invoices
-      .filter((inv) => getInvoiceStatusInfo(inv).status === "danger")
-      .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
+  // FIX: Función que recibe el XML parseado y abre el formulario final
+  const handleXmlParsed = (data: XMLParsedData) => {
+    setIsXmlModalOpen(false);
+    setPrefillData({
+      proveedor: data.emisorNombre,
+      proveedorId: "", // Buscaremos por nombre en el UseEffect del Modal
+      concepto: `Gasto amparado por CFDI (${data.emisorRfc})`,
+      montoTotal: data.montoTotal,
+      uuid: data.uuid,
+      fecha_emision: data.fecha,
+      xml_file: data.xmlFile,
+    });
+    setEditingInvoice(null);
+    setIsExpenseModalOpen(true); // Abre el modal de siempre, pero ya Lleno!
+  };
 
-    const totalPorPagar = invoices
-      .filter((inv) => {
-        const s = getInvoiceStatusInfo(inv).status;
-        return s === "warning" || s === "default";
-      })
-      .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
+  // 1. FORMATEO DE DATOS DE FACTURAS
+  const normalizedInvoices = useMemo(() => {
+    const dataArray = Array.isArray(invoices)
+      ? invoices
+      : (invoices as any).items ||
+        (invoices as any).data ||
+        (invoices as any).results ||
+        [];
 
-    const totalParcial = invoices
-      .filter((inv) => getInvoiceStatusInfo(inv).status === "info")
-      .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
-
-    const fromPurchasesCount = invoices.filter(
-      (inv) => !!inv.orden_compra_id,
-    ).length;
-
-    return { totalVencido, totalPorPagar, totalParcial, fromPurchasesCount };
+    return dataArray.map((inv: any) => ({
+      ...inv,
+      supplier_razon_social:
+        inv.supplier_razon_social ||
+        inv.supplier?.razon_social ||
+        inv.proveedor ||
+        "Desconocido",
+      saldo_pendiente: inv.saldo_pendiente || 0,
+      monto_total: inv.monto_total || 0,
+    })) as PayableInvoice[];
   }, [invoices]);
 
-  const filteredInvoices = useMemo(() => {
-    const q = safeLower(searchCxP);
-    return invoices.filter((inv) => {
-      const proveedor = safeLower(inv.supplier_razon_social || "");
-      const uuid = safeLower(inv.uuid || "");
-      const concepto = safeLower(inv.concepto || "");
-      return proveedor.includes(q) || uuid.includes(q) || concepto.includes(q);
-    });
-  }, [invoices, searchCxP]);
-
+  // 2. FORMATEO DE DATOS DE PAGOS
   const allPayments = useMemo(() => {
-    const rows = invoices.flatMap((inv) => {
+    const rows = normalizedInvoices.flatMap((inv) => {
       const supplierName = inv.supplier_razon_social || "";
       const folioFactura =
         inv.folio_interno ||
@@ -206,7 +209,7 @@ export default function Payables() {
         (inv.uuid ? inv.uuid.substring(0, 8) : "");
       const payments = inv.payments || [];
 
-      return payments.map((p) => ({
+      return payments.map((p: any) => ({
         id: p.id,
         proveedor: supplierName,
         folioFactura,
@@ -214,21 +217,39 @@ export default function Payables() {
         monto: p.monto,
         metodo_pago: p.metodo_pago || "Transferencia",
         complemento_uuid: p.complemento_uuid || null,
+        factura_original: inv,
       }));
     });
 
-    const filtered = rows.filter(
-      (r) =>
-        safeLower(r.proveedor).includes(safeLower(searchPagos)) ||
-        safeLower(r.folioFactura).includes(safeLower(searchPagos)),
-    );
-
-    return filtered.sort((a, b) => {
+    return rows.sort((a, b) => {
       const da = parseDateSafe(a.fecha_pago)?.getTime() ?? 0;
       const db = parseDateSafe(b.fecha_pago)?.getTime() ?? 0;
       return db - da;
     });
-  }, [invoices, searchPagos]);
+  }, [normalizedInvoices]);
+
+  const kpis = useMemo(() => {
+    const totalVencido = normalizedInvoices
+      .filter((inv) => getInvoiceStatusInfo(inv).status === "danger")
+      .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
+
+    const totalPorPagar = normalizedInvoices
+      .filter((inv) => {
+        const s = getInvoiceStatusInfo(inv).status;
+        return s === "warning" || s === "default";
+      })
+      .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
+
+    const totalParcial = normalizedInvoices
+      .filter((inv) => getInvoiceStatusInfo(inv).status === "info")
+      .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
+
+    const fromPurchasesCount = normalizedInvoices.filter(
+      (inv) => !!inv.orden_compra_id,
+    ).length;
+
+    return { totalVencido, totalPorPagar, totalParcial, fromPurchasesCount };
+  }, [normalizedInvoices]);
 
   const handleCreateInvoice = async (invoiceData: Partial<PayableInvoice>) => {
     const payloadConDefaults = {
@@ -281,23 +302,287 @@ export default function Payables() {
     }
   };
 
-  const handleViewInvoice = (invoice: PayableInvoice) => {
-    setSelectedInvoice(invoice);
-    setIsDetailSheetOpen(true);
+  const formatMoney = (amount: number) => {
+    return new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: "MXN",
+      minimumFractionDigits: 2,
+    }).format(amount || 0);
   };
 
-  const handleEditInvoice = (invoice: PayableInvoice) => {
-    setEditingInvoice(invoice);
-    setPrefillData(null);
-    setIsExpenseModalOpen(true);
-  };
+  // 3. DEFINICIÓN DE COLUMNAS PARA TABLA INTELIGENTE (FACTURAS)
+  const payablesColumns: ColumnDef<PayableInvoice>[] = useMemo(
+    () => [
+      {
+        key: "folio_interno",
+        header: "Folio / ID",
+        render: (_, row) => (
+          <span className="font-mono text-sm font-bold text-slate-700 dark:text-slate-300 uppercase">
+            {row.folio_interno || row.id}
+          </span>
+        ),
+      },
+      {
+        key: "supplier_razon_social",
+        header: "Proveedor",
+        render: (value) => (
+          <span className="font-black text-brand-navy dark:text-white uppercase tracking-tight">
+            {value || "—"}
+          </span>
+        ),
+      },
+      {
+        key: "clasificacion",
+        header: "Clasificación",
+        render: (value) => {
+          if (!value)
+            return <span className="text-[10px] text-muted-foreground">—</span>;
+          return (
+            <Badge className={getClasificacionColor(value)}>
+              {getClasificacionLabel(value)}
+            </Badge>
+          );
+        },
+      },
+      {
+        key: "concepto",
+        header: "Concepto",
+        render: (value) => (
+          <span className="max-w-[200px] truncate text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 block">
+            {value}
+          </span>
+        ),
+      },
+      {
+        key: "fecha_vencimiento",
+        header: "Vencimiento",
+        type: "date",
+        render: (value, row) => {
+          const statusInfo = getInvoiceStatusInfo(row);
+          const isOverdue =
+            statusInfo.status === "danger" && (row.saldo_pendiente || 0) > 0;
+          return (
+            <span
+              className={
+                isOverdue
+                  ? "text-red-600 font-bold"
+                  : "text-slate-600 dark:text-slate-300 font-medium text-xs"
+              }
+            >
+              {value || "—"}
+            </span>
+          );
+        },
+      },
+      {
+        key: "monto_total",
+        header: "Monto",
+        type: "number",
+        render: (value) => (
+          <span className="font-mono text-sm font-bold text-slate-700 dark:text-slate-300 uppercase">
+            {formatMoney(value)}
+          </span>
+        ),
+      },
+      {
+        key: "saldo_pendiente",
+        header: "Saldo",
+        type: "number",
+        render: (value, row) => {
+          const statusInfo = getInvoiceStatusInfo(row);
+          const isOverdue =
+            statusInfo.status === "danger" && (row.saldo_pendiente || 0) > 0;
+          return (
+            <span
+              className={`font-mono text-sm font-black ${
+                value === 0
+                  ? "text-emerald-600 dark:text-emerald-400"
+                  : isOverdue
+                    ? "text-red-600 dark:text-red-400"
+                    : "text-amber-600 dark:text-amber-400"
+              }`}
+            >
+              {formatMoney(value)}
+            </span>
+          );
+        },
+      },
+      {
+        key: "estatus",
+        header: "Estatus",
+        type: "status",
+        statusOptions: ["pendiente", "pago_parcial", "pagado", "cancelado"],
+        render: (_, row) => {
+          const statusInfo = getInvoiceStatusInfo(row);
+          return (
+            <StatusBadge status={statusInfo.status}>
+              {statusInfo.label}
+            </StatusBadge>
+          );
+        },
+      },
+      {
+        key: "id",
+        header: "Acciones",
+        sortable: false,
+        render: (_, row) => (
+          <div className="flex items-center justify-center">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50"
+                >
+                  <MoreHorizontal className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                className="glass-panel border-white/20 min-w-[160px] z-50 dark:bg-slate-900/90"
+              >
+                <DropdownMenuItem
+                  onClick={() => {
+                    setSelectedInvoice(row);
+                    setIsDetailSheetOpen(true);
+                  }}
+                  className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
+                >
+                  <Eye className="h-4 w-4 mr-2 text-blue-500" /> Ver Detalle
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setEditingInvoice(row);
+                    setPrefillData(null);
+                    setIsExpenseModalOpen(true);
+                  }}
+                  className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
+                >
+                  <Edit className="h-4 w-4 mr-2 text-brand-green" /> Editar
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="dark:bg-white/10" />
+                <DropdownMenuItem
+                  onClick={() => {
+                    setSelectedInvoice(row);
+                    setIsPaymentModalOpen(true);
+                  }}
+                  disabled={row.saldo_pendiente === 0}
+                  className={cn(
+                    "gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer",
+                    row.saldo_pendiente > 0
+                      ? "text-amber-600 focus:text-amber-700 focus:bg-amber-50 dark:focus:bg-amber-900/30"
+                      : "opacity-50",
+                  )}
+                >
+                  <CreditCard className="h-4 w-4 mr-2" /> Registrar Pago
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="dark:bg-white/10" />
+                <DropdownMenuItem
+                  onClick={() => {
+                    setInvoiceToDelete(row);
+                    setIsDeleteInvoiceOpen(true);
+                  }}
+                  className="gap-2 font-bold text-xs uppercase tracking-tight text-rose-600 dark:text-rose-500 cursor-pointer dark:focus:bg-rose-950/30"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" /> Eliminar
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        ),
+      },
+    ],
+    [],
+  );
 
-  const handlePayInvoice = (invoice: PayableInvoice) => {
-    setSelectedInvoice(invoice);
-    setIsPaymentModalOpen(true);
-  };
+  // 4. DEFINICIÓN DE COLUMNAS PARA TABLA INTELIGENTE (PAGOS)
+  const paymentsColumns: ColumnDef<any>[] = useMemo(
+    () => [
+      {
+        key: "id",
+        header: "ID Pago",
+        render: (value) => (
+          <span className="font-mono text-xs font-bold text-slate-600 dark:text-slate-400">
+            {value}
+          </span>
+        ),
+      },
+      {
+        key: "proveedor",
+        header: "Proveedor",
+        render: (value) => (
+          <span className="font-black text-brand-navy dark:text-white uppercase tracking-tight">
+            {value}
+          </span>
+        ),
+      },
+      {
+        key: "folioFactura",
+        header: "Folio Factura",
+        render: (value) => (
+          <span className="font-mono text-xs text-slate-600 dark:text-slate-400">
+            {value}
+          </span>
+        ),
+      },
+      {
+        key: "fecha_pago",
+        header: "Fecha Pago",
+        type: "date",
+        render: (value) => {
+          const fecha = parseDateSafe(value);
+          return (
+            <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+              {fecha
+                ? format(fecha, "dd MMM yyyy", { locale: es }).toUpperCase()
+                : "—"}
+            </span>
+          );
+        },
+      },
+      {
+        key: "monto",
+        header: "Monto",
+        type: "number",
+        render: (value) => (
+          <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 text-sm">
+            {formatMoney(value)}
+          </span>
+        ),
+      },
+      {
+        key: "metodo_pago",
+        header: "Método",
+        render: (value) => <StatusBadge status="info">{value}</StatusBadge>,
+      },
+      {
+        key: "comprobante",
+        header: "Comprobante",
+        sortable: false,
+        render: () => (
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 h-8 text-[10px] font-black uppercase tracking-widest haptic-press shadow-sm border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300"
+            onClick={() => toast.info("Descarga de comprobante en desarrollo")}
+          >
+            <Download className="h-3 w-3" /> REP
+          </Button>
+        ),
+      },
+    ],
+    [],
+  );
 
   const isLoading = isLoadingInvoices || isLoadingBankAccounts;
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-brand-navy" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-8 space-y-8 animate-page-enter pb-20">
@@ -307,7 +592,31 @@ export default function Payables() {
         icon={
           <CreditCard className="h-8 w-8 text-brand-navy dark:text-white" />
         }
-      />
+      >
+        <div className="flex flex-wrap items-center gap-3">
+          {/* FIX: BOTÓN QUE ABRE EL MODAL DE ARRASTRAR XML */}
+          <Button
+            variant="outline"
+            className="border-indigo-500 bg-indigo-50/50 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-800 font-black tracking-wide shadow-sm haptic-press transition-all"
+            onClick={() => setIsXmlModalOpen(true)}
+          >
+            <FileCode2 className="h-4 w-4 mr-2 text-indigo-600" /> Leer XML /
+            Gasto
+          </Button>
+
+          <ActionButton
+            size="md"
+            onClick={() => {
+              setEditingInvoice(null);
+              setPrefillData(null);
+              setIsExpenseModalOpen(true);
+            }}
+            className="bg-brand-red hover:bg-brand-red/90 text-white shadow-brand-red/20 shadow-md"
+          >
+            <Plus className="h-4 w-4 mr-2" /> Registrar Gasto
+          </ActionButton>
+        </div>
+      </PageHeader>
 
       <Tabs defaultValue="cuentas" className="w-full space-y-6">
         <div className="w-full overflow-x-auto hide-scrollbar pb-2 sm:pb-0">
@@ -335,7 +644,7 @@ export default function Payables() {
           value="cuentas"
           className="m-0 focus-visible:outline-none animate-in fade-in slide-in-from-bottom-2 duration-500 space-y-6"
         >
-          {/* KPI CARDS (Tahoe UI) */}
+          {/* KPI CARDS */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <Card
               className={cn(
@@ -399,205 +708,13 @@ export default function Payables() {
             </Card>
           </div>
 
-          {/* TABLA PRINCIPAL (Liquid Glass Tahoe) */}
           <Card className="shadow-2xl border-none overflow-hidden bg-transparent">
-            <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-200 dark:border-white/10 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-xl py-5 px-6 gap-4">
-              <div className="relative w-full sm:max-w-md">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <Input
-                  placeholder="Buscar por proveedor, UUID o concepto..."
-                  value={searchCxP}
-                  onChange={(e) => setSearchCxP(e.target.value)}
-                  className="pl-10 h-10 bg-white/50 dark:bg-black/20 border-slate-200 dark:border-white/10"
-                />
-              </div>
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => {
-                  setEditingInvoice(null);
-                  setPrefillData(null);
-                  setIsExpenseModalOpen(true);
-                }}
-                className="w-full sm:w-auto haptic-press shadow-md shadow-brand-red/20 bg-brand-red hover:bg-brand-red/90 text-white"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Registrar Gasto / Factura
-              </Button>
-            </CardHeader>
-
             <CardContent className="p-0 bg-white dark:bg-slate-950 [&_thead]:bg-slate-50/80 dark:[&_thead]:bg-slate-900/80 [&_thead]:backdrop-blur-xl [&_th]:bg-transparent [&_th]:border-b [&_th]:border-slate-200 dark:[&_th]:border-white/10 [&_th]:text-[10px] [&_th]:font-black [&_th]:uppercase [&_th]:tracking-[0.2em] [&_th]:text-slate-500 dark:[&_th]:text-slate-400">
-              {isLoading ? (
-                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 p-8 text-center animate-pulse">
-                  Cargando facturas...
-                </div>
-              ) : (
-                <DataTable>
-                  <DataTableHeader>
-                    <DataTableRow className="bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-md">
-                      <DataTableHead>ID</DataTableHead>
-                      <DataTableHead>Proveedor</DataTableHead>
-                      <DataTableHead>Origen / Ref.</DataTableHead>
-                      <DataTableHead>Clas.</DataTableHead>
-                      <DataTableHead>Concepto</DataTableHead>
-                      <DataTableHead>Vencimiento</DataTableHead>
-                      <DataTableHead className="text-right">
-                        Monto
-                      </DataTableHead>
-                      <DataTableHead className="text-right">
-                        Saldo
-                      </DataTableHead>
-                      <DataTableHead>Estatus</DataTableHead>
-                      <DataTableHead className="text-center">
-                        Acciones
-                      </DataTableHead>
-                    </DataTableRow>
-                  </DataTableHeader>
-                  <DataTableBody>
-                    {filteredInvoices.map((invoice) => {
-                      const statusInfo = getInvoiceStatusInfo(invoice);
-                      const saldo = invoice.saldo_pendiente || 0;
-                      const monto = invoice.monto_total || 0;
-                      const venc = invoice.fecha_vencimiento || "";
-                      const isOverdue =
-                        statusInfo.status === "danger" && saldo > 0;
-                      const clasificacion = invoice.clasificacion || "";
-
-                      return (
-                        <DataTableRow
-                          key={String(invoice.id)}
-                          className={cn(
-                            "border-b border-slate-200/50 dark:border-white/5 bg-white dark:bg-slate-950 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors",
-                            isOverdue && "bg-red-50/30 dark:bg-red-950/20",
-                          )}
-                        >
-                          <DataTableCell className="font-mono text-sm font-bold text-slate-700 dark:text-slate-300 uppercase">
-                            {invoice.folio_interno || invoice.id}
-                          </DataTableCell>
-                          <DataTableCell className="font-black text-brand-navy dark:text-white uppercase tracking-tight">
-                            {invoice.supplier_razon_social || "—"}
-                          </DataTableCell>
-                          <DataTableCell>
-                            <div className="flex flex-col">
-                              <span className="text-[10px] font-black uppercase text-slate-400">
-                                {invoice.clasificacion === "costo_mantenimiento"
-                                  ? "Mantenimiento"
-                                  : "Gasto General"}
-                              </span>
-                              <span className="font-bold text-brand-navy dark:text-slate-200 text-xs">
-                                {invoice.folio_interno || "—"}{" "}
-                                {/* Aquí saldrá el OT-2026-XXX */}
-                              </span>
-                            </div>
-                          </DataTableCell>
-                          <DataTableCell>
-                            {clasificacion ? (
-                              <Badge
-                                className={getClasificacionColor(clasificacion)}
-                              >
-                                {getClasificacionLabel(clasificacion)}
-                              </Badge>
-                            ) : (
-                              <span className="text-[10px] text-muted-foreground">
-                                —
-                              </span>
-                            )}
-                          </DataTableCell>
-                          <DataTableCell className="max-w-[150px] truncate text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
-                            {invoice.concepto}
-                          </DataTableCell>
-                          <DataTableCell
-                            className={
-                              isOverdue
-                                ? "text-red-600 font-bold"
-                                : "text-slate-600 dark:text-slate-300 font-medium text-xs"
-                            }
-                          >
-                            {venc}
-                          </DataTableCell>
-                          <DataTableCell className="text-right font-mono text-sm font-bold text-slate-700 dark:text-slate-300 uppercase">
-                            ${monto.toLocaleString("es-MX")}
-                          </DataTableCell>
-                          <DataTableCell
-                            className={`text-right font-mono text-sm font-black ${
-                              saldo === 0
-                                ? "text-emerald-600 dark:text-emerald-400"
-                                : isOverdue
-                                  ? "text-red-600 dark:text-red-400"
-                                  : "text-amber-600 dark:text-amber-400"
-                            }`}
-                          >
-                            ${saldo.toLocaleString("es-MX")}
-                          </DataTableCell>
-                          <DataTableCell>
-                            <StatusBadge status={statusInfo.status}>
-                              {statusInfo.label}
-                            </StatusBadge>
-                          </DataTableCell>
-                          <DataTableCell>
-                            <div className="flex items-center justify-center pr-2">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50"
-                                  >
-                                    <MoreHorizontal className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent
-                                  align="end"
-                                  className="glass-panel border-white/20 min-w-[160px] z-50 dark:bg-slate-900/90"
-                                >
-                                  <DropdownMenuItem
-                                    onClick={() => handleViewInvoice(invoice)}
-                                    className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
-                                  >
-                                    <Eye className="h-4 w-4 mr-2 text-blue-500" />{" "}
-                                    Ver Detalle
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => handleEditInvoice(invoice)}
-                                    className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
-                                  >
-                                    <Edit className="h-4 w-4 mr-2 text-brand-green" />{" "}
-                                    Editar
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator className="dark:bg-white/10" />
-                                  <DropdownMenuItem
-                                    onClick={() => handlePayInvoice(invoice)}
-                                    disabled={saldo === 0}
-                                    className={cn(
-                                      "gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer",
-                                      saldo > 0
-                                        ? "text-amber-600 focus:text-amber-700 focus:bg-amber-50 dark:focus:bg-amber-900/30"
-                                        : "opacity-50",
-                                    )}
-                                  >
-                                    <CreditCard className="h-4 w-4 mr-2" />{" "}
-                                    Registrar Pago
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator className="dark:bg-white/10" />
-                                  <DropdownMenuItem
-                                    onClick={() => {
-                                      setInvoiceToDelete(invoice);
-                                      setIsDeleteInvoiceOpen(true);
-                                    }}
-                                    className="gap-2 font-bold text-xs uppercase tracking-tight text-rose-600 dark:text-rose-500 cursor-pointer dark:focus:bg-rose-950/30"
-                                  >
-                                    <Trash2 className="h-4 w-4 mr-2" /> Eliminar
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          </DataTableCell>
-                        </DataTableRow>
-                      );
-                    })}
-                  </DataTableBody>
-                </DataTable>
-              )}
+              <EnhancedDataTable
+                data={normalizedInvoices}
+                columns={payablesColumns}
+                exportFileName="cuentas_por_pagar"
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -608,103 +725,26 @@ export default function Payables() {
           className="m-0 focus-visible:outline-none animate-in fade-in slide-in-from-bottom-2 duration-500 space-y-6"
         >
           <Card className="shadow-2xl border-none overflow-hidden bg-transparent">
-            <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-200 dark:border-white/10 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-xl py-5 px-6 gap-4">
-              <div className="relative w-full sm:max-w-md">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <Input
-                  placeholder="Buscar por proveedor o folio..."
-                  value={searchPagos}
-                  onChange={(e) => setSearchPagos(e.target.value)}
-                  className="pl-10 h-10 bg-white/50 dark:bg-black/20 border-slate-200 dark:border-white/10"
-                />
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full sm:w-auto haptic-press shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10"
-              >
-                <FileCode2 className="h-4 w-4 mr-2 text-indigo-600 dark:text-indigo-400" />
-                Leer REP / Constancia
-              </Button>
-            </CardHeader>
             <CardContent className="p-0 bg-white dark:bg-slate-950 [&_thead]:bg-slate-50/80 dark:[&_thead]:bg-slate-900/80 [&_thead]:backdrop-blur-xl [&_th]:bg-transparent [&_th]:border-b [&_th]:border-slate-200 dark:[&_th]:border-white/10 [&_th]:text-[10px] [&_th]:font-black [&_th]:uppercase [&_th]:tracking-[0.2em] [&_th]:text-slate-500 dark:[&_th]:text-slate-400">
-              {isLoading ? (
-                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 p-8 text-center animate-pulse">
-                  Cargando pagos...
-                </div>
-              ) : (
-                <DataTable>
-                  <DataTableHeader>
-                    <DataTableRow className="bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-md">
-                      <DataTableHead>ID Pago</DataTableHead>
-                      <DataTableHead>Proveedor</DataTableHead>
-                      <DataTableHead>Folio Factura</DataTableHead>
-                      <DataTableHead>Fecha Pago</DataTableHead>
-                      <DataTableHead className="text-right">
-                        Monto
-                      </DataTableHead>
-                      <DataTableHead>Método</DataTableHead>
-                      <DataTableHead>Comprobante</DataTableHead>
-                    </DataTableRow>
-                  </DataTableHeader>
-                  <DataTableBody>
-                    {allPayments.map((p) => {
-                      const fecha = parseDateSafe(p.fecha_pago);
-                      return (
-                        <DataTableRow
-                          key={String(p.id)}
-                          className="border-b border-slate-200/50 dark:border-white/5 bg-white dark:bg-slate-950 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors"
-                        >
-                          <DataTableCell className="font-mono text-xs font-bold text-slate-600 dark:text-slate-400">
-                            {p.id}
-                          </DataTableCell>
-                          <DataTableCell className="font-black text-brand-navy dark:text-white uppercase tracking-tight">
-                            {p.proveedor}
-                          </DataTableCell>
-                          <DataTableCell className="font-mono text-xs text-slate-600 dark:text-slate-400">
-                            {p.folioFactura}
-                          </DataTableCell>
-                          <DataTableCell className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                            {fecha
-                              ? format(fecha, "dd MMM yyyy", {
-                                  locale: es,
-                                }).toUpperCase()
-                              : "—"}
-                          </DataTableCell>
-                          <DataTableCell className="text-right font-mono font-black text-emerald-600 dark:text-emerald-400 text-sm">
-                            ${Number(p.monto || 0).toLocaleString("es-MX")}
-                          </DataTableCell>
-                          <DataTableCell>
-                            <StatusBadge status="info">
-                              {p.metodo_pago}
-                            </StatusBadge>
-                          </DataTableCell>
-                          <DataTableCell>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="gap-2 h-8 text-[10px] font-black uppercase tracking-widest haptic-press shadow-sm border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300"
-                              onClick={() =>
-                                toast.info(
-                                  "Descarga de comprobante en desarrollo",
-                                )
-                              }
-                            >
-                              <Download className="h-3 w-3" /> REP
-                            </Button>
-                          </DataTableCell>
-                        </DataTableRow>
-                      );
-                    })}
-                  </DataTableBody>
-                </DataTable>
-              )}
+              <EnhancedDataTable
+                data={allPayments}
+                columns={paymentsColumns}
+                exportFileName="pagos_emitidos"
+              />
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
 
       {/* MODALES */}
+
+      {/* FIX: Componente Drag & Drop para Leer XML */}
+      <ImportXMLExpenseModal
+        open={isXmlModalOpen}
+        onOpenChange={setIsXmlModalOpen}
+        onSuccess={handleXmlParsed}
+      />
+
       <RegisterExpenseModal
         open={isExpenseModalOpen}
         onOpenChange={(open) => {
@@ -787,7 +827,10 @@ export default function Payables() {
                 </div>
                 <p className="text-xs sm:text-sm leading-relaxed text-rose-900 dark:text-rose-200/80">
                   Esta acción no se puede deshacer y{" "}
-                  <b className="font-black underline">borrará los pagos asociados</b>.
+                  <b className="font-black underline">
+                    borrará los pagos asociados
+                  </b>
+                  .
                 </p>
               </div>
             </AlertDialogDescription>

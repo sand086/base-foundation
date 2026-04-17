@@ -65,6 +65,84 @@ interface ExtendedTripLeg extends Omit<TripLeg, "status"> {
   status: TripStatus | "liquidado" | string;
 }
 
+// Helper Para traducir las fases dinámicamente en el Modal
+const getDynamicLegStatus = (leg: ExtendedTripLeg) => {
+  const status = String(leg.status).toLowerCase();
+  const type = leg.leg_type;
+
+  if (status === "creado")
+    return {
+      label: "ASIGNADO",
+      color:
+        "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+    };
+
+  if (status === "en_transito") {
+    if (type === "carga_muelle")
+      return {
+        label: "OPERANDO EN MUELLE",
+        color: "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400",
+      };
+    if (type === "ruta_carretera")
+      return {
+        label: "EN CARRETERA",
+        color:
+          "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+      };
+    if (type === "entrega_vacio")
+      return {
+        label: "RETORNANDO VACÍO",
+        color:
+          "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400",
+      };
+  }
+
+  if (status === "entregado") {
+    if (type === "carga_muelle")
+      return {
+        label: "CARGADO EN PATIO",
+        color:
+          "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
+      };
+    if (type === "ruta_carretera")
+      return {
+        label: "DESENGANCHADO EN PATIO",
+        color:
+          "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
+      };
+    if (type === "entrega_vacio")
+      return {
+        label: "FINALIZADO",
+        color:
+          "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+      };
+  }
+
+  if (status === "cerrado")
+    return {
+      label: "CERRADO",
+      color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+    };
+  if (status === "liquidado")
+    return {
+      label: "LIQUIDADO",
+      color:
+        "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
+    };
+
+  if (["detenido", "retraso", "accidente"].includes(status))
+    return {
+      label: status.toUpperCase(),
+      color:
+        "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400 animate-pulse",
+    };
+
+  return {
+    label: status.replace("_", " ").toUpperCase(),
+    color: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+  };
+};
+
 interface TripDetailsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -83,7 +161,8 @@ export function TripDetailsModal({
   onSettleClick,
   onUpdateStatusClick,
 }: TripDetailsModalProps) {
-  const { editTrip, refreshTrips, addTimelineEvent } = useTrips();
+  // FIX: Cambiamos refreshTrips por fetchTrips para asegurar la sincronización global
+  const { editTrip, fetchTrips, addTimelineEvent, unhookTrip } = useTrips();
   const { updateLoadStatus } = useUnits();
   const { isStamping, handleStampNominal, handleStampFinal } = useBilling();
 
@@ -100,6 +179,7 @@ export function TripDetailsModal({
   const [isSyncing, setIsSyncing] = useState(false);
   const [isUndoing, setIsUndoing] = useState(false);
   const [isGeneratingNom, setIsGeneratingNom] = useState(false);
+  const [isUnhooking, setIsUnhooking] = useState(false);
 
   const [localUuid, setLocalUuid] = useState<string | null>(null);
   const [finalUuid, setFinalUuid] = useState<string | null>(null);
@@ -131,8 +211,8 @@ export function TripDetailsModal({
       // 1. Buscamos el viaje actualizado directo en la base de datos
       const res = await axiosClient.get(`/api/logistics/trips/${localTrip.id}`);
       setLocalTrip(res.data);
-      // 2. Avisamos al padre (el tablero) que actualice lo suyo en el fondo
-      await refreshTrips();
+      // 2. Avisamos al padre (el tablero) que actualice lo suyo en el fondo (AQUI ES CLAVE)
+      await fetchTrips();
     } catch (e) {
       console.error("Error recargando viaje local", e);
     }
@@ -258,7 +338,7 @@ export function TripDetailsModal({
       //  LÓGICA DE CIERRE CONDICIONAL
       if (isFirstLeg) {
         onOpenChange(false); // Si era la única fase, cerramos todo.
-        await refreshTrips(); // Le decimos al padre que recargue
+        await fetchTrips(); // FIX: recargar tabla padre
       } else {
         await refreshLocalTrip(); // Si quedan fases, repintamos el modal abierto.
       }
@@ -301,102 +381,73 @@ export function TripDetailsModal({
     }
   };
 
-  // ... (Las funciones de Descarga y NOM-087 se mantienen igual, solo cambian `trip` por `localTrip`)
-  const handleDownloadBothFiles = async (
+  const handleDownloadPDF = (uuidToDownload: string) => {
+    const toastId = toast.loading("Descargando PDF...");
+    try {
+      // 1. Obtenemos la URL base desde el archivo .env (Local o Producción)
+      // Si no existe la variable, usamos localhost por defecto.
+      const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "/api";
+
+      // Limpiamos la URL por si tiene un slash al final (ej: /api/ -> /api)
+      const baseURL = rawBaseURL.replace(/\/$/, "");
+
+      // 2. Construimos la ruta dinámica correcta
+      const fileUrl = `${baseURL}/sat/invoice/${uuidToDownload}/pdf`;
+
+      console.log(rawBaseURL);
+
+      // 3. Descarga nativa (inmune a corrupciones de Axios)
+      const link = document.createElement("a");
+      link.href = fileUrl;
+      link.target = "_blank";
+      link.setAttribute("download", `CFDI_${uuidToDownload}.pdf`);
+
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      toast.success("PDF descargado exitosamente.", { id: toastId });
+    } catch (error) {
+      toast.error("Error al iniciar la descarga.", { id: toastId });
+    }
+  };
+
+  const handleDownloadXML = (uuidToDownload: string) => {
+    const toastId = toast.loading("Descargando XML...");
+    try {
+      // 1. URL Dinámica
+      const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "/api";
+      console.log(rawBaseURL);
+      const baseURL = rawBaseURL.replace(/\/$/, "");
+
+      // 2. Ruta dinámica
+      const fileUrl = `${baseURL}/sat/invoice/${uuidToDownload}/xml`;
+
+      const link = document.createElement("a");
+      link.href = fileUrl;
+      link.target = "_blank";
+      link.setAttribute("download", `CFDI_${uuidToDownload}.xml`);
+
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      toast.success("XML descargado exitosamente.", { id: toastId });
+    } catch {
+      toast.error("Error al iniciar la descarga del XML.", { id: toastId });
+    }
+  };
+
+  const handleDownloadBothFiles = (
     uuidToDownload: string,
     isFinal: boolean = false,
   ) => {
-    /* Mismo código, sin cambios */
-    const toastId = toast.loading("Preparando archivos para descarga...");
-    try {
-      const resPdf = await axiosClient.get(
-        `/billing/invoice/${uuidToDownload}/pdf`,
-        { responseType: "blob" },
-      );
-      const pdfURL = window.URL.createObjectURL(
-        new Blob([resPdf.data], { type: "application/pdf" }),
-      );
-      const pdfLink = document.createElement("a");
-      pdfLink.href = pdfURL;
-      pdfLink.setAttribute(
-        "download",
-        `${isFinal ? "CFDI_Final" : "Carta_Porte"}_${uuidToDownload}.pdf`,
-      );
-      document.body.appendChild(pdfLink);
-      pdfLink.click();
-      document.body.removeChild(pdfLink);
-      setTimeout(async () => {
-        try {
-          const resXml = await axiosClient.get(
-            `/billing/invoice/${uuidToDownload}/xml`,
-            { responseType: "blob" },
-          );
-          const xmlURL = window.URL.createObjectURL(
-            new Blob([resXml.data], { type: "application/xml" }),
-          );
-          const xmlLink = document.createElement("a");
-          xmlLink.href = xmlURL;
-          xmlLink.setAttribute(
-            "download",
-            `${isFinal ? "CFDI_Final" : "Carta_Porte"}_${uuidToDownload}.xml`,
-          );
-          document.body.appendChild(xmlLink);
-          xmlLink.click();
-          document.body.removeChild(xmlLink);
-          toast.success("PDF y XML descargados exitosamente.", { id: toastId });
-        } catch (error) {
-          toast.error("El PDF se descargó, pero hubo un error con el XML.", {
-            id: toastId,
-          });
-        }
-      }, 800);
-    } catch (error) {
-      toast.error("Error al descargar el archivo PDF.", { id: toastId });
-    }
-  };
+    handleDownloadPDF(uuidToDownload);
 
-  const handleDownloadXML = async (uuidToDownload: string) => {
-    const toastId = toast.loading("Descargando XML...");
-    try {
-      const res = await axiosClient.get(
-        `/billing/invoice/${uuidToDownload}/xml`,
-        { responseType: "blob" },
-      );
-      const xmlURL = window.URL.createObjectURL(
-        new Blob([res.data], { type: "application/xml" }),
-      );
-      const link = document.createElement("a");
-      link.href = xmlURL;
-      link.setAttribute("download", `CFDI_${uuidToDownload}.xml`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      toast.success("XML descargado exitosamente.", { id: toastId });
-    } catch {
-      toast.error("Error al descargar el XML.", { id: toastId });
-    }
-  };
-
-  const handleDownloadPDF = async (uuidToDownload: string) => {
-    const toastId = toast.loading("Descargando PDF...");
-    try {
-      const res = await axiosClient.get(
-        `/billing/invoice/${uuidToDownload}/pdf`,
-        { responseType: "blob" },
-      );
-      const fileURL = window.URL.createObjectURL(
-        new Blob([res.data], { type: "application/pdf" }),
-      );
-      const link = document.createElement("a");
-      link.href = fileURL;
-      link.setAttribute("download", `CFDI_${uuidToDownload}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      toast.success("PDF descargado exitosamente.", { id: toastId });
-    } catch {
-      toast.error("Error al descargar el PDF.", { id: toastId });
-    }
+    // Le damos medio segundo al navegador para que no bloquee la segunda descarga
+    setTimeout(() => {
+      handleDownloadXML(uuidToDownload);
+    }, 500);
   };
 
   const handlePrintNOM087 = async () => {
@@ -709,6 +760,10 @@ export function TripDetailsModal({
                         {(localTrip.legs as ExtendedTripLeg[])?.map(
                           (leg, idx) => {
                             const btnUI = getRelayButtonUI(leg.leg_type);
+                            const activeFuelLogs =
+                              leg.fuel_logs?.filter(
+                                (log: any) => log.record_status !== "E",
+                              ) || [];
 
                             return (
                               <Card
@@ -750,68 +805,67 @@ export function TripDetailsModal({
                                         </span>
                                       </div>
                                       {/* INYECCIÓN NUEVA: VALES DE COMBUSTIBLE */}
-                                      {leg.fuel_logs &&
-                                        leg.fuel_logs.length > 0 && (
-                                          <div className="mt-3 pt-3 border-t border-dashed border-slate-200 dark:border-white/10">
-                                            <p className="text-[9px] font-black text-amber-600 dark:text-amber-500 uppercase tracking-widest flex items-center gap-1 mb-2">
-                                              <Fuel className="h-3 w-3" /> Vales
-                                              de Combustible Asociados (
-                                              {leg.fuel_logs.length})
-                                            </p>
-                                            <div className="space-y-1.5">
-                                              {leg.fuel_logs.map(
-                                                (log: any, i: number) => (
-                                                  <div
-                                                    key={log.id || i}
-                                                    className="flex justify-between items-center bg-amber-50/50 dark:bg-amber-950/20 px-2 py-1.5 rounded border border-amber-100 dark:border-amber-900/30"
-                                                  >
-                                                    <div className="flex items-center gap-2">
-                                                      <span className="font-mono text-[9px] font-bold text-slate-500">
-                                                        #{log.id}
-                                                      </span>
-                                                      <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 truncate max-w-[120px]">
-                                                        {log.estacion}
-                                                      </span>
-                                                    </div>
-                                                    <div className="flex items-center gap-3">
-                                                      <span className="font-mono font-black text-[10px] text-amber-700 dark:text-amber-400">
-                                                        {log.litros?.toFixed(1)}{" "}
-                                                        L
-                                                      </span>
-                                                      <span className="font-mono font-bold text-[10px] text-slate-600 dark:text-slate-400">
-                                                        $
-                                                        {log.total?.toLocaleString(
-                                                          "es-MX",
-                                                          {
-                                                            minimumFractionDigits: 2,
-                                                          },
-                                                        )}
-                                                      </span>
-                                                    </div>
+                                      {activeFuelLogs.length > 0 && (
+                                        <div className="mt-3 pt-3 border-t border-dashed border-slate-200 dark:border-white/10">
+                                          <p className="text-[9px] font-black text-amber-600 dark:text-amber-500 uppercase tracking-widest flex items-center gap-1 mb-2">
+                                            <Fuel className="h-3 w-3" /> Vales
+                                            de Combustible Asociados (
+                                            {activeFuelLogs.length})
+                                          </p>
+                                          <div className="space-y-1.5">
+                                            {activeFuelLogs.map(
+                                              (log: any, i: number) => (
+                                                <div
+                                                  key={log.id || i}
+                                                  className="flex justify-between items-center bg-amber-50/50 dark:bg-amber-950/20 px-2 py-1.5 rounded border border-amber-100 dark:border-amber-900/30"
+                                                >
+                                                  <div className="flex items-center gap-2">
+                                                    <span className="font-mono text-[9px] font-bold text-slate-500">
+                                                      #{log.id}
+                                                    </span>
+                                                    <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 truncate max-w-[120px]">
+                                                      {log.estacion}
+                                                    </span>
                                                   </div>
-                                                ),
-                                              )}
-                                            </div>
+                                                  <div className="flex items-center gap-3">
+                                                    <span className="font-mono font-black text-[10px] text-amber-700 dark:text-amber-400">
+                                                      {log.litros?.toFixed(1)} L
+                                                    </span>
+                                                    <span className="font-mono font-bold text-[10px] text-slate-600 dark:text-slate-400">
+                                                      $
+                                                      {log.total?.toLocaleString(
+                                                        "es-MX",
+                                                        {
+                                                          minimumFractionDigits: 2,
+                                                        },
+                                                      )}
+                                                    </span>
+                                                  </div>
+                                                </div>
+                                              ),
+                                            )}
                                           </div>
-                                        )}
-                                      {/* FIN INYECCIÓN */}
+                                        </div>
+                                      )}
                                     </div>
 
                                     <div className="flex flex-col sm:items-end gap-3 shrink-0">
-                                      <Badge
-                                        className={cn(
-                                          "uppercase font-black tracking-widest text-[9px] border-0 px-3 py-1 shadow-sm",
-                                          leg.status === "entregado"
-                                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                                            : leg.status === "cerrado"
-                                              ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                                              : leg.status === "liquidado"
-                                                ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
-                                                : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-                                        )}
-                                      >
-                                        {String(leg.status).replace("_", " ")}
-                                      </Badge>
+                                      {(() => {
+                                        const statusConfig =
+                                          getDynamicLegStatus(
+                                            leg as ExtendedTripLeg,
+                                          );
+                                        return (
+                                          <Badge
+                                            className={cn(
+                                              "uppercase font-black tracking-widest text-[9px] border-0 px-3 py-1 shadow-sm",
+                                              statusConfig.color,
+                                            )}
+                                          >
+                                            {statusConfig.label}
+                                          </Badge>
+                                        );
+                                      })()}
                                       <div className="flex flex-col gap-3">
                                         {/* SI ES ENTREGA DE VACÍO: Mostramos Input + Botón Finalizar */}
                                         {leg.id === activeLeg?.id &&
@@ -837,46 +891,93 @@ export function TripDetailsModal({
                                             </Button>
                                           </div>
                                         ) : (
-                                          /* SI ES CUALQUIER OTRA FASE: Botón normal de Siguiente Fase */
-                                          <div className="flex gap-2">
-                                            {["creado", "en_transito"].includes(
-                                              leg.status,
-                                            ) && (
-                                              <Button
-                                                size="sm"
-                                                className={cn(
-                                                  "h-8 font-black text-[9px] uppercase tracking-widest shadow-lg haptic-press text-white",
-                                                  btnUI.color,
-                                                )}
-                                                disabled={finishingLeg}
-                                                onClick={() =>
-                                                  onRelayClick?.(
-                                                    leg as any,
-                                                    localTrip!,
-                                                  )
-                                                }
-                                              >
-                                                {finishingLeg ? (
-                                                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                                                ) : (
-                                                  btnUI.icon
-                                                )}
-                                                {btnUI.text}
-                                              </Button>
-                                            )}
+                                          /* SI ES CUALQUIER OTRA FASE: Botones Dinámicos */
+                                          /* SI ES CUALQUIER OTRA FASE: Botones Dinámicos */
+                                          <div className="flex flex-wrap gap-2">
+                                            {/* 1. BOTÓN DE SIGUIENTE FASE / PASAR A RUTA */}
+                                            {/* FIX: Agregamos "entregado" y "detenido" para que NO desaparezca tras desenganchar */}
+                                            {[
+                                              "creado",
+                                              "en_transito",
+                                              "entregado",
+                                              "detenido",
+                                            ].includes(leg.status) &&
+                                              leg.leg_type !==
+                                                "entrega_vacio" && (
+                                                <Button
+                                                  size="sm"
+                                                  className={cn(
+                                                    "h-8 font-black text-[9px] uppercase tracking-widest shadow-lg haptic-press text-white",
+                                                    btnUI.color,
+                                                  )}
+                                                  disabled={
+                                                    finishingLeg || isUnhooking
+                                                  }
+                                                  onClick={() => {
+                                                    onOpenChange(false);
+                                                    onRelayClick?.(
+                                                      leg as any,
+                                                      localTrip!,
+                                                    );
+                                                  }}
+                                                >
+                                                  {finishingLeg ? (
+                                                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                                                  ) : (
+                                                    btnUI.icon
+                                                  )}
+                                                  {btnUI.text}
+                                                </Button>
+                                              )}
 
-                                            {/* Botón de Liquidar (se queda igual) */}
+                                            {/* 2. BOTÓN DE DESENGANCHAR EN PATIO */}
+                                            {/* Este SÍ desaparece después de usarse para no duplicar desenganches */}
+                                            {leg.leg_type === "carga_muelle" &&
+                                              [
+                                                "creado",
+                                                "en_transito",
+                                              ].includes(leg.status) && (
+                                                <Button
+                                                  size="sm"
+                                                  className="h-8 bg-purple-600 hover:bg-purple-700 text-white font-black text-[9px] uppercase tracking-widest shadow-lg shadow-purple-500/20 haptic-press border-none"
+                                                  disabled={
+                                                    finishingLeg || isUnhooking
+                                                  }
+                                                  onClick={async () => {
+                                                    setIsUnhooking(true);
+                                                    const success =
+                                                      await unhookTrip(
+                                                        String(localTrip.id),
+                                                      );
+                                                    if (success) {
+                                                      await fetchTrips();
+                                                      onOpenChange(false);
+                                                    }
+                                                    setIsUnhooking(false);
+                                                  }}
+                                                >
+                                                  {isUnhooking ? (
+                                                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                                                  ) : (
+                                                    <Container className="h-3.5 w-3.5 mr-1.5" />
+                                                  )}
+                                                  Desenganchar Carga
+                                                </Button>
+                                              )}
+
+                                            {/* 3. BOTÓN DE LIQUIDAR OP. */}
                                             {leg.status === "entregado" &&
                                               onSettleClick && (
                                                 <Button
                                                   size="sm"
                                                   className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[9px] uppercase shadow-lg shadow-emerald-500/20"
-                                                  onClick={() =>
+                                                  onClick={() => {
+                                                    onOpenChange(false);
                                                     onSettleClick(
                                                       leg as any,
                                                       localTrip!,
-                                                    )
-                                                  }
+                                                    );
+                                                  }}
                                                 >
                                                   <Wallet className="h-3.5 w-3.5 mr-1.5" />{" "}
                                                   LIQUIDAR OP.
@@ -895,7 +996,7 @@ export function TripDetailsModal({
                                           <CalendarDays className="h-3 w-3" />{" "}
                                           Inicio
                                         </Label>
-                                        <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                        <div className="text-xs font-bold text-slate-700 dark:text-slate-300">
                                           {leg.start_date
                                             ? format(
                                                 new Date(leg.start_date),
@@ -903,14 +1004,14 @@ export function TripDetailsModal({
                                                 { locale: es },
                                               )
                                             : "Pendiente"}
-                                        </p>
+                                        </div>
                                       </div>
                                       <div className="space-y-1">
                                         <Label className="text-[9px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-1">
                                           <CalendarDays className="h-3 w-3" />{" "}
                                           Fin
                                         </Label>
-                                        <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                        <div className="text-xs font-bold text-slate-700 dark:text-slate-300">
                                           {leg.actual_arrival
                                             ? format(
                                                 new Date(leg.actual_arrival),
@@ -918,18 +1019,18 @@ export function TripDetailsModal({
                                                 { locale: es },
                                               )
                                             : "Pendiente"}
-                                        </p>
+                                        </div>
                                       </div>
                                       <div className="space-y-1">
                                         <Label className="text-[9px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-1">
                                           <Gauge className="h-3 w-3" /> Odo.
                                           Inicial
                                         </Label>
-                                        <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                        <div className="text-xs font-bold text-slate-700 dark:text-slate-300">
                                           {leg.odometro_inicial
                                             ? `${leg.odometro_inicial} km`
                                             : "N/A"}
-                                        </p>
+                                        </div>
                                       </div>
                                       <div className="space-y-1">
                                         <Label className="text-[9px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-1">
@@ -937,8 +1038,7 @@ export function TripDetailsModal({
                                           Anticipos / Vales
                                         </Label>
                                         {(() => {
-                                          // Parche visual: Restamos el anticipo de casetas si es la fase de entrega de vacío
-                                          // para evitar mostrar el arrastre incorrecto que viene del backend.
+                                          // Parche visual
                                           const displayAnticipos =
                                             leg.leg_type === "entrega_vacio"
                                               ? Math.max(
@@ -1339,7 +1439,7 @@ export function TripDetailsModal({
         </DialogContent>
       </Dialog>
 
-      {/*  ALERT DIALOG PARA DESHACER FASE */}
+      {/* ALERT DIALOG PARA DESHACER FASE */}
       <AlertDialog open={showUndoDialog} onOpenChange={setShowUndoDialog}>
         <AlertDialogContent className="w-[95vw] sm:max-w-md p-0 overflow-hidden shadow-2xl rounded-2xl bg-card/95 backdrop-blur-xl border border-border">
           <AlertDialogHeader className="p-6 bg-rose-50 dark:bg-rose-900/20 border-b border-rose-100 dark:border-rose-800/30">

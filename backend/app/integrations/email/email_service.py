@@ -37,7 +37,7 @@ class EmailService:
             if trip.client and trip.client.email
             else "gerencia@3t.com.mx"
         )
-        cc_emails = ["desarrolloSoft@asicomsystems.com.mx"]
+        cc_emails = ["desarrolloSoft@asicomsystems.com.mx", "trafico2@3t.com.mx"]
         destinatarios = [to_email] + cc_emails
 
         # 2. Buscar Plantilla en BD

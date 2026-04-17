@@ -13,5 +13,6 @@ export type TripTimelineEventCreatePayload = {
     combustible_porcentaje?: (number | null);
     combustible_litros?: (number | null);
     terminal_entrega_vacio?: (string | null);
+    trip_leg_id?: (number | null);
 };
 

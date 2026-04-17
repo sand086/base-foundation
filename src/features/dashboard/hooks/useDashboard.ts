@@ -23,10 +23,11 @@ export function useDashboard(startDate?: Date, endDate?: Date) {
           ? format(endDate, "yyyy-MM-dd")
           : format(new Date(), "yyyy-MM-dd");
 
-        const responseData = await DefaultService.getDashboardStatsApiDashboardStatsGet(
-          formattedStart,
-          formattedEnd,
-        );
+        const responseData =
+          await DefaultService.getDashboardStatsApiDashboardStatsGet(
+            formattedStart,
+            formattedEnd,
+          );
 
         setData(responseData);
       } catch (err: any) {
@@ -45,9 +46,18 @@ export function useDashboard(startDate?: Date, endDate?: Date) {
 
   return {
     serviceStats: data?.serviceStats,
-    clientServices: data?.clientServices ?? [],
-    operatorStats: data?.operatorStats ?? [],
-    recentServices: data?.recentServices ?? [],
+    clientServices: data?.clientServices,
+    operatorStats: data?.operatorStats,
+    recentServices: data?.recentServices,
+    revenueTrend: data?.revenueTrend,
+    tripConfigTrend: data?.tripConfigTrend,
+    fuelTrend: data?.fuelTrend,
+
+    // NUEVAS PROPIEDADES (con 'as any' temporalmente para evitar el error de TypeScript
+    // hasta que regeneres tu API con npm run generate-api)
+    dailyRevenue: (data as any)?.dailyRevenue,
+    mechanicStats: (data as any)?.mechanicStats,
+
     isLoading,
     error,
   };

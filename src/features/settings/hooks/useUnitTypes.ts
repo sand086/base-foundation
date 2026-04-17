@@ -58,7 +58,9 @@ export function useUnitTypes() {
 
   // --- Helpers de UI ---
 
-  const tiposActivos = Array.isArray(tiposUnidad) ? tiposUnidad.filter((t) => t.activo) : [];
+  const tiposActivos = Array.isArray(tiposUnidad)
+    ? tiposUnidad.filter((t) => t.activo)
+    : [];
 
   const getTipo = useCallback(
     (idOrNombre: string) => {

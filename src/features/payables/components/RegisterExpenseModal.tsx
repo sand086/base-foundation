@@ -1,4 +1,3 @@
-// src/features/cxp/RegisterExpenseModal.tsx
 import { useEffect, useMemo, useState } from "react";
 import {
   Dialog,
@@ -37,11 +36,24 @@ import {
   IndirectCategory,
   FinancialClassification,
   RegisterExpensePayload,
-  PrefillData,
+  PrefillData as BasePrefillData, // El tipo global original
 } from "@/features/payables/types";
 import { PurchaseOrder, getOrderTypeLabel } from "@/features/purchases/types";
 import { Trip } from "@/features/trips/types";
 import { Unit } from "@/features/units/types";
+
+// Extensión para que acepte los campos del XML
+export interface LocalPrefillData extends Partial<BasePrefillData> {
+  proveedor?: string;
+  proveedorId?: string;
+  concepto?: string;
+  montoTotal?: number;
+  ordenCompraId?: string;
+  ordenCompraFolio?: string;
+  uuid?: string;
+  fecha_emision?: string;
+  xml_file?: File | null;
+}
 
 export type UploadResult = {
   url: string;
@@ -57,7 +69,7 @@ interface RegisterExpenseModalProps {
   onSubmit: (payload: RegisterExpensePayload) => void | Promise<void>;
   suppliers: Supplier[];
   editInvoice?: PayableInvoice | null;
-  prefillData?: PrefillData | null;
+  prefillData?: LocalPrefillData | null;
   trips?: Trip[];
   units?: Unit[];
   indirectCategories?: IndirectCategory[];
@@ -191,17 +203,20 @@ export function RegisterExpenseModal({
     }
   }, [formData.fecha_emision, formData.dias_credito]);
 
-  // Prefill Purchases
+  // Prefill Purchases o Importación XML
   useEffect(() => {
     if (!open || !prefillData) return;
-    const byId = toIntOrNull(prefillData.proveedorId);
+
+    // Buscar si el proveedor existe en la base de datos (Por ID o aproximando el nombre del XML)
+    const byId = toIntOrNull(prefillData.proveedorId || "");
     const supplierById = byId ? suppliers.find((s) => s.id === byId) : null;
     const supplierByName =
       supplierById ||
-      suppliers.find(
-        (s) =>
-          s.razon_social.trim().toLowerCase() ===
-          prefillData.proveedor.trim().toLowerCase(),
+      suppliers.find((s) =>
+        s.razon_social
+          .trim()
+          .toLowerCase()
+          .includes((prefillData.proveedor || "").trim().toLowerCase()),
       ) ||
       null;
 
@@ -215,6 +230,10 @@ export function RegisterExpenseModal({
       orden_compra_id: prefillData.ordenCompraId ?? prev.orden_compra_id,
       orden_compra_folio:
         prefillData.ordenCompraFolio ?? prev.orden_compra_folio,
+      // FIX: Inyectamos los datos del XML
+      uuid: prefillData.uuid ?? prev.uuid,
+      fecha_emision: prefillData.fecha_emision ?? prev.fecha_emision,
+      xml_file: prefillData.xml_file ?? prev.xml_file,
     }));
   }, [prefillData, open, suppliers]);
 
@@ -447,20 +466,31 @@ export function RegisterExpenseModal({
         <DialogHeader className="p-6 bg-card border-b border-border shrink-0 relative z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center gap-4 sm:gap-5">
-            <div className={cn(
-              "w-12 h-12 rounded-xl flex items-center justify-center shadow-inner shrink-0",
-              editInvoice
-                ? "bg-amber-100 dark:bg-amber-900/30"
-                : "bg-emerald-100 dark:bg-emerald-900/30",
-            )}>
-              <FileText className={cn("h-6 w-6", editInvoice ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400")} />
+            <div
+              className={cn(
+                "w-12 h-12 rounded-xl flex items-center justify-center shadow-inner shrink-0",
+                editInvoice
+                  ? "bg-amber-100 dark:bg-amber-900/30"
+                  : "bg-emerald-100 dark:bg-emerald-900/30",
+              )}
+            >
+              <FileText
+                className={cn(
+                  "h-6 w-6",
+                  editInvoice
+                    ? "text-amber-600 dark:text-amber-400"
+                    : "text-emerald-600 dark:text-emerald-400",
+                )}
+              />
             </div>
             <div className="flex flex-col gap-1 text-left">
               <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-foreground heading-crisp leading-none">
                 {editInvoice ? "Editar Gasto" : "Registrar Gasto"}
               </DialogTitle>
               <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mt-1">
-                {formData.orden_compra_folio ? `Origen: ${formData.orden_compra_folio}` : "Registro de factura o gasto operativo"}
+                {formData.orden_compra_folio
+                  ? `Origen: ${formData.orden_compra_folio}`
+                  : "Registro de factura o gasto operativo"}
               </p>
             </div>
           </div>
@@ -921,7 +951,11 @@ export function RegisterExpenseModal({
         </div>
         <DialogFooter className="p-6 sm:p-8 bg-muted/50 border-t border-slate-200 dark:border-white/10 shrink-0">
           <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
-            <Button variant="outline" onClick={() => onOpenChange(false)} className="w-full sm:w-auto haptic-press font-black uppercase tracking-widest text-[10px]">
+            <Button
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              className="w-full sm:w-auto haptic-press font-black uppercase tracking-widest text-[10px]"
+            >
               Cancelar
             </Button>
             <Button

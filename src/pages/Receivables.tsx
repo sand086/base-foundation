@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Download,
   AlertCircle,
@@ -25,6 +26,7 @@ import {
   ColumnDef,
 } from "@/components/ui/enhanced-data-table";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge"; // Agregado Badge para la barra flotante
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,8 +45,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-import axiosClient from "@/api/axiosClient";
-
 import { ImportServicesModal } from "@/features/receivables/components/ImportServicesModal";
 import { CreateInvoiceModal } from "@/features/receivables/components/CreateInvoiceModal";
 import { InvoiceDetailSheet } from "@/features/receivables/components/InvoiceDetailSheet";
@@ -60,16 +60,25 @@ import {
   calculateDaysOverdue,
 } from "@/features/receivables/types";
 
+// HOOKS
 import { useBankAccounts } from "@/features/treasury/hooks/useBankAccounts";
-import { receivableService } from "@/features/receivables/services/receivableService";
-import { cn } from "@/lib/utils";
+import { useReceivables } from "@/features/receivables/hooks/useReceivables";
 
 export default function Receivables() {
-  const [invoices, setInvoices] = useState<ReceivableInvoice[]>([]);
-  const [services, setServices] = useState<FinalizableService[]>([]);
-  const [loading, setLoading] = useState(true);
+  // 1. OBTENEMOS DATOS DEL HOOK
+  const {
+    receivables,
+    isLoadingReceivables,
+    refreshReceivables,
+    deleteReceivable,
+    registerMultiplePaymentRep,
+    registerPayment,
+  } = useReceivables();
+
   const { bankAccounts = [] } = useBankAccounts();
 
+  // Estados UI (Modales y Selección)
+  const [services, setServices] = useState<FinalizableService[]>([]);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false);
@@ -87,37 +96,73 @@ export default function Receivables() {
   const [invoiceToDelete, setInvoiceToDelete] =
     useState<ReceivableInvoice | null>(null);
 
-  const fetchInvoices = async () => {
-    try {
-      setLoading(true);
-      const data = await receivableService.getInvoices();
+  //   ESTADO PARA LA SELECCIÓN MÚLTIPLE EN LA TABLA
+  const [selectedRows, setSelectedRows] = useState<ReceivableInvoice[]>([]);
 
-      const formattedData: ReceivableInvoice[] = data.map((inv: any) => ({
-        ...inv,
-        client_id: inv.client_id || inv.cliente_id || inv.client?.id,
-        folio: inv.folio_interno || `CXC-${String(inv.id)}`,
-        cliente: inv.client?.razon_social || "Cliente Desconocido",
-        requiereREP: inv.saldo_pendiente > 0,
-        fechaEmision: inv.fecha_emision,
-        fechaVencimiento: inv.fecha_vencimiento,
-        cobros: inv.payments || [],
-      }));
-
-      setInvoices(formattedData);
-    } catch (error) {
-      toast.error("Error al cargar las cuentas por cobrar");
-      console.error(error);
-    } finally {
-      setLoading(false);
+  // 2. FORMATEAMOS LOS DATOS DE LA API
+  const formattedInvoices = useMemo(() => {
+    let dataArray = [];
+    if (Array.isArray(receivables)) {
+      dataArray = receivables;
+    } else if (receivables && typeof receivables === "object") {
+      dataArray =
+        (receivables as any).items ||
+        (receivables as any).data ||
+        (receivables as any).results ||
+        [];
     }
+
+    return dataArray.map((inv: any) => ({
+      ...inv,
+      id: inv.id,
+      client_id: inv.client_id || inv.cliente_id || inv.client?.id,
+      folio:
+        inv.folio_interno ||
+        (inv.uuid ? inv.uuid.substring(0, 8) : `CXC-${inv.id}`),
+      cliente:
+        inv.client?.razon_social ||
+        inv.clientName ||
+        inv.client_razon_social ||
+        "Cliente Desconocido",
+      requiereREP: (inv.saldo_pendiente || 0) > 0,
+      monto_total: inv.monto_total || 0,
+      saldo_pendiente:
+        inv.saldo_pendiente !== undefined
+          ? inv.saldo_pendiente
+          : inv.monto_total || 0,
+      fecha_emision: inv.fecha_emision || inv.created_at,
+      fecha_vencimiento: inv.fecha_vencimiento,
+      estatus: inv.estatus || inv.status || "corriente",
+      cobros: inv.payments || [],
+    })) as ReceivableInvoice[];
+  }, [receivables]);
+
+  //   LÓGICA DEL BOTÓN DE COBRO MÚLTIPLE
+  const handlePaySelectedInvoices = () => {
+    if (selectedRows.length === 0) return;
+
+    // VALIDACIÓN DE NEGOCIO: Todas deben ser del mismo cliente
+    const firstClientId = selectedRows[0].client_id;
+    const allSameClient = selectedRows.every(
+      (inv) => inv.client_id === firstClientId,
+    );
+
+    if (!allSameClient) {
+      toast.error("Selección Inválida", {
+        description:
+          "Para generar un solo REP, todas las facturas seleccionadas deben pertenecer al MISMO CLIENTE.",
+      });
+      return;
+    }
+
+    // Si pasan, abrimos el modal
+    setInvoicesToPay(selectedRows);
+    setIsPaymentModalOpen(true);
   };
 
-  useEffect(() => {
-    fetchInvoices();
-  }, []);
-
+  // 3. LÓGICA DE EXPORTACIÓN Y KPIS
   const handleExportToExcel = () => {
-    if (invoices.length === 0) {
+    if (formattedInvoices.length === 0) {
       toast.error("No hay datos para exportar");
       return;
     }
@@ -133,16 +178,16 @@ export default function Receivables() {
       "Días Vencidos",
     ];
 
-    const rows = invoices.map((inv) => {
+    const rows = formattedInvoices.map((inv) => {
       const diasVencidos = calculateDaysOverdue(inv.fecha_vencimiento);
       return [
-        inv.folio_interno,
+        inv.folio_interno || inv.uuid,
         `"${inv.cliente}"`,
         inv.fecha_emision,
         inv.fecha_vencimiento,
         inv.monto_total,
         inv.saldo_pendiente,
-        inv.estatus.toUpperCase(),
+        inv.estatus?.toUpperCase() || "",
         diasVencidos > 0 ? diasVencidos : 0,
       ].join(",");
     });
@@ -167,23 +212,25 @@ export default function Receivables() {
   };
 
   const agingReport = useMemo(() => {
-    const corriente = invoices
+    const corriente = formattedInvoices
       .filter(
         (inv) =>
-          getAgingCategory(inv) === "corriente" && inv.saldo_pendiente > 0,
+          getAgingCategory(inv) === "corriente" &&
+          (inv.saldo_pendiente || 0) > 0,
       )
-      .reduce((sum, inv) => sum + inv.saldo_pendiente, 0);
-    const vencido1_30 = invoices
+      .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
+    const vencido1_30 = formattedInvoices
       .filter((inv) => getAgingCategory(inv) === "vencido_1_30")
-      .reduce((sum, inv) => sum + inv.saldo_pendiente, 0);
-    const vencido31_60 = invoices
+      .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
+    const vencido31_60 = formattedInvoices
       .filter((inv) => getAgingCategory(inv) === "vencido_31_60")
-      .reduce((sum, inv) => sum + inv.saldo_pendiente, 0);
-    const incobrable = invoices
+      .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
+    const incobrable = formattedInvoices
       .filter((inv) => getAgingCategory(inv) === "incobrable")
-      .reduce((sum, inv) => sum + inv.saldo_pendiente, 0);
+      .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
+
     return { corriente, vencido1_30, vencido31_60, incobrable };
-  }, [invoices]);
+  }, [formattedInvoices]);
 
   const handleImportServices = (selectedServices: FinalizableService[]) => {
     setImportedServices(selectedServices);
@@ -197,30 +244,24 @@ export default function Receivables() {
     toast.info("Función de creación manual en desarrollo");
   };
 
+  // 4. REGISTRAR PAGO Y TIMBRAR REP MÚLTIPLE (SAT)
   const handleRegisterPayment = async (payload: any) => {
-    try {
-      await axiosClient.post(`/api/sat/stamp/payment`, payload);
-      toast.success("¡Cobro Registrado y Complemento Timbrado!");
+    if (invoicesToPay.length === 0) return;
+
+    const success = await registerMultiplePaymentRep(payload);
+
+    if (success) {
       setIsPaymentModalOpen(false);
       setInvoicesToPay([]);
-      fetchInvoices();
-    } catch (error: any) {
-      toast.error(
-        error.response?.data?.detail ||
-          "Error al registrar el cobro y timbrar REP",
-      );
+      setSelectedRows([]); // Limpiamos las palomitas de la tabla al pagar con éxito
     }
   };
 
+  // 5. ELIMINAR FACTURA
   const handleDeleteInvoice = async () => {
     if (!invoiceToDelete) return;
-    try {
-      await axiosClient.delete(`api/receivables/${invoiceToDelete.id}`);
-      setInvoices(invoices.filter((inv) => inv.id !== invoiceToDelete.id));
-      toast.success("Factura eliminada correctamente");
-    } catch (error) {
-      toast.error("Error al eliminar la factura");
-    } finally {
+    const success = await deleteReceivable(invoiceToDelete.id);
+    if (success) {
       setIsDeleteDialogOpen(false);
       setInvoiceToDelete(null);
     }
@@ -234,6 +275,7 @@ export default function Receivables() {
     }).format(amount || 0);
   };
 
+  // 6. COLUMNAS DE LA TABLA Y SEMÁFORO DE COBRANZA
   const columns: ColumnDef<ReceivableInvoice>[] = useMemo(
     () => [
       {
@@ -262,7 +304,7 @@ export default function Receivables() {
         ),
       },
       {
-        key: "montoTotal",
+        key: "monto_total",
         header: "Monto",
         type: "number",
         render: (value, row) => (
@@ -271,57 +313,91 @@ export default function Receivables() {
               {formatMoney(value)}
             </span>
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mt-1">
-              {row.moneda}
+              {row.moneda || "MXN"}
             </span>
           </div>
         ),
       },
       {
-        key: "saldoPendiente",
+        key: "saldo_pendiente",
         header: "Saldo a Cobrar",
         type: "number",
         render: (value, row) => {
+          const saldo = value || 0;
           const statusInfo = getInvoiceStatusInfo(row);
           return (
             <span
-              className={`font-mono text-sm font-black ${value === 0 ? "text-emerald-600 dark:text-emerald-400" : statusInfo.status === "danger" ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400"}`}
+              className={`font-mono text-sm font-black ${saldo === 0 ? "text-emerald-600 dark:text-emerald-400" : statusInfo.status === "danger" ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400"}`}
             >
-              {formatMoney(value)}
+              {formatMoney(saldo)}
             </span>
           );
         },
       },
       {
-        key: "fechaEmision",
+        key: "fecha_emision",
         header: "Emisión",
         type: "date",
         render: (value) => (
           <span className="font-mono text-sm font-bold text-slate-700 dark:text-slate-300 uppercase">
-            {new Date(value).toLocaleDateString("es-MX")}
+            {value ? new Date(value).toLocaleDateString("es-MX") : "—"}
           </span>
         ),
       },
       {
-        key: "fechaVencimiento",
+        key: "fecha_vencimiento",
         header: "Vencimiento",
         type: "date",
         render: (value, row) => {
-          const daysOverdue = calculateDaysOverdue(value);
-          const isPastDue = daysOverdue > 0 && row.saldo_pendiente > 0;
-          return (
-            <div className="flex flex-col">
-              <span
-                className={`font-mono text-sm font-bold uppercase ${isPastDue ? "text-red-600 dark:text-red-400" : "text-slate-700 dark:text-slate-300"}`}
-              >
-                {new Date(value).toLocaleDateString("es-MX")}
+          if (!value) return "—";
+          if (row.saldo_pendiente === 0)
+            return (
+              <span className="text-emerald-600 font-bold uppercase text-[10px]">
+                Liquidado
               </span>
-              {isPastDue && (
+            );
+
+          const daysOverdue = calculateDaysOverdue(value);
+          const formattedDate = new Date(value).toLocaleDateString("es-MX");
+
+          // SEMÁFORO DE COBRANZA INTELIGENTE
+          if (daysOverdue > 0) {
+            // ROJO: Vencido
+            return (
+              <div className="flex flex-col">
+                <span className="font-mono text-sm font-bold uppercase text-red-600 dark:text-red-400">
+                  {formattedDate}
+                </span>
                 <span className="text-[10px] font-black uppercase tracking-widest text-red-500 dark:text-red-400 mt-1 animate-pulse">
                   +{daysOverdue} DÍAS VENCIDO
                 </span>
-              )}
-            </div>
-          );
+              </div>
+            );
+          } else if (daysOverdue >= -5 && daysOverdue <= 0) {
+            // AMARILLO: Por vencer (En los próximos 5 días)
+            return (
+              <div className="flex flex-col">
+                <span className="font-mono text-sm font-bold uppercase text-amber-600 dark:text-amber-400">
+                  {formattedDate}
+                </span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-500 mt-1">
+                  POR VENCER ({Math.abs(daysOverdue)}D)
+                </span>
+              </div>
+            );
+          } else {
+            // VERDE: A tiempo
+            return (
+              <div className="flex flex-col">
+                <span className="font-mono text-sm font-bold uppercase text-slate-700 dark:text-slate-300">
+                  {formattedDate}
+                </span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-500 mt-1">
+                  A TIEMPO
+                </span>
+              </div>
+            );
+          }
         },
       },
       {
@@ -348,7 +424,11 @@ export default function Receivables() {
         render: (_, row) => (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200/50 dark:border-white/10 bg-white/50 dark:bg-slate-900/50">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200/50 dark:border-white/10 bg-white/50 dark:bg-slate-900/50"
+              >
                 <MoreHorizontal className="h-4 w-4 text-slate-500 dark:text-slate-400" />
               </Button>
             </DropdownMenuTrigger>
@@ -363,10 +443,11 @@ export default function Receivables() {
                 }}
                 className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
               >
-                <Eye className="h-4 w-4 mr-2 text-blue-500 dark:text-blue-400" /> Ver Detalle
+                <Eye className="h-4 w-4 mr-2 text-blue-500 dark:text-blue-400" />{" "}
+                Ver Detalle
               </DropdownMenuItem>
 
-              {row.saldo_pendiente > 0 && (
+              {(row.saldo_pendiente || 0) > 0 && (
                 <>
                   <DropdownMenuSeparator className="dark:bg-white/10" />
                   <DropdownMenuItem
@@ -400,7 +481,7 @@ export default function Receivables() {
     [],
   );
 
-  if (loading) {
+  if (isLoadingReceivables) {
     return (
       <div className="flex justify-center items-center h-64">
         <Loader2 className="h-8 w-8 animate-spin text-brand-navy" />
@@ -409,7 +490,7 @@ export default function Receivables() {
   }
 
   return (
-    <div className="space-y-6 pb-20">
+    <div className="space-y-6 pb-20 animate-page-enter relative">
       <PageHeader
         title="Cuentas por Cobrar (Tesorería)"
         description="Gestión de cartera, antigüedad de saldos y cobranza a clientes."
@@ -526,16 +607,52 @@ export default function Receivables() {
         </Card>
       </div>
 
-      <Card className="shadow-2xl border-none overflow-hidden bg-transparent">
+      <Card className="shadow-2xl border-none overflow-hidden bg-transparent relative z-0">
         <CardContent className="p-0 bg-white dark:bg-slate-950 [&_thead]:bg-slate-50/80 dark:[&_thead]:bg-slate-900/80 [&_thead]:backdrop-blur-xl [&_th]:bg-transparent [&_th]:border-b [&_th]:border-slate-200 dark:[&_th]:border-white/10 [&_th]:text-[10px] [&_th]:font-black [&_th]:uppercase [&_th]:tracking-[0.2em] [&_th]:text-slate-500 dark:[&_th]:text-slate-400">
           <EnhancedDataTable
-            data={invoices}
+            data={formattedInvoices}
             columns={columns}
             exportFileName="cuentas_por_cobrar"
+            enableRowSelection={true}
+            selectedRows={selectedRows}
+            onSelectedRowsChange={setSelectedRows}
+            rowKey="id"
           />
         </CardContent>
       </Card>
 
+      {/*   PANEL FLOTANTE DE COBRO MULTIPLE   */}
+      {selectedRows.length > 0 && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 fade-in duration-300 ease-out">
+          <div className="glass-panel bg-brand-navy/95 dark:bg-slate-900/95 text-white px-3 py-3 rounded-2xl shadow-2xl flex items-center gap-4 sm:gap-6 border border-white/20">
+            <div className="flex items-center gap-3 pl-3">
+              <Badge className="bg-emerald-500 text-white font-black text-sm h-7 px-3 border-none">
+                {selectedRows.length}
+              </Badge>
+              <div className="hidden sm:flex flex-col">
+                <span className="font-bold text-xs uppercase tracking-widest leading-none">
+                  Facturas
+                </span>
+                <span className="text-[9px] text-emerald-400 font-bold uppercase tracking-widest leading-none mt-1">
+                  Seleccionadas
+                </span>
+              </div>
+            </div>
+
+            <div className="h-8 w-px bg-white/20 hidden sm:block"></div>
+
+            <Button
+              onClick={handlePaySelectedInvoices}
+              className="bg-emerald-500 hover:bg-emerald-600 text-white font-black uppercase tracking-widest text-[10px] sm:text-xs h-11 px-6 rounded-xl border-none shadow-[0_0_15px_rgba(16,185,129,0.4)] transition-all hover:scale-[1.02] haptic-press"
+            >
+              <CreditCard className="w-4 h-4 mr-2" />
+              Generar REP
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* MODALES */}
       <ImportServicesModal
         open={isImportModalOpen}
         onOpenChange={setIsImportModalOpen}
@@ -568,12 +685,13 @@ export default function Receivables() {
       <AccountStatementModal
         open={isAccountStatementOpen}
         onClose={() => setIsAccountStatementOpen(false)}
-        invoices={invoices}
+        invoices={formattedInvoices}
       />
+
       <ImportXMLPaymentModal
         open={isImportXMLOpen}
         onOpenChange={setIsImportXMLOpen}
-        onSuccess={fetchInvoices}
+        onSuccess={refreshReceivables}
       />
 
       <AlertDialog
@@ -597,7 +715,8 @@ export default function Receivables() {
           <div className="p-6 sm:p-8 bg-slate-50/50 dark:bg-transparent">
             <AlertDialogDescription className="text-slate-600 dark:text-slate-300 text-sm font-medium">
               {invoiceToDelete &&
-              invoiceToDelete.saldo_pendiente < invoiceToDelete.monto_total ? (
+              (invoiceToDelete.saldo_pendiente || 0) <
+                (invoiceToDelete.monto_total || 0) ? (
                 <span className="text-red-600 dark:text-red-400 font-bold bg-red-50 dark:bg-red-950/30 p-3 rounded-lg block mt-2 border border-red-200 dark:border-red-900/50">
                   Error: Esta factura ya tiene abonos/pagos registrados. Por
                   auditoría fiscal, no es posible eliminarla. Cancele los pagos
@@ -606,7 +725,10 @@ export default function Receivables() {
               ) : (
                 <span className="block mt-2">
                   Esta acción no se puede deshacer. Se eliminará la factura{" "}
-                  <strong>{invoiceToDelete?.folio_interno}</strong> del sistema.
+                  <strong>
+                    {invoiceToDelete?.uuid || invoiceToDelete?.folio_interno}
+                  </strong>{" "}
+                  del sistema.
                 </span>
               )}
             </AlertDialogDescription>
@@ -617,8 +739,8 @@ export default function Receivables() {
                 Cancelar
               </AlertDialogCancel>
               {invoiceToDelete &&
-                invoiceToDelete.saldo_pendiente ===
-                  invoiceToDelete.monto_total && (
+                (invoiceToDelete.saldo_pendiente || 0) ===
+                  (invoiceToDelete.monto_total || 0) && (
                   <AlertDialogAction
                     onClick={handleDeleteInvoice}
                     className="bg-rose-600 hover:bg-rose-700 text-white font-black uppercase tracking-widest text-[10px] haptic-press shadow-rose-600/20"

@@ -295,6 +295,7 @@ class TripTimelineEventCreatePayload(BaseModel):
     combustible_porcentaje: Optional[float] = None
     combustible_litros: Optional[float] = None
     terminal_entrega_vacio: Optional[str] = None
+    trip_leg_id: Optional[int] = None
 
 
 class TripTimelineEventResponse(TripTimelineEventBase):

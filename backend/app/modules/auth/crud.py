@@ -1,7 +1,6 @@
-
 # --- Fuente: crud_users.py ---
 
-
+import time
 from sqlalchemy.orm import Session, joinedload
 
 from app.models import models
@@ -146,6 +145,7 @@ def delete_user(db: Session, user_id: int):
     Soft delete:
     - record_status = ELIMINADO
     - activo = False
+    - Libera el email para no causar IntegrityError si se quiere re-registrar.
     """
     user = (
         db.query(models.User)
@@ -160,6 +160,12 @@ def delete_user(db: Session, user_id: int):
 
     user.record_status = RecordStatus.ELIMINADO
     user.activo = False
+
+    # NUEVO: Libera el email agregándole un timestamp para evitar conflictos de constraint Unique
+    timestamp = int(time.time())
+    if user.email:
+        user.email = f"del_{timestamp}_{user.email}"
+
     db.add(user)
     db.commit()
     return True
@@ -266,7 +272,11 @@ def delete_role(db: Session, role_id: int):
         return None  # “no se puede borrar, está en uso”
 
     role.record_status = RecordStatus.ELIMINADO
+
+    # NUEVO: Libera el name_key para evitar conflictos de constraint Unique
+    timestamp = int(time.time())
+    role.name_key = f"del_{timestamp}_{role.name_key}"
+
     db.add(role)
     db.commit()
     return True
-
