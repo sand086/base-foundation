@@ -1047,8 +1047,6 @@ export function NextLegModal({
                     Chasis 1
                   </Label>
                   <Select
-                    // CORRECCIÓN: Usamos Boolean() para evitar la doble negación de ESLint
-                    disabled={Boolean(tripPadre?.remolque_1_id)}
                     value={
                       formData.remolque_1_id
                         ? String(formData.remolque_1_id)
@@ -1060,11 +1058,7 @@ export function NextLegModal({
                   >
                     <SelectTrigger
                       className={cn(
-                        "h-10 font-bold border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100",
-                        // CORRECCIÓN: Quitamos el !! en el ternario
-                        tripPadre?.remolque_1_id
-                          ? "bg-slate-100 dark:bg-slate-800/50 opacity-80 cursor-not-allowed"
-                          : "bg-card",
+                        "h-10 font-bold border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100 bg-card",
                       )}
                     >
                       <SelectValue placeholder="R1" />
@@ -1095,8 +1089,6 @@ export function NextLegModal({
                         Dolly
                       </Label>
                       <Select
-                        // CORRECCIÓN PARA DOLLY
-                        disabled={Boolean(tripPadre?.dolly_id)}
                         value={
                           formData.dolly_id ? String(formData.dolly_id) : ""
                         }
@@ -1106,11 +1098,7 @@ export function NextLegModal({
                       >
                         <SelectTrigger
                           className={cn(
-                            "h-10 font-bold border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100",
-                            // CORRECCIÓN PARA DOLLY
-                            tripPadre?.dolly_id
-                              ? "bg-slate-100 dark:bg-slate-800/50 opacity-80 cursor-not-allowed"
-                              : "bg-card",
+                            "h-10 font-bold border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100 bg-card",
                           )}
                         >
                           <SelectValue placeholder="Dolly" />
@@ -1134,8 +1122,6 @@ export function NextLegModal({
                         Chasis 2
                       </Label>
                       <Select
-                        // CORRECCIÓN PARA CHASIS 2
-                        disabled={Boolean(tripPadre?.remolque_2_id)}
                         value={
                           formData.remolque_2_id
                             ? String(formData.remolque_2_id)
@@ -1150,11 +1136,7 @@ export function NextLegModal({
                       >
                         <SelectTrigger
                           className={cn(
-                            "h-10 font-bold border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100",
-                            // CORRECCIÓN PARA CHASIS 2
-                            tripPadre?.remolque_2_id
-                              ? "bg-slate-100 dark:bg-slate-800/50 opacity-80 cursor-not-allowed"
-                              : "bg-card",
+                            "h-10 font-bold border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100 bg-card",
                           )}
                         >
                           <SelectValue placeholder="R2" />

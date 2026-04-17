@@ -100,7 +100,7 @@ export default function Dashboard() {
               Analizando flota y servicios...
             </p>
             <p className="text-[10px] text-muted-foreground/60 uppercase tracking-widest mt-1">
-              v2.0 Backend Real
+              sincronizando datos
             </p>
           </div>
         </div>

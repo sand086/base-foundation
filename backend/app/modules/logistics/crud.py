@@ -141,6 +141,15 @@ def update_trip_status(
     trip = get_trip(db, trip_id)
     if not trip:
         return None
+    # Si el viaje ya está cerrado o liquidado, NO permitimos que cambie a "en_transito" o "detenido"
+    estados_finales = [
+        models.TripStatus.ENTREGADO,
+        models.TripStatus.CERRADO,
+        "liquidado",
+    ]
+    if trip.status in estados_finales and status not in estados_finales:
+        # Se aborta silenciosamente el cambio de estatus, protegiendo el viaje
+        return trip
 
     active_leg = None
     if trip.legs:
@@ -163,7 +172,10 @@ def update_trip_status(
     trip.last_update = datetime.utcnow()
 
     if active_leg:
-        active_leg.status = status
+        if active_leg.status in estados_finales and status not in estados_finales:
+            pass  # No regresamos el estatus del tramo
+        else:
+            active_leg.status = status
         active_leg.last_update = datetime.utcnow()
         if location:
             active_leg.last_location = location

@@ -210,7 +210,7 @@ class BillingService:
         raw_emisor = (
             nombre_conf.value
             if nombre_conf and nombre_conf.value
-            else "ESCUELA KEMPER URATE"
+            else "TRANSPORTES RÁPIDOS 3T"
         )
         raw_emisor = (
             raw_emisor.upper()
@@ -219,7 +219,9 @@ class BillingService:
             .strip()
         )
         self.emisor_nombre = (
-            "ESCUELA KEMPER URATE" if self.emisor_rfc == "EKU9003173C9" else raw_emisor
+            "TRANSPORTES RÁPIDOS 3T"
+            if self.emisor_rfc == "EKU9003173C9"
+            else raw_emisor
         )
         self.emisor_regimen = (
             regimen_conf.value if regimen_conf and regimen_conf.value else "601"
@@ -727,9 +729,7 @@ class BillingService:
         if is_nominal:
             subtotal = Decimal("1.00")
         else:
-            base = Decimal(str(_get_safe(viaje, "tarifa_base", 0)))
-            casetas = Decimal(str(_get_safe(viaje, "costo_casetas", 0)))
-            subtotal = base + casetas
+            subtotal = Decimal(str(_get_safe(viaje, "tarifa_base", 0)))
 
         iva = subtotal * Decimal("0.16")
         ret = subtotal * Decimal("0.04")
