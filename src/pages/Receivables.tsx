@@ -15,6 +15,8 @@ import {
   Sheet as SheetIcon,
   Loader2,
   FileCode2,
+  BadgeDollarSign,
+  ReceiptText,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,7 +28,7 @@ import {
   ColumnDef,
 } from "@/components/ui/enhanced-data-table";
 import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge"; // Agregado Badge para la barra flotante
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,7 +58,6 @@ import {
   ReceivableInvoice,
   FinalizableService,
   getInvoiceStatusInfo,
-  getAgingCategory,
   calculateDaysOverdue,
 } from "@/features/receivables/types";
 
@@ -65,7 +66,6 @@ import { useBankAccounts } from "@/features/treasury/hooks/useBankAccounts";
 import { useReceivables } from "@/features/receivables/hooks/useReceivables";
 
 export default function Receivables() {
-  // 1. OBTENEMOS DATOS DEL HOOK
   const {
     receivables,
     isLoadingReceivables,
@@ -77,7 +77,7 @@ export default function Receivables() {
 
   const { bankAccounts = [] } = useBankAccounts();
 
-  // Estados UI (Modales y Selección)
+  // Estados UI
   const [services, setServices] = useState<FinalizableService[]>([]);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -95,11 +95,9 @@ export default function Receivables() {
   >();
   const [invoiceToDelete, setInvoiceToDelete] =
     useState<ReceivableInvoice | null>(null);
-
-  //   ESTADO PARA LA SELECCIÓN MÚLTIPLE EN LA TABLA
   const [selectedRows, setSelectedRows] = useState<ReceivableInvoice[]>([]);
 
-  // 2. FORMATEAMOS LOS DATOS DE LA API
+  // FORMATEO DE DATOS DE LA API
   const formattedInvoices = useMemo(() => {
     let dataArray = [];
     if (Array.isArray(receivables)) {
@@ -124,12 +122,12 @@ export default function Receivables() {
         inv.clientName ||
         inv.client_razon_social ||
         "Cliente Desconocido",
-      requiereREP: (inv.saldo_pendiente || 0) > 0,
-      monto_total: inv.monto_total || 0,
+      monto_total: Number(inv.monto_total) || 0,
       saldo_pendiente:
         inv.saldo_pendiente !== undefined
-          ? inv.saldo_pendiente
-          : inv.monto_total || 0,
+          ? Number(inv.saldo_pendiente)
+          : Number(inv.monto_total) || 0,
+      requiereREP: (Number(inv.saldo_pendiente) || 0) > 0,
       fecha_emision: inv.fecha_emision || inv.created_at,
       fecha_vencimiento: inv.fecha_vencimiento,
       estatus: inv.estatus || inv.status || "corriente",
@@ -137,11 +135,55 @@ export default function Receivables() {
     })) as ReceivableInvoice[];
   }, [receivables]);
 
-  //   LÓGICA DEL BOTÓN DE COBRO MÚLTIPLE
+  // CÁLCULO DEL RESUMEN FINANCIERO (Facturado, Cobrado, Pendiente, Vencido)
+  const financialSummary = useMemo(() => {
+    let totalFacturado = 0;
+    let totalCobrado = 0;
+    let porCobrarVigente = 0;
+    let carteraVencida = 0;
+
+    formattedInvoices.forEach((inv) => {
+      const monto = Number(inv.monto_total) || 0;
+      const saldo = Number(inv.saldo_pendiente) || 0;
+      const cobrado = monto - saldo > 0 ? monto - saldo : 0;
+
+      // Sumamos a los totales históricos
+      totalFacturado += monto;
+      totalCobrado += cobrado;
+
+      // Evaluamos el saldo pendiente para saber si está vencido o a tiempo
+      if (saldo > 0) {
+        if (!inv.fecha_vencimiento) {
+          porCobrarVigente += saldo;
+          return;
+        }
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const fechaStr = inv.fecha_vencimiento.includes("T")
+          ? inv.fecha_vencimiento.split("T")[0]
+          : inv.fecha_vencimiento;
+        const vencimiento = new Date(fechaStr.replace(/-/g, "/"));
+        vencimiento.setHours(0, 0, 0, 0);
+
+        const diffTime = today.getTime() - vencimiento.getTime();
+        const daysOverdue = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        if (daysOverdue > 0) {
+          carteraVencida += saldo;
+        } else {
+          porCobrarVigente += saldo;
+        }
+      }
+    });
+
+    return { totalFacturado, totalCobrado, porCobrarVigente, carteraVencida };
+  }, [formattedInvoices]);
+
   const handlePaySelectedInvoices = () => {
     if (selectedRows.length === 0) return;
 
-    // VALIDACIÓN DE NEGOCIO: Todas deben ser del mismo cliente
     const firstClientId = selectedRows[0].client_id;
     const allSameClient = selectedRows.every(
       (inv) => inv.client_id === firstClientId,
@@ -155,12 +197,10 @@ export default function Receivables() {
       return;
     }
 
-    // Si pasan, abrimos el modal
     setInvoicesToPay(selectedRows);
     setIsPaymentModalOpen(true);
   };
 
-  // 3. LÓGICA DE EXPORTACIÓN Y KPIS
   const handleExportToExcel = () => {
     if (formattedInvoices.length === 0) {
       toast.error("No hay datos para exportar");
@@ -211,27 +251,6 @@ export default function Receivables() {
     toast.success("Archivo Excel generado exitosamente");
   };
 
-  const agingReport = useMemo(() => {
-    const corriente = formattedInvoices
-      .filter(
-        (inv) =>
-          getAgingCategory(inv) === "corriente" &&
-          (inv.saldo_pendiente || 0) > 0,
-      )
-      .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
-    const vencido1_30 = formattedInvoices
-      .filter((inv) => getAgingCategory(inv) === "vencido_1_30")
-      .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
-    const vencido31_60 = formattedInvoices
-      .filter((inv) => getAgingCategory(inv) === "vencido_31_60")
-      .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
-    const incobrable = formattedInvoices
-      .filter((inv) => getAgingCategory(inv) === "incobrable")
-      .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
-
-    return { corriente, vencido1_30, vencido31_60, incobrable };
-  }, [formattedInvoices]);
-
   const handleImportServices = (selectedServices: FinalizableService[]) => {
     setImportedServices(selectedServices);
     setIsImportModalOpen(false);
@@ -244,20 +263,16 @@ export default function Receivables() {
     toast.info("Función de creación manual en desarrollo");
   };
 
-  // 4. REGISTRAR PAGO Y TIMBRAR REP MÚLTIPLE (SAT)
   const handleRegisterPayment = async (payload: any) => {
     if (invoicesToPay.length === 0) return;
-
     const success = await registerMultiplePaymentRep(payload);
-
     if (success) {
       setIsPaymentModalOpen(false);
       setInvoicesToPay([]);
-      setSelectedRows([]); // Limpiamos las palomitas de la tabla al pagar con éxito
+      setSelectedRows([]);
     }
   };
 
-  // 5. ELIMINAR FACTURA
   const handleDeleteInvoice = async () => {
     if (!invoiceToDelete) return;
     const success = await deleteReceivable(invoiceToDelete.id);
@@ -275,7 +290,6 @@ export default function Receivables() {
     }).format(amount || 0);
   };
 
-  // 6. COLUMNAS DE LA TABLA Y SEMÁFORO DE COBRANZA
   const columns: ColumnDef<ReceivableInvoice>[] = useMemo(
     () => [
       {
@@ -338,11 +352,19 @@ export default function Receivables() {
         key: "fecha_emision",
         header: "Emisión",
         type: "date",
-        render: (value) => (
-          <span className="font-mono text-sm font-bold text-slate-700 dark:text-slate-300 uppercase">
-            {value ? new Date(value).toLocaleDateString("es-MX") : "—"}
-          </span>
-        ),
+        render: (value) => {
+          if (!value) return "—";
+          const safeDate = new Date(
+            value.includes("-")
+              ? value.split("T")[0].replace(/-/g, "/")
+              : value,
+          );
+          return (
+            <span className="font-mono text-sm font-bold text-slate-700 dark:text-slate-300 uppercase">
+              {safeDate.toLocaleDateString("es-MX")}
+            </span>
+          );
+        },
       },
       {
         key: "fecha_vencimiento",
@@ -358,11 +380,14 @@ export default function Receivables() {
             );
 
           const daysOverdue = calculateDaysOverdue(value);
-          const formattedDate = new Date(value).toLocaleDateString("es-MX");
+          const safeDate = new Date(
+            value.includes("-")
+              ? value.split("T")[0].replace(/-/g, "/")
+              : value,
+          );
+          const formattedDate = safeDate.toLocaleDateString("es-MX");
 
-          // SEMÁFORO DE COBRANZA INTELIGENTE
           if (daysOverdue > 0) {
-            // ROJO: Vencido
             return (
               <div className="flex flex-col">
                 <span className="font-mono text-sm font-bold uppercase text-red-600 dark:text-red-400">
@@ -374,7 +399,6 @@ export default function Receivables() {
               </div>
             );
           } else if (daysOverdue >= -5 && daysOverdue <= 0) {
-            // AMARILLO: Por vencer (En los próximos 5 días)
             return (
               <div className="flex flex-col">
                 <span className="font-mono text-sm font-bold uppercase text-amber-600 dark:text-amber-400">
@@ -386,7 +410,6 @@ export default function Receivables() {
               </div>
             );
           } else {
-            // VERDE: A tiempo
             return (
               <div className="flex flex-col">
                 <span className="font-mono text-sm font-bold uppercase text-slate-700 dark:text-slate-300">
@@ -493,7 +516,7 @@ export default function Receivables() {
     <div className="space-y-6 pb-20 animate-page-enter relative">
       <PageHeader
         title="Cuentas por Cobrar (Tesorería)"
-        description="Gestión de cartera, antigüedad de saldos y cobranza a clientes."
+        description="Gestión de cartera, métricas de ingresos y cobranza a clientes."
       >
         <div className="flex flex-wrap items-center gap-3">
           <Button
@@ -550,56 +573,63 @@ export default function Receivables() {
         </div>
       </PageHeader>
 
+      {/* NUEVAS TARJETAS DE MÉTRICAS GLOBALES */}
       <div className="grid gap-4 md:grid-cols-4">
-        <Card className="border-l-4 border-l-emerald-500 shadow-sm hover:shadow-md transition-shadow">
+        {/* TOTAL FACTURADO */}
+        <Card className="border-l-4 border-l-blue-600 shadow-sm hover:shadow-md transition-shadow">
           <CardContent className="p-5">
             <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] flex items-center gap-1.5 mb-1">
-              <CheckCircle2 className="h-4 w-4 text-emerald-500" /> Corriente
-              (Al Día)
+              <ReceiptText className="h-4 w-4 text-blue-500" /> Total Facturado
             </p>
-            <p className="text-2xl font-black text-brand-navy dark:text-white leading-none tracking-tighter">
+            <p className="text-2xl font-black text-blue-700 dark:text-blue-400 leading-none tracking-tighter">
               $
-              {agingReport.corriente.toLocaleString("es-MX", {
+              {financialSummary.totalFacturado.toLocaleString("es-MX", {
                 minimumFractionDigits: 2,
               })}
             </p>
           </CardContent>
         </Card>
+
+        {/* TOTAL COBRADO */}
+        <Card className="border-l-4 border-l-emerald-500 shadow-sm hover:shadow-md transition-shadow bg-emerald-50/30">
+          <CardContent className="p-5">
+            <p className="text-[10px] font-black text-emerald-800 dark:text-emerald-400 uppercase tracking-[0.2em] flex items-center gap-1.5 mb-1">
+              <BadgeDollarSign className="h-4 w-4 text-emerald-600" /> Total
+              Cobrado (Ingresos)
+            </p>
+            <p className="text-2xl font-black text-emerald-700 dark:text-emerald-500 leading-none tracking-tighter">
+              $
+              {financialSummary.totalCobrado.toLocaleString("es-MX", {
+                minimumFractionDigits: 2,
+              })}
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* POR COBRAR (VIGENTE) */}
         <Card className="border-l-4 border-l-amber-400 shadow-sm hover:shadow-md transition-shadow">
           <CardContent className="p-5">
             <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] flex items-center gap-1.5 mb-1">
-              <Clock className="h-4 w-4 text-amber-500" /> Vencido 1-30 Días
+              <Clock className="h-4 w-4 text-amber-500" /> Por Cobrar (Vigente)
             </p>
             <p className="text-2xl font-black text-amber-600 dark:text-amber-400 leading-none tracking-tighter">
               $
-              {agingReport.vencido1_30.toLocaleString("es-MX", {
+              {financialSummary.porCobrarVigente.toLocaleString("es-MX", {
                 minimumFractionDigits: 2,
               })}
             </p>
           </CardContent>
         </Card>
-        <Card className="border-l-4 border-l-orange-500 shadow-sm hover:shadow-md transition-shadow">
+
+        {/* CARTERA VENCIDA */}
+        <Card className="border-l-4 border-l-rose-500 shadow-sm hover:shadow-md transition-shadow">
           <CardContent className="p-5">
             <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] flex items-center gap-1.5 mb-1">
-              <AlertCircle className="h-4 w-4 text-orange-500" /> Vencido 31-60
-              Días
+              <AlertCircle className="h-4 w-4 text-rose-500" /> Cartera Vencida
             </p>
-            <p className="text-2xl font-black text-orange-600 dark:text-orange-400 leading-none tracking-tighter">
+            <p className="text-2xl font-black text-rose-600 dark:text-rose-400 leading-none tracking-tighter">
               $
-              {agingReport.vencido31_60.toLocaleString("es-MX", {
-                minimumFractionDigits: 2,
-              })}
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="border-l-4 border-l-red-600 shadow-sm hover:shadow-md transition-shadow">
-          <CardContent className="p-5">
-            <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] flex items-center gap-1.5 mb-1">
-              <Ban className="h-4 w-4 text-red-500" /> Cartera Vencida (+90)
-            </p>
-            <p className="text-2xl font-black text-red-700 dark:text-red-400 leading-none tracking-tighter">
-              $
-              {agingReport.incobrable.toLocaleString("es-MX", {
+              {financialSummary.carteraVencida.toLocaleString("es-MX", {
                 minimumFractionDigits: 2,
               })}
             </p>
@@ -621,7 +651,7 @@ export default function Receivables() {
         </CardContent>
       </Card>
 
-      {/*   PANEL FLOTANTE DE COBRO MULTIPLE   */}
+      {/* PANEL FLOTANTE DE COBRO MULTIPLE   */}
       {selectedRows.length > 0 && (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 fade-in duration-300 ease-out">
           <div className="glass-panel bg-brand-navy/95 dark:bg-slate-900/95 text-white px-3 py-3 rounded-2xl shadow-2xl flex items-center gap-4 sm:gap-6 border border-white/20">
