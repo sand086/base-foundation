@@ -39,7 +39,7 @@ export const authService = {
   // 4. Limpieza de sesión mejorada
   logout: async () => {
     try {
-      // 🛡️ Le avisamos al backend que destruya la sesión en BD (Si falla, no pasa nada)
+      //  Le avisamos al backend que destruya la sesión en BD (Si falla, no pasa nada)
       await axiosClient.post("/api/auth/logout");
     } catch (e) {
       console.warn("El token ya estaba inactivo en el servidor.");

@@ -251,7 +251,7 @@ export function NextLegModal({
       if (lastLeg?.leg_type === "carga_muelle") nextLegType = "ruta_carretera";
       if (lastLeg?.leg_type === "ruta_carretera") nextLegType = "entrega_vacio";
 
-      // 💡 FIX LEAD: Casteo estricto a Number para asegurar que los comparadores === funcionen en los filtros.
+      //  FIX LEAD: Casteo estricto a Number para asegurar que los comparadores === funcionen en los filtros.
       const inheritedR1 = tripPadre.remolque_1_id
         ? Number(tripPadre.remolque_1_id)
         : (lastLeg as any)?.remolque_1_id

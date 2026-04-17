@@ -65,11 +65,11 @@ export function InvoiceDetailSheet({
 
   if (!invoice) return null;
 
-  // 🛡️ VACUNA TYPESCRIPT
+  //  VACUNA TYPESCRIPT
   const inv = invoice as any;
   const statusInfo = getInvoiceStatusInfo(inv);
 
-  // 💡 EXTRACCIÓN DE DATOS
+  //  EXTRACCIÓN DE DATOS
   const uuid = safeStr(inv.uuid) || "NO TIMBRADO";
   const rawFolio = safeStr(inv.folio_interno) || safeStr(inv.folio);
   const displayFolio = rawFolio && rawFolio !== "S/F" ? rawFolio : uuid;
@@ -100,7 +100,7 @@ export function InvoiceDetailSheet({
   const ordenFolio =
     safeStr(inv.orden_compra_folio) || safeStr(inv.ordenCompraFolio);
 
-  // 🛡️ DESCARGA NATIVA (100% Inmune a corrupciones de Javascript)
+  //  DESCARGA NATIVA (100% Inmune a corrupciones de Javascript)
   const handleDownload = (fileType: "pdf" | "xml", targetUuid: string) => {
     const toastId = toast.loading(`Descargando ${fileType.toUpperCase()}...`);
 
@@ -111,11 +111,6 @@ export function InvoiceDetailSheet({
 
       // 2. Armamos la URL exacta del archivo en el servidor
       const fileUrl = `${baseURL}/sat/invoice/${targetUuid}/${fileType}`;
-
-      // 🔥 EL TRUCO MAGISTRAL 🔥
-      // En lugar de usar fetch() para traer los bytes a Javascript,
-      // dejamos que el NAVEGADOR haga la petición directamente creando un link invisible.
-      // Como tu backend de Python ya dice "attachment", el navegador lo descargará intacto.
 
       const link = document.createElement("a");
       link.href = fileUrl;

@@ -769,7 +769,7 @@ class BillingService:
                 else ""
             )
         else:
-            # 🛡️ FIX CP147: HEURÍSTICA DE EMERGENCIA FORZADA AL 012 PARA QUE PASE AHORA MISMO
+            #  FIX CP147: HEURÍSTICA DE EMERGENCIA FORZADA AL 012 PARA QUE PASE AHORA MISMO
             cp_int = int(cp_cliente) if cp_cliente.isdigit() else 0
 
             if 1000 <= cp_int <= 16999:
