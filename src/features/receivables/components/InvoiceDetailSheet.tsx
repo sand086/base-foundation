@@ -110,7 +110,7 @@ export function InvoiceDetailSheet({
       const baseURL = rawBaseURL.replace(/\/$/, "");
 
       // 2. Armamos la URL exacta del archivo en el servidor
-      const fileUrl = `${baseURL}/sat/invoice/${targetUuid}/${fileType}`;
+      const fileUrl = `${baseURL}/api/sat/invoice/${targetUuid}/${fileType}`;
 
       const link = document.createElement("a");
       link.href = fileUrl;
