@@ -94,6 +94,14 @@ def update_user(db: Session, user_id: int, payload: schemas.UserUpdate):
     ):
         data.pop(k, None)
 
+    # Si el JSON incluye "password", lo extraemos, lo encriptamos y lo pasamos al campo real
+    if "password" in data:
+        raw_password = data.pop("password")
+        # Validamos que no venga vacío
+        if raw_password:
+            data["password_hash"] = get_password_hash(raw_password)
+
+    # Ahora sí, guardamos todos los datos (incluyendo el hash si se cambió la clave)
     for k, v in data.items():
         setattr(user, k, v)
 

@@ -512,46 +512,23 @@ def read_user(user_id: int, db: Session = Depends(get_db)):
 
 
 @router.put("/{user_id}", response_model=schemas.UserResponse)
-def update_user(db: Session, user_id: int, payload: schemas.UserUpdate):
-    user = (
-        db.query(models.User)
-        .filter(
-            models.User.id == user_id,
-            models.User.record_status != RecordStatus.ELIMINADO,
-        )
-        .first()
-    )
+def update_user(
+    user_id: int, payload: schemas.UserUpdate, db: Session = Depends(get_db)
+):
+    if payload.email:
+        existing = crud.get_user_by_email(db, payload.email)
+        if existing and existing.id != user_id:
+            raise HTTPException(status_code=400, detail="El correo ya existe")
+
+    if payload.role_id is not None:
+        role = crud.get_role(db, payload.role_id)
+        if not role:
+            raise HTTPException(status_code=404, detail="Rol no encontrado")
+
+    user = crud.update_user(db, user_id, payload)
     if not user:
-        return None
-
-    data = payload.model_dump(exclude_unset=True)
-
-    # bloquear auditoría / record_status (se controla por delete)
-    for k in (
-        "created_at",
-        "updated_at",
-        "created_by_id",
-        "updated_by_id",
-        "record_status",
-    ):
-        data.pop(k, None)
-
-    # 👇 EL FIX PARA LA CONTRASEÑA 👇
-    # Si el JSON incluye "password", lo extraemos, lo encriptamos y lo pasamos al campo real
-    if "password" in data:
-        raw_password = data.pop("password")
-        # Validamos que no venga vacío
-        if raw_password:
-            data["password_hash"] = get_password_hash(raw_password)
-
-    # Ahora sí, guardamos todos los datos (incluyendo el hash si se cambió la clave)
-    for k, v in data.items():
-        setattr(user, k, v)
-
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return get_user(db, user_id)
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    return user
 
 
 @router.patch("/{user_id}/status")
