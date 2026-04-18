@@ -292,6 +292,21 @@ class BillingService:
             getattr(cliente, "codigo_postal_fiscal", "91808") if cliente else "91808"
         )
 
+        # --- LÓGICA DE UBICACIÓN DINÁMICA CON FALLBACK ---
+        loc_destino = (
+            self.db.query(SatLocationCode)
+            .filter(SatLocationCode.codigo_postal == cp_cliente)
+            .first()
+        )
+
+        estado_dest = loc_destino.estado_clave if loc_destino else "VER"
+        municipio_dest = (
+            str(loc_destino.municipio_clave).zfill(3)
+            if loc_destino and loc_destino.municipio_clave
+            else "193"
+        )
+        # -------------------------------------------------
+
         return {
             "id_ccp": "CCC" + str(uuid.uuid4()).upper().replace("-", "")[:33],
             "folio": f"CP-{viaje.id}{'N' if is_nominal else 'F'}",
@@ -372,8 +387,8 @@ class BillingService:
                 getattr(operador, "license_number", "LIC123") if operador else "LIC123"
             ),
             "cp_destino": cp_cliente,
-            "estado_destino": "VER",  # Remplazar por estado real del destino
-            "municipio_destino": "193",  # Remplazar por municipio real del destino
+            "estado_destino": estado_dest,
+            "municipio_destino": municipio_dest,
             "leyenda_legal": DEFAULT_LEYENDA,
         }
 
