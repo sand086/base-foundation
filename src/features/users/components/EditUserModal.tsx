@@ -383,7 +383,13 @@ export function EditUserModal({
 
                       {/* 👇 FIX 3: Pasamos el control al React-Hook-Form directamente */}
                       <PasswordInput
-                        {...register("password")}
+                        value={formData.password || ""}
+                        onChange={(v) =>
+                          setValue("password", v, {
+                            shouldValidate: true,
+                            shouldDirty: true,
+                          })
+                        }
                         placeholder="••••••••"
                       />
 

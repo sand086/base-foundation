@@ -646,3 +646,34 @@ def verify_user_password(
             detail="La contraseña de autorización es incorrecta.",
         )
     return {"status": "success", "message": "Identidad confirmada."}
+
+
+# =====================================================================
+# SCRIPT TEMPORAL: MIGRACIÓN DE CONTRASEÑAS A ENCRIPTACIÓN REVERSIBLE
+# =====================================================================
+
+
+@router.post("/dev/migrar-contrasenas")
+def migrar_todas_las_contrasenas(db: Session = Depends(get_db)):
+    """
+    Este endpoint recorre todos los usuarios y cambia su contraseña a "Temp086."
+    usando la nueva encriptación reversible (Fernet).
+    """
+    from app.core import security
+
+    # Obtener todos los usuarios, incluso los inactivos
+    users = db.query(models.User).all()
+
+    contador = 0
+    for user in users:
+        # Encriptamos la nueva contraseña temporal
+        nuevo_hash_reversible = security.get_password_hash("Temp086.")
+        user.password_hash = nuevo_hash_reversible
+        contador += 1
+
+    db.commit()
+
+    return {
+        "status": "success",
+        "message": f"Se han migrado {contador} usuarios. Su nueva contraseña visible es Temp086.",
+    }
