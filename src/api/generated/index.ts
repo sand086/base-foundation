@@ -12,6 +12,7 @@ export type { AlertConfigUpdate } from './models/AlertConfigUpdate';
 export type { AssignTirePayload } from './models/AssignTirePayload';
 export type { BankAccountCreate } from './models/BankAccountCreate';
 export type { BankAccountResponse } from './models/BankAccountResponse';
+export type { BankMovementCreate } from './models/BankMovementCreate';
 export type { BankMovementResponse } from './models/BankMovementResponse';
 export type { BatchSettlementPayload } from './models/BatchSettlementPayload';
 export type { BatchSettlementPreviewRequest } from './models/BatchSettlementPreviewRequest';

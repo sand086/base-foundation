@@ -1527,6 +1527,9 @@ class BankMovement(AuditMixin, Base):
     referencia = Column(String(100))
     comprobante_url = Column(String(500), nullable=True)
 
+    conciliado = Column(Boolean, default=False, server_default="false")
+    fecha_conciliacion = Column(Date, nullable=True)
+
     bank_account = relationship("BankAccount", backref="movements")
 
 

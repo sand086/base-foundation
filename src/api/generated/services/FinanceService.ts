@@ -4,6 +4,7 @@
 /* eslint-disable */
 import type { BankAccountCreate } from '../models/BankAccountCreate';
 import type { BankAccountResponse } from '../models/BankAccountResponse';
+import type { BankMovementCreate } from '../models/BankMovementCreate';
 import type { BankMovementResponse } from '../models/BankMovementResponse';
 import type { Body_fix_orphan_payments_api_finance_fix_orphan_payments_post } from '../models/Body_fix_orphan_payments_api_finance_fix_orphan_payments_post';
 import type { Body_upload_payment_xml_api_finance_payments_upload_xml_post } from '../models/Body_upload_payment_xml_api_finance_payments_upload_xml_post';
@@ -174,6 +175,68 @@ export class FinanceService {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/api/finance/movements',
+        });
+    }
+    /**
+     * Create Manual Movement
+     * Crea un movimiento manual (Ingreso o Egreso) afectando el saldo directamente.
+     * @param requestBody
+     * @returns BankMovementResponse Successful Response
+     * @throws ApiError
+     */
+    public static createManualMovementApiFinanceMovementsPost(
+        requestBody: BankMovementCreate,
+    ): CancelablePromise<BankMovementResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/finance/movements',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Conciliate Movement
+     * Marca un movimiento bancario como conciliado (Verificado contra el banco).
+     * @param movementId
+     * @returns BankMovementResponse Successful Response
+     * @throws ApiError
+     */
+    public static conciliateMovementApiFinanceMovementsMovementIdConciliationPatch(
+        movementId: number,
+    ): CancelablePromise<BankMovementResponse> {
+        return __request(OpenAPI, {
+            method: 'PATCH',
+            url: '/api/finance/movements/{movement_id}/conciliation',
+            path: {
+                'movement_id': movementId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Delete Bank Movement
+     * Elimina un movimiento bancario y restaura el saldo de la cuenta.
+     * @param movementId
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static deleteBankMovementApiFinanceMovementsMovementIdDelete(
+        movementId: number,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'DELETE',
+            url: '/api/finance/movements/{movement_id}',
+            path: {
+                'movement_id': movementId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
         });
     }
     /**

@@ -109,6 +109,45 @@ def read_movements(db: Session = Depends(get_db)):
     return crud.get_bank_movements(db)
 
 
+@router.patch(
+    "/movements/{movement_id}/conciliation", response_model=schemas.BankMovementResponse
+)
+def conciliate_movement(movement_id: int, db: Session = Depends(get_db)):
+    """Marca un movimiento bancario como conciliado (Verificado contra el banco)."""
+    movement = crud.conciliate_bank_movement(db, movement_id)
+    if not movement:
+        raise HTTPException(status_code=404, detail="Movimiento no encontrado")
+
+    return movement
+
+
+@router.delete("/movements/{movement_id}")
+def delete_bank_movement(
+    movement_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """Elimina un movimiento bancario y restaura el saldo de la cuenta."""
+    success = crud.delete_bank_movement(db, movement_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Movimiento no encontrado")
+
+    return {"message": "Movimiento eliminado y saldo restaurado correctamente"}
+
+
+@router.post("/movements", response_model=schemas.BankMovementResponse)
+def create_manual_movement(
+    movement: schemas.BankMovementCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """Crea un movimiento manual (Ingreso o Egreso) afectando el saldo directamente."""
+    try:
+        return crud.create_bank_movement(db, movement, current_user.id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 # =====================================================================
 # INVOICES (Carga Masiva CxP)
 # =====================================================================

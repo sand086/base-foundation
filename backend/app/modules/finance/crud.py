@@ -713,3 +713,65 @@ def process_sat_master_report(
 
     db.commit()
     return {"message": "Sincronización SAT Completada", "detalles": resultados}
+
+
+def conciliate_bank_movement(db: Session, movement_id: int):
+    """Marca un movimiento como conciliado con la fecha de hoy"""
+    movement = (
+        db.query(models.BankMovement)
+        .filter(
+            models.BankMovement.id == movement_id,
+            models.BankMovement.record_status != RecordStatus.ELIMINADO,
+        )
+        .first()
+    )
+
+    if not movement:
+        return None
+
+    # Cambiamos el estatus a conciliado y le ponemos la fecha actual
+    movement.conciliado = True
+    movement.fecha_conciliacion = date.today()
+
+    db.commit()
+    db.refresh(movement)
+    return movement
+
+
+def delete_bank_movement(db: Session, movement_id: int):
+    """
+    Elimina un movimiento (Soft Delete) y revierte el impacto en el saldo de la cuenta.
+    """
+    movement = (
+        db.query(models.BankMovement)
+        .filter(
+            models.BankMovement.id == movement_id,
+            models.BankMovement.record_status != RecordStatus.ELIMINADO,
+        )
+        .first()
+    )
+
+    if not movement:
+        return False
+
+    # Buscamos la cuenta y la bloqueamos (for update) para evitar errores de concurrencia
+    account = (
+        db.query(models.BankAccount)
+        .filter(models.BankAccount.id == movement.bank_account_id)
+        .with_for_update()
+        .first()
+    )
+
+    if account:
+        # Si era un ingreso que sumó dinero, se lo restamos.
+        if movement.tipo == "ingreso":
+            account.saldo -= movement.monto
+        # Si era un egreso que restó dinero, se lo devolvemos.
+        elif movement.tipo == "egreso":
+            account.saldo += movement.monto
+
+    # Hacemos Soft Delete del movimiento
+    movement.record_status = RecordStatus.ELIMINADO
+
+    db.commit()
+    return True
