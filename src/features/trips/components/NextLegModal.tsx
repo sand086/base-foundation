@@ -234,7 +234,7 @@ export function NextLegModal({
     referencia: "",
     peso_toneladas: 0,
     descripcion_mercancia: "",
-    sat_clave_producto: "78101802",
+    sat_clave_producto: "01010101",
     sat_clave_unidad: "E48",
     es_material_peligroso: false,
     clase_imo: "",
@@ -292,7 +292,7 @@ export function NextLegModal({
         peso_toneladas: tripPadre.peso_toneladas || 0,
         descripcion_mercancia:
           tripPadre.descripcion_mercancia || "Carga General",
-        sat_clave_producto: tripPadre.sat_clave_producto || "78101802",
+        sat_clave_producto: tripPadre.sat_clave_producto || "01010101",
         sat_clave_unidad: tripPadre.sat_clave_unidad || "E48",
         es_material_peligroso: tripPadre.es_material_peligroso || false,
         clase_imo: tripPadre.clase_imo || "",
@@ -939,7 +939,7 @@ export function NextLegModal({
                         Clave Producto SAT *
                       </Label>
                       <Input
-                        placeholder="Ej. 78101802"
+                        placeholder="Ej. 01010101"
                         className="h-11 font-mono bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100"
                         value={tripFiscalData.sat_clave_producto}
                         onChange={(e) =>

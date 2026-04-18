@@ -292,19 +292,25 @@ class BillingService:
             getattr(cliente, "codigo_postal_fiscal", "91808") if cliente else "91808"
         )
 
-        # --- LÓGICA DE UBICACIÓN DINÁMICA CON FALLBACK ---
+        # --- LÓGICA DE UBICACIÓN DINÁMICA CON FALLBACK SEGURO ---
         loc_destino = (
             self.db.query(SatLocationCode)
             .filter(SatLocationCode.codigo_postal == cp_cliente)
             .first()
         )
 
-        estado_dest = loc_destino.estado_clave if loc_destino else "VER"
-        municipio_dest = (
-            str(loc_destino.municipio_clave).zfill(3)
-            if loc_destino and loc_destino.municipio_clave
-            else "193"
-        )
+        if loc_destino:
+            estado_dest = loc_destino.estado_clave
+            municipio_dest = str(loc_destino.municipio_clave).zfill(3)
+        else:
+            # FALLBACK SEGURO: Si el CP del cliente no está en tu BD,
+            # forzamos TODA LA TRÍADA a una combinación válida para no romper el SAT.
+            logger.warning(
+                f"CP {cp_cliente} no encontrado en BD. Usando tríada fallback Veracruz."
+            )
+            cp_cliente = "91808"
+            estado_dest = "VER"
+            municipio_dest = "193"
         # -------------------------------------------------
 
         return {
@@ -334,9 +340,14 @@ class BillingService:
                 else "1000.00"
             ),
             "bienes_transp": (
-                viaje.sat_clave_producto
-                if viaje and viaje.sat_clave_producto
-                else "78101802"
+                "01010101"
+                if (
+                    is_nominal
+                    or not viaje
+                    or not getattr(viaje, "sat_clave_producto", None)
+                    or getattr(viaje, "sat_clave_producto", None) == "78101802"
+                )
+                else viaje.sat_clave_producto
             ),
             "descripcion_mercancia": (
                 viaje.descripcion_mercancia
@@ -939,6 +950,10 @@ class BillingService:
         if d.get("placa_remolque_2") and d["placa_remolque_2"] != "1XXXX99":
             remolques_xml += f'\n                    <cartaporte31:Remolque SubTipoRem="{d.get("subtipo_remolque_2", d["subtipo_remolque"])}" Placa="{d["placa_remolque_2"]}" />'
 
+        mat_peligroso = (
+            ' MaterialPeligroso="No"' if d["bienes_transp"] == "01010101" else ""
+        )
+
         return f"""<?xml version="1.0" encoding="UTF-8"?>
 <cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:cartaporte31="http://www.sat.gob.mx/CartaPorte31" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/CartaPorte31 http://www.sat.gob.mx/sitio_internet/cfd/CartaPorte/CartaPorte31.xsd" Version="4.0" Fecha="{d['fecha']}" Serie="CP" Folio="{d['folio']}" FormaPago="99" CondicionesDePago="CONTADO" SubTotal="{d['subtotal']}" Moneda="MXN" TipoCambio="1" Total="{d['total']}" TipoDeComprobante="I" Exportacion="01" MetodoPago="PPD" LugarExpedicion="{self.emisor_cp}">{relacion_xml}
     <cfdi:Emisor Rfc="{self.emisor_rfc}" Nombre="{self.emisor_nombre}" RegimenFiscal="{self.emisor_regimen}" />
@@ -966,7 +981,7 @@ class BillingService:
                 </cartaporte31:Ubicacion>
             </cartaporte31:Ubicaciones>
             <cartaporte31:Mercancias PesoBrutoTotal="{d['peso_bruto']}" UnidadPeso="KGM" NumTotalMercancias="1">
-                <cartaporte31:Mercancia BienesTransp="{d['bienes_transp']}" Descripcion="{d['descripcion_mercancia']}" Cantidad="1" ClaveUnidad="21" PesoEnKg="{d['peso_bruto']}" Unidad="pza" />
+                <cartaporte31:Mercancia BienesTransp="{d['bienes_transp']}" Descripcion="{d['descripcion_mercancia']}" Cantidad="1" ClaveUnidad="H87" PesoEnKg="{d['peso_bruto']}" Unidad="pza"{mat_peligroso} />
                 <cartaporte31:Autotransporte PermSCT="{d['permiso_sct']}" NumPermisoSCT="{d['num_permiso']}">
                     <cartaporte31:IdentificacionVehicular ConfigVehicular="{d['config_vehicular']}" PesoBrutoVehicular="{d['peso_bruto_vehicular']}" PlacaVM="{d['placas']}" AnioModeloVM="{d['anio_modelo']}" />
                     <cartaporte31:Seguros AseguraRespCivil="{d['aseguradora']}" PolizaRespCivil="{d['poliza']}" />

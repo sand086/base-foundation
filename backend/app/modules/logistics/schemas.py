@@ -396,7 +396,7 @@ class TripBase(ORMBase):
     es_material_peligroso: Optional[bool] = False
     clase_imo: Optional[str] = Field(default=None, max_length=50)
     sat_clave_producto: Optional[str] = Field(
-        default="78101802", max_length=20, description="Clave SAT para Fletes"
+        default="01010101", max_length=20, description="Clave SAT para Fletes"
     )
     sat_clave_unidad: Optional[str] = Field(
         default="E48", max_length=10, description="Clave SAT Unidad de Servicio"
