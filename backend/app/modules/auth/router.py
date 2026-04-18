@@ -482,7 +482,12 @@ def read_user_me(current_user: models.User = Depends(get_current_active_user)):
 
 @router.get("", response_model=List[schemas.UserResponse])
 def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return crud.get_users(db, skip=skip, limit=limit)
+    users = crud.get_users(db, skip=skip, limit=limit)
+
+    for user in users:
+        user.password = security.decrypt_password(user.password_hash)
+
+    return users
 
 
 @router.post("", response_model=schemas.UserResponse)
@@ -495,7 +500,10 @@ def create_user(payload: schemas.UserCreate, db: Session = Depends(get_db)):
         if not role:
             raise HTTPException(status_code=404, detail="Rol no encontrado")
 
-    return crud.create_user(db, payload)
+    user = crud.create_user(db, payload)
+    # Mandar contraseña desencriptada al crearlo
+    user.password = security.decrypt_password(user.password_hash)
+    return user
 
 
 # =========================================================
@@ -508,6 +516,9 @@ def read_user(user_id: int, db: Session = Depends(get_db)):
     user = crud.get_user(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    # Desencriptar
+    user.password = security.decrypt_password(user.password_hash)
     return user
 
 
@@ -528,6 +539,9 @@ def update_user(
     user = crud.update_user(db, user_id, payload)
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    # Desencriptar tras actualizar
+    user.password = security.decrypt_password(user.password_hash)
     return user
 
 

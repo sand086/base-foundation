@@ -267,6 +267,7 @@ class UserResponse(UserBase):
 
     # Anidado opcional (evita N requests)
     role: Optional[RoleResponse] = None
+    password: Optional[str] = None
 
     # AuditMixin
     record_status: RecordStatus

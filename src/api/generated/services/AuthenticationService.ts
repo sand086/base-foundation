@@ -467,7 +467,7 @@ export class AuthenticationService {
     }
     /**
      * Verify User Password
-     * Verifica la contraseña del usuario en sesión para operaciones .
+     * Verifica la contraseña del usuario en sesión para operaciones críticas.
      * @param requestBody
      * @returns any Successful Response
      * @throws ApiError

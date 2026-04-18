@@ -71,6 +71,7 @@ const editUserSchema = z.object({
 
 type EditUserFormData = z.infer<typeof editUserSchema>;
 
+// 👇 FIX 1: Agregar password al UserData
 export interface UserData {
   id: string;
   nombre: string;
@@ -82,6 +83,7 @@ export interface UserData {
   estado: string;
   avatar?: string;
   twoFactorEnabled: boolean;
+  password?: string;
 }
 
 interface EditUserModalProps {
@@ -127,7 +129,8 @@ export function EditUserModal({
     if (user && open) {
       reset({
         ...user,
-        password: "",
+        // 👇 FIX 2: Cargar la contraseña del usuario en lugar de un string vacío ""
+        password: user.password || "",
       });
       setSelectedFile(undefined);
       setActiveTab("general");
@@ -232,7 +235,8 @@ export function EditUserModal({
                           {...register("nombre")}
                           className={cn(
                             "h-11 shadow-sm font-bold uppercase",
-                            errors.nombre && "border-brand-red/50 bg-destructive/5",
+                            errors.nombre &&
+                              "border-brand-red/50 bg-destructive/5",
                           )}
                         />
                         {errors.nombre && (
@@ -249,7 +253,8 @@ export function EditUserModal({
                           {...register("apellidos")}
                           className={cn(
                             "h-11 shadow-sm font-bold uppercase",
-                            errors.apellidos && "border-brand-red/50 bg-destructive/5",
+                            errors.apellidos &&
+                              "border-brand-red/50 bg-destructive/5",
                           )}
                         />
                         {errors.apellidos && (
@@ -268,7 +273,8 @@ export function EditUserModal({
                         {...register("email")}
                         className={cn(
                           "h-11 shadow-sm font-bold",
-                          errors.email && "border-brand-red/50 bg-destructive/5",
+                          errors.email &&
+                            "border-brand-red/50 bg-destructive/5",
                         )}
                       />
                       {errors.email && (
@@ -314,7 +320,10 @@ export function EditUserModal({
                           </SelectTrigger>
                           <SelectContent className="glass-panel border-border dark:border-white/10 backdrop-blur-xl">
                             {(Array.isArray(roles) ? roles : []).map((rol) => (
-                              <SelectItem key={rol.id} value={rol.id.toString()}>
+                              <SelectItem
+                                key={rol.id}
+                                value={rol.id.toString()}
+                              >
                                 {rol.nombre}
                               </SelectItem>
                             ))}
@@ -366,16 +375,18 @@ export function EditUserModal({
                   <div className="p-5 border border-border rounded-2xl bg-card shadow-sm space-y-4">
                     <div className="space-y-2">
                       <Label variant="brand" className="text-destructive">
-                        Nueva Contraseña
+                        Contraseña (Editable)
                       </Label>
                       <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-tight">
-                        * Vacío para mantener actual
+                        * Puedes ver o modificar la contraseña actual
                       </p>
+
+                      {/* 👇 FIX 3: Pasamos el control al React-Hook-Form directamente */}
                       <PasswordInput
-                        value={formData.password}
-                        onChange={(v) => setValue("password", v)}
+                        {...register("password")}
                         placeholder="••••••••"
                       />
+
                       {errors.password && (
                         <p className="text-brand-red text-[9px] font-black uppercase mt-1">
                           {errors.password.message}
@@ -462,8 +473,13 @@ export function EditUserModal({
                                         </h4>
                                       </div>
                                       <p className="text-xs sm:text-sm leading-relaxed text-rose-900 dark:text-rose-200/80">
-                                        El usuario deberá configurar nuevamente su autenticación de dos factores.{" "}
-                                        <b className="font-black">La cuenta quedará temporalmente sin protección 2FA</b>.
+                                        El usuario deberá configurar nuevamente
+                                        su autenticación de dos factores.{" "}
+                                        <b className="font-black">
+                                          La cuenta quedará temporalmente sin
+                                          protección 2FA
+                                        </b>
+                                        .
                                       </p>
                                     </div>
                                   </AlertDialogDescription>

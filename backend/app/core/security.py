@@ -1,24 +1,49 @@
 from datetime import datetime, timedelta
 from typing import Any, Union, Optional
 from jose import jwt, JWTError
-from passlib.context import CryptContext
+from cryptography.fernet import Fernet
 from app.core.config import settings
 import pyotp
 import qrcode
 import io
 import base64
 
-pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+# --- Configuración de JWT ---
 ALGORITHM = "HS256"
 
+# --- Configuración de Encriptación Bidireccional (Reversible) ---
+# Intentamos obtener la llave desde las configuraciones (ej. .env).
+# Si no existe, usamos una de fallback. (Asegúrate de que esta llave nunca cambie o no podrás desencriptar).
+ENCRYPTION_KEY = getattr(
+    settings, "ENCRYPTION_KEY", b"Gk2Q6-fF-O1_G_g3aL8dM7J3KxR_vT8Y0Z_uW9aXzYQ="
+)
+cipher_suite = Fernet(ENCRYPTION_KEY)
 
-# --- Contraseñas ---
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
 
-
+# --- Contraseñas (Encriptación Reversible) ---
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    """Encripta la contraseña de forma bidireccional (reversible)"""
+    if not password:
+        return ""
+    # Encriptamos el string y lo guardamos como un texto base64
+    return cipher_suite.encrypt(password.encode("utf-8")).decode("utf-8")
+
+
+def decrypt_password(encrypted_password: str) -> str:
+    """Desencripta la contraseña para verla en texto plano"""
+    if not encrypted_password:
+        return ""
+    try:
+        return cipher_suite.decrypt(encrypted_password.encode("utf-8")).decode("utf-8")
+    except Exception:
+        # IMPORTANTE: Si la contraseña era de las antiguas (Argon2), fallará al desencriptar.
+        # Esto atrapa el error para que el sistema no se caiga.
+        return ""
+
+
+def verify_password(plain_password: str, encrypted_password: str) -> bool:
+    """Verifica si la contraseña plana coincide con la desencriptada"""
+    return plain_password == decrypt_password(encrypted_password)
 
 
 # --- Tokens JWT ---
