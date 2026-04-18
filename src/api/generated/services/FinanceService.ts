@@ -5,6 +5,7 @@
 import type { BankAccountCreate } from '../models/BankAccountCreate';
 import type { BankAccountResponse } from '../models/BankAccountResponse';
 import type { BankMovementResponse } from '../models/BankMovementResponse';
+import type { Body_fix_orphan_payments_api_finance_fix_orphan_payments_post } from '../models/Body_fix_orphan_payments_api_finance_fix_orphan_payments_post';
 import type { Body_upload_payment_xml_api_finance_payments_upload_xml_post } from '../models/Body_upload_payment_xml_api_finance_payments_upload_xml_post';
 import type { BulkUploadPayload } from '../models/BulkUploadPayload';
 import type { ProviderCreate } from '../models/ProviderCreate';
@@ -242,6 +243,7 @@ export class FinanceService {
     }
     /**
      * Register Receivable Payment
+     * CAMBIO CLAVE: Cobra una factura de cliente e ingresa el dinero a Tesorería.
      * @param invoiceId
      * @param requestBody
      * @returns any Successful Response
@@ -266,8 +268,7 @@ export class FinanceService {
     }
     /**
      * Upload Payment Xml
-     * Lee un XML de Complemento de Pago (REP), busca el UUID de la factura relacionada
-     * y aplica el pago automáticamente matando el saldo pendiente.
+     * CAMBIO CLAVE: Si subes el XML del REP, busca/crea una cuenta puente y hace el ingreso en tesorería.
      * @param formData
      * @returns any Successful Response
      * @throws ApiError
@@ -280,6 +281,27 @@ export class FinanceService {
             url: '/api/finance/payments/upload-xml',
             formData: formData,
             mediaType: 'multipart/form-data',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Fix Orphan Payments
+     * Busca los pagos antiguos que decían "cuenta_deposito: '' " (o null)
+     * y los inserta oficialmente en la cuenta bancaria de Tesorería que le mandes.
+     * @param requestBody
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static fixOrphanPaymentsApiFinanceFixOrphanPaymentsPost(
+        requestBody: Body_fix_orphan_payments_api_finance_fix_orphan_payments_post,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/finance/fix-orphan-payments',
+            body: requestBody,
+            mediaType: 'application/json',
             errors: {
                 422: `Validation Error`,
             },

@@ -240,6 +240,203 @@ class BillingService:
             else "193"
         )
 
+    # =====================================================================
+    # MÉTODOS AUXILIARES RECUPERADOS
+    # =====================================================================
+
+    def _obtener_datos_completos(self, viaje_id: int, is_final: bool = False):
+        """Busca toda la información en la BD requerida para la Carta Porte"""
+        viaje = self.db.query(Trip).filter(Trip.id == viaje_id).first()
+        if not viaje:
+            raise HTTPException(status_code=404, detail="Viaje no encontrado.")
+
+        cliente = (
+            self.db.query(ClientModel).filter(ClientModel.id == viaje.client_id).first()
+        )
+
+        # Obtenemos el tramo (Leg) para saber qué camión y operador lo hicieron
+        tramo = self.db.query(TripLeg).filter(TripLeg.trip_id == viaje_id).first()
+        if not tramo:
+            raise HTTPException(
+                status_code=400, detail="El viaje no tiene tramos (TripLeg) asignados."
+            )
+
+        unidad = self.db.query(Unit).filter(Unit.id == tramo.unit_id).first()
+        operador = (
+            self.db.query(Operator).filter(Operator.id == tramo.operator_id).first()
+        )
+
+        r1 = (
+            self.db.query(Unit).filter(Unit.id == viaje.remolque_1_id).first()
+            if viaje.remolque_1_id
+            else None
+        )
+        r2 = (
+            self.db.query(Unit).filter(Unit.id == viaje.remolque_2_id).first()
+            if viaje.remolque_2_id
+            else None
+        )
+
+        return viaje, cliente, unidad, operador, r1, r2
+
+    def _build_dict_from_models(
+        self, viaje, cliente, unidad, operador, r1, r2, is_nominal=False
+    ) -> dict:
+        """Arma el diccionario maestro que se inyecta en el XML de Carta Porte"""
+        subtotal = 1.00 if is_nominal else float(viaje.tarifa_base or 0.0)
+        iva = subtotal * 0.16
+        retenciones = subtotal * 0.04
+        total = subtotal + iva - retenciones
+
+        cp_cliente = (
+            getattr(cliente, "codigo_postal_fiscal", "91808") if cliente else "91808"
+        )
+
+        return {
+            "id_ccp": "CCC" + str(uuid.uuid4()).upper().replace("-", "")[:33],
+            "folio": f"CP-{viaje.id}{'N' if is_nominal else 'F'}",
+            "fecha": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+            "subtotal": f"{subtotal:.2f}",
+            "iva": f"{iva:.2f}",
+            "retenciones": f"{retenciones:.2f}",
+            "total": f"{total:.2f}",
+            "descripcion_concepto": (
+                "FLETE NOMINAL"
+                if is_nominal
+                else (viaje.descripcion_mercancia or "FLETE CARGA GENERAL")
+            ),
+            "rfc_cliente": cliente.rfc if cliente else "XAXX010101000",
+            "nombre_cliente": cliente.razon_social if cliente else "PUBLICO EN GENERAL",
+            "cp_cliente": cp_cliente,
+            "regimen_cliente": (
+                getattr(cliente, "regimen_fiscal", "601") if cliente else "601"
+            ),
+            "uso_cfdi": "G03",
+            "total_dist_rec": "100",  # Asignar valor real de distancia si existe
+            "peso_bruto": (
+                str(viaje.peso_toneladas * 1000)
+                if viaje and viaje.peso_toneladas
+                else "1000.00"
+            ),
+            "bienes_transp": (
+                viaje.sat_clave_producto
+                if viaje and viaje.sat_clave_producto
+                else "78101802"
+            ),
+            "descripcion_mercancia": (
+                viaje.descripcion_mercancia
+                if viaje and viaje.descripcion_mercancia
+                else "Carga General"
+            ),
+            "permiso_sct": (
+                getattr(unidad, "permiso_sct_tipo", "TPAF01") if unidad else "TPAF01"
+            ),
+            "num_permiso": (
+                getattr(unidad, "permiso_sct_folio", "123456") if unidad else "123456"
+            ),
+            "config_vehicular": (
+                getattr(unidad, "config_vehicular_sat", "T3S2") if unidad else "T3S2"
+            ),
+            "peso_bruto_vehicular": "15000",
+            "placas": (
+                getattr(unidad, "placas", "XXXXXX").replace("-", "")
+                if unidad
+                else "XXXXXX"
+            ),
+            "anio_modelo": str(getattr(unidad, "year", "2020")) if unidad else "2020",
+            "aseguradora": (
+                getattr(unidad, "aseguradora_resp_civil", "SEGUROS")
+                if unidad
+                else "SEGUROS"
+            ),
+            "poliza": (
+                getattr(unidad, "poliza_resp_civil", "123456") if unidad else "123456"
+            ),
+            "subtipo_remolque": getattr(r1, "tipo_1", "CTR004") if r1 else "CTR004",
+            "placa_remolque_1": (
+                getattr(r1, "placas", "1XXXX99").replace("-", "") if r1 else "1XXXX99"
+            ),
+            "subtipo_remolque_2": getattr(r2, "tipo_1", "CTR004") if r2 else "CTR004",
+            "placa_remolque_2": (
+                getattr(r2, "placas", "1XXXX99").replace("-", "") if r2 else "1XXXX99"
+            ),
+            "rfc_operador": (
+                getattr(operador, "rfc", "XAXX010101000")
+                if operador
+                else "XAXX010101000"
+            ),
+            "nombre_operador": (
+                getattr(operador, "name", "OPERADOR") if operador else "OPERADOR"
+            ),
+            "licencia": (
+                getattr(operador, "license_number", "LIC123") if operador else "LIC123"
+            ),
+            "cp_destino": cp_cliente,
+            "estado_destino": "VER",  # Remplazar por estado real del destino
+            "municipio_destino": "193",  # Remplazar por municipio real del destino
+            "leyenda_legal": DEFAULT_LEYENDA,
+        }
+
+    def _importar_comprobante_ws(self, data, relacion_uuid=None):
+        """Conecta con el PAC, envía el XML y devuelve el UUID timbrado"""
+        logger.info("Generando XML Carta Porte y enviando al PAC...")
+        xml_base = self._armar_xml_sin_sello(data, relacion_uuid)
+
+        with open(self.path_cer, "rb") as f:
+            cer_data = f.read()
+            cert = x509.load_der_x509_certificate(cer_data)
+            cert_b64 = base64.b64encode(cer_data).decode("utf-8").replace("\n", "")
+            sn_hex = format(cert.serial_number, "x")
+            no_certificado = "".join([sn_hex[i] for i in range(1, len(sn_hex), 2)])
+
+        xml_sellado = xml_base.replace(
+            "<cfdi:Comprobante",
+            f'<cfdi:Comprobante NoCertificado="{no_certificado}" Certificado="{cert_b64}"',
+        )
+
+        try:
+            client_zeep = zeep.Client(self.wsdl_timbrado, plugins=[self.history])
+            result = client_zeep.service.timbrar(
+                self.pac_user, self.pac_pass, xml_sellado.encode("utf-8"), False
+            )
+
+            if int(getattr(result, "status", 0)) != 200:
+                raise HTTPException(
+                    status_code=400, detail=f"Error PAC: {result.mensaje}"
+                )
+
+            res_sat = result.resultados[0]
+            if int(getattr(res_sat, "status", 0)) != 200:
+                raise HTTPException(
+                    status_code=400, detail=f"Error SAT: {res_sat.mensaje}"
+                )
+
+            uuid_timbrado = res_sat.uuid
+            logger.info(f"¡CARTA PORTE TIMBRADA! UUID: {uuid_timbrado}")
+
+            raw_cfdi = res_sat.cfdiTimbrado
+            cfdi_bytes = (
+                raw_cfdi.encode("utf-8") if isinstance(raw_cfdi, str) else raw_cfdi
+            )
+            self._guardar_xml_disco(cfdi_bytes, uuid_timbrado)
+
+            class PACResult:
+                pass
+
+            ret = PACResult()
+            ret.uuid = uuid_timbrado
+            return ret
+
+        except Exception as e:
+            logger.error(f"Error en comunicación con PAC: {e}")
+            raise HTTPException(
+                status_code=500, detail=f"Error al timbrar Carta Porte: {str(e)}"
+            )
+
+    # =====================================================================
+    # MÉTODOS DE FACTURACIÓN
+    # =====================================================================
+
     def generar_carta_porte_nominal(
         self, invoice_data: ReceivableInvoiceCreate
     ) -> ReceivableInvoice:

@@ -75,13 +75,10 @@ def create_bank_account(
     return crud.create_bank_account(db, account, current_user.id)
 
 
-#  NUEVO: RUTA PARA EDITAR (PATCH)
 @router.patch("/bank-accounts/{account_id}", response_model=schemas.BankAccountResponse)
 def update_bank_account(
     account_id: int,
-    account_data: dict = Body(
-        ...
-    ),  # Recibe los datos parciales (incluido saldo_inicial si fue forzado)
+    account_data: dict = Body(...),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_active_user),
 ):
@@ -94,7 +91,6 @@ def update_bank_account(
     return updated_account
 
 
-#  NUEVO: RUTA PARA ELIMINAR/ARCHIVAR (DELETE)
 @router.delete("/bank-accounts/{account_id}")
 def delete_bank_account(
     account_id: int,
@@ -124,9 +120,7 @@ def bulk_upload_invoices(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_active_user),
 ):
-    """
-    Endpoint para procesar la carga masiva de facturas del SAT (CXP).
-    """
+    """Endpoint para procesar la carga masiva de facturas del SAT (CXP)."""
     try:
         resultado = crud.process_bulk_payables(db=db, payload_data=payload.data)
         return resultado
@@ -137,7 +131,7 @@ def bulk_upload_invoices(
 
 
 # =====================================================================
-# RECEIVABLES (Cuentas por Cobrar)
+# RECEIVABLES (Cuentas por Cobrar & Puente a Tesorería)
 # =====================================================================
 
 
@@ -157,7 +151,6 @@ def get_receivable_invoices(
         )
         .filter(
             models.ReceivableInvoice.record_status == models.RecordStatus.ACTIVO.value,
-            #   AQUÍ ESTÁ LA MAGIA: Filtramos los que no tienen folio
             models.ReceivableInvoice.folio_interno.isnot(None),
             models.ReceivableInvoice.folio_interno != "",
         )
@@ -168,9 +161,7 @@ def get_receivable_invoices(
     )
 
     response = []
-
     for inv in invoices:
-        # Empaquetamos el historial de pagos para esta factura
         pagos_list = []
         for p in inv.payments:
             pagos_list.append(
@@ -189,7 +180,7 @@ def get_receivable_invoices(
             {
                 "id": inv.id,
                 "uuid": inv.uuid,
-                "folio_interno": inv.folio_interno,  # Ya no ocupamos el 'or "S/F"' porque todos tendrán folio
+                "folio_interno": inv.folio_interno,
                 "concepto": inv.concepto or "Servicio de Flete",
                 "monto_total": inv.monto_total,
                 "saldo_pendiente": inv.saldo_pendiente,
@@ -245,10 +236,11 @@ def register_receivable_payment(
     invoice_id: int,
     payment: dict = Body(...),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(
-        get_current_active_user
-    ),  # Importante traer el usuario
+    current_user: models.User = Depends(get_current_active_user),
 ):
+    """
+    CAMBIO CLAVE: Cobra una factura de cliente e ingresa el dinero a Tesorería.
+    """
     invoice = (
         db.query(models.ReceivableInvoice)
         .filter(models.ReceivableInvoice.id == invoice_id)
@@ -265,36 +257,39 @@ def register_receivable_payment(
             status_code=400, detail="El monto supera el saldo pendiente"
         )
 
+    # Requerir cuenta bancaria para que sume a tesorería
+    cuenta_id = payment.get("cuenta_deposito") or payment.get("bank_account_id")
+    if not cuenta_id:
+        raise HTTPException(
+            status_code=400, detail="Debes especificar la cuenta bancaria de destino."
+        )
+
     nuevo_pago = models.ReceivableInvoicePayment(
         invoice_id=invoice.id,
         monto=monto_pago,
         metodo_pago=payment.get("metodo_pago", "TRANSFERENCIA"),
         referencia=payment.get("referencia", ""),
+        cuenta_deposito=str(cuenta_id),  # Guardamos el ID del banco
         created_by_id=current_user.id,
     )
     db.add(nuevo_pago)
 
     invoice.saldo_pendiente -= monto_pago
-
     if invoice.saldo_pendiente <= 0:
         invoice.estatus = models.InvoiceStatus.PAGADO
     else:
         invoice.estatus = models.InvoiceStatus.PAGO_PARCIAL
 
-    #  MAGIA DE TESORERÍA: Si el front nos manda la cuenta bancaria elegida, la afectamos.
-    bank_account_id = payment.get("bank_account_id")
-    if bank_account_id:
-        movimiento_schema = schemas.BankMovementCreate(
-            bank_account_id=int(bank_account_id),
-            tipo="ingreso",  # Es un pago de cliente (CXC), entonces entra dinero
-            monto=monto_pago,
-            concepto=f"Cobro de Fra. {invoice.folio_interno or invoice.uuid}",
-            referencia=payment.get("referencia", ""),
-        )
-        # Llamamos al CRUD con bloqueo pesimista
-        crud.create_bank_movement(db, movimiento_schema, current_user.id)
+    # MAGIA TESORERÍA: Crear ingreso al banco
+    movimiento_schema = schemas.BankMovementCreate(
+        bank_account_id=int(cuenta_id),
+        tipo="ingreso",
+        monto=monto_pago,
+        concepto=f"Cobro Fra. {invoice.folio_interno or invoice.uuid[:8]}",
+        referencia=payment.get("referencia", ""),
+    )
+    crud.create_bank_movement(db, movimiento_schema, current_user.id)
 
-    # 1 solo Commit para asegurar que si falla el saldo, no se guarda el pago (Transacción Atómica)
     db.commit()
     db.refresh(invoice)
 
@@ -312,8 +307,7 @@ async def upload_payment_xml(
     current_user: models.User = Depends(get_current_active_user),
 ):
     """
-    Lee un XML de Complemento de Pago (REP), busca el UUID de la factura relacionada
-    y aplica el pago automáticamente matando el saldo pendiente.
+    CAMBIO CLAVE: Si subes el XML del REP, busca/crea una cuenta puente y hace el ingreso en tesorería.
     """
     try:
         content = await file.read()
@@ -332,12 +326,30 @@ async def upload_payment_xml(
 
         doctos = root.xpath("//pago20:DoctoRelacionado", namespaces=ns)
 
+        # Buscamos o creamos una cuenta virtual para pagos cargados por XML
+        banco_xml = (
+            db.query(models.BankAccount)
+            .filter(models.BankAccount.alias == "Banco Automático XML")
+            .first()
+        )
+        if not banco_xml:
+            banco_xml = models.BankAccount(
+                banco="Cobro Automático",
+                numero_cuenta="00000000",
+                alias="Banco Automático XML",
+                tipo_cuenta="cobranza",
+                saldo=0.0,
+                created_by_id=current_user.id,
+                estatus="activo",
+            )
+            db.add(banco_xml)
+            db.flush()
+
         pagos_procesados = 0
         for doc in doctos:
             uuid_factura = doc.get("IdDocumento").upper()
             monto_pagado = float(doc.get("ImpPagado", "0.00"))
 
-            # SOLUCIÓN AL BUG: Cambié uuid_val a uuid_factura
             factura = (
                 db.query(models.ReceivableInvoice)
                 .filter(models.ReceivableInvoice.uuid == uuid_factura)
@@ -351,7 +363,7 @@ async def upload_payment_xml(
                     monto=monto_pagado,
                     metodo_pago=forma_pago,
                     referencia="Carga XML REP",
-                    cuenta_deposito="Banco Automático",
+                    cuenta_deposito=str(banco_xml.id),  # Asignamos la cuenta
                     created_by_id=current_user.id,
                 )
                 db.add(nuevo_pago)
@@ -363,12 +375,22 @@ async def upload_payment_xml(
                 else:
                     factura.estatus = "pago_parcial"
 
+                # Generamos el ingreso en la tesorería (Banco Automático XML)
+                mov_schema = schemas.BankMovementCreate(
+                    bank_account_id=banco_xml.id,
+                    tipo="ingreso",
+                    monto=monto_pagado,
+                    concepto=f"Cobro XML Fra. {factura.folio_interno}",
+                    referencia="Carga XML REP",
+                )
+                crud.create_bank_movement(db, mov_schema, current_user.id)
+
                 pagos_procesados += 1
 
         db.commit()
         return {
             "status": "success",
-            "message": f"Se procesaron {pagos_procesados} pagos automáticamente.",
+            "message": f"Se procesaron {pagos_procesados} pagos automáticamente y se enviaron a Tesorería.",
         }
 
     except Exception as e:
@@ -377,7 +399,78 @@ async def upload_payment_xml(
 
 
 # =====================================================================
-# PAGOS A PROVEEDORES Y CAJA CHICA (Endpoints)
+# SCRIPT SALVAVIDAS: ARREGLAR PAGOS HUÉRFANOS DE TESORERÍA
+# =====================================================================
+
+
+@router.post("/fix-orphan-payments")
+def fix_orphan_payments(
+    cuenta_destino_id: int = Body(..., embed=True),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """
+    Busca los pagos antiguos que decían "cuenta_deposito: '' " (o null)
+    y los inserta oficialmente en la cuenta bancaria de Tesorería que le mandes.
+    """
+    try:
+        pagos_huerfanos = (
+            db.query(models.ReceivableInvoicePayment)
+            .filter(
+                (models.ReceivableInvoicePayment.cuenta_deposito == "")
+                | (
+                    models.ReceivableInvoicePayment.cuenta_deposito.is_(None)
+                )  # Mejor práctica SQLAlchemy
+            )
+            .all()
+        )
+
+        if not pagos_huerfanos:
+            return {
+                "message": "Excelente, no tienes pagos huérfanos. Todo está cuadrado."
+            }
+
+        for pago in pagos_huerfanos:
+            # Extraemos la fecha del pago original para que el historial sea exacto
+            fecha_historica = pago.fecha_pago if pago.fecha_pago else datetime.now()
+
+            # Generar el ingreso a tesorería
+            mov_schema = schemas.BankMovementCreate(
+                bank_account_id=cuenta_destino_id,
+                tipo="ingreso",
+                monto=pago.monto,
+                fecha=fecha_historica,  # <--- ¡LA SOLUCIÓN! Le pasamos la fecha explícitamente
+                concepto=f"Sincronización Fra. ID {pago.invoice_id}",
+                # Si referencia es null, forzamos un string
+                referencia=(
+                    pago.referencia if pago.referencia else "Sincronización Histórica"
+                ),
+            )
+
+            crud.create_bank_movement(db, mov_schema, current_user.id)
+
+            # Enlazar el pago a la cuenta para que no vuelva a procesarse
+            pago.cuenta_deposito = str(cuenta_destino_id)
+
+        db.commit()
+        return {
+            "message": f"¡Éxito! Se inyectaron {len(pagos_huerfanos)} cobros al banco. Tu Tesorería ahora refleja los ingresos reales."
+        }
+
+    except Exception as e:
+        # ATRAMPAMOS EL ERROR Y LO DEVOLVEMOS AL NAVEGADOR
+        db.rollback()
+        import traceback
+
+        error_details = traceback.format_exc()
+        print(error_details)  # Esto lo imprimirá en la consola negra de tu servidor
+        raise HTTPException(
+            status_code=500, detail=f"Cazador de Bugs activado. Error exacto: {str(e)}"
+        )
+
+
+# =====================================================================
+# PAGOS A PROVEEDORES Y CAJA CHICA
 # =====================================================================
 
 

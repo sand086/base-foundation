@@ -58,15 +58,19 @@ class BankMovementResponse(BaseModel):
     id: int
     tipo: str
     monto: float
-    moneda: str
+    moneda: str = "MXN"  # <-- Agregamos valor por defecto
     concepto: str
     fecha: date
-    banco: Optional[str]
-    cuenta_bancaria: Optional[str]
-    referencia_bancaria: Optional[str]
-    origen_modulo: Optional[str]
-    conciliado: bool
-    fecha_conciliacion: Optional[date]
+
+    # <-- A todos los Optional les agregamos '= None' al final
+    banco: Optional[str] = None
+    cuenta_bancaria: Optional[str] = None
+    referencia_bancaria: Optional[str] = None
+    origen_modulo: Optional[str] = None
+
+    conciliado: bool = False  # <-- Agregamos valor por defecto
+    fecha_conciliacion: Optional[date] = None  # <-- Agregamos '= None'
+
     model_config = ConfigDict(from_attributes=True)
 
 
