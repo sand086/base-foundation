@@ -314,21 +314,17 @@ const Users = () => {
                   twoFactorEnabled:
                     (user as any).twoFactorEnabled ||
                     (user as any).is_2fa_enabled,
+
+                  // 👇 ESTA ES LA LÍNEA QUE TE FALTA AÑADIR 👇
+                  password: (user as any).password || "",
                 });
                 setIsEditModalOpen(true);
               }}
             >
-              <Edit className="h-4 w-4 text-brand-green dark:text-[#009740]" /> Editar Perfil
+              <Edit className="h-4 w-4 text-brand-green dark:text-[#009740]" />{" "}
+              Editar Perfil
             </DropdownMenuItem>
-            <DropdownMenuItem
-              className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
-              onClick={() => {
-                setSelectedUserId(user.id);
-                setShowResetPasswordDialog(true);
-              }}
-            >
-              <Key className="h-4 w-4 text-amber-500" /> Reset Password
-            </DropdownMenuItem>
+
             <DropdownMenuSeparator className="dark:bg-white/10" />
             <DropdownMenuItem
               onClick={() => {
@@ -337,7 +333,9 @@ const Users = () => {
               }}
               className={cn(
                 "gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer",
-                user.estado === "activo" ? "text-rose-600 dark:text-rose-500 dark:focus:bg-rose-950/30" : "text-emerald-600 dark:text-emerald-500 dark:focus:bg-emerald-950/30",
+                user.estado === "activo"
+                  ? "text-rose-600 dark:text-rose-500 dark:focus:bg-rose-950/30"
+                  : "text-emerald-600 dark:text-emerald-500 dark:focus:bg-emerald-950/30",
               )}
             >
               {user.estado === "activo" ? (
@@ -484,7 +482,9 @@ const Users = () => {
               </p>
 
               <div className="p-5 bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-2xl text-center">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-2">Clave Temporal</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-2">
+                  Clave Temporal
+                </p>
                 <code className="font-mono font-black text-lg text-brand-red tracking-wide">
                   Temporal123!
                 </code>
@@ -498,7 +498,8 @@ const Users = () => {
                   </h4>
                 </div>
                 <p className="text-xs sm:text-sm leading-relaxed text-amber-900 dark:text-amber-200/80">
-                  El usuario deberá cambiar esta contraseña en su próximo inicio de sesión.
+                  El usuario deberá cambiar esta contraseña en su próximo inicio
+                  de sesión.
                 </p>
               </div>
             </AlertDialogDescription>
@@ -533,17 +534,23 @@ const Users = () => {
       >
         <AlertDialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
           <AlertDialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
-            <div className={cn(
-              "absolute inset-0 bg-gradient-to-br to-transparent pointer-events-none",
-              selectedUser?.estado === "activo" ? "from-rose-500/5 dark:from-rose-500/10" : "from-emerald-500/5 dark:from-emerald-500/10"
-            )} />
-            <div className="relative z-10 flex items-center gap-4 sm:gap-5">
-              <div className={cn(
-                "w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shadow-inner shrink-0 icon-plate border",
+            <div
+              className={cn(
+                "absolute inset-0 bg-gradient-to-br to-transparent pointer-events-none",
                 selectedUser?.estado === "activo"
-                  ? "bg-rose-100 dark:bg-rose-900/30 border-rose-200 dark:border-rose-500/20"
-                  : "bg-emerald-100 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-500/20"
-              )}>
+                  ? "from-rose-500/5 dark:from-rose-500/10"
+                  : "from-emerald-500/5 dark:from-emerald-500/10",
+              )}
+            />
+            <div className="relative z-10 flex items-center gap-4 sm:gap-5">
+              <div
+                className={cn(
+                  "w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shadow-inner shrink-0 icon-plate border",
+                  selectedUser?.estado === "activo"
+                    ? "bg-rose-100 dark:bg-rose-900/30 border-rose-200 dark:border-rose-500/20"
+                    : "bg-emerald-100 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-500/20",
+                )}
+              >
                 {selectedUser?.estado === "activo" ? (
                   <UserX className="h-7 w-7 sm:h-8 sm:w-8 text-rose-600 dark:text-rose-400" />
                 ) : (
@@ -551,12 +558,14 @@ const Users = () => {
                 )}
               </div>
               <div className="flex flex-col gap-1 text-left">
-                <AlertDialogTitle className={cn(
-                  "text-2xl font-black uppercase tracking-tighter heading-crisp leading-none",
-                  selectedUser?.estado === "activo"
-                    ? "text-rose-600 dark:text-rose-500"
-                    : "text-emerald-700 dark:text-emerald-400"
-                )}>
+                <AlertDialogTitle
+                  className={cn(
+                    "text-2xl font-black uppercase tracking-tighter heading-crisp leading-none",
+                    selectedUser?.estado === "activo"
+                      ? "text-rose-600 dark:text-rose-500"
+                      : "text-emerald-700 dark:text-emerald-400",
+                  )}
+                >
                   {selectedUser?.estado === "activo"
                     ? "Suspender Acceso"
                     : "Reactivar Acceso"}
@@ -578,35 +587,44 @@ const Users = () => {
                 .
               </p>
 
-              <div className={cn(
-                "p-5 border-l-4 rounded-r-2xl shadow-sm",
-                selectedUser?.estado === "activo"
-                  ? "bg-rose-50 dark:bg-rose-950/20 border-rose-500"
-                  : "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-500"
-              )}>
+              <div
+                className={cn(
+                  "p-5 border-l-4 rounded-r-2xl shadow-sm",
+                  selectedUser?.estado === "activo"
+                    ? "bg-rose-50 dark:bg-rose-950/20 border-rose-500"
+                    : "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-500",
+                )}
+              >
                 <div className="flex items-center gap-2 mb-3">
-                  <AlertTriangle className={cn(
-                    "h-4 w-4",
-                    selectedUser?.estado === "activo"
-                      ? "text-rose-600 dark:text-rose-400"
-                      : "text-emerald-600 dark:text-emerald-400"
-                  )} />
-                  <h4 className={cn(
-                    "text-[10px] sm:text-[11px] font-black uppercase tracking-widest",
-                    selectedUser?.estado === "activo"
-                      ? "text-rose-800 dark:text-rose-400"
-                      : "text-emerald-800 dark:text-emerald-400"
-                  )}>
+                  <AlertTriangle
+                    className={cn(
+                      "h-4 w-4",
+                      selectedUser?.estado === "activo"
+                        ? "text-rose-600 dark:text-rose-400"
+                        : "text-emerald-600 dark:text-emerald-400",
+                    )}
+                  />
+                  <h4
+                    className={cn(
+                      "text-[10px] sm:text-[11px] font-black uppercase tracking-widest",
+                      selectedUser?.estado === "activo"
+                        ? "text-rose-800 dark:text-rose-400"
+                        : "text-emerald-800 dark:text-emerald-400",
+                    )}
+                  >
                     Efecto Inmediato
                   </h4>
                 </div>
-                <p className={cn(
-                  "text-xs sm:text-sm leading-relaxed",
-                  selectedUser?.estado === "activo"
-                    ? "text-rose-900 dark:text-rose-200/80"
-                    : "text-emerald-900 dark:text-emerald-200/80"
-                )}>
-                  Esto afectará sus permisos de inicio de sesión de manera inmediata.
+                <p
+                  className={cn(
+                    "text-xs sm:text-sm leading-relaxed",
+                    selectedUser?.estado === "activo"
+                      ? "text-rose-900 dark:text-rose-200/80"
+                      : "text-emerald-900 dark:text-emerald-200/80",
+                  )}
+                >
+                  Esto afectará sus permisos de inicio de sesión de manera
+                  inmediata.
                 </p>
               </div>
             </AlertDialogDescription>

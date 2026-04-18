@@ -38,6 +38,7 @@ class LoginResponse(BaseModel):
     token_type: str = "bearer"
     user: Optional[UserAuthSchema] = None
     require_2fa: bool = False
+    must_setup_2fa: bool = False
     temp_token: Optional[str] = None
 
 
@@ -276,9 +277,9 @@ class UserResponse(UserBase):
     created_by_id: Optional[int] = None
     updated_by_id: Optional[int] = None
 
-    # Comentario raro/importante:
-    # El modelo tiene `two_factor_secret`, pero NO conviene exponerlo en respuesta.
-    # Si necesitas mostrar algo al front, mejor expón solo flags (is_2fa_enabled) y/o QR provisioned aparte.
+    @property
+    def is_2fa_configured(self) -> bool:
+        return bool(self.two_factor_secret)
 
 
 class PasswordReset(ORMBase):

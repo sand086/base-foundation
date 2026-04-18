@@ -485,4 +485,17 @@ export class AuthenticationService {
             },
         });
     }
+    /**
+     * Migrar Todas Las Contrasenas
+     * Este endpoint recorre todos los usuarios y cambia su contraseña a "Temp086."
+     * usando la nueva encriptación reversible (Fernet).
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static migrarTodasLasContrasenasApiAuthDevMigrarContrasenasPost(): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/auth/dev/migrar-contrasenas',
+        });
+    }
 }

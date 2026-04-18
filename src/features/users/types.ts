@@ -13,6 +13,7 @@ export interface User {
   puesto?: string | null;
   avatar_url?: string;
   activo?: boolean;
+  password?: string;
   // Objeto de rol detallado que viene del backend
   role?: {
     id: number;
@@ -49,6 +50,7 @@ export interface LoginResponse {
   token_type: string;
   user: User;
   require_2fa?: boolean;
+  must_setup_2fa?: boolean;
   temp_token?: string; // Token temporal para verificar 2FA si está activo
 }
 
@@ -69,7 +71,8 @@ export interface TwoFactorVerifyResponse {
 
 export interface TwoFactorSetupResponse {
   secret: string;
-  qr_code_url: string;
+  qr_code: string;
+  manual_entry_key: string;
 }
 
 // ==========================================

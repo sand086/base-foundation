@@ -103,11 +103,26 @@ def login(
     if not user.activo:
         raise HTTPException(status_code=403, detail="Usuario desactivado")
 
-    # 3. Flujo 2FA (Retorno anticipado con token temporal)
-    if user.is_2fa_enabled and user.two_factor_secret:
+    # 3. Intercepción de Doble Factor (2FA)
+    if user.is_2fa_enabled:
+        # Generamos un token temporal (válido por 5 min) para este proceso
         temp_token = security.generate_temp_token(str(user.id))
+
+        # ESCENARIO A: El admin activó el switch pero el usuario NO ha configurado su QR
+        if not user.two_factor_secret:
+            return schemas.LoginResponse(
+                require_2fa=True,
+                must_setup_2fa=True,  # <-- Avisamos a React que debe ir a /setup-2fa
+                temp_token=temp_token,
+                user=None,
+                access_token=None,
+                refresh_token=None,
+            )
+
+        # ESCENARIO B: El usuario ya tiene su dispositivo vinculado (Flujo normal)
         return schemas.LoginResponse(
             require_2fa=True,
+            must_setup_2fa=False,  # <-- Avisamos a React que debe ir a /verify-2fa
             temp_token=temp_token,
             user=None,
             access_token=None,
@@ -118,9 +133,9 @@ def login(
     access_token = security.create_access_token(subject=str(user.id))
     refresh_token = security.create_refresh_token(subject=str(user.id))
 
-    # 5. Persistencia y Registro de detalles
+    # 5. Persistencia y Registro de Auditoría
     user.last_login = datetime.utcnow()
-    user.refresh_token = refresh_token  # 💾 Guardamos en BD para validación
+    user.refresh_token = refresh_token
     db.commit()
 
     cliente_ip = request.client.host if request.client else "Desconocida"
@@ -130,7 +145,7 @@ def login(
         accion="Inicio de sesión exitoso",
         tipo_accion="login",
         modulo="Auth",
-        detalles="Acceso mediante contraseña y Refresh Token generado",
+        detalles="Acceso mediante contraseña (Sin 2FA)",
         ip=cliente_ip,
         dispositivo=request.headers.get("user-agent", "Desconocido")[:250],
     )
@@ -677,3 +692,29 @@ def migrar_todas_las_contrasenas(db: Session = Depends(get_db)):
         "status": "success",
         "message": f"Se han migrado {contador} usuarios. Su nueva contraseña visible es Temp086.",
     }
+
+
+@router.post("/2fa/setup-temp", response_model=schemas.TwoFactorSetupResponse)
+def setup_2fa_temp(
+    temp_token: str = Body(..., embed=True), db: Session = Depends(get_db)
+):
+    # Validamos el token temporal
+    user_id = security.decode_temp_token(temp_token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Sesión expirada")
+
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+
+    # Generamos secreto y QR al vuelo
+    secret = security.generate_2fa_secret()
+    user.two_factor_secret = secret  # Lo guardamos provisionalmente
+    db.commit()
+
+    totp = security.get_totp(secret)
+    uri = totp.provisioning_uri(name=user.email, issuer_name="TMS Sistema")
+
+    return schemas.TwoFactorSetupResponse(
+        secret=secret,
+        qr_code=f"data:image/png;base64,{security.generate_qr_code(uri)}",
+        manual_entry_key=secret,
+    )

@@ -9,6 +9,7 @@ export type LoginResponse = {
     token_type?: string;
     user?: (UserAuthSchema | null);
     require_2fa?: boolean;
+    must_setup_2fa?: boolean;
     temp_token?: (string | null);
 };
 
