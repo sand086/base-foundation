@@ -111,7 +111,12 @@ const formatCurrency = (val: number) =>
     minimumFractionDigits: 2,
   }).format(val || 0);
 
-const UNIT_STATUSES_AVAILABLE = ["disponible", "bloqueado"] as const;
+const UNIT_STATUSES_AVAILABLE = [
+  "disponible",
+  "bloqueado",
+  "en_ruta",
+  "en ruta",
+] as const;
 
 const normalizeStr = (str?: string | null) =>
   str
@@ -464,6 +469,9 @@ export function NextLegModal({
       (o) =>
         o.status === "activo" ||
         o.status === "disponible" ||
+        // 👇 AQUÍ AGREGAMOS LOS ESTATUS "en_ruta" y "en ruta"
+        o.status === "en_ruta" ||
+        o.status === "en ruta" ||
         Number(o.id) === Number(formData.operator_id),
     );
   }, [operadores, formData.operator_id]);

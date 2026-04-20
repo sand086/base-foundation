@@ -417,19 +417,28 @@ export default function TripSettlement() {
         })),
       };
 
-      await axiosClient.post("/api/logistics/trips/legs/settle-batch", payload);
-
-      // 🚀 ACTUALIZACIÓN OPTIMISTA AQUÍ: Desaparece al instante de la lista de pendientes
+      // 🚀 ACTUALIZACIÓN OPTIMISTA: Ocultamos de inmediato
       setLocallyLiquidatedIds((prev) => [...prev, ...selectedLegIds]);
 
+      // Enviamos al backend
+      await axiosClient.post("/api/logistics/trips/legs/settle-batch", payload);
+
       toast.success("Liquidación Emitida Exitosamente", {
-        description: `Se registró el pago de ${formatCurrencyLocal(liquidacion.neto_a_pagar)} con su desglose. Cuenta por cobrar enviada a Tesorería.`,
+        description: `Se registró el pago de ${formatCurrencyLocal(liquidacion.neto_a_pagar)} con su desglose. Cuenta por cobrar y Factura generadas.`,
       });
 
       if (refresh) refresh();
       setShowReceiptModal(true);
     } catch (error) {
-      toast.error("Error al guardar la liquidación en el servidor.");
+      // 🚨 REVERSIÓN DE EMERGENCIA: Si el PAC/SAT o la BD fallan, los regresamos a la pantalla
+      setLocallyLiquidatedIds((prev) =>
+        prev.filter((id) => !selectedLegIds.includes(id)),
+      );
+
+      toast.error("Error al emitir Liquidación y CxC", {
+        description:
+          "El servidor rechazó la operación (Probable error de timbrado SAT). Revisa la consola.",
+      });
     } finally {
       setIsAnimating(false);
     }

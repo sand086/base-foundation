@@ -36,6 +36,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogHeader,
 } from "@/components/ui/dialog";
 import {
   EnhancedDataTable,
@@ -79,7 +80,7 @@ interface AuditFormData {
   kilometrosECM: string;
   litrosECM: string;
   odometroFinal: string;
-  maxOdoVales: number; // NUEVO: Para guardar el mayor odómetro físico encontrado
+  maxOdoVales: number;
 }
 
 // ============================================================================
@@ -110,6 +111,7 @@ export default function FuelConciliation() {
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [isFetchingVales, setIsFetchingVales] = useState(false);
+  const [valesRawData, setValesRawData] = useState<any[]>([]);
 
   // Estados de Modales y Edición
   const [legToReset, setLegToReset] = useState<string | null>(null);
@@ -133,14 +135,18 @@ export default function FuelConciliation() {
     return trips.find((t) => String(t.id) === selectedTripId) || null;
   }, [trips, selectedTripId]);
 
-  // 2. FILTRADO ESTRICTO DE TRAMOS (Solo entregados o cerrados)
+  // 2. FILTRADO ESTRICTO DE TRAMOS CON EXCEPCIÓN PARA EDICIÓN
   const tripLegs = useMemo(() => {
     if (!activeTrip || !activeTrip.legs) return [];
     return activeTrip.legs.filter((leg) => {
       const legStatus = String(leg.status ?? "").toLowerCase();
-      return ["entregado", "cerrado"].includes(legStatus);
+      // 🚀 EXCEPCIÓN: Si estamos editando, forzamos que aparezca el tramo seleccionado
+      return (
+        ["entregado", "cerrado"].includes(legStatus) ||
+        String(leg.id) === selectedLegId
+      );
     });
-  }, [activeTrip]);
+  }, [activeTrip, selectedLegId]);
 
   const activeLeg = useMemo(
     () => tripLegs.find((l) => String(l.id) === selectedLegId) || null,
@@ -183,7 +189,6 @@ export default function FuelConciliation() {
           log.record_status === "A";
 
         if (esValido) {
-          // Buscamos el odómetro más alto ingresado físicamente en los tickets
           const odoLog = Number(log.odometro) || 0;
           if (odoLog > mayorOdometroEnVales) {
             mayorOdometroEnVales = odoLog;
@@ -191,6 +196,8 @@ export default function FuelConciliation() {
         }
         return esValido;
       });
+
+      setValesRawData(valesDiesel);
 
       const totalVales = valesDiesel.reduce(
         (sum: number, log: any) => sum + Number(log.litros),
@@ -200,7 +207,7 @@ export default function FuelConciliation() {
       setFormData((prev) => ({
         ...prev,
         litrosVales: totalVales.toString(),
-        maxOdoVales: mayorOdometroEnVales, // Guardamos la referencia maestra
+        maxOdoVales: mayorOdometroEnVales,
       }));
 
       if (totalVales > 0) {
@@ -223,17 +230,39 @@ export default function FuelConciliation() {
   const handleTripSelect = (id: string) => {
     setSelectedTripId(id);
     setSelectedLegId("");
+    setIsEditing(false);
     handleResetState();
   };
 
   const handleLegSelect = async (legId: string) => {
     setSelectedLegId(legId);
+    setIsEditing(false);
     handleResetState();
     await fetchValesCombustible(legId);
   };
 
-  // Cargar edición
+  // 🚀 LÓGICA DE AUTO-CÁLCULO DEL ODÓMETRO FINAL (OnBlur)
+  const handleAutoCalculateOdometer = () => {
+    const kms = Number(formData.kilometrosECM);
+    if (kms > 0 && activeLeg) {
+      const baseOdo =
+        formData.maxOdoVales > 0
+          ? formData.maxOdoVales
+          : Number(activeLeg.odometro_inicial) || 0;
+
+      const odoFinal = baseOdo + kms;
+
+      setFormData((prev) => ({ ...prev, odometroFinal: String(odoFinal) }));
+
+      toast.info("Odómetro auto-calculado", {
+        description: `Base: ${baseOdo.toLocaleString()} km + Recorrido ECM: ${kms.toLocaleString()} km`,
+      });
+    }
+  };
+
+  // 🚀 REPARACIÓN DEL EDITAR
   const handleEditAudit = async (leg: any) => {
+    // Al setear estos IDs, los Selects los agarran gracias a la lista blanca modificada
     setSelectedTripId(String(leg.trip_id));
     setSelectedLegId(String(leg.id));
     setIsEditing(true);
@@ -280,7 +309,7 @@ export default function FuelConciliation() {
       await axiosClient.post(
         `/api/logistics/trips/legs/${legToReset}/reset-audit`,
       );
-      toast.success("Registro de detalles Revertida", {
+      toast.success("Registro de detalles Revertido", {
         id: toastId,
         description: "El tramo ha vuelto a estatus pendiente.",
       });
@@ -296,7 +325,7 @@ export default function FuelConciliation() {
   };
 
   // =========================================================================
-  // 3. LA MATEMÁTICA FINANCIERA Y EL RECIBO DE SANCIÓN (REGLA DEL 3%)
+  // LA MATEMÁTICA FINANCIERA Y EL RECIBO DE SANCIÓN (REGLA DEL 3%)
   // =========================================================================
   const auditResult = useMemo(() => {
     const litrosVales = Number(formData.litrosVales) || 0;
@@ -340,29 +369,6 @@ export default function FuelConciliation() {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  // =========================================================================
-  // 4. AUTO CÁLCULO DE ODÓMETRO FINAL BASADO EN EL PUNTO DE REFERENCIA
-  // =========================================================================
-  const handleAutoCalculateOdometer = () => {
-    const kms = Number(formData.kilometrosECM);
-    if (kms > 0 && activeLeg) {
-      // Regla maestra: Si encontramos un odómetro físico en los vales, ese es nuestra verdad.
-      // Si no hay (Ej. Fase sin carga), usamos el inicial de la fase.
-      const baseOdo =
-        formData.maxOdoVales > 0
-          ? formData.maxOdoVales
-          : Number(activeLeg.odometro_inicial) || 0;
-
-      const odoFinal = baseOdo + kms;
-
-      setFormData((prev) => ({ ...prev, odometroFinal: String(odoFinal) }));
-
-      toast.info("Odómetro auto-calculado", {
-        description: `Base: ${baseOdo.toLocaleString()} km + Recorrido ECM: ${kms.toLocaleString()} km`,
-      });
-    }
-  };
-
   const handleResetState = () => {
     setFormData({
       litrosVales: "0",
@@ -380,7 +386,9 @@ export default function FuelConciliation() {
     handleResetState();
   };
 
-  // 5. GUARDAR Y APLICAR SANCIÓN AL BACKEND
+  // =========================================================================
+  // 🚀 GUARDAR Y APLICAR SANCIÓN AL BACKEND (CORREGIDO STATUS "EN CURSO")
+  // =========================================================================
   const handleAuthorizeAndClose = async () => {
     if (!activeTrip || !selectedLegId) return;
 
@@ -404,7 +412,7 @@ export default function FuelConciliation() {
       const comentarioBitacora = `Detalles Fase. Km ECM: ${kmECM}. Litros ECM: ${ltECM}. Vales: ${vales}. Rend Real: ${rReal.toFixed(2)} km/L. Ver: ${est}. ${isRobo ? auditResult.mensajeDeduccion : ""}`;
 
       const payload = {
-        status: isRobo ? "incidencia" : "info",
+        status: "entregado", // 🚀 ESTO ARREGLA EL BUG QUE LO REGRESABA A "EN CURSO"
         location: "Conciliación de Combustible",
         comments: comentarioBitacora.trim(),
         odometro: Number(formData.odometroFinal),
@@ -421,8 +429,8 @@ export default function FuelConciliation() {
 
       toast.success(
         isEditing
-          ? "Registro de detalles Actualizada"
-          : "Registro de detalles Registrada",
+          ? "Registro de detalles Actualizado"
+          : "Registro de detalles Registrado",
         {
           description:
             "La liquidación absorberá automáticamente la penalización si aplica.",
@@ -627,7 +635,7 @@ export default function FuelConciliation() {
                 variant="outline"
                 className="border-slate-200 dark:border-white/10 bg-emerald-50 text-emerald-700"
               >
-                Tolerancia: {TOLERANCIA_FIJA * 100}%
+                Tolerancia Estricta: {TOLERANCIA_FIJA * 100}%
               </Badge>
               <Badge
                 variant="outline"
@@ -658,8 +666,20 @@ export default function FuelConciliation() {
                 <SelectContent className="max-h-[300px]">
                   {trips
                     .filter((t) => {
-                      const status = String(t.status ?? "").toLowerCase();
-                      return ["entregado", "cerrado"].includes(status);
+                      if (String(t.id) === selectedTripId) return true;
+
+                      const tripStatus = String(t.status ?? "").toLowerCase();
+                      if (["entregado", "cerrado"].includes(tripStatus))
+                        return true;
+
+                      // 🚀 EL FIX MÁGICO: Si el viaje sigue en tránsito, pero tiene tramos entregados, ¡muéstralo!
+                      const tieneTramosListos = t.legs?.some((leg) =>
+                        ["entregado", "cerrado"].includes(
+                          String(leg.status ?? "").toLowerCase(),
+                        ),
+                      );
+
+                      return tieneTramosListos;
                     })
                     .map((t) => {
                       const clientName =
@@ -758,7 +778,7 @@ export default function FuelConciliation() {
             <div className="flex items-center gap-2 px-1">
               <History className="h-4 w-4 text-slate-400" />
               <h3 className="font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 text-xs">
-                Historial de Conciliaciones
+                Historial de Auditorías
               </h3>
             </div>
             <Card className="border-slate-200 dark:border-white/10 shadow-sm bg-white dark:bg-slate-900 rounded-2xl overflow-hidden">
@@ -767,7 +787,7 @@ export default function FuelConciliation() {
                   data={auditedLegs}
                   columns={auditedColumns as any}
                   className="border-none"
-                  searchPlaceholder="Buscar folio o operador..."
+                  searchPlaceholder="Buscar por folio o operador..."
                 />
               </CardContent>
             </Card>
@@ -888,7 +908,7 @@ export default function FuelConciliation() {
               </Card>
             </div>
 
-            {/* BARRA INFERIOR: VEREDICTO Y BOTONES */}
+            {/* BARRA INFERIOR COMPACTA: VEREDICTO Y BOTONES */}
             <Card className="border-none shadow-2xl bg-white dark:bg-slate-900 overflow-hidden">
               <div
                 className={cn(
@@ -918,7 +938,7 @@ export default function FuelConciliation() {
                   </div>
                   <div className="flex flex-col pl-4 md:pl-8">
                     <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
-                      Diferencia Lts.
+                      Faltante Diésel
                     </span>
                     <span
                       className={cn(
@@ -943,7 +963,7 @@ export default function FuelConciliation() {
                     <div className="flex items-center gap-1.5 text-rose-600 dark:text-rose-500 px-3 py-1.5 bg-rose-50 dark:bg-rose-900/10 rounded-lg border border-rose-100 dark:border-rose-900/30">
                       <AlertTriangle className="h-4 w-4 animate-pulse" />
                       <span className="font-black uppercase text-[10px] tracking-widest">
-                        Excede {TOLERANCIA_FIJA * 100}%
+                        Excede Tol.
                       </span>
                     </div>
                   )}
@@ -1030,7 +1050,7 @@ export default function FuelConciliation() {
                 </div>
                 <div>
                   <p className="text-[9px] uppercase font-black tracking-widest text-slate-400">
-                    Operador
+                    Operador Auditado
                   </p>
                   <p className="text-sm font-black text-slate-800 dark:text-white uppercase">
                     {legToView?.operator?.name || "N/A"}

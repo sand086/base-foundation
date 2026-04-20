@@ -464,7 +464,10 @@ export const DispatchWizard = ({
             `${u.tipo_1} ${u.tipo} ${u.tipo_unidad}`.toLowerCase();
           return (
             (searchIn.includes("tracto") || searchIn.includes("camion")) &&
-            ["disponible", "bloqueado"].includes(u.status?.toLowerCase())
+            // 👇 AQUÍ SE AGREGÓ EL ESTATUS DE RUTA
+            ["disponible", "bloqueado", "en_ruta", "en ruta"].includes(
+              u.status?.toLowerCase(),
+            )
           );
         })
         .map((u: any) => ({
@@ -516,7 +519,8 @@ export const DispatchWizard = ({
     () =>
       arrOperadores
         .filter((o: any) =>
-          ["activo", "disponible", "inactivo"].includes(
+          // 👇 AQUÍ TAMBIÉN SE AGREGÓ EL ESTATUS DE RUTA
+          ["activo", "disponible", "inactivo", "en_ruta", "en ruta"].includes(
             o.status?.toLowerCase(),
           ),
         )

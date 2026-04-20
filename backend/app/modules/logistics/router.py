@@ -616,7 +616,9 @@ def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(g
 
     trip = db.query(models.Trip).filter(models.Trip.id == leg.trip_id).first()
     all_completed = all(
-        l.status in ["entregado", "cerrado", "liquidado"] for l in trip.legs
+        l.status in ["entregado", "cerrado", "liquidado"]
+        for l in trip.legs
+        if l.leg_type != "entrega_vacio"
     )
     cxc_creada = False
 
