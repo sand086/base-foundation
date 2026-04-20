@@ -153,13 +153,16 @@ def debug_ping():
     return {"message": "El router de billing funciona"}
 
 
+# ================================================
+# EL MOTOR 2: 2 TIMBRES (La Recolección Operativa)
+# ================================================
 @router.post("/stamp/nominal", response_model=dict)
 def generar_carta_porte_nominal(
     invoice_data: ReceivableInvoiceCreate, db: Session = Depends(get_db)
 ):
     """
     Endpoint Fase 3 (Bypass Aduanal):
-    Genera y timbra la Carta Porte 3.1 por un valor de $1.00 MXN.
+    Genera y timbra la Carta Porte 3.1 por un valor de $1.00 MXN o montos ocultos.
     """
     service = BillingService(db)
     try:
@@ -170,7 +173,7 @@ def generar_carta_porte_nominal(
             "data": {
                 "factura_id": factura.id,
                 "uuid": factura.uuid,
-                "xml_url": factura.xml_url,
+                "xml_url": getattr(factura, "xml_url", None),
             },
         }
     except Exception as e:
@@ -178,7 +181,39 @@ def generar_carta_porte_nominal(
         raise HTTPException(status_code=400, detail=custom_error)
 
 
-#  FASE 2: NUEVO ENDPOINT PARA TIMBRADO REAL DESDE LA UI DE Dispatch
+# ================================================
+# EL MOTOR 1: 1 TIMBRE (El Santo Grial Multi-Ruta)
+# ================================================
+@router.post("/stamp/one-shot", response_model=dict)
+def generar_carta_porte_one_shot(
+    invoice_data: ReceivableInvoiceCreate, db: Session = Depends(get_db)
+):
+    """
+    Endpoint Motor 1 (1 Solo Timbre):
+    Genera y timbra la Carta Porte 3.1 con ruta completa (Multi-Origen / Multi-Destino)
+    consumiendo solo 1 timbre.
+    """
+    service = BillingService(db)
+    try:
+        # Llama al método del BillingService que construye el XML completo Multi-Nodo
+        factura = service.generar_carta_porte_one_shot(invoice_data)
+        return {
+            "status": "success",
+            "message": "Factura Total (Motor 1) generada exitosamente",
+            "data": {
+                "factura_id": factura.id,
+                "uuid": factura.uuid,
+                "xml_url": getattr(factura, "xml_url", None),
+            },
+        }
+    except Exception as e:
+        custom_error = parse_sat_error(e)
+        raise HTTPException(status_code=400, detail=custom_error)
+
+
+# ================================================
+# TIMBRADO REAL (Sustituciones y Cierre)
+# ================================================
 @router.post("/{trip_id}/stamp-real", response_model=dict)
 def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
     """
@@ -269,7 +304,7 @@ def generar_factura_final(
             "data": {
                 "factura_id": factura_final.id,
                 "uuid": factura_final.uuid,
-                "xml_url": factura_final.xml_url,
+                "xml_url": getattr(factura_final, "xml_url", None),
             },
         }
     except Exception as e:
@@ -294,7 +329,6 @@ def download_invoice_pdf(uuid: str, db: Session = Depends(get_db)):
 
     service = BillingService(db)
 
-    # --- AQUÍ VA EL CÓDIGO NUEVO ---
     pdf_path_upper = service.storage_dir / f"{clean_uuid.upper()}.pdf"
     pdf_path_lower = service.storage_dir / f"{clean_uuid.lower()}.pdf"
 
@@ -307,7 +341,6 @@ def download_invoice_pdf(uuid: str, db: Session = Depends(get_db)):
             status_code=404,
             detail=f"El PDF del documento {clean_uuid} no se encontró en el servidor.",
         )
-    # --- FIN DEL CÓDIGO NUEVO ---
 
     # FORZAMOS LA DESCARGA COMO ATTACHMENT
     return FileResponse(
@@ -335,7 +368,6 @@ def download_invoice_xml(uuid: str, db: Session = Depends(get_db)):
 
     service = BillingService(db)
 
-    # --- AQUÍ VA LA LÓGICA DE BÚSQUEDA MEJORADA ---
     xml_path_upper = service.storage_dir / f"{clean_uuid.upper()}.xml"
     xml_path_lower = service.storage_dir / f"{clean_uuid.lower()}.xml"
 
@@ -348,7 +380,6 @@ def download_invoice_xml(uuid: str, db: Session = Depends(get_db)):
             status_code=404,
             detail=f"El XML del documento {clean_uuid} no se encontró en el servidor.",
         )
-    # --- FIN DE LA LÓGICA MEJORADA ---
 
     # FORZAMOS LA DESCARGA COMO ATTACHMENT
     return FileResponse(

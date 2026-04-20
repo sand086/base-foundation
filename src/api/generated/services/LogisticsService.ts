@@ -673,26 +673,6 @@ export class LogisticsService {
         });
     }
     /**
-     * Reset Audit Endpoint
-     * @param legId
-     * @returns any Successful Response
-     * @throws ApiError
-     */
-    public static resetAuditEndpointApiLogisticsTripsLegsLegIdResetAuditPost(
-        legId: number,
-    ): CancelablePromise<any> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/logistics/trips/legs/{leg_id}/reset-audit',
-            path: {
-                'leg_id': legId,
-            },
-            errors: {
-                422: `Validation Error`,
-            },
-        });
-    }
-    /**
      * Unhook Trip In Yard
      * @param tripId
      * @returns TripResponse Successful Response

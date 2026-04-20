@@ -668,7 +668,7 @@ export class DefaultService {
     /**
      * Generar Carta Porte Nominal
      * Endpoint Fase 3 (Bypass Aduanal):
-     * Genera y timbra la Carta Porte 3.1 por un valor de $1.00 MXN.
+     * Genera y timbra la Carta Porte 3.1 por un valor de $1.00 MXN o montos ocultos.
      * @param requestBody
      * @returns any Successful Response
      * @throws ApiError
@@ -679,6 +679,28 @@ export class DefaultService {
         return __request(OpenAPI, {
             method: 'POST',
             url: '/api/sat/stamp/nominal',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Generar Carta Porte One Shot
+     * Endpoint Motor 1 (1 Solo Timbre):
+     * Genera y timbra la Carta Porte 3.1 con ruta completa (Multi-Origen / Multi-Destino)
+     * consumiendo solo 1 timbre.
+     * @param requestBody
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static generarCartaPorteOneShotApiSatStampOneShotPost(
+        requestBody: ReceivableInvoiceCreate,
+    ): CancelablePromise<Record<string, any>> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/sat/stamp/one-shot',
             body: requestBody,
             mediaType: 'application/json',
             errors: {

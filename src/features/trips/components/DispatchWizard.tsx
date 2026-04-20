@@ -102,6 +102,9 @@ export type WizardData = {
   conoceRutaCompleta: boolean;
   unit2Id: string;
   driver2Id: string;
+  remolque1Id_2: string;
+  dollyId_2: string;
+  remolque2Id_2: string;
 
   anticipo_casetas: number;
   anticipo_viaticos: number;
@@ -301,9 +304,21 @@ export const DispatchWizard = ({
         anticipo_combustible:
           tripFromState.legs?.[0]?.anticipo_combustible || 0,
         generarCartaPorte: true,
-        conoceRutaCompleta: false,
-        unit2Id: "",
-        driver2Id: "",
+        conoceRutaCompleta: (tripFromState.legs?.length || 0) > 1,
+        // Carga dinámica de tramo 2
+        unit2Id: tripFromState.legs?.[1]?.unit_id
+          ? String(tripFromState.legs[1].unit_id)
+          : "",
+        driver2Id: tripFromState.legs?.[1]?.operator_id
+          ? String(tripFromState.legs[1].operator_id)
+          : "",
+        remolque1Id_2: tripFromState.remolque_1_id
+          ? String(tripFromState.remolque_1_id)
+          : "",
+        dollyId_2: tripFromState.dolly_id ? String(tripFromState.dolly_id) : "",
+        remolque2Id_2: tripFromState.remolque_2_id
+          ? String(tripFromState.remolque_2_id)
+          : "",
       } as Partial<WizardData> & { id?: number; status?: string };
     }
     return undefined;
@@ -359,6 +374,9 @@ export const DispatchWizard = ({
     conoceRutaCompleta: initialData?.conoceRutaCompleta ?? false,
     unit2Id: initialData?.unit2Id || "",
     driver2Id: initialData?.driver2Id || "",
+    remolque1Id_2: initialData?.remolque1Id_2 || "",
+    dollyId_2: initialData?.dollyId_2 || "",
+    remolque2Id_2: initialData?.remolque2Id_2 || "",
     anticipo_casetas: initialData?.anticipo_casetas || 0,
     anticipo_viaticos: initialData?.anticipo_viaticos || 0,
     anticipo_combustible: initialData?.anticipo_combustible || 0,
@@ -405,6 +423,21 @@ export const DispatchWizard = ({
           anticipo_casetas: foundTrip.legs?.[0]?.anticipo_casetas || 0,
           anticipo_viaticos: foundTrip.legs?.[0]?.anticipo_viaticos || 0,
           anticipo_combustible: foundTrip.legs?.[0]?.anticipo_combustible || 0,
+          // Carga dinámica de tramo 2
+          conoceRutaCompleta: (foundTrip.legs?.length || 0) > 1,
+          unit2Id: foundTrip.legs?.[1]?.unit_id
+            ? String(foundTrip.legs[1].unit_id)
+            : "",
+          driver2Id: foundTrip.legs?.[1]?.operator_id
+            ? String(foundTrip.legs[1].operator_id)
+            : "",
+          remolque1Id_2: foundTrip.remolque_1_id
+            ? String(foundTrip.remolque_1_id)
+            : "",
+          dollyId_2: foundTrip.dolly_id ? String(foundTrip.dolly_id) : "",
+          remolque2Id_2: foundTrip.remolque_2_id
+            ? String(foundTrip.remolque_2_id)
+            : "",
         }));
       }
     }
@@ -622,6 +655,11 @@ export const DispatchWizard = ({
           payload.final_leg = {
             unit_id: cleanId(data.unit2Id) || null,
             operator_id: cleanId(data.driver2Id) || null,
+            remolque_1_id: cleanId(data.remolque1Id_2) || null,
+            dolly_id: isFullTrip ? cleanId(data.dollyId_2) || null : null,
+            remolque_2_id: isFullTrip
+              ? cleanId(data.remolque2Id_2) || null
+              : null,
             leg_type: "ruta_carretera",
             odometro_inicial: 0,
             nivel_tanque_inicial: 0,
@@ -746,9 +784,15 @@ export const DispatchWizard = ({
         isValid &&
         Boolean(data.dollyId && data.remolque2Id && data.contenedor_2);
     }
-    // Si activa el Switch de generar carta porte y conoce ruta
+
+    // Validar Tramo 2 si activan el Motor Dual (1 Timbre)
     if (data.generarCartaPorte && data.conoceRutaCompleta) {
-      isValid = isValid && Boolean(data.unit2Id && data.driver2Id);
+      isValid =
+        isValid &&
+        Boolean(data.unit2Id && data.driver2Id && data.remolque1Id_2);
+      if (isFullTrip) {
+        isValid = isValid && Boolean(data.dollyId_2 && data.remolque2Id_2);
+      }
     }
     return isValid;
   }, [isFullTrip, data]);
@@ -1196,7 +1240,13 @@ export const DispatchWizard = ({
                     <SearchableSelect
                       items={availableTractos}
                       value={data.unitId}
-                      onSelect={(v) => setData((p) => ({ ...p, unitId: v }))}
+                      onSelect={(v) =>
+                        setData((p) => ({
+                          ...p,
+                          unitId: v,
+                          unit2Id: p.unit2Id === p.unitId ? v : p.unit2Id,
+                        }))
+                      }
                       placeholder="Buscar..."
                     />
                   </div>
@@ -1207,17 +1257,25 @@ export const DispatchWizard = ({
                     <SearchableSelect
                       items={availableOperators}
                       value={data.driverId}
-                      onSelect={(v) => setData((p) => ({ ...p, driverId: v }))}
+                      onSelect={(v) =>
+                        setData((p) => ({
+                          ...p,
+                          driverId: v,
+                          driver2Id:
+                            p.driver2Id === p.driverId ? v : p.driver2Id,
+                        }))
+                      }
                       placeholder="Buscar..."
                     />
                   </div>
                 </div>
               </div>
 
-              {/* ARRASTRE */}
+              {/* ARRASTRE TRAMO 1 */}
               <div className={sectionCardClass}>
                 <h4 className="text-sm font-black uppercase tracking-tighter text-foreground mb-4 flex items-center gap-2 border-b pb-2">
-                  <LinkIcon className="h-5 w-5 text-blue-600" /> Arrastre
+                  <LinkIcon className="h-5 w-5 text-blue-600" /> Arrastre{" "}
+                  {data.conoceRutaCompleta && "Inicial"}
                 </h4>
                 <div className="space-y-3">
                   <div className="space-y-1.5">
@@ -1228,7 +1286,15 @@ export const DispatchWizard = ({
                       items={availableRemolques}
                       value={data.remolque1Id}
                       onSelect={(v) =>
-                        setData((p) => ({ ...p, remolque1Id: v }))
+                        setData((p) => ({
+                          ...p,
+                          remolque1Id: v,
+                          // Sincronización automática con el Tramo 2 (Magia UX)
+                          remolque1Id_2:
+                            p.remolque1Id_2 === p.remolque1Id
+                              ? v
+                              : p.remolque1Id_2,
+                        }))
                       }
                       placeholder="Buscar..."
                     />
@@ -1243,7 +1309,12 @@ export const DispatchWizard = ({
                           items={availableDollies}
                           value={data.dollyId}
                           onSelect={(v) =>
-                            setData((p) => ({ ...p, dollyId: v }))
+                            setData((p) => ({
+                              ...p,
+                              dollyId: v,
+                              dollyId_2:
+                                p.dollyId_2 === p.dollyId ? v : p.dollyId_2,
+                            }))
                           }
                           placeholder="Buscar..."
                         />
@@ -1256,7 +1327,14 @@ export const DispatchWizard = ({
                           items={availableRemolques}
                           value={data.remolque2Id}
                           onSelect={(v) =>
-                            setData((p) => ({ ...p, remolque2Id: v }))
+                            setData((p) => ({
+                              ...p,
+                              remolque2Id: v,
+                              remolque2Id_2:
+                                p.remolque2Id_2 === p.remolque2Id
+                                  ? v
+                                  : p.remolque2Id_2,
+                            }))
                           }
                           placeholder="Buscar..."
                         />
@@ -1266,7 +1344,7 @@ export const DispatchWizard = ({
                 </div>
               </div>
 
-              {/* OPCIONES DE EMISIÓN SAT (AQUÍ ESTÁ EL MOTOR DUAL) */}
+              {/* OPCIONES DE EMISIÓN SAT (MOTOR DUAL) */}
               <div
                 className={cn(
                   sectionCardClass,
@@ -1315,7 +1393,7 @@ export const DispatchWizard = ({
                           }))
                         }
                       >
-                        Timbrar Automático
+                        Descargar CP al finalizar
                       </Label>
                     </div>
                     {data.generarCartaPorte && (
@@ -1325,7 +1403,24 @@ export const DispatchWizard = ({
                           <Switch
                             checked={data.conoceRutaCompleta}
                             onCheckedChange={(c) =>
-                              setData((p) => ({ ...p, conoceRutaCompleta: c }))
+                              setData((p) => ({
+                                ...p,
+                                conoceRutaCompleta: c,
+                                // Sincronizamos chasis por si acaso al prender
+                                unit2Id: c ? p.unit2Id || p.unitId : p.unit2Id,
+                                driver2Id: c
+                                  ? p.driver2Id || p.driverId
+                                  : p.driver2Id,
+                                remolque1Id_2: c
+                                  ? p.remolque1Id_2 || p.remolque1Id
+                                  : p.remolque1Id_2,
+                                dollyId_2: c
+                                  ? p.dollyId_2 || p.dollyId
+                                  : p.dollyId_2,
+                                remolque2Id_2: c
+                                  ? p.remolque2Id_2 || p.remolque2Id
+                                  : p.remolque2Id_2,
+                              }))
                             }
                             className="data-[state=checked]:bg-emerald-600"
                           />
@@ -1337,14 +1432,32 @@ export const DispatchWizard = ({
                                 : "text-slate-500",
                             )}
                             onClick={() =>
-                              setData((p) => ({
-                                ...p,
-                                conoceRutaCompleta: !p.conoceRutaCompleta,
-                              }))
+                              setData((p) => {
+                                const isChecked = !p.conoceRutaCompleta;
+                                return {
+                                  ...p,
+                                  conoceRutaCompleta: isChecked,
+                                  unit2Id: isChecked
+                                    ? p.unit2Id || p.unitId
+                                    : p.unit2Id,
+                                  driver2Id: isChecked
+                                    ? p.driver2Id || p.driverId
+                                    : p.driver2Id,
+                                  remolque1Id_2: isChecked
+                                    ? p.remolque1Id_2 || p.remolque1Id
+                                    : p.remolque1Id_2,
+                                  dollyId_2: isChecked
+                                    ? p.dollyId_2 || p.dollyId
+                                    : p.dollyId_2,
+                                  remolque2Id_2: isChecked
+                                    ? p.remolque2Id_2 || p.remolque2Id
+                                    : p.remolque2Id_2,
+                                };
+                              })
                             }
                           >
                             <Award className="h-3.5 w-3.5" /> Conozco la Ruta
-                            Carretera (Ahorro 1 Timbre)
+                            Carretera
                           </Label>
                         </div>
                       </>
@@ -1353,50 +1466,119 @@ export const DispatchWizard = ({
                 </div>
               </div>
 
-              {/* TRAMO 2: RUTA CARRETERA (Aparece solo si el switch del Motor 1 está activo) */}
+              {/* TRAMO 2: RUTA CARRETERA COMPLETA */}
               {data.generarCartaPorte && data.conoceRutaCompleta && (
                 <div className="lg:col-span-2 animate-in slide-in-from-top-4 fade-in duration-500">
-                  <div className="rounded-[20px] border border-emerald-200 dark:border-emerald-800 bg-emerald-50/30 dark:bg-emerald-950/20 p-5 shadow-xl backdrop-blur-xl">
-                    <h4 className="text-sm font-black uppercase tracking-tighter text-emerald-700 dark:text-emerald-400 mb-4 flex items-center gap-2 border-b border-emerald-200 dark:border-emerald-800 pb-2">
-                      <Truck className="h-5 w-5 text-emerald-600 dark:text-emerald-500" />{" "}
-                      Tramo 2 (Ruta Carretera)
-                    </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                      <div className="space-y-1.5">
-                        <Label
-                          variant="brand"
-                          className="text-emerald-800 dark:text-emerald-300"
-                          required
-                        >
-                          TRACTO FINAL (CARRETERA)
-                        </Label>
-                        <SearchableSelect
-                          items={availableTractos}
-                          value={data.unit2Id}
-                          onSelect={(v) =>
-                            setData((p) => ({ ...p, unit2Id: v }))
-                          }
-                          placeholder="Buscar tracto de ruta..."
-                          className="border-emerald-200 dark:border-emerald-800"
-                        />
+                  <div className="rounded-[20px] border border-emerald-200 dark:border-emerald-800 bg-emerald-50/30 dark:bg-emerald-950/20 p-5 shadow-xl backdrop-blur-xl space-y-6">
+                    <div>
+                      <h4 className="text-sm font-black uppercase tracking-tighter text-emerald-700 dark:text-emerald-400 mb-4 flex items-center gap-2 border-b border-emerald-200 dark:border-emerald-800 pb-2">
+                        <Truck className="h-5 w-5 text-emerald-600 dark:text-emerald-500" />{" "}
+                        Tramo 2 (Tractocamión de Ruta)
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div className="space-y-1.5">
+                          <Label
+                            variant="brand"
+                            className="text-emerald-800 dark:text-emerald-300"
+                            required
+                          >
+                            TRACTO FINAL (CARRETERA)
+                          </Label>
+                          <SearchableSelect
+                            items={availableTractos}
+                            value={data.unit2Id}
+                            onSelect={(v) =>
+                              setData((p) => ({ ...p, unit2Id: v }))
+                            }
+                            placeholder="Buscar tracto de ruta..."
+                            className="border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label
+                            variant="brand"
+                            className="text-emerald-800 dark:text-emerald-300"
+                            required
+                          >
+                            OPERADOR FINAL (CARRETERA)
+                          </Label>
+                          <SearchableSelect
+                            items={availableOperators}
+                            value={data.driver2Id}
+                            onSelect={(v) =>
+                              setData((p) => ({ ...p, driver2Id: v }))
+                            }
+                            placeholder="Buscar operador de ruta..."
+                            className="border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40"
+                          />
+                        </div>
                       </div>
-                      <div className="space-y-1.5">
-                        <Label
-                          variant="brand"
-                          className="text-emerald-800 dark:text-emerald-300"
-                          required
-                        >
-                          OPERADOR FINAL (CARRETERA)
-                        </Label>
-                        <SearchableSelect
-                          items={availableOperators}
-                          value={data.driver2Id}
-                          onSelect={(v) =>
-                            setData((p) => ({ ...p, driver2Id: v }))
-                          }
-                          placeholder="Buscar operador de ruta..."
-                          className="border-emerald-200 dark:border-emerald-800"
-                        />
+                    </div>
+
+                    <div>
+                      <h4 className="text-sm font-black uppercase tracking-tighter text-emerald-700 dark:text-emerald-400 mb-4 flex items-center gap-2 border-b border-emerald-200 dark:border-emerald-800 pb-2">
+                        <LinkIcon className="h-5 w-5 text-emerald-600 dark:text-emerald-500" />{" "}
+                        Arrastre Final (Carretera)
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                        <div className="space-y-1.5">
+                          <Label
+                            variant="brand"
+                            className="text-emerald-800 dark:text-emerald-300"
+                            required
+                          >
+                            REMOLQUE 1
+                          </Label>
+                          <SearchableSelect
+                            items={availableRemolques}
+                            value={data.remolque1Id_2}
+                            onSelect={(v) =>
+                              setData((p) => ({ ...p, remolque1Id_2: v }))
+                            }
+                            placeholder="Buscar..."
+                            className="border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40"
+                          />
+                        </div>
+                        {isFullTrip && (
+                          <>
+                            <div className="space-y-1.5">
+                              <Label
+                                variant="brand"
+                                className="text-emerald-800 dark:text-emerald-300"
+                                required
+                              >
+                                DOLLY
+                              </Label>
+                              <SearchableSelect
+                                items={availableDollies}
+                                value={data.dollyId_2}
+                                onSelect={(v) =>
+                                  setData((p) => ({ ...p, dollyId_2: v }))
+                                }
+                                placeholder="Buscar..."
+                                className="border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40"
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label
+                                variant="brand"
+                                className="text-emerald-800 dark:text-emerald-300"
+                                required
+                              >
+                                REMOLQUE 2
+                              </Label>
+                              <SearchableSelect
+                                items={availableRemolques}
+                                value={data.remolque2Id_2}
+                                onSelect={(v) =>
+                                  setData((p) => ({ ...p, remolque2Id_2: v }))
+                                }
+                                placeholder="Buscar..."
+                                className="border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40"
+                              />
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1439,7 +1621,7 @@ export const DispatchWizard = ({
               <Card
                 className={cn(
                   shellClass,
-                  "border-blue-200/50 dark:border-blue-800/30 bg-blue-50/20 dark:bg-blue-950/10",
+                  "border-blue-200/50 dark:border-blue-800/30 bg-blue-50/20 dark:bg-blue-950/10 h-full",
                 )}
               >
                 <CardHeader className={cn(headerClass, "pb-3 pt-4")}>
@@ -1491,12 +1673,11 @@ export const DispatchWizard = ({
                   </div>
                 </CardContent>
               </Card>
-
-              {/* Tarjeta de Operación */}
+              {/* Tarjeta de Operación (RESUMEN ENRIQUECIDO) */}
               <Card
                 className={cn(
                   shellClass,
-                  "border-emerald-200/50 dark:border-emerald-800/30 bg-emerald-50/20 dark:bg-emerald-950/10",
+                  "border-emerald-200/50 dark:border-emerald-800/30 bg-emerald-50/20 dark:bg-emerald-950/10 h-full",
                 )}
               >
                 <CardHeader className={cn(headerClass, "pb-3 pt-4")}>
@@ -1509,37 +1690,159 @@ export const DispatchWizard = ({
                     </CardTitle>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-3 pt-4 text-sm text-foreground">
-                  <div className="flex justify-between border-b border-border pb-2">
-                    <span className="font-bold text-muted-foreground">
-                      Operador:
-                    </span>
-                    <span className="font-black text-emerald-800 dark:text-emerald-300 text-right">
-                      {availableOperators.find((o) => o.value === data.driverId)
-                        ?.label || "N/A"}
-                    </span>
+                <CardContent className="space-y-4 pt-4 text-sm text-foreground h-auto max-h-[60vh] overflow-y-auto custom-scrollbar">
+                  {/* TRAMO 1 */}
+                  <div className="space-y-2">
+                    <h5 className="font-black text-brand-navy dark:text-blue-400 uppercase text-[10px] tracking-widest border-b pb-1">
+                      {data.conoceRutaCompleta
+                        ? "Fase 1: Recolección en Patio"
+                        : "Asignación Principal"}
+                    </h5>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                      <div className="flex justify-between border-b border-dashed border-slate-200 dark:border-white/10 pb-1">
+                        <span className="text-muted-foreground font-bold">
+                          Operador:
+                        </span>
+                        <span className="font-black text-right">
+                          {availableOperators
+                            .find((o) => o.value === data.driverId)
+                            ?.label?.split(" ")[0] || "N/A"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between border-b border-dashed border-slate-200 dark:border-white/10 pb-1">
+                        <span className="text-muted-foreground font-bold">
+                          Tracto:
+                        </span>
+                        <span className="font-black text-right">
+                          {availableTractos
+                            .find((t) => t.value === data.unitId)
+                            ?.label?.split(" ")[0] || "N/A"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between border-b border-dashed border-slate-200 dark:border-white/10 pb-1">
+                        <span className="text-muted-foreground font-bold">
+                          Remolque 1:
+                        </span>
+                        <span className="font-black text-right">
+                          {availableRemolques
+                            .find((r) => r.value === data.remolque1Id)
+                            ?.label?.split(" ")[0] || "N/A"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between border-b border-dashed border-slate-200 dark:border-white/10 pb-1">
+                        <span className="text-muted-foreground font-bold">
+                          Contenedor 1:
+                        </span>
+                        <span className="font-black text-right">
+                          {data.contenedor_1 || "N/A"}
+                        </span>
+                      </div>
+
+                      {isFullTrip && (
+                        <>
+                          <div className="flex justify-between border-b border-dashed border-slate-200 dark:border-white/10 pb-1">
+                            <span className="text-muted-foreground font-bold">
+                              Dolly:
+                            </span>
+                            <span className="font-black text-right">
+                              {availableDollies
+                                .find((d) => d.value === data.dollyId)
+                                ?.label?.split(" ")[0] || "N/A"}
+                            </span>
+                          </div>
+                          <div className="flex justify-between border-b border-dashed border-slate-200 dark:border-white/10 pb-1">
+                            <span className="text-muted-foreground font-bold">
+                              Remolque 2:
+                            </span>
+                            <span className="font-black text-right">
+                              {availableRemolques
+                                .find((r) => r.value === data.remolque2Id)
+                                ?.label?.split(" ")[0] || "N/A"}
+                            </span>
+                          </div>
+                          <div className="flex justify-between border-b border-dashed border-slate-200 dark:border-white/10 pb-1 sm:col-span-2">
+                            <span className="text-muted-foreground font-bold">
+                              Contenedor 2:
+                            </span>
+                            <span className="font-black text-right">
+                              {data.contenedor_2 || "N/A"}
+                            </span>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex justify-between border-b border-border pb-2">
-                    <span className="font-bold text-muted-foreground">
-                      Unidad:
-                    </span>
-                    <span className="font-black text-emerald-800 dark:text-emerald-300 text-right">
-                      {availableTractos
-                        .find((t) => t.value === data.unitId)
-                        ?.label?.split(" ")[0] || "N/A"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between border-b border-border pb-2">
-                    <span className="font-bold text-muted-foreground">
-                      Contenedor 1:
-                    </span>
-                    <span className="font-mono font-black text-foreground text-right">
-                      {data.contenedor_1 || "N/A"}
-                    </span>
-                  </div>
-                  <div className="flex flex-col gap-1 pb-1">
-                    <span className="font-bold text-muted-foreground">
-                      Mercancía SAT:
+
+                  {/* TRAMO 2 */}
+                  {data.generarCartaPorte && data.conoceRutaCompleta && (
+                    <div className="space-y-2 pt-2 border-t border-dashed border-slate-200 dark:border-white/10">
+                      <h5 className="font-black text-emerald-600 dark:text-emerald-400 uppercase text-[10px] tracking-widest border-b border-emerald-100 dark:border-emerald-900 pb-1">
+                        Fase 2: Ruta Carretera
+                      </h5>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                        <div className="flex justify-between border-b border-dashed border-slate-200 dark:border-white/10 pb-1">
+                          <span className="text-muted-foreground font-bold">
+                            Operador:
+                          </span>
+                          <span className="font-black text-right">
+                            {availableOperators
+                              .find((o) => o.value === data.driver2Id)
+                              ?.label?.split(" ")[0] || "N/A"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between border-b border-dashed border-slate-200 dark:border-white/10 pb-1">
+                          <span className="text-muted-foreground font-bold">
+                            Tracto:
+                          </span>
+                          <span className="font-black text-right">
+                            {availableTractos
+                              .find((t) => t.value === data.unit2Id)
+                              ?.label?.split(" ")[0] || "N/A"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between border-b border-dashed border-slate-200 dark:border-white/10 pb-1">
+                          <span className="text-muted-foreground font-bold">
+                            Remolque 1:
+                          </span>
+                          <span className="font-black text-right">
+                            {availableRemolques
+                              .find((r) => r.value === data.remolque1Id_2)
+                              ?.label?.split(" ")[0] || "N/A"}
+                          </span>
+                        </div>
+
+                        {isFullTrip && (
+                          <>
+                            <div className="flex justify-between border-b border-dashed border-slate-200 dark:border-white/10 pb-1">
+                              <span className="text-muted-foreground font-bold">
+                                Dolly:
+                              </span>
+                              <span className="font-black text-right">
+                                {availableDollies
+                                  .find((d) => d.value === data.dollyId_2)
+                                  ?.label?.split(" ")[0] || "N/A"}
+                              </span>
+                            </div>
+                            <div className="flex justify-between border-b border-dashed border-slate-200 dark:border-white/10 pb-1 sm:col-span-2">
+                              <span className="text-muted-foreground font-bold">
+                                Remolque 2:
+                              </span>
+                              <span className="font-black text-right">
+                                {availableRemolques
+                                  .find((r) => r.value === data.remolque2Id_2)
+                                  ?.label?.split(" ")[0] || "N/A"}
+                              </span>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* MERCANCÍA */}
+                  <div className="pt-3 border-t border-slate-200 dark:border-white/10 space-y-1">
+                    <span className="font-bold text-muted-foreground text-xs block">
+                      Mercancía SAT (Peso: {data.peso_toneladas} Ton):
                     </span>
                     <span className="font-semibold text-foreground/80 text-xs line-clamp-2 leading-tight">
                       {data.descripcion_mercancia || "N/A"}
@@ -1581,8 +1884,8 @@ export const DispatchWizard = ({
                   <>
                     <Check className="mr-2 h-5 w-5" />{" "}
                     {data.generarCartaPorte
-                      ? "Confirmar y Timbrar al SAT"
-                      : "Confirmar Sin Timbrar (Borrador)"}
+                      ? "Despachar"
+                      : "Confirmar sin CP (Borrador)"}
                   </>
                 )}
               </Button>

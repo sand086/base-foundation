@@ -1,7 +1,6 @@
-# --- Fuente: crud_trips.py ---
-
 from datetime import datetime
 import uuid
+import traceback
 
 from sqlalchemy.orm import Session, joinedload, selectinload, contains_eager
 from sqlalchemy import func, and_, or_
@@ -10,6 +9,9 @@ from datetime import date, timedelta
 from app.models import models
 from app.models.models import RecordStatus, TripStatus, TripLegType
 from . import schemas
+import logging
+
+logger = logging.getLogger("logistics.crud")
 
 
 def get_trips(db: Session, skip: int = 0, limit: int = 100):
@@ -65,48 +67,101 @@ def get_trip(db: Session, trip_id: str):
 
 def create_trip(db: Session, trip: schemas.TripCreate):
     """
-    1. Crea el Viaje Padre desempaquetando el esquema (no pierdes datos).
-    2. Si trae un Tramo Inicial (No es Standby), crea el TripLeg y bloquea recursos.
+    1. Crea el Viaje Padre desempaquetando el esquema (omitiendo campos lógicos Pydantic).
+    2. Si trae un Tramo Inicial, crea el TripLeg y bloquea recursos.
+    3. Si el Motor Dual está activo y trae un Tramo Final, lo crea como segundo Leg.
     """
-    trip_data = trip.model_dump(exclude={"initial_leg"})
-
-    db_trip = models.Trip(**trip_data)
-    db.add(db_trip)
-    db.flush()
-
-    if trip.initial_leg:
-        leg_data = trip.initial_leg
-
-        monto_pagar = (trip.tarifa_base or 0) - (
-            (leg_data.anticipo_casetas or 0)
-            + (leg_data.anticipo_viaticos or 0)
-            + (leg_data.anticipo_combustible or 0)
+    try:
+        # 🚀 BLINDAJE: Excluimos todos los campos lógicos de Pydantic que NO están en la base de datos
+        trip_data = trip.model_dump(
+            exclude={
+                "initial_leg",
+                "final_leg",
+                "conoce_ruta_completa",
+                "ocultar_montos_pdf",
+                "is_dummy_stamping",
+            }
         )
 
-        db_leg = models.TripLeg(
-            trip_id=db_trip.id,
-            leg_type=leg_data.leg_type,
-            status=db_trip.status,
-            unit_id=leg_data.unit_id,
-            operator_id=leg_data.operator_id,
-            anticipo_casetas=leg_data.anticipo_casetas,
-            anticipo_viaticos=leg_data.anticipo_viaticos,
-            anticipo_combustible=leg_data.anticipo_combustible,
-            monto_neto_pagado=monto_pagar,
-            odometro_inicial=leg_data.odometro_inicial,
-            nivel_tanque_inicial=leg_data.nivel_tanque_inicial,
-            start_date=db_trip.start_date,
-        )
-        db.add(db_leg)
+        db_trip = models.Trip(**trip_data)
+        db.add(db_trip)
+        db.flush()
 
-        unit_ids_to_block = [
-            leg_data.unit_id,
-            trip.remolque_1_id,
-            trip.dolly_id,
-            trip.remolque_2_id,
-        ]
+        unit_ids_to_block = []
+        operator_ids_to_block = []
+
+        # ==========================================
+        # CREACIÓN DEL TRAMO 1 (PIERNA INICIAL)
+        # ==========================================
+        if trip.initial_leg:
+            leg_data = trip.initial_leg
+
+            monto_pagar = (trip.tarifa_base or 0) - (
+                (leg_data.anticipo_casetas or 0)
+                + (leg_data.anticipo_viaticos or 0)
+                + (leg_data.anticipo_combustible or 0)
+            )
+
+            db_leg_1 = models.TripLeg(
+                trip_id=db_trip.id,
+                leg_type=leg_data.leg_type,
+                status=db_trip.status,  # Hereda status del viaje padre (ej. en_transito o creado)
+                unit_id=leg_data.unit_id,
+                operator_id=leg_data.operator_id,
+                anticipo_casetas=leg_data.anticipo_casetas,
+                anticipo_viaticos=leg_data.anticipo_viaticos,
+                anticipo_combustible=leg_data.anticipo_combustible,
+                monto_neto_pagado=monto_pagar,
+                odometro_inicial=leg_data.odometro_inicial,
+                nivel_tanque_inicial=leg_data.nivel_tanque_inicial,
+                start_date=db_trip.start_date,
+            )
+            db.add(db_leg_1)
+
+            # Acumulamos recursos para bloquear solo si el viaje ya arrancó ("en_transito")
+            if db_trip.status == "en_transito":
+                unit_ids_to_block.extend(
+                    [
+                        leg_data.unit_id,
+                        trip.remolque_1_id,
+                        trip.dolly_id,
+                        trip.remolque_2_id,
+                    ]
+                )
+                operator_ids_to_block.append(leg_data.operator_id)
+
+        # ==========================================
+        # CREACIÓN DEL TRAMO 2 (MOTOR DUAL - OPCIONAL)
+        # ==========================================
+        # Verificamos que conozca la ruta completa y que el payload traiga final_leg
+        if getattr(trip, "conoce_ruta_completa", False) and getattr(
+            trip, "final_leg", None
+        ):
+            leg_final = trip.final_leg
+
+            # El tramo 2 SIEMPRE nace en status 'creado' porque el chofer 2 está esperando en patio
+            db_leg_2 = models.TripLeg(
+                trip_id=db_trip.id,
+                leg_type=leg_final.leg_type or "ruta_carretera",
+                status="creado",
+                unit_id=leg_final.unit_id,
+                operator_id=leg_final.operator_id,
+                # Inicializamos anticipos en 0 para la pierna 2 (se le asignarán después cuando despache)
+                anticipo_casetas=0.0,
+                anticipo_viaticos=0.0,
+                anticipo_combustible=0.0,
+                monto_neto_pagado=0.0,
+                start_date=db_trip.start_date,
+            )
+            db.add(db_leg_2)
+
+            # Nota: Los recursos del Tramo 2 (Tracto 2 y Chofer 2) NO se bloquean como "EN_RUTA"
+            # todavía, porque ellos físicamente aún no están operando.
+
+        # ==========================================
+        # BLOQUEO FÍSICO DE RECURSOS
+        # ==========================================
         valid_unit_ids = [uid for uid in unit_ids_to_block if uid is not None]
-
         if valid_unit_ids:
             units = (
                 db.query(models.Unit)
@@ -120,19 +175,26 @@ def create_trip(db: Session, trip: schemas.TripCreate):
                 u.status = models.UnitStatus.EN_RUTA
                 db.add(u)
 
-        if leg_data.operator_id:
-            operator = (
+        valid_operator_ids = [oid for oid in operator_ids_to_block if oid is not None]
+        if valid_operator_ids:
+            operators = (
                 db.query(models.Operator)
-                .filter(models.Operator.id == leg_data.operator_id)
-                .first()
+                .filter(models.Operator.id.in_(valid_operator_ids))
+                .all()
             )
-            if operator:
-                operator.status = models.OperatorStatus.EN_RUTA
-                db.add(operator)
+            for o in operators:
+                o.status = models.OperatorStatus.EN_RUTA
+                db.add(o)
 
-    db.commit()
-    db.refresh(db_trip)
-    return db_trip
+        db.commit()
+        db.refresh(db_trip)
+        return db_trip
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error Crítico en create_trip: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise e
 
 
 def update_trip_status(

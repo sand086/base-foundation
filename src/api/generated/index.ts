@@ -20,6 +20,7 @@ export type { BatchSettlementPreviewResponse } from './models/BatchSettlementPre
 export type { Body_create_fuel_log_api_fleet_fuel_logs_post } from './models/Body_create_fuel_log_api_fleet_fuel_logs_post';
 export type { Body_download_csd_secure_api_sat_csd_download_post } from './models/Body_download_csd_secure_api_sat_csd_download_post';
 export type { Body_fix_orphan_payments_api_finance_fix_orphan_payments_post } from './models/Body_fix_orphan_payments_api_finance_fix_orphan_payments_post';
+export type { Body_setup_2fa_temp_api_auth_2fa_setup_temp_post } from './models/Body_setup_2fa_temp_api_auth_2fa_setup_temp_post';
 export type { Body_upload_client_document_api_clients__client_id__documents__doc_type__post } from './models/Body_upload_client_document_api_clients__client_id__documents__doc_type__post';
 export type { Body_upload_csd_files_api_sat_csd_post } from './models/Body_upload_csd_files_api_sat_csd_post';
 export type { Body_upload_fuel_document_api_fleet_fuel_logs__log_id__documents__doc_type__post } from './models/Body_upload_fuel_document_api_fleet_fuel_logs__log_id__documents__doc_type__post';
